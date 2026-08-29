@@ -1,0 +1,431 @@
+"""Strict installation manifest v2 contracts."""
+
+from __future__ import annotations
+
+import unittest
+from dataclasses import replace
+from pathlib import Path
+
+from agent_artifacts.configuration.model import SourceKind
+from agent_artifacts.domain.diagnostics import diagnostic_to_data
+from agent_artifacts.domain.identifiers import (
+    ArtifactCoordinate,
+    ArtifactIdentity,
+    ObjectDigest,
+    SourceAlias,
+    SourceId,
+)
+from agent_artifacts.domain.result import Err, Ok
+from agent_artifacts.install_state.model import (
+    ArtifactEvidence,
+    EffectProof,
+    InstallationRecord,
+    InstallState,
+    SourceEvidence,
+)
+from agent_artifacts.install_state.schema import install_state_bytes, parse_install_state
+from agent_artifacts.protocol.hashing import json_digest
+from agent_artifacts.protocol.json import JsonArray
+from agent_artifacts.protocol.semver import SemVer
+
+
+def _digest(character: str) -> ObjectDigest:
+    return ObjectDigest("sha256", character * 64)
+
+
+def _record() -> InstallationRecord:
+    identity = ArtifactIdentity("mcp", "atlassian")
+    return InstallationRecord(
+        coordinate=ArtifactCoordinate(SourceAlias("company"), identity),
+        source=SourceEvidence(
+            alias=SourceAlias("company"),
+            declared_id=SourceId("company-agent-artifacts"),
+            kind=SourceKind.REGISTRY_GIT,
+            origin="https://github.com/acme/agent-artifacts-registry.git",
+            resolved_commit="a" * 40,
+            subscription_ref="main",
+        ),
+        artifact=ArtifactEvidence(
+            identity=identity,
+            version=SemVer(2, 1, 0),
+            manifest_digest=_digest("1"),
+            payload_digest=_digest("2"),
+            object_digest=_digest("3"),
+        ),
+        profile="tabnine",
+        profile_version=1,
+        scope="project",
+        requested_mode="symlink",
+        effects=(
+            EffectProof(
+                kind="merge-json",
+                destination=".mcp.json",
+                actual_mode="copy",
+                installed_digest=_digest("4"),
+                json_path="mcpServers.atlassian",
+                merge_mode="key",
+                identity_digest=json_digest(JsonArray(("atlassian",))),
+                identity_evidence=JsonArray(("atlassian",)),
+                created_destination=False,
+                overwrote=False,
+            ),
+        ),
+        setup_state_ref="setup-atlassian-tabnine",
+    )
+
+
+class InstallStateSchemaTests(unittest.TestCase):
+    fixtures = Path(__file__).resolve().parent / "fixtures" / "install-state"
+
+    def test_err02_recognized_v01_state_has_one_typed_diagnostic_for_project_and_user_paths(
+        self,
+    ) -> None:
+        """Recognized 0.1 state is distinct from malformed v2 without inspecting its content."""
+
+        payload = (self.fixtures / "legacy-v01-manifest.json").read_bytes()
+        for path in (
+            "/fixture/project/.agent-artifacts/manifest.json",
+            "/fixture/user/.agent-artifacts/manifest.json",
+        ):
+            with self.subTest(path=path):
+                result = parse_install_state(payload, path=path)
+
+                self.assertIsInstance(result, Err)
+                assert isinstance(result, Err)
+                self.assertEqual(len(result.diagnostics), 1)
+                diagnostic = result.diagnostics[0]
+                self.assertEqual(diagnostic.code.value, "install-state-legacy")
+                self.assertEqual(
+                    diagnostic.message,
+                    "AART 0.1 installation state was detected.",
+                )
+                self.assertEqual(
+                    diagnostic_to_data(diagnostic),
+                    {
+                        "code": "install-state-legacy",
+                        "severity": "error",
+                        "message": "AART 0.1 installation state was detected.",
+                        "location": {
+                            "source": None,
+                            "path": path,
+                            "pointer": None,
+                            "line": None,
+                            "column": None,
+                        },
+                        "remediation": [
+                            "Reinstall the artifacts you need with: aart marketplace install "
+                            "<coordinate> --profile <name>",
+                            "Remove the retired state file and reinstall: this revision is "
+                            "not converted at runtime",
+                        ],
+                        "details": {
+                            "detected_schema": "install-state-v0.1",
+                            "required_schema": "install-state-v2",
+                        },
+                    },
+                )
+
+    def test_err02_malformed_v2_fixture_remains_invalid(self) -> None:
+        """ERR02 must not mistake a malformed v2 shape for the bounded legacy signature."""
+
+        result = parse_install_state(
+            (self.fixtures / "malformed-v2-manifest.json").read_bytes(),
+            path="/fixture/project/.agent-artifacts/manifest.json",
+        )
+
+        self.assertIsInstance(result, Err)
+        assert isinstance(result, Err)
+        self.assertEqual(
+            tuple(diagnostic.code.value for diagnostic in result.diagnostics),
+            ("install-state-invalid",),
+        )
+        self.assertEqual(
+            tuple(diagnostic.message for diagnostic in result.diagnostics),
+            ("installations must be an array",),
+        )
+
+    def test_err02_uses_install_state_invalid_for_every_nonlegacy_top_level_shape(self) -> None:
+        """Only the exact recognized 0.1 envelope is legacy; malformed state has one family."""
+
+        malformed = (
+            b"{",
+            b'{"unrelated":true}',
+            b'{"repo":"M1F1/agent-artifacts","installed":[],"extra":true}',
+            b'{"repo":1,"installed":[]}',
+            b'{"repo":"M1F1/agent-artifacts","installed":{}}',
+            b'{"schema_version":1,"installations":[]}',
+            b'{"schema_version":3,"installations":[]}',
+            b'{"schema_version":2,"installations":[{}]}',
+        )
+        for payload in malformed:
+            with self.subTest(payload=payload):
+                result = parse_install_state(payload)
+
+                self.assertIsInstance(result, Err)
+                assert isinstance(result, Err)
+                self.assertEqual(
+                    {diagnostic.code.value for diagnostic in result.diagnostics},
+                    {"install-state-invalid"},
+                )
+
+    def test_v2_round_trip_is_canonical_and_deterministic(self) -> None:
+        state = InstallState(schema_version=2, installations=(_record(),))
+
+        first = install_state_bytes(state)
+        parsed = parse_install_state(first)
+
+        self.assertEqual(parsed, Ok(state))
+        self.assertEqual(install_state_bytes(parsed.value), first)
+        self.assertTrue(first.endswith(b"\n"))
+        self.assertIn(b'"schema_version":2', first)
+        self.assertIn(b'"subscription_ref":"main"', first)
+        self.assertIn(b'"identity_evidence":["atlassian"]', first)
+
+    def test_unknown_fields_and_duplicate_keys_are_rejected(self) -> None:
+        valid = install_state_bytes(InstallState(2, (_record(),))).decode().rstrip()
+        unknown = valid[:-1] + ',"raw_setup_output":"secret"}'
+        duplicate = valid.replace('"schema_version":2', '"schema_version":2,"schema_version":2')
+
+        for payload in (unknown, duplicate):
+            with self.subTest(payload=payload[:60]):
+                result = parse_install_state(payload)
+                self.assertIsInstance(result, Err)
+
+    def test_corrupt_version_digest_commit_and_effect_shape_are_rejected(self) -> None:
+        valid = install_state_bytes(InstallState(2, (_record(),))).decode()
+        invalid_documents = (
+            valid.replace('"version":"2.1.0"', '"version":"latest"'),
+            valid.replace("sha256:" + "1" * 64, "sha256:bad"),
+            valid.replace('"resolved_commit":"' + "a" * 40 + '"', '"resolved_commit":"main"'),
+            valid.replace('"kind":"merge-json"', '"kind":"copy-tree"'),
+        )
+
+        for payload in invalid_documents:
+            with self.subTest(payload=payload[:80]):
+                self.assertIsInstance(parse_install_state(payload), Err)
+
+    def test_credential_bearing_origin_is_rejected_before_serialization(self) -> None:
+        with self.assertRaisesRegex(ValueError, "credential-free"):
+            SourceEvidence(
+                alias=SourceAlias("company"),
+                declared_id=SourceId("company-agent-artifacts"),
+                kind=SourceKind.REGISTRY_GIT,
+                origin="https://token@github.com/acme/private.git",
+                resolved_commit="a" * 40,
+                subscription_ref="main",
+            )
+
+    def test_git_source_requires_a_safe_recorded_subscription_ref(self) -> None:
+        with self.assertRaisesRegex(ValueError, "safe subscription"):
+            replace(_record().source, subscription_ref="../moving")
+
+    def test_local_source_uses_explicit_local_revision_without_a_subscription_ref(self) -> None:
+        original = _record()
+        source = SourceEvidence(
+            SourceAlias("local"),
+            SourceId("local-artifacts"),
+            SourceKind.SOURCE_LOCAL,
+            "/work/artifacts",
+            "local",
+        )
+        record = replace(
+            original,
+            coordinate=ArtifactCoordinate(SourceAlias("local"), original.artifact.identity),
+            source=source,
+        )
+        state = InstallState(2, (record,))
+
+        self.assertEqual(parse_install_state(install_state_bytes(state)), Ok(state))
+        with self.assertRaisesRegex(ValueError, "local source origin"):
+            replace(source, resolved_commit="a" * 40)
+
+    def test_local_source_accepts_snapshot_bound_revision(self) -> None:
+        source = SourceEvidence(
+            SourceAlias("local"),
+            SourceId("local-artifacts"),
+            SourceKind.SOURCE_LOCAL,
+            "/work/artifacts",
+            "local:" + "a" * 64,
+        )
+
+        self.assertEqual(source.resolved_commit, "local:" + "a" * 64)
+
+    def test_state_rejects_duplicate_installation_identity(self) -> None:
+        with self.assertRaisesRegex(ValueError, "unique"):
+            InstallState(2, (_record(), _record()))
+
+    def test_state_rejects_two_installations_claiming_the_same_effect(self) -> None:
+        original = _record()
+        other_identity = ArtifactIdentity("mcp", "jira")
+        other = replace(
+            original,
+            coordinate=ArtifactCoordinate(SourceAlias("company"), other_identity),
+            artifact=replace(original.artifact, identity=other_identity),
+        )
+
+        with self.assertRaisesRegex(ValueError, "effect ownership"):
+            InstallState(2, (original, other))
+
+    def test_a_contested_effect_names_the_file_and_both_claimants(self) -> None:
+        """Refusing is right; refusing without saying what clashes sends the reader to the file."""
+
+        original = _record()
+        other_identity = ArtifactIdentity("mcp", "jira")
+        other = replace(
+            original,
+            coordinate=ArtifactCoordinate(SourceAlias("company"), other_identity),
+            artifact=replace(original.artifact, identity=other_identity),
+        )
+
+        with self.assertRaises(ValueError) as raised:
+            InstallState(2, (original, other))
+
+        message = str(raised.exception)
+        self.assertIn(".mcp.json -> mcpServers.atlassian", message)
+        self.assertIn("company/mcp/atlassian", message)
+        self.assertIn("company/mcp/jira", message)
+        self.assertIn("Uninstall whichever of the two", message)
+
+    def test_a_long_list_of_clashes_is_cut_short_and_says_how_many_remain(self) -> None:
+        """A manifest with dozens of clashes is one problem; the reader needs a few, not all."""
+
+        base = _record()
+        records = []
+        for slot in range(7):
+            for claimant in ("a", "b"):
+                identity = ArtifactIdentity("mcp", f"tool{slot}{claimant}")
+                records.append(
+                    replace(
+                        base,
+                        coordinate=ArtifactCoordinate(SourceAlias("company"), identity),
+                        artifact=replace(base.artifact, identity=identity),
+                        effects=(replace(base.effects[0], json_path=f"mcpServers.slot{slot}"),),
+                    )
+                )
+
+        with self.assertRaises(ValueError) as raised:
+            InstallState(2, tuple(records))
+
+        message = str(raised.exception)
+        self.assertEqual(message.count("claimed by"), 10)
+        self.assertIn("... and 2 more contested effect(s)", message)
+
+    def test_merge_effects_with_distinct_identities_can_share_a_json_path(self) -> None:
+        original = _record()
+        other_identity = ArtifactIdentity("mcp", "jira")
+        other = replace(
+            original,
+            coordinate=ArtifactCoordinate(SourceAlias("company"), other_identity),
+            artifact=replace(original.artifact, identity=other_identity),
+            effects=(
+                replace(
+                    original.effects[0],
+                    identity_digest=json_digest(JsonArray(("jira",))),
+                    identity_evidence=JsonArray(("jira",)),
+                ),
+            ),
+        )
+
+        state = InstallState(2, (original, other))
+
+        self.assertEqual(len(state.installations), 2)
+
+    def test_distinct_memory_blocks_can_share_one_instruction_file(self) -> None:
+        original = _record()
+
+        def memory(name: str, digest: str):
+            identity = ArtifactIdentity("memory", name)
+            return replace(
+                original,
+                coordinate=ArtifactCoordinate(SourceAlias("company"), identity),
+                artifact=replace(original.artifact, identity=identity),
+                effects=(
+                    EffectProof(
+                        kind="managed-block",
+                        destination="CLAUDE.md",
+                        actual_mode="copy",
+                        installed_digest=_digest(digest),
+                    ),
+                ),
+                memory_mode="prepend",
+                setup_state_ref=None,
+            )
+
+        state = InstallState(2, (memory("house", "8"), memory("testing", "9")))
+
+        self.assertEqual(len(state.installations), 2)
+
+    def test_project_and_user_effect_destinations_do_not_cross_scope(self) -> None:
+        project_effect = EffectProof(
+            kind="write-file",
+            destination="/Users/example/.claude/rules.md",
+            actual_mode="copy",
+            installed_digest=_digest("6"),
+            source_path="payload/rules.md",
+        )
+        with self.assertRaisesRegex(ValueError, "project.*relative"):
+            replace(_record(), effects=(project_effect,))
+
+    def test_memory_mode_round_trips_but_is_rejected_for_other_artifact_types(self) -> None:
+        original = _record()
+        identity = ArtifactIdentity("memory", "house")
+        memory = replace(
+            original,
+            coordinate=ArtifactCoordinate(SourceAlias("company"), identity),
+            artifact=replace(original.artifact, identity=identity),
+            requested_mode="copy",
+            effects=(
+                EffectProof(
+                    kind="managed-block",
+                    destination="CLAUDE.md",
+                    actual_mode="copy",
+                    installed_digest=_digest("8"),
+                ),
+            ),
+            memory_mode="append",
+            setup_state_ref=None,
+        )
+
+        encoded = install_state_bytes(InstallState(2, (memory,)))
+
+        self.assertIn(b'"memory_mode":"append"', encoded)
+        self.assertEqual(parse_install_state(encoded), Ok(InstallState(2, (memory,))))
+        with self.assertRaisesRegex(ValueError, "installation record"):
+            replace(original, memory_mode="append")
+
+    def test_invalid_memory_mode_is_rejected_during_parse(self) -> None:
+        original = _record()
+        identity = ArtifactIdentity("memory", "house")
+        memory = replace(
+            original,
+            coordinate=ArtifactCoordinate(SourceAlias("company"), identity),
+            artifact=replace(original.artifact, identity=identity),
+            requested_mode="copy",
+            effects=(
+                EffectProof(
+                    kind="managed-block",
+                    destination="CLAUDE.md",
+                    actual_mode="copy",
+                    installed_digest=_digest("8"),
+                ),
+            ),
+            setup_state_ref=None,
+        )
+        encoded = install_state_bytes(InstallState(2, (memory,))).decode()
+        invalid = encoded.replace('"effects":', '"memory_mode":"overlay","effects":')
+
+        self.assertIsInstance(parse_install_state(invalid), Err)
+
+    def test_non_symlink_effect_cannot_claim_symlink_mode(self) -> None:
+        with self.assertRaisesRegex(ValueError, "non-symlink"):
+            EffectProof(
+                kind="write-file",
+                destination=".claude/rules.md",
+                actual_mode="symlink",
+                installed_digest=_digest("7"),
+                source_path="payload/rules.md",
+            )
+
+
+if __name__ == "__main__":
+    unittest.main()

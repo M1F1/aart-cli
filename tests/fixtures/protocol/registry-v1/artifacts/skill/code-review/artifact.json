@@ -1,0 +1,1 @@
+{"compatibility":{"platforms":["darwin","linux"],"profiles":["claude","tabnine"]},"install":{"effects":["copy-tree"],"modes":["copy","symlink"],"scopes":["project","user"]},"name":"code-review","payload":{"format":"aart-skill-v1","root":"payload"},"schema_version":1,"summary":"Review changes for correctness, security, and maintainability.","type":"skill","version":"1.0.0"}

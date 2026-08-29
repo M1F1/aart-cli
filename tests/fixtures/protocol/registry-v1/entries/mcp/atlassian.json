@@ -1,0 +1,1 @@
+{"name":"atlassian","review":{"policy":"reference-review-v1","status":"approved"},"schema_version":1,"source":{"kind":"git","path":"artifacts/mcp/atlassian","ref":"main","url":"https://github.com/example/atlassian-agent-tools.git"},"type":"mcp"}

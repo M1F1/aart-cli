@@ -1,0 +1,147 @@
+"""Profile loader — WP-8. Built-ins overlaid by ``<project>/.agent-artifacts/profiles.json``."""
+
+from __future__ import annotations
+
+import json
+import os
+from types import MappingProxyType
+from typing import Any, Mapping, Optional, cast
+
+from .builtin import builtin
+from .model import (
+    ArtifactKind,
+    CopyTarget,
+    GuidelineTarget,
+    HookTarget,
+    MemoryTarget,
+    MergeSpec,
+    Profile,
+    ProfileTargets,
+)
+
+_ARTIFACT_TYPES = ("skill", "guideline", "mcp", "hook", "memory")
+
+
+def _unsupported_from_dict(value: object, label: str) -> Mapping[ArtifactKind, str]:
+    """Validate stable user-facing reasons from a custom profile record."""
+
+    if not isinstance(value, Mapping):
+        raise ValueError(f"{label} must be an object")
+    parsed: dict[ArtifactKind, str] = {}
+    for raw_type, raw_reason in value.items():
+        if raw_type not in _ARTIFACT_TYPES:
+            raise ValueError(f"{label} has unknown artifact type {raw_type!r}")
+        if (
+            not isinstance(raw_reason, str)
+            or not raw_reason.strip()
+            or "\n" in raw_reason
+            or "\r" in raw_reason
+        ):
+            raise ValueError(f"{label}.{raw_type} must be a non-empty single-line string")
+        parsed[cast(ArtifactKind, raw_type)] = raw_reason.strip()
+    return MappingProxyType(parsed)
+
+
+def _merge_spec_from_dict(d: Mapping[str, Any]) -> MergeSpec:
+    """Build a ``MergeSpec`` from a JSON-parsed dict."""
+    return MergeSpec(
+        file=d["file"],
+        json_path=d["json_path"],
+        mode=d["mode"],
+        identity=tuple(d.get("identity", ())),
+        entry_template=(
+            MappingProxyType(d["entry_template"]) if d.get("entry_template") is not None else None
+        ),
+    )
+
+
+def _hook_target_from_dict(d: Mapping[str, Any]) -> HookTarget:
+    """Build a ``HookTarget`` from a JSON-parsed dict."""
+    return HookTarget(
+        scripts_dir=d["scripts_dir"],
+        events=MappingProxyType(d["events"]),
+        merge=_merge_spec_from_dict(d["merge"]),
+    )
+
+
+def _profile_from_dict(record: Mapping[str, Any]) -> Profile:
+    """Build a ``Profile`` from a JSON-parsed dict (the §11 record shape).
+
+    Every artifact-type section is **optional**: a missing key yields ``None``
+    (this harness does not support that type — docs/design/DESIGN-memory.md §5), so partial
+    profiles load without a ``KeyError``.
+
+    Expected JSON shape (a partial ``vibe``-style profile + an ``memory`` target)::
+
+        {
+          "name": "vibe",
+          "skills":     { "dir": ".vibe/skills/<name>/" },
+          "guidelines": { "dest": ".vibe/guidelines/" },
+          "memory":     { "kind": "file", "dest": "AGENTS.md" }
+          # no "mcp" / "hooks" keys -> mcp=None, hooks=None
+        }
+    """
+    skills_d = record.get("skills")
+    guide_d = record.get("guidelines")
+    mcp_d = record.get("mcp")
+    hooks_d = record.get("hooks")
+    memory_d = record.get("memory")
+    user_d = record.get("user")
+
+    return Profile(
+        name=record["name"],
+        skills=CopyTarget(dir=skills_d["dir"]) if skills_d is not None else None,
+        guidelines=(GuidelineTarget(dest=guide_d["dest"]) if guide_d is not None else None),
+        mcp=_merge_spec_from_dict(mcp_d) if mcp_d is not None else None,
+        hooks=_hook_target_from_dict(hooks_d) if hooks_d is not None else None,
+        memory=(
+            MemoryTarget(kind=memory_d["kind"], dest=memory_d["dest"])
+            if memory_d is not None
+            else None
+        ),
+        unsupported=_unsupported_from_dict(record.get("unsupported", {}), "profile.unsupported"),
+        user=_targets_from_dict(user_d) if user_d is not None else None,
+    )
+
+
+def _targets_from_dict(record: Mapping[str, Any]) -> ProfileTargets:
+    """Parse an explicit nested scope target record using the normal profile target schema."""
+
+    skills_d = record.get("skills")
+    guide_d = record.get("guidelines")
+    mcp_d = record.get("mcp")
+    hooks_d = record.get("hooks")
+    memory_d = record.get("memory")
+    unsupported = _unsupported_from_dict(record.get("unsupported", {}), "profile user.unsupported")
+    return ProfileTargets(
+        skills=CopyTarget(dir=skills_d["dir"]) if skills_d is not None else None,
+        guidelines=(GuidelineTarget(dest=guide_d["dest"]) if guide_d is not None else None),
+        mcp=_merge_spec_from_dict(mcp_d) if mcp_d is not None else None,
+        hooks=_hook_target_from_dict(hooks_d) if hooks_d is not None else None,
+        memory=(
+            MemoryTarget(kind=memory_d["kind"], dest=memory_d["dest"])
+            if memory_d is not None
+            else None
+        ),
+        unsupported=unsupported,
+    )
+
+
+def load_profiles(project: Optional[str] = None) -> Mapping[str, Profile]:
+    """Built-in profiles merged with the project's override file (pure merge over data).
+
+    If *project* is given and ``<project>/.agent-artifacts/profiles.json`` exists,
+    parse it and overlay/add those profiles over the built-ins. User records
+    replace or add by name.  Missing project or file -> just the built-ins.
+    """
+    base = dict(builtin())  # mutable copy for merging
+
+    if project is not None:
+        override_path = os.path.join(project, ".agent-artifacts", "profiles.json")
+        if os.path.isfile(override_path):
+            with open(override_path, encoding="utf-8") as fh:
+                overrides: Mapping[str, Any] = json.load(fh)
+            for name, record in overrides.items():
+                base[name] = _profile_from_dict(record)
+
+    return MappingProxyType(base)

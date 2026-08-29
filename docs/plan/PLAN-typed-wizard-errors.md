@@ -1,0 +1,499 @@
+# Plan: typed stage failures and actionable TUI diagnostics
+
+- **Status:** delivered; ERR01–ERR09 completed
+- **Tracking issue:** [#74 — Typed stage failures and actionable TUI diagnostics](https://github.com/M1F1/agent-artifacts/issues/74)
+- **Design:** [`DESIGN-typed-wizard-errors.md`](../design/DESIGN-typed-wizard-errors.md)
+- **Primary outcome:** expected failures retain typed diagnostics through the wizard, and an
+  internal exception can never silently restart an active session.
+- **Initial user-visible case:** legacy project installation state detected while loading
+  Artifacts.
+
+## Handoff state
+
+The change set that introduced this plan also contains two prerequisite bug fixes that must remain
+independently understandable in history:
+
+- `agent_artifacts/tui.py` and `tests/tui_consumer_text_test.py` contain the local setup-reporting
+  identity fix;
+- `agent_artifacts/tui_marketplace.py` and `tests/tui_marketplace_test.py` contain the local
+  lifecycle-status deduplication fix that prevents the observed Artifacts restart;
+ERR01–ERR04 now landed in separate reviewable commits. A continuing agent should verify their
+evidence in this plan and `PROGRESS-tui-program.md`, then continue at ERR05b rather than repeating
+the completed implementation.
+
+Since then, **ERR05a has landed out of order** — see that package for exactly what is delivered and
+what remains. The agreed sequence from that point is: ERR05a (done), then the TUI legibility
+program in `PLAN-tui-legibility.md`, then ERR01 onward with the `tui_layout` kernel available for
+rendering diagnostics as records rather than flattened strings.
+
+The reproducer below is **live in this working tree**: `.agent-artifacts/manifest.json` currently
+has top-level `installed` and `repo` keys, so ERR02 can be driven against it without constructing
+a fixture.
+
+The reproducer for the first expected failure is:
+
+```text
+/Users/mifi/code/agent-artifacts/.agent-artifacts/manifest.json
+  top-level keys: repo, installed
+
+cd /Users/mifi/code/agent-artifacts
+aart
+  User -> configured registry -> Claude -> Install -> Project -> Copy -> Artifacts
+```
+
+Characterized output before ERR02:
+
+```text
+error: missing required field 'installations'; missing required field 'schema_version';
+unknown field 'installed'; unknown field 'repo'
+```
+
+A **second live reproducer** needs no fixture either, only an ordinary configuration whose
+enabled source is a registry:
+
+```text
+cd <any canonical registry checkout>      # one containing aart-registry.json
+aart
+  Maintainer -> select the enabled registry source
+```
+
+```text
+error: registry registry is ready for source management, but artifact browsing requires the
+federated marketplace view
+```
+
+The frontends currently diverge after this same flattened diagnostic: text returns to Sources, so
+the user may cleanly quit with status 0; curses stores it as a terminal selection error and exits
+2. Neither output names a stage or gives Maintainer a valid role-specific input. Design §4
+"Role-scoped stage inputs" holds the decision this drives: Maintainer curates a checkout and skips
+Sources. Note the same checkout reaches the Maintainer action list immediately via
+`aart --source .`, so the working path already exists — what is missing is making it the default
+for the role.
+
+The supported explicit migration preview currently continues with a separate, legitimate source
+resolution error for `memory/superpowers@tabnine`. Do not hide or bypass that error:
+
+```sh
+aart migrate state --from 0.1 --scope project --dry-run
+```
+
+## Guardrails
+
+- Write a failing characterization test before each functional change.
+- Expected errors use `DomainErr`; do not add ordinary exception subclasses as control flow.
+- Preserve `Diagnostic.code`, `location`, `remediation`, and `details`; never flatten them to one
+  semicolon-separated string inside canonical TUI flows.
+- Do not automatically migrate or modify legacy/invalid state.
+- Do not broaden startup validation so project state blocks unrelated user-scope or maintainer
+  paths.
+- Do not catch programming errors inside domain code merely to make tests pass.
+- Do not restart the wizard after session initialization.
+- Do not expose raw exceptions, tracebacks, file contents, credentials, setup inputs, or environment
+  values in normal terminal output or analytics.
+- Keep text and curses behavior equivalent; a feature is incomplete if only one frontend handles it.
+- Do not change registry schemas, artifact versions, or `requires_aart` in this task.
+- Keep release/version bump and publication as separate explicitly authorized work.
+
+## Delivery sequence
+
+### ERR01 — characterize the two failure classes
+
+**Status:** completed
+
+1. Add a parser/application fixture for recognized 0.1 state (`repo` plus `installed`) and a
+   separate malformed-v2 fixture.
+2. Add a text-wizard test that reaches Artifacts with legacy project state and captures the current
+   flattened diagnostic.
+3. **Already satisfied by ERR05a.** The curses crash boundary no longer restarts the wizard, and
+   `tests/tui_fallback_boundary_test.py` holds six tests for the fixed contract. Do not write a
+   test for the old behaviour; verify those tests still assert it and move on.
+3b. Add a text-wizard characterization test for the Maintainer dead end: a canonical registry
+   checkout, a configuration whose only enabled source is `registry-git`, role Maintainer. Capture
+   that the current behaviour prints one flattened line, returns to Sources, and permits a clean
+   quit without a mutation. Record separately that the curses adapter turns the same error into
+   its terminal exit-2 selection failure.
+4. Keep the already-added lifecycle duplicate test as regression coverage for the concrete bug,
+   but do not treat deduplication as sufficient error handling.
+5. Record mutation snapshots around each failing flow so later fixes prove that diagnostics are
+   read-only.
+
+Acceptance:
+
+- tests fail for the intended behavioral reasons, not fixture/setup errors;
+- the legacy-state and unexpected-internal-error cases are independently reproducible;
+- test output contains no secrets or machine-dependent source content.
+
+### ERR02 — discriminate legacy installation state in the parser
+
+**Status:** completed; depends on ERR01
+
+1. Add `INSTALL_STATE_LEGACY = DiagnosticCode("install-state-legacy")` beside
+   `STATE_INVALID` in `agent_artifacts/install_state/schema.py`.
+2. After JSON parsing and before strict v2 field validation, recognize only the bounded 0.1
+   top-level shape. Return a typed diagnostic with:
+   - the exact input path in `SourceLocation`;
+   - a message that this is AART 0.1 installation state;
+   - preview-first project/user migration remediation without `--apply`;
+   - a detail identifying detected and required schema families, without serializing file content.
+3. Keep malformed JSON, arbitrary unknown objects, malformed v2, and unsupported explicit schema
+   versions under `install-state-invalid`.
+4. Test project and user paths, canonical diagnostic ordering, and serialization through
+   `diagnostic_to_data`.
+
+Acceptance:
+
+- legacy shape produces exactly `install-state-legacy`;
+- malformed v2 never produces `install-state-legacy`;
+- parsing performs no writes and does not infer source mappings.
+
+### ERR03 — preserve DomainErr through the Artifacts loader
+
+**Status:** completed; depends on ERR02
+
+1. Change `_load_user_wizard_read_model` to return
+   `DomainResult[_UserWizardReadModel]` for the canonical configured-marketplace path.
+2. Remove conversion of `ConsumerApplicationService.browse` failures into legacy
+   `Err("; ".join(...), code=2)`.
+3. Audit the function's legacy-source branch. Adapt legacy command errors at one named compatibility
+   boundary rather than weakening the canonical return type.
+4. Introduce the immutable `WizardStageFailure` presentation envelope in a small wizard/TUI model
+   module. It contains stage/operation/recovery context and the original diagnostics.
+5. Add a pure adapter from `(session, operation, DomainErr)` to `WizardStageFailure`.
+
+Acceptance:
+
+- diagnostic identity, location, remediation, and details survive from parser to stage envelope;
+- no canonical path concatenates diagnostic messages;
+- mypy proves every loader outcome is handled.
+
+### ERR04 — shared deterministic rendering and recovery
+
+**Status:** completed; depends on ERR03
+
+1. Add one pure renderer for `WizardStageFailure` used by text and curses.
+2. Render stage, operation, codes, locations, details, remediation, and only the allowed recovery
+   choices.
+3. Add a shared wizard event for Retry if both frontends can support it in this slice. Otherwise
+   ship Back/Quit equivalently and leave Retry explicitly pending; do not implement it in one
+   frontend only.
+4. Text Artifacts behavior:
+   - render the failure in place;
+   - Back returns to Mode/Scope through existing navigation;
+   - Quit exits cleanly;
+   - Retry repeats only the read-model load and preserves the session/basket.
+5. Curses Artifacts behavior mirrors text and returns to the same screen after dismiss/retry.
+6. Use the fixed lower pane for list-local feedback only. A stage-blocking
+   `WizardStageFailure` uses the scrollable record view; it must not be rendered beneath a stale
+   or unavailable list. Add one test for each placement and assert that the status bar only names
+   available recovery keys.
+7. Add narrow-terminal rendering tests and verify no color dependency.
+
+Acceptance:
+
+- legacy state output names Artifacts, project, path, code, and migration preview;
+- choosing Back preserves valid earlier selections and permits User scope;
+- no error path finalizes a plan or mutates state.
+
+Delivered in `c87935e`:
+
+- `render_wizard_stage_failure` is the sole deterministic projection used by text and curses;
+  it bounds normal lines, renders safe stage/context/location/remediation facts, and redacts
+  adapter-only and nonallowlisted details.
+- Both frontends accept Retry, Back and Quit in place. Retry repeats only the read loader; Back
+  preserves valid selections through `wizard_back`; Quit preserves the existing basket-discard
+  confirmation. Curses shows a scrollable record with a recovery-only bar rather than a stale
+  list pane.
+- The retained legacy command adapter keeps an explicit old nonzero exit code only after Quit.
+  It neither appears in the record nor changes canonical recovery choices.
+- Focused width/recovery/no-write tests plus every `python scripts/quality.py` gate pass (1845
+  tests). An independent review caught and fixed a curses basket-confirmation asymmetry.
+
+### ERR05 — constrain curses fallback and type internal failures
+
+**Status:** completed. **ERR05a delivered** ahead of ERR01–ERR04 as an independent commit, because the
+broad handlers were actively discarding live sessions and because any later TUI work would have
+had its exceptions swallowed and misreported as "curses unavailable". **ERR05b** subsequently
+completed after ERR04.
+
+Delivered in ERR05a (items 1–3, minus typed rendering):
+
+- `CursesUnavailable` in `agent_artifacts/tui.py` marks the sole condition permitting text
+  fallback — import/TTY/curses setup failure before interaction begins.
+- `_run_curses` records that the callback reached session initialization and re-raises anything
+  that fails after it; it no longer starts a text wizard itself, so fallback has exactly one site.
+- `run` falls back only on `CursesUnavailable`. Its outermost handler renders the stable
+  `tui-stage-internal` code via `internal_failure_lines` and exits non-zero, never invoking
+  `_run_text`.
+- Redaction by default: only the exception *type* is disclosed, never the message or a traceback.
+- `tests/tui_fallback_boundary_test.py` covers both sides of the boundary. Two tests in
+  `tests/tui_source_stage_test.py` that asserted the old broad-fallback behavior were rewritten
+  against the new contract rather than deleted.
+
+Delivered in ERR05b:
+
+- `InternalFailureContext` holds only the last safe stage and operation outside `WizardSession`.
+  The shell marks Artifacts load, Review, Finalize, Setup and Reporting before those operations;
+  default internal records show that safe context with the stable code and exception type only.
+- `AART_DEBUG=1` is the chosen explicit local developer mechanism. It writes a traceback to local
+  stderr only; normal stdout and all reporting paths remain redacted.
+- `_curses_supported` falls back only for an unavailable `curses` import or TTY `OSError`.
+  Unexpected probe failures become `tui-stage-internal`, not a silent text restart.
+- Focused fallback/context/debug tests and all ten quality gates pass (1851 tests).
+
+1. Replace broad fallback semantics in `_run_curses` and `run` with an explicit initialization
+   boundary.
+2. Allow text fallback exactly once only for import/TTY/curses setup failure before wizard session
+   initialization.
+3. After initialization:
+   - expected stage failures use `WizardStageFailure`;
+   - unexpected exceptions restore the terminal and produce `tui-stage-internal`;
+   - the process exits non-zero and never invokes `_run_text`.
+4. Ensure the outer crash boundary knows the last stage and operation without storing terminal or
+   service objects in `WizardSession`.
+5. Decide and implement the explicit local debug traceback mechanism from the design's open
+   decisions. Default output must remain redacted.
+
+Acceptance:
+
+- initialization failure starts onboarding once in text mode;
+- post-initialization exception never restarts onboarding;
+- normal output contains a stable code and no raw exception/traceback;
+- debug output is opt-in, local-only, tested, and excluded from reporting.
+
+### ERR06 — audit remaining stage boundaries
+
+**Status:** completed in `181d555`; depends on ERR03–ERR05
+
+Audit every stage/operation boundary and classify failures rather than mechanically wrapping all
+exceptions:
+
+1. Sources load/add/sync/finalize.
+2. Profile/scope/mode compatibility projection.
+3. Artifacts marketplace and lifecycle joins.
+4. Review preparation for consumer and maintainer paths.
+5. Finalize, setup queue, and reporting.
+6. Legacy compatibility paths still using `agent_artifacts.model.Err`, explicitly including
+   `_selected_legacy_source_arguments` ([tui.py:1949](../../agent_artifacts/tui.py)), whose
+   `source-incompatible` and `source-selection-invalid` diagnostics are flattened by both
+   frontends into `selection["error"]` and end the session.
+
+For each boundary:
+
+- expected adapter/domain failure returns `DomainErr`;
+- frontend adds stage context and recovery choices;
+- internal invariant failures reach the typed outer crash boundary;
+- post-finalize warnings cannot overwrite or obscure known artifact outcomes;
+- JSON CLI retains structured diagnostics and exit status.
+
+Acceptance:
+
+- no new canonical TUI code flattens diagnostics;
+- no broad exception handler triggers a frontend restart;
+- every caught exception has a documented narrow reason or is the outer crash boundary.
+
+Delivered:
+
+- Sources choice validation is compact, code-bearing list-local feedback. In curses it occupies
+  the fixed lower list slot and is bounded to `CONTENT_MEASURE`; source add/sync/refresh failures
+  remain local to their form/notice flow and use the same code-bearing bounded text.
+- The consumer-loader and named `_selected_legacy_source_arguments` bridge preserve their
+  `DomainErr` as conservative `Sources` records in both frontends. Compatibility exit status is
+  never rendered and does not reduce Back/Quit recovery.
+- Canonical consumer and curation review/finalize paths preserve their errors into `Review`
+  records. The live curses frontend recovers in place; dispatch after required curses teardown
+  renders a terminal record instead of flattening an expected finalization failure.
+- Source finalization returns its `DomainErr` to the frontend rather than printing and returning an
+  integer. Setup/reporting retain their explicit post-outcome warning-only classification; ERR09
+  owns their effect-review/manual-route contract.
+- Profile, scope and mode currently have pure input/compatibility projections rather than an
+  adapter that can emit `DomainErr`; Artifacts keeps the ERR04 typed load boundary. Legacy command
+  mutation results remain in the pre-1.0 command surface and are not reclassified as canonical TUI
+  domain failures.
+- Regression coverage includes source feedback placement/width, legacy bridge recovery in both
+  frontends, consumer Review prepare/finalize recovery, startup source records and post-teardown
+  terminal finalization records. All ten quality gates passed with 1861 tests.
+
+### ERR08 — Maintainer curates a checkout, not a subscription
+
+**Status:** completed in `b331060`; depends on ERR01 for its characterization test. Independent of
+ERR02–ERR04, so it may land before or after them.
+
+Implements design §4 "Role-scoped stage inputs". This removes the dead end itself; ERR06 removes
+the failure class around it. Both are wanted: the second reproducer must stop being reachable
+*and* stop being fatal when a related boundary fails.
+
+1. When the role is Maintainer and no explicit `--source`/`--repo` was given, resolve the catalog
+   root to the current working directory and skip the Sources stage. An explicit flag still wins.
+2. Apply it in **both** frontends. The two call sites are the curses gate at
+   [tui.py:5132](../../agent_artifacts/tui.py) and the text gate at
+   [tui.py:2864](../../agent_artifacts/tui.py); a change in one only is incomplete.
+3. Keep `_selected_legacy_source_arguments` for the paths that still need it — a Maintainer who
+   *does* pass a source, and every non-Maintainer legacy caller. Do not delete the registry
+   rejection; it stays correct for those, and ERR06 makes it recoverable.
+4. The stepper must not show a stage the role never visits, so `stages_for` drops `source` for the
+   Maintainer default path. Check `projected_stages_for` still marks the tail honestly.
+5. Preserve Back: from Maintainer action, Back returns to Role, not to a skipped Sources.
+
+Acceptance:
+
+- from a canonical registry checkout with only a registry source enabled, `aart` → Maintainer
+  reaches the Maintainer action list without touching Sources;
+- `aart --source <dir>` is unchanged, including its registry rejection;
+- User is untouched: Sources still runs, and a registry subscription still browses through the
+  federated marketplace view;
+- the stepper never lists a stage the session cannot reach;
+- no writes occur anywhere on this path.
+
+Delivered:
+
+- `WizardSession.maintainer_checkout` is a pure route fact set only after the user selects
+  Maintainer with no explicit `--source` or `--repo`. The Maintainer stage graph omits Sources;
+  changing role clears the fact and Back from Maintainer action returns to Role.
+- Both frontend gates resolve the curation root to absolute `cwd`, show the Maintainer action list
+  without asking a consumer Sources question, and keep User's source-selection route unchanged.
+  Maintainer's User-workflows entry reuses the existing configuration rather than inventing a
+  source selection.
+- An explicit source/repo still takes the old Sources route, including the ERR06 typed,
+  recoverable registry rejection. No configuration, source, artifact, setup or reporting write is
+  performed merely by choosing the default route.
+- Registry-only checkout, text/curses action-list, stepper/Back and explicit-route tests passed;
+  independent review found no critical issue. All ten quality gates passed with 1866 tests.
+
+### ERR09 — bounded setup review and manual `SETUP.md` fallback
+
+**Status:** in delivery; ERR09-A/B completed in `819b885` and `0cfee2a`; follows ERR04's shared
+record renderer and ERR06's setup-boundary audit.
+The detailed contract and file map are in
+[`PLAN-setup-review-transparency.md`](PLAN-setup-review-transparency.md); its design is
+[`DESIGN-setup-review-transparency.md`](../design/DESIGN-setup-review-transparency.md).
+Public tracking is [#75 — Transparent setup review and manual `SETUP.md`
+fallback](https://github.com/M1F1/agent-artifacts/issues/75).
+
+This is the Track-3 follow-up to the completed legibility work. It makes setup-capable MCPs and
+other directory artifacts legible before an installer runs, and keeps a trusted manual route
+visible for users who decline or do not trust automation.
+
+1. Add a forward-compatible setup protocol revision: new/updated setup-capable artifacts require
+   a package-root `SETUP.md`; existing version-1 installers remain readable and are never made
+   invalid retrospectively.
+2. Show a standard manual-alternative preamble before every setup review and on every setup
+   failure/cancellation: repository-relative `SETUP.md`, a commit-pinned repository URL when the
+   source can provide one, otherwise an absolute local source path, and an explicit statement that
+   no setup effect has run yet.
+3. Replace flattened `module: summary -> target` output with a stable effect record bounded by
+   `CONTENT_MEASURE`: identity, purpose, target, capability, reversibility/recovery and safe
+   command detail. The shared text/curses projection is the only renderer; no terminal-width
+   string may be constructed independently.
+4. Require the same preamble at the runtime boundary for static and custom installers. A custom
+   script also carries the standard non-executing header pointing to `../SETUP.md`, but a script
+   cannot suppress the runtime's user-facing manual route.
+5. After a payload has installed, a failed, skipped, or declined setup outcome names the known
+   payload result first and then renders its manual route. It remains a typed, non-secret outcome;
+   no path implies rollback of the payload.
+
+Acceptance:
+
+- a user can decline every setup effect and still receives a concrete manual path or immutable
+  repository link;
+- every effect is comprehensible as a bounded record at widths 40, 80, 120 and 200;
+- ~~v1 artifacts remain compatible, while a newly authored setup artifact without `SETUP.md` is
+  rejected before installation;~~ **withdrawn by the maintainer during ERR09-D**: exactly one
+  recipe revision is supported, so a setup artifact without `SETUP.md`, or declaring the
+  superseded `1`/`1` pair, is rejected before installation with its migration named;
+- list-local setup validation feedback uses the fixed lower pane, whereas a blocking setup review
+  or execution failure uses the record presentation defined in the design;
+- no manual route, effect rendering, or failure output exposes a secret, setup input, raw process
+  output, or unbounded command line.
+
+### ERR07 — documentation, quality, and release handoff
+
+**Status:** completed.
+
+1. Update user documentation with the rendered legacy-state example, migration preview, source-map
+   follow-up, and distinction between project and user scope.
+2. Update persistent-wizard design documentation to link this error contract.
+3. Add a release note describing the UX correction without claiming automatic migration.
+4. Decide the executable patch version only in the release task. Do not edit registry compatibility
+   or per-artifact requirements.
+5. Verify a built wheel reproduces the same typed behavior as the checkout.
+
+Acceptance:
+
+- docs never instruct users to delete or hand-edit installation state;
+- release notes distinguish legacy state, invalid state, and internal failure;
+- wheel and checkout pass the same end-to-end scenarios.
+
+Delivered:
+
+- README gained *When Installation State Cannot Be Read*, which prints the three records as the
+  code actually renders them, previews migration for the project and user scope separately because
+  the two never cross, and shows the repeatable `--source-map` follow-up for an unresolved legacy
+  identity. It says plainly that deleting the manifest is not a fix, and that `aart` performs no
+  migration step on the user's behalf.
+- `DESIGN-persistent-tui-wizard.md` §11 no longer implies its own presentation rules. It names
+  [`DESIGN-typed-wizard-errors.md`](../design/DESIGN-typed-wizard-errors.md) as the owner of the
+  diagnostic algebra, the stage record, the list-local/stage-blocking placement rule and the curses
+  fallback boundary, and keeps only the guarantees this wizard makes.
+- The `Unreleased` CHANGELOG entry separates the three failure classes, states that no state is
+  migrated or rewritten, and carries no version number — item 4 leaves that to the release task.
+- Item 5 was a real gap, not a formality: `packaging-check` imported `agent_artifacts.cli.main`
+  from the extracted wheel and proved nothing about behavior. It now renders all three records
+  through the checkout and through the wheel and requires byte equality. The probe uses only
+  synthetic paths, so the comparison is not an accident of the local environment.
+- Two superseded statements were corrected rather than left standing: ERR09's `v1 artifacts remain
+  compatible` acceptance bullet, and `DESIGN-setup-review-transparency.md` D1.
+
+## Test matrix
+
+Minimum focused coverage:
+
+| Layer | Scenario | Required assertion |
+|---|---|---|
+| parser | recognized 0.1 project/user state | `install-state-legacy`, path, remediation |
+| parser | malformed JSON/v2 | `install-state-invalid`, precise location |
+| consumer | browse reads legacy selected scope | original diagnostic preserved |
+| wizard core | stage failure envelope | immutable, deterministic recovery choices |
+| text TUI | Artifacts legacy state | actionable output; Back/Quit/Retry contract |
+| curses TUI | Artifacts legacy state | same diagnostic and recovery semantics |
+| curses startup | terminal init failure | text onboarding exactly once |
+| curses active | unexpected exception | `tui-stage-internal`; no restart |
+| safety | every failure above | no tracked project/config/state/store mutation |
+| privacy | internal/setup failures | no secret, raw output, or traceback by default |
+| regression | installed MCP lifecycle join | Artifacts renders; unique statuses retained |
+| regression | setup/reporting | artifact outcome preserved independently |
+| setup review | manual fallback and effect list | `SETUP.md` route, bounded records, no secret output |
+
+Before implementation handoff or PR, run:
+
+```sh
+git diff --check
+make format-check
+make lint
+make typecheck
+make unit
+make integration
+make e2e
+make validate
+make coverage
+make packaging-check
+make docs-check
+```
+
+The repository-wide lint gate must include all tracked implementation and test files. Preserve
+untracked workspace artifacts unless their ownership and inclusion are explicitly agreed before
+claiming the complete gate passes.
+
+## Completion checklist
+
+- [x] ERR01 characterization tests exist and failed before implementation.
+- [x] ERR02 distinguishes legacy and invalid installation state.
+- [x] ERR03 preserves typed diagnostics through stage loading.
+- [x] ERR04 renders and recovers equivalently in text and curses.
+- [x] ERR05 prevents post-start fallback/restart and types internal failures.
+- [x] ERR06 audits all stage boundaries without exception laundering.
+- [x] ERR08 makes the default Maintainer route a checkout workflow.
+- [ ] ERR09 gives every new setup installer a `SETUP.md` fallback and a bounded effect review.
+- [ ] ERR07 documents, packages, and hands off release decisions.
+- [ ] No automatic migration or state overwrite was introduced.
+- [ ] No analytics payload gained local diagnostic context.
+- [ ] No registry/artifact compatibility requirement changed.

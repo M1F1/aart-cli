@@ -1,0 +1,2051 @@
+"""Pure registry workspace planning and quality checks over inert snapshots."""
+
+from __future__ import annotations
+
+from collections import Counter
+from dataclasses import dataclass, replace
+from typing import cast
+
+from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from agent_artifacts.domain.identifiers import ArtifactIdentity, ObjectDigest, SourceId
+from agent_artifacts.domain.result import Err, Ok, Result
+from agent_artifacts.protocol.capabilities import Capability
+from agent_artifacts.protocol.hashing import sha256_bytes
+from agent_artifacts.protocol.json import (
+    JsonArray,
+    JsonObject,
+    canonical_json_bytes,
+    parse_json,
+)
+from agent_artifacts.protocol.native_models import (
+    INSTALL_EFFECTS_BY_TYPE,
+    PAYLOAD_FORMAT_BY_TYPE,
+    ArtifactManifest,
+    ArtifactSelector,
+    CanonicalArtifactType,
+    CollectionManifest,
+    CompatibilitySpec,
+    InstallMode,
+    InstallScope,
+    InstallSpec,
+    PayloadSpec,
+    SourceManifest,
+)
+from agent_artifacts.protocol.native_schema import (
+    artifact_manifest_to_json,
+    collection_manifest_to_json,
+    parse_artifact_manifest,
+    parse_provenance,
+    parse_source_manifest,
+    source_manifest_to_json,
+)
+from agent_artifacts.protocol.native_tree import (
+    SnapshotEntry,
+    SnapshotEntryKind,
+    SourceSnapshot,
+)
+from agent_artifacts.protocol.paths import SafeRelativePath, parse_relative_path
+from agent_artifacts.protocol.registry_index import (
+    build_registry_index,
+    index_artifact_from_package,
+)
+from agent_artifacts.protocol.registry_models import (
+    LockedArtifact,
+    RegistryLock,
+    RegistryManifest,
+    ReviewRecord,
+    ServiceAdvertisement,
+)
+from agent_artifacts.protocol.registry_schema import (
+    parse_registry_entry,
+    parse_registry_index,
+    parse_registry_lock,
+    parse_registry_manifest,
+    registry_index_to_json,
+    registry_lock_to_json,
+    registry_manifest_to_json,
+)
+from agent_artifacts.protocol.registry_tree import (
+    registry_inputs_digest,
+    resolve_locked_references,
+)
+from agent_artifacts.protocol.semver import SemVer, VersionBounds
+from agent_artifacts.registry_maintenance.model import (
+    NativeAcquirer,
+    NativeReferenceAcquisition,
+    NativeReferenceDisposition,
+)
+from agent_artifacts.registry_maintenance.planning import (
+    registry_native_content,
+    resolve_native_acquisition,
+)
+from agent_artifacts.registry_maintenance.vendoring import (
+    VENDOR_IMPORTER_ID,
+    CopyIntegrity,
+    DeliveryFinding,
+    VendoredPackage,
+    VendorOptions,
+    VendorOrigin,
+    assess_vendored_package,
+    copy_integrity_message,
+    delivery_reference_message,
+    describe_delivery,
+    mcp_descriptor_message,
+    project_vendored_package,
+    read_vendor_record,
+    verify_vendored_copy,
+)
+from agent_artifacts.runtime_contract import EXECUTABLE_VERSION
+from agent_artifacts.security.application import verify_security_index
+from agent_artifacts.security.attestation_schema import parse_security_index
+from agent_artifacts.security.model import InstallationRisk
+from agent_artifacts.sources.model import source_snapshot_digest
+from agent_artifacts.sources.subtree import TakenSubtree, take_subtree
+
+from .model import (
+    ArtifactScaffoldOptions,
+    CollectionAuthorOptions,
+    RegistryInitOptions,
+    RegistryOperation,
+    RegistryQualityCheck,
+    RegistryQualityReport,
+    RegistryWorkspaceChange,
+    RegistryWorkspacePlan,
+    VendoredArtifactCheck,
+    VendoredArtifactPlan,
+    WorkspaceChangeKind,
+    registry_workspace_review_digest,
+)
+from .templates import (
+    REGISTRY_CI_WORKFLOW,
+    REGISTRY_GITIGNORE,
+    REPORTING_TEMPLATES,
+    render_registry_readme,
+)
+
+REGISTRY_COMMAND_INVALID = DiagnosticCode("registry-command-invalid")
+REGISTRY_AUDIT_WARNING = DiagnosticCode("registry-audit-warning")
+# `LAF-45`: a report of what the audit did, as opposed to what it found. It carries no remediation
+# because there is nothing to remedy — an operator reads it to know the check ran at all.
+REGISTRY_AUDIT_NOTE = DiagnosticCode("registry-audit-note")
+
+
+# `RS-09`: the next step a refused registry command hands over. These are shared lines rather than
+# one sentence per call site, which `SI-6` already learned once on the object store: the operator's
+# next step is the same wherever the same problem is stated, and a distinct sentence per site
+# invents distinctions they do not have. Every `aart …` written here is parsed by the shipped CLI in
+# `tests/source_remediation_test.py`, so a command that stops existing fails the suite.
+_REVIEW_AGAIN = (
+    "the workspace moved between the review and the finalize; run the command again to review the "
+    "current workspace, then repeat it with `--yes`",
+)
+_REVIEW_FIRST = (
+    "run the same command without `--yes` to produce the review, approve it, then repeat the "
+    "command with `--yes`",
+)
+_INITIALIZE = (
+    "point `--source` at a registry checkout, or create one with "
+    "`aart registry init --source-id SLUG --display-name NAME --yes`",
+)
+_CLEAR_PATH = (
+    "move or remove whatever occupies that path in the checkout, then run the command again",
+)
+_ALREADY_A_REGISTRY = (
+    "this checkout is already a registry: read it with `aart registry validate`, or "
+    "initialize a different directory by pointing `--source` at it",
+)
+_LIST_PACKAGES = ("`aart registry validate` reports every package and entry this registry holds",)
+_RELOCK = (
+    "resolve the authored entries again with `aart registry lock --yes`, then "
+    "`aart registry build --yes`",
+)
+_LOCK_FIRST = (
+    "write the lock with `aart registry lock --yes`, then run `aart registry build --yes`",
+)
+_APPROVE_ENTRIES = (
+    "approve the review record of every authored entry under `entries/`, then "
+    "`aart registry lock --yes`",
+)
+_COPY_INTEGRITY = (
+    "the copy on disk no longer matches the record committed beside it: restore it from the last "
+    "commit that agreed with the record before re-vendoring",
+)
+_CANONICAL_ROOTS = (
+    "restore the canonical `artifacts/` and `collections/` roots in `aart-source.json`, then "
+    "`aart registry validate`",
+)
+_SETUP_RECIPE = (
+    "add the declared recipe and its `SETUP.md` to the package, or drop `--setup-recipe`, then run "
+    "the command again",
+)
+
+
+def _is_vendored_package(files: dict[str, SnapshotEntry], base: str) -> bool:
+    """Whether the package at `base` records a vendoring, as opposed to being authored in place."""
+
+    provenance = files.get(f"{base}/provenance.json")
+    if provenance is None or provenance.kind is not SnapshotEntryKind.FILE:
+        return False
+    parsed = parse_provenance(provenance.content, path=f"{base}/provenance.json")
+    return isinstance(parsed, Ok) and parsed.value.importer.id == VENDOR_IMPORTER_ID
+
+
+def _existing_package_remediation(
+    files: dict[str, SnapshotEntry],
+    base: str,
+    identity: ArtifactIdentity,
+) -> tuple[str, ...]:
+    """`RS-04`: `vendor` is create-only, so say which command is not.
+
+    Upstream moving is the ordinary reason to run `vendor` a second time, and `revendor` is the
+    command that adopts movement — but only for a copy that records where it came from. An authored
+    package has no upstream to re-resolve, so it is told the other thing instead of being sent to a
+    command that would refuse it.
+    """
+
+    if _is_vendored_package(files, base):
+        return (
+            f"to take a newer upstream into this copy, run `aart registry revendor "
+            f"{identity.kind} {identity.name} --artifact-version <version>`, which re-resolves the "
+            f"ref this package records; `vendor` creates a package and never replaces one",
+        )
+    return (
+        f"{base} was authored here and records no upstream, so vendor under a name this registry "
+        f"does not use, or remove that package first if you meant to replace it",
+    )
+
+
+_RECORDED_ORIGIN = (
+    "run the command without `--yes` to read the origin and ref recorded with the copy, and take "
+    "the new bytes from that origin",
+)
+_IDENTITIES = (
+    "make `registry_id` in `aart-registry.json` and `source_id` in `aart-source.json` the same "
+    "value, then `aart registry validate`",
+)
+_ENTRY_FILES = (
+    "one file under `entries/` per identity, named for the identity it declares; correct the file, "
+    "then `aart registry validate`",
+)
+
+
+_UPSTREAM_UNREACHABLE = (
+    "the origin could not be read, so this is unknown rather than behind: restore access to it and "
+    "run `aart registry audit --check-upstream` again",
+)
+_COVERAGE_LIMIT = (
+    "nothing to correct: this records what the audit could not cover, because a registry with no "
+    "external references has no external provenance to check",
+)
+_PROVENANCE = (
+    "a package authored in this registry has no provenance and this stays a warning; a copy taken "
+    "from upstream gets its record from the vendoring that took it",
+)
+_DECLARE_LICENSE = (
+    "record the license in the package's `artifact.json`; for a copy, `--license` on the vendoring "
+    "states what this registry publishes",
+)
+_SECURITY_EVIDENCE = (
+    "supply the per-object evidence under `security/index.json`, or accept that the audit reports "
+    "installation risk as unassessed",
+)
+_SECURITY_REBUILD = (
+    "the evidence describes a different compiled registry: rebuild the index with "
+    "`aart registry build --yes`, regenerate the evidence for it, then `aart registry audit`",
+)
+_SECURITY_RISK = (
+    "read the attestation for that object and either correct the package or stop publishing it; "
+    "the audit reports the risk rather than deciding it for you",
+)
+
+
+def _revendor(identity: ArtifactIdentity) -> tuple[str, ...]:
+    """The next step for a copy that has moved, naming the copy it is about."""
+
+    return (
+        "take the copy again with "
+        f"`aart registry revendor {identity.kind} {identity.name} --artifact-version VERSION "
+        "--yes`, which replaces the bytes this registry ships",
+    )
+
+
+def _delivery(identity: ArtifactIdentity) -> tuple[str, ...]:
+    """The next step for a copy whose shipped shape is wrong, naming the copy it is about."""
+
+    return (
+        f"correct the package this registry ships for {identity}, or take the copy again with "
+        f"`aart registry revendor {identity.kind} {identity.name} --artifact-version VERSION "
+        "--yes`",
+    )
+
+
+def _not_vendored(identity: ArtifactIdentity) -> tuple[str, ...]:
+    """The one next step that names the package it is about, so it can be run as written."""
+
+    return (
+        "this package ships no vendoring record, so there is no copy to move: "
+        f"`aart registry refresh-native {identity.kind} {identity.name}` is what updates a "
+        "native reference",
+    )
+
+
+def _error(message: str, remediation: tuple[str, ...]) -> Err:
+    return Err(
+        (Diagnostic(REGISTRY_COMMAND_INVALID, Severity.ERROR, message, remediation=remediation),)
+    )
+
+
+def _note(message: str) -> Diagnostic:
+    return Diagnostic(REGISTRY_AUDIT_NOTE, Severity.INFO, message)
+
+
+def _diagnostic(message: str, remediation: tuple[str, ...], *, warning: bool = False) -> Diagnostic:
+    """One line of a `validate` or `audit` report, with what to do about it.
+
+    `RS-09`: a report is where these two commands state a problem, so a finding that names no next
+    step is the same dead end as a refusal that names none. A warning gets one too — most of them
+    describe a limit rather than a defect, and saying which is exactly what the operator needs.
+    """
+
+    return Diagnostic(
+        REGISTRY_AUDIT_WARNING if warning else REGISTRY_COMMAND_INVALID,
+        Severity.WARNING if warning else Severity.ERROR,
+        message,
+        remediation=remediation,
+    )
+
+
+def _files(snapshot: SourceSnapshot) -> Result[dict[str, SnapshotEntry]]:
+    digest = source_snapshot_digest(snapshot)
+    if isinstance(digest, Err):
+        return _error("registry command requires one safe inert workspace snapshot", _CLEAR_PATH)
+    return Ok({str(item.path): item for item in snapshot.entries})
+
+
+def _path(raw: str) -> SafeRelativePath:
+    parsed = parse_relative_path(raw)
+    assert isinstance(parsed, Ok)
+    return parsed.value
+
+
+def _change(
+    raw_path: str,
+    before: SnapshotEntry | None,
+    content: bytes,
+    *,
+    executable: bool = False,
+) -> RegistryWorkspaceChange:
+    before_digest = None if before is None else sha256_bytes(before.content)
+    after_digest = sha256_bytes(content)
+    if before is None:
+        kind = WorkspaceChangeKind.ADDED
+    elif before.content == content and before.executable == executable:
+        kind = WorkspaceChangeKind.UNCHANGED
+    else:
+        kind = WorkspaceChangeKind.CHANGED
+    return RegistryWorkspaceChange(
+        _path(raw_path),
+        kind,
+        content,
+        before_digest,
+        after_digest,
+        executable,
+    )
+
+
+def _removal(raw_path: str, before: SnapshotEntry) -> RegistryWorkspaceChange:
+    return RegistryWorkspaceChange(
+        _path(raw_path),
+        WorkspaceChangeKind.REMOVED,
+        b"",
+        sha256_bytes(before.content),
+        None,
+        before.executable,
+    )
+
+
+def _project_changes(
+    snapshot: SourceSnapshot,
+    changes: tuple[RegistryWorkspaceChange, ...],
+) -> Result[SourceSnapshot]:
+    current = _files(snapshot)
+    if isinstance(current, Err):
+        return current
+    output = dict(current.value)
+    for change in changes:
+        raw = str(change.path)
+        before = output.get(raw)
+        if before is not None and before.kind is not SnapshotEntryKind.FILE:
+            return _error(f"registry change target is not a regular file: {raw}", _CLEAR_PATH)
+        actual = None if before is None else sha256_bytes(before.content)
+        if actual != change.before_digest:
+            return _error(f"registry change precondition changed: {raw}", _REVIEW_AGAIN)
+        if change.kind is WorkspaceChangeKind.REMOVED:
+            # The directory entries stay: an emptied directory is still on disk after the file is
+            # unlinked, and a projection that dropped it would disagree with the snapshot the
+            # applier re-reads to verify itself.  Git does not track empty directories, so the
+            # maintainer's commit is unaffected either way.
+            del output[raw]
+            continue
+        output[raw] = SnapshotEntry(
+            change.path,
+            SnapshotEntryKind.FILE,
+            change.content,
+            change.executable,
+        )
+        for length in range(1, len(change.path.parts)):
+            parent = SafeRelativePath(change.path.parts[:length])
+            existing = output.get(str(parent))
+            if existing is not None and existing.kind is not SnapshotEntryKind.DIRECTORY:
+                return _error(f"registry change parent is not a directory: {parent}", _CLEAR_PATH)
+            output.setdefault(
+                str(parent),
+                SnapshotEntry(parent, SnapshotEntryKind.DIRECTORY),
+            )
+    return Ok(SourceSnapshot(snapshot.origin, tuple(output.values())))
+
+
+def _plan(
+    operation: RegistryOperation,
+    snapshot: SourceSnapshot,
+    desired: tuple[tuple[str, bytes, bool], ...],
+    *,
+    prune_under: str | None = None,
+) -> Result[RegistryWorkspacePlan]:
+    """Plan exactly ``desired``; under ``prune_under``, also remove what ``desired`` no longer names.
+
+    Pruning is opt-in and confined to one directory because every other operation writes a fixed set
+    of derived documents and owns nothing else in the workspace.
+    """
+
+    current = _files(snapshot)
+    if isinstance(current, Err):
+        return current
+    expected = source_snapshot_digest(snapshot)
+    if isinstance(expected, Err):
+        return expected
+    kept = {path for path, _content, _executable in desired}
+    changes = tuple(
+        _change(path, current.value.get(path), content, executable=executable)
+        for path, content, executable in sorted(desired)
+    ) + (
+        ()
+        if prune_under is None
+        else tuple(
+            _removal(raw, entry)
+            for raw, entry in sorted(current.value.items())
+            if raw.startswith(f"{prune_under}/")
+            and entry.kind is SnapshotEntryKind.FILE
+            and raw not in kept
+        )
+    )
+    projected = _project_changes(snapshot, changes)
+    if isinstance(projected, Err):
+        return projected
+    next_digest = source_snapshot_digest(projected.value)
+    if isinstance(next_digest, Err):
+        return next_digest
+    return Ok(
+        RegistryWorkspacePlan(
+            operation,
+            expected.value,
+            next_digest.value,
+            changes,
+            registry_workspace_review_digest(
+                operation,
+                expected.value,
+                next_digest.value,
+                changes,
+            ),
+        )
+    )
+
+
+def project_registry_workspace_plan(
+    snapshot: SourceSnapshot,
+    plan: RegistryWorkspacePlan,
+) -> Result[SourceSnapshot]:
+    current = source_snapshot_digest(snapshot)
+    if isinstance(current, Err):
+        return current
+    if current.value != plan.expected_snapshot_digest:
+        return _error("registry workspace changed after plan review", _REVIEW_AGAIN)
+    projected = _project_changes(snapshot, plan.changes)
+    if isinstance(projected, Err):
+        return projected
+    digest = source_snapshot_digest(projected.value)
+    if isinstance(digest, Err) or digest.value != plan.next_snapshot_digest:
+        return _error("registry plan no longer produces its reviewed snapshot", _REVIEW_AGAIN)
+    return projected
+
+
+def plan_registry_workspace_files(
+    operation: RegistryOperation,
+    snapshot: SourceSnapshot,
+    desired: tuple[tuple[str, bytes, bool], ...],
+) -> Result[RegistryWorkspacePlan]:
+    """Build a reviewed plan for already-materialized deterministic managed files."""
+
+    return _plan(operation, snapshot, desired)
+
+
+def plan_registry_init(
+    snapshot: SourceSnapshot,
+    options: RegistryInitOptions,
+) -> Result[RegistryWorkspacePlan]:
+    files = _files(snapshot)
+    if isinstance(files, Err):
+        return files
+    occupied = {
+        "aart-registry.json",
+        "aart-source.json",
+        "aart.lock.json",
+        "aart.index.json",
+    } & files.value.keys()
+    if occupied:
+        return _error("registry init refuses an existing registry workspace", _ALREADY_A_REGISTRY)
+    # Every registry gets byte-identical files.  Where CI fetches AART from is a repository
+    # variable, not something written in here at creation time, so these bytes never have to be
+    # regenerated when a company moves the tool.
+    templates = (
+        (".gitignore", REGISTRY_GITIGNORE),
+        (".github/workflows/aart-registry.yml", REGISTRY_CI_WORKFLOW),
+        *REPORTING_TEMPLATES,
+    )
+    # The README is the one generated file a maintainer is meant to edit, so it is written when
+    # absent and left alone otherwise -- never compared, never overwritten.  Managing it would
+    # make the file people are supposed to change the file that puts the registry out of step
+    # with the command that manages it, and a repository created on GitHub with "Add a README"
+    # already has one.
+    written_once = tuple(
+        (path, content)
+        for path, content in (
+            ("README.md", render_registry_readme(options.registry_id, options.display_name)),
+            # The pin is the version of the tool creating the registry -- the same number `init`
+            # already writes as `requires_aart.min_inclusive`.  No inference is involved: AART
+            # knows its own version, which is exactly what the deleted origin stamp did not.
+            (".aart-version", f"{EXECUTABLE_VERSION}\n".encode("utf-8")),
+        )
+        if path not in files.value
+    )
+    for path, expected in templates:
+        existing = files.value.get(path)
+        if existing is not None and (
+            existing.kind is not SnapshotEntryKind.FILE
+            or existing.content != expected
+            or existing.executable
+        ):
+            return _error(
+                f"registry init refuses to overwrite an existing template: {path}", _CLEAR_PATH
+            )
+    bounds = VersionBounds(options.minimum_aart, options.maximum_aart_exclusive)
+    registry = RegistryManifest(
+        1,
+        1,
+        SourceId(options.registry_id),
+        options.display_name,
+        bounds,
+        tuple(
+            Capability(value)
+            for value in (
+                "artifact-manifest-v1",
+                "lockfile-v1",
+                "registry-entry-v1",
+            )
+        ),
+        "main",
+        (
+            (
+                ServiceAdvertisement(
+                    "usage_reporting",
+                    "github-issues",
+                    options.usage_reporting_repository,
+                ),
+            )
+            if options.usage_reporting_repository is not None
+            else ()
+        ),
+    )
+    source = SourceManifest(
+        1,
+        1,
+        SourceId(options.registry_id),
+        options.display_name,
+        bounds,
+        (Capability("artifact-manifest-v1"),),
+        (_path("artifacts"),),
+        (_path("collections"),),
+    )
+    return _plan(
+        RegistryOperation.INIT,
+        snapshot,
+        (
+            *((path, content, False) for path, content in (*templates, *written_once)),
+            (
+                "aart-registry.json",
+                canonical_json_bytes(registry_manifest_to_json(registry)),
+                False,
+            ),
+            (
+                "aart-source.json",
+                canonical_json_bytes(source_manifest_to_json(source)),
+                False,
+            ),
+        ),
+    )
+
+
+def _source_manifest(files: dict[str, SnapshotEntry]) -> Result[SourceManifest]:
+    marker = files.get("aart-source.json")
+    if marker is None or marker.kind is not SnapshotEntryKind.FILE:
+        return _error("registry workspace requires aart-source.json", _INITIALIZE)
+    parsed = parse_source_manifest(marker.content)
+    if isinstance(parsed, Err):
+        return parsed
+    if parsed.value.artifact_roots != (
+        _path("artifacts"),
+    ) or parsed.value.collection_roots not in {
+        (),
+        (_path("collections"),),
+    }:
+        return _error(
+            "registry maintainer commands require canonical artifacts/ and collections/ roots",
+            _CANONICAL_ROOTS,
+        )
+    return parsed
+
+
+def _payload(
+    options: ArtifactScaffoldOptions,
+    *,
+    base: str,
+) -> tuple[tuple[str, bytes, bool], ...]:
+    """Create a minimally runnable primary payload for a new canonical package.
+
+    A scaffold must itself satisfy the same compiler used by publication.  In particular, hook
+    descriptors cannot be empty placeholders: they need a registration and an executable target.
+    """
+
+    if options.kind == "skill":
+        return (
+            (
+                f"{base}/SKILL.md",
+                (
+                    f"---\nname: {options.name}\ndescription: {options.summary}\n---\n\n"
+                    f"# {options.name.replace('-', ' ').title()}\n"
+                ).encode(),
+                False,
+            ),
+        )
+    if options.kind in {"guideline", "memory"}:
+        return (
+            (
+                f"{base}/{options.name}.md",
+                f"# {options.name.replace('-', ' ').title()}\n\n{options.summary}\n".encode(),
+                False,
+            ),
+        )
+    if options.kind == "mcp":
+        return (
+            (
+                f"{base}/mcp.json",
+                canonical_json_bytes(
+                    JsonObject(
+                        (
+                            ("name", options.name),
+                            (
+                                "server",
+                                JsonObject(
+                                    (
+                                        ("command", "echo"),
+                                        (
+                                            "args",
+                                            JsonArray(
+                                                (
+                                                    f"{options.name} is a scaffold; review its "
+                                                    "MCP command before use.",
+                                                )
+                                            ),
+                                        ),
+                                    )
+                                ),
+                            ),
+                        )
+                    )
+                ),
+                False,
+            ),
+        )
+    return (
+        (
+            f"{base}/hook.json",
+            canonical_json_bytes(
+                JsonObject(
+                    (
+                        ("name", options.name),
+                        ("command", f"${{SCRIPT_DIR}}/{options.name}.sh"),
+                    )
+                )
+            ),
+            False,
+        ),
+        (
+            f"{base}/{options.name}.sh",
+            (
+                f"#!/bin/sh\nprintf '%s\\n' '{options.name} hook scaffold requires author review'\n"
+            ).encode(),
+            True,
+        ),
+    )
+
+
+def plan_artifact_scaffold(
+    snapshot: SourceSnapshot,
+    options: ArtifactScaffoldOptions,
+) -> Result[RegistryWorkspacePlan]:
+    files = _files(snapshot)
+    if isinstance(files, Err):
+        return files
+    source = _source_manifest(files.value)
+    if isinstance(source, Err):
+        return source
+    root = source.value.artifact_roots[0]
+    base = f"{root}/{options.kind}/{options.name}"
+    if any(path == base or path.startswith(f"{base}/") for path in files.value):
+        return _error(
+            f"artifact package already exists: {options.kind}/{options.name}", _LIST_PACKAGES
+        )
+    kind = cast(CanonicalArtifactType, options.kind)
+    manifest = ArtifactManifest(
+        1,
+        ArtifactIdentity(kind, options.name),
+        options.version,
+        options.summary,
+        PayloadSpec(_path("payload"), PAYLOAD_FORMAT_BY_TYPE[kind]),
+        CompatibilitySpec(options.profiles, options.platforms),
+        InstallSpec(
+            cast(tuple[InstallScope, ...], options.scopes),
+            cast(tuple[InstallMode, ...], options.modes),
+            tuple(sorted(INSTALL_EFFECTS_BY_TYPE[kind])),
+        ),
+    )
+    payload = _payload(options, base=f"{base}/payload")
+    return _plan(
+        RegistryOperation.SCAFFOLD,
+        snapshot,
+        (
+            (
+                f"{base}/artifact.json",
+                canonical_json_bytes(artifact_manifest_to_json(manifest)),
+                False,
+            ),
+            *payload,
+        ),
+    )
+
+
+def plan_registry_collection(
+    snapshot: SourceSnapshot,
+    options: CollectionAuthorOptions,
+    *,
+    executable_version: SemVer,
+    available_capabilities: tuple[Capability, ...],
+) -> Result[RegistryWorkspacePlan]:
+    """Author one collection solely from identities this registry already holds."""
+
+    parsed = _registry_inputs(snapshot)
+    if isinstance(parsed, Err):
+        return parsed
+    registry, source, entries = parsed.value
+    if not source.collection_roots:
+        return _error(
+            "registry source declares no collection root",
+            _CANONICAL_ROOTS,
+        )
+    files = _files(snapshot)
+    assert isinstance(files, Ok)
+    native = registry_native_content(
+        snapshot,
+        files.value,
+        registry,
+        executable_version=executable_version,
+        available_capabilities=available_capabilities,
+    )
+    if isinstance(native, Err):
+        return native
+    available = {item.identity for item in native.value[0]} | {entry.identity for entry in entries}
+    missing = tuple(member for member in options.members if member not in available)
+    if missing:
+        return _error(
+            "collection members are absent from this registry: "
+            + ", ".join(str(member) for member in missing),
+            _LIST_PACKAGES,
+        )
+    manifest = CollectionManifest(
+        1,
+        options.name,
+        options.summary,
+        tuple(ArtifactSelector(member) for member in options.members),
+    )
+    target = f"{source.collection_roots[0]}/{options.name}.json"
+    return _plan(
+        RegistryOperation.COLLECTION,
+        snapshot,
+        ((target, canonical_json_bytes(collection_manifest_to_json(manifest)), False),),
+    )
+
+
+def _adopted_authored(
+    files: dict[str, SnapshotEntry],
+    base: str,
+) -> tuple[tuple[str, bytes, bool], ...]:
+    """Whatever the maintainer already wrote inside the target package.
+
+    A foreign subtree almost never satisfies its kind's payload contract on its own, and no flag can
+    carry file bytes. So `vendor` adopts the files the maintainer has already placed at the target
+    path — the `payload/mcp.json` wrapper, a `SETUP.md`, a `setup/` recipe — and projects them
+    alongside the taken bytes, where `VN-2`'s refusals judge them. `artifact.json` and
+    `provenance.json` are excluded because the projection derives them.
+    """
+
+    prefix = f"{base}/"
+    return tuple(
+        (raw.removeprefix(prefix), item.content, item.executable)
+        for raw, item in sorted(files.items())
+        if raw.startswith(prefix)
+        and item.kind is SnapshotEntryKind.FILE
+        and raw.removeprefix(prefix) not in {"artifact.json", "provenance.json"}
+    )
+
+
+def plan_artifact_vendor(
+    snapshot: SourceSnapshot,
+    acquisition: NativeReferenceAcquisition,
+    options: VendorOptions,
+    *,
+    path: SafeRelativePath,
+    review: ReviewRecord,
+    importer_version: SemVer,
+) -> Result[VendoredArtifactPlan]:
+    """Plan the owned package a reviewed vendoring would write, writing nothing.
+
+    The approved review record is the same gate `plan_native_promotion` applies: a vendoring is the
+    moment foreign bytes become this registry's responsibility, and it does not happen unreviewed.
+    """
+
+    if review.status != "approved":
+        return _error("vendoring requires an approved review record", _REVIEW_FIRST)
+    files = _files(snapshot)
+    if isinstance(files, Err):
+        return files
+    source = _source_manifest(files.value)
+    if isinstance(source, Err):
+        return source
+    root = source.value.artifact_roots[0]
+    identity = options.identity
+    base = f"{root}/{identity.kind}/{identity.name}"
+    # An existing manifest is an existing package: adopting the maintainer's authored wrapper is the
+    # point, so their `payload/` and `setup/` files must not read as one.
+    if f"{base}/artifact.json" in files.value:
+        return _error(
+            f"artifact package already exists: {identity.kind}/{identity.name}",
+            _existing_package_remediation(files.value, base, identity),
+        )
+    taken = take_subtree(acquisition.snapshot, path)
+    if isinstance(taken, Err):
+        return taken
+    projected = project_vendored_package(
+        taken.value,
+        VendorOrigin(acquisition.url, acquisition.requested_ref, acquisition.resolved_commit),
+        replace(options, authored=_adopted_authored(files.value, base)),
+        artifact_root=root,
+        importer_version=importer_version,
+    )
+    if isinstance(projected, Err):
+        return projected
+    written = {relative for relative, _content, _executable in projected.value.files}
+    if options.setup_recipe is not None:
+        for required in (f"{base}/{options.setup_recipe}", f"{base}/SETUP.md"):
+            if required not in written:
+                return _error(
+                    f"the declared setup recipe requires {required}, which is not present",
+                    _SETUP_RECIPE,
+                )
+    # The assessment runs over the projected object, so the review reports what the baseline found
+    # in the exact bytes this vendoring writes — the maintainer's own wrapper as much as the copied
+    # payload — and the evidence is committed beside the package for the next reader.
+    assessed = assess_vendored_package(projected.value, source_id=source.value.source_id)
+    if isinstance(assessed, Err):
+        return assessed
+    planned = _plan(
+        RegistryOperation.VENDOR,
+        snapshot,
+        (*projected.value.files, (assessed.value.document_path, assessed.value.document, False)),
+    )
+    if isinstance(planned, Err):
+        return planned
+    return Ok(
+        VendoredArtifactPlan(
+            planned.value,
+            assessed.value.assessment,
+            projected.value.license,
+            _package_delivery(projected.value),
+        )
+    )
+
+
+def _package_delivery(package: VendoredPackage) -> DeliveryFinding | None:
+    """What a consumer receives from the package this plan would write (design §7)."""
+
+    prefix = f"{package.base}/"
+    return describe_delivery(
+        package.manifest.identity.kind,
+        {
+            relative.removeprefix(prefix): content
+            for relative, content, _executable in package.files
+            if relative.startswith(f"{prefix}{package.manifest.payload.root}/")
+        },
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class VendoredArtifactOrigin:
+    """What the workspace already knows about one vendored copy, before anything is acquired."""
+
+    base: str
+    url: str
+    ref: str
+    path: SafeRelativePath
+    recorded_commit: str
+    input_digest: ObjectDigest
+    manifest: ArtifactManifest
+    authored: tuple[str, ...]
+
+
+def read_vendored_artifact(
+    snapshot: SourceSnapshot,
+    identity: ArtifactIdentity,
+) -> Result[VendoredArtifactOrigin]:
+    """Read one vendored package's own record of where it came from.
+
+    Separate from planning because the caller has to acquire between the two: the recorded ref is
+    the thing being resolved, and it lives in the package.
+    """
+
+    files = _files(snapshot)
+    if isinstance(files, Err):
+        return files
+    source = _source_manifest(files.value)
+    if isinstance(source, Err):
+        return source
+    base = f"{source.value.artifact_roots[0]}/{identity.kind}/{identity.name}"
+    manifest_entry = files.value.get(f"{base}/artifact.json")
+    if manifest_entry is None:
+        return _error(
+            f"registry has no artifact package {identity.kind}/{identity.name}", _LIST_PACKAGES
+        )
+    manifest = parse_artifact_manifest(manifest_entry.content, path=f"{base}/artifact.json")
+    if isinstance(manifest, Err):
+        return manifest
+    return read_vendored_package(files.value, base, manifest.value)
+
+
+def read_vendored_package(
+    files: dict[str, SnapshotEntry],
+    base: str,
+    manifest: ArtifactManifest,
+) -> Result[VendoredArtifactOrigin]:
+    """The same read from a package already located, for callers walking every artifact root.
+
+    `registry audit` visits packages by path rather than by identity, and a registry may declare
+    more than one artifact root; resolving the identity again would look only under the first.
+    """
+
+    provenance_entry = files.get(f"{base}/provenance.json")
+    if provenance_entry is None:
+        return _error(
+            f"{manifest.identity} records no provenance, so it was not vendored; "
+            "refresh-native updates a native reference",
+            _not_vendored(manifest.identity),
+        )
+    provenance = parse_provenance(provenance_entry.content, path=f"{base}/provenance.json")
+    if isinstance(provenance, Err):
+        return provenance
+    record = read_vendor_record(provenance.value)
+    if isinstance(record, Err):
+        return record
+    origin = provenance.value.origin
+    return Ok(
+        VendoredArtifactOrigin(
+            base,
+            origin.url,
+            record.value.ref,
+            origin.path,
+            origin.resolved_commit,
+            origin.input_digest,
+            manifest,
+            record.value.authored,
+        )
+    )
+
+
+def _drift_counts(
+    files: dict[str, SnapshotEntry],
+    vendored: VendoredArtifactOrigin,
+    taken: TakenSubtree,
+) -> tuple[int, int, int]:
+    """Compare upstream's files with the copy's, ignoring what the maintainer wrote themselves.
+
+    Derived documents are excluded because they are projections of these inputs, not evidence of
+    upstream movement: reporting `artifact.json` as changed would count the version bump as drift.
+    """
+
+    authored = {f"{vendored.base}/{relative}" for relative in vendored.authored} | {
+        f"{vendored.base}/artifact.json",
+        f"{vendored.base}/provenance.json",
+    }
+    copied = {
+        raw: entry
+        for raw, entry in files.items()
+        if raw.startswith(f"{vendored.base}/")
+        and entry.kind is SnapshotEntryKind.FILE
+        and raw not in authored
+    }
+    upstream = {
+        f"{vendored.base}/{vendored.manifest.payload.root}/{entry.path}": entry
+        for entry in taken.snapshot.entries
+        if entry.kind is SnapshotEntryKind.FILE
+    }
+    changed = sum(
+        1
+        for raw, entry in upstream.items()
+        if raw in copied
+        and (copied[raw].content != entry.content or copied[raw].executable != entry.executable)
+    )
+    return (
+        len(upstream.keys() - copied.keys()),
+        changed,
+        len(copied.keys() - upstream.keys()),
+    )
+
+
+def plan_artifact_revendor(
+    snapshot: SourceSnapshot,
+    acquisition: NativeReferenceAcquisition,
+    vendored: VendoredArtifactOrigin,
+    *,
+    version: SemVer | None,
+    review: ReviewRecord,
+    importer_version: SemVer,
+) -> Result[VendoredArtifactCheck]:
+    """Re-resolve one vendored copy against upstream and report what that means.
+
+    An `up-to-date` copy is left alone deliberately, including its recorded commit: a ref that has
+    moved over content the subtree does not contain has changed nothing this registry ships, and
+    re-pinning would produce a diff claiming the copy was refreshed when it was not.
+    """
+
+    if review.status != "approved":
+        return _error("re-vendoring requires an approved review record", _REVIEW_FIRST)
+    if acquisition.url != vendored.url or acquisition.requested_ref != vendored.ref:
+        return _error(
+            "the acquisition does not resolve the recorded vendoring instruction", _RECORDED_ORIGIN
+        )
+    files = _files(snapshot)
+    if isinstance(files, Err):
+        return files
+    # The copy against its own record, before upstream is mentioned at all: a copy that is not the
+    # copy cannot be discussed as current or as behind, and re-vendoring it would overwrite a
+    # difference the maintainer has not seen yet (design §5).
+    integrity = verify_vendored_copy(
+        files.value,
+        vendored.base,
+        vendored.manifest.payload.root,
+        vendored.authored,
+        vendored.input_digest,
+    )
+    if isinstance(integrity, Err):
+        return integrity
+    if not integrity.value.matches:
+        return _error(
+            copy_integrity_message(vendored.manifest.identity, integrity.value), _COPY_INTEGRITY
+        )
+    taken = take_subtree(acquisition.snapshot, vendored.path)
+    if isinstance(taken, Err):
+        return taken
+    added, changed, removed = _drift_counts(files.value, vendored, taken.value)
+    if taken.value.input_digest == integrity.value.recomputed:
+        return Ok(
+            VendoredArtifactCheck(
+                NativeReferenceDisposition.UP_TO_DATE,
+                acquisition.resolved_commit,
+                vendored.recorded_commit,
+                0,
+                0,
+                0,
+            )
+        )
+    drifted = VendoredArtifactCheck(
+        NativeReferenceDisposition.CHANGED,
+        acquisition.resolved_commit,
+        vendored.recorded_commit,
+        added,
+        changed,
+        removed,
+    )
+    if version is None:
+        # The diff is rendered before the refusal, not instead of it: the maintainer cannot choose
+        # the version the movement deserves without first seeing the movement (design §4).
+        return Ok(drifted)
+    manifest = vendored.manifest
+    authored: list[tuple[str, bytes, bool]] = []
+    for relative in vendored.authored:
+        entry = files.value.get(f"{vendored.base}/{relative}")
+        if entry is None or entry.kind is not SnapshotEntryKind.FILE:
+            return _error(
+                f"the authored file recorded with this copy is missing: {relative}", _COPY_INTEGRITY
+            )
+        authored.append((relative, entry.content, entry.executable))
+    options = VendorOptions(
+        manifest.identity,
+        version,
+        manifest.summary,
+        manifest.compatibility.profiles,
+        manifest.compatibility.platforms,
+        manifest.install.scopes,
+        manifest.install.modes,
+        None if manifest.setup is None else manifest.setup.recipe,
+        () if manifest.setup is None else manifest.setup.platforms,
+        tuple(authored),
+        (),
+        # The recorded licence is carried, not re-derived: it is the registry's own statement about
+        # what it publishes, and a re-vendor that silently dropped it would turn every upstream
+        # movement into an unlicensed copy.
+        license=manifest.license,
+    )
+    projected = project_vendored_package(
+        taken.value,
+        VendorOrigin(vendored.url, vendored.ref, acquisition.resolved_commit),
+        options,
+        artifact_root=_path(vendored.base.split("/", 1)[0]),
+        importer_version=importer_version,
+    )
+    if isinstance(projected, Err):
+        return projected
+    source = _source_manifest(files.value)
+    if isinstance(source, Err):
+        return source
+    assessed = assess_vendored_package(projected.value, source_id=source.value.source_id)
+    if isinstance(assessed, Err):
+        return assessed
+    planned = _plan(
+        RegistryOperation.REVENDOR,
+        snapshot,
+        (*projected.value.files, (assessed.value.document_path, assessed.value.document, False)),
+        # Upstream deletions have to reach the copy.  Confined to this package's own directory, so
+        # a re-vendor can never remove another artifact's content.
+        prune_under=vendored.base,
+    )
+    if isinstance(planned, Err):
+        return planned
+    return Ok(
+        replace(
+            drifted,
+            plan=planned.value,
+            assessment=assessed.value.assessment,
+            delivery=_package_delivery(projected.value),
+        ),
+    )
+
+
+def plan_registry_format(snapshot: SourceSnapshot) -> Result[RegistryWorkspacePlan]:
+    files = _files(snapshot)
+    if isinstance(files, Err):
+        return files
+    source = _source_manifest(files.value)
+    if isinstance(source, Err):
+        return source
+
+    def is_protocol_document(path: str) -> bool:
+        if path in {
+            "aart-registry.json",
+            "aart-source.json",
+            "aart.lock.json",
+            "aart.index.json",
+        } or path.startswith("entries/"):
+            return path.endswith(".json")
+        parts = tuple(path.split("/"))
+        for root in source.value.collection_roots:
+            if parts[: len(root.parts)] == root.parts:
+                return path.endswith(".json")
+        for root in source.value.artifact_roots:
+            if parts[: len(root.parts)] != root.parts:
+                continue
+            relative = parts[len(root.parts) :]
+            return (
+                len(relative) == 3 and relative[-1] in {"artifact.json", "provenance.json"}
+            ) or (len(relative) == 4 and relative[-2:] == ("setup", "installer.json"))
+        return False
+
+    desired: list[tuple[str, bytes, bool]] = []
+    for path, item in sorted(files.value.items()):
+        if item.kind is not SnapshotEntryKind.FILE or not is_protocol_document(path):
+            continue
+        parsed = parse_json(item.content)
+        if isinstance(parsed, Err):
+            return parsed
+        desired.append((path, canonical_json_bytes(parsed.value), item.executable))
+    if not desired:
+        return _error("registry format found no JSON documents", _INITIALIZE)
+    return _plan(RegistryOperation.FORMAT, snapshot, tuple(desired))
+
+
+def _registry_inputs(
+    snapshot: SourceSnapshot,
+) -> Result[tuple[RegistryManifest, SourceManifest, tuple]]:
+    files = _files(snapshot)
+    if isinstance(files, Err):
+        return files
+    registry_file = files.value.get("aart-registry.json")
+    if registry_file is None or registry_file.kind is not SnapshotEntryKind.FILE:
+        return _error("registry workspace requires aart-registry.json", _INITIALIZE)
+    registry = parse_registry_manifest(registry_file.content)
+    source = _source_manifest(files.value)
+    if isinstance(registry, Err):
+        return registry
+    if isinstance(source, Err):
+        return source
+    if registry.value.registry_id != source.value.source_id:
+        return _error("registry and source identities differ", _IDENTITIES)
+    entries = []
+    for path, item in sorted(files.value.items()):
+        if not path.startswith("entries/") or item.kind is not SnapshotEntryKind.FILE:
+            continue
+        parsed = parse_registry_entry(item.content, path=path)
+        if isinstance(parsed, Err):
+            return parsed
+        expected_path = f"entries/{parsed.value.identity.kind}/{parsed.value.identity.name}.json"
+        if path != expected_path:
+            return _error(f"registry entry identity does not match its path: {path}", _ENTRY_FILES)
+        entries.append(parsed.value)
+    identities = tuple(item.identity for item in entries)
+    if len(set(identities)) != len(identities):
+        return _error("registry workspace contains duplicate entry identities", _ENTRY_FILES)
+    return Ok((registry.value, source.value, tuple(entries)))
+
+
+def _acquisitions_by_identity(
+    entries: tuple,
+    acquisitions: tuple[NativeReferenceAcquisition, ...],
+    *,
+    executable_version: SemVer,
+    available_capabilities: tuple[Capability, ...],
+) -> Result[dict[ArtifactIdentity, tuple]]:
+    if len(entries) != len(acquisitions):
+        return _error("registry lock/build requires one acquisition per entry", _RELOCK)
+    available = list(acquisitions)
+    resolved: dict[ArtifactIdentity, tuple] = {}
+    for entry in entries:
+        matches = []
+        for acquisition in available:
+            result = resolve_native_acquisition(
+                entry,
+                acquisition,
+                executable_version=executable_version,
+                available_capabilities=available_capabilities,
+            )
+            if isinstance(result, Ok):
+                matches.append((acquisition, (*result.value, acquisition)))
+        if len(matches) != 1:
+            return _error(
+                f"registry acquisition is missing or ambiguous for {entry.identity}", _RELOCK
+            )
+        available.remove(matches[0][0])
+        resolved[entry.identity] = matches[0][1]
+    return Ok(resolved)
+
+
+def plan_registry_lock(
+    snapshot: SourceSnapshot,
+    acquisitions: tuple[NativeReferenceAcquisition, ...],
+    *,
+    executable_version: SemVer,
+    available_capabilities: tuple[Capability, ...],
+) -> Result[RegistryWorkspacePlan]:
+    parsed = _registry_inputs(snapshot)
+    if isinstance(parsed, Err):
+        return parsed
+    registry, _source, entries = parsed.value
+    files = _files(snapshot)
+    assert isinstance(files, Ok)
+    native = registry_native_content(
+        snapshot,
+        files.value,
+        registry,
+        executable_version=executable_version,
+        available_capabilities=available_capabilities,
+    )
+    if isinstance(native, Err):
+        return native
+    if any(entry.review.status != "approved" for entry in entries):
+        return _error(
+            "registry lock requires every authored entry to be approved", _APPROVE_ENTRIES
+        )
+    resolved = _acquisitions_by_identity(
+        entries,
+        acquisitions,
+        executable_version=executable_version,
+        available_capabilities=available_capabilities,
+    )
+    if isinstance(resolved, Err):
+        return resolved
+    inputs = registry_inputs_digest(snapshot)
+    if isinstance(inputs, Err):
+        return inputs
+    locked = []
+    for entry in entries:
+        package, candidate, provenance_digest, _source_id, acquisition = resolved.value[
+            entry.identity
+        ]
+        locked.append(
+            (
+                entry.identity,
+                LockedArtifact(
+                    acquisition.url,
+                    acquisition.requested_ref,
+                    acquisition.resolved_commit,
+                    entry.source.path,
+                    package.manifest_digest,
+                    package.payload_digest,
+                    candidate.digest,
+                    package.manifest.version,
+                    entry.review,
+                    provenance_digest,
+                ),
+            )
+        )
+    lock = RegistryLock(1, inputs.value, tuple(locked))
+    return _plan(
+        RegistryOperation.LOCK,
+        snapshot,
+        (("aart.lock.json", canonical_json_bytes(registry_lock_to_json(lock)), False),),
+    )
+
+
+def plan_registry_build(
+    snapshot: SourceSnapshot,
+    acquisitions: tuple[NativeReferenceAcquisition, ...],
+    *,
+    executable_version: SemVer,
+    available_capabilities: tuple[Capability, ...],
+) -> Result[RegistryWorkspacePlan]:
+    parsed = _registry_inputs(snapshot)
+    if isinstance(parsed, Err):
+        return parsed
+    registry, _source, entries = parsed.value
+    files = _files(snapshot)
+    assert isinstance(files, Ok)
+    lock_file = files.value.get("aart.lock.json")
+    if lock_file is None or lock_file.kind is not SnapshotEntryKind.FILE:
+        return _error("registry build requires a valid aart.lock.json", _LOCK_FIRST)
+    lock = parse_registry_lock(lock_file.content)
+    inputs = registry_inputs_digest(snapshot)
+    if isinstance(lock, Err):
+        return lock
+    if isinstance(inputs, Err):
+        return inputs
+    references = resolve_locked_references(
+        entries,
+        lock.value,
+        expected_inputs_digest=inputs.value,
+    )
+    if isinstance(references, Err):
+        return references
+    resolved = _acquisitions_by_identity(
+        entries,
+        acquisitions,
+        executable_version=executable_version,
+        available_capabilities=available_capabilities,
+    )
+    if isinstance(resolved, Err):
+        return resolved
+    native = registry_native_content(
+        snapshot,
+        files.value,
+        registry,
+        executable_version=executable_version,
+        available_capabilities=available_capabilities,
+    )
+    if isinstance(native, Err):
+        return native
+    owned, collections = native.value
+    indexed = list(owned)
+    locked_by_identity = dict(lock.value.entries)
+    for entry in entries:
+        package, candidate, provenance_digest, source_id, acquisition = resolved.value[
+            entry.identity
+        ]
+        actual = LockedArtifact(
+            acquisition.url,
+            acquisition.requested_ref,
+            acquisition.resolved_commit,
+            entry.source.path,
+            package.manifest_digest,
+            package.payload_digest,
+            candidate.digest,
+            package.manifest.version,
+            entry.review,
+            provenance_digest,
+        )
+        if locked_by_identity.get(entry.identity) != actual:
+            return _error(f"acquired package does not match lock for {entry.identity}", _RELOCK)
+        indexed.append(
+            index_artifact_from_package(
+                package,
+                source_id=source_id,
+                object_digest=candidate.digest,
+                review=entry.review,
+            )
+        )
+    index = build_registry_index(registry, inputs.value, tuple(indexed), collections)
+    if isinstance(index, Err):
+        return index
+    return _plan(
+        RegistryOperation.BUILD,
+        snapshot,
+        (("aart.index.json", canonical_json_bytes(registry_index_to_json(index.value)), False),),
+    )
+
+
+def validate_registry_workspace(
+    snapshot: SourceSnapshot,
+    *,
+    executable_version: SemVer,
+    available_capabilities: tuple[Capability, ...],
+    require_compiled: bool = False,
+) -> Result[RegistryQualityReport]:
+    diagnostics: list[Diagnostic] = []
+    parsed = _registry_inputs(snapshot)
+    if isinstance(parsed, Err):
+        diagnostics.extend(parsed.diagnostics)
+        return Ok(RegistryQualityReport((RegistryQualityCheck("validate", tuple(diagnostics)),)))
+    registry, source, entries = parsed.value
+    files = _files(snapshot)
+    assert isinstance(files, Ok)
+    # A package that contradicts its own provenance is malformed, and this is where well-formedness
+    # is decided.  It costs no network: the copy is checked against the record it carries (VI-2).
+    vendored, unreadable = _vendored_packages(files.value, source)
+    diagnostics.extend(unreadable)
+    for package in vendored:
+        diagnostics.extend(vendored_copy_diagnostics(files.value, package))
+    native = registry_native_content(
+        snapshot,
+        files.value,
+        registry,
+        executable_version=executable_version,
+        available_capabilities=available_capabilities,
+    )
+    if isinstance(native, Err):
+        diagnostics.extend(native.diagnostics)
+    inputs = registry_inputs_digest(snapshot)
+    if isinstance(inputs, Err):
+        diagnostics.extend(inputs.diagnostics)
+    lock_file = files.value.get("aart.lock.json")
+    index_file = files.value.get("aart.index.json")
+    valid_lock_file = lock_file is not None and lock_file.kind is SnapshotEntryKind.FILE
+    valid_index_file = index_file is not None and index_file.kind is SnapshotEntryKind.FILE
+    if lock_file is not None and not valid_lock_file:
+        diagnostics.append(_diagnostic("aart.lock.json must be a regular file", _RELOCK))
+    if index_file is not None and not valid_index_file:
+        diagnostics.append(_diagnostic("aart.index.json must be a regular file", _RELOCK))
+    if require_compiled and (not valid_lock_file or not valid_index_file):
+        diagnostics.append(_diagnostic("compiled registry requires lock and index", _RELOCK))
+    parsed_lock = None
+    if lock_file is not None and lock_file.kind is SnapshotEntryKind.FILE:
+        lock = parse_registry_lock(lock_file.content)
+        if isinstance(lock, Err):
+            diagnostics.extend(lock.diagnostics)
+        else:
+            parsed_lock = lock.value
+        if isinstance(lock, Ok) and isinstance(inputs, Ok):
+            resolved = resolve_locked_references(
+                entries,
+                lock.value,
+                expected_inputs_digest=inputs.value,
+            )
+            if isinstance(resolved, Err):
+                diagnostics.extend(resolved.diagnostics)
+    parsed_index = None
+    if index_file is not None and index_file.kind is SnapshotEntryKind.FILE:
+        index = parse_registry_index(index_file.content)
+        if isinstance(index, Err):
+            diagnostics.extend(index.diagnostics)
+        else:
+            parsed_index = index.value
+            if isinstance(inputs, Ok) and (
+                index.value.registry_id != registry.registry_id
+                or index.value.protocol_version != registry.protocol_version
+                or index.value.registry_inputs_digest != inputs.value
+                or index.value.services != registry.services
+            ):
+                diagnostics.append(
+                    _diagnostic("compiled index does not match registry inputs", _RELOCK)
+                )
+    if parsed_index is not None and parsed_lock is None:
+        diagnostics.append(_diagnostic("compiled index requires a valid lock", _LOCK_FIRST))
+    if parsed_index is not None and parsed_lock is not None and isinstance(native, Ok):
+        indexed_by_identity = {item.identity: item for item in parsed_index.artifacts}
+        locked_by_identity = dict(parsed_lock.entries)
+        for identity, locked in sorted(locked_by_identity.items(), key=lambda item: str(item[0])):
+            indexed = indexed_by_identity.get(identity)
+            if indexed is None or not (
+                indexed.version == locked.artifact_version
+                and indexed.manifest_digest == locked.manifest_digest
+                and indexed.payload_digest == locked.payload_digest
+                and indexed.object_digest == locked.object_digest
+                and indexed.review == locked.review
+                and (indexed.provenance is None) == (locked.provenance_digest is None)
+                and (
+                    indexed.provenance is None
+                    or (
+                        indexed.provenance.origin_url == locked.origin_url
+                        and indexed.provenance.resolved_commit == locked.resolved_commit
+                        and indexed.provenance.path == locked.path
+                    )
+                )
+            ):
+                diagnostics.append(
+                    _diagnostic(f"compiled index disagrees with lock for {identity}", _RELOCK)
+                )
+        owned_by_identity = {item.identity: item for item in native.value[0]}
+        for identity, owned in sorted(owned_by_identity.items(), key=lambda item: str(item[0])):
+            indexed = indexed_by_identity.get(identity)
+            if indexed is None or replace(indexed, collections=()) != owned:
+                diagnostics.append(
+                    _diagnostic(f"compiled index disagrees with owned package {identity}", _RELOCK)
+                )
+        if set(indexed_by_identity) != set(locked_by_identity) | set(owned_by_identity):
+            diagnostics.append(
+                _diagnostic("compiled index artifact identities are incomplete", _RELOCK)
+            )
+        if parsed_index.collections != native.value[1]:
+            diagnostics.append(
+                _diagnostic("compiled index collections differ from source", _RELOCK)
+            )
+    return Ok(RegistryQualityReport((RegistryQualityCheck("validate", tuple(diagnostics)),)))
+
+
+def vendored_copy_diagnostics(
+    files: dict[str, SnapshotEntry],
+    vendored: VendoredArtifactOrigin,
+) -> tuple[Diagnostic, ...]:
+    """Check one vendored copy against the origin it records (VI-2, design §4).
+
+    A pure function of the committed snapshot: no network, no store, and the same answer in
+    `validate`, in `audit`, and before a re-vendor. The mismatch is an error rather than a warning
+    because it is a defect in the registry, not a fact about the world like being behind upstream —
+    what this registry publishes is not what it says it publishes.
+    """
+
+    integrity = verify_vendored_copy(
+        files,
+        vendored.base,
+        vendored.manifest.payload.root,
+        vendored.authored,
+        vendored.input_digest,
+    )
+    if isinstance(integrity, Err):
+        return integrity.diagnostics
+    if integrity.value.matches:
+        return ()
+    return (
+        _diagnostic(
+            copy_integrity_message(vendored.manifest.identity, integrity.value), _COPY_INTEGRITY
+        ),
+    )
+
+
+def package_delivery_diagnostics(
+    files: dict[str, SnapshotEntry],
+    base: str,
+    manifest: ArtifactManifest,
+    *,
+    vendored: bool,
+) -> tuple[Diagnostic, ...]:
+    """Report a descriptor that launches a file consumers never receive (VI-4).
+
+    An error rather than a warning: unlike a missing licence, this is not a fact about the world the
+    maintainer may accept. It is an artifact that cannot start on any consumer machine.
+
+    `RS-01`: `VI-5` hung this off the vendoring delivery finding, so an `mcp` package authored in
+    place was never looked at. Nothing in the consequence depends on where the bytes came from — the
+    merge writes an empty entry either way — so the check runs for every package the audit walks.
+
+    The audit is where it runs, not `registry validate`. `validate_registry_workspace` is also the
+    consumer's gate on a candidate source, so a new hard failure there makes every registry already
+    carrying such a descriptor unloadable on upgrade, for its subscribers as well as its maintainer.
+    That is the protocol break `VI-5` rejected. `registry audit` is maintainer-side and is what the
+    generated registry CI runs.
+    """
+
+    prefix = f"{base}/{manifest.payload.root}/"
+    finding = describe_delivery(
+        manifest.identity.kind,
+        {
+            raw.removeprefix(f"{base}/"): entry.content
+            for raw, entry in files.items()
+            if raw.startswith(prefix) and entry.kind is SnapshotEntryKind.FILE
+        },
+    )
+    if finding is None:
+        return ()
+    identity = manifest.identity
+    diagnostics: list[Diagnostic] = []
+    if finding.referenced:
+        diagnostics.append(
+            _diagnostic(
+                delivery_reference_message(identity, finding, vendored=vendored),
+                _delivery(identity),
+            )
+        )
+    if finding.starts_nothing:
+        diagnostics.append(
+            _diagnostic(mcp_descriptor_message(identity, vendored=vendored), _delivery(identity))
+        )
+    return tuple(diagnostics)
+
+
+def verify_vendored_artifact(
+    snapshot: SourceSnapshot,
+    vendored: VendoredArtifactOrigin,
+) -> Result[CopyIntegrity]:
+    """The same check over a whole workspace, for a caller holding one artifact's record."""
+
+    files = _files(snapshot)
+    if isinstance(files, Err):
+        return files
+    return verify_vendored_copy(
+        files.value,
+        vendored.base,
+        vendored.manifest.payload.root,
+        vendored.authored,
+        vendored.input_digest,
+    )
+
+
+def _shipped_digest(
+    files: dict[str, SnapshotEntry],
+    vendored: VendoredArtifactOrigin,
+) -> ObjectDigest:
+    """The digest of the bytes this registry actually ships (design §5).
+
+    Drift is a statement about the copy, not about the record: comparing upstream with
+    `origin.input_digest` answers for a package that may no longer exist. A copy that cannot be
+    reconstructed at all falls back to the recorded value, because that case is already an error in
+    the offline part of the same command and adding a second phrasing of it here would report one
+    defect twice.
+    """
+
+    integrity = verify_vendored_copy(
+        files,
+        vendored.base,
+        vendored.manifest.payload.root,
+        vendored.authored,
+        vendored.input_digest,
+    )
+    return vendored.input_digest if isinstance(integrity, Err) else integrity.value.recomputed
+
+
+def _vendored_packages(
+    files: dict[str, SnapshotEntry],
+    source: SourceManifest,
+) -> tuple[tuple[VendoredArtifactOrigin, ...], tuple[Diagnostic, ...]]:
+    """Every vendored package the snapshot declares, and what refused to be read as one."""
+
+    roots = tuple(f"{root}/" for root in source.artifact_roots)
+    packages: list[VendoredArtifactOrigin] = []
+    diagnostics: list[Diagnostic] = []
+    for path, item in sorted(files.items()):
+        if (
+            item.kind is not SnapshotEntryKind.FILE
+            or not path.endswith("/artifact.json")
+            or not any(path.startswith(root) for root in roots)
+        ):
+            continue
+        base = path.removesuffix("/artifact.json")
+        provenance = files.get(f"{base}/provenance.json")
+        if provenance is None or provenance.kind is not SnapshotEntryKind.FILE:
+            continue
+        parsed = parse_provenance(provenance.content, path=f"{base}/provenance.json")
+        if isinstance(parsed, Err) or parsed.value.importer.id != VENDOR_IMPORTER_ID:
+            # A provenance that does not parse is already reported by the checks that parse it, and
+            # one written by another importer describes a reference, which ships no bytes to verify.
+            continue
+        manifest = parse_artifact_manifest(item.content, path=path)
+        if isinstance(manifest, Err):
+            continue
+        read = read_vendored_package(files, base, manifest.value)
+        if isinstance(read, Err):
+            diagnostics.extend(read.diagnostics)
+            continue
+        packages.append(read.value)
+    return tuple(packages), tuple(diagnostics)
+
+
+def _vendored_upstream_findings(
+    acquirer: NativeAcquirer,
+    files: dict[str, SnapshotEntry],
+    vendored: VendoredArtifactOrigin,
+) -> tuple[NativeReferenceDisposition, tuple[Diagnostic, ...]]:
+    """Report whether one vendored copy still matches upstream, and never guess when it cannot.
+
+    Read-only by construction: it resolves and compares, and no caller can turn the answer into a
+    write. An upstream that cannot be read is reported as unknown rather than as drift, because a
+    maintainer who has lost access to an origin has a different problem from one who is behind it,
+    and neither of them is told their copy is current (design §6).
+
+    The disposition comes back with the findings so the audit can say how many copies it compared
+    (`LAF-45`). It is the same vocabulary `revendor --check` prints, deliberately: one answer about
+    one copy should not have two names depending on which command asked.
+    """
+
+    identity = vendored.manifest.identity
+    shipped = _shipped_digest(files, vendored)
+    acquired = acquirer(vendored.url, vendored.ref)
+    if isinstance(acquired, Err):
+        return NativeReferenceDisposition.UNREACHABLE, (
+            _diagnostic(
+                f"vendored artifact upstream could not be read, so drift is unknown: {identity} "
+                f"({vendored.url} at {vendored.ref})",
+                _UPSTREAM_UNREACHABLE,
+                warning=True,
+            ),
+        )
+    taken = take_subtree(acquired.value.snapshot, vendored.path)
+    if isinstance(taken, Err):
+        return NativeReferenceDisposition.CHANGED, (
+            _diagnostic(
+                f"vendored artifact is behind upstream: {identity} was taken from "
+                f"{vendored.path}, which {vendored.ref} no longer provides",
+                _revendor(identity),
+                warning=True,
+            ),
+        )
+    if taken.value.input_digest == shipped:
+        return NativeReferenceDisposition.UP_TO_DATE, ()
+    return NativeReferenceDisposition.CHANGED, (
+        _diagnostic(
+            f"vendored artifact is behind upstream: {identity} copies {vendored.path} at "
+            f"{vendored.recorded_commit[:12]}, and {vendored.ref} now resolves to "
+            f"{acquired.value.resolved_commit[:12]}",
+            _revendor(identity),
+            warning=True,
+        ),
+    )
+
+
+def _upstream_check_note(dispositions: tuple[NativeReferenceDisposition, ...]) -> Diagnostic:
+    """`LAF-45`: state that the check ran, including when it had nothing to report.
+
+    Every other outcome of `--check-upstream` prints a line. A registry whose copies are all
+    current printed nothing, and so did a command run without the flag — so an operator reading a
+    CI log could not tell a clean result from a dropped argument. This is the line that separates
+    them, and it is `info` because it is not a finding: nothing here asks anyone to act.
+    """
+
+    if not dispositions:
+        return _note("no vendored artifacts to check against upstream")
+    counted = Counter(dispositions)
+    subject = "1 vendored artifact against its upstream"
+    if len(dispositions) > 1:
+        subject = f"{len(dispositions)} vendored artifacts against their upstreams"
+    return _note(
+        f"checked {subject}: "
+        f"{counted[NativeReferenceDisposition.UP_TO_DATE]} up-to-date, "
+        f"{counted[NativeReferenceDisposition.CHANGED]} changed, "
+        f"{counted[NativeReferenceDisposition.UNREACHABLE]} unreachable"
+    )
+
+
+def audit_registry_workspace(
+    snapshot: SourceSnapshot,
+    *,
+    executable_version: SemVer,
+    available_capabilities: tuple[Capability, ...],
+    upstream_acquirer: NativeAcquirer | None = None,
+) -> Result[RegistryQualityReport]:
+    """Audit committed registry content, optionally resolving vendored origins.
+
+    `upstream_acquirer` is absent by default, which keeps the audit a pure function of the snapshot:
+    a command that silently reached the network would make every offline run a failure and every CI
+    run dependent on somebody else's uptime. A caller that wants the drift report supplies one, and
+    gets findings that report rather than refuse.
+    """
+
+    parsed = _registry_inputs(snapshot)
+    if isinstance(parsed, Err):
+        return Ok(RegistryQualityReport((RegistryQualityCheck("audit", parsed.diagnostics),)))
+    registry, source, entries = parsed.value
+    files = _files(snapshot)
+    assert isinstance(files, Ok)
+    diagnostics: list[Diagnostic] = []
+    upstream_dispositions: list[NativeReferenceDisposition] = []
+    native = registry_native_content(
+        snapshot,
+        files.value,
+        registry,
+        executable_version=executable_version,
+        available_capabilities=available_capabilities,
+    )
+    if isinstance(native, Err):
+        diagnostics.extend(native.diagnostics)
+    if not entries:
+        diagnostics.append(
+            _diagnostic(
+                "registry contains no external references; provenance coverage is partial",
+                _COVERAGE_LIMIT,
+                warning=True,
+            )
+        )
+    for entry in entries:
+        if entry.review.status != "approved":
+            diagnostics.append(
+                _diagnostic(
+                    f"external reference is not approved: {entry.identity}", _APPROVE_ENTRIES
+                )
+            )
+    lock_file = files.value.get("aart.lock.json")
+    if entries and (lock_file is None or lock_file.kind is not SnapshotEntryKind.FILE):
+        diagnostics.append(
+            _diagnostic("external reference audit requires a valid lock", _LOCK_FIRST)
+        )
+    if lock_file is not None and lock_file.kind is SnapshotEntryKind.FILE:
+        lock = parse_registry_lock(lock_file.content)
+        if isinstance(lock, Err):
+            diagnostics.extend(lock.diagnostics)
+        else:
+            if {identity for identity, _locked in lock.value.entries} != {
+                entry.identity for entry in entries
+            }:
+                diagnostics.append(
+                    _diagnostic(
+                        "committed lock identities differ from authored references", _RELOCK
+                    )
+                )
+            for identity, locked in lock.value.entries:
+                if locked.provenance_digest is None:
+                    diagnostics.append(
+                        _diagnostic(
+                            f"external reference has no provenance document: {identity}",
+                            _PROVENANCE,
+                            warning=True,
+                        )
+                    )
+    roots = tuple(f"{root}/" for root in source.artifact_roots)
+    for path, item in sorted(files.value.items()):
+        if (
+            item.kind is not SnapshotEntryKind.FILE
+            or not path.endswith("/artifact.json")
+            or not any(path.startswith(root) for root in roots)
+        ):
+            continue
+        manifest = parse_artifact_manifest(item.content, path=path)
+        if isinstance(manifest, Err):
+            diagnostics.extend(manifest.diagnostics)
+            continue
+        base = path.removesuffix("/artifact.json")
+        provenance_path = f"{base}/provenance.json"
+        provenance = files.value.get(provenance_path)
+        vendored: VendoredArtifactOrigin | None = None
+        if provenance is None:
+            diagnostics.append(
+                _diagnostic(
+                    f"owned package has no provenance document: {manifest.value.identity}",
+                    _PROVENANCE,
+                    warning=True,
+                )
+            )
+        elif provenance.kind is not SnapshotEntryKind.FILE:
+            diagnostics.append(
+                _diagnostic(f"provenance is not a file: {provenance_path}", _CLEAR_PATH)
+            )
+        else:
+            parsed_provenance = parse_provenance(provenance.content, path=provenance_path)
+            if isinstance(parsed_provenance, Err):
+                diagnostics.extend(parsed_provenance.diagnostics)
+            elif parsed_provenance.value.importer.id == VENDOR_IMPORTER_ID:
+                # A vendored package's own record of how the copy was made is checked against the
+                # options digest written with it, so a hand-edited `provenance.json` is an audit
+                # failure rather than the silent basis of the next re-vendor.
+                read = read_vendored_package(files.value, base, manifest.value)
+                if isinstance(read, Err):
+                    diagnostics.extend(read.diagnostics)
+                else:
+                    vendored = read.value
+                    # The copy against the record, before anything is said about upstream: a copy
+                    # that is not the copy cannot be discussed as current or behind (design §5).
+                    diagnostics.extend(vendored_copy_diagnostics(files.value, vendored))
+        # Outside the vendored branch on purpose (RS-01): what a consumer receives from an `mcp`
+        # package is a property of the package, and an authored descriptor gets it wrong as easily
+        # as a copied one.
+        diagnostics.extend(
+            package_delivery_diagnostics(
+                files.value, base, manifest.value, vendored=vendored is not None
+            )
+        )
+        if manifest.value.license is None:
+            diagnostics.append(
+                _diagnostic(
+                    # Vendoring redistributes somebody else's work, so the omission is named as
+                    # what it is rather than folded into the generic finding (design §7).
+                    f"vendored artifact redistributes upstream bytes with no declared license: "
+                    f"{manifest.value.identity}"
+                    if vendored is not None
+                    else f"owned package has no declared license: {manifest.value.identity}",
+                    _DECLARE_LICENSE,
+                    warning=True,
+                )
+            )
+        if vendored is not None and upstream_acquirer is not None:
+            disposition, findings = _vendored_upstream_findings(
+                upstream_acquirer, files.value, vendored
+            )
+            upstream_dispositions.append(disposition)
+            diagnostics.extend(findings)
+        if manifest.value.setup is not None:
+            recipe = f"{base}/{manifest.value.setup.recipe}"
+            recipe_file = files.value.get(recipe)
+            if recipe_file is None or recipe_file.kind is not SnapshotEntryKind.FILE:
+                diagnostics.append(
+                    _diagnostic(f"declared setup recipe is missing: {recipe}", _SETUP_RECIPE)
+                )
+    security_file = files.value.get("security/index.json")
+    if security_file is None:
+        diagnostics.append(
+            _diagnostic(
+                "no per-object installation-risk evidence was supplied to registry audit",
+                _SECURITY_EVIDENCE,
+                warning=True,
+            )
+        )
+    elif security_file.kind is not SnapshotEntryKind.FILE:
+        diagnostics.append(
+            _diagnostic("registry security index is not a regular file", _CLEAR_PATH)
+        )
+    else:
+        security_index = parse_security_index(security_file.content)
+        if isinstance(security_index, Err):
+            diagnostics.extend(security_index.diagnostics)
+        else:
+            documents = []
+            missing_document = False
+            for security_entry in security_index.value.entries:
+                document = files.value.get(str(security_entry.path))
+                if document is None or document.kind is not SnapshotEntryKind.FILE:
+                    diagnostics.append(
+                        _diagnostic(
+                            f"registry security index document is missing: {security_entry.path}",
+                            _SECURITY_EVIDENCE,
+                        )
+                    )
+                    missing_document = True
+                    continue
+                documents.append((security_entry.path, document.content))
+            if not missing_document:
+                verified = verify_security_index(security_index.value, tuple(documents))
+                if isinstance(verified, Err):
+                    diagnostics.extend(verified.diagnostics)
+                else:
+                    compiled_file = files.value.get("aart.index.json")
+                    compiled = (
+                        parse_registry_index(compiled_file.content)
+                        if compiled_file is not None
+                        and compiled_file.kind is SnapshotEntryKind.FILE
+                        else None
+                    )
+                    if compiled is None or isinstance(compiled, Err):
+                        diagnostics.append(
+                            _diagnostic(
+                                "registry security index requires a valid compiled index", _RELOCK
+                            )
+                        )
+                    elif (
+                        security_index.value.registry_id != registry.registry_id
+                        or security_index.value.registry_id != compiled.value.registry_id
+                        or security_index.value.registry_inputs_digest
+                        != compiled.value.registry_inputs_digest
+                    ):
+                        diagnostics.append(
+                            _diagnostic(
+                                "registry security index identity differs from the compiled registry",
+                                _SECURITY_REBUILD,
+                            )
+                        )
+                    else:
+                        expected_objects = {item.object_digest for item in compiled.value.artifacts}
+                        evidence_objects = {
+                            item.cache_key.object_digest for item in verified.value.attestations
+                        }
+                        missing_objects = expected_objects - evidence_objects
+                        extra_objects = evidence_objects - expected_objects
+                        if missing_objects:
+                            diagnostics.append(
+                                _diagnostic(
+                                    "registry security index lacks evidence for one or more compiled objects",
+                                    _SECURITY_REBUILD,
+                                )
+                            )
+                        if extra_objects:
+                            diagnostics.append(
+                                _diagnostic(
+                                    "registry security index contains evidence for unknown objects",
+                                    _SECURITY_REBUILD,
+                                )
+                            )
+                        for attestation in verified.value.attestations:
+                            risk = attestation.assessment.installation_risk
+                            if risk is InstallationRisk.CRITICAL:
+                                diagnostics.append(
+                                    _diagnostic(
+                                        "registry security evidence reports critical installation risk "
+                                        f"for {attestation.cache_key.object_digest}",
+                                        _SECURITY_RISK,
+                                    )
+                                )
+                            elif risk in {InstallationRisk.HIGH, InstallationRisk.UNKNOWN}:
+                                diagnostics.append(
+                                    _diagnostic(
+                                        "registry security evidence requires review because installation "
+                                        f"risk is {risk.value} for {attestation.cache_key.object_digest}",
+                                        _SECURITY_RISK,
+                                        warning=True,
+                                    )
+                                )
+    if upstream_acquirer is not None:
+        # Said once, at the end, and only when the caller asked for the check — its absence is what
+        # tells an operator the flag never reached the command (`LAF-45`).
+        diagnostics.append(_upstream_check_note(tuple(upstream_dispositions)))
+    return Ok(RegistryQualityReport((RegistryQualityCheck("audit", tuple(diagnostics)),)))
+
+
+def test_registry_compatibility(
+    snapshot: SourceSnapshot,
+    *,
+    minimum: SemVer,
+    latest: SemVer,
+    available_capabilities: tuple[Capability, ...],
+) -> Result[RegistryQualityReport]:
+    checks = []
+    for name, version in (("minimum", minimum), ("latest", latest)):
+        result = validate_registry_workspace(
+            snapshot,
+            executable_version=version,
+            available_capabilities=available_capabilities,
+            require_compiled=True,
+        )
+        assert isinstance(result, Ok)
+        diagnostics = tuple(
+            diagnostic for check in result.value.checks for diagnostic in check.diagnostics
+        )
+        checks.append(RegistryQualityCheck(name, diagnostics))
+    return Ok(RegistryQualityReport(tuple(checks)))
