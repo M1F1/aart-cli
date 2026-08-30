@@ -240,3 +240,21 @@ provider port that can say whether its output is newline-terminated.
 Invariants touched: INV-055, INV-063.
 Evidence/links: D-022.
 Promotion condition: a provider or artifact is found where trailing whitespace is significant.
+
+### B-023 — Detecting registrations nothing owns
+Status: OPEN
+Discovered in: CP-11 / `agent_artifacts/application/installed_state.py` /
+`current_state_from_observation`
+Why useful: `DriftKind.UNEXPECTED` exists and is tested, but nothing can currently produce it from
+a real machine. `observe_installation` walks the registrations a receipt names, so a server entry
+added by hand — or left behind by a failed uninstall — is invisible.
+Why noncritical now: the repair path is about putting right what AART installed. Removing something
+AART did not install is an uninstall question, and claiming a stray without a complete picture of
+ownership is how a tool deletes somebody's own configuration (D-033).
+Potential approach: read the harness settings file whole, subtract everything every receipt in
+scope claims, and report the remainder — with ownership metadata so an entry a person wrote is
+never mistaken for one AART abandoned.
+Invariants touched: INV-058, INV-075, INV-079.
+Evidence/links: D-033; `tests/reconciliation_test.py::ComparisonTest::
+test_something_present_that_nothing_desires_is_named_and_not_repaired`.
+Promotion condition: uninstall or scope-level doctor needs to report orphans (CP-12 or CP-16).

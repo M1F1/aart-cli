@@ -2,27 +2,29 @@
 
 ## Current objective
 
-Open **CP-11 Desired-state reconciliation engine** on the verified CP-07 planning pipeline, CP-08
-input and credential algebras, CP-09 artifact-owned Python environments and the CP-10 runtime
-projection.
+Open **CP-12 Installed lifecycle on reconciliation**: route install, update, configure, repair,
+credential rotation, harness reconfiguration, downgrade and uninstall through the CP-11 engine, so
+each intent becomes a desired state rather than its own procedure.
 
-CP-10 produced the first real drift vocabulary: `VerificationFinding` already names six ways an
-installation stops matching its receipt, and `observe_installation` already measures them on a real
-machine. CP-11's job is to generalise that into `DesiredState` / `CurrentState` / `Drift` and a
-*minimal* `MutationPlan` — repairing only what drifted, using the `EffectCapabilities` metadata that
-CP-07 put on every effect and nothing has yet consumed.
+CP-11 produced a `RepairPlan` and nothing executes one yet. `repair_converged` exists, is tested,
+and has never been called after real effects. That is the gap: this slice is where a plan becomes
+an execution, and where the re-inspection that §158.8 requires actually runs.
 
 ## Immediate next actions
 
-1. Read Product Specification sections 116–130 alongside the CP-07 effect capability metadata, then
-   characterize the legacy `setup_verify.py` and `setup_undo.py` behaviour before changing anything.
-2. Write CP-11 RED tests for minimality: a plan that repairs one drifted thing touches nothing else,
-   and a re-run after a successful repair produces an empty plan.
-3. Model `DesiredState` and `CurrentState` as separate types. A reconciler that can read one as the
-   other is a reconciler that can report "no drift" because it compared a thing to itself.
-4. Re-inspect after mutation and prove convergence, rather than assuming the effects worked.
-5. Make unsupported repair semantics explicit — an effect that is not `independently_repairable`
-   must say so and escalate, not be quietly rebuilt.
+1. Read Product Specification sections 158.2–158.6 and the installed-lifecycle sections alongside
+   `setup.py`, `lifecycle/application.py` and `setup_undo.py`, then characterize the current
+   install/repair/uninstall behaviour before changing anything.
+2. Write CP-12 RED tests for the property that matters: after executing a repair plan, a fresh
+   inspection converges — and when it does not, that is reported as a failed repair rather than a
+   successful one.
+3. Build the executor over the existing interpreters (`LocalPythonRuntime`, `LocalProjectionWriter`,
+   `LocalHarnessRegistry`, `MacOsKeychainProvider`), dispatching by effect type with no interpreter
+   ever acting outside the artifact it was constructed for.
+4. Express each intent as a desired state, per §158.6 — the intents share reconciliation machinery
+   and must not grow parallel procedures.
+5. Handle interrupted and partial outcomes explicitly: a plan that stopped halfway is a state to
+   re-inspect, not a rollback to guess at.
 
 ## Do not do yet
 
@@ -32,7 +34,7 @@ CP-07 put on every effect and nothing has yet consumed.
 - no Docker or OCI distribution (B-003);
 - no changes to old AART repositories;
 - no Source Sync promotion;
-- no routing of the public install/repair flow yet — that is CP-12, on top of CP-11;
+- no orphan detection (B-023) unless uninstall proves to need it;
 - no additional harness targets that have not been measured on a live build (B-020);
 - no additional secret providers (B-004), installer backends, or transports beyond stdio;
 - no backlog work unless it becomes a proven critical-path blocker.
@@ -40,14 +42,13 @@ CP-07 put on every effect and nothing has yet consumed.
 ## Carried forward
 
 - CP-08: `TransientSecret` lives only in `io/`; nothing in `domain` or `application` may gain a
-  field that can hold a secret value. `plan_credential_mutation` takes `policy` as a required
-  keyword. Keychain replacement is delete-then-add (D-017). `domain/inputs.py` parses URLs itself.
-- CP-09: `ArtifactEnvironment` paths are derived, never supplied. The runtime interpreters refuse
-  effects outside the artifact they were constructed for, and the tests assert no process ran. A
-  declared lock is refused, not ignored (D-021).
+  field that can hold a secret value. Keychain replacement is delete-then-add (D-017).
+- CP-09: `ArtifactEnvironment` paths are derived, never supplied. Interpreters refuse effects
+  outside the artifact they were constructed for, and the tests assert no process ran.
 - CP-10: a launcher carries the command that reads a secret, never the secret (D-022). Stdin and
-  file bindings stay refused (D-023, D-024). `LocalProjectionWriter` checks artifact ownership and
-  re-digests after writing. Harness settings are merged, never replaced, and keep their permissions
-  (D-026). Receipts fingerprint config values rather than copying them (D-027). An unmeasurable
-  launcher counts as drift, never as a pass (D-028) — CP-11 must not soften this to make a
-  reconciler converge.
+  file bindings stay refused. Harness settings are merged, never replaced (D-026). An unmeasurable
+  launcher counts as drift (D-028).
+- CP-11: desired and current are different types, and unobserved is drift, not a match (D-029).
+  Establishing and correcting are separate effect lists (D-030). Steps run in dependency order
+  (D-031). A forbidden repair fails the plan rather than being dropped (D-032) — CP-12 must not
+  soften any of these to make an execution succeed.

@@ -331,3 +331,65 @@ the Product Specification first instead of hiding the change here.
   same answer.
 - **Consequence:** findings are a closed enum in a fixed order, so CP-11 maps each to a remediation
   rather than parsing prose.
+
+## D-029 — Desired and current are different types, and a component nobody looked at is drift
+- **Decision:** `DesiredState` and `CurrentState` are separate frozen types over the same
+  `ComponentId` vocabulary. A desired component with no observation is `DriftKind.UNOBSERVED`, not
+  a match.
+- **Status:** accepted.
+- **Reason:** §158 makes the comparison the centre of the whole engine, and the two failure modes
+  worth engineering against are comparing a state to itself and converging by declining to look.
+  Separate types make the first impossible to write; a distinct unobserved kind makes the second
+  visible instead of silent. It is the same rule as D-028, one level up.
+- **Consequence:** an inspector that covers less produces more drift, not less, which is the
+  correct direction for a safety property. The CP-10 end-to-end test asserts exactly this for a
+  credential nobody inspected.
+
+## D-030 — A desired component says how it is established and how it is corrected
+- **Decision:** `DesiredComponent` carries `effects` and an optional `correction`, and
+  `effects_for(kind)` returns `correction` for `DIVERGENT` and `UNVERIFIABLE` drift, `effects`
+  otherwise. `correction` defaults to `effects`.
+- **Status:** accepted.
+- **Reason:** credentials proved one effect list insufficient. CP-08 refuses `StoreCredential` when
+  a credential is already present and `ReplaceCredential` when it is absent, both deliberately. A
+  component that could only name one of them would issue the wrong one half the time, and the
+  refusal would surface as a repair failure rather than as the modelling gap it is. Every other
+  component in front of us is an idempotent write where establishing and correcting are the same
+  act, which is why `correction` defaults rather than being required.
+- **Consequence:** `independently_repairable` considers both lists, so a component cannot look
+  repairable through its establishing path and escalate through its correcting one.
+
+## D-031 — Repair steps run in dependency order, not the canonical review order
+- **Decision:** `RepairPlan.steps` are ordered by `Component` declaration order — payload, runtime
+  environment, dependencies, configuration, credentials, launcher, harness — rather than by the
+  canonical effect sort `MutationPlan` uses.
+- **Status:** accepted.
+- **Reason:** `MutationPlan` sorts effects canonically so a review digest is stable, which is right
+  for a document and wrong for a script. An environment has to exist before dependencies go into
+  it, and a launcher has to exist before a harness is told to run it. The component enum is already
+  the dependency order the Product Specification draws in §158.1, so ordering by it needs no second
+  source of truth.
+- **Consequence:** `RepairPlan` keeps its own ordered steps and computes its own review digest over
+  them, so determinism comes from the ordering being total rather than from re-sorting.
+
+## D-032 — A repair the policy forbids fails the plan instead of being dropped
+- **Decision:** `plan_repair` returns `reconcile-policy-violation` when any effect needed by a
+  drifted component exceeds the risk ceiling or is forbidden.
+- **Status:** accepted.
+- **Reason:** the alternative — omitting the effect and planning the rest — produces a plan that
+  looks complete, runs cleanly, and leaves the machine exactly as broken as it was. Failing names
+  the component and the effect, so the answer is to change the policy or accept the drift, both of
+  which are decisions somebody makes rather than an outcome nobody sees.
+- **Consequence:** `plan_repair` takes `policy` as a required keyword, matching
+  `plan_credential_mutation` (D-016's line of reasoning).
+
+## D-033 — A current state is paired with the desired state it answers
+- **Decision:** `current_state_from_observation` takes the `DesiredState` rather than a coordinate,
+  and reports only components that state describes.
+- **Status:** accepted.
+- **Reason:** found by a failing test. A desired state built without a base interpreter omits the
+  runtime environment, and an observation that reported the perfectly healthy environment anyway
+  produced `UNEXPECTED` drift — the engine calling a working component stray because the caller had
+  described less. "Unexpected" is only an honest claim against a complete description.
+- **Consequence:** detecting genuinely stray registrations needs an inspector that reads a harness
+  file whole rather than one that checks the entries a receipt names. B-023 tracks it.

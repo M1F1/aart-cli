@@ -28,11 +28,21 @@ from agent_artifacts.application.installation_verification import (
     VerificationFinding,
     verify_installation,
 )
+from agent_artifacts.application.installed_state import (
+    current_state_from_observation,
+    desired_state_from_receipt,
+)
+from agent_artifacts.application.reconciliation import plan_repair, repair_converged
 from agent_artifacts.application.runtime_projection import generate_launcher
 from agent_artifacts.domain.credentials import CredentialProviderRef, CredentialReference
 from agent_artifacts.domain.effects import CreatePythonEnvironment
 from agent_artifacts.domain.harness import McpRegistration, Scope, mcp_target
-from agent_artifacts.domain.identifiers import InputId
+from agent_artifacts.domain.identifiers import (
+    ArtifactCoordinate,
+    ArtifactIdentity,
+    InputId,
+    SourceAlias,
+)
 from agent_artifacts.domain.inputs import (
     BoundInput,
     BoundInputs,
@@ -43,11 +53,18 @@ from agent_artifacts.domain.inputs import (
     SecretProviderReference,
 )
 from agent_artifacts.domain.launch import LaunchContract, Transport
+from agent_artifacts.domain.policies import EffectivePolicy
 from agent_artifacts.domain.python_runtime import ArtifactEnvironment
 from agent_artifacts.domain.receipts import (
     InstallationReceipt,
     config_fingerprint,
     installation_receipt_to_data,
+)
+from agent_artifacts.domain.reconciliation import (
+    Component,
+    ComponentId,
+    ComponentState,
+    DriftKind,
 )
 from agent_artifacts.domain.result import Err, Ok
 from agent_artifacts.io.credentials import SECURITY_TOOL, MacOsKeychainProvider
@@ -344,6 +361,68 @@ class InstalledMcpServerTest(unittest.TestCase):
         self.assertEqual(
             verify_installation(receipt, observe_installation(receipt, registry=registry)),
             (VerificationFinding.LAUNCHER_CHANGED,),
+        )
+
+    def test_damage_to_one_component_plans_a_repair_that_touches_only_that_component(self):
+        """The point of reconciliation: an edited launcher is not a reason to reinstall a server."""
+
+        receipt = self.install(self.provider, "test-file")
+        coordinate = ArtifactCoordinate(
+            SourceAlias("public"), ArtifactIdentity("mcp", "github"), "1.0.0"
+        )
+        registry = LocalHarnessRegistry(str(self.scope))
+        desired = desired_state_from_receipt(coordinate, receipt, base_interpreter=sys.executable)
+
+        def current(*, inspect_credential: bool = True):
+            observed = observe_installation(receipt, registry=registry)
+            credentials = (
+                (("github-token", ComponentState.MATCHED),)
+                if inspect_credential and os.path.exists(self.provider.path)
+                else ()
+            )
+            return current_state_from_observation(
+                desired, receipt, observed, credentials=credentials
+            )
+
+        def repair_plan():
+            result = plan_repair(desired, current(), policy=EffectivePolicy())
+            self.assertIsInstance(result, Ok, getattr(result, "diagnostics", ()))
+            return result.value
+
+        self.assertEqual(repair_plan().steps, ())
+        self.assertTrue(repair_converged(desired, current()))
+
+        # A credential nobody inspected is drift, not a pass -- so a reconciler cannot converge by
+        # declining to look.
+        skipped = plan_repair(
+            desired, current(inspect_credential=False), policy=EffectivePolicy()
+        ).value
+        self.assertEqual(
+            [(item.component, item.kind) for item in skipped.drift],
+            [(ComponentId(Component.CREDENTIAL, "github-token"), DriftKind.UNOBSERVED)],
+        )
+
+        pathlib.Path(receipt.launcher).write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+        launcher_only = repair_plan()
+        self.assertEqual(
+            [step.component for step in launcher_only.steps], [ComponentId(Component.LAUNCHER)]
+        )
+        self.assertTrue(launcher_only.complete)
+
+        # Put the launcher back and take the harness entry away instead.
+        LocalProjectionWriter(self.environment).write(
+            generate_launcher(
+                self.environment,
+                LaunchContract("server.py", Transport.STDIO, ("--strict",)),
+                self.bound_inputs("test-file"),
+                resolvers=(self.provider,),  # type: ignore[arg-type]
+            ).value
+        )
+        registry.unregister(mcp_target("tabnine", Scope.PROJECT), "github")
+        harness_only = repair_plan()
+        self.assertEqual(
+            [step.component for step in harness_only.steps],
+            [ComponentId(Component.HARNESS, "tabnine")],
         )
 
     @unittest.skipUnless(
