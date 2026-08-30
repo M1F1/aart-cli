@@ -67,3 +67,27 @@ the Product Specification first instead of hiding the change here.
   compiler. Legacy native source loading remains public-flow authority until Source Sync migrates.
   Declarative launch is `AART Native`; an explicit external-script escape hatch is `AART
   Compatible` and remains visible for later policy evaluation.
+
+## D-009 — Candidate identity binds selected author input, not repository revision churn
+- **Decision:** derive Candidate ID from source alias, manifest path, target registry and the
+  ArtifactInputDigest. Preserve the exact prior Candidate record when that identity is unchanged;
+  source revision alone cannot reopen a rejected Candidate.
+- **Status:** accepted.
+- **Reason:** INV-015 and edge case 165.25 require unrelated monorepo changes to remain invisible
+  and digest-aware rejection to survive repeated Source Scan.
+- **Consequence:** a selected manifest/payload change creates a new Candidate linked to and
+  superseding the prior record. Source Scan remains a read-only observation and cannot mutate the
+  approved registry.
+
+## D-010 — Approved payload identity and full workspace preconditions are separate digests
+- **Decision:** a registry version's `registry_snapshot` hashes approved immutable artifact or
+  reference content only. A promotion/lifecycle plan separately binds the full registry workspace
+  before and after, including version, index, snapshot and audit records.
+- **Status:** accepted.
+- **Reason:** promotion audit must record the approved content snapshot after promotion, while
+  lifecycle metadata must be able to change without changing immutable payload identity. Including
+  an audit record's own after-digest in that digest would also create a self-reference.
+- **Consequence:** vendored package integrity and lifecycle metadata integrity are both validated,
+  but deprecation, revocation and canonical-branch publication do not rewrite payload identity.
+  The public `registry promote` flow applies locally only; commit, push, merge and publication
+  remain separate authorities.

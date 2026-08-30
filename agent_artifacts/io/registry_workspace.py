@@ -50,7 +50,9 @@ _ROOT_FILES = frozenset(
 # plan that writes an attestation is verified against a re-read snapshot, and `registry audit` reads
 # `security/index.json` out of that same snapshot — a root it could not see was a root whose
 # evidence it could never report.
-_ROOT_DIRECTORIES = frozenset({"entries", "artifacts", "collections", "security"})
+_ROOT_DIRECTORIES = frozenset(
+    {"entries", "artifacts", "collections", "security", "registry", "references"}
+)
 _GITHUB_DIRECTORIES = frozenset({".github", ".github/workflows", ".github/ISSUE_TEMPLATE"})
 _GITHUB_FILES = frozenset(
     {

@@ -32,6 +32,8 @@ class RegistryCliTest(unittest.TestCase):
             "init",
             "scaffold",
             "collection",
+            "scan",
+            "promote",
             "discover",
             "format",
             "promote-native",

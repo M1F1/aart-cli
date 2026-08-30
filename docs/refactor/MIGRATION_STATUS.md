@@ -16,7 +16,7 @@
 | CP-02 Clean architecture seam | VERIFIED | Architecture boundary tests; frozen domain scan; format/lint/typecheck/validate/docs/secret gates green | Legacy orchestration remains outside the new seam for strangler migration |
 | CP-03 Five core algebras | VERIFIED | Frozen five-algebra modules; Hypothesis monotonicity/determinism properties; full gates green | Legacy/subsystem models remain flow authority until later adapters migrate |
 | CP-04 Authoring manifest/compiler | VERIFIED | Explicit JSON/YAML discovery; five-kind canonical compilation; input-digest properties; real-filesystem integration; 1,935 unit + 46 E2E tests, 83.45% coverage and all quality gates green | Existing native/source commands remain public-flow authority until CP-05 routes Source Sync through the compiler |
-| CP-05 Source/Candidate/Registry | NOT STARTED | — | — |
+| CP-05 Source/Candidate/Registry | VERIFIED | Frozen Candidate/registry lifecycle; digest-aware Source Scan; atomic versioned promotion and lifecycle plans; public scan/review/local-promote flow; 1,959 unit + 46 E2E tests, 83.23% coverage and all quality gates green | Older curation `promote-native`/vendor paths remain supported legacy authority until later registry migration/removal evidence |
 | CP-06 Marketplace/Selection/Collections | NOT STARTED | — | — |
 | CP-07 Inspection/Remediation/Policy/Plan | NOT STARTED | — | — |
 | CP-08 Inputs/Credentials | NOT STARTED | — | — |

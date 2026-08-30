@@ -2,19 +2,18 @@
 
 ## Current objective
 
-Open **CP-05 Source, Candidate, Registry and Promotion lifecycle** on the verified CP-04 compiler
-output.
+Open **CP-06 Marketplace Selection, Collections and resolution** on the verified CP-05 approved
+registry-version projection.
 
 ## Immediate next actions
 
-1. Commit the verified CP-04 slice as a reviewable checkpoint.
-2. Create `docs/refactor/slices/CP-05-source-candidate-registry.md` before CP-05 code changes.
-3. Define frozen Source/Candidate lifecycle states and semantic candidate diff over
-   `CompiledAuthorArtifact`.
-4. Route source synchronization through explicit manifest discovery without promotion or registry
-   mutation.
-5. Add immutable coordinate/version, rejection/superseding and vendored-promotion RED tests before
-   implementing CP-05 transitions.
+1. Characterize the existing marketplace catalog/search, coordinate parser, compiler graph,
+   Collection and ownership behavior against Product Specification sections 91–99 and 166.
+2. Write CP-06 RED tests for multi-registry aggregation, explicit ambiguity, first-class Selection,
+   exact Collections versus custom selections, dependency/version conflicts and one active version
+   per coordinate/scope.
+3. Consume only validated CP-05 `RegistryArtifactVersion` state; do not scan author repositories or
+   collapse Candidate state into the consumer marketplace.
 
 ## Do not do yet
 
@@ -24,5 +23,5 @@ output.
 - no Docker-first MCP design;
 - no changes to old AART repositories;
 - no Source Sync promotion;
-- no consumer marketplace aggregation yet;
+- no install/remediation execution yet (CP-07 onward);
 - no backlog work unless it becomes a proven critical-path blocker.

@@ -410,6 +410,17 @@ class Request:
     setup_recipe: Optional[str] = None
     review_policy: Optional[str] = None
     registry_action: Optional[str] = None
+    # Maintainer Source Scan inputs are separate from both the writable registry checkout and
+    # consumer source subscriptions. The command observes one clean pinned author checkout and
+    # can only report Candidates.
+    candidate_checkout: Optional[str] = None
+    candidate_source_alias: Optional[str] = None
+    candidate_source_url: Optional[str] = None
+    target_registry_alias: Optional[str] = None
+    promotion_candidate_ids: Tuple[str, ...] = ()
+    promotion_validation_report: Optional[str] = None
+    promotion_policy_result: Optional[str] = None
+    promotion_mode: str = "vendored"
     check: bool = False
     # Resolve vendored origins during an audit.  Off by default: an audit that reached the network
     # unasked would fail offline and depend on somebody else's uptime in CI.

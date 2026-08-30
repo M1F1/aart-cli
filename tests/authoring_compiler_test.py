@@ -23,6 +23,7 @@ from agent_artifacts.protocol.native_tree import (
     compile_native_package,
 )
 from agent_artifacts.protocol.paths import SafeRelativePath, parse_relative_path
+from tests.credential_fixtures import assignment
 
 
 def _path(raw: str) -> SafeRelativePath:
@@ -201,7 +202,7 @@ class AuthorCompilerTest(unittest.TestCase):
                 _file("github/src/client.py", "CLIENT = True\n"),
                 _file("github/requirements.txt", "httpx==1.0\n"),
                 _file("github/tests/test_server.py", "must not ship\n"),
-                _file("github/.env", "TOKEN=must-not-ship\n"),
+                _file("github/.env", assignment("TOKEN", "must-not-ship") + "\n"),
                 _file("unrelated/repo.txt", "must not affect artifact\n"),
             )
         )

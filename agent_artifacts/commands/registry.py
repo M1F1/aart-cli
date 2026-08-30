@@ -4,9 +4,17 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 
 from agent_artifacts import command_outcome as _common
+from agent_artifacts.application.maintainer import CandidateBundle, reconcile_source_scan
+from agent_artifacts.application.promotion import (
+    PromotionEvidence,
+    finalize_promotion,
+    load_registry_versions,
+    plan_bulk_promotion,
+)
 from agent_artifacts.configuration.model import ConfiguredSource, SourceKind
 from agent_artifacts.curation.model import (
     DEFAULT_MAXIMUM_AART,
@@ -22,6 +30,7 @@ from agent_artifacts.curation.runtime import (
     default_native_acquirer,
     load_local_curation_service,
 )
+from agent_artifacts.domain.candidates import CandidateState, assess_candidate
 from agent_artifacts.domain.diagnostics import (
     Diagnostic,
     DiagnosticCode,
@@ -29,9 +38,13 @@ from agent_artifacts.domain.diagnostics import (
     diagnostic_to_data,
 )
 from agent_artifacts.domain.identifiers import SourceAlias
+from agent_artifacts.domain.registry import PromotionMode, RegistryArtifactVersion
 from agent_artifacts.domain.result import Err, Ok, Result
+from agent_artifacts.io.registry_promotion import FilesystemPromotionOutput
 from agent_artifacts.io.registry_workspace import FilesystemRegistryWorkspace
 from agent_artifacts.model import Request
+from agent_artifacts.protocol.authoring import compile_author_snapshot
+from agent_artifacts.protocol.hashing import parse_sha256
 from agent_artifacts.protocol.native_tree import SnapshotEntryKind, SourceSnapshot
 from agent_artifacts.protocol.registry_models import RegistryManifest
 from agent_artifacts.protocol.registry_schema import parse_registry_manifest
@@ -492,6 +505,373 @@ def _run_discover(request: Request) -> int:
     return _common.OK
 
 
+def _run_scan(request: Request) -> int:
+    """Observe one exact author revision and report Candidates without registry effects."""
+
+    if (
+        request.candidate_checkout is None
+        or request.candidate_source_alias is None
+        or request.candidate_source_url is None
+        or request.target_registry_alias is None
+    ):
+        return _emit_error(
+            request,
+            "scan",
+            _error(
+                "scan requires checkout, source alias, source URL, and target registry",
+                _READ_THE_ACTIONS,
+            ),
+        )
+    alias_pattern = r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*"
+    if (
+        re.fullmatch(alias_pattern, request.candidate_source_alias) is None
+        or re.fullmatch(alias_pattern, request.target_registry_alias) is None
+        or not request.candidate_source_url.strip()
+        or request.candidate_source_url != request.candidate_source_url.strip()
+        or any(character in request.candidate_source_url for character in "\r\n")
+    ):
+        return _emit_error(
+            request,
+            "scan",
+            _error("scan aliases or source URL are invalid", _READ_THE_ACTIONS),
+        )
+    checkout = os.path.abspath(request.candidate_checkout)
+    revision = _git(checkout, "rev-parse", "--verify", "HEAD")
+    dirty = _git(checkout, "status", "--porcelain=v1", "--untracked-files=all")
+    if (
+        revision.returncode != 0
+        or re.fullmatch(r"[0-9a-f]{40}", revision.stdout.strip()) is None
+        or dirty.returncode != 0
+        or dirty.stdout
+    ):
+        return _emit_error(
+            request,
+            "scan",
+            _error(
+                "Source Scan requires one clean pinned Git checkout at HEAD",
+                (
+                    "commit or discard author checkout changes; `aart registry scan --help` "
+                    "shows the explicit source boundaries",
+                ),
+            ),
+        )
+    source_alias = SourceAlias(request.candidate_source_alias)
+    target_registry = SourceAlias(request.target_registry_alias)
+    try:
+        configured = ConfiguredSource(
+            source_alias,
+            SourceKind.SOURCE_LOCAL,
+            checkout,
+            None,
+            True,
+        )
+        acquired = read_local_snapshot(
+            LocalSnapshotRequest(
+                source_instance_id(configured),
+                source_alias,
+                checkout,
+                SnapshotLimits(),
+            )
+        )
+    except ValueError as error:
+        return _emit_error(request, "scan", _error(str(error), _READ_THE_ACTIONS))
+    if isinstance(acquired, Err):
+        return _emit_error(request, "scan", acquired)
+    pinned_revision = revision.stdout.strip()
+    compiled = compile_author_snapshot(
+        acquired.value.snapshot,
+        source_alias=source_alias,
+        source=request.candidate_source_url,
+        revision=pinned_revision,
+    )
+    if isinstance(compiled, Err):
+        return _emit_error(request, "scan", compiled)
+    approved: tuple[RegistryArtifactVersion, ...] = ()
+    if request.source_dir is not None:
+        registry_snapshot = FilesystemRegistryWorkspace(_root(request)).snapshot()
+        if isinstance(registry_snapshot, Err):
+            return _emit_error(request, "scan", registry_snapshot)
+        loaded_versions = load_registry_versions(registry_snapshot.value)
+        if isinstance(loaded_versions, Err):
+            return _emit_error(request, "scan", loaded_versions)
+        approved = loaded_versions.value
+    scanned = reconcile_source_scan(
+        source_alias,
+        pinned_revision,
+        compiled.value,
+        previous=(),
+        approved=approved,
+        target_registry=target_registry,
+    )
+    if isinstance(scanned, Err):
+        return _emit_error(request, "scan", scanned)
+    candidates = tuple(item.candidate for item in scanned.value.active)
+    if request.json:
+        print(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "ok": True,
+                    "operation": "registry.scan",
+                    "source_alias": source_alias.value,
+                    "source_revision": pinned_revision,
+                    "target_registry": target_registry.value,
+                    "manifest_count": scanned.value.manifest_count,
+                    "registry_mutations": len(scanned.value.registry_mutations),
+                    "candidates": [
+                        {
+                            "candidate_id": item.id.value,
+                            "coordinate": str(item.artifact.coordinate),
+                            "input_digest": str(item.artifact.provenance.input_digest),
+                            "canonical_digest": str(item.canonical_digest),
+                            "state": item.state.value,
+                        }
+                        for item in candidates
+                    ],
+                },
+                indent=2,
+            )
+        )
+    else:
+        print(f"Source Scan {source_alias.value}@{pinned_revision}")
+        print(f"target registry: {target_registry.value}")
+        print(f"{len(candidates)} candidate(s); registry mutations: 0")
+        for item in candidates:
+            print(f"  {item.state.value:>7}  {item.artifact.coordinate}  {item.id}")
+    return _common.OK
+
+
+def _run_candidate_promotion(request: Request) -> int:
+    """Re-observe exact IDs, then review or apply one local promotion transaction."""
+
+    if (
+        request.source_dir is None
+        or request.candidate_checkout is None
+        or request.candidate_source_alias is None
+        or request.candidate_source_url is None
+        or request.target_registry_alias is None
+        or request.promotion_validation_report is None
+        or request.promotion_policy_result is None
+        or not request.promotion_candidate_ids
+    ):
+        return _emit_error(
+            request,
+            "promote",
+            _error(
+                "candidate promotion requires all explicit review boundaries", _READ_THE_ACTIONS
+            ),
+        )
+    alias_pattern = r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*"
+    if (
+        re.fullmatch(alias_pattern, request.candidate_source_alias) is None
+        or re.fullmatch(alias_pattern, request.target_registry_alias) is None
+        or not request.candidate_source_url.strip()
+        or request.candidate_source_url != request.candidate_source_url.strip()
+        or any(character in request.candidate_source_url for character in "\r\n")
+        or len(set(request.promotion_candidate_ids)) != len(request.promotion_candidate_ids)
+        or any(
+            re.fullmatch(r"[0-9a-f]{64}", candidate_id) is None
+            for candidate_id in request.promotion_candidate_ids
+        )
+    ):
+        return _emit_error(
+            request,
+            "promote",
+            _error("candidate promotion aliases, URL or IDs are invalid", _READ_THE_ACTIONS),
+        )
+    validation_report = parse_sha256(request.promotion_validation_report)
+    policy_result = parse_sha256(request.promotion_policy_result)
+    if isinstance(validation_report, Err) or isinstance(policy_result, Err):
+        return _emit_error(
+            request,
+            "promote",
+            _error("promotion evidence digests must be canonical SHA-256", _READ_THE_ACTIONS),
+        )
+    try:
+        mode = PromotionMode(request.promotion_mode)
+    except ValueError:
+        return _emit_error(
+            request,
+            "promote",
+            _error("promotion mode must be vendored or referenced", _READ_THE_ACTIONS),
+        )
+    output = FilesystemPromotionOutput(_root(request))
+    registry_snapshot = output.current()
+    if isinstance(registry_snapshot, Err):
+        return _emit_error(request, "promote", registry_snapshot)
+    approved = load_registry_versions(registry_snapshot.value)
+    if isinstance(approved, Err):
+        return _emit_error(request, "promote", approved)
+
+    checkout = os.path.abspath(request.candidate_checkout)
+    revision = _git(checkout, "rev-parse", "--verify", "HEAD")
+    dirty = _git(checkout, "status", "--porcelain=v1", "--untracked-files=all")
+    if (
+        revision.returncode != 0
+        or re.fullmatch(r"[0-9a-f]{40}", revision.stdout.strip()) is None
+        or dirty.returncode != 0
+        or dirty.stdout
+    ):
+        return _emit_error(
+            request,
+            "promote",
+            _error(
+                "Candidate promotion requires one clean pinned Git checkout at HEAD",
+                ("commit or discard author checkout changes, then scan again",),
+            ),
+        )
+    source_alias = SourceAlias(request.candidate_source_alias)
+    target_registry = SourceAlias(request.target_registry_alias)
+    try:
+        configured = ConfiguredSource(
+            source_alias,
+            SourceKind.SOURCE_LOCAL,
+            checkout,
+            None,
+            True,
+        )
+        acquired = read_local_snapshot(
+            LocalSnapshotRequest(
+                source_instance_id(configured),
+                source_alias,
+                checkout,
+                SnapshotLimits(),
+            )
+        )
+    except ValueError as error:
+        return _emit_error(request, "promote", _error(str(error), _READ_THE_ACTIONS))
+    if isinstance(acquired, Err):
+        return _emit_error(request, "promote", acquired)
+    pinned_revision = revision.stdout.strip()
+    compiled = compile_author_snapshot(
+        acquired.value.snapshot,
+        source_alias=source_alias,
+        source=request.candidate_source_url,
+        revision=pinned_revision,
+    )
+    if isinstance(compiled, Err):
+        return _emit_error(request, "promote", compiled)
+    scanned = reconcile_source_scan(
+        source_alias,
+        pinned_revision,
+        compiled.value,
+        previous=(),
+        approved=approved.value,
+        target_registry=target_registry,
+    )
+    if isinstance(scanned, Err):
+        return _emit_error(request, "promote", scanned)
+    by_id = {item.candidate.id.value: item for item in scanned.value.active}
+    if not set(request.promotion_candidate_ids) <= set(by_id):
+        return _emit_error(
+            request,
+            "promote",
+            _error(
+                "one or more selected Candidate IDs no longer match the pinned Source Scan",
+                (
+                    "use `aart registry scan --help`, run a fresh scan with explicit boundaries, "
+                    "and review the current Candidate IDs",
+                ),
+            ),
+        )
+    selected: list[CandidateBundle] = []
+    for candidate_id in sorted(request.promotion_candidate_ids):
+        bundle = by_id[candidate_id]
+        candidate = bundle.candidate
+        if candidate.state in {CandidateState.NEW, CandidateState.CHANGED}:
+            candidate = assess_candidate(candidate)
+        if candidate.state not in {CandidateState.READY, CandidateState.WARNING}:
+            return _emit_error(
+                request,
+                "promote",
+                _error(
+                    f"Candidate {candidate.id} is {candidate.state.value} and cannot be promoted",
+                    ("resolve validation/policy findings and run Source Scan again",),
+                ),
+            )
+        selected.append(CandidateBundle(candidate, bundle.artifact))
+    evidence = tuple(
+        (
+            item.candidate.id,
+            PromotionEvidence(validation_report.value, policy_result.value),
+        )
+        for item in selected
+    )
+    planned = plan_bulk_promotion(
+        registry_snapshot.value,
+        tuple(selected),
+        evidence=evidence,
+        approved=approved.value,
+        mode=mode,
+    )
+    if isinstance(planned, Err):
+        return _emit_error(request, "promote", planned)
+    plan = planned.value
+    changes = [
+        {"path": str(item.path), "status": item.kind.value}
+        for item in plan.changes
+        if item.kind.value != "unchanged"
+    ]
+    if not request.yes:
+        if request.json:
+            print(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "ok": True,
+                        "operation": "registry.promote",
+                        "phase": "review",
+                        "applied": False,
+                        "candidate_ids": list(sorted(request.promotion_candidate_ids)),
+                        "mode": plan.mode.value,
+                        "review_digest": str(plan.review_digest),
+                        "registry_snapshot_before": str(plan.expected_registry_snapshot),
+                        "registry_snapshot_after": str(plan.next_registry_snapshot),
+                        "changes": changes,
+                        "commit": False,
+                        "push": False,
+                    },
+                    indent=2,
+                )
+            )
+        else:
+            print(f"Promotion review: {len(selected)} Candidate(s), mode={plan.mode.value}")
+            print(f"review digest: {plan.review_digest}")
+            for item in changes:
+                print(f"  {item['status']:>7}  {item['path']}")
+            print("Reviewed only. Re-run with --yes to promote locally; no commit or push.")
+        return _common.OK
+    applied = finalize_promotion(plan, plan.review_digest, output=output)
+    if isinstance(applied, Err):
+        return _emit_error(request, "promote", applied)
+    if request.json:
+        print(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "ok": True,
+                    "operation": "registry.promote",
+                    "phase": "promoted-local",
+                    "applied": True,
+                    "candidate_ids": list(sorted(request.promotion_candidate_ids)),
+                    "mode": plan.mode.value,
+                    "review_digest": str(applied.value.review_digest),
+                    "registry_snapshot": str(applied.value.registry_snapshot),
+                    "changed_paths": applied.value.changed_paths,
+                    "commit": False,
+                    "push": False,
+                },
+                indent=2,
+            )
+        )
+    else:
+        print(
+            f"Promoted {len(selected)} Candidate(s) locally ({applied.value.changed_paths} paths)."
+        )
+        print("Not committed. Not pushed. Canonical-branch publication remains external.")
+    return _common.OK
+
+
 def _git(root: str, *arguments: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ("git", "-C", root, *arguments),
@@ -708,6 +1088,10 @@ def run(request: Request) -> int:
         return _run_curation(request, CurationAction.SCAFFOLD)
     if action == "collection":
         return _run_curation(request, CurationAction.COLLECTION)
+    if action == "scan":
+        return _run_scan(request)
+    if action == "promote":
+        return _run_candidate_promotion(request)
     if action == "discover":
         return _run_discover(request)
     if action == "format":

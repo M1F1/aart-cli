@@ -733,6 +733,122 @@ def build_parser() -> argparse.ArgumentParser:
     _add_registry_finalize(p_collection)
     _add_json(p_collection)
 
+    p_scan = registry_sub.add_parser(
+        "scan",
+        help="discover native Candidates in one pinned author checkout",
+        description=(
+            "Read a clean Git author checkout at its exact HEAD, compile only explicit aart.json "
+            "or aart.yaml manifests, and report Candidate state. Source Scan never changes the "
+            "target registry and never promotes a Candidate."
+        ),
+    )
+    _add_registry_source(p_scan)
+    p_scan.add_argument(
+        "--checkout",
+        required=True,
+        dest="candidate_checkout",
+        metavar="DIR",
+        help="clean local Git checkout of the author source",
+    )
+    p_scan.add_argument(
+        "--source-alias",
+        required=True,
+        dest="candidate_source_alias",
+        metavar="ALIAS",
+        help="stable alias for the author source",
+    )
+    p_scan.add_argument(
+        "--source-url",
+        required=True,
+        dest="candidate_source_url",
+        metavar="URL",
+        help="credential-free provenance URL for the author source",
+    )
+    p_scan.add_argument(
+        "--target-registry",
+        required=True,
+        dest="target_registry_alias",
+        metavar="ALIAS",
+        help="trust-domain registry that may later review the Candidates",
+    )
+    _add_json(p_scan)
+
+    p_candidate_promote = registry_sub.add_parser(
+        "promote",
+        help="review or locally promote exact Candidate IDs as one registry transaction",
+        description=(
+            "Re-observe a clean pinned author checkout, select exact Candidate IDs, and plan one "
+            "atomic registry promotion. Without --yes this only reviews. With --yes it writes the "
+            "local registry checkout but never commits, pushes, merges, or publishes it."
+        ),
+    )
+    p_candidate_promote.add_argument(
+        "--source",
+        dest="source_dir",
+        required=True,
+        metavar="DIR",
+        help="writable local registry Git checkout",
+    )
+    p_candidate_promote.add_argument(
+        "--checkout",
+        required=True,
+        dest="candidate_checkout",
+        metavar="DIR",
+        help="clean local Git checkout of the author source",
+    )
+    p_candidate_promote.add_argument(
+        "--source-alias",
+        required=True,
+        dest="candidate_source_alias",
+        metavar="ALIAS",
+        help="stable alias for the author source",
+    )
+    p_candidate_promote.add_argument(
+        "--source-url",
+        required=True,
+        dest="candidate_source_url",
+        metavar="URL",
+        help="credential-free provenance URL for the author source",
+    )
+    p_candidate_promote.add_argument(
+        "--target-registry",
+        required=True,
+        dest="target_registry_alias",
+        metavar="ALIAS",
+        help="trust-domain registry receiving the promotion",
+    )
+    p_candidate_promote.add_argument(
+        "--candidate",
+        required=True,
+        action="append",
+        dest="promotion_candidate_ids",
+        metavar="SHA256",
+        help="exact Candidate ID selected during registry scan (repeatable)",
+    )
+    p_candidate_promote.add_argument(
+        "--validation-report",
+        required=True,
+        dest="promotion_validation_report",
+        metavar="DIGEST",
+        help="canonical SHA-256 digest of validation evidence",
+    )
+    p_candidate_promote.add_argument(
+        "--policy-result",
+        required=True,
+        dest="promotion_policy_result",
+        metavar="DIGEST",
+        help="canonical SHA-256 digest of the effective policy result",
+    )
+    p_candidate_promote.add_argument(
+        "--mode",
+        choices=("vendored", "referenced"),
+        default="vendored",
+        dest="promotion_mode",
+        help="enterprise default vendored, or explicit weaker referenced mode",
+    )
+    _add_registry_finalize(p_candidate_promote)
+    _add_json(p_candidate_promote)
+
     p_discover = registry_sub.add_parser(
         "discover",
         help="scan a foreign checkout and emit a reviewable vendoring manifest",
@@ -1250,6 +1366,14 @@ def _to_request(args: argparse.Namespace) -> Request:
         setup_recipe=getattr(args, "setup_recipe", None),
         review_policy=getattr(args, "review_policy", None),
         registry_action=getattr(args, "registry_action", None),
+        candidate_checkout=getattr(args, "candidate_checkout", None),
+        candidate_source_alias=getattr(args, "candidate_source_alias", None),
+        candidate_source_url=getattr(args, "candidate_source_url", None),
+        target_registry_alias=getattr(args, "target_registry_alias", None),
+        promotion_candidate_ids=tuple(getattr(args, "promotion_candidate_ids", ()) or ()),
+        promotion_validation_report=getattr(args, "promotion_validation_report", None),
+        promotion_policy_result=getattr(args, "promotion_policy_result", None),
+        promotion_mode=getattr(args, "promotion_mode", "vendored"),
         check=bool(getattr(args, "check", False)),
         check_upstream=bool(getattr(args, "check_upstream", False)),
         strict=bool(getattr(args, "strict", False)),
