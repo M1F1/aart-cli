@@ -281,6 +281,18 @@ class MacOsKeychainProvider:
             *self._suffix(),
         )
 
+    def resolution_argv(self, reference: CredentialReference) -> tuple[str, ...]:
+        """The argv a launcher runs to read this credential when the artifact starts.
+
+        This builds a command; it does not run one. The value it will produce belongs to the
+        launched process and never returns here, which is why this is the one place a caller may
+        ask for `-w` without a secret entering this one.
+        """
+
+        if not isinstance(reference, CredentialReference):
+            raise ValueError("a resolution command needs a credential reference")
+        return self._locate(reference, "-w")
+
     def available(self) -> ProviderState:
         if sys.platform != "darwin":
             return ProviderState.UNAVAILABLE

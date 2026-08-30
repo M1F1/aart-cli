@@ -251,3 +251,83 @@ the Product Specification first instead of hiding the change here.
 - **Consequence:** `PythonPackageRequirement` gained `lock_format`, so planning offers only backends
   that can read the artifact's contract. `descriptor_kind` also tells the interpreter whether to
   pass `-r <file>` or a project directory, which it could otherwise only guess from a filename.
+
+## D-022 — A launcher carries the command that reads a secret, never the secret
+- **Decision:** `generate_launcher` writes a shell command substitution that asks the credential
+  provider for each secret when the artifact starts. The provider supplies that argv through a
+  `CredentialResolutionPort`; `MacOsKeychainProvider.resolution_argv` builds it without running it.
+- **Status:** accepted.
+- **Reason:** §97 and §98 make the launcher an installation projection that may hold non-secret
+  configured values and references to secret providers, and never secret values. A resolved value
+  written into a file outlives every review that approved it, survives backups, and is readable by
+  anything that can read the file — while resolving at launch gives the value the lifetime of the
+  process that needs it.
+- **Consequence:** a provider that no interpreter can resolve fails generation
+  (`launcher-provider-unresolvable`) rather than producing a launcher with a hole in it, and a
+  provider that will not answer at run time exits 77 with the reference named and no value shown.
+
+## D-023 — The transport owns stdin, so a stdin-bound input is refused
+- **Decision:** an input bound to stdin under the stdio transport fails generation with
+  `launcher-transport-conflict`.
+- **Status:** accepted.
+- **Reason:** CP-08 deliberately separated `ProcessBinding` from `InputValueSource` so a secret
+  could be delivered on stdin — the lowest-exposure binding there is. Under stdio, stdin is the
+  protocol channel. Writing a value into it would corrupt the first JSON-RPC message and produce a
+  failure that looks like a broken server rather than a mis-bound input.
+- **Consequence:** `BindingExposure.PRIVATE` remains reachable for transports that do not claim
+  stdin. The refusal names the transport, so the fix is visible.
+
+## D-024 — A generated launcher does not write a secret to disk
+- **Decision:** a `FileBinding` fails generation with `launcher-binding-unsupported`.
+- **Status:** accepted.
+- **Reason:** a file-bound secret needs a lifetime: a mode, a directory nothing else can read, and
+  removal on every exit path including a killed process. Emitting a `trap` and hoping is not that
+  design. Environment and argument bindings cover the real MCP servers in front of us, and both
+  already declare their exposure honestly.
+- **Consequence:** B-019 tracks the design. Until then the refusal is loud, which is the CP-09
+  precedent (D-021): an unsupported contract is refused, never approximated.
+
+## D-025 — A harness target is measured, not derived
+- **Decision:** `MCP_TARGETS` holds observed settings paths and map keys; `mcp_target` raises
+  `KeyError` for any harness nobody has measured, and `McpTarget` refuses a path that leaves its
+  scope root.
+- **Status:** accepted.
+- **Reason:** the legacy `profiles/builtin.py` already carries this hard-won knowledge, including
+  the note that a Tabnine build surfaced its MCP entry from `settings.json` while published docs
+  name a different file. A registration written to a guessed path is worse than none: it reports
+  success and the server never starts.
+- **Consequence:** OpenCode and Vibe are not carried forward yet — their MCP keys are marked
+  unverified in the legacy profile, so importing them would launder a guess into a canonical value.
+  B-020 tracks measuring them.
+
+## D-026 — A harness settings file is merged, never replaced
+- **Decision:** `LocalHarnessRegistry` preserves every unrelated key and server, keeps the file's
+  existing permissions, reports unparseable JSON (`harness-settings-unreadable`) and refuses a
+  server map that is not a map (`harness-settings-unusable`) instead of overwriting either.
+- **Status:** accepted.
+- **Reason:** the file belongs to the harness and the person using it. An installer that has to
+  destroy a configuration to record itself has not installed anything; it has traded one working
+  setup for another.
+- **Consequence:** registering is idempotent — an unchanged entry rewrites nothing and reports
+  `changed=False`, which CP-11 can read directly as "no drift here".
+
+## D-027 — A receipt fingerprints config values rather than copying them
+- **Decision:** `InstallationReceipt.config` holds `ConfigFingerprint(input, sha256(id||value))`.
+- **Status:** accepted.
+- **Reason:** config values are not secret — the launcher holds them in the open — but
+  `EffectivePolicy.forbidden_persisted_config` exists because some of them must not be persisted
+  anyway. A digest detects drift exactly as well as a copy and leaves that policy nothing to
+  violate. The input id is folded in so the same value under two names cannot share one digest.
+- **Consequence:** repairing a drifted config value needs the desired value from the plan, not from
+  the receipt. That is the correct direction: a receipt records what happened, not what should.
+
+## D-028 — Verification with nothing measured is drift, not a pass
+- **Decision:** `verify_installation` reports `launcher-changed` when the observed digest is
+  `None`, and `observe_installation` converts every measurement failure into a fact rather than
+  raising.
+- **Status:** accepted.
+- **Reason:** the failure mode being defended against is a verifier that returns "no findings"
+  because it could not look. An unreadable launcher and a matching launcher must never produce the
+  same answer.
+- **Consequence:** findings are a closed enum in a fixed order, so CP-11 maps each to a remediation
+  rather than parsing prose.

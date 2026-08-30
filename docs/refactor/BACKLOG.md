@@ -181,3 +181,62 @@ Evidence/links: D-021; `tests/python_environment_integration_test.py::RuntimeRef
 test_it_refuses_a_locked_project_rather_than_quietly_ignoring_the_lock`.
 Promotion condition: a critical-path artifact declares a lock, or reproducibility review requires
 lock-exact installation.
+
+### B-019 — File-bound secrets in a generated launcher
+Status: OPEN
+Discovered in: CP-10 / `agent_artifacts/application/runtime_projection.py` / `generate_launcher`
+Why useful: some servers accept a credential only as a file path. `FileBinding` and
+`BindingExposure.OWNED_FILE` already model it, and planning already permits it, so the only missing
+piece is a launcher that can materialize one safely.
+Why noncritical now: no MCP server on the critical path needs it. Environment and argument bindings
+cover the real ones, and the refusal is explicit (D-024) rather than a silent gap.
+Potential approach: `umask 077`, a file under the artifact's own root, and a `trap` covering EXIT,
+INT, TERM and HUP — with a test that kills the process and asserts nothing is left behind, which is
+the assertion that makes the feature safe rather than merely present.
+Invariants touched: INV-053, INV-054, INV-062.
+Evidence/links: D-024; `tests/runtime_projection_test.py::GeneratedLauncherTest::
+test_a_file_binding_is_refused_rather_than_quietly_writing_a_secret_to_disk`.
+Promotion condition: a critical-path artifact declares a file-bound secret.
+
+### B-020 — Measured MCP targets for OpenCode and Vibe
+Status: OPEN
+Discovered in: CP-10 / `agent_artifacts/domain/harness.py` / `MCP_TARGETS`
+Why useful: `MCP_TARGETS` carries Tabnine and Claude Code. The legacy `profiles/builtin.py` also
+carries OpenCode and Vibe, but marks their MCP keys and hook event model as unverified best-effort
+defaults.
+Why noncritical now: CP-10 needs one real harness adapter and Tabnine is measured. Copying an
+unverified path into a canonical table would launder a guess into an authority (D-025).
+Potential approach: install one server against a live build of each and read back what the harness
+actually parsed, the way the Tabnine target was established.
+Invariants touched: INV-058, INV-059.
+Evidence/links: D-025; `agent_artifacts/profiles/builtin.py` OpenCode note at §19.
+Promotion condition: a user targets OpenCode or Vibe on the critical path, or a live build becomes
+available to measure.
+
+### B-021 — A launcher for a platform without a POSIX shell
+Status: OPEN
+Discovered in: CP-10 / `agent_artifacts/application/runtime_projection.py` / `_render`
+Why useful: the generated launcher is `/bin/sh`. Windows has no POSIX shell by default, so an
+installation there has no runtime projection at all.
+Why noncritical now: pairs with B-017 — the environment layout differs on Windows too
+(`Scripts/python.exe`, not `bin/python`), so both are one piece of work, and neither is on the
+critical path.
+Potential approach: a second renderer selected by platform, with `shell_quote`'s property test
+repeated against the real target shell rather than assumed.
+Invariants touched: INV-060, INV-100.
+Evidence/links: B-017; `agent_artifacts/domain/python_runtime.py` `_INTERPRETER_SUBPATH`.
+Promotion condition: Windows enters the supported platform set.
+
+### B-022 — Provider values whose trailing whitespace is significant
+Status: OPEN
+Discovered in: CP-10 / `agent_artifacts/application/runtime_projection.py` / `generate_launcher`
+Why useful: the launcher captures a secret with `$(...)`, which strips trailing newlines. A value
+that legitimately ends in one reaches the process altered.
+Why noncritical now: this is standard POSIX behaviour, every provider CLI in scope emits a trailing
+newline of its own that must be stripped, and CP-08 already measures stored length at the provider,
+so a truncation is visible there.
+Potential approach: a length check at launch against a length recorded in the receipt, or a
+provider port that can say whether its output is newline-terminated.
+Invariants touched: INV-055, INV-063.
+Evidence/links: D-022.
+Promotion condition: a provider or artifact is found where trailing whitespace is significant.
