@@ -15,17 +15,23 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
 
-from .credentials import CredentialReference
-from .harness import McpRegistration, registration_to_data
+from .credentials import CredentialProviderRef, CredentialReference
+from .diagnostics import Diagnostic, DiagnosticCode, Severity
+from .harness import McpRegistration, registration_from_data, registration_to_data
 from .identifiers import InputId, ObjectDigest
 from .launch import Transport
+from .result import Err, Ok, Result
 
 __all__ = [
+    "RECEIPT_INVALID",
     "ConfigFingerprint",
     "InstallationReceipt",
     "config_fingerprint",
+    "installation_receipt_from_data",
     "installation_receipt_to_data",
 ]
+
+RECEIPT_INVALID = DiagnosticCode("receipt-invalid")
 
 
 def config_fingerprint(input_id: InputId, value: str) -> "ConfigFingerprint":
@@ -107,7 +113,18 @@ def installation_receipt_to_data(receipt: InstallationReceipt) -> dict[str, obje
         "config": [
             {"digest": str(item.digest), "input": item.input.value} for item in receipt.config
         ],
-        "credentials": [str(reference) for reference in receipt.credentials],
+        # Structural, not the joined string alone: a service or account may itself contain the
+        # separators, so a document that only carried `str(reference)` could not be read back.
+        "credentials": [
+            {
+                "account": reference.provider.account,
+                "input": reference.input.value,
+                "provider": reference.provider.provider,
+                "reference": str(reference),
+                "service": reference.provider.service,
+            }
+            for reference in receipt.credentials
+        ],
         "interpreter": receipt.interpreter,
         "launcher": receipt.launcher,
         "launcher_digest": str(receipt.launcher_digest),
@@ -115,3 +132,76 @@ def installation_receipt_to_data(receipt: InstallationReceipt) -> dict[str, obje
         "root": receipt.root,
         "transport": receipt.transport.value,
     }
+
+
+def _error(message: str) -> Err:
+    return Err((Diagnostic(RECEIPT_INVALID, Severity.ERROR, message),))
+
+
+def _digest(value: object, label: str) -> ObjectDigest:
+    if not isinstance(value, str) or value.count(":") != 1:
+        raise ValueError(f"{label} must be written as algorithm:value")
+    algorithm, digest = value.split(":")
+    if not algorithm or not digest:
+        raise ValueError(f"{label} must be written as algorithm:value")
+    return ObjectDigest(algorithm, digest)
+
+
+def _reference(data: object) -> CredentialReference:
+    if not isinstance(data, dict):
+        raise ValueError("a credential document must be a mapping")
+    try:
+        return CredentialReference(
+            InputId(str(data["input"])),
+            CredentialProviderRef(
+                str(data["provider"]), str(data["service"]), str(data["account"])
+            ),
+        )
+    except KeyError as error:
+        raise ValueError(f"credential document is missing {error.args[0]}") from None
+
+
+def _fingerprint(data: object) -> ConfigFingerprint:
+    if not isinstance(data, dict):
+        raise ValueError("a config document must be a mapping")
+    try:
+        return ConfigFingerprint(
+            InputId(str(data["input"])), _digest(data["digest"], "config digest")
+        )
+    except KeyError as error:
+        raise ValueError(f"config document is missing {error.args[0]}") from None
+
+
+def installation_receipt_from_data(data: object) -> Result[InstallationReceipt]:
+    """The exact inverse of :func:`installation_receipt_to_data`.
+
+    A receipt read back off a disk is evidence somebody else's process wrote, so this refuses
+    anything it cannot rebuild faithfully rather than filling a gap with a default.  Every
+    constructor invariant still applies: a launcher outside its own root is rejected here for the
+    same reason it is rejected when the installation is first recorded.
+    """
+
+    if not isinstance(data, dict):
+        return _error("an installation receipt must be a mapping")
+    try:
+        for key in ("artifact", "root", "launcher", "launcher_digest", "interpreter"):
+            if key not in data:
+                raise ValueError(f"installation receipt is missing {key}")
+        for key in ("registrations", "credentials", "config"):
+            if not isinstance(data.get(key, []), list):
+                raise ValueError(f"installation receipt {key} must be a list")
+        return Ok(
+            InstallationReceipt(
+                str(data["artifact"]),
+                str(data["root"]),
+                str(data["launcher"]),
+                _digest(data["launcher_digest"], "launcher digest"),
+                str(data["interpreter"]),
+                Transport(str(data.get("transport", Transport.STDIO.value))),
+                tuple(registration_from_data(item) for item in data.get("registrations", [])),
+                tuple(_reference(item) for item in data.get("credentials", [])),
+                tuple(_fingerprint(item) for item in data.get("config", [])),
+            )
+        )
+    except ValueError as error:
+        return _error(str(error))

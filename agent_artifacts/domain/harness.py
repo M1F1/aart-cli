@@ -25,6 +25,7 @@ __all__ = [
     "Scope",
     "mcp_target",
     "registration_entry",
+    "registration_from_data",
     "registration_to_data",
 ]
 
@@ -135,6 +136,46 @@ def registration_entry(registration: McpRegistration) -> dict[str, object]:
     if registration.arguments:
         entry["args"] = list(registration.arguments)
     return dict(sorted(entry.items()))
+
+
+def registration_from_data(data: object) -> McpRegistration:
+    """Rebuild one registration from its own projection.
+
+    The harness and scope are looked up in the measured table rather than trusted from the
+    document, and the settings file has to be the one that table names.  A record claiming some
+    other path is a record about a harness this build has never measured.
+    """
+
+    if not isinstance(data, dict):
+        raise ValueError("a registration document must be a mapping")
+    try:
+        harness = data["harness"]
+        scope = data["scope"]
+        server = data["server"]
+        command = data["command"]
+        settings_file = data["settings_file"]
+        transport = data["transport"]
+        arguments = data.get("arguments", [])
+    except KeyError as error:
+        raise ValueError(f"registration document is missing {error.args[0]}") from None
+    if (
+        not isinstance(harness, str)
+        or not isinstance(scope, str)
+        or not isinstance(server, str)
+        or not isinstance(command, str)
+        or not isinstance(settings_file, str)
+        or not isinstance(transport, str)
+        or not isinstance(arguments, list)
+        or any(not isinstance(item, str) for item in arguments)
+    ):
+        raise ValueError("registration document has an invalid field")
+    try:
+        target = mcp_target(harness, Scope(scope))
+    except (KeyError, ValueError):
+        raise ValueError(f"no measured MCP target for {harness} at {scope} scope") from None
+    if target.settings_file != settings_file:
+        raise ValueError(f"{harness} settings live at {target.settings_file}, not {settings_file}")
+    return McpRegistration(target, server, command, tuple(arguments), Transport(transport))
 
 
 def registration_to_data(registration: McpRegistration) -> dict[str, object]:

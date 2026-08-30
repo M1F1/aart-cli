@@ -292,3 +292,20 @@ the legacy wizard reachable until the public-flow evidence for step 6 exists.
 Invariants touched: INV-149, INV-168.
 Evidence/links: B-024; `tests/consumer_shell_test.py`.
 Promotion condition: B-024 is complete and equivalent public-flow evidence exists.
+
+### B-026 — Canonical installation-receipt persistence
+Status: PROMOTED TO CRITICAL PATH (2026-08-31) — store landed; recording from execution remains
+Discovered in: CP-13 / B-024 / `agent_artifacts/io/`
+Why useful: canonical installed state could be projected and verified but not kept. Every reader of
+`InstallationReceipt` took one as an argument; nothing wrote one down and nothing read one back, so
+no canonical installed state survived the process that produced it.
+Promotion evidence: B-024 assembles `ConsumerScreens` over canonical services. Installed (12–14),
+Updates (15–16) and Activity (25–27) are all projections of installed state and past actions, so
+without persistence the canonical shell can only ever draw an empty machine — and CP-13 step 6
+cannot retire legacy authority whose one remaining advantage is that it persists
+(`receipt_service.py`, `setup_receipt.py`). CP-16 supportability has the same dependency.
+Invariants touched: INV-149, INV-152, INV-169.
+Evidence/links: D-044, D-045; `agent_artifacts/io/receipt_store.py`; `tests/receipt_store_test.py`.
+Remaining before closure: building an `InstallationReceipt` from a finished `execute_lifecycle`
+outcome and recording it, plus recording the action receipt, so the store has a producer in the
+real flow rather than in tests alone.

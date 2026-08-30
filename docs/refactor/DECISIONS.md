@@ -508,3 +508,25 @@ the Product Specification first instead of hiding the change here.
   drew "Nothing is installed here" for an artifact that was plainly installed.
 - **Consequence:** 25 → 26 → 27 stays about one action, and 12 → 13 about one artifact. Back
   returns to the list with the cursor still on the row that was opened.
+
+## D-044 — A record stores identity structurally, not as its printed form
+- **Decision:** persisted receipts carry credential references and artifact coordinates as objects
+  with named parts; `str(reference)` is kept alongside them as a label, never as the storage.
+- **Status:** accepted.
+- **Reason:** `CredentialReference` prints as `input@provider:service/account` and a coordinate as
+  `source/kind/name@version`, but nothing forbids `@`, `:` or `/` inside a service, an account or a
+  name. A parser over the printed form would be right until the first punctuated provider, and then
+  silently wrong about which credential an installation holds.
+- **Consequence:** `installation_receipt_to_data` emits a mapping per credential; the label stays
+  under `"reference"` so existing readers and the MCP stdio E2E assertion keep working.
+
+## D-045 — A receipt that cannot be read is reported, never skipped
+- **Decision:** `LocalReceiptStore` returns `Err` for an unreadable record rather than omitting it
+  from `installations()` or `actions()`; a limit bounds what is opened, not what is reported.
+- **Status:** accepted.
+- **Reason:** a skipped receipt presents itself to every later reader as an installation that never
+  happened. Reconciliation would then plan a fresh install over an existing one, which is the exact
+  failure a receipt exists to prevent. Absence and corruption are different answers and get
+  different codes (`receipt-absent`, `receipt-unreadable`).
+- **Consequence:** one corrupt file makes the whole listing an error until a person resolves it.
+  That is deliberate: a partial truth about what is installed is worse than a refusal.

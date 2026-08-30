@@ -16,6 +16,7 @@ from itertools import groupby
 from typing import cast
 
 from agent_artifacts.domain.credentials import CredentialObservation, CredentialReference
+from agent_artifacts.domain.diagnostics import Diagnostic, Severity
 from agent_artifacts.domain.effects import RiskClass, effect_to_data
 from agent_artifacts.domain.inputs import (
     BoundInputs,
@@ -29,9 +30,11 @@ from agent_artifacts.domain.inputs import (
     binding_kind,
 )
 from agent_artifacts.domain.plans import InstallPlan, install_plan_to_data
+from agent_artifacts.domain.receipts import RECEIPT_INVALID
 from agent_artifacts.domain.reconciliation import CurrentState, DesiredState, compare_states
 from agent_artifacts.domain.remediations import remediation_to_data
 from agent_artifacts.domain.requirements import requirement_to_data
+from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.domain.selection import Collection, OwnershipReason, ResolvedSelection
 from agent_artifacts.domain.serialization import CanonicalValue, canonical_json_bytes
 from agent_artifacts.marketplace.model import MarketplaceCatalog
@@ -79,6 +82,7 @@ __all__ = [
     "DashboardView",
     "DoctorView",
     "RegistryView",
+    "activity_from_receipts",
     "activity_view_to_data",
     "consumer_plan_to_data",
     "install_flow_screens",
@@ -97,6 +101,7 @@ __all__ = [
     "project_receipt_detail",
     "project_registries",
     "project_selection",
+    "receipt_detail_from_data",
     "receipt_detail_to_data",
 ]
 
@@ -908,6 +913,24 @@ _ACTIVITY_VERBS: dict[LifecycleIntentKind, str] = {
 }
 
 
+def _moment(recorded_at: object, label: str) -> datetime:
+    """Parse one recorded moment, or refuse it.
+
+    An offset is required rather than assumed.  A naive timestamp read back on another machine
+    would silently move the action into a different day, and the day is what a timeline is for.
+    """
+
+    if not isinstance(recorded_at, str) or "T" not in recorded_at:
+        raise ValueError(f"{label} needs an ISO-8601 date and time")
+    try:
+        moment = datetime.fromisoformat(recorded_at)
+    except ValueError as error:
+        raise ValueError(f"{recorded_at!r} is not an ISO-8601 timestamp") from error
+    if moment.tzinfo is None or moment.tzinfo.utcoffset(moment) is None:
+        raise ValueError(f"{label} needs an explicit UTC offset")
+    return moment
+
+
 @dataclass(frozen=True, slots=True)
 class ActivityRecord:
     """One finished lifecycle action, with the moment it finished.
@@ -923,15 +946,7 @@ class ActivityRecord:
     def __post_init__(self) -> None:
         if not isinstance(self.outcome, LifecycleExecutionOutcome):
             raise ValueError("an activity record needs a lifecycle execution outcome")
-        if not isinstance(self.recorded_at, str) or "T" not in self.recorded_at:
-            raise ValueError("an activity record needs an ISO-8601 date and time")
-        try:
-            moment = datetime.fromisoformat(self.recorded_at)
-        except ValueError as error:
-            raise ValueError(f"{self.recorded_at!r} is not an ISO-8601 timestamp") from error
-        if moment.tzinfo is None or moment.tzinfo.utcoffset(moment) is None:
-            raise ValueError("an activity timestamp needs an explicit UTC offset")
-        object.__setattr__(self, "moment", moment)
+        object.__setattr__(self, "moment", _moment(self.recorded_at, "an activity record"))
 
 
 @dataclass(frozen=True, slots=True)
@@ -999,6 +1014,32 @@ def _activity_entry(record: ActivityRecord) -> ActivityEntry:
     )
 
 
+def _receipt_entry(view: ReceiptDetailView) -> ActivityEntry:
+    return ActivityEntry(
+        view.moment.isoformat(),
+        view.moment.strftime("%H:%M"),
+        view.intent,
+        view.artifact,
+        view.summary,
+        view.outcome,
+        view.outcome.mark,
+        view.review_digest,
+        view.detail,
+    )
+
+
+def _timeline(entries: tuple[tuple[datetime, ActivityEntry], ...], today: date) -> ActivityView:
+    if not isinstance(today, date) or isinstance(today, datetime):
+        raise ValueError("activity projection needs the reader's current date")
+    ordered = sorted(entries, key=lambda item: item[0], reverse=True)
+    return ActivityView(
+        tuple(
+            ActivityDayView(_day_label(day, today), tuple(entry for _, entry in group))
+            for day, group in groupby(ordered, key=lambda item: item[0].date())
+        )
+    )
+
+
 def project_activity(records: tuple[ActivityRecord, ...], *, today: date) -> ActivityView:
     """Group finished actions into the days a person remembers them by, newest first.
 
@@ -1008,15 +1049,19 @@ def project_activity(records: tuple[ActivityRecord, ...], *, today: date) -> Act
 
     if any(not isinstance(item, ActivityRecord) for item in records):
         raise ValueError("activity projection needs activity records")
-    if not isinstance(today, date) or isinstance(today, datetime):
-        raise ValueError("activity projection needs the reader's current date")
-    ordered = sorted(records, key=lambda item: item.moment, reverse=True)
-    return ActivityView(
-        tuple(
-            ActivityDayView(_day_label(day, today), tuple(_activity_entry(item) for item in group))
-            for day, group in groupby(ordered, key=lambda item: item.moment.date())
-        )
-    )
+    return _timeline(tuple((item.moment, _activity_entry(item)) for item in records), today)
+
+
+def activity_from_receipts(receipts: tuple[ReceiptDetailView, ...], *, today: date) -> ActivityView:
+    """The same timeline, rebuilt from receipts that outlived the process that ran them.
+
+    A stored receipt already carries the sentence the timeline shows, so nothing is re-derived from
+    a plan this run never made.  That is what lets Activity survive a restart at all.
+    """
+
+    if any(not isinstance(item, ReceiptDetailView) for item in receipts):
+        raise ValueError("activity projection needs receipt detail views")
+    return _timeline(tuple((item.moment, _receipt_entry(item)) for item in receipts), today)
 
 
 def activity_view_to_data(view: ActivityView) -> dict[str, object]:
@@ -1094,6 +1139,7 @@ class ReceiptDetailView:
     recorded_at: str
     intent: str
     artifact: str
+    summary: str
     status: str
     outcome: ActivityOutcome
     review_digest: str
@@ -1103,6 +1149,10 @@ class ReceiptDetailView:
     restoration_status: str | None
     undo: UndoAvailability
     detail: str
+    moment: datetime = field(init=False)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "moment", _moment(self.recorded_at, "a receipt"))
 
 
 def project_receipt_detail(record: ActivityRecord) -> ReceiptDetailView:
@@ -1116,6 +1166,7 @@ def project_receipt_detail(record: ActivityRecord) -> ReceiptDetailView:
         record.moment.isoformat(),
         projected.kind,
         projected.artifact,
+        _activity_summary(outcome),
         projected.status,
         _ACTIVITY_OUTCOMES[outcome.status],
         projected.review_digest,
@@ -1145,6 +1196,7 @@ def receipt_detail_to_data(view: ReceiptDetailView) -> dict[str, object]:
         "restoration_status": view.restoration_status,
         "review_digest": view.review_digest,
         "status": view.status,
+        "summary": view.summary,
         "steps": [
             {
                 "component": item.component,
@@ -1365,3 +1417,82 @@ def project_doctor(artifacts: tuple[InstalledArtifactView, ...]) -> DoctorView:
         repairable,
         actions,
     )
+
+
+def _view_error(message: str) -> Err:
+    return Err((Diagnostic(RECEIPT_INVALID, Severity.ERROR, message),))
+
+
+def _string(data: dict[str, object], key: str) -> str:
+    value = data.get(key)
+    if not isinstance(value, str):
+        raise ValueError(f"a receipt needs a {key}")
+    return value
+
+
+def _rows(data: dict[str, object], key: str) -> tuple[dict[str, object], ...]:
+    rows = data.get(key, [])
+    if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+        raise ValueError(f"a receipt's {key} must be a list of records")
+    return tuple(cast("list[dict[str, object]]", rows))
+
+
+def receipt_detail_from_data(data: object) -> Result[ReceiptDetailView]:
+    """The exact inverse of :func:`receipt_detail_to_data`.
+
+    Undo is read back rather than recomputed.  What could be reversed was decided by the effects
+    that actually ran, and a later process has no standing to upgrade that answer.
+    """
+
+    if not isinstance(data, dict):
+        return _view_error("a receipt must be a mapping")
+    try:
+        restoration = data.get("restoration_status")
+        if restoration is not None and not isinstance(restoration, str):
+            raise ValueError("a receipt's restoration status must be a string or absent")
+        undo = data.get("undo")
+        if not isinstance(undo, dict) or not isinstance(undo.get("available"), bool):
+            raise ValueError("a receipt needs an undo availability")
+        components = undo.get("components", [])
+        if not isinstance(components, list) or any(
+            not isinstance(item, str) for item in components
+        ):
+            raise ValueError("a receipt's undo components must be strings")
+        return Ok(
+            ReceiptDetailView(
+                _string(data, "recorded_at"),
+                _string(data, "intent"),
+                _string(data, "artifact"),
+                _string(data, "summary"),
+                _string(data, "status"),
+                ActivityOutcome(_string(data, "outcome")),
+                _string(data, "review_digest"),
+                _string(data, "policy_digest"),
+                tuple(
+                    LifecycleStepOutcomeView(
+                        _string(row, "component"),
+                        _string(row, "effect"),
+                        _string(row, "status"),
+                        _string(row, "detail"),
+                    )
+                    for row in _rows(data, "steps")
+                ),
+                tuple(
+                    LifecycleDriftView(
+                        _string(row, "component"),
+                        _string(row, "kind"),
+                        bool(row.get("repairable")),
+                    )
+                    for row in _rows(data, "drift")
+                ),
+                restoration,
+                UndoAvailability(
+                    cast("bool", undo["available"]),
+                    _string(undo, "reason"),
+                    tuple(cast("list[str]", components)),
+                ),
+                _string(data, "detail"),
+            )
+        )
+    except ValueError as error:
+        return _view_error(str(error))
