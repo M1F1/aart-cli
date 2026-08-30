@@ -28,17 +28,35 @@ def _imports(path: pathlib.Path) -> tuple[str, ...]:
     return tuple(modules)
 
 
+# `redaction` is the package's single redactor and imports nothing, from anywhere. Refusing a
+# credential shape in reviewed registry guidance is a domain validity rule, and the alternative to
+# this one allowance is a second copy of that matcher -- which is what `redaction.py` exists to
+# prevent. Nothing else outside `domain` may be added here.
+DOMAIN_ALLOWED_LEAVES = ("agent_artifacts.redaction",)
+
+
 class CanonicalArchitectureBoundaryTest(unittest.TestCase):
     def test_domain_depends_only_on_stdlib_and_canonical_domain(self) -> None:
         violations: list[str] = []
         for path in sorted((PACKAGE / "domain").glob("*.py")):
             for module in _imports(path):
-                if module.startswith("agent_artifacts.") and not module.startswith(
-                    "agent_artifacts.domain"
+                if (
+                    module.startswith("agent_artifacts.")
+                    and not module.startswith("agent_artifacts.domain")
+                    and module not in DOMAIN_ALLOWED_LEAVES
                 ):
                     violations.append(f"{path.name}: {module}")
 
         self.assertEqual(violations, [])
+
+    def test_the_allowed_domain_leaf_stays_a_leaf(self) -> None:
+        for name in DOMAIN_ALLOWED_LEAVES:
+            path = PACKAGE / (name.split(".", 1)[1].replace(".", "/") + ".py")
+            imported = [
+                module for module in _imports(path) if module.startswith("agent_artifacts.")
+            ]
+
+            self.assertEqual(imported, [], f"{name} must keep importing nothing from the package")
 
     def test_application_does_not_import_concrete_io_or_interfaces(self) -> None:
         forbidden = (

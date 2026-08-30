@@ -37,6 +37,16 @@ class SourceOrigin:
 
 
 @dataclass(frozen=True, slots=True, order=True)
+class InputId:
+    """Identity of one declared runtime input, independent of its kind and of any value."""
+
+    value: str
+
+    def __str__(self) -> str:
+        return self.value
+
+
+@dataclass(frozen=True, slots=True, order=True)
 class ArtifactIdentity:
     kind: ArtifactKind
     name: str

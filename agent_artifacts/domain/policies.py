@@ -25,7 +25,9 @@ class EffectivePolicy:
     allowed_transports: frozenset[str] | None = None
     allowed_credential_providers: frozenset[str] | None = None
     allowed_network_hosts: frozenset[str] | None = None
+    allowed_secret_bindings: frozenset[str] | None = None
     forbidden_effects: frozenset[str] = frozenset()
+    forbidden_persisted_config: frozenset[str] = frozenset()
     required_checks: frozenset[str] = frozenset()
     risk_ceiling: RiskClass = RiskClass.HIGH_RISK_EXECUTION
     interactive_remediation: bool = True
@@ -36,7 +38,9 @@ class EffectivePolicy:
         _valid_set(self.allowed_transports, "allowed transports")
         _valid_set(self.allowed_credential_providers, "allowed credential providers")
         _valid_set(self.allowed_network_hosts, "allowed network hosts")
+        _valid_set(self.allowed_secret_bindings, "allowed secret bindings")
         _valid_set(self.forbidden_effects, "forbidden effects")
+        _valid_set(self.forbidden_persisted_config, "forbidden persisted config")
         _valid_set(self.required_checks, "required checks")
         if not isinstance(self.risk_ceiling, RiskClass) or not isinstance(
             self.interactive_remediation, bool
@@ -55,7 +59,9 @@ class PolicyOverlay:
     allowed_transports: frozenset[str] | None = None
     allowed_credential_providers: frozenset[str] | None = None
     allowed_network_hosts: frozenset[str] | None = None
+    allowed_secret_bindings: frozenset[str] | None = None
     forbidden_effects: frozenset[str] = frozenset()
+    forbidden_persisted_config: frozenset[str] = frozenset()
     required_checks: frozenset[str] = frozenset()
     risk_ceiling: RiskClass | None = None
     interactive_remediation: bool | None = None
@@ -66,7 +72,9 @@ class PolicyOverlay:
         _valid_set(self.allowed_transports, "allowed transports")
         _valid_set(self.allowed_credential_providers, "allowed credential providers")
         _valid_set(self.allowed_network_hosts, "allowed network hosts")
+        _valid_set(self.allowed_secret_bindings, "allowed secret bindings")
         _valid_set(self.forbidden_effects, "forbidden effects")
+        _valid_set(self.forbidden_persisted_config, "forbidden persisted config")
         _valid_set(self.required_checks, "required checks")
         if (
             self.risk_ceiling is not None
@@ -99,7 +107,13 @@ def compose_policy(parent: EffectivePolicy, overlay: PolicyOverlay) -> Effective
             parent.allowed_credential_providers, overlay.allowed_credential_providers
         ),
         allowed_network_hosts=_narrow(parent.allowed_network_hosts, overlay.allowed_network_hosts),
+        allowed_secret_bindings=_narrow(
+            parent.allowed_secret_bindings, overlay.allowed_secret_bindings
+        ),
         forbidden_effects=parent.forbidden_effects | overlay.forbidden_effects,
+        forbidden_persisted_config=(
+            parent.forbidden_persisted_config | overlay.forbidden_persisted_config
+        ),
         required_checks=parent.required_checks | overlay.required_checks,
         risk_ceiling=ceiling,
         interactive_remediation=(
@@ -126,8 +140,10 @@ def policy_to_data(policy: EffectivePolicy) -> dict[str, object]:
         "allowed_network_hosts": values(policy.allowed_network_hosts),
         "allowed_registries": values(policy.allowed_registries),
         "allowed_runtimes": values(policy.allowed_runtimes),
+        "allowed_secret_bindings": values(policy.allowed_secret_bindings),
         "allowed_transports": values(policy.allowed_transports),
         "forbidden_effects": sorted(policy.forbidden_effects),
+        "forbidden_persisted_config": sorted(policy.forbidden_persisted_config),
         "interactive_remediation": policy.interactive_remediation,
         "required_checks": sorted(policy.required_checks),
         "risk_ceiling": policy.risk_ceiling.name.lower().replace("_", "-"),

@@ -153,3 +153,52 @@ the Product Specification first instead of hiding the change here.
 - **Consequence:** intent, requirement, owner and effect ordering cannot change review identity, so
   a review approval binds exactly one semantic plan. Environment facts enter the digest through the
   assessments they produced rather than as a second raw copy.
+
+## D-016 — A secret value exists only in `io`, in a carrier that resists every way of keeping it
+- **Decision:** `TransientSecret` lives in `agent_artifacts/io/credentials.py`. It renders as
+  `[redacted]` from `__repr__`, `__str__` and `__format__`, raises on `pickle`, `copy` and
+  `deepcopy`, and yields its value exactly once through `consume()`. No domain or application type
+  can hold one: `SecretInput` has no value or default field, and the only source a `SecretInput`
+  may bind to is a `SecretProviderReference`. `CredentialObservation` carries provider state,
+  credential state and a length, never content.
+- **Status:** accepted.
+- **Reason:** INV-048/INV-051/INV-053 separate `CredentialReference` from a credential value, and
+  the standing constraint is that secret values never appear in registry content, plans, receipts,
+  provenance, logs, exceptions, JSON output, snapshots, tests or TUI history. Making the carrier
+  unserializable and single-use turns that from a review rule into a type-level one: the paths that
+  would leak a value are the paths that raise.
+- **Consequence:** planning is total over references and never blocks on a provider. A caller that
+  wants to log a plan, snapshot it or diff it cannot accidentally include a value, because no value
+  reached the plan. passing `store()` no carrier at all — its default — delegates acquisition to the
+  provider's own prompt, so the common path never materialises a `TransientSecret`.
+
+## D-017 — Keychain replacement removes and re-adds, because in-place update blocks on a dialog
+- **Decision:** `MacOsKeychainProvider.store(..., replace=True)` runs `delete-generic-password`
+  followed by `add-generic-password`. It does not use `add-generic-password -U`.
+- **Status:** accepted.
+- **Reason:** measured, not assumed. Against `security` on macOS 15, `add-generic-password -U` on an
+  existing item raises an authorization dialog and never returns without a human — a six-second
+  probe and a twenty-second test both timed out, and the killed process left the item unreadable
+  afterwards. `delete-generic-password` then `add-generic-password` completes with status 0 and no
+  dialog, with default item access control and no `-A`. An operation that cannot complete
+  unattended cannot be part of desired-state reconciliation.
+- **Consequence:** replacement is not atomic. There is a window in which the credential is absent,
+  so a write that fails after the removal says exactly that ("the previous value was already
+  removed, so the credential is now absent and has to be stored again") and CP-11/12 repair it as
+  an ordinary absent-credential drift. `-U`'s absence is asserted by test, not left to habit.
+
+## D-018 — The domain parses host allow-lists itself rather than importing `urllib`
+- **Decision:** `agent_artifacts/domain/inputs.py` validates a URL with `_url_host`, a strict
+  reader that refuses anything it cannot read plainly: non-`http(s)` schemes, userinfo, backslashes,
+  quotes, angle brackets, control characters and DEL, address literals, non-numeric ports, and
+  empty, leading or trailing host labels. It returns the lowercase host or None.
+- **Status:** accepted.
+- **Reason:** two reasons, and either alone would be enough. `tests/domain_kernel_test.py` forbids
+  the `urllib` root in `domain` because `urllib.request` reaches the network, and the ban is coarse
+  on purpose — widening it to `urllib.parse` would weaken a gate to make a test pass. Separately,
+  `urlsplit` is lenient exactly where a host allow-list is attacked: it accepts userinfo,
+  backslashes and control characters, so the checker and whatever opens the URL later can disagree
+  about which host was named. Refusing the unusual case is the conservative reading.
+- **Consequence:** `ObtainFrom` uses the same reader, so guidance links are held to the same
+  standard as validated configuration. The bypass cases are permanent test cases rather than
+  comments, and IPv6 literals are refused until an allow-list can name one (backlog).

@@ -136,6 +136,20 @@ class DeleteCredential:
 
 
 @dataclass(frozen=True, slots=True)
+class VerifyCredential:
+    """Ask the provider whether the reference resolves. It never returns the value."""
+
+    reference: str
+    provider: str
+    risk: ClassVar[RiskClass] = RiskClass.READ_ONLY
+    capabilities: ClassVar[EffectCapabilities] = EffectCapabilities(True, True, False, True)
+
+    def __post_init__(self) -> None:
+        _line(self.reference, "credential reference")
+        _line(self.provider, "credential provider")
+
+
+@dataclass(frozen=True, slots=True)
 class ConfigureHarness:
     harness: str
     artifact: str
@@ -167,6 +181,7 @@ Effect: TypeAlias = (
     | StoreCredential
     | ReplaceCredential
     | DeleteCredential
+    | VerifyCredential
     | ConfigureHarness
     | VerifyRequirement
 )
@@ -209,6 +224,8 @@ def effect_to_data(effect: Effect) -> dict[str, object]:
         data.update(kind="replace-credential", reference=effect.reference, provider=effect.provider)
     elif isinstance(effect, DeleteCredential):
         data.update(kind="delete-credential", reference=effect.reference, provider=effect.provider)
+    elif isinstance(effect, VerifyCredential):
+        data.update(kind="verify-credential", reference=effect.reference, provider=effect.provider)
     elif isinstance(effect, ConfigureHarness):
         data.update(
             kind="configure-harness",
