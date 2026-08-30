@@ -33,6 +33,7 @@ from dataclasses import dataclass, replace
 from typing import Callable, List, Literal, Mapping, Optional, Sequence, Tuple
 
 from . import __version__
+from .application.consumer_ui import ConsumerUiState
 from .application.sources import SourceAdoptionOutcome
 from .configuration.model import (
     OrganizationPolicy,
@@ -103,6 +104,7 @@ from .setup import (
     setup_retry_command,
 )
 from .sources.model import SourceIdentityTransition, SourceSyncOutcome
+from .tui_consumer import ConsumerScreenSource, run_consumer_shell
 from .tui_failures import (
     WizardOperation,
     WizardStageFailure,
@@ -6147,6 +6149,54 @@ def _height(stdscr) -> int:
 
 def _width(stdscr) -> int:
     return stdscr.getmaxyx()[1]
+
+
+class _CursesTerminal:
+    """The whole curses dependency of the canonical consumer application.
+
+    Drawing and one blocking read: everything else about that application -- what a key means,
+    what a screen shows, when to reload rows -- lives in code that never touches a terminal.
+    """
+
+    def __init__(self, stdscr) -> None:
+        self._stdscr = stdscr
+
+    def draw(self, lines: Tuple[str, ...]) -> None:
+        self._stdscr.clear()
+        height, width = self._stdscr.getmaxyx()
+        for row, line in enumerate(lines[: max(height - 1, 0)]):
+            self._stdscr.addstr(row, 0, line[: max(width - 1, 0)])
+        self._stdscr.refresh()
+
+    def key(self) -> int:
+        return int(self._stdscr.getch())
+
+
+def run_consumer(source: ConsumerScreenSource) -> ConsumerUiState:
+    """Run the canonical consumer application over curses, or raise if there is no terminal."""
+
+    try:
+        import curses  # stdlib; imported lazily so the text path needs no terminal at all.
+    except ImportError as error:
+        raise CursesUnavailable("the curses application could not start") from error
+
+    captured: dict = {}
+
+    def _ui(stdscr) -> None:
+        captured["state"] = run_consumer_shell(source, _CursesTerminal(stdscr))
+
+    try:
+        curses.wrapper(_ui)
+    except CursesUnavailable:
+        raise
+    except Exception as error:  # pragma: no cover - terminal capability failure
+        if "state" in captured:
+            raise
+        raise CursesUnavailable("the curses application could not start") from error
+    state = captured.get("state")
+    if not isinstance(state, ConsumerUiState):  # pragma: no cover - wrapper always runs _ui
+        raise CursesUnavailable("the curses application did not run")
+    return state
 
 
 def _curses_supported() -> bool:

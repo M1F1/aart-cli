@@ -2,38 +2,38 @@
 
 ## Current objective
 
-Open **CP-13 Consumer TUI 01–29**: reuse the existing persistent stdlib/curses TUI and route its
-consumer install and installed-lifecycle surfaces through the canonical Selection, plan,
-input/credential, reconciliation and execution seams verified in CP-06–CP-12.
+Finish **CP-13 Consumer TUI 01–29**. Steps 1–4 of the slice are complete and verified: all 29
+accepted screens have canonical projections and Fast/Verbose renderers over CP-06–CP-12 values, the
+keyboard and the persistent application loop are pure and headlessly driven, and a consumer flow
+E2E runs the real CP-12 installation through Installed → drift → repair → Activity → receipt →
+ownership-aware uninstall.
 
-The semantic core now exists, but the public consumer still sees the characterized legacy catalog,
-setup and lifecycle procedures. CP-13 is the strangler cutover: Fast and Verbose become two
-projections of the same immutable plan/state, and the accepted screen catalog becomes executable
-public behavior rather than documentation alone.
+What remains is the wiring that makes the canonical application the one a person actually reaches.
 
 ## Immediate next actions
 
-1. Read Product Specification sections 149–163 and inventory current `tui.py`,
-   `tui_marketplace.py`, `tui_layout.py`, `tui_failures.py`, `wizard.py`, consumer commands and their
-   tests against accepted screens 01–29.
-2. Create the CP-13 slice file and a screen-by-screen coverage table: existing/partial/missing,
-   canonical application input, Fast projection, Verbose projection and acceptance test.
-3. Characterize navigation/state persistence before changing it. Keep arrows/Enter/Esc/`/`/`?`/`q`,
-   context shortcuts, Fast default and remembered presentation preference.
-4. Introduce pure consumer view models over CP-06 Selection/Collections, CP-07 InstallPlan,
-   CP-08 inputs/credential references and CP-11/12 health/reconciliation outcomes. Render both
-   levels from those models; never plan inside a renderer.
-5. Route one complete public vertical flow first: Marketplace multi-select → Collection preview →
-   Required Inputs/remediation → review → progress/outcome → Installed/receipt → drift/repair.
-6. Add accepted uninstall ownership explanations, credential retention choice, Registries,
-   Credentials, Activity, Settings and Doctor entry point without implementing CP-16 doctor logic
-   twice.
+1. **B-024** — assemble one `ConsumerScreens` builder over the canonical services so the shell can
+   draw Marketplace, artifact/Collection detail and the whole install flow (screens 02–11, 15–24).
+   Build it once: CP-14 needs the same assembly for the maintainer catalog. Refresh it after an
+   action, never inside a draw.
+2. **B-025** — route the default TTY entry in `tui.py::run` to `run_consumer` behind the existing
+   curses-availability check, keeping the legacy wizard reachable until step 6 evidence exists.
+3. Route the public consumer commands (`install`, `update`, `uninstall`, `status`) through
+   `plan_lifecycle_intent`/`execute_lifecycle` rather than the legacy setup queue, projecting their
+   output with `consumer_plan_to_data` and `receipt_detail_to_data` so text, curses and `--json`
+   are three renderings of one plan.
+4. Only then step 6: retire legacy consumer semantic authority (`consumer/application.py`,
+   `installation/*`, `setup_engine/*`, `lifecycle/application.py`) path by path, each removal
+   preceded by a public-flow test proving the canonical path already carries it.
+5. Update the CP-13 coverage table as each screen group moves from projection to live flow.
 
 ## Do not do yet
 
 - no replacement with Textual/Rich or a second TUI framework;
 - no Maintainer Mode screens 30–53 (CP-14), beyond preserving the existing opt-in boundary;
 - no broad package moves or deletion of legacy authority before public replacement evidence;
+- no second place where a key's meaning is decided: `key_event` is the only one (D-041);
+- no clock in `application/`: `today` and a record's own timestamp are supplied (D-039);
 - no new transport, credential provider, installer backend or unmeasured harness target;
 - no Docker/OCI foundation (B-003), orphan classifier (B-023) or other backlog work;
 - no changes to older AART repositories.

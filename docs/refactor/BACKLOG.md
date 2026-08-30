@@ -258,3 +258,37 @@ Invariants touched: INV-058, INV-075, INV-079.
 Evidence/links: D-033; `tests/reconciliation_test.py::ComparisonTest::
 test_something_present_that_nothing_desires_is_named_and_not_repaired`.
 Promotion condition: uninstall or scope-level doctor needs to report orphans (CP-12 or CP-16).
+
+### B-024 — Marketplace and install-flow screens for the canonical consumer shell
+Status: OPEN
+Discovered in: CP-13 / `agent_artifacts/tui_consumer.py` / `CanonicalScreenSource`
+Why useful: the persistent consumer application draws Dashboard, Installed, Installed details,
+Activity, receipts, Registries, Settings and Doctor from canonical views. Screens 02–11 and 15–24
+currently draw "… is not available yet" because a screen source for them needs the resolution,
+inspection and input services to be reachable as one assembled consumer session.
+Why noncritical now: the projections for those screens exist and are tested (`project_selection`,
+`project_install_plan`, `project_collection`, `project_required_inputs`); what is missing is the
+service wiring that produces them for a live machine, which is the same wiring CP-14 needs for the
+maintainer catalog. Building it twice would be the waste.
+Potential approach: one assembled `ConsumerScreens` builder over the canonical services, refreshed
+after each action rather than inside a draw, with the marketplace rows coming from
+`project_marketplace_rows` as `tui_marketplace` already produces them.
+Invariants touched: INV-149, INV-152, INV-153.
+Evidence/links: D-041; `tests/consumer_shell_test.py::ConsumerShellTest::
+test_a_screen_with_nothing_behind_it_yet_says_so_rather_than_drawing_nothing`.
+Promotion condition: retiring legacy consumer authority (CP-13 step 6) or routing the default TTY
+entry to the canonical application requires them.
+
+### B-025 — Routing the default TTY entry to the canonical consumer application
+Status: OPEN
+Discovered in: CP-13 / `agent_artifacts/tui.py` / `run`
+Why useful: `run_consumer` exists, is typed, and drives the canonical application over curses, but
+nothing calls it — `run()` still opens the legacy wizard. Until it is routed, the canonical shell is
+reachable only from tests and embedders.
+Why noncritical now: routing it now would regress the flows the legacy wizard still owns alone
+(Marketplace browse, install, sources maintenance), because the screens behind them are B-024.
+Potential approach: route once B-024 lands, behind the existing curses-availability check, keeping
+the legacy wizard reachable until the public-flow evidence for step 6 exists.
+Invariants touched: INV-149, INV-168.
+Evidence/links: B-024; `tests/consumer_shell_test.py`.
+Promotion condition: B-024 is complete and equivalent public-flow evidence exists.

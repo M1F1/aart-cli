@@ -455,3 +455,56 @@ the Product Specification first instead of hiding the change here.
 - **Consequence:** Collection removal explains retained ownership and removes only final-owner
   artifacts. The real uninstall E2E proves the runtime/root and harness entry disappear while the
   provider-held credential remains.
+
+## D-039 — Activity groups by the day a record names, and today is supplied
+- **Decision:** `ActivityRecord` carries its own ISO-8601 timestamp with an explicit UTC offset,
+  and `project_activity` takes `today` as a required keyword rather than reading a clock.
+- **Status:** accepted.
+- **Reason:** the application layer has no clock by construction, and a receipt that dated itself
+  when somebody opened the timeline would be a record of the reading rather than of the action. A
+  naive timestamp also cannot be ordered against one written on another machine.
+- **Consequence:** "Today"/"Yesterday" mean the reader's today; every other day is named by its
+  date. A record without a time or an offset is refused at construction, not silently coerced.
+
+## D-040 — A receipt records what happened; it does not promise an undo
+- **Decision:** `UndoAvailability` offers undo only when at least one effect was applied, every
+  applied effect declares `reversible=True`, and no applied effect is a credential mutation.
+- **Status:** accepted.
+- **Reason:** §161.9 states a receipt does not imply guaranteed undo, and INV-161 forbids retaining
+  an old secret value. Manufacturing credential undo would require keeping exactly the value the
+  architecture refuses to hold, so the honest answer is the refusal and its reason.
+- **Consequence:** the receipt screen says plainly why undo is unavailable — nothing took effect,
+  nothing retained can reverse it, or no previous value exists — instead of offering an action that
+  cannot complete.
+
+## D-041 — Key meaning is decided in the reducer, not in the terminal
+- **Decision:** `key_event` translates a key *name* to an event inside the application layer, with
+  the current mode in hand; `tui_consumer.key_name` maps one `getch` code to a name and the curses
+  adapter does nothing else.
+- **Status:** accepted.
+- **Reason:** what a key means depends on mode: while the search filter is open every printable key
+  is a letter of the query, and at the quit prompt only the answer keys act. A shell that decided
+  that for itself would eventually let `q` quit instead of typing a q — the exact bug the legacy
+  wizard warns about in its own comment.
+- **Consequence:** the whole keyboard is headlessly testable against canonical view models, and no
+  ncurses constant reaches `agent_artifacts/application/`.
+
+## D-042 — Esc goes back in the persistent consumer application
+- **Decision:** in the canonical consumer application `Esc` is Back and `q` quits; the legacy
+  wizard's Esc-also-quits stays where it is.
+- **Status:** accepted.
+- **Reason:** §161.1 lists Esc among the global keys of a persistent application with left
+  navigation, where Back is what Esc means. Esc-as-quit is a wizard behaviour: a wizard has no
+  position to return to.
+- **Consequence:** Esc at the Dashboard does nothing rather than exiting. Quitting with a selection
+  still asks first.
+
+## D-043 — A detail screen is about a focused row, not about the cursor
+- **Decision:** navigation records the row it was opened from as `ConsumerUiState.focus`, keeping
+  the previous focus when the current screen has no rows of its own; Back clears it.
+- **Status:** accepted.
+- **Reason:** loading a detail screen replaces the row set with that screen's own — usually empty —
+  so the cursor cannot say what the screen is about. Discovered by the headless shell test, which
+  drew "Nothing is installed here" for an artifact that was plainly installed.
+- **Consequence:** 25 → 26 → 27 stays about one action, and 12 → 13 about one artifact. Back
+  returns to the list with the cursor still on the row that was opened.

@@ -69,7 +69,13 @@ ARTIFACT = "mcp/github"
 COORDINATE = ArtifactCoordinate(SourceAlias("public"), ArtifactIdentity("mcp", "github"), "1.5.0")
 
 
-class RepairedInstallationTest(unittest.TestCase):
+class InstalledFixture(unittest.TestCase):
+    """One real installation on disk: payload, owned runtime, launcher, harness, credential.
+
+    Held apart from the tests so the consumer flow can stand on exactly the same installation
+    rather than on a second one that only resembles it.
+    """
+
     def setUp(self) -> None:
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
@@ -185,6 +191,8 @@ class RepairedInstallationTest(unittest.TestCase):
         )[0]
         return json.loads(reply["result"]["content"][0]["text"])
 
+
+class RepairedInstallationTest(InstalledFixture):
     def test_an_intact_installation_needs_no_repair_and_touches_nothing(self):
         before = pathlib.Path(self.receipt.launcher).read_bytes()
         outcome = self.repair()
