@@ -544,3 +544,17 @@ the Product Specification first instead of hiding the change here.
   is inspected, not inferred from the fact that a record exists. The timeline always gets the
   action, including failures, and gets it before the installation record, so a store that then
   refuses still leaves the attempt visible.
+
+## D-047 — A Collection opens ticked, and customizing it stays about the Collection
+- **Decision:** entering screen 04 seeds the selection with every member (a new `SET_SELECTION`
+  event the screen source supplies on the way in), and the 04 → 04a step keeps `focus` instead of
+  taking the row under the cursor (`keeps_focus`).
+- **Status:** accepted.
+- **Reason:** opening a Collection is asking for the Collection, so the exact membership is the
+  honest starting point and Space then removes from it. And a Collection preview lists *members*,
+  so D-043's "a detail is about the row under the cursor" would make Customize about one member
+  rather than about the Collection it is customizing.
+- **Consequence:** `project_collection` stays the only place a selection identity is decided, and an
+  exact re-selection collapses back to the exact Collection because the ticks are ordered by
+  membership before projection. Quitting with a Collection open now asks first, because a ticked
+  Collection is a selection.

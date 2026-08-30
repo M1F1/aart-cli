@@ -84,8 +84,9 @@ existed; three defects were found by tests rather than by reading:
 5. Wire the persistent curses shell and public commands without duplicating planning.
    **PARTIAL** — the loop, the keymap and a canonical screen source exist and are driven headlessly
    (`run_consumer_shell`, `key_event`, `CanonicalScreenSource`); the curses adapter in `tui.py` is
-   `_CursesTerminal` plus `run_consumer`. Screens 02–11 and 15–24 have projections but no assembled
-   service wiring (B-024), and `run()` still opens the legacy wizard (B-025).
+   `_CursesTerminal` plus `run_consumer`. Marketplace, artifact details, Collection preview and
+   customization (02–04a) are drawn from canonical offers (B-024 part 1, D-047). Screens 05–11 and
+   15–24 still need the plan-bearing assembly, and `run()` still opens the legacy wizard (B-025).
 5a. Persist canonical installed state and finished actions, so screens 12–16 and 25–27 have
    something to project between processes. **DONE** — `domain/receipts.py` gained the parse that
    inverts its own projection, `application/consumer_views.py` gained `receipt_detail_from_data`
@@ -113,6 +114,11 @@ the quit prompt where only the answer keys act.
 `tests/consumer_shell_test.py` — the persistent application driven through its own loop with a
 scripted terminal: rows load per screen, filters narrow and restore them, details stay about the
 row they were opened from, and `v` redraws the same screen with more disclosed.
+
+`tests/consumer_marketplace_shell_test.py` — screens 02–04a over a real built marketplace: the list
+holds artifacts and Collections together, Enter opens the right screen for whichever the cursor is
+on, a Collection preview lists its members as its rows, unticking one makes the selection custom
+with an identity of its own, and re-ticking every member is the exact Collection again.
 
 `tests/receipt_recording_test.py` — what a finished action leaves behind, over real reviewed plans
 and a fake store: every action reaches the timeline including the ones that failed, an install that
@@ -156,16 +162,16 @@ own launcher after a repair planned from disk alone, and no stored file contains
 
 ## Remaining
 
-- Step 5 service wiring for screens 02–11 and 15–24 (B-024).
+- Step 5 service wiring for screens 05–11 and 15–24 (B-024); 02–04a are done.
 - Routing the default TTY entry to the canonical application (B-025).
 - Step 6: retiring legacy consumer semantic authority, once the above give equivalent public-flow
   evidence.
 
 ## Known compromises
 
-- Screens 02–11 and 15–24 draw an explicit "… is not available yet" line in the canonical shell
-  rather than silently drawing an empty screen. Their projections exist and are tested; only the
-  live service assembly is missing (B-024).
+- Screens 05–11 and 15–24 draw an explicit "… is not available yet" line in the canonical shell
+  rather than silently drawing an empty screen. Their projections exist and are tested; what is
+  missing is the assembly that carries a live plan (B-024).
 - `run_consumer` is reachable by embedders and tests but is not yet the default TTY entry (B-025).
   No legacy behavior has been changed or removed to make room for it.
 
@@ -197,6 +203,6 @@ machine-output tests prove every accepted flow now consumes the canonical applic
 - Do not undo: existing curses layout/search/basket/back/quit characterization; one semantic plan
   for both profiles; Maintainer Mode remains opt-in; `key_event` stays the only place a key's
   meaning is decided; no clock in `application/`.
-- Tests last run/results: 2,309 unit + 80 E2E tests, 83.25% coverage, all ten quality gates
+- Tests last run/results: 2,315 unit + 80 E2E tests, 83.29% coverage, all ten quality gates
   green (`make quality`). CP-12 baseline was 2,196 unit + 65 E2E at 83.25%.
 - Failure evidence: three defects found by tests are listed under Characterization / RED evidence.

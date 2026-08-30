@@ -20,6 +20,7 @@ from .consumer_views import (
     ConsumerSession,
     ConsumerSettings,
     PresentationProfile,
+    keeps_focus,
     navigation_targets,
 )
 
@@ -39,6 +40,7 @@ class ConsumerUiEventKind(str, Enum):
     BACK = "back"
     MOVE = "move"
     SET_ROWS = "set-rows"
+    SET_SELECTION = "set-selection"
     TOGGLE_PROFILE = "toggle-profile"
     TOGGLE_SELECTION = "toggle-selection"
     SEARCH = "search"
@@ -176,10 +178,15 @@ def _navigate(
     # What the next screen is about: the row somebody was on, or -- where this screen has no rows
     # of its own -- whatever the screen before it was already about.  A detail opened from a
     # detail is still about the same thing.
+    focus = (
+        state.focus
+        if keeps_focus(state.session.screen, screen)
+        else state.current_row or state.focus
+    )
     updated = replace(
         state,
         session=state.session.navigate(screen),
-        focus=state.current_row or state.focus,
+        focus=focus,
         search="",
         help_visible=False,
         quit_pending=False,
@@ -212,6 +219,21 @@ def _set_rows(
     standing = state.current_row
     cursor = rows.index(standing) if standing in rows else 0
     return replace(state, rows=rows, cursor=cursor), ()
+
+
+def _set_selection(
+    state: ConsumerUiState, selected: tuple[str, ...]
+) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
+    """Replace what is ticked, for a screen that opens with an opinion about it.
+
+    A Collection opens with every member ticked, because opening a Collection is asking for the
+    Collection. Untick from there; this event is how a screen says so, and it is only ever sent as
+    a screen is entered.
+    """
+
+    if state.session.screen not in _SELECTABLE:
+        return state, ()
+    return replace(state, selection=tuple(dict.fromkeys(selected)), quit_pending=False), ()
 
 
 def _move(
@@ -254,6 +276,8 @@ def reduce_consumer_ui(
         return _set_rows(state, event.rows)
     if event.kind is ConsumerUiEventKind.MOVE:
         return _move(state, event.text)
+    if event.kind is ConsumerUiEventKind.SET_SELECTION:
+        return _set_selection(state, event.rows)
     if event.kind is ConsumerUiEventKind.TOGGLE_SELECTION:
         return _toggle_selection(state, event.key)
     if event.kind is ConsumerUiEventKind.TOGGLE_PROFILE:

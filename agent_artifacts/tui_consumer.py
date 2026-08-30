@@ -29,6 +29,7 @@ from agent_artifacts.application.consumer_views import (
     CredentialInputView,
     DashboardView,
     DoctorView,
+    InputView,
     InstalledArtifactView,
     InstalledCollectionView,
     LifecycleOutcomeView,
@@ -37,7 +38,9 @@ from agent_artifacts.application.consumer_views import (
     PresentationProfile,
     ReceiptDetailView,
     RegistryView,
+    project_collection,
 )
+from agent_artifacts.domain.selection import Collection
 from agent_artifacts.tui_marketplace import MarketplaceArtifactRow, render_artifact_detail
 
 __all__ = [
@@ -45,6 +48,8 @@ __all__ = [
     "ConsumerScreenSource",
     "ConsumerScreens",
     "ConsumerTerminal",
+    "MarketplaceCollectionEntry",
+    "MarketplaceEntry",
     "key_name",
     "run_consumer_shell",
     "render_activity",
@@ -545,6 +550,9 @@ class ConsumerScreenSource(Protocol):
     def detail(self, state: ConsumerUiState) -> ConsumerScreen | None:
         """Where Enter goes from the row under the cursor, if anywhere."""
 
+    def selected(self, state: ConsumerUiState) -> tuple[str, ...] | None:
+        """What this screen opens with ticked, or `None` where it has no opinion."""
+
 
 _HELP_LINES: tuple[str, ...] = (
     "↑ ↓  move        space  select",
@@ -598,7 +606,7 @@ def run_consumer_shell(
             ConsumerUiEventKind.SEARCH_CLOSE,
         }
     )
-    current = _reload(source, current)
+    current = _reload(source, current, entering=True)
     while not current.exited:
         terminal.draw(frame(source, current))
         name = key_name(terminal.key())
@@ -608,18 +616,68 @@ def run_consumer_shell(
         if event is None:
             continue
         current, commands = reduce_consumer_ui(current, event)
-        if event.kind in reloads or any(
-            command.kind is ConsumerUiCommandKind.LOAD_SCREEN for command in commands
-        ):
-            current = _reload(source, current)
+        entering = any(command.kind is ConsumerUiCommandKind.LOAD_SCREEN for command in commands)
+        if entering or event.kind in reloads:
+            current = _reload(source, current, entering=entering)
     return current
 
 
-def _reload(source: ConsumerScreenSource, state: ConsumerUiState) -> ConsumerUiState:
+def _reload(
+    source: ConsumerScreenSource, state: ConsumerUiState, *, entering: bool = False
+) -> ConsumerUiState:
+    """Re-read the rows, and on the way into a screen, whatever it opens with ticked."""
+
     reloaded, _ = reduce_consumer_ui(
         state, ConsumerUiEvent(ConsumerUiEventKind.SET_ROWS, rows=source.rows(state))
     )
-    return reloaded
+    seed = source.selected(reloaded) if entering else None
+    if seed is None:
+        return reloaded
+    seeded, _ = reduce_consumer_ui(
+        reloaded, ConsumerUiEvent(ConsumerUiEventKind.SET_SELECTION, rows=seed)
+    )
+    return seeded
+
+
+@dataclass(frozen=True, slots=True)
+class MarketplaceEntry:
+    """One offered artifact and what installing it will ask for."""
+
+    row: MarketplaceArtifactRow
+    inputs: tuple[InputView, ...] = ()
+
+    @property
+    def key(self) -> str:
+        return self.row.key
+
+
+@dataclass(frozen=True, slots=True)
+class MarketplaceCollectionEntry:
+    """One offered Collection, kept canonical so a customization keeps its own identity.
+
+    The Collection itself is held rather than one projection of it, because which members are
+    chosen is what the customize screen is for, and only :func:`project_collection` may decide what
+    identity a given choice has.
+    """
+
+    collection: Collection
+    inputs: tuple[InputView, ...] = ()
+
+    @property
+    def key(self) -> str:
+        return str(self.collection.coordinate)
+
+    @property
+    def members(self) -> tuple[str, ...]:
+        return tuple(str(item.request) for item in self.collection.members)
+
+    def view(self, selected: tuple[str, ...] | None = None) -> MarketplaceCollectionView:
+        chosen = (
+            None
+            if selected is None
+            else tuple(item for item in self.members if item in frozenset(selected))
+        )
+        return project_collection(self.collection, selected=chosen, inputs=self.inputs)
 
 
 @dataclass(frozen=True, slots=True)
@@ -637,6 +695,14 @@ class ConsumerScreens:
     settings: ConsumerSettings = ConsumerSettings()
     doctor: DoctorView | None = None
     receipts: tuple[ReceiptDetailView, ...] = ()
+    marketplace: tuple[MarketplaceEntry, ...] = ()
+    collections: tuple[MarketplaceCollectionEntry, ...] = ()
+
+    def offered(self, key: str) -> MarketplaceEntry | None:
+        return next((item for item in self.marketplace if item.key == key), None)
+
+    def offered_collection(self, key: str) -> MarketplaceCollectionEntry | None:
+        return next((item for item in self.collections if item.key == key), None)
 
     def artifact(self, coordinate: str) -> InstalledArtifactView | None:
         return next((item for item in self.installed if item.coordinate == coordinate), None)
@@ -669,6 +735,15 @@ class CanonicalScreenSource:
 
     def rows(self, state: ConsumerUiState) -> tuple[str, ...]:
         screen, query = state.session.screen, state.search
+        if screen is ConsumerScreen.MARKETPLACE:
+            return tuple(
+                item.key
+                for item in self._offers()
+                if _matches(query, item.key, self._summary(item))
+            )
+        if screen in (ConsumerScreen.COLLECTION_PREVIEW, ConsumerScreen.COLLECTION_CUSTOMIZE):
+            preview = self._screens.offered_collection(state.focus)
+            return () if preview is None else preview.members
         if screen is ConsumerScreen.INSTALLED:
             return tuple(
                 item.coordinate
@@ -687,15 +762,47 @@ class CanonicalScreenSource:
             )
         return ()
 
+    def _offers(self) -> tuple[MarketplaceEntry | MarketplaceCollectionEntry, ...]:
+        return (*self._screens.marketplace, *self._screens.collections)
+
+    @staticmethod
+    def _summary(entry: MarketplaceEntry | MarketplaceCollectionEntry) -> str:
+        if isinstance(entry, MarketplaceEntry):
+            return entry.row.summary
+        return entry.collection.summary
+
+    def collection(self, key: str, selected: tuple[str, ...]) -> MarketplaceCollectionView:
+        """One offered Collection as the given ticks make it: exact, or a custom selection."""
+
+        entry = self._screens.offered_collection(key)
+        if entry is None:
+            raise ValueError(f"no Collection is offered as {key}")
+        return entry.view(selected)
+
+    def selected(self, state: ConsumerUiState) -> tuple[str, ...] | None:
+        """A Collection opens with every member ticked; nothing else has an opinion."""
+
+        if state.session.screen is not ConsumerScreen.COLLECTION_PREVIEW:
+            return None
+        entry = self._screens.offered_collection(state.focus)
+        return None if entry is None else entry.members
+
     def detail(self, state: ConsumerUiState) -> ConsumerScreen | None:
         """Enter opens the detail of whatever this screen is currently about."""
 
+        screen, row = state.session.screen, state.current_row or state.focus
+        if screen is ConsumerScreen.MARKETPLACE:
+            if self._screens.offered_collection(state.current_row) is not None:
+                return ConsumerScreen.COLLECTION_PREVIEW
+            return ConsumerScreen.ARTIFACT_DETAILS if state.current_row else None
+        if screen is ConsumerScreen.COLLECTION_PREVIEW:
+            return ConsumerScreen.COLLECTION_CUSTOMIZE if state.focus else None
         target = {
             ConsumerScreen.INSTALLED: ConsumerScreen.INSTALLED_ARTIFACT_DETAILS,
             ConsumerScreen.ACTIVITY: ConsumerScreen.ACTIVITY_DETAILS,
             ConsumerScreen.ACTIVITY_DETAILS: ConsumerScreen.RECEIPT_DETAILS,
-        }.get(state.session.screen)
-        if target is None or not (state.current_row or state.focus):
+        }.get(screen)
+        if target is None or not row:
             return None
         return target
 
@@ -704,6 +811,26 @@ class CanonicalScreenSource:
         screens = self._screens
         if screen is ConsumerScreen.DASHBOARD:
             return render_dashboard(screens.dashboard)
+        if screen is ConsumerScreen.MARKETPLACE:
+            offered = {item.key: item for item in self._offers()}
+            return self._list(
+                state,
+                tuple(
+                    f"{key}  {self._summary(offered[key])}" for key in state.rows if key in offered
+                ),
+            )
+        if screen is ConsumerScreen.ARTIFACT_DETAILS:
+            entry = screens.offered(state.focus)
+            return (
+                ("Nothing is offered here.",)
+                if entry is None
+                else render_marketplace_artifact(entry.row, profile, inputs=entry.inputs)
+            )
+        if screen in (ConsumerScreen.COLLECTION_PREVIEW, ConsumerScreen.COLLECTION_CUSTOMIZE):
+            preview = screens.offered_collection(state.focus)
+            if preview is None:
+                return ("No Collection is offered here.",)
+            return render_collection(preview.view(state.selection), profile)
         if screen is ConsumerScreen.INSTALLED:
             return self._list(
                 state,

@@ -12,11 +12,12 @@ What remains is the wiring that makes the canonical application the one a person
 
 ## Immediate next actions
 
-1. **B-024** — assemble one `ConsumerScreens` builder over the canonical services so the shell can
-   draw Marketplace, artifact/Collection detail and the whole install flow (screens 02–11, 15–24).
-   Installed state and the timeline now come from `LocalReceiptStore` (B-026); what is missing is
-   resolution, inspection and input binding for a live machine. Build it once: CP-14 needs the same
-   assembly for the maintainer catalog. Refresh it after an action, never inside a draw.
+1. **B-024** — continue the canonical screen assembly. Marketplace, artifact details and
+   Collection preview/customize (02–04a) now draw from `MarketplaceEntry`/`MarketplaceCollectionEntry`
+   offers. What remains is the plan-bearing half: screens 05–11 and 15–24 need a `ConsumerPlanView`
+   and lifecycle views assembled from resolution, inspection and input binding, refreshed after an
+   action rather than derived inside a draw. Build it once: CP-14 needs the same assembly for the
+   maintainer catalog.
 2. **B-025** — route the default TTY entry in `tui.py::run` to `run_consumer` behind the existing
    curses-availability check, keeping the legacy wizard reachable until step 6 evidence exists.
 3. Route the public consumer commands (`install`, `update`, `uninstall`, `status`) through

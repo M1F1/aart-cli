@@ -260,7 +260,7 @@ test_something_present_that_nothing_desires_is_named_and_not_repaired`.
 Promotion condition: uninstall or scope-level doctor needs to report orphans (CP-12 or CP-16).
 
 ### B-024 — Marketplace and install-flow screens for the canonical consumer shell
-Status: OPEN
+Status: IN PROGRESS (2026-08-31) — 02–04a drawn from canonical offers; 05–11 and 15–24 remain
 Discovered in: CP-13 / `agent_artifacts/tui_consumer.py` / `CanonicalScreenSource`
 Why useful: the persistent consumer application draws Dashboard, Installed, Installed details,
 Activity, receipts, Registries, Settings and Doctor from canonical views. Screens 02–11 and 15–24

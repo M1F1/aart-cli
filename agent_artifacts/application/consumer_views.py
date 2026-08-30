@@ -86,6 +86,7 @@ __all__ = [
     "activity_view_to_data",
     "consumer_plan_to_data",
     "install_flow_screens",
+    "keeps_focus",
     "navigation_targets",
     "project_activity",
     "project_dashboard",
@@ -1272,6 +1273,28 @@ _NAVIGATION: dict[ConsumerScreen, tuple[ConsumerScreen, ...]] = {
     ConsumerScreen.SETTINGS: (),
     ConsumerScreen.DOCTOR: (ConsumerScreen.VERIFY_REPAIR,),
 }
+
+
+_KEEPS_FOCUS: frozenset[tuple[ConsumerScreen, ConsumerScreen]] = frozenset(
+    {
+        (ConsumerScreen.COLLECTION_PREVIEW, ConsumerScreen.COLLECTION_CUSTOMIZE),
+        (ConsumerScreen.COLLECTION_PREVIEW, ConsumerScreen.REVIEW_SELECTION),
+        (ConsumerScreen.COLLECTION_CUSTOMIZE, ConsumerScreen.REVIEW_SELECTION),
+    }
+)
+
+
+def keeps_focus(current: ConsumerScreen, target: ConsumerScreen) -> bool:
+    """Whether stepping between these two screens stays about the same thing.
+
+    Normally the next screen is about the row somebody was on. A Collection is the exception: its
+    preview lists members, so the row under the cursor is a member, while customizing is still
+    about the Collection itself.
+    """
+
+    if not isinstance(current, ConsumerScreen) or not isinstance(target, ConsumerScreen):
+        raise ValueError("consumer navigation needs two screens")
+    return (current, target) in _KEEPS_FOCUS
 
 
 def navigation_targets(screen: ConsumerScreen) -> tuple[ConsumerScreen, ...]:
