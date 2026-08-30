@@ -116,7 +116,9 @@ class RequirementAndRemediationAlgebraTest(unittest.TestCase):
 class EffectAlgebraTest(unittest.TestCase):
     def test_effects_carry_explicit_risk_and_repair_capabilities(self) -> None:
         copy = CopyTree("payload", ".aart/mcp/github/payload")
-        runtime = CreatePythonEnvironment("github", ".aart/mcp/github/runtime/.venv")
+        runtime = CreatePythonEnvironment(
+            "github", ".aart/mcp/github/runtime/.venv", "/usr/bin/python3"
+        )
         credential = ReplaceCredential("github-token", "macos-keychain")
         harness = ConfigureHarness("tabnine", "github", ".tabnine/agent/settings.json")
 

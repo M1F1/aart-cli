@@ -45,6 +45,7 @@ class RemediationCapabilityKind(str, Enum):
     EXECUTABLE_INSTALLER = "executable-installer"
     HARNESS_CONFIGURATION = "harness-configuration"
     NETWORK_CONFIGURATION = "network-configuration"
+    PYTHON_INSTALLER = "python-installer"
     RUNTIME_INSTALLER = "runtime-installer"
 
 

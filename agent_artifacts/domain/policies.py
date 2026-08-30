@@ -25,6 +25,7 @@ class EffectivePolicy:
     allowed_transports: frozenset[str] | None = None
     allowed_credential_providers: frozenset[str] | None = None
     allowed_network_hosts: frozenset[str] | None = None
+    allowed_python_installers: frozenset[str] | None = None
     allowed_secret_bindings: frozenset[str] | None = None
     forbidden_effects: frozenset[str] = frozenset()
     forbidden_persisted_config: frozenset[str] = frozenset()
@@ -38,6 +39,7 @@ class EffectivePolicy:
         _valid_set(self.allowed_transports, "allowed transports")
         _valid_set(self.allowed_credential_providers, "allowed credential providers")
         _valid_set(self.allowed_network_hosts, "allowed network hosts")
+        _valid_set(self.allowed_python_installers, "allowed Python installers")
         _valid_set(self.allowed_secret_bindings, "allowed secret bindings")
         _valid_set(self.forbidden_effects, "forbidden effects")
         _valid_set(self.forbidden_persisted_config, "forbidden persisted config")
@@ -59,6 +61,7 @@ class PolicyOverlay:
     allowed_transports: frozenset[str] | None = None
     allowed_credential_providers: frozenset[str] | None = None
     allowed_network_hosts: frozenset[str] | None = None
+    allowed_python_installers: frozenset[str] | None = None
     allowed_secret_bindings: frozenset[str] | None = None
     forbidden_effects: frozenset[str] = frozenset()
     forbidden_persisted_config: frozenset[str] = frozenset()
@@ -72,6 +75,7 @@ class PolicyOverlay:
         _valid_set(self.allowed_transports, "allowed transports")
         _valid_set(self.allowed_credential_providers, "allowed credential providers")
         _valid_set(self.allowed_network_hosts, "allowed network hosts")
+        _valid_set(self.allowed_python_installers, "allowed Python installers")
         _valid_set(self.allowed_secret_bindings, "allowed secret bindings")
         _valid_set(self.forbidden_effects, "forbidden effects")
         _valid_set(self.forbidden_persisted_config, "forbidden persisted config")
@@ -107,6 +111,9 @@ def compose_policy(parent: EffectivePolicy, overlay: PolicyOverlay) -> Effective
             parent.allowed_credential_providers, overlay.allowed_credential_providers
         ),
         allowed_network_hosts=_narrow(parent.allowed_network_hosts, overlay.allowed_network_hosts),
+        allowed_python_installers=_narrow(
+            parent.allowed_python_installers, overlay.allowed_python_installers
+        ),
         allowed_secret_bindings=_narrow(
             parent.allowed_secret_bindings, overlay.allowed_secret_bindings
         ),
@@ -138,6 +145,7 @@ def policy_to_data(policy: EffectivePolicy) -> dict[str, object]:
     return {
         "allowed_credential_providers": values(policy.allowed_credential_providers),
         "allowed_network_hosts": values(policy.allowed_network_hosts),
+        "allowed_python_installers": values(policy.allowed_python_installers),
         "allowed_registries": values(policy.allowed_registries),
         "allowed_runtimes": values(policy.allowed_runtimes),
         "allowed_secret_bindings": values(policy.allowed_secret_bindings),

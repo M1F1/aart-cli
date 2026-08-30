@@ -25,11 +25,13 @@ from agent_artifacts.domain.plans import (
     PlannedRemediation,
 )
 from agent_artifacts.domain.policies import EffectivePolicy, policy_to_data
+from agent_artifacts.domain.python_runtime import installers_for_lock
 from agent_artifacts.domain.remediations import (
     ConfigureCredential,
     ConfigureHarness,
     ConfigureNetwork,
     InstallExecutable,
+    InstallPythonPackages,
     InstallRuntime,
     Remediation,
     remediation_to_data,
@@ -287,7 +289,7 @@ def _capability_names(
 def _remediation_risk(remediation: Remediation) -> RiskClass:
     if isinstance(remediation, ConfigureCredential):
         return RiskClass.CREDENTIAL_MUTATION
-    if isinstance(remediation, (InstallRuntime, InstallExecutable)):
+    if isinstance(remediation, (InstallRuntime, InstallExecutable, InstallPythonPackages)):
         return RiskClass.EXECUTABLE_INSTALL
     if isinstance(remediation, ConfigureNetwork):
         return RiskClass.NETWORK_MUTATION
@@ -301,6 +303,8 @@ def _remediation_policy_key(remediation: Remediation) -> str:
         return "install-runtime"
     if isinstance(remediation, InstallExecutable):
         return "install-executable"
+    if isinstance(remediation, InstallPythonPackages):
+        return "install-python-packages"
     if isinstance(remediation, ConfigureNetwork):
         return "configure-network"
     return "configure-harness"
@@ -350,7 +354,16 @@ def _possible_remediations(
             if requirement.harness in available
             else ()
         )
-    assert isinstance(requirement, (FilesystemRequirement, PythonPackageRequirement))
+    if isinstance(requirement, PythonPackageRequirement):
+        # Which backends could read this contract, intersected with what the platform runs. A
+        # backend the artifact's lock was not written by is never offered.
+        readable = {item.value for item in installers_for_lock(requirement.lock_format)}
+        available = _capability_names(facts, RemediationCapabilityKind.PYTHON_INSTALLER)
+        return tuple(
+            InstallPythonPackages(requirement.id, installer)
+            for installer in sorted(readable & available)
+        )
+    assert isinstance(requirement, FilesystemRequirement)
     return ()
 
 
@@ -377,6 +390,11 @@ def allowed_remediations(
             if isinstance(remediation, InstallRuntime) and (
                 policy.allowed_runtimes is not None
                 and remediation.runtime not in policy.allowed_runtimes
+            ):
+                continue
+            if isinstance(remediation, InstallPythonPackages) and (
+                policy.allowed_python_installers is not None
+                and remediation.installer not in policy.allowed_python_installers
             ):
                 continue
             if isinstance(remediation, ConfigureNetwork) and (

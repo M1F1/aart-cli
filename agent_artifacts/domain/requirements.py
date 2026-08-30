@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TypeAlias
 
+from .python_runtime import LOCK_FORMATS
+
 _ID_RE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 
 
@@ -110,9 +112,12 @@ class HarnessRequirement:
 
 @dataclass(frozen=True, slots=True)
 class PythonPackageRequirement:
+    """The dependency contract an artifact declares, never the backend that installs it."""
+
     id: RequirementId
     descriptor: str
     path: str
+    lock_format: str | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.id, RequirementId) or self.descriptor not in {
@@ -121,6 +126,8 @@ class PythonPackageRequirement:
         }:
             raise ValueError("Python package requirement is invalid")
         _single_line(self.path, "dependency descriptor path")
+        if self.lock_format is not None and self.lock_format not in LOCK_FORMATS:
+            raise ValueError("Python package lock format is unsupported")
 
 
 Requirement: TypeAlias = (
@@ -189,5 +196,6 @@ def requirement_to_data(requirement: Requirement) -> dict[str, object]:
         "descriptor": requirement.descriptor,
         "id": requirement.id.value,
         "kind": "python-package",
+        "lock_format": requirement.lock_format,
         "path": requirement.path,
     }

@@ -147,3 +147,37 @@ Invariants touched: INV-057, INV-190.
 Evidence/links: D-018.
 Promotion condition: a Product Specification input or a real registry artifact needs to name an
 address literal.
+
+### B-017 — Windows environment layout for artifact-owned Python environments
+Status: OPEN
+Discovered in: CP-09 / `agent_artifacts/domain/python_runtime.py` / `ArtifactEnvironment`
+Why useful: the derived interpreter path is `runtime/.venv/bin/python`, which is the POSIX layout.
+Windows venvs put it at `runtime\Scripts\python.exe`, so an artifact installed on Windows would get
+a path that does not exist.
+Why noncritical now: the first credential provider is macOS-only and the first harness adapter is
+not written yet, so a Windows layout alone would be a third of a working Windows install. Deriving
+the path from the root is what makes adding the second layout a one-place change.
+Potential approach: give `ArtifactEnvironment` a layout discriminator fed from `EnvironmentFacts.
+platform`, and pick the subpath from it; keep the paths derived, never supplied.
+Invariants touched: INV-044, INV-046.
+Evidence/links: D-020.
+Promotion condition: Windows appears as a supported consumer platform with a credential provider
+and a harness adapter.
+
+### B-018 — Installing a locked Python project
+Status: OPEN
+Discovered in: CP-09 / `agent_artifacts/io/python_runtime.py` / `install_dependencies`
+Why useful: an artifact may declare `pyproject.toml + uv.lock`. The domain models it, planning
+narrows the installer to uv, and the interpreter refuses it explicitly — so the contract is
+reviewable but not yet installable.
+Why noncritical now: §110 makes `requirements.txt` and `pyproject.toml` the V1 specifications, and
+both are fully implemented for both backends. Refusing loudly keeps the lock's guarantee intact;
+see D-021.
+Potential approach: `uv sync --frozen` against the artifact-owned environment, with a test that a
+pinned version in the lock is the version actually installed — the assertion that makes the
+feature worth having.
+Invariants touched: INV-042, INV-043, INV-047.
+Evidence/links: D-021; `tests/python_environment_integration_test.py::RuntimeRefusalTest::
+test_it_refuses_a_locked_project_rather_than_quietly_ignoring_the_lock`.
+Promotion condition: a critical-path artifact declares a lock, or reproducibility review requires
+lock-exact installation.

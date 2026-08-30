@@ -202,3 +202,52 @@ the Product Specification first instead of hiding the change here.
 - **Consequence:** `ObtainFrom` uses the same reader, so guidance links are held to the same
   standard as validated configuration. The bypass cases are permanent test cases rather than
   comments, and IPv6 literals are refused until an allow-list can name one (backlog).
+
+## D-019 — An installer is chosen by intersection; a preference selects inside it, never widens it
+- **Decision:** `select_python_installer` computes `compatible(spec) ∩ available(platform) ∩
+  permitted(policy)` and picks from that set. A `preferred` argument is honoured only when it is
+  already in the set; otherwise the lowest name is taken, so the same three sets always give the
+  same answer. An empty intersection is `no-compatible-python-installer` carrying all three sets by
+  name. A lock narrows compatibility to the resolver that wrote it (`installers_for_lock`), and the
+  same rule serves both `PythonDependencySpec` and `PythonPackageRequirement`.
+- **Status:** accepted.
+- **Reason:** INV-042 separates the specification from the backend and INV-043 lets an artifact
+  declare one contract, so compatibility is a property of the artifact while availability is a
+  property of the machine and permission is a property of policy. §111 makes a preferred installer
+  a profile setting and says the final choice is filtered through capabilities and policy — which
+  makes preference a selector inside the permitted set, not a fourth input that could widen it.
+- **Consequence:** `EffectivePolicy` gained `allowed_python_installers`, composing by intersection,
+  and preference deliberately stayed out of the policy algebra: a non-restrictive field in a
+  restrictive algebra is how an overlay eventually widens something. A uv-locked project on a
+  machine with only pip fails at planning time with the reason, instead of at execution time.
+
+## D-020 — The interpreter enforces artifact ownership, not just the planner
+- **Decision:** `LocalPythonRuntime` is constructed for one `ArtifactEnvironment` and refuses, before
+  starting any process, an effect naming another artifact, a destination or descriptor outside that
+  root, or a base interpreter inside the environment being built. `ArtifactEnvironment` derives
+  `payload`, `environment` and `interpreter` from the root as `init=False` fields, so no caller can
+  supply an interpreter path at all.
+- **Status:** accepted.
+- **Reason:** INV-044 gives one artifact one environment and INV-045 forbids implicit global
+  mutation. Planning already refuses bad paths, but "the plan was correct" is the wrong thing for
+  the component that runs `venv` and `pip` to assume — a plan can be replayed, edited, or built by
+  a future code path that has not been written yet. Two checks in different layers cost almost
+  nothing; one check in the wrong layer costs the invariant.
+- **Consequence:** the refusal tests assert no process ran at all, so a regression shows up as an
+  executed command rather than as a wrong outcome. `PYTHONNOUSERSITE=1` and a reduced environment
+  are set for the same reason: an inherited `VIRTUAL_ENV` is how an install silently lands
+  elsewhere.
+
+## D-021 — A declared lock is honoured or refused, never quietly ignored
+- **Decision:** `InstallPythonDependencies` carries `descriptor_kind` (`requirements`, `pyproject`,
+  `locked-project`). The interpreter implements the first two for both pip and uv, and returns
+  `python-runtime-unsupported` for a locked project rather than installing the loose versions.
+- **Status:** accepted.
+- **Reason:** INV-047 makes author intent and approved resolution distinct concepts, so a lock
+  exists precisely to stop something else being installed. Installing unlocked versions from a
+  locked contract would satisfy the type and violate the reason it exists — and it would do so
+  silently, which is worse than not supporting it. The domain and the planner model locks fully;
+  only the execution of one is deferred (B-018).
+- **Consequence:** `PythonPackageRequirement` gained `lock_format`, so planning offers only backends
+  that can read the artifact's contract. `descriptor_kind` also tells the interpreter whether to
+  pass `-r <file>` or a project directory, which it could otherwise only guess from a filename.

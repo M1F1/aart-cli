@@ -392,7 +392,7 @@ class CanonicalInstallPlanningTest(unittest.TestCase):
             ArtifactInstallIntent(
                 artifacts[name],
                 (),
-                (CreatePythonEnvironment(name, f".aart/{name}/.venv"),),
+                (CreatePythonEnvironment(name, f".aart/{name}/.venv", "/usr/bin/python3"),),
             )
             for name in names
         )

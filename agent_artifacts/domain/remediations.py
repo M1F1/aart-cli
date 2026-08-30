@@ -80,6 +80,23 @@ class ConfigureHarness:
 
 
 @dataclass(frozen=True, slots=True)
+class InstallPythonPackages:
+    """Install a declared dependency descriptor with one named backend.
+
+    The installer is part of the remediation because "install the dependencies" and "install them
+    with uv" are different things to offer and different things to approve.
+    """
+
+    requirement: RequirementId
+    installer: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.requirement, RequirementId):
+            raise ValueError("Python package remediation requires a requirement id")
+        _token(self.installer, "Python installer")
+
+
+@dataclass(frozen=True, slots=True)
 class SelectAlternativeProvider:
     requirement: RequirementId
     provider: str
@@ -94,6 +111,7 @@ Remediation: TypeAlias = (
     ConfigureCredential
     | InstallRuntime
     | InstallExecutable
+    | InstallPythonPackages
     | ConfigureNetwork
     | ConfigureHarness
     | SelectAlternativeProvider
@@ -118,6 +136,12 @@ def remediation_to_data(remediation: Remediation) -> dict[str, object]:
         return {
             "executable": remediation.executable,
             "kind": "install-executable",
+            "requirement": str(remediation.requirement),
+        }
+    if isinstance(remediation, InstallPythonPackages):
+        return {
+            "installer": remediation.installer,
+            "kind": "install-python-packages",
             "requirement": str(remediation.requirement),
         }
     if isinstance(remediation, ConfigureNetwork):
