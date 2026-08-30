@@ -2,20 +2,18 @@
 
 ## Current objective
 
-Finish **CP-00 Canonical planning baseline**, then start
-**CP-01 Repository characterization and invariant map**.
+Complete **CP-04 Native authoring manifest and canonical compiler** through the existing compiler
+seam, preserving explicit discovery and declared payload boundaries.
 
 ## Immediate next actions
 
-1. Commit this bootstrap package to `M1F1/aart-cli`.
-2. Verify `docs/product-specification/PRODUCT_SPECIFICATION.md` is readable and authoritative.
-3. Verify root `AGENTS.md` establishes target, precedence, autonomy and backlog rules.
-4. Create `docs/refactor/slices/CP-01-repository-characterization.md` from the slice template.
-5. Inventory current `agent_artifacts` package and tests without moving modules.
-6. Build invariant traceability:
-   Product Specification invariant → current behavior/module → target owner → tests → missing evidence.
-7. Add characterization tests for high-risk behavior before structural refactors.
-8. Update MIGRATION_STATUS, DECISIONS, BACKLOG and this file before CP-02.
+1. Characterize existing `protocol/native_*` discovery, schema and canonical-tree compilation.
+2. Add RED tests for explicit `aart.yaml`/`aart.json` discovery without heuristic crawling.
+3. Add an authoring representation that lowers into the canonical Artifact algebra.
+4. Prove include/exclude selection cannot escape the manifest root or include undeclared files.
+5. Bind manifest bytes, selected payload and relevant metadata into ArtifactInputDigest.
+6. Preserve existing public native protocol while routing a complete compiler path through the new
+   canonical owner.
 
 ## Do not do yet
 

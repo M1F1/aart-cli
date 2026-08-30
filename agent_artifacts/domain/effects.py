@@ -1,0 +1,206 @@
+"""The canonical Effect algebra with explicit risk and reconciliation capabilities."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from enum import IntEnum
+from typing import ClassVar, TypeAlias
+
+
+class RiskClass(IntEnum):
+    READ_ONLY = 0
+    LOCAL_MUTATION = 10
+    CONFIGURATION_MUTATION = 20
+    CREDENTIAL_MUTATION = 30
+    EXECUTABLE_INSTALL = 40
+    NETWORK_MUTATION = 50
+    HIGH_RISK_EXECUTION = 60
+
+
+@dataclass(frozen=True, slots=True)
+class EffectCapabilities:
+    inspectable: bool
+    idempotent: bool
+    reversible: bool
+    independently_repairable: bool
+
+    def __post_init__(self) -> None:
+        values = (
+            self.inspectable,
+            self.idempotent,
+            self.reversible,
+            self.independently_repairable,
+        )
+        if any(not isinstance(value, bool) for value in values):
+            raise ValueError("effect capabilities must be booleans")
+        if self.independently_repairable and not self.inspectable:
+            raise ValueError("independent repair requires inspectability")
+
+
+_OWNED = EffectCapabilities(True, True, True, True)
+_RECREATABLE = EffectCapabilities(True, True, False, True)
+_CREDENTIAL = EffectCapabilities(True, False, False, True)
+_HARNESS = EffectCapabilities(True, True, True, True)
+
+
+def _line(value: str, label: str) -> None:
+    if not isinstance(value, str) or not value or any(character in value for character in "\r\n"):
+        raise ValueError(f"{label} must be one non-empty line")
+
+
+@dataclass(frozen=True, slots=True)
+class CopyTree:
+    source: str
+    destination: str
+    risk: ClassVar[RiskClass] = RiskClass.LOCAL_MUTATION
+    capabilities: ClassVar[EffectCapabilities] = _OWNED
+
+    def __post_init__(self) -> None:
+        _line(self.source, "copy source")
+        _line(self.destination, "copy destination")
+
+
+@dataclass(frozen=True, slots=True)
+class WriteFile:
+    destination: str
+    content_digest: str
+    executable: bool = False
+    risk: ClassVar[RiskClass] = RiskClass.LOCAL_MUTATION
+    capabilities: ClassVar[EffectCapabilities] = _OWNED
+
+    def __post_init__(self) -> None:
+        _line(self.destination, "write destination")
+        _line(self.content_digest, "content digest")
+        if not isinstance(self.executable, bool):
+            raise ValueError("executable must be boolean")
+
+
+@dataclass(frozen=True, slots=True)
+class CreatePythonEnvironment:
+    artifact: str
+    destination: str
+    risk: ClassVar[RiskClass] = RiskClass.EXECUTABLE_INSTALL
+    capabilities: ClassVar[EffectCapabilities] = _RECREATABLE
+
+    def __post_init__(self) -> None:
+        _line(self.artifact, "artifact")
+        _line(self.destination, "environment destination")
+
+
+@dataclass(frozen=True, slots=True)
+class InstallPythonDependencies:
+    environment: str
+    descriptor: str
+    risk: ClassVar[RiskClass] = RiskClass.EXECUTABLE_INSTALL
+    capabilities: ClassVar[EffectCapabilities] = _RECREATABLE
+
+
+@dataclass(frozen=True, slots=True)
+class StoreCredential:
+    reference: str
+    provider: str
+    risk: ClassVar[RiskClass] = RiskClass.CREDENTIAL_MUTATION
+    capabilities: ClassVar[EffectCapabilities] = _CREDENTIAL
+
+
+@dataclass(frozen=True, slots=True)
+class ReplaceCredential:
+    reference: str
+    provider: str
+    risk: ClassVar[RiskClass] = RiskClass.CREDENTIAL_MUTATION
+    capabilities: ClassVar[EffectCapabilities] = _CREDENTIAL
+
+    def __post_init__(self) -> None:
+        _line(self.reference, "credential reference")
+        _line(self.provider, "credential provider")
+
+
+@dataclass(frozen=True, slots=True)
+class DeleteCredential:
+    reference: str
+    provider: str
+    risk: ClassVar[RiskClass] = RiskClass.CREDENTIAL_MUTATION
+    capabilities: ClassVar[EffectCapabilities] = _CREDENTIAL
+
+
+@dataclass(frozen=True, slots=True)
+class ConfigureHarness:
+    harness: str
+    artifact: str
+    destination: str
+    risk: ClassVar[RiskClass] = RiskClass.CONFIGURATION_MUTATION
+    capabilities: ClassVar[EffectCapabilities] = _HARNESS
+
+    def __post_init__(self) -> None:
+        _line(self.harness, "harness")
+        _line(self.artifact, "artifact")
+        _line(self.destination, "harness destination")
+
+
+@dataclass(frozen=True, slots=True)
+class VerifyRequirement:
+    requirement: str
+    risk: ClassVar[RiskClass] = RiskClass.READ_ONLY
+    capabilities: ClassVar[EffectCapabilities] = EffectCapabilities(True, True, False, True)
+
+
+Effect: TypeAlias = (
+    CopyTree
+    | WriteFile
+    | CreatePythonEnvironment
+    | InstallPythonDependencies
+    | StoreCredential
+    | ReplaceCredential
+    | DeleteCredential
+    | ConfigureHarness
+    | VerifyRequirement
+)
+
+
+def effect_to_data(effect: Effect) -> dict[str, object]:
+    data: dict[str, object] = {
+        "capabilities": {
+            "idempotent": effect.capabilities.idempotent,
+            "independently_repairable": effect.capabilities.independently_repairable,
+            "inspectable": effect.capabilities.inspectable,
+            "reversible": effect.capabilities.reversible,
+        },
+        "risk": effect.risk.name.lower().replace("_", "-"),
+    }
+    if isinstance(effect, CopyTree):
+        data.update(kind="copy-tree", source=effect.source, destination=effect.destination)
+    elif isinstance(effect, WriteFile):
+        data.update(
+            kind="write-file",
+            destination=effect.destination,
+            content_digest=effect.content_digest,
+            executable=effect.executable,
+        )
+    elif isinstance(effect, CreatePythonEnvironment):
+        data.update(
+            kind="create-python-environment",
+            artifact=effect.artifact,
+            destination=effect.destination,
+        )
+    elif isinstance(effect, InstallPythonDependencies):
+        data.update(
+            kind="install-python-dependencies",
+            environment=effect.environment,
+            descriptor=effect.descriptor,
+        )
+    elif isinstance(effect, StoreCredential):
+        data.update(kind="store-credential", reference=effect.reference, provider=effect.provider)
+    elif isinstance(effect, ReplaceCredential):
+        data.update(kind="replace-credential", reference=effect.reference, provider=effect.provider)
+    elif isinstance(effect, DeleteCredential):
+        data.update(kind="delete-credential", reference=effect.reference, provider=effect.provider)
+    elif isinstance(effect, ConfigureHarness):
+        data.update(
+            kind="configure-harness",
+            harness=effect.harness,
+            artifact=effect.artifact,
+            destination=effect.destination,
+        )
+    else:
+        data.update(kind="verify-requirement", requirement=effect.requirement)
+    return data
