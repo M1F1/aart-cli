@@ -380,12 +380,22 @@ def _compatibility(value: JsonValue, *, path: str) -> Result[CompatibilitySpec]:
     if isinstance(validated, Err):
         return validated
     profiles = _parse_named_values(
-        _field(validated.value, "profiles"), ARTIFACT_INVALID, "profile", None, path=path
+        _field(validated.value, "profiles"),
+        ARTIFACT_INVALID,
+        "profile",
+        None,
+        path=path,
+        allow_empty=True,
     )
     if isinstance(profiles, Err):
         return profiles
     platforms = _parse_named_values(
-        _field(validated.value, "platforms"), ARTIFACT_INVALID, "platform", None, path=path
+        _field(validated.value, "platforms"),
+        ARTIFACT_INVALID,
+        "platform",
+        None,
+        path=path,
+        allow_empty=True,
     )
     if isinstance(platforms, Err):
         return platforms
