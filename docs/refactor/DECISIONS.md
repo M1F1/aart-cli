@@ -114,3 +114,42 @@ the Product Specification first instead of hiding the change here.
 - **Consequence:** explicit foreign-registry dependencies and fallback both fail closed by default.
   Allowed crossings retain the exact registry alias, snapshot and dependency ownership edge in the
   resolved result.
+
+## D-013 — Absent observations are explicit Unknown facts, never silent satisfaction
+- **Decision:** `EnvironmentFacts` carries at most one `EnvironmentFact` per `RequirementId`, and
+  `inspect_requirements` fills every requested requirement the inspector did not observe with
+  `FactState.UNKNOWN`. An inspector returning a fact outside the requested boundary is an error.
+- **Status:** accepted.
+- **Reason:** INV-004/INV-005 require deterministic planning over a closed fact set, and section 11
+  makes `Satisfied | Unsatisfied | Unknown` the requirement state algebra. Treating a missing
+  observation as satisfied would let a partial inspector silently widen what installs.
+- **Consequence:** unsupported observations (credential, network, harness, Python package) remain
+  Unknown until CP-08/09/10 add their specialized inspectors, and Unknown blocks planning exactly
+  like Unsatisfied unless an allowed remediation is selected.
+
+## D-014 — Remediation availability derives from declared capabilities, not from probing
+- **Decision:** `_possible_remediations` derives options from typed `RemediationCapability` values
+  supplied with the facts, then intersects them with the effective policy's allow-lists, forbidden
+  effects and risk ceiling. `interactive_remediation=False` yields zero options and planning fails
+  closed with `no-allowed-remediation`.
+- **Status:** accepted.
+- **Reason:** INV-035 defines availability as `Possible ∩ PlatformCapabilities ∩ EffectivePolicy`,
+  INV-036 requires deterministic non-interactive failure, and INV-004 forbids planning from
+  touching the host to discover what it could install.
+- **Consequence:** capability discovery belongs to inspection adapters, so a platform that cannot
+  install a runtime simply contributes no capability rather than offering a remediation that would
+  fail at execution. `EffectivePolicy` gained `allowed_network_hosts` and `interactive_remediation`,
+  both composing restrictively (intersection and logical AND).
+
+## D-015 — Review identity covers the whole plan except the digest itself
+- **Decision:** `InstallPlan.review_digest` is SHA-256 over the canonical JSON of the plan with the
+  digest field omitted: resolved selection with ownership/provenance, platform, owned assessments,
+  chosen remediations with owners and risk, deduplicated effects with all owners, risk summary and
+  the effective-policy digest.
+- **Status:** accepted.
+- **Reason:** INV-005 requires one identity for the same artifact/target/policy/facts, INV-127
+  requires deduplication to retain why an artifact is present, and INV-152 requires Fast and Verbose
+  to project the same immutable plan. Including the digest in its own preimage is self-referential.
+- **Consequence:** intent, requirement, owner and effect ordering cannot change review identity, so
+  a review approval binds exactly one semantic plan. Environment facts enter the digest through the
+  assessments they produced rather than as a second raw copy.

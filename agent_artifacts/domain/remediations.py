@@ -57,17 +57,37 @@ class ConfigureNetwork:
     requirement: RequirementId
     host: str
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.requirement, RequirementId):
+            raise ValueError("network remediation requires a requirement id")
+        if (
+            not isinstance(self.host, str)
+            or not self.host
+            or any(character in self.host for character in "\r\n")
+        ):
+            raise ValueError("network remediation host is invalid")
+
 
 @dataclass(frozen=True, slots=True)
 class ConfigureHarness:
     requirement: RequirementId
     harness: str
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.requirement, RequirementId):
+            raise ValueError("harness remediation requires a requirement id")
+        _token(self.harness, "harness")
+
 
 @dataclass(frozen=True, slots=True)
 class SelectAlternativeProvider:
     requirement: RequirementId
     provider: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.requirement, RequirementId):
+            raise ValueError("provider remediation requires a requirement id")
+        _token(self.provider, "credential provider")
 
 
 Remediation: TypeAlias = (

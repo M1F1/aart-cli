@@ -94,6 +94,10 @@ class InstallPythonDependencies:
     risk: ClassVar[RiskClass] = RiskClass.EXECUTABLE_INSTALL
     capabilities: ClassVar[EffectCapabilities] = _RECREATABLE
 
+    def __post_init__(self) -> None:
+        _line(self.environment, "Python environment")
+        _line(self.descriptor, "dependency descriptor")
+
 
 @dataclass(frozen=True, slots=True)
 class StoreCredential:
@@ -101,6 +105,10 @@ class StoreCredential:
     provider: str
     risk: ClassVar[RiskClass] = RiskClass.CREDENTIAL_MUTATION
     capabilities: ClassVar[EffectCapabilities] = _CREDENTIAL
+
+    def __post_init__(self) -> None:
+        _line(self.reference, "credential reference")
+        _line(self.provider, "credential provider")
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,6 +130,10 @@ class DeleteCredential:
     risk: ClassVar[RiskClass] = RiskClass.CREDENTIAL_MUTATION
     capabilities: ClassVar[EffectCapabilities] = _CREDENTIAL
 
+    def __post_init__(self) -> None:
+        _line(self.reference, "credential reference")
+        _line(self.provider, "credential provider")
+
 
 @dataclass(frozen=True, slots=True)
 class ConfigureHarness:
@@ -142,6 +154,9 @@ class VerifyRequirement:
     requirement: str
     risk: ClassVar[RiskClass] = RiskClass.READ_ONLY
     capabilities: ClassVar[EffectCapabilities] = EffectCapabilities(True, True, False, True)
+
+    def __post_init__(self) -> None:
+        _line(self.requirement, "verified requirement")
 
 
 Effect: TypeAlias = (
