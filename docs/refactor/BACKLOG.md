@@ -294,7 +294,7 @@ Evidence/links: B-024; `tests/consumer_shell_test.py`.
 Promotion condition: B-024 is complete and equivalent public-flow evidence exists.
 
 ### B-026 — Canonical installation-receipt persistence
-Status: PROMOTED TO CRITICAL PATH (2026-08-31) — store landed; recording from execution remains
+Status: CLOSED (2026-08-31) — promoted to the critical path and completed
 Discovered in: CP-13 / B-024 / `agent_artifacts/io/`
 Why useful: canonical installed state could be projected and verified but not kept. Every reader of
 `InstallationReceipt` took one as an argument; nothing wrote one down and nothing read one back, so
@@ -306,6 +306,8 @@ cannot retire legacy authority whose one remaining advantage is that it persists
 (`receipt_service.py`, `setup_receipt.py`). CP-16 supportability has the same dependency.
 Invariants touched: INV-149, INV-152, INV-169.
 Evidence/links: D-044, D-045; `agent_artifacts/io/receipt_store.py`; `tests/receipt_store_test.py`.
-Remaining before closure: building an `InstallationReceipt` from a finished `execute_lifecycle`
-outcome and recording it, plus recording the action receipt, so the store has a producer in the
-real flow rather than in tests alone.
+Closed by: `io/receipt_store.py` (the store), `application/receipt_recording.py` (what a finished
+action leaves behind, D-046) and `tests/receipt_persistence_e2e_test.py`, where a real installation
+recorded by one store is read back by a second store built fresh over the same directory and every
+later decision -- desired state, review digest, repair, timeline -- is made from the receipt on
+disk. Assembling those reads into the consumer shell is B-024.

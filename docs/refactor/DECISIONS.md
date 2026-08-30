@@ -530,3 +530,17 @@ the Product Specification first instead of hiding the change here.
   different codes (`receipt-absent`, `receipt-unreadable`).
 - **Consequence:** one corrupt file makes the whole listing an error until a person resolves it.
   That is deliberate: a partial truth about what is installed is worse than a refusal.
+
+## D-046 — An action that took effect is recorded even when it did not finish
+- **Decision:** `record_lifecycle_outcome` records the installation whenever any step applied or the
+  run converged; it leaves the store untouched when nothing applied, forgets the record only when an
+  uninstall converged, and leaves the existing record standing when an update was rolled back.
+- **Status:** accepted.
+- **Reason:** the leftovers of a half-finished install are on the machine whether or not a record
+  names them. A record makes them drift a repair can find; no record makes them files nothing owns.
+  The converse holds for a rollback: after a restored update the previous installation is the one
+  that is still true, so writing the new receipt would describe a machine that does not exist.
+- **Consequence:** Installed can show an artifact that is not healthy, which is the point — health
+  is inspected, not inferred from the fact that a record exists. The timeline always gets the
+  action, including failures, and gets it before the installation record, so a store that then
+  refuses still leaves the attempt visible.

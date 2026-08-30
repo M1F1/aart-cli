@@ -12,25 +12,21 @@ What remains is the wiring that makes the canonical application the one a person
 
 ## Immediate next actions
 
-1. **B-026 remainder** — give the receipt store a producer in a real flow: build an
-   `InstallationReceipt` from a finished `execute_lifecycle` outcome and record it, and record the
-   action receipt alongside it. The store, the parse and the timeline rebuild exist and are green
-   (`io/receipt_store.py`, `tests/receipt_store_test.py`); what is missing is the write at the end
-   of an execution, which is what makes Installed and Activity non-empty on a real machine.
-2. **B-024** — assemble one `ConsumerScreens` builder over the canonical services so the shell can
+1. **B-024** — assemble one `ConsumerScreens` builder over the canonical services so the shell can
    draw Marketplace, artifact/Collection detail and the whole install flow (screens 02–11, 15–24).
-   Build it once: CP-14 needs the same assembly for the maintainer catalog. Refresh it after an
-   action, never inside a draw.
-3. **B-025** — route the default TTY entry in `tui.py::run` to `run_consumer` behind the existing
+   Installed state and the timeline now come from `LocalReceiptStore` (B-026); what is missing is
+   resolution, inspection and input binding for a live machine. Build it once: CP-14 needs the same
+   assembly for the maintainer catalog. Refresh it after an action, never inside a draw.
+2. **B-025** — route the default TTY entry in `tui.py::run` to `run_consumer` behind the existing
    curses-availability check, keeping the legacy wizard reachable until step 6 evidence exists.
-4. Route the public consumer commands (`install`, `update`, `uninstall`, `status`) through
+3. Route the public consumer commands (`install`, `update`, `uninstall`, `status`) through
    `plan_lifecycle_intent`/`execute_lifecycle` rather than the legacy setup queue, projecting their
    output with `consumer_plan_to_data` and `receipt_detail_to_data` so text, curses and `--json`
    are three renderings of one plan.
-5. Only then step 6: retire legacy consumer semantic authority (`consumer/application.py`,
+4. Only then step 6: retire legacy consumer semantic authority (`consumer/application.py`,
    `installation/*`, `setup_engine/*`, `lifecycle/application.py`) path by path, each removal
    preceded by a public-flow test proving the canonical path already carries it.
-6. Update the CP-13 coverage table as each screen group moves from projection to live flow.
+5. Update the CP-13 coverage table as each screen group moves from projection to live flow.
 
 ## Do not do yet
 
@@ -60,3 +56,6 @@ What remains is the wiring that makes the canonical application the one a person
 - Persisted identity is structural, never a printed form re-parsed (D-044); an unreadable record is
   reported rather than skipped, because a skipped receipt reads as an installation that never
   happened (D-045).
+- An action that took effect is recorded even when it did not finish, and a rolled-back update
+  leaves the previous record standing (D-046). Health is inspected, never inferred from the
+  existence of a record.

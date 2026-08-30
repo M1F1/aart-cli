@@ -89,8 +89,9 @@ existed; three defects were found by tests rather than by reading:
 5a. Persist canonical installed state and finished actions, so screens 12–16 and 25–27 have
    something to project between processes. **DONE** — `domain/receipts.py` gained the parse that
    inverts its own projection, `application/consumer_views.py` gained `receipt_detail_from_data`
-   and `activity_from_receipts`, and `io/receipt_store.py` is the managed store (B-026, D-044,
-   D-045). Recording from a finished `execute_lifecycle` outcome is what remains of B-026.
+   and `activity_from_receipts`, `io/receipt_store.py` is the managed store, and
+   `application/receipt_recording.py` decides what a finished action leaves in it (B-026 closed;
+   D-044, D-045, D-046).
 6. Retire legacy semantic authority only after equivalent public-flow/E2E evidence. **NOT STARTED**
    — blocked on step 5 by design; no legacy authority has been removed.
 
@@ -113,6 +114,12 @@ the quit prompt where only the answer keys act.
 scripted terminal: rows load per screen, filters narrow and restore them, details stay about the
 row they were opened from, and `v` redraws the same screen with more disclosed.
 
+`tests/receipt_recording_test.py` — what a finished action leaves behind, over real reviewed plans
+and a fake store: every action reaches the timeline including the ones that failed, an install that
+took effect is recorded even when it did not finish, one that took no effect leaves the store
+untouched, a completed uninstall forgets rather than rewrites, an interrupted one keeps the record
+that describes its residue, and a rolled-back update leaves the previous record standing.
+
 `tests/receipt_store_test.py` — persistence across a process boundary: a receipt written down and
 read back is the receipt that was written, including a credential reference whose service and
 account contain the separators its printed form uses; six malformed documents are refused rather
@@ -130,6 +137,12 @@ the server answers again through its own launcher → the Activity entry and its
 honest undo → uninstall is ownership-aware and retains the credential. One test renders every
 consumer surface and asserts the real secret appears on none of them.
 
+`tests/receipt_persistence_e2e_test.py` — the same real installation, then nothing in memory is
+trusted: a second store built fresh over the same directory reads the receipt back off disk, and
+the desired state, the review digest, the repair of a launcher broken after the write, the timeline
+and the uninstall are all decided from that read-back receipt. The server answers again through its
+own launcher after a repair planned from disk alone, and no stored file contains the real secret.
+
 ## Done
 
 - Canonical screen contract re-read; existing TUI and test surfaces inventoried above.
@@ -138,11 +151,11 @@ consumer surface and asserts the real secret appears on none of them.
 - Pure keymap and cursor/search/focus interaction state (D-041, D-042, D-043).
 - Persistent application loop over injected ports, with a curses adapter that is `draw` + `getch`.
 - Property, keyboard-integration, headless-shell and real-installation E2E evidence, above.
-- Canonical persistence for installed state and finished actions (B-026, D-044, D-045).
+- Canonical persistence for installed state and finished actions, with a producer in a real
+  reviewed, scope-locked flow (B-026 closed; D-044, D-045, D-046).
 
 ## Remaining
 
-- Recording a finished `execute_lifecycle` outcome into the receipt store (B-026 remainder).
 - Step 5 service wiring for screens 02–11 and 15–24 (B-024).
 - Routing the default TTY entry to the canonical application (B-025).
 - Step 6: retiring legacy consumer semantic authority, once the above give equivalent public-flow
@@ -160,10 +173,10 @@ consumer surface and asserts the real secret appears on none of them.
 
 - B-024 — Marketplace and install-flow screens for the canonical consumer shell.
 - B-025 — Routing the default TTY entry to the canonical consumer application.
-- B-026 — Canonical installation-receipt persistence. **Promoted to the critical path**: B-024
-  cannot assemble Installed, Updates or Activity over a machine whose canonical state does not
-  survive a process, and step 6 cannot retire legacy authority whose remaining advantage is that
-  it persists.
+- B-026 — Canonical installation-receipt persistence. **Promoted to the critical path and
+  completed**: B-024 cannot assemble Installed, Updates or Activity over a machine whose canonical
+  state does not survive a process, and step 6 cannot retire legacy authority whose remaining
+  advantage is that it persists.
 
 ## Blockers
 
@@ -178,12 +191,12 @@ machine-output tests prove every accepted flow now consumes the canonical applic
 
 - Current working state: steps 1–4 complete and verified; step 5 partial; step 6 not started. The
   legacy wizard is untouched and still owns the default TTY entry.
-- Exact next action: record a finished `execute_lifecycle` outcome into `LocalReceiptStore`
-  (B-026 remainder), then B-024 — assemble one `ConsumerScreens` builder over the canonical
-  services so the shell can draw Marketplace and the install flow — then B-025 to route `run()`.
+- Exact next action: B-024 — assemble one `ConsumerScreens` builder over the canonical services,
+  reading installed state and the timeline from `LocalReceiptStore`, so the shell can draw
+  Marketplace and the install flow — then B-025 to route `run()`.
 - Do not undo: existing curses layout/search/basket/back/quit characterization; one semantic plan
   for both profiles; Maintainer Mode remains opt-in; `key_event` stays the only place a key's
   meaning is decided; no clock in `application/`.
-- Tests last run/results: 2,295 unit + 75 E2E tests, 83.23% coverage, all ten quality gates
+- Tests last run/results: 2,309 unit + 80 E2E tests, 83.25% coverage, all ten quality gates
   green (`make quality`). CP-12 baseline was 2,196 unit + 65 E2E at 83.25%.
 - Failure evidence: three defects found by tests are listed under Characterization / RED evidence.
