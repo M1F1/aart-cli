@@ -91,3 +91,26 @@ the Product Specification first instead of hiding the change here.
   but deprecation, revocation and canonical-branch publication do not rewrite payload identity.
   The public `registry promote` flow applies locally only; commit, push, merge and publication
   remain separate authorities.
+
+## D-011 — Unqualified registry collisions require an explicit provenance choice
+- **Decision:** if an unqualified artifact Selection can resolve from more than one configured
+  registry, resolution fails with every valid qualified coordinate, including when the candidate
+  payload digests are identical.
+- **Status:** accepted.
+- **Reason:** the Product Specification permits identical digests to be deduplicated visually but
+  still requires installation provenance to record the selected registry/snapshot. Without an
+  explicit registry choice, choosing that provenance would introduce hidden priority.
+- **Consequence:** a presentation layer may collapse identical rows, but it must retain explicit
+  registry choices for resolution. Different-content collisions receive the same fail-closed
+  treatment and can never be shadowed.
+
+## D-012 — Dependencies prefer their declaring registry
+- **Decision:** an unqualified dependency first resolves within the selected parent artifact's
+  registry. It may fall back to another registry only when no satisfying local version exists and
+  effective policy explicitly permits cross-registry resolution.
+- **Status:** accepted.
+- **Reason:** this preserves registry review boundaries and existing same-registry semantics while
+  implementing the Product Specification's explicit, policy-governed cross-registry capability.
+- **Consequence:** explicit foreign-registry dependencies and fallback both fail closed by default.
+  Allowed crossings retain the exact registry alias, snapshot and dependency ownership edge in the
+  resolved result.
