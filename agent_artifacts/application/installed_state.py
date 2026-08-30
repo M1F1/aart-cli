@@ -15,9 +15,12 @@ from agent_artifacts.domain.credentials import CredentialReference
 from agent_artifacts.domain.effects import (
     ConfigureHarness,
     CreatePythonEnvironment,
+    DeleteCredential,
     InstallPythonDependencies,
+    RemoveOwnedPath,
     ReplaceCredential,
     StoreCredential,
+    UnconfigureHarness,
     WriteFile,
 )
 from agent_artifacts.domain.identifiers import ArtifactCoordinate
@@ -38,6 +41,7 @@ from .installation_verification import InstallationObservation, VerificationFind
 __all__ = [
     "current_state_from_observation",
     "desired_state_from_receipt",
+    "removal_state_from_receipt",
 ]
 
 
@@ -118,6 +122,65 @@ def desired_state_from_receipt(
     return DesiredState(coordinate, tuple(components))
 
 
+def removal_state_from_receipt(
+    coordinate: ArtifactCoordinate,
+    receipt: InstallationReceipt,
+    *,
+    delete_credentials: bool = False,
+) -> DesiredState:
+    """The absent desired state used by uninstall reconciliation.
+
+    Credentials are deliberately omitted by default. The final dependant disappearing is not
+    authority to delete a credential; callers have to request that separate mutation explicitly.
+    """
+
+    if not isinstance(receipt, InstallationReceipt):
+        raise ValueError("removal state needs an installation receipt")
+    environment = ArtifactEnvironment(receipt.artifact, receipt.root)
+    absent = ComponentState.ABSENT
+    components: list[DesiredComponent] = [
+        DesiredComponent(
+            ComponentId(Component.PAYLOAD),
+            (RemoveOwnedPath(environment.root, recursive=True),),
+            target=absent,
+        ),
+        DesiredComponent(
+            ComponentId(Component.RUNTIME_ENVIRONMENT),
+            (RemoveOwnedPath(environment.environment, recursive=True),),
+            target=absent,
+        ),
+        DesiredComponent(
+            ComponentId(Component.LAUNCHER),
+            (RemoveOwnedPath(receipt.launcher),),
+            target=absent,
+        ),
+    ]
+    components.extend(
+        DesiredComponent(
+            ComponentId(Component.HARNESS, registration.target.harness),
+            (
+                UnconfigureHarness(
+                    registration.target.harness,
+                    registration.server,
+                    registration.target.settings_file,
+                ),
+            ),
+            target=absent,
+        )
+        for registration in receipt.registrations
+    )
+    if delete_credentials:
+        components.extend(
+            DesiredComponent(
+                ComponentId(Component.CREDENTIAL, str(reference.input)),
+                (DeleteCredential(str(reference), reference.provider.provider),),
+                target=absent,
+            )
+            for reference in receipt.credentials
+        )
+    return DesiredState(coordinate, tuple(components))
+
+
 def _launcher_state(findings: frozenset[VerificationFinding]) -> ComponentState:
     if VerificationFinding.LAUNCHER_MISSING in findings:
         return ComponentState.ABSENT
@@ -160,7 +223,11 @@ def current_state_from_observation(
     wanted = {component.id for component in desired.components}
 
     components: list[ObservedComponent] = [
-        ObservedComponent(ComponentId(Component.LAUNCHER), _launcher_state(found))
+        ObservedComponent(
+            ComponentId(Component.PAYLOAD),
+            ComponentState.MATCHED if observation.root_present else ComponentState.ABSENT,
+        ),
+        ObservedComponent(ComponentId(Component.LAUNCHER), _launcher_state(found)),
     ]
     if observation.interpreter_present:
         components.append(

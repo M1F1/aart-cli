@@ -130,7 +130,17 @@ def plan_repair(
     by_id = {component.id: component for component in desired.components}
     steps: list[RepairStep] = []
     escalated: list[ComponentId] = []
-    for item in sorted(drift, key=lambda entry: entry.sort_key):
+
+    def execution_order(item: Drift) -> tuple[int, int, str]:
+        component = by_id.get(item.component)
+        ordinal, name = item.sort_key
+        # Establish dependencies from the bottom up. Tear them down in the opposite direction:
+        # unregister the harness before deleting the launcher it names, and delete the root last.
+        if component is not None and component.target.value == "absent":
+            return (1, -ordinal, name)
+        return (0, ordinal, name)
+
+    for item in sorted(drift, key=execution_order):
         component = by_id.get(item.component)
         if component is None or not item.repairable:
             escalated.append(item.component)

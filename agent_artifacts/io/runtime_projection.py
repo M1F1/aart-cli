@@ -124,6 +124,7 @@ def observe_installation(
         commands.append((registration.target.harness, registration.server, command))
 
     return InstallationObservation(
+        root_present=os.path.isdir(receipt.root),
         launcher_present=present,
         launcher_executable=present and os.access(receipt.launcher, os.X_OK),
         launcher_digest=digest,

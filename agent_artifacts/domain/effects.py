@@ -44,6 +44,7 @@ _OWNED = EffectCapabilities(True, True, True, True)
 _RECREATABLE = EffectCapabilities(True, True, False, True)
 _CREDENTIAL = EffectCapabilities(True, False, False, True)
 _HARNESS = EffectCapabilities(True, True, True, True)
+_REMOVAL = EffectCapabilities(True, True, False, True)
 
 
 def _line(value: str, label: str) -> None:
@@ -76,6 +77,25 @@ class WriteFile:
         _line(self.content_digest, "content digest")
         if not isinstance(self.executable, bool):
             raise ValueError("executable must be boolean")
+
+
+@dataclass(frozen=True, slots=True)
+class RemoveOwnedPath:
+    """Remove a path owned by one installed artifact.
+
+    The effect deliberately says whether a directory tree may be removed. The interpreter still
+    proves ownership before acting; a recursive flag is not authority to cross an artifact root.
+    """
+
+    destination: str
+    recursive: bool = False
+    risk: ClassVar[RiskClass] = RiskClass.LOCAL_MUTATION
+    capabilities: ClassVar[EffectCapabilities] = _REMOVAL
+
+    def __post_init__(self) -> None:
+        _line(self.destination, "removal destination")
+        if not isinstance(self.recursive, bool):
+            raise ValueError("recursive removal flag must be boolean")
 
 
 @dataclass(frozen=True, slots=True)
@@ -186,6 +206,22 @@ class ConfigureHarness:
 
 
 @dataclass(frozen=True, slots=True)
+class UnconfigureHarness:
+    """Remove only the named owned entry from a harness settings file."""
+
+    harness: str
+    server: str
+    destination: str
+    risk: ClassVar[RiskClass] = RiskClass.CONFIGURATION_MUTATION
+    capabilities: ClassVar[EffectCapabilities] = _HARNESS
+
+    def __post_init__(self) -> None:
+        _line(self.harness, "harness")
+        _line(self.server, "harness server")
+        _line(self.destination, "harness destination")
+
+
+@dataclass(frozen=True, slots=True)
 class VerifyRequirement:
     requirement: str
     risk: ClassVar[RiskClass] = RiskClass.READ_ONLY
@@ -198,6 +234,7 @@ class VerifyRequirement:
 Effect: TypeAlias = (
     CopyTree
     | WriteFile
+    | RemoveOwnedPath
     | CreatePythonEnvironment
     | InstallPythonDependencies
     | StoreCredential
@@ -205,6 +242,7 @@ Effect: TypeAlias = (
     | DeleteCredential
     | VerifyCredential
     | ConfigureHarness
+    | UnconfigureHarness
     | VerifyRequirement
 )
 
@@ -227,6 +265,12 @@ def effect_to_data(effect: Effect) -> dict[str, object]:
             destination=effect.destination,
             content_digest=effect.content_digest,
             executable=effect.executable,
+        )
+    elif isinstance(effect, RemoveOwnedPath):
+        data.update(
+            kind="remove-owned-path",
+            destination=effect.destination,
+            recursive=effect.recursive,
         )
     elif isinstance(effect, CreatePythonEnvironment):
         data.update(
@@ -256,6 +300,13 @@ def effect_to_data(effect: Effect) -> dict[str, object]:
             kind="configure-harness",
             harness=effect.harness,
             artifact=effect.artifact,
+            destination=effect.destination,
+        )
+    elif isinstance(effect, UnconfigureHarness):
+        data.update(
+            kind="unconfigure-harness",
+            harness=effect.harness,
+            server=effect.server,
             destination=effect.destination,
         )
     else:

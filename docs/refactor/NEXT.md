@@ -2,53 +2,53 @@
 
 ## Current objective
 
-Open **CP-12 Installed lifecycle on reconciliation**: route install, update, configure, repair,
-credential rotation, harness reconfiguration, downgrade and uninstall through the CP-11 engine, so
-each intent becomes a desired state rather than its own procedure.
+Open **CP-13 Consumer TUI 01–29**: reuse the existing persistent stdlib/curses TUI and route its
+consumer install and installed-lifecycle surfaces through the canonical Selection, plan,
+input/credential, reconciliation and execution seams verified in CP-06–CP-12.
 
-CP-11 produced a `RepairPlan` and nothing executes one yet. `repair_converged` exists, is tested,
-and has never been called after real effects. That is the gap: this slice is where a plan becomes
-an execution, and where the re-inspection that §158.8 requires actually runs.
+The semantic core now exists, but the public consumer still sees the characterized legacy catalog,
+setup and lifecycle procedures. CP-13 is the strangler cutover: Fast and Verbose become two
+projections of the same immutable plan/state, and the accepted screen catalog becomes executable
+public behavior rather than documentation alone.
 
 ## Immediate next actions
 
-1. Read Product Specification sections 158.2–158.6 and the installed-lifecycle sections alongside
-   `setup.py`, `lifecycle/application.py` and `setup_undo.py`, then characterize the current
-   install/repair/uninstall behaviour before changing anything.
-2. Write CP-12 RED tests for the property that matters: after executing a repair plan, a fresh
-   inspection converges — and when it does not, that is reported as a failed repair rather than a
-   successful one.
-3. Build the executor over the existing interpreters (`LocalPythonRuntime`, `LocalProjectionWriter`,
-   `LocalHarnessRegistry`, `MacOsKeychainProvider`), dispatching by effect type with no interpreter
-   ever acting outside the artifact it was constructed for.
-4. Express each intent as a desired state, per §158.6 — the intents share reconciliation machinery
-   and must not grow parallel procedures.
-5. Handle interrupted and partial outcomes explicitly: a plan that stopped halfway is a state to
-   re-inspect, not a rollback to guess at.
+1. Read Product Specification sections 149–163 and inventory current `tui.py`,
+   `tui_marketplace.py`, `tui_layout.py`, `tui_failures.py`, `wizard.py`, consumer commands and their
+   tests against accepted screens 01–29.
+2. Create the CP-13 slice file and a screen-by-screen coverage table: existing/partial/missing,
+   canonical application input, Fast projection, Verbose projection and acceptance test.
+3. Characterize navigation/state persistence before changing it. Keep arrows/Enter/Esc/`/`/`?`/`q`,
+   context shortcuts, Fast default and remembered presentation preference.
+4. Introduce pure consumer view models over CP-06 Selection/Collections, CP-07 InstallPlan,
+   CP-08 inputs/credential references and CP-11/12 health/reconciliation outcomes. Render both
+   levels from those models; never plan inside a renderer.
+5. Route one complete public vertical flow first: Marketplace multi-select → Collection preview →
+   Required Inputs/remediation → review → progress/outcome → Installed/receipt → drift/repair.
+6. Add accepted uninstall ownership explanations, credential retention choice, Registries,
+   Credentials, Activity, Settings and Doctor entry point without implementing CP-16 doctor logic
+   twice.
 
 ## Do not do yet
 
-- no broad package moves;
-- no TUI rewrite;
-- no switch to Textual/Rich;
-- no Docker or OCI distribution (B-003);
-- no changes to old AART repositories;
-- no Source Sync promotion;
-- no orphan detection (B-023) unless uninstall proves to need it;
-- no additional harness targets that have not been measured on a live build (B-020);
-- no additional secret providers (B-004), installer backends, or transports beyond stdio;
-- no backlog work unless it becomes a proven critical-path blocker.
+- no replacement with Textual/Rich or a second TUI framework;
+- no Maintainer Mode screens 30–53 (CP-14), beyond preserving the existing opt-in boundary;
+- no broad package moves or deletion of legacy authority before public replacement evidence;
+- no new transport, credential provider, installer backend or unmeasured harness target;
+- no Docker/OCI foundation (B-003), orphan classifier (B-023) or other backlog work;
+- no changes to older AART repositories.
 
 ## Carried forward
 
-- CP-08: `TransientSecret` lives only in `io/`; nothing in `domain` or `application` may gain a
-  field that can hold a secret value. Keychain replacement is delete-then-add (D-017).
-- CP-09: `ArtifactEnvironment` paths are derived, never supplied. Interpreters refuse effects
-  outside the artifact they were constructed for, and the tests assert no process ran.
-- CP-10: a launcher carries the command that reads a secret, never the secret (D-022). Stdin and
-  file bindings stay refused. Harness settings are merged, never replaced (D-026). An unmeasurable
-  launcher counts as drift (D-028).
-- CP-11: desired and current are different types, and unobserved is drift, not a match (D-029).
-  Establishing and correcting are separate effect lists (D-030). Steps run in dependency order
-  (D-031). A forbidden repair fails the plan rather than being dropped (D-032) — CP-12 must not
-  soften any of these to make an execution succeed.
+- Product Specification is the only product authority; accepted screen numbers are contracts, not
+  optional mockups.
+- Fast and Verbose share selection, requirements, policy, plan digest, risks, effects and execution;
+  only detail changes. Fast may compress review but never bypass it or hide material risk.
+- Secret values never enter view models, history, snapshots, receipts or JSON. Credential UI is
+  reference/provider/health/dependant oriented.
+- CP-12 absent desired targets and reverse teardown order stay intact. Uninstall retains artifacts
+  with remaining ownership and credentials by default.
+- Scope mutations use compare-under-lock reviewed execution. Interrupted work is re-inspected and
+  replanned; no UI action resumes an imperative instruction number.
+- The legacy curses behavior is characterization evidence. Reuse it until canonical public-flow
+  tests prove a specific path replaceable.

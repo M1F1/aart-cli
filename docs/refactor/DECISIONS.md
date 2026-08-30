@@ -393,3 +393,65 @@ the Product Specification first instead of hiding the change here.
   described less. "Unexpected" is only an honest claim against a complete description.
 - **Consequence:** detecting genuinely stray registrations needs an inspector that reads a harness
   file whole rather than one that checks the entries a receipt names. B-023 tracks it.
+
+## D-034 — Absence is a desired component target, not a separate uninstall engine
+- **Decision:** `DesiredComponent.target` is either `MATCHED` or `ABSENT`. Uninstall builds absent
+  payload/runtime/launcher/harness components and plans them through `plan_repair`; absent effects
+  execute in reverse dependency order.
+- **Status:** accepted.
+- **Reason:** an empty desired state can identify unexpected components but cannot say how an owned
+  component is safely removed. A second imperative uninstall would violate INV-173. An explicit
+  absent target preserves the same comparison, policy, review, effect and re-inspection path while
+  giving removal a typed, reviewable effect.
+- **Consequence:** `RemoveOwnedPath` is still confined by `ArtifactEnvironment.owns`, and
+  `UnconfigureHarness` names exactly one measured registration. Harness removal precedes launcher,
+  runtime and root removal; installation keeps the forward dependency order from D-031.
+
+## D-035 — Effect completion never substitutes for re-inspection
+- **Decision:** `execute_repair` re-inspects after an empty plan, success, adapter refusal/exception,
+  interruption and partial failure. Outcomes distinguish `CONVERGED`, `UNCONVERGED`, `FAILED`,
+  `INTERRUPTED` and `UNVERIFIED` and retain residual component drift.
+- **Status:** accepted.
+- **Reason:** §158.8 makes observed convergence the success condition. An interpreter can report
+  success without changing the machine, and an interrupted process leaves a real state that is
+  more important than the instruction number it reached.
+- **Consequence:** a future resume always starts by inspecting and planning again; it never blindly
+  continues from the first unattempted step. The outcome projection is the secret-free lifecycle
+  receipt payload for Activity/receipt UI work.
+
+## D-036 — Review preconditions are compared inside a per-scope mutation lease
+- **Decision:** `execute_lifecycle` acquires a lease derived from the relevant scope identity,
+  re-inspects under the lease, reconstructs the plan and requires its review digest to match before
+  any effect executes. Read-only inspection remains unlocked.
+- **Status:** accepted.
+- **Reason:** acquiring a lock only around writes leaves a gap in which another process can change
+  the state after Review. A global lock would serialize unrelated projects. Hashing the scope key
+  into the managed path makes the boundary explicit without trusting a project path as a filename.
+- **Consequence:** same-scope contention returns an operation-lock diagnostic and mutates nothing;
+  different scopes proceed independently. Release runs on success, failure, stale review and
+  interruption.
+
+## D-037 — Update restoration is reconciliation and only follows reversible applied effects
+- **Decision:** after a failed update, restoration is planned against a fresh observation paired
+  with the previous desired state. It runs only when at least one effect was applied and every
+  applied effect declares `reversible=True`.
+- **Status:** accepted.
+- **Reason:** replaying a receipt is not proof that the earlier state can be restored, and claiming
+  transaction atomicity over environment creation or package installation would violate INV-225.
+  The previous desired state plus a new observation is the same honest input used for every other
+  lifecycle intent.
+- **Consequence:** verified restoration reports `RESTORED`; failed restoration is distinct;
+  non-reversible work reports `PARTIALLY_APPLIED` with residual drift and never calls itself rolled
+  back.
+
+## D-038 — Ownership and credential cleanup are decisions before uninstall planning
+- **Decision:** uninstall subtracts the released Collection/direct/dependency ownership reasons
+  first. Any remaining reason retains the artifact with a no-mutation plan. Credential components
+  are excluded from the removal desired state unless deletion is explicitly requested.
+- **Status:** accepted.
+- **Reason:** a component planner cannot infer whether another Collection or direct selection still
+  owns the artifact, and a final known dependant disappearing is not authority to erase a reusable
+  credential. Both choices must be visible before effects exist.
+- **Consequence:** Collection removal explains retained ownership and removes only final-owner
+  artifacts. The real uninstall E2E proves the runtime/root and harness entry disappear while the
+  provider-held credential remains.
