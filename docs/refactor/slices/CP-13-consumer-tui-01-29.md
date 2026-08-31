@@ -198,14 +198,23 @@ own launcher after a repair planned from disk alone, and no stored file contains
   payload became a component an install establishes and a repair can keep (D-053). Proven end to
   end: an empty machine, one reviewed plan, and a server that afterwards answers its harness
   through its own generated launcher, with the receipt read back by a second store.
+- The write half of the manifest -> install-description step: `protocol/authoring.py` reads the §91
+  `inputs` array and the §107/§108 `python.dependencies` descriptor, so an author's declarations
+  survive compilation as `RuntimeInput` and `PythonDependencySpec` values. Every one is built
+  through the domain constructor and its refusal is reported as a manifest diagnostic, so a secret
+  with a default, guidance carrying a plausible example credential, or an environment variable
+  written as an assignment is refused by the rule that already existed rather than by a second copy
+  of it (D-054). A manifest naming an entrypoint, descriptor or lock its payload does not ship is
+  refused at compile time (D-055).
 
 ## Remaining
 
-- Step 5 flow wiring, in order: nothing canonical yet *produces* a `PlannedInstallation` --
-  `LaunchContract`, `RuntimeInput` and `PythonDependencySpec` are constructed only in tests, and
-  `protocol/authoring.py` parses `transport`/`runtime`/`launch` but not the `inputs` and
-  `python.dependencies` §91/§107/§108 declare. That parser and its lowering are the remaining gap
-  between a resolved Selection and a real install.
+- Step 5 flow wiring, in order: nothing canonical yet *produces* a `PlannedInstallation`. The
+  manifest now carries the declarations (D-054), but nothing reads a stored package back into the
+  `LaunchContract`, bound inputs and harness targets a `PlannedInstallation` needs. That read side
+  is the remaining gap between a resolved Selection and a real install: an artifact-store read,
+  `generate_launcher` over the declared contract, `bind_runtime_inputs` over the declared inputs,
+  and the harness targets the Selection asked for.
 - Then holding the flow in the session so screens 05–11 carry a live `ConsumerPlanView`, and
   routing the public commands through `propose_installation`/`execute_lifecycle`.
 - Routing the default TTY entry to the canonical application (B-025). This follows the install
@@ -232,6 +241,11 @@ own launcher after a repair planned from disk alone, and no stored file contains
   completed**: B-024 cannot assemble Installed, Updates or Activity over a machine whose canonical
   state does not survive a process, and step 6 cannot retire legacy authority whose remaining
   advantage is that it persists.
+- B-027 — Poetry-locked artifacts have no installer backend, so `type: poetry` is refused by name
+  rather than approximated by installing the loose project the lock exists to prevent.
+- B-028 — Cross-checking an input's binding against the transport at authoring time. Deliberately
+  declined: the launcher generator is the single authority on what a binding can deliver (D-023,
+  D-024), and a second copy of that rule in the parser would be the one nobody updates.
 
 ## Blockers
 
@@ -246,13 +260,14 @@ machine-output tests prove every accepted flow now consumes the canonical applic
 
 - Current working state: steps 1–4 complete and verified; step 5 partial; step 6 not started. The
   legacy wizard is untouched and still owns the default TTY entry.
-- Exact next action: teach `protocol/authoring.py` the `inputs` and `python.dependencies`
-  declarations of §91/§107/§108, carry them through compilation, and lower a compiled artifact into
-  a `PlannedInstallation`. Then hold the flow in the session, then B-025, then the public commands,
+- Exact next action: lower a compiled artifact into a `PlannedInstallation` -- read the package
+  back from the artifact store, generate its launcher from the declared `LaunchContract`, bind the
+  declared inputs, and attach the Selection's harness targets. The authoring half of that step is
+  done (D-054, D-055). Then hold the flow in the session, then B-025, then the public commands,
   then step 6.
 - Do not undo: existing curses layout/search/basket/back/quit characterization; one semantic plan
   for both profiles; Maintainer Mode remains opt-in; `key_event` stays the only place a key's
   meaning is decided; no clock in `application/`.
-- Tests last run/results: 2,378 unit + 94 E2E tests, 83.36% coverage, all ten quality gates
+- Tests last run/results: 2,395 unit + 94 E2E tests, 83.35% coverage, all ten quality gates
   green (`make quality`). CP-12 baseline was 2,196 unit + 65 E2E at 83.25%.
 - Failure evidence: three defects found by tests are listed under Characterization / RED evidence.

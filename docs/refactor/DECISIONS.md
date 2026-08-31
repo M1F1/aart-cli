@@ -654,3 +654,36 @@ the Product Specification first instead of hiding the change here.
 - **Consequence:** repair keeps its existing behaviour until a caller supplies `payload_source`;
   when one does, a missing payload becomes drift the reconciler can put right instead of a
   component that quietly disappears from the comparison.
+
+## D-054 — The manifest declares what an installation needs; the domain keeps the rules
+- **Decision:** `protocol/authoring.py` parses the §91 `inputs` array and the §107/§108
+  `python.dependencies` descriptor into `RuntimeInput` and `PythonDependencySpec`, and
+  `AuthorManifest` carries both. Every one of these values is constructed through `_built`, which
+  turns the domain constructor's `ValueError` into a manifest diagnostic. The parser decides only
+  which fields a kind may carry; what makes a value acceptable stays where it already was.
+- **Status:** accepted.
+- **Reason:** the rules are already written once, in `domain/inputs.py` — a secret carries no value,
+  guidance carries no plausible example credential (INV-168), an environment variable is a name and
+  not an assignment. Restating them in the parser would give a manifest two sets of rules free to
+  disagree, and the parser's copy is the one nobody would think to update.
+- **Consequence:** a secret input's field set omits `default` and `value` entirely rather than
+  validating them as empty, so there is no field a real credential could be written into and then
+  be carried in the input digest. The declarations reach that digest exactly as the author wrote
+  them: what an artifact asks for is part of what the artifact is, and re-serialising domain values
+  would let a parser change round-trip into a different artifact identity. Declaration order is
+  preserved for the same reason it exists — it is the order somebody is asked for the values.
+
+## D-055 — A descriptor an artifact points at has to travel with it
+- **Decision:** `_compile_one` refuses a manifest whose entrypoint, dependency descriptor or lock
+  file is not among the selected payload files, with `AUTHOR_PAYLOAD_INVALID` naming the file.
+  `_DEPENDENCY_KINDS` admits `requirements`, `pyproject` and `uv`; anything else is refused by name.
+- **Status:** accepted.
+- **Reason:** §108 requires the descriptor and its lock to ship inside the canonical payload. An
+  artifact whose dependency list lives only in the author's repository installs today and fails to
+  install tomorrow, and the failure arrives at the consumer rather than at the author. The same
+  argument covers the entrypoint: a launcher naming a file the payload does not carry starts
+  nothing. Refusing at compile time puts the error where it can still be fixed.
+- **Consequence:** a resolver with no installer backend behind it — poetry today — is refused rather
+  than approximated by installing the loose project the lock exists to prevent (B-027). The check
+  runs after the input digest is computed and before canonical lowering, so a refused manifest never
+  produces a package.

@@ -312,3 +312,37 @@ action leaves behind, D-046) and `tests/receipt_persistence_e2e_test.py`, where 
 recorded by one store is read back by a second store built fresh over the same directory and every
 later decision -- desired state, review digest, repair, timeline -- is made from the receipt on
 disk. Assembling those reads into the consumer shell is B-024.
+
+### B-027 — Poetry-locked artifacts have no installer backend
+Status: OPEN
+Discovered in: CP-13 / `protocol/authoring.py` / `_parse_dependencies`
+Why useful: `poetry.lock` is common in the Python artifacts AART is meant to install. Today
+`python.dependencies.type: poetry` is refused by name, so such an artifact cannot be authored
+canonically at all and its author has to export a requirements file by hand.
+Why noncritical now: `domain/python_runtime.LOCK_FORMATS` is `("uv",)` and no effect interpreter can
+install from a poetry lock. Accepting the declaration without a backend would be worse than
+refusing it: the installer would fall back to the loose `pyproject.toml` and install versions nobody
+resolved, which is the exact failure a lock exists to prevent.
+Potential approach: add a poetry entry to `LOCK_FORMATS` and an `InstallPythonDependencies`
+interpreter path once one exists, then widen `_DEPENDENCY_KINDS`.
+Invariants touched: INV-107, INV-108.
+Evidence/links: D-055; `tests/authoring_inputs_test.py::DeclaredDependencyTest`.
+Promotion condition: a Product Specification section or an acceptance artifact requires installing
+from a poetry lock.
+
+### B-028 — Cross-check an input's binding against the transport at authoring time
+Status: OPEN (deliberately declined for now)
+Discovered in: CP-13 / `protocol/authoring.py` / `_parse_injection`
+Why useful: some declarations are decidable as impossible before anyone installs them — a `stdin`
+binding on a `stdio` transport would compete with the protocol itself for the same stream, and a
+`file` binding needs somebody to write that file, which a generated launcher does not do.
+Why noncritical now: D-023/D-024 make the launcher generator the single authority on what a binding
+can deliver. A second authority in the parser could disagree with it, and would be the copy nobody
+updates when a generator learns a new delivery. The generator already refuses these, with the
+artifact's real transport in hand — which the parser does not have at the point it reads `inject`.
+Potential approach: if it is worth catching earlier, have the compiler ask the generator rather than
+restate its rules, once a compiled artifact is lowered into a `PlannedInstallation`.
+Invariants touched: INV-091.
+Evidence/links: D-023, D-024, D-054.
+Promotion condition: evidence that an artifact reached a consumer carrying a binding its transport
+could never deliver.

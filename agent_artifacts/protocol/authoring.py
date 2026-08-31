@@ -27,11 +27,31 @@ from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Sever
 from agent_artifacts.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
+    InputId,
     ObjectDigest,
     SourceAlias,
 )
 from agent_artifacts.domain.identifiers import (
     ArtifactKind as IdentityKind,
+)
+from agent_artifacts.domain.inputs import (
+    CliArgumentBinding,
+    ConfigInput,
+    EnvironmentBinding,
+    FileBinding,
+    InputGuidance,
+    InputValidation,
+    ObtainFrom,
+    ProcessBinding,
+    RuntimeInput,
+    SecretInput,
+    StdinBinding,
+)
+from agent_artifacts.domain.python_runtime import (
+    PyProjectSpec,
+    PythonDependencySpec,
+    RequirementsFile,
+    spec_descriptor_path,
 )
 from agent_artifacts.domain.result import Err, Ok, Result
 
@@ -81,6 +101,18 @@ _INSTALL_EFFECTS: dict[AuthorKind, tuple[InstallEffect, ...]] = {
     "hook": ("copy-tree", "merge-json"),
     "memory": ("managed-block",),
 }
+#: What an author may say about how a value reaches the running artifact. The names are the
+#: §91 vocabulary; what each one can actually deliver is decided once, by the launcher generator.
+_INJECTIONS: dict[str, str] = {
+    "environment": "variable",
+    "cli-argument": "argument",
+    "file": "path",
+    "stdin": "",
+}
+#: Dependency descriptors this build can install, and the lock format each one implies. A resolver
+#: with no backend behind it is refused rather than approximated: installing the loose project
+#: instead of the lock would install versions nobody resolved.
+_DEPENDENCY_KINDS: dict[str, str | None] = {"requirements": None, "pyproject": None, "uv": "uv"}
 _COMPILER_ID = "aart-native-author"
 _COMPILER_VERSION = SemVer(1, 0, 0)
 _COMPILER_OPTIONS_DIGEST = sha256_bytes(b"AART-NATIVE-AUTHOR-COMPILER-V1\n")
@@ -111,6 +143,8 @@ class AuthorManifest:
     runtime_version: str | None
     launch: str | None
     entrypoint: SafeRelativePath | None
+    inputs: tuple[RuntimeInput, ...]
+    dependencies: PythonDependencySpec | None
     harnesses: tuple[str, ...]
     platforms: tuple[str, ...]
     compliance: ComplianceLevel
@@ -318,6 +352,355 @@ def _nested_type(
     return Ok((type_result.value, field_result.value, object_result.value))
 
 
+def _built(build, label: str, *, path: str) -> Result:
+    """Build a domain value, reporting what it refused rather than raising out of the parser.
+
+    The rules a runtime input has to satisfy -- a secret with no value field, guidance with no
+    plausible example credential, an environment variable that is one -- already live in the
+    domain. Restating them here would give a manifest two sets of rules that could disagree.
+    """
+
+    try:
+        return Ok(build())
+    except ValueError as error:
+        return _error(AUTHOR_MANIFEST_INVALID, f"{label} is invalid: {error}", path=path)
+
+
+def _parse_obtain_from(value: JsonValue, *, path: str) -> Result[ObtainFrom]:
+    parsed = _object(value, "help.obtain_from", path=path)
+    if isinstance(parsed, Err):
+        return parsed
+    fields = _fields(
+        parsed.value,
+        required=frozenset({"label", "url"}),
+        path=path,
+        label="help.obtain_from",
+        extensions=True,
+    )
+    if isinstance(fields, Err):
+        return fields
+    label = _string(fields.value["label"], "help.obtain_from.label", path=path)
+    url = _string(fields.value["url"], "help.obtain_from.url", path=path)
+    for item in (label, url):
+        if isinstance(item, Err):
+            return item
+    assert isinstance(label, Ok) and isinstance(url, Ok)
+    return _built(lambda: ObtainFrom(label.value, url.value), "help.obtain_from", path=path)
+
+
+def _parse_guidance(value: JsonValue, *, path: str) -> Result[InputGuidance]:
+    parsed = _object(value, "help", path=path)
+    if isinstance(parsed, Err):
+        return parsed
+    fields = _fields(
+        parsed.value,
+        required=frozenset({"label"}),
+        optional=frozenset(
+            {"description", "example", "format_hint", "obtain_from", "validation_hint"}
+        ),
+        path=path,
+        label="help",
+        extensions=True,
+    )
+    if isinstance(fields, Err):
+        return fields
+    strings: dict[str, str | None] = {}
+    for name in ("label", "description", "example", "format_hint", "validation_hint"):
+        if name not in fields.value:
+            strings[name] = None
+            continue
+        parsed_string = _string(fields.value[name], f"help.{name}", path=path)
+        if isinstance(parsed_string, Err):
+            return parsed_string
+        strings[name] = parsed_string.value
+    obtain: ObtainFrom | None = None
+    if "obtain_from" in fields.value:
+        parsed_obtain = _parse_obtain_from(fields.value["obtain_from"], path=path)
+        if isinstance(parsed_obtain, Err):
+            return parsed_obtain
+        obtain = parsed_obtain.value
+    return _built(
+        lambda: InputGuidance(
+            str(strings["label"]),
+            strings["description"] or "",
+            strings["example"],
+            strings["format_hint"],
+            obtain,
+            strings["validation_hint"] or "",
+        ),
+        "help",
+        path=path,
+    )
+
+
+def _parse_validation(value: JsonValue, *, path: str) -> Result[InputValidation]:
+    parsed = _nested_type(
+        value,
+        "validation",
+        path=path,
+        optional=frozenset({"pattern", "allowed_hosts", "message"}),
+    )
+    if isinstance(parsed, Err):
+        return parsed
+    kind, fields, _object_value = parsed.value
+    pattern: str | None = None
+    if "pattern" in fields:
+        parsed_pattern = _string(fields["pattern"], "validation.pattern", path=path)
+        if isinstance(parsed_pattern, Err):
+            return parsed_pattern
+        pattern = parsed_pattern.value
+    hosts: tuple[str, ...] = ()
+    if "allowed_hosts" in fields:
+        parsed_hosts = _strings(
+            fields["allowed_hosts"], "validation.allowed_hosts", path=path, allow_empty=False
+        )
+        if isinstance(parsed_hosts, Err):
+            return parsed_hosts
+        hosts = parsed_hosts.value
+    message = ""
+    if "message" in fields:
+        parsed_message = _string(fields["message"], "validation.message", path=path)
+        if isinstance(parsed_message, Err):
+            return parsed_message
+        message = parsed_message.value
+    return _built(lambda: InputValidation(kind, pattern, hosts, message), "validation", path=path)
+
+
+def _parse_injection(value: JsonValue, *, path: str) -> Result[ProcessBinding]:
+    """Which delivery an author asked for, refused by name when this build has no such delivery.
+
+    The type is checked before the fields are, so an author who names an injection AART cannot
+    perform is told that, rather than being told about a field that only looks unknown because
+    the injection is.
+    """
+
+    parsed = _object(value, "inject", path=path)
+    if isinstance(parsed, Err):
+        return parsed
+    kind = parsed.value.get("type")
+    if not isinstance(kind, str) or kind not in _INJECTIONS:
+        named = f" {kind!r}" if isinstance(kind, str) else ""
+        return _error(
+            AUTHOR_MANIFEST_INVALID,
+            f"inject.type{named} is not an injection this build can deliver",
+            path=path,
+        )
+    field = _INJECTIONS[kind]
+    fields = _fields(
+        parsed.value,
+        required=frozenset({"type"} | ({field} if field else set())),
+        path=path,
+        label=f"inject.type {kind!r}",
+        extensions=True,
+    )
+    if isinstance(fields, Err):
+        return fields
+    if not field:
+        return _built(StdinBinding, "inject", path=path)
+    parsed_field = _string(fields.value[field], f"inject.{field}", path=path)
+    if isinstance(parsed_field, Err):
+        return parsed_field
+    setting = parsed_field.value
+    builders = {
+        "environment": lambda: EnvironmentBinding(setting),
+        "cli-argument": lambda: CliArgumentBinding(setting),
+        "file": lambda: FileBinding(setting),
+    }
+    return _built(builders[kind], f"inject.{field}", path=path)
+
+
+def _parse_input(value: JsonValue, *, path: str) -> Result[RuntimeInput]:
+    parsed = _object(value, "input", path=path)
+    if isinstance(parsed, Err):
+        return parsed
+    kind_value = parsed.value.get("kind")
+    if kind_value not in ("secret", "config"):
+        return _error(
+            AUTHOR_MANIFEST_INVALID,
+            "every input declares kind 'secret' or 'config'",
+            path=path,
+        )
+    secret = kind_value == "secret"
+    # A secret takes no `default` and no `value`: §91 keeps the confidential class free of any
+    # field a real credential could be written into, and the omission is the enforcement.
+    optional = frozenset({"required", "help"}) | (
+        frozenset() if secret else frozenset({"default", "validation"})
+    )
+    fields = _fields(
+        parsed.value,
+        required=frozenset({"id", "kind", "inject"}),
+        optional=optional,
+        path=path,
+        label=f"{kind_value} input",
+        extensions=True,
+    )
+    if isinstance(fields, Err):
+        return fields
+    identifier = _string(fields.value["id"], "input.id", path=path)
+    if isinstance(identifier, Err):
+        return identifier
+    binding = _parse_injection(fields.value["inject"], path=path)
+    if isinstance(binding, Err):
+        return binding
+    required = True
+    if "required" in fields.value:
+        if not isinstance(fields.value["required"], bool):
+            return _error(
+                AUTHOR_MANIFEST_INVALID,
+                f"input {identifier.value!r} required must be true or false",
+                path=path,
+            )
+        required = bool(fields.value["required"])
+    guidance: InputGuidance | None = None
+    if "help" in fields.value:
+        parsed_guidance = _parse_guidance(fields.value["help"], path=path)
+        if isinstance(parsed_guidance, Err):
+            return parsed_guidance
+        guidance = parsed_guidance.value
+    label = f"input {identifier.value!r}"
+    if secret:
+        return _built(
+            lambda: SecretInput(InputId(identifier.value), binding.value, required, guidance),
+            label,
+            path=path,
+        )
+    validation: InputValidation | None = None
+    if "validation" in fields.value:
+        parsed_validation = _parse_validation(fields.value["validation"], path=path)
+        if isinstance(parsed_validation, Err):
+            return parsed_validation
+        validation = parsed_validation.value
+    default: str | None = None
+    if "default" in fields.value:
+        parsed_default = _string(fields.value["default"], "input.default", path=path)
+        if isinstance(parsed_default, Err):
+            return parsed_default
+        default = parsed_default.value
+    return _built(
+        lambda: ConfigInput(
+            InputId(identifier.value),
+            binding.value,
+            required,
+            validation,
+            guidance,
+            default,
+        ),
+        label,
+        path=path,
+    )
+
+
+def _parse_inputs(value: JsonValue, *, path: str) -> Result[tuple[RuntimeInput, ...]]:
+    """Declaration order is kept: it is the order somebody is asked for these values."""
+
+    if not isinstance(value, JsonArray):
+        return _error(AUTHOR_MANIFEST_INVALID, "inputs must be an array", path=path)
+    inputs: list[RuntimeInput] = []
+    seen: set[str] = set()
+    for item in value.items:
+        parsed = _parse_input(item, path=path)
+        if isinstance(parsed, Err):
+            return parsed
+        identifier = str(parsed.value.id)
+        if identifier in seen:
+            return _error(
+                AUTHOR_MANIFEST_INVALID,
+                f"input {identifier!r} is declared more than once",
+                path=path,
+            )
+        seen.add(identifier)
+        inputs.append(parsed.value)
+    return Ok(tuple(inputs))
+
+
+def _parse_dependencies(value: JsonValue, *, path: str) -> Result[PythonDependencySpec]:
+    """Which descriptor an artifact points at, and the lock its resolver wrote, if any.
+
+    §108: AART reuses the Python ecosystem's descriptors rather than inventing one. The type is
+    checked first here too, so a resolver this build has no backend for is refused by name instead
+    of being approximated by installing the loose project the lock was written to prevent.
+    """
+
+    parsed = _object(value, "python.dependencies", path=path)
+    if isinstance(parsed, Err):
+        return parsed
+    kind = parsed.value.get("type")
+    if not isinstance(kind, str) or kind not in _DEPENDENCY_KINDS:
+        named = f" {kind!r}" if isinstance(kind, str) else ""
+        return _error(
+            AUTHOR_MANIFEST_INVALID,
+            f"python.dependencies.type{named} names a resolver no installer here can read",
+            path=path,
+        )
+    lock_format = _DEPENDENCY_KINDS[kind]
+    if kind == "requirements":
+        required = frozenset({"type", "path"})
+    elif lock_format is None:
+        required = frozenset({"type", "pyproject"})
+    else:
+        required = frozenset({"type", "pyproject", "lock"})
+    fields = _fields(
+        parsed.value,
+        required=required,
+        path=path,
+        label=f"a {kind} descriptor",
+        extensions=True,
+    )
+    if isinstance(fields, Err):
+        return fields
+    named_paths = {}
+    for name in required - {"type"}:
+        parsed_path = _string(fields.value[name], f"python.dependencies.{name}", path=path)
+        if isinstance(parsed_path, Err):
+            return parsed_path
+        named_paths[name] = parsed_path.value
+    if kind == "requirements":
+        return _built(
+            lambda: RequirementsFile(named_paths["path"]), "python.dependencies", path=path
+        )
+    return _built(
+        lambda: PyProjectSpec(named_paths["pyproject"], named_paths.get("lock"), lock_format),
+        "python.dependencies",
+        path=path,
+    )
+
+
+def _parse_python(value: JsonValue, *, path: str) -> Result[PythonDependencySpec]:
+    parsed = _object(value, "python", path=path)
+    if isinstance(parsed, Err):
+        return parsed
+    fields = _fields(
+        parsed.value,
+        required=frozenset({"dependencies"}),
+        path=path,
+        label="python",
+        extensions=True,
+    )
+    if isinstance(fields, Err):
+        return fields
+    return _parse_dependencies(fields.value["dependencies"], path=path)
+
+
+def _declared_payload_files(manifest: AuthorManifest) -> tuple[str, ...]:
+    """Every payload file the manifest points at and an installation would then need.
+
+    §108 requires the descriptor and its lock to ship in the canonical payload: an artifact whose
+    dependency list lives only in the source repository is installable today and uninstallable
+    tomorrow. The entrypoint is here for the same reason -- a launcher that names a file the
+    payload does not carry starts nothing.
+    """
+
+    files: list[str] = []
+    if manifest.entrypoint is not None:
+        files.append(str(manifest.entrypoint))
+    spec = manifest.dependencies
+    if spec is not None:
+        files.append(spec_descriptor_path(spec))
+        if isinstance(spec, PyProjectSpec) and spec.lock is not None:
+            files.append(spec.lock)
+    return tuple(files)
+
+
 def _parse_document(manifest: DiscoveredAuthorManifest) -> Result[JsonObject]:
     raw_path = str(manifest.path)
     if manifest.path.parts[-1] == "aart.json":
@@ -367,6 +750,7 @@ def parse_author_manifest(manifest: DiscoveredAuthorManifest) -> Result[AuthorMa
                 "launch",
                 "requirements",
                 "inputs",
+                "python",
                 "credentials",
                 "compatibility",
                 "install",
@@ -606,6 +990,20 @@ def parse_author_manifest(manifest: DiscoveredAuthorManifest) -> Result[AuthorMa
                 return parsed_platforms
             platforms = parsed_platforms.value
 
+    inputs: tuple[RuntimeInput, ...] = ()
+    if "inputs" in root:
+        parsed_inputs = _parse_inputs(root["inputs"], path=raw_path)
+        if isinstance(parsed_inputs, Err):
+            return parsed_inputs
+        inputs = parsed_inputs.value
+
+    dependencies: PythonDependencySpec | None = None
+    if "python" in root:
+        parsed_python = _parse_python(root["python"], path=raw_path)
+        if isinstance(parsed_python, Err):
+            return parsed_python
+        dependencies = parsed_python.value
+
     intent_entries: list[tuple[str, JsonValue]] = [
         ("schema", schema_result.value),
         ("payload", payload_object.value),
@@ -618,6 +1016,12 @@ def parse_author_manifest(manifest: DiscoveredAuthorManifest) -> Result[AuthorMa
         intent_entries.append(("launch", launch_object))
     if compatibility_object is not None:
         intent_entries.append(("compatibility", compatibility_object))
+    # Kept as declared rather than as re-serialized domain values: what an artifact asks for is
+    # part of what the artifact is, so it belongs byte-for-byte in the input digest.
+    if inputs:
+        intent_entries.append(("inputs", root["inputs"]))
+    if dependencies is not None:
+        intent_entries.append(("python", root["python"]))
 
     return Ok(
         AuthorManifest(
@@ -633,6 +1037,8 @@ def parse_author_manifest(manifest: DiscoveredAuthorManifest) -> Result[AuthorMa
             runtime_version,
             launch,
             entrypoint,
+            inputs,
+            dependencies,
             harnesses,
             platforms,
             compliance,
@@ -812,6 +1218,14 @@ def _compile_one(
     digest = _input_digest(source_manifest, selected)
     if isinstance(digest, Err):
         return digest
+    shipped = {relative for relative, _entry in selected}
+    for needed in _declared_payload_files(manifest):
+        if needed not in shipped:
+            return _error(
+                AUTHOR_PAYLOAD_INVALID,
+                f"the manifest names {needed!r}, which the payload does not include",
+                path=str(source_manifest.path),
+            )
     payload_entries = _canonical_payload_entries(manifest, selected)
     if isinstance(payload_entries, Err):
         return payload_entries

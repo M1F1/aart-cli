@@ -16,12 +16,15 @@ The install flow comes before the TTY entry. Routing `run()` at the canonical ap
 public entry point can start an install would take away the flows the legacy wizard still owns
 alone; B-025 is therefore item 3 here, not item 1.
 
-1. **Read an artifact's install description from its package.** `propose_installation` now lowers a
-   `PlannedInstallation` into both the reviewed plan and the effects that run (D-052), but nothing
-   canonical produces a `PlannedInstallation`: `LaunchContract`, `RuntimeInput` and
-   `PythonDependencySpec` are constructed only in tests, so the manifest → install-description step
-   does not exist outside `protocol/authoring.py`'s parser. This is the one remaining gap between a
-   resolved Selection and a real install, and it is critical path.
+1. **Lower a compiled artifact into a `PlannedInstallation`.** Half of this is done:
+   `protocol/authoring.py` now reads the §91 `inputs` array and the §107/§108 `python.dependencies`
+   descriptor, so an author's declarations survive compilation into `RuntimeInput` and
+   `PythonDependencySpec` values (D-054), and a manifest naming a file its payload does not ship is
+   refused (D-055). What remains is the read side: nothing yet turns a stored package back into the
+   `PlannedInstallation` that `propose_installation` lowers (D-052) — that needs an artifact-store
+   read, `generate_launcher` over the declared `LaunchContract`, `bind_runtime_inputs` over the
+   declared inputs, and the harness targets the Selection asked for. This is the one remaining gap
+   between a resolved Selection and a real install, and it is critical path.
 2. Hold the flow in the consumer session, so screens 05–11 carry a live `ConsumerPlanView` instead
    of "Nothing has been planned yet": resolution → inspection → input binding →
    `propose_installation`, held beside the `ConsumerMachine` and passed to `screens_from`, refreshed
@@ -84,3 +87,9 @@ alone; B-025 is therefore item 3 here, not item 1.
   refused rather than assumed absent.
 - The payload is its own component, established from plan knowledge (`payload_source`) and observed
   as the payload directory rather than the root beside it (D-053).
+- The domain keeps the rules an input has to satisfy; the authoring parser only decides which fields
+  a kind may carry, and surfaces the domain's refusal as a diagnostic (D-054). A secret's field set
+  omits `default` and `value` entirely, so there is no field a real credential could be written
+  into. Declarations reach the input digest exactly as the author wrote them, in declared order.
+- A descriptor an artifact points at travels inside its payload, or the manifest is refused at
+  compile time (D-055). A resolver with no installer backend is refused by name, never approximated.
