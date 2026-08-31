@@ -725,3 +725,18 @@ the Product Specification first instead of hiding the change here.
   environment and reinstalls into it. Drift *inside* the environment — a package removed or
   upgraded by hand — is not detected, and the detail says so rather than letting a partial check
   read as a full one. Verifying installed distributions against the descriptor is B-029.
+
+## D-058 — A package that does not say how it is installed is refused, not read as saying nothing
+- **Decision:** `read_package_description` reads a whole canonical tree — finds `artifact.json`,
+  parses it, and requires the `aart.authoring` extension. A package without that extension is
+  refused by name. `PACKAGE_PAYLOAD_DIRECTORY`, `PACKAGE_MANIFEST_FILENAME` and
+  `package_payload_root` give the compiler and the reader one spelling of the layout.
+- **Status:** accepted.
+- **Reason:** "this artifact declares no runtime and no inputs" and "whatever wrote this package
+  never recorded what it needs" are different facts, and only the first is safe to install. Reading
+  the second as the first would produce an artifact that starts nothing and asks for nothing, with
+  no error anywhere — the failure would arrive when somebody tried to use it.
+- **Consequence:** the install path now begins at the content-addressed object store: a package is
+  published, read back with its digest verified, described, planned and installed, and the payload
+  an install copies from is the store's verified copy rather than any other tree with the same
+  files.

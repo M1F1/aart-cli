@@ -28,7 +28,9 @@ from agent_artifacts.domain.result import Err, Ok
 from agent_artifacts.protocol.authoring import (
     compile_author_snapshot,
     describe_installation,
+    package_payload_root,
     read_install_description,
+    read_package_description,
 )
 from agent_artifacts.protocol.native_schema import parse_artifact_manifest
 from tests.authoring_compiler_test import _file, _snapshot
@@ -65,6 +67,32 @@ def _stored_description(**overrides: object):
     assert isinstance(parsed, Ok), getattr(parsed, "diagnostics", ())
     extension = dict(parsed.value.extensions)["aart.authoring"]
     return read_install_description(extension, path="artifact.json")
+
+
+def _without_authoring(entries):
+    """The same tree, as some other importer that never wrote an authoring intent would leave it."""
+
+    from agent_artifacts.protocol.json import JsonObject, canonical_json_bytes, parse_json
+    from agent_artifacts.protocol.native_tree import SnapshotEntry
+
+    rewritten = []
+    for entry in entries:
+        if str(entry.path) != "artifact.json":
+            rewritten.append(entry)
+            continue
+        parsed = parse_json(entry.content)
+        assert isinstance(parsed, Ok), getattr(parsed, "diagnostics", ())
+        kept = JsonObject(
+            tuple(item for item in parsed.value.entries if item[0] != "aart.authoring")
+        )
+        rewritten.append(
+            SnapshotEntry(entry.path, entry.kind, canonical_json_bytes(kept), entry.executable)
+        )
+    return tuple(rewritten)
+
+
+def _reason(result) -> str:
+    return result.diagnostics[0].message
 
 
 def _authored_description(**overrides: object):
@@ -155,6 +183,40 @@ class StoredDescriptionTest(unittest.TestCase):
         result = read_install_description("aart.authoring", path="artifact.json")
 
         self.assertIsInstance(result, Err)
+
+
+class StoredPackageTest(unittest.TestCase):
+    """Reading a whole package tree, the way anything holding one on disk would."""
+
+    def test_a_package_tree_describes_the_installation_it_asks_for(self) -> None:
+        described = read_package_description(_compiled().canonical_entries)
+
+        self.assertIsInstance(described, Ok, getattr(described, "diagnostics", ()))
+        self.assertEqual(described.value, _authored_description())
+
+    def test_a_tree_with_no_artifact_manifest_is_refused(self) -> None:
+        entries = tuple(
+            entry for entry in _compiled().canonical_entries if str(entry.path) != "artifact.json"
+        )
+
+        described = read_package_description(entries)
+
+        self.assertIsInstance(described, Err)
+        self.assertIn("artifact.json", _reason(described))
+
+    def test_a_package_no_aart_compiler_wrote_is_refused_rather_than_guessed(self) -> None:
+        compiled = _compiled()
+        stripped = _without_authoring(compiled.canonical_entries)
+
+        described = read_package_description(stripped)
+
+        self.assertIsInstance(described, Err)
+        self.assertIn("does not say how it is installed", _reason(described))
+
+    def test_the_payload_of_a_stored_package_is_where_the_compiler_put_it(self) -> None:
+        self.assertEqual(
+            package_payload_root("/var/lib/aart/objects/ab"), "/var/lib/aart/objects/ab/payload"
+        )
 
 
 class DescriptionRulesTest(unittest.TestCase):

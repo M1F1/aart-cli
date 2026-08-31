@@ -71,7 +71,11 @@ from .native_models import (
     PayloadSpec,
     Provenance,
 )
-from .native_schema import artifact_manifest_to_json, provenance_to_json
+from .native_schema import (
+    artifact_manifest_to_json,
+    parse_artifact_manifest,
+    provenance_to_json,
+)
 from .native_tree import (
     NativeArtifactPackage,
     SnapshotEntry,
@@ -115,6 +119,12 @@ _INJECTIONS: dict[str, str] = {
 #: with no backend behind it is refused rather than approximated: installing the loose project
 #: instead of the lock would install versions nobody resolved.
 _DEPENDENCY_KINDS: dict[str, str | None] = {"requirements": None, "pyproject": None, "uv": "uv"}
+#: Where a compiled package keeps the artifact's own files, written once and read back by name.
+PACKAGE_PAYLOAD_DIRECTORY = "payload"
+PACKAGE_MANIFEST_FILENAME = "artifact.json"
+#: The extension a package carries its author's declarations in, and the only thing that lets an
+#: installer say what installing it would involve.
+AUTHORING_EXTENSION = "aart.authoring"
 _COMPILER_ID = "aart-native-author"
 _COMPILER_VERSION = SemVer(1, 0, 0)
 _COMPILER_OPTIONS_DIGEST = sha256_bytes(b"AART-NATIVE-AUTHOR-COMPILER-V1\n")
@@ -855,6 +865,52 @@ def read_install_description(intent: JsonValue, *, path: str) -> Result[InstallD
     )
 
 
+def package_payload_root(root: str) -> str:
+    """Where the artifact's own files sit inside a package that has been written to `root`."""
+
+    if not isinstance(root, str) or not root or root.endswith("/"):
+        raise ValueError("a package payload root is derived from the package root")
+    return f"{root}/{PACKAGE_PAYLOAD_DIRECTORY}"
+
+
+def read_package_description(entries: tuple[SnapshotEntry, ...]) -> Result[InstallDescription]:
+    """What installing this package would involve, read from the canonical tree itself.
+
+    A package that carries no authoring extension is refused rather than described as declaring
+    nothing. The two are not the same: one artifact says it needs no runtime and no inputs, and the
+    other was written by something that never recorded what it needs. Installing the second as
+    though it were the first would produce an artifact that starts nothing and asks for nothing,
+    with no error anywhere.
+    """
+
+    manifest_entry = next(
+        (
+            entry
+            for entry in entries
+            if str(entry.path) == PACKAGE_MANIFEST_FILENAME and entry.kind is SnapshotEntryKind.FILE
+        ),
+        None,
+    )
+    if manifest_entry is None:
+        return _error(
+            AUTHOR_TREE_INVALID,
+            f"a package describes itself in {PACKAGE_MANIFEST_FILENAME}, which this one has none of",
+            path=PACKAGE_MANIFEST_FILENAME,
+        )
+    manifest = parse_artifact_manifest(manifest_entry.content, path=PACKAGE_MANIFEST_FILENAME)
+    if isinstance(manifest, Err):
+        return manifest
+    extension = dict(manifest.value.extensions).get(AUTHORING_EXTENSION)
+    if extension is None:
+        return _error(
+            AUTHOR_TREE_INVALID,
+            f"{manifest.value.identity} does not say how it is installed: it carries no "
+            f"{AUTHORING_EXTENSION!r}, so what it needs is unknown rather than nothing",
+            path=PACKAGE_MANIFEST_FILENAME,
+        )
+    return read_install_description(extension, path=PACKAGE_MANIFEST_FILENAME)
+
+
 def _declared_payload_files(manifest: AuthorManifest) -> tuple[str, ...]:
     """Every payload file the manifest points at and an installation would then need.
 
@@ -1315,7 +1371,7 @@ def _input_digest(
     assert isinstance(logical_manifest, Ok)
     records = [file_entry(logical_manifest.value, source_manifest.content)]
     for relative, entry in selected:
-        path = parse_relative_path(f"payload/{relative}")
+        path = parse_relative_path(f"{PACKAGE_PAYLOAD_DIRECTORY}/{relative}")
         assert isinstance(path, Ok)
         records.append(file_entry(path.value, entry.content, executable=entry.executable))
     digest = tree_digest(records)
@@ -1334,7 +1390,7 @@ def _canonical_payload_entries(
 ) -> Result[list[SnapshotEntry]]:
     entries: list[SnapshotEntry] = []
     for relative, source_entry in selected:
-        path = parse_relative_path(f"payload/{relative}")
+        path = parse_relative_path(f"{PACKAGE_PAYLOAD_DIRECTORY}/{relative}")
         assert isinstance(path, Ok)
         entries.append(
             SnapshotEntry(
@@ -1362,7 +1418,7 @@ def _canonical_payload_entries(
                 ("server", JsonObject(server_entries)),
             )
         )
-        descriptor_path = parse_relative_path("payload/mcp.json")
+        descriptor_path = parse_relative_path(f"{PACKAGE_PAYLOAD_DIRECTORY}/mcp.json")
         assert isinstance(descriptor_path, Ok)
         entries.append(
             SnapshotEntry(
@@ -1407,7 +1463,7 @@ def _compile_one(
         PayloadSpec(payload_root, PAYLOAD_FORMAT_BY_TYPE[native_kind]),
         CompatibilitySpec(manifest.harnesses, manifest.platforms),
         InstallSpec(("project", "user"), ("copy",), _INSTALL_EFFECTS[manifest.kind]),
-        extensions=(("aart.authoring", manifest.canonical_intent),),
+        extensions=((AUTHORING_EXTENSION, manifest.canonical_intent),),
     )
     native_provenance = Provenance(
         1,
@@ -1425,7 +1481,7 @@ def _compile_one(
         ),
         (),
     )
-    manifest_path = parse_relative_path("artifact.json")
+    manifest_path = parse_relative_path(PACKAGE_MANIFEST_FILENAME)
     provenance_path = parse_relative_path("provenance.json")
     assert isinstance(manifest_path, Ok) and isinstance(provenance_path, Ok)
     canonical_entries = [

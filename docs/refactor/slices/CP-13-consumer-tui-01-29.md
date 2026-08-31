@@ -213,7 +213,9 @@ own launcher after a repair planned from disk alone, and no stored file contains
   harness targets and a policy to produce the `PlannedInstallation` D-052 lowers (D-056). Proven
   end to end from an author's repository: compiled, written to a store as bytes, read back by a
   process that has not seen the repository, installed, and answering its harness afterwards with
-  the arguments, the configuration value and the launch-time secret the manifest declared.
+  the arguments, the configuration value and the launch-time secret the manifest declared. The
+  package travels through the content-addressed object store on the way, and a package that never
+  recorded what it needs is refused rather than read as needing nothing (D-058).
 - A defect that first install surfaced: the `runtime-dependencies` component was never observed, so
   every healthy artifact with dependencies reported unobserved drift forever. It is now reported
   through the environment that holds it, with the observation saying what it did not check (D-057,
@@ -221,10 +223,7 @@ own launcher after a repair planned from disk alone, and no stored file contains
 
 ## Remaining
 
-- Step 5 flow wiring: the install path now exists end to end and is proven, but nothing reads a
-  package out of a local artifact store -- the E2E writes the canonical entries itself -- so a
-  store read is the first remaining piece.
-- Then holding the flow in the session so screens 05–11 carry a live `ConsumerPlanView`, and
+- Step 5 flow wiring: holding the flow in the session so screens 05–11 carry a live `ConsumerPlanView`, and
   routing the public commands through `propose_installation`/`execute_lifecycle`.
 - Routing the default TTY entry to the canonical application (B-025). This follows the install
   flow rather than preceding it: routing `run()` while no public entry point can start an install
@@ -271,13 +270,13 @@ machine-output tests prove every accepted flow now consumes the canonical applic
 
 - Current working state: steps 1–4 complete and verified; step 5 partial; step 6 not started. The
   legacy wizard is untouched and still owns the default TTY entry.
-- Exact next action: read a package out of a local artifact store, then hold the whole flow in the
-  consumer session so screens 05–11 carry a live `ConsumerPlanView`. The order is the one
+- Exact next action: hold the whole flow in the consumer session so screens 05–11 carry a live
+  `ConsumerPlanView`. The order is the one
   `tests/artifact_installation_e2e_test.py` already runs: describe, plan, inspect, offer
   remediations, propose, execute. Then B-025, then the public commands, then step 6.
 - Do not undo: existing curses layout/search/basket/back/quit characterization; one semantic plan
   for both profiles; Maintainer Mode remains opt-in; `key_event` stays the only place a key's
   meaning is decided; no clock in `application/`.
-- Tests last run/results: 2,430 unit + 97 E2E tests, 83.51% coverage, all ten quality gates
+- Tests last run/results: 2,435 unit + 98 E2E tests, 83.51% coverage, all ten quality gates
   green (`make quality`). CP-12 baseline was 2,196 unit + 65 E2E at 83.25%.
 - Failure evidence: three defects found by tests are listed under Characterization / RED evidence.

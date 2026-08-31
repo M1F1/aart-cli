@@ -70,12 +70,22 @@ from agent_artifacts.io.execution import (
     RuntimeEffectInterpreter,
 )
 from agent_artifacts.io.harness import LocalHarnessRegistry
+from agent_artifacts.io.object_store import publish_object, read_object
 from agent_artifacts.io.python_runtime import LocalPythonRuntime
 from agent_artifacts.io.runtime_projection import observe_installation
-from agent_artifacts.protocol.authoring import compile_author_snapshot, read_install_description
-from agent_artifacts.protocol.native_schema import parse_artifact_manifest
+from agent_artifacts.protocol.authoring import (
+    compile_author_snapshot,
+    package_payload_root,
+    read_package_description,
+)
 from agent_artifacts.sources.local import read_local_snapshot
 from agent_artifacts.sources.model import LocalSnapshotRequest, SnapshotLimits, source_instance_id
+from agent_artifacts.store.model import (
+    ObjectPublishCommand,
+    ObjectReadRequest,
+    make_object_candidate,
+    object_store_paths,
+)
 from tests.mcp_stdio_e2e_test import SERVER_SOURCE, _FileProvider, speak
 
 TOKEN = InputId("github-token")
@@ -163,24 +173,26 @@ class AuthoredInstallationTest(unittest.TestCase):
         return compiled.value[0]
 
     def _publish(self, compiled):
-        """Write the canonical package to a store, the way anything downstream would receive it."""
+        """Put the canonical package in the object store, the way anything downstream receives it."""
 
-        self.published = self.scope / "store/mcp/github/1.5.0"
-        for entry in compiled.canonical_entries:
-            destination = self.published / str(entry.path)
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            destination.write_bytes(entry.content)
+        self.paths = object_store_paths(str(self.scope / "store"))
+        candidate = make_object_candidate(compiled.canonical_entries)
+        self.assertIsInstance(candidate, Ok, getattr(candidate, "diagnostics", ()))
+        published = publish_object(ObjectPublishCommand(self.paths, candidate.value))
+        self.assertIsInstance(published, Ok, getattr(published, "diagnostics", ()))
+        self.object_digest = candidate.value.digest
         return compiled.package
 
     # -- the installing machine's side -------------------------------------------------------
 
     def _describe(self):
-        """Read what the artifact needs from the bytes on disk, not from the compiler in memory."""
+        """Read what the artifact needs out of the store, not from the compiler in memory."""
 
-        manifest = parse_artifact_manifest((self.published / "artifact.json").read_bytes())
-        self.assertIsInstance(manifest, Ok, getattr(manifest, "diagnostics", ()))
-        extension = dict(manifest.value.extensions)["aart.authoring"]
-        described = read_install_description(extension, path="artifact.json")
+        stored = read_object(ObjectReadRequest(self.paths, self.object_digest))
+        self.assertIsInstance(stored, Ok, getattr(stored, "diagnostics", ()))
+        self.assertIsNotNone(stored.value, "the package this test published is not in the store")
+        self.published = pathlib.Path(package_payload_root(stored.value.root))
+        described = read_package_description(stored.value.candidate.entries)
         self.assertIsInstance(described, Ok, getattr(described, "diagnostics", ()))
         return described.value
 
@@ -214,7 +226,7 @@ class AuthoredInstallationTest(unittest.TestCase):
             self._resolved(),
             self.description,
             root=str(self.scope / ".tabnine/agent/aart/mcp/github"),
-            payload_source=str(self.published / "payload"),
+            payload_source=str(self.published),
             sources=(
                 SecretProviderReference(
                     TOKEN, CredentialProviderRef("test-file", "aart-e2e", "github-token")
@@ -328,6 +340,18 @@ class AuthoredInstallationTest(unittest.TestCase):
         self.assertTrue(answers["token_present"])
         self.assertTrue(self.environment.owns(answers["executable"]))
         self.assertFalse(answers["aart_importable"])
+
+    def test_the_payload_that_is_installed_is_the_one_the_store_verified(self) -> None:
+        self._install()
+
+        self.assertTrue(
+            str(self.published).startswith(self.paths.objects),
+            "the payload an install copies from has to be the store's verified copy",
+        )
+        self.assertEqual(
+            (self.published / "server.py").read_bytes(),
+            pathlib.Path(self.environment.payload_path("server.py")).read_bytes(),
+        )
 
     def test_the_declared_dependencies_are_installed_into_the_environment_it_owns(self) -> None:
         proposal, _ = self._install()

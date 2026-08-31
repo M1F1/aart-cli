@@ -24,9 +24,9 @@ public commands rather than building it.
    `InstallDescription` (D-056) → `plan_artifact_installation` → `inspect_requirements` →
    `installation_remediations` → `propose_installation` → `execute_lifecycle`. Hold that beside the
    `ConsumerMachine` and pass it to `screens_from`, refreshed after an action rather than derived
-   inside a draw (D-051). One thing is still missing on this path: nothing reads a package out of a
-   local artifact store — the E2E writes the canonical entries itself — so a store read is the
-   first piece of this step.
+   inside a draw (D-051). The store read exists now: `read_package_description` describes a package
+   read back out of the content-addressed object store, digest verified, and the payload an install
+   copies from is the store's own verified copy (D-058).
 2. **B-025** — route the default TTY entry in `tui.py::run` to `run_consumer` behind the existing
    curses-availability check, building its source with `screens_from(assemble_consumer_machine(...))`
    over `LocalReceiptStore` and the local inspector. Keep the legacy wizard reachable until step 6
@@ -97,3 +97,6 @@ public commands rather than building it.
 - Dependencies are reported through the environment that holds them (D-057). Losing the environment
   is drift; a package changed by hand inside a healthy one is not yet detected, and the observation
   says so instead of claiming more than it measured (B-029).
+- A package carrying no authoring extension is refused rather than read as declaring nothing
+  (D-058): an artifact that needs nothing and a package that never recorded what it needs are
+  different facts, and only one of them is safe to install.
