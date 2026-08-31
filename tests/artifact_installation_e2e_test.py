@@ -413,7 +413,7 @@ class AuthoredInstallationTest(unittest.TestCase):
             policy=EffectivePolicy(),
             facts=EnvironmentFacts(sys.platform, remediation_capabilities=self._capabilities()),
             inspect=LocalEnvironmentInspector(self._capabilities()),
-            observe=lambda _desired: self._inspect(),
+            observe=lambda _planned: self._inspect(),
             base_interpreter=sys.executable,
             resolvers=(self.provider,),
         )
@@ -447,7 +447,7 @@ class AuthoredInstallationTest(unittest.TestCase):
             policy=EffectivePolicy(),
             facts=EnvironmentFacts(sys.platform, remediation_capabilities=self._capabilities()),
             inspect=LocalEnvironmentInspector(self._capabilities()),
-            observe=lambda _desired: self._inspect(),
+            observe=lambda _planned: self._inspect(),
             base_interpreter=sys.executable,
             resolvers=(self.provider,),
         )

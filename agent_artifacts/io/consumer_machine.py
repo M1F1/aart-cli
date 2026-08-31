@@ -42,7 +42,6 @@ from agent_artifacts.domain.credentials import (
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.identifiers import ArtifactCoordinate
 from agent_artifacts.domain.receipts import InstalledRecord
-from agent_artifacts.domain.reconciliation import ComponentState
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.install_state.model import InstallScope
 from agent_artifacts.install_state.paths import install_state_paths
@@ -50,6 +49,7 @@ from agent_artifacts.install_state.schema import parse_install_state
 
 from .credentials import CredentialProviderPort
 from .harness import LocalHarnessRegistry
+from .installation_observation import COMPONENT_STATE
 from .receipt_store import LocalReceiptStore
 from .runtime_projection import observe_installation
 
@@ -58,14 +58,6 @@ __all__ = ["INSTALL_STATE_UNREADABLE", "read_consumer_machine"]
 #: An installation manifest exists and could not be read.  Distinct from a missing manifest:
 #: one means nothing was installed in that scope, the other means this process cannot tell.
 INSTALL_STATE_UNREADABLE = DiagnosticCode("install-state-unreadable")
-
-
-_COMPONENT_STATE = {
-    CredentialState.PRESENT: ComponentState.MATCHED,
-    CredentialState.ABSENT: ComponentState.ABSENT,
-    CredentialState.INVALID: ComponentState.DIVERGENT,
-    CredentialState.UNKNOWN: ComponentState.UNKNOWN,
-}
 
 
 def _error(message: str) -> Err:
@@ -186,7 +178,7 @@ def read_consumer_machine(
             base_interpreter=receipt.base_interpreter,
         )
         credential_states = tuple(
-            (reference.input.value, _COMPONENT_STATE[by_reference[reference].state])
+            (reference.input.value, COMPONENT_STATE[by_reference[reference].state])
             for reference in receipt.credentials
         )
         current = current_state_from_observation(

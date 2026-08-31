@@ -33,7 +33,7 @@ from agent_artifacts.domain.install_description import InstallDescription
 from agent_artifacts.domain.plans import PlannedRemediation
 from agent_artifacts.domain.policies import EffectivePolicy
 from agent_artifacts.domain.python_runtime import PythonInstaller
-from agent_artifacts.domain.reconciliation import CurrentState, DesiredState
+from agent_artifacts.domain.reconciliation import CurrentState
 from agent_artifacts.domain.remediations import Remediation
 from agent_artifacts.domain.requirements import Requirement
 from agent_artifacts.domain.result import Err, Ok, Result
@@ -49,7 +49,7 @@ from .installation_planning import (
     aggregate_requirements,
     inspect_requirements,
 )
-from .installation_proposal import PlannedInstallation, desired_state_for
+from .installation_proposal import PlannedInstallation
 
 __all__ = [
     "OFFER_NOT_PLANNABLE",
@@ -140,7 +140,7 @@ def offer_installation(
     policy: EffectivePolicy,
     facts: EnvironmentFacts,
     inspect: EnvironmentInspectionPort,
-    observe: Callable[[DesiredState], CurrentState],
+    observe: Callable[[PlannedInstallation], CurrentState],
     base_interpreter: str | None = None,
     resolvers: tuple[object, ...] = (),
 ) -> Result[InstallationOffer]:
@@ -201,8 +201,13 @@ def offer_installation(
 
     observed: list[tuple[ArtifactCoordinate, CurrentState]] = []
     for installation in installations:
+        # The planned installation rather than its desired state, because an observer needs to know
+        # where to look and the desired state does not say. `intended_receipt` does -- it names the
+        # paths this install would occupy -- which is also why observing a first install is not a
+        # formality: something already at one of those paths is drift to review, not a file to
+        # quietly overwrite.
         try:
-            observed.append((installation.coordinate, observe(desired_state_for(installation))))
+            observed.append((installation.coordinate, observe(installation)))
         except Exception as error:  # noqa: BLE001 - the port is somebody else's code
             return _error(f"{installation.coordinate} could not be observed: {error}")
 

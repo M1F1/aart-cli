@@ -54,10 +54,10 @@ def _placement(name: str = "github", *, root: str = ROOT, **overrides: object):
     return ArtifactPlacement(**fields)  # type: ignore[arg-type]
 
 
-def _nothing_installed(desired):
+def _nothing_installed(planned):
     """This machine, before any of it exists: observed, and observed to be absent."""
 
-    return CurrentState(desired.artifact)
+    return CurrentState(planned.coordinate)
 
 
 def _offer(*placements, policy: EffectivePolicy | None = None, inspector=None, observe=None):
@@ -164,7 +164,7 @@ class InstallationOfferTest(unittest.TestCase):
         """Reporting an empty state here would say "nothing is installed" about a machine nobody
         managed to look at, and a first install would then write over whatever is there."""
 
-        def _blind(desired):
+        def _blind(planned):
             raise OSError("the harness registry is unreadable")
 
         offered = _offer(observe=_blind)
