@@ -371,7 +371,7 @@ Evidence/links: D-057; `tests/artifact_installation_e2e_test.py`.
 Promotion condition: evidence that a silently drifted environment reached a consumer as healthy.
 
 ### B-030 — Aggregate installation execution and one transaction receipt
-Status: PROMOTED TO CP-13 CRITICAL PATH (2026-08-31)
+Status: DONE (2026-08-31)
 Discovered in: CP-13 / `agent_artifacts/application/consumer_ui.py` / production action handler
 Why useful: `InstallationProposal` already holds one bulk `InstallPlan` and all per-artifact
 `LifecyclePlan`s, but execution and action recording currently accept only one `LifecyclePlan` and
@@ -392,11 +392,12 @@ Evidence/links: D-052, D-059, D-063, D-064, D-065; `tests/consumer_ui_actions_te
 `tests/consumer_action_shell_test.py`; `tests/installation_transaction_test.py`;
 `tests/installation_transaction_receipt_test.py`; `tests/consumer_transaction_screens_test.py`;
 `tests/artifact_installation_e2e_test.py`.
-Progress (2026-08-31): aggregate execution under one lease (D-064), one Activity receipt plus one
-installed record per applied member, and screens 10/11 drawn from that transaction (D-065) are
-verified for single and multi-artifact Selection, including the partially-applied and
-never-attempted cases. What remains under this number is reloading the durable machine after a
-transaction, so Installed and Activity refresh from what was just recorded.
+Outcome (2026-08-31): aggregate execution under one lease (D-064), one Activity receipt plus one
+installed record per applied member, screens 10/11 drawn from that transaction (D-065), and a real
+recorded install re-read from disk into Installed, Collections and Activity (D-066) are verified for
+single and multi-artifact Selection, including the partially-applied and never-attempted cases. The
+reload needed no new production code, only the acceptance evidence that the stored transaction is
+what the next machine reads.
 Unblock condition: aggregate execution, durable recording and screen projections are verified for
 single and multi-artifact Selection, including partial execution and compensation evidence, and a
 recorded transaction is visible to the next assembled machine without hand-built state.

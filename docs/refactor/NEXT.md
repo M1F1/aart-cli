@@ -31,9 +31,10 @@ that flow and execution, plus composition of real Marketplace and installed-stat
    named with its status and steps, a member that never ran is drawn rather than dropped, and undo
    is offered only where the transaction can be reversed (D-065). The authored-manifest E2E installs
    through `execute_installation` and draws those screens from the receipt that run produced.
-   **Remaining:** reload the durable machine after a transaction (B-030) so Installed and Activity
-   show it without reassembling by hand, and compose configured Marketplace offers into the same
-   source. Do not route `run()` until these live-flow tests pass.
+   A real install recorded as a transaction is re-read from disk by `read_consumer_machine` and
+   appears in Installed, Collections and Activity with the token absent from every surface (D-066),
+   so B-030 is closed. **Remaining:** compose configured Marketplace offers into the same source.
+   Do not route `run()` until that lands with live-flow tests.
 3. Define and test the strangler boundary for existing project/user installation manifests. They
    must remain visible and operable until a kind-neutral canonical receipt/observation replaces
    them; never treat the absence of a canonical MCP receipt as evidence that a Skill/Rule/Hook/

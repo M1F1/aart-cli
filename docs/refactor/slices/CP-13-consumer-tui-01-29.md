@@ -206,7 +206,18 @@ run that installs a compiled and published artifact is read out of the running c
 accepted navigation routes: 05 names the coordinate, 06 the four requirements this machine measured,
 07 the two declared inputs with the secret shown as configured and no value anywhere, 09 the risks
 and the review identity, and 11 the install that actually ran. None of them says "Nothing has been
-planned yet", and the real secret appears on none of them.
+planned yet", and the real secret appears on none of them. That run goes through
+`execute_installation` rather than a per-artifact shortcut, so what screens 10 and 11 draw is the
+transaction the confirmation produced (D-065).
+
+The same run is then recorded and re-read (D-066): `record_installation_transaction` writes to a
+real `LocalReceiptStore`, and `read_consumer_machine` — which has never seen the proposal — reads
+the state root and harness root this install wrote and produces a machine whose Installed names the
+coordinate, whose Collections still name the kit that asked for it, and whose Activity is the one
+transaction, its receipt naming the Selection and its members. The credential provider that resolves
+the token at launch is not an inspector, so the reference comes back `unknown` with the installation
+as its dependant rather than with an invented answer, and neither the drawn screens nor the
+serialized machine carries the token.
 
 `tests/consumer_session_e2e_test.py` — nothing is handed a view. A real installation is recorded
 with who asked for it; a second process reads that record back, inspects the machine, assembles it
@@ -278,10 +289,10 @@ own launcher after a repair planned from disk alone, and no stored file contains
 
 ## Remaining
 
-- Reload the durable machine after a transaction (B-030), so Installed and Activity refresh from
-  the receipt it recorded, then implement the production action handler over `begin_installation`,
-  CP-12 execution, durable recording and that reload. Execution, recording and the screens that
-  draw the result are done (D-064, D-065).
+- Implement the production action handler over `begin_installation`, CP-12 execution, durable
+  recording and machine reload. Every part it composes is done and verified: execution and
+  recording (D-064), the screens that draw the result (D-065), and the reload that shows it to the
+  next machine (D-066). What the handler adds is the wiring, not a missing capability.
 - Compose configured Marketplace and preserve/adapt existing kind-neutral project/user install
   state before retrying the default route.
 - Route public commands through the same handler/application boundary.
@@ -300,9 +311,8 @@ own launcher after a repair planned from disk alone, and no stored file contains
   `plan_artifact_installation` from the package's own description.
 - The canonical shell now emits and transports install/update/repair/uninstall action requests, but
   its current composition has no production handler, configured Marketplace offers or adapter for
-  existing project/user installation records, and the durable machine is not reloaded after a
-  transaction (B-030). The legacy public entry remains until those replacement facts are proven
-  (D-062, D-063).
+  existing project/user installation records. The legacy public entry remains until those
+  replacement facts are proven (D-062, D-063).
 
 ## Backlog discoveries
 
@@ -321,10 +331,10 @@ own launcher after a repair planned from disk alone, and no stored file contains
   D-024), and a second copy of that rule in the parser would be the one nobody updates.
 - B-029 — Verifying installed distributions against the declared descriptor, rather than reporting
   dependencies through the environment that holds them (D-057).
-- B-030 — Aggregate installation execution and one transaction receipt. **Promoted to CP-13:** the
-  production handler cannot fragment one reviewed Selection into N actions without violating
-  INV-130/INV-138. Execution, recording and rendering are done (D-064, D-065); what remains under
-  this number is reloading the durable machine after a transaction.
+- B-030 — Aggregate installation execution and one transaction receipt. **Promoted to CP-13 and
+  now done:** the production handler cannot fragment one reviewed Selection into N actions without
+  violating INV-130/INV-138, so execution, recording, rendering and the durable reload were all
+  completed here (D-064, D-065, D-066).
 
 ## Blockers
 

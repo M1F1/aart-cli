@@ -868,3 +868,23 @@ the Product Specification first instead of hiding the change here.
   authored-manifest E2E now installs through `execute_installation` and draws 10/11 from the
   receipt that real run produced, so the transaction path has end-to-end evidence rather than
   view-level evidence only.
+
+## D-066 — B-030's reload needed evidence, not code
+- **Decision:** the durable half of B-030 is closed by acceptance evidence rather than by new
+  production code. `tests/artifact_installation_e2e_test.py` now records a real install as a
+  transaction into `LocalReceiptStore` and re-reads the machine with `read_consumer_machine` from
+  the state root and harness root that install actually wrote — a reader that has never seen the
+  proposal — asserting the artifact appears in Installed, the Collection that asked for it is still
+  the reason it is there, and the transaction is one Activity entry whose receipt names the
+  Selection and its members.
+- **Status:** accepted.
+- **Reason:** the transaction receipt gained `selection` and `artifacts` (D-064), and those fields
+  cross the stored document, `activity_from_receipts` and the installed-record reader. A round-trip
+  unit test proves the document; only a reload from disk proves that the next machine a person
+  opens shows what the last one recorded.
+- **Consequence:** an unavailable credential provider stays unavailable across the reload: the file
+  provider that resolves this artifact's token at launch is not an inspector, so the reread machine
+  reports the reference as `unknown` with the installation named as its dependant rather than
+  inventing an answer, and no drawn screen or serialized machine carries the token. What remains
+  before the default TTY route is Marketplace composition and legacy installed-state visibility,
+  not durability.

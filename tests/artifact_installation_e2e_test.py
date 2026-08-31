@@ -24,6 +24,7 @@ import secrets
 import sys
 import tempfile
 import unittest
+from dataclasses import asdict
 
 from agent_artifacts.application.artifact_installation import (
     installation_remediations,
@@ -51,6 +52,7 @@ from agent_artifacts.application.installation_proposal import (
     intended_receipt,
 )
 from agent_artifacts.application.installed_state import current_state_from_observation
+from agent_artifacts.application.receipt_recording import record_installation_transaction
 from agent_artifacts.configuration.model import ConfiguredSource, SourceKind
 from agent_artifacts.domain.candidates import CandidateId
 from agent_artifacts.domain.credentials import CredentialProviderRef
@@ -79,6 +81,7 @@ from agent_artifacts.domain.selection import (
     ResolvedSelection,
     VersionConstraint,
 )
+from agent_artifacts.io.consumer_machine import read_consumer_machine
 from agent_artifacts.io.environment_inspection import LocalEnvironmentInspector
 from agent_artifacts.io.execution import (
     CredentialEffectInterpreter,
@@ -90,6 +93,7 @@ from agent_artifacts.io.execution import (
 from agent_artifacts.io.harness import LocalHarnessRegistry
 from agent_artifacts.io.object_store import publish_object, read_object
 from agent_artifacts.io.python_runtime import LocalPythonRuntime
+from agent_artifacts.io.receipt_store import LocalReceiptStore
 from agent_artifacts.io.runtime_projection import observe_installation
 from agent_artifacts.protocol.authoring import (
     compile_author_snapshot,
@@ -350,12 +354,12 @@ class AuthoredInstallationTest(unittest.TestCase):
         self.assertIsInstance(executed, Ok, getattr(executed, "diagnostics", ()))
         return flow.proposal, executed.value
 
-    def _drawn(self, screen: ConsumerScreen, flow) -> str:
+    def _drawn(self, screen: ConsumerScreen, flow, machine=None) -> str:
         """Draw one screen of this flow, reached the way a person reaches it."""
 
         source = CanonicalScreenSource(
             screens_from(
-                assemble_consumer_machine((), today=TODAY),
+                assemble_consumer_machine((), today=TODAY) if machine is None else machine,
                 plan=flow.plan,
                 transaction=flow.outcome,
             )
@@ -464,6 +468,76 @@ class AuthoredInstallationTest(unittest.TestCase):
 
         self.assertNotIn(self.token, drawn)
         self.assertIn("github-token", drawn)
+
+    def test_the_transaction_this_run_recorded_is_what_the_next_machine_reads(self) -> None:
+        """A receipt nobody can read back is not a record (B-030).
+
+        Nothing in-memory survives: the machine is read from the state root and the harness root
+        this install actually wrote, by a reader that has never seen the proposal.
+        """
+
+        flow = self._begin()
+        _, outcome = self._install(flow)
+
+        recorded = record_installation_transaction(
+            outcome,
+            recorded_at=MOMENT,
+            store=LocalReceiptStore(self.state_root),
+            receipts=((self.package.coordinate, intended_receipt(self.planned)),),
+        )
+        self.assertIsInstance(recorded, Ok, getattr(recorded, "diagnostics", ()))
+
+        reread = read_consumer_machine(
+            state_root=self.state_root, harness_root=str(self.scope), today=TODAY
+        )
+
+        self.assertIsInstance(reread, Ok, getattr(reread, "diagnostics", ()))
+        machine = reread.value
+        self.assertEqual(
+            [item.coordinate for item in machine.installed], [str(self.package.coordinate)]
+        )
+        self.assertEqual(len(machine.activity.entries), 1)
+        self.assertEqual(machine.activity.entries[0].summary, "Installed 1 artifact")
+        self.assertEqual(len(machine.receipts), 1)
+        self.assertEqual(machine.receipts[0].review_digest, str(flow.proposal.review_digest))
+        self.assertEqual(
+            [item.coordinate for item in machine.receipts[0].artifacts],
+            [str(self.package.coordinate)],
+        )
+        # The Collection that asked for this artifact is still the reason it is here.
+        self.assertEqual([item.collection for item in machine.collections], [KIT.owner])
+
+    def test_the_reread_machine_carries_no_secret_and_no_invented_credential_fact(self) -> None:
+        """The provider that resolves this token at launch is not an inspector, and a machine that
+        cannot ask is not entitled to an answer."""
+
+        flow = self._begin()
+        _, outcome = self._install(flow)
+        self.assertIsInstance(
+            record_installation_transaction(
+                outcome,
+                recorded_at=MOMENT,
+                store=LocalReceiptStore(self.state_root),
+                receipts=((self.package.coordinate, intended_receipt(self.planned)),),
+            ),
+            Ok,
+        )
+
+        machine = read_consumer_machine(
+            state_root=self.state_root, harness_root=str(self.scope), today=TODAY
+        ).value
+
+        drawn = "\n".join(
+            self._drawn(screen, flow, machine)
+            for screen in (ConsumerScreen.INSTALLED, ConsumerScreen.ACTIVITY)
+        )
+        self.assertIn(str(self.package.coordinate), drawn)
+        self.assertNotIn(self.token, json.dumps(asdict(machine), default=str))
+        self.assertNotIn(self.token, drawn)
+        self.assertEqual([item.input for item in machine.credentials], ["github-token"])
+        self.assertEqual(machine.credentials[0].health, "unknown")
+        self.assertEqual(machine.credentials[0].provider_state, "unknown")
+        self.assertEqual(machine.credentials[0].dependants, (str(self.package.coordinate),))
 
     def test_no_reviewed_surface_carries_the_secret_the_install_arranges_to_read(self) -> None:
         proposal, outcome = self._install()
