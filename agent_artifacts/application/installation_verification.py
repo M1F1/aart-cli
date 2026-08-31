@@ -40,7 +40,7 @@ class VerificationFinding(str, Enum):
 class InstallationObservation:
     """What an interpreter found. Facts only -- no comparison has happened yet."""
 
-    root_present: bool = False
+    payload_present: bool = False
     launcher_present: bool = False
     launcher_executable: bool = False
     launcher_digest: ObjectDigest | None = None
@@ -49,7 +49,7 @@ class InstallationObservation:
 
     def __post_init__(self) -> None:
         for value, label in (
-            (self.root_present, "installation root presence"),
+            (self.payload_present, "installed payload presence"),
             (self.launcher_present, "launcher presence"),
             (self.launcher_executable, "launcher executability"),
             (self.interpreter_present, "interpreter presence"),

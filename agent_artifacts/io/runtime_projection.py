@@ -68,8 +68,11 @@ class LocalProjectionWriter:
             )
 
         content = projection.content.encode("utf-8")
+        existing: bytes | bool = False
         try:
-            existing = os.path.exists(projection.path) and open(projection.path, "rb").read()
+            if os.path.exists(projection.path):
+                with open(projection.path, "rb") as handle:
+                    existing = handle.read()
         except OSError as error:
             return _error(PROJECTION_FAILED, f"cannot read {projection.path}: {error.strerror}")
         if existing == content and os.access(projection.path, os.X_OK):
@@ -124,7 +127,7 @@ def observe_installation(
         commands.append((registration.target.harness, registration.server, command))
 
     return InstallationObservation(
-        root_present=os.path.isdir(receipt.root),
+        payload_present=os.path.isdir(ArtifactEnvironment(receipt.artifact, receipt.root).payload),
         launcher_present=present,
         launcher_executable=present and os.access(receipt.launcher, os.X_OK),
         launcher_digest=digest,

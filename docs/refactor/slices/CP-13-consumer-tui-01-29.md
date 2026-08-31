@@ -191,13 +191,26 @@ own launcher after a repair planned from disk alone, and no stored file contains
 - Property, keyboard-integration, headless-shell and real-installation E2E evidence, above.
 - Canonical persistence for installed state and finished actions, with a producer in a real
   reviewed, scope-locked flow (B-026 closed; D-044, D-045, D-046).
+- The bridge step 5 was missing: `application/installation_proposal.py` lowers one
+  `PlannedInstallation` into both the `InstallPlan` a person reviews and the `LifecyclePlan`s that
+  run it, deriving the review from a real reconciliation so a credential already present and wrong
+  is replaced rather than stored, and refusing to construct when the two disagree (D-052). The
+  payload became a component an install establishes and a repair can keep (D-053). Proven end to
+  end: an empty machine, one reviewed plan, and a server that afterwards answers its harness
+  through its own generated launcher, with the receipt read back by a second store.
 
 ## Remaining
 
-- Step 5 flow wiring: producing a live `ConsumerPlanView` when somebody starts an install, and
-  routing the public commands through `plan_lifecycle_intent`/`execute_lifecycle`. The machine
-  assembly behind every other screen is done (B-024 closed).
-- Routing the default TTY entry to the canonical application (B-025).
+- Step 5 flow wiring, in order: nothing canonical yet *produces* a `PlannedInstallation` --
+  `LaunchContract`, `RuntimeInput` and `PythonDependencySpec` are constructed only in tests, and
+  `protocol/authoring.py` parses `transport`/`runtime`/`launch` but not the `inputs` and
+  `python.dependencies` §91/§107/§108 declare. That parser and its lowering are the remaining gap
+  between a resolved Selection and a real install.
+- Then holding the flow in the session so screens 05–11 carry a live `ConsumerPlanView`, and
+  routing the public commands through `propose_installation`/`execute_lifecycle`.
+- Routing the default TTY entry to the canonical application (B-025). This follows the install
+  flow rather than preceding it: routing `run()` while no public entry point can start an install
+  would take away flows the legacy wizard still owns alone.
 - Step 6: retiring legacy consumer semantic authority, once the above give equivalent public-flow
   evidence.
 
@@ -233,12 +246,13 @@ machine-output tests prove every accepted flow now consumes the canonical applic
 
 - Current working state: steps 1–4 complete and verified; step 5 partial; step 6 not started. The
   legacy wizard is untouched and still owns the default TTY entry.
-- Exact next action: B-025 — route `tui.py::run` to `run_consumer` over `screens_from`, behind the
-  existing curses-availability check, keeping the legacy wizard reachable until step 6 evidence
-  exists. Then the public commands, then step 6.
+- Exact next action: teach `protocol/authoring.py` the `inputs` and `python.dependencies`
+  declarations of §91/§107/§108, carry them through compilation, and lower a compiled artifact into
+  a `PlannedInstallation`. Then hold the flow in the session, then B-025, then the public commands,
+  then step 6.
 - Do not undo: existing curses layout/search/basket/back/quit characterization; one semantic plan
   for both profiles; Maintainer Mode remains opt-in; `key_event` stays the only place a key's
   meaning is decided; no clock in `application/`.
-- Tests last run/results: 2,356 unit + 89 E2E tests, 83.34% coverage, all ten quality gates
+- Tests last run/results: 2,378 unit + 94 E2E tests, 83.36% coverage, all ten quality gates
   green (`make quality`). CP-12 baseline was 2,196 unit + 65 E2E at 83.25%.
 - Failure evidence: three defects found by tests are listed under Characterization / RED evidence.

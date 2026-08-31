@@ -12,23 +12,33 @@ What remains is the wiring that makes the canonical application the one a person
 
 ## Immediate next actions
 
-1. **B-025** — route the default TTY entry in `tui.py::run` to `run_consumer` behind the existing
+The install flow comes before the TTY entry. Routing `run()` at the canonical application while no
+public entry point can start an install would take away the flows the legacy wizard still owns
+alone; B-025 is therefore item 3 here, not item 1.
+
+1. **Read an artifact's install description from its package.** `propose_installation` now lowers a
+   `PlannedInstallation` into both the reviewed plan and the effects that run (D-052), but nothing
+   canonical produces a `PlannedInstallation`: `LaunchContract`, `RuntimeInput` and
+   `PythonDependencySpec` are constructed only in tests, so the manifest → install-description step
+   does not exist outside `protocol/authoring.py`'s parser. This is the one remaining gap between a
+   resolved Selection and a real install, and it is critical path.
+2. Hold the flow in the consumer session, so screens 05–11 carry a live `ConsumerPlanView` instead
+   of "Nothing has been planned yet": resolution → inspection → input binding →
+   `propose_installation`, held beside the `ConsumerMachine` and passed to `screens_from`, refreshed
+   after an action rather than derived inside a draw (D-051).
+3. **B-025** — route the default TTY entry in `tui.py::run` to `run_consumer` behind the existing
    curses-availability check, building its source with `screens_from(assemble_consumer_machine(...))`
    over `LocalReceiptStore` and the local inspector. Keep the legacy wizard reachable until step 6
    evidence exists.
-2. Start the canonical install flow from a public entry point, so screens 05–11 carry a live
-   `ConsumerPlanView` instead of "Nothing has been planned yet": resolution → inspection → input
-   binding → `plan_install`, held by the session and passed to `screens_from`, refreshed after an
-   action rather than derived inside a draw (D-051).
-3. Route the public consumer commands (`install`, `update`, `uninstall`, `status`) through
-   `plan_lifecycle_intent`/`execute_lifecycle` rather than the legacy setup queue, projecting their
+4. Route the public consumer commands (`install`, `update`, `uninstall`, `status`) through
+   `propose_installation`/`execute_lifecycle` rather than the legacy setup queue, projecting their
    output with `consumer_plan_to_data` and `receipt_detail_to_data` so text, curses and `--json`
    are three renderings of one plan. `render_install_plan` is already the whole-plan review a
    non-interactive command prints (D-049).
-4. Only then step 6: retire legacy consumer semantic authority (`consumer/application.py`,
+5. Only then step 6: retire legacy consumer semantic authority (`consumer/application.py`,
    `installation/*`, `setup_engine/*`, `lifecycle/application.py`) path by path, each removal
    preceded by a public-flow test proving the canonical path already carries it.
-5. Update the CP-13 coverage table as each screen group moves from projection to live flow.
+6. Update the CP-13 coverage table as each screen group moves from projection to live flow.
 
 ## Do not do yet
 
@@ -68,3 +78,9 @@ What remains is the wiring that makes the canonical application the one a person
   repair that carried the nothing it knows would release a Collection's claim (D-050).
 - The machine is assembled once and never inside a draw (D-051). Collection membership comes from
   recorded ownership, not from a Collection's current manifest.
+- One lowering stands behind the plan somebody reviews and the effects that run (D-052): the review
+  is derived from the reconciliation against a real inspection, never assumed from a fresh install,
+  and `InstallationProposal` refuses to exist when the two disagree. An artifact nobody observed is
+  refused rather than assumed absent.
+- The payload is its own component, established from plan knowledge (`payload_source`) and observed
+  as the payload directory rather than the root beside it (D-053).

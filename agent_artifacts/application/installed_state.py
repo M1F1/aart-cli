@@ -5,8 +5,13 @@ component algebra, so a launcher somebody edited becomes a launcher repair and a
 somebody deleted becomes a harness repair -- and neither becomes a reinstall.
 
 Desired state is derived from the receipt plus the things a receipt deliberately does not hold: the
-base interpreter an environment is built from, and the dependency descriptor. Those come from the
-plan, which is where §158 says they belong. A receipt records what happened, not what should.
+base interpreter an environment is built from, the dependency descriptor, and where the payload is
+copied from. Those come from the plan, which is where §158 says they belong. A receipt records what
+happened, not what should.
+
+The same builder serves an installation that has not happened yet, from the receipt that
+installation intends to leave. That is deliberate: the state an install converges to has to be the
+state a repair afterwards keeps, and two builders would be free to disagree about it.
 """
 
 from __future__ import annotations
@@ -14,6 +19,7 @@ from __future__ import annotations
 from agent_artifacts.domain.credentials import CredentialReference
 from agent_artifacts.domain.effects import (
     ConfigureHarness,
+    CopyTree,
     CreatePythonEnvironment,
     DeleteCredential,
     InstallPythonDependencies,
@@ -61,12 +67,15 @@ def desired_state_from_receipt(
     *,
     base_interpreter: str | None = None,
     dependencies: tuple[str, str, str] | None = None,
+    payload_source: str | None = None,
 ) -> DesiredState:
     """The component-level desired state this receipt describes.
 
-    `base_interpreter` and `dependencies` are optional because they are plan knowledge, not receipt
-    knowledge. Omitting them omits those components rather than inventing them: a reconciler that
-    guessed which interpreter an environment was built from would repair it into something else.
+    `base_interpreter`, `dependencies` and `payload_source` are optional because they are plan
+    knowledge, not receipt knowledge. Omitting them omits those components rather than inventing
+    them: a reconciler that guessed which interpreter an environment was built from would repair it
+    into something else, and one that guessed where a payload came from would overwrite it from
+    somewhere nobody chose.
     """
 
     if not isinstance(receipt, InstallationReceipt):
@@ -75,6 +84,13 @@ def desired_state_from_receipt(
     environment = ArtifactEnvironment(receipt.artifact, receipt.root)
     components: list[DesiredComponent] = []
 
+    if payload_source is not None:
+        components.append(
+            DesiredComponent(
+                ComponentId(Component.PAYLOAD),
+                (CopyTree(payload_source, environment.payload),),
+            )
+        )
     if base_interpreter is not None:
         components.append(
             DesiredComponent(
@@ -225,7 +241,7 @@ def current_state_from_observation(
     components: list[ObservedComponent] = [
         ObservedComponent(
             ComponentId(Component.PAYLOAD),
-            ComponentState.MATCHED if observation.root_present else ComponentState.ABSENT,
+            ComponentState.MATCHED if observation.payload_present else ComponentState.ABSENT,
         ),
         ObservedComponent(ComponentId(Component.LAUNCHER), _launcher_state(found)),
     ]

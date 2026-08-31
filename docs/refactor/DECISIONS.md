@@ -620,3 +620,37 @@ the Product Specification first instead of hiding the change here.
   thereby installed it. Credential dependants are matched by reference, not by provider account:
   two artifacts sharing an account but binding different inputs are not dependants of each other's
   credential. CP-14 can assemble the maintainer catalog the same way.
+
+## D-052 — One lowering stands behind the plan somebody reviews and the effects that run
+- **Decision:** `application/installation_proposal.py` introduces `PlannedInstallation` — one
+  artifact's whole intended installation — and lowers it two ways. `intended_receipt` writes the
+  receipt the install means to leave; `desired_state_for` feeds that receipt to the existing
+  `desired_state_from_receipt`, so the state an install converges to and the state a later repair
+  keeps are built by one function. `propose_installation` then reconciles that desired state
+  against a real inspection and hands the effects the reconciler chose to `prepare_install_plan`,
+  so the review names exactly what will run. `InstallationProposal.__post_init__` refuses to
+  construct when an effect that would run is not in the reviewed plan.
+- **Status:** accepted.
+- **Reason:** an install is described twice — as the review a person confirms (161.5 screens 05–09)
+  and as the desired state CP-11 drives. Written separately the two are free to disagree, and
+  somebody then confirms one thing while another runs. Deriving the review from the reconciliation
+  rather than from an assumed fresh install is what makes this exact rather than approximate: a
+  credential that is already present and wrong is *replaced*, not stored, and the review says so.
+- **Consequence:** "what you confirmed is what runs" is a property of the type, not a discipline.
+  `observed` is required for every planned artifact rather than defaulted, because "nobody looked"
+  and "it is not there" call for different installs and a default would quietly pick one. An
+  already-converged proposal is representable: an empty mutation plan and no steps.
+
+## D-053 — The payload component rests on the payload, not on the root beside it
+- **Decision:** `InstallationObservation.root_present` becomes `payload_present`, measured as the
+  payload directory rather than the artifact root; `desired_state_from_receipt` gains an optional
+  `payload_source` that adds the `payload` component as a `CopyTree`.
+- **Status:** accepted.
+- **Reason:** a fresh install has to establish the payload, and the root also holds the runtime
+  environment — so a payload somebody deleted left the root standing and read back as present. The
+  source of a payload is plan knowledge like the base interpreter and the dependency descriptor: a
+  receipt does not hold it, and a reconciler that guessed would overwrite the payload from
+  somewhere nobody chose.
+- **Consequence:** repair keeps its existing behaviour until a caller supplies `payload_source`;
+  when one does, a missing payload becomes drift the reconciler can put right instead of a
+  component that quietly disappears from the comparison.
