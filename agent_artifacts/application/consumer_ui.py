@@ -25,6 +25,7 @@ from .consumer_views import (
 )
 
 __all__ = [
+    "ConsumerActionKind",
     "ConsumerUiCommand",
     "ConsumerUiCommandKind",
     "ConsumerUiEvent",
@@ -33,6 +34,15 @@ __all__ = [
     "key_event",
     "reduce_consumer_ui",
 ]
+
+
+class ConsumerActionKind(str, Enum):
+    """Lifecycle intents the UI may request from the application shell."""
+
+    INSTALL = "install"
+    UPDATE = "update"
+    VERIFY_REPAIR = "verify-repair"
+    UNINSTALL = "uninstall"
 
 
 class ConsumerUiEventKind(str, Enum):
@@ -49,33 +59,47 @@ class ConsumerUiEventKind(str, Enum):
     HELP = "help"
     QUIT = "quit"
     CONFIRM_QUIT = "confirm-quit"
+    REQUEST_ACTION = "request-action"
+    ACTION_PREPARED = "action-prepared"
+    CONFIRM_ACTION = "confirm-action"
+    ACTION_RECORDED = "action-recorded"
 
 
 class ConsumerUiCommandKind(str, Enum):
     LOAD_SCREEN = "load-screen"
     CONFIRM_QUIT = "confirm-quit"
     EXIT = "exit"
+    PREPARE_ACTION = "prepare-action"
+    EXECUTE_ACTION = "execute-action"
 
 
 @dataclass(frozen=True, slots=True)
 class ConsumerUiEvent:
     kind: ConsumerUiEventKind
     screen: ConsumerScreen | None = None
+    action: ConsumerActionKind | None = None
     key: str = ""
     text: str = ""
     accepted: bool | None = None
     rows: tuple[str, ...] = ()
+    semantic_identity: str = ""
+    selection_identity: str = ""
+    review_digest: str = ""
 
     def __post_init__(self) -> None:
         if (
             not isinstance(self.kind, ConsumerUiEventKind)
             or (self.screen is not None and not isinstance(self.screen, ConsumerScreen))
+            or (self.action is not None and not isinstance(self.action, ConsumerActionKind))
             or not isinstance(self.key, str)
             or any(character in self.key for character in "\r\n")
             or not isinstance(self.text, str)
             or any(character in self.text for character in "\r\n")
             or not (self.accepted is None or isinstance(self.accepted, bool))
             or not _rows_valid(self.rows)
+            or not _safe_identity(self.semantic_identity)
+            or not _safe_identity(self.selection_identity)
+            or not _safe_identity(self.review_digest)
         ):
             raise ValueError("consumer UI event is invalid")
 
@@ -84,6 +108,33 @@ class ConsumerUiEvent:
 class ConsumerUiCommand:
     kind: ConsumerUiCommandKind
     screen: ConsumerScreen | None = None
+    action: ConsumerActionKind | None = None
+    selection: tuple[str, ...] = ()
+    focus: str = ""
+    review_digest: str = ""
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.kind, ConsumerUiCommandKind)
+            or (self.screen is not None and not isinstance(self.screen, ConsumerScreen))
+            or (self.action is not None and not isinstance(self.action, ConsumerActionKind))
+            or not _rows_valid(self.selection)
+            or not isinstance(self.focus, str)
+            or any(character in self.focus for character in "\r\n")
+            or not _safe_identity(self.review_digest)
+        ):
+            raise ValueError("consumer UI command is invalid")
+        if (
+            self.kind
+            in (
+                ConsumerUiCommandKind.PREPARE_ACTION,
+                ConsumerUiCommandKind.EXECUTE_ACTION,
+            )
+            and self.action is None
+        ):
+            raise ValueError("an action command needs a typed action")
+        if self.kind is ConsumerUiCommandKind.EXECUTE_ACTION and not self.review_digest:
+            raise ValueError("executing an action needs the reviewed plan identity")
 
 
 _INITIAL_SESSION = ConsumerSession(ConsumerScreen.DASHBOARD)
@@ -121,6 +172,10 @@ def _rows_valid(rows: tuple[str, ...]) -> bool:
     )
 
 
+def _safe_identity(value: str) -> bool:
+    return isinstance(value, str) and not any(character in value for character in "\r\n")
+
+
 @dataclass(frozen=True, slots=True)
 class ConsumerUiState:
     session: ConsumerSession = _INITIAL_SESSION
@@ -134,6 +189,7 @@ class ConsumerUiState:
     help_visible: bool = False
     quit_pending: bool = False
     exited: bool = False
+    action: ConsumerActionKind | None = None
 
     def __post_init__(self) -> None:
         if (
@@ -158,6 +214,7 @@ class ConsumerUiState:
             or not isinstance(self.help_visible, bool)
             or not isinstance(self.quit_pending, bool)
             or not isinstance(self.exited, bool)
+            or (self.action is not None and not isinstance(self.action, ConsumerActionKind))
         ):
             raise ValueError("consumer UI state is invalid")
         if self.session.profile is not self.settings.profile:
@@ -258,6 +315,151 @@ def _toggle_selection(
     return replace(state, selection=selected, quit_pending=False), ()
 
 
+_ACTION_REVIEW: dict[tuple[ConsumerActionKind, ConsumerScreen], ConsumerScreen] = {
+    (ConsumerActionKind.INSTALL, ConsumerScreen.MARKETPLACE): ConsumerScreen.REVIEW_SELECTION,
+    (ConsumerActionKind.INSTALL, ConsumerScreen.ARTIFACT_DETAILS): ConsumerScreen.REVIEW_SELECTION,
+    (
+        ConsumerActionKind.INSTALL,
+        ConsumerScreen.COLLECTION_PREVIEW,
+    ): ConsumerScreen.REVIEW_SELECTION,
+    (
+        ConsumerActionKind.INSTALL,
+        ConsumerScreen.COLLECTION_CUSTOMIZE,
+    ): ConsumerScreen.REVIEW_SELECTION,
+    (ConsumerActionKind.UPDATE, ConsumerScreen.UPDATES): ConsumerScreen.UPDATE_INPUTS,
+    (
+        ConsumerActionKind.VERIFY_REPAIR,
+        ConsumerScreen.INSTALLED_ARTIFACT_DETAILS,
+    ): ConsumerScreen.VERIFY_REPAIR,
+    (ConsumerActionKind.VERIFY_REPAIR, ConsumerScreen.DOCTOR): ConsumerScreen.VERIFY_REPAIR,
+    (
+        ConsumerActionKind.UNINSTALL,
+        ConsumerScreen.INSTALLED_ARTIFACT_DETAILS,
+    ): ConsumerScreen.UNINSTALL_REVIEW,
+    (
+        ConsumerActionKind.UNINSTALL,
+        ConsumerScreen.INSTALLED_COLLECTION_DETAILS,
+    ): ConsumerScreen.UNINSTALL_REVIEW,
+}
+
+
+def _request_action(
+    state: ConsumerUiState, action: ConsumerActionKind | None
+) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
+    if action is None:
+        return state, ()
+    target = _ACTION_REVIEW.get((action, state.session.screen))
+    focus = state.focus or state.current_row
+    if target is None:
+        return state, ()
+    if action in (ConsumerActionKind.INSTALL, ConsumerActionKind.UPDATE):
+        if not state.selection and not (
+            action is ConsumerActionKind.INSTALL
+            and state.session.screen is not ConsumerScreen.MARKETPLACE
+            and focus
+        ):
+            return state, ()
+    elif not focus:
+        return state, ()
+
+    moved, navigation = _navigate(state, target)
+    if moved is state:
+        return state, ()
+    if state.session.screen is ConsumerScreen.MARKETPLACE:
+        focus = ""
+    prepared = replace(moved, action=action, quit_pending=False)
+    command = ConsumerUiCommand(
+        ConsumerUiCommandKind.PREPARE_ACTION,
+        action=action,
+        selection=state.selection,
+        focus=focus,
+    )
+    return prepared, (command, *navigation)
+
+
+def _action_prepared(
+    state: ConsumerUiState, event: ConsumerUiEvent
+) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
+    action = event.action
+    if action is None or action is not state.action or not event.review_digest:
+        return state, ()
+    if action in (ConsumerActionKind.INSTALL, ConsumerActionKind.UPDATE) and (
+        not event.semantic_identity or not event.selection_identity
+    ):
+        return state, ()
+    session = replace(
+        state.session,
+        semantic_identity=event.semantic_identity or None,
+        selection_identity=event.selection_identity or None,
+        review_digest=event.review_digest,
+    )
+    return replace(state, session=session, quit_pending=False), ()
+
+
+_ACTION_RUNNING: dict[tuple[ConsumerActionKind, ConsumerScreen], ConsumerScreen | None] = {
+    (ConsumerActionKind.INSTALL, ConsumerScreen.READY): ConsumerScreen.INSTALLING,
+    (ConsumerActionKind.UPDATE, ConsumerScreen.UPDATE_INPUTS): ConsumerScreen.UPDATING,
+    (
+        ConsumerActionKind.VERIFY_REPAIR,
+        ConsumerScreen.VERIFY_REPAIR,
+    ): None,
+    (ConsumerActionKind.UNINSTALL, ConsumerScreen.UNINSTALL_REVIEW): ConsumerScreen.UNINSTALLING,
+}
+
+
+def _confirm_action(
+    state: ConsumerUiState,
+) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
+    action, review_digest = state.action, state.session.review_digest
+    if action is None or review_digest is None:
+        return state, ()
+    key = (action, state.session.screen)
+    if key not in _ACTION_RUNNING:
+        return state, ()
+    command = ConsumerUiCommand(
+        ConsumerUiCommandKind.EXECUTE_ACTION,
+        action=action,
+        selection=state.selection,
+        focus=state.focus,
+        review_digest=review_digest,
+    )
+    target = _ACTION_RUNNING[key]
+    if target is None:
+        return replace(state, quit_pending=False), (command,)
+    moved, navigation = _navigate(state, target)
+    return moved, (command, *navigation)
+
+
+_ACTION_RESULT: dict[tuple[ConsumerActionKind, ConsumerScreen], ConsumerScreen] = {
+    (ConsumerActionKind.INSTALL, ConsumerScreen.INSTALLING): ConsumerScreen.SUCCESS,
+    (ConsumerActionKind.UPDATE, ConsumerScreen.UPDATING): ConsumerScreen.ACTIVITY_DETAILS,
+    (
+        ConsumerActionKind.VERIFY_REPAIR,
+        ConsumerScreen.VERIFY_REPAIR,
+    ): ConsumerScreen.ACTIVITY_DETAILS,
+    (ConsumerActionKind.UNINSTALL, ConsumerScreen.UNINSTALLING): ConsumerScreen.ACTIVITY_DETAILS,
+}
+
+
+def _action_recorded(
+    state: ConsumerUiState, event: ConsumerUiEvent
+) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
+    action = event.action
+    if action is None or action is not state.action or not event.text:
+        return state, ()
+    target = _ACTION_RESULT.get((action, state.session.screen))
+    if target is None:
+        return state, ()
+    moved, commands = _navigate(state, target)
+    return replace(
+        moved,
+        selection=(),
+        focus=event.text,
+        quit_pending=False,
+        action=None,
+    ), commands
+
+
 def reduce_consumer_ui(
     state: ConsumerUiState,
     event: ConsumerUiEvent,
@@ -280,6 +482,14 @@ def reduce_consumer_ui(
         return _set_selection(state, event.rows)
     if event.kind is ConsumerUiEventKind.TOGGLE_SELECTION:
         return _toggle_selection(state, event.key)
+    if event.kind is ConsumerUiEventKind.REQUEST_ACTION:
+        return _request_action(state, event.action)
+    if event.kind is ConsumerUiEventKind.ACTION_PREPARED:
+        return _action_prepared(state, event)
+    if event.kind is ConsumerUiEventKind.CONFIRM_ACTION:
+        return _confirm_action(state)
+    if event.kind is ConsumerUiEventKind.ACTION_RECORDED:
+        return _action_recorded(state, event)
     if event.kind is ConsumerUiEventKind.TOGGLE_PROFILE:
         profile = (
             PresentationProfile.VERBOSE
@@ -390,6 +600,36 @@ def key_event(
         return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="up")
     if key in ("down", "j"):
         return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="down")
+    if key == "i":
+        action = (
+            ConsumerActionKind.UPDATE
+            if state.session.screen in (ConsumerScreen.UPDATES, ConsumerScreen.UPDATE_INPUTS)
+            else ConsumerActionKind.INSTALL
+        )
+        return ConsumerUiEvent(ConsumerUiEventKind.REQUEST_ACTION, action=action)
+    if key == "r" and state.session.screen in (
+        ConsumerScreen.INSTALLED_ARTIFACT_DETAILS,
+        ConsumerScreen.DOCTOR,
+    ):
+        return ConsumerUiEvent(
+            ConsumerUiEventKind.REQUEST_ACTION,
+            action=ConsumerActionKind.VERIFY_REPAIR,
+        )
+    if key == "u" and state.session.screen in (
+        ConsumerScreen.INSTALLED_ARTIFACT_DETAILS,
+        ConsumerScreen.INSTALLED_COLLECTION_DETAILS,
+    ):
+        return ConsumerUiEvent(
+            ConsumerUiEventKind.REQUEST_ACTION,
+            action=ConsumerActionKind.UNINSTALL,
+        )
+    if key == "enter" and state.session.screen in (
+        ConsumerScreen.READY,
+        ConsumerScreen.UPDATE_INPUTS,
+        ConsumerScreen.UNINSTALL_REVIEW,
+        ConsumerScreen.VERIFY_REPAIR,
+    ):
+        return ConsumerUiEvent(ConsumerUiEventKind.CONFIRM_ACTION)
     if key == "enter" and detail is not None:
         return ConsumerUiEvent(ConsumerUiEventKind.NAVIGATE, screen=detail)
     return None

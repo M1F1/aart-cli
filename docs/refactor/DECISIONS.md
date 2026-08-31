@@ -810,3 +810,23 @@ the Product Specification first instead of hiding the change here.
   configured Marketplace in the source, and a migration/adapter for existing project/user install
   records. The canonical durable reader, receipt provenance and all headless screen evidence remain
   useful and verified; only the premature public dispatch is removed.
+
+## D-063 — The reducer requests actions; one injected handler replaces the immutable snapshot
+- **Decision:** consumer interaction names four typed intents (`install`, `update`,
+  `verify-repair`, `uninstall`) and emits only `PREPARE_ACTION` or `EXECUTE_ACTION`. Preparation
+  carries Selection/focus and returns the semantic, Selection and review identities that were
+  actually prepared. Execution carries that exact review identity. The persistent shell crosses
+  one injected handler boundary, draws the running screen before synchronous execution, and accepts
+  only a matching prepared/recorded response with a replacement immutable screen source. With no
+  handler it fails closed.
+- **Status:** accepted.
+- **Reason:** navigation is not lifecycle authority. Putting planning or effects in `key_event`, the
+  reducer or a renderer would duplicate the application services and let Fast/Verbose or a redraw
+  change semantics. Letting a handler mutate a source in place would break D-051's one-snapshot
+  rule; accepting an untyped callback response could display one action's outcome under another
+  action's review.
+- **Consequence:** Marketplace `i`, contextual update/repair/uninstall shortcuts and Ready/review
+  confirmation are headlessly testable through the real shell without any filesystem or terminal
+  dependency in the reducer. The production handler is still deliberately absent: multi-artifact
+  execution must first gain one aggregate transaction outcome/receipt (B-030), because calling the
+  singular CP-12 recorder once per artifact would violate INV-130 and INV-138.

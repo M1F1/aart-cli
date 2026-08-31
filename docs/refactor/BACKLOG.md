@@ -369,3 +369,26 @@ Potential approach: ask the environment's own interpreter which distributions it
 Invariants touched: INV-107, INV-108.
 Evidence/links: D-057; `tests/artifact_installation_e2e_test.py`.
 Promotion condition: evidence that a silently drifted environment reached a consumer as healthy.
+
+### B-030 — Aggregate installation execution and one transaction receipt
+Status: PROMOTED TO CP-13 CRITICAL PATH (2026-08-31)
+Discovered in: CP-13 / `agent_artifacts/application/consumer_ui.py` / production action handler
+Why useful: `InstallationProposal` already holds one bulk `InstallPlan` and all per-artifact
+`LifecyclePlan`s, but execution and action recording currently accept only one `LifecyclePlan` and
+produce one artifact action receipt. A handler that loops those APIs would turn one reviewed
+Selection into N independently recorded actions.
+Promotion evidence: INV-130 requires one coherent bulk plan/review boundary and INV-138 requires
+one receipt explaining Selection provenance, resolved artifacts, effects and final ownership. The
+canonical shell now emits one `EXECUTE_ACTION` for its whole Selection (D-063), so no compliant
+production handler can be connected until the application layer can preserve that transaction as
+one outcome while retaining per-artifact effect and compensation evidence.
+Potential approach: add an immutable installation-transaction outcome keyed by the proposal review
+digest; compare every lifecycle plan under one scope lease, execute deterministically, preserve
+each artifact outcome and any compensation, then atomically record one action receipt plus the
+resulting per-artifact installation records. Project screens 10/11 and Activity from that aggregate
+rather than selecting an arbitrary member outcome.
+Invariants touched: INV-130, INV-133, INV-138, INV-149, INV-152.
+Evidence/links: D-052, D-059, D-063; `tests/consumer_ui_actions_test.py`;
+`tests/consumer_action_shell_test.py`.
+Unblock condition: aggregate execution, durable recording and screen projections are verified for
+single and multi-artifact Selection, including partial execution and compensation evidence.

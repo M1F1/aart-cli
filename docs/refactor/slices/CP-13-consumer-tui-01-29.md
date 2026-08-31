@@ -99,6 +99,13 @@ existed; three defects were found by tests rather than by reading:
    missing boundary: the reducer cannot request lifecycle actions, the composed source has no
    configured Marketplace, and existing public installations live in the project/user manifest.
    The route was reverted under D-062 and B-025 remains open until those facts are addressed.
+   **ACTION BOUNDARY DONE** — `ConsumerActionKind` and the reducer's `PREPARE_ACTION` /
+   `EXECUTE_ACTION` commands now carry only Selection/focus and the exact prepared review identity.
+   `key_event` is still the only key interpreter. `run_consumer_shell` crosses one injected handler
+   boundary, observes the running screen before synchronous execution, replaces its immutable
+   source from a matching prepared/recorded update, and fails closed if an action has no handler
+   (D-063). A production handler is not connected yet: doing so by looping singular lifecycle
+   recording would violate the one-transaction receipt contract, promoted as B-030.
 5a. Persist canonical installed state and finished actions, so screens 12–16 and 25–27 have
    something to project between processes. **DONE** — `domain/receipts.py` gained the parse that
    inverts its own projection, `application/consumer_views.py` gained `receipt_detail_from_data`
@@ -133,6 +140,14 @@ the quit prompt where only the answer keys act.
 `tests/consumer_shell_test.py` — the persistent application driven through its own loop with a
 scripted terminal: rows load per screen, filters narrow and restore them, details stay about the
 row they were opened from, and `v` redraws the same screen with more disclosed.
+
+`tests/consumer_ui_actions_test.py` and `tests/consumer_action_shell_test.py` — accepted action
+transitions now have RED→green evidence: Marketplace `i` prepares the whole Selection; empty or
+invalid-context actions do nothing; a prepared review identity is the only identity Ready may
+execute; Installed emits typed repair/uninstall requests; a recorded install clears Selection and
+opens Success. The real persistent loop swaps in the prepared and recorded snapshots supplied by
+one injected handler, draws Installing before crossing the execution boundary, rejects mismatched
+handler responses and fails closed when the handler is absent.
 
 `tests/consumer_machine_read_test.py` and `tests/tui_consumer_entry_test.py` — a second process reads
 the whole machine from durable records, detects missing runtime and launcher state, preserves an
@@ -249,7 +264,12 @@ own launcher after a repair planned from disk alone, and no stored file contains
 
 ## Remaining
 
-- Routing the public commands through `begin_installation`/`execute_lifecycle`.
+- Aggregate the proposal's lifecycle executions and record one transaction receipt (B-030), then
+  implement the production action handler over `begin_installation`, CP-12 execution, durable
+  recording and machine reload.
+- Compose configured Marketplace and preserve/adapt existing kind-neutral project/user install
+  state before retrying the default route.
+- Route public commands through the same handler/application boundary.
 - Step 6: retiring legacy consumer semantic authority, once the above give equivalent public-flow
   evidence.
 
@@ -263,10 +283,11 @@ own launcher after a repair planned from disk alone, and no stored file contains
   built without it keeps the old behavior rather than failing, which is what let the field be added
   without rewriting every construction site; the one that matters is filled by
   `plan_artifact_installation` from the package's own description.
-- The canonical shell can hold and render a `ConsumerFlow`, but its reducer emits no command to
-  start or apply install/update/repair/uninstall. Its current composition also lacks configured
-  Marketplace offers and an adapter for existing project/user installation records. The legacy
-  public entry remains until those replacement facts are proven (D-062).
+- The canonical shell now emits and transports install/update/repair/uninstall action requests, but
+  its current composition has no production handler, configured Marketplace offers or adapter for
+  existing project/user installation records. The singular lifecycle receipt cannot be used as the
+  bulk transaction receipt (B-030). The legacy public entry remains until those replacement facts
+  are proven (D-062, D-063).
 
 ## Backlog discoveries
 
@@ -285,6 +306,9 @@ own launcher after a repair planned from disk alone, and no stored file contains
   D-024), and a second copy of that rule in the parser would be the one nobody updates.
 - B-029 — Verifying installed distributions against the declared descriptor, rather than reporting
   dependencies through the environment that holds them (D-057).
+- B-030 — Aggregate installation execution and one transaction receipt. **Promoted to CP-13:** the
+  production handler cannot fragment one reviewed Selection into N actions without violating
+  INV-130/INV-138.
 
 ## Blockers
 
@@ -297,15 +321,17 @@ machine-output tests prove every accepted flow now consumes the canonical applic
 
 ## Handoff
 
-- Current working state: steps 1–4 complete and verified; step 5 has a durable machine reader and a
-  rendering loop but no live lifecycle command boundary; step 6 has not started. The legacy wizard
-  and command authority remain public by design (D-062).
-- Exact next action: add typed reducer commands and injected handlers for the accepted lifecycle
-  transitions, compose the configured Marketplace, and preserve existing project/user install
-  records. Only then retry B-025 and route public flag commands one seam at a time.
+- Current working state: steps 1–4 complete and verified; step 5 has a durable machine reader,
+  action-capable reducer and an injected/fail-closed shell boundary, but no production handler;
+  step 6 has not started. The legacy wizard and command authority remain public by design (D-062,
+  D-063).
+- Exact next action: implement B-030's aggregate execution/receipt with single-and-bulk tests, then
+  use it in the production handler. Compose configured Marketplace and preserve existing
+  project/user install records before retrying B-025 and routing public flag commands one seam at a
+  time.
 - Do not undo: existing curses layout/search/basket/back/quit characterization; one semantic plan
   for both profiles; Maintainer Mode remains opt-in; `key_event` stays the only place a key's
   meaning is decided; no clock in `application/`.
-- Tests last run/results: 2,461 unit + 101 E2E tests, 83.49% coverage, all ten quality gates green
-  (`make quality`). CP-12 baseline was 2,196 unit + 65 E2E at 83.25%.
+- Tests last run/results: 2,471 unit + 101 E2E tests, 83.46% coverage, all ten quality gates green
+  (`make quality PYTHON=python3`). CP-12 baseline was 2,196 unit + 65 E2E at 83.25%.
 - Failure evidence: three defects found by tests are listed under Characterization / RED evidence.

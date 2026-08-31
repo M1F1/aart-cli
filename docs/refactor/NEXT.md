@@ -17,14 +17,19 @@ installed end to end (D-056), and a flow holds that install for the screens that
 The missing layer is typed application commands/handlers that turn selection and confirmation into
 that flow and execution, plus composition of real Marketplace and installed-state sources.
 
-1. Add RED interaction tests for the accepted action transitions: Marketplace selection → Review,
-   Ready → execute, Installed → verify/repair/uninstall, and outcome → refreshed machine/Activity.
-   Extend `ConsumerUiCommandKind` only with semantic application requests; the reducer still does
-   no I/O and `key_event` remains the sole key interpreter.
-2. Add an injected consumer application handler that builds `ConsumerFlow` with
-   `begin_installation`, executes its reviewed lifecycle plans under the existing CP-12 lock, calls
-   `record_installation`, and reloads the durable machine. Compose configured Marketplace offers
-   into the same source. Do not route `run()` until these live-flow tests pass.
+1. **DONE:** RED interaction tests now cover Marketplace selection → Review, Ready → execute,
+   Installed → verify/repair/uninstall, and recorded outcome → refreshed Success/Activity routing.
+   `PREPARE_ACTION` and `EXECUTE_ACTION` carry only typed intent, coordinates/selection and review
+   identity. The reducer remains pure, `key_event` remains the sole key interpreter, and the shell
+   accepts matching prepared/recorded updates only through an injected handler (D-063).
+2. Add the real consumer application handler. Before connecting effects, introduce one aggregate
+   installation execution/recording outcome for the whole `InstallationProposal`: looping
+   `execute_lifecycle`/`record_lifecycle_outcome` per selected artifact would create N actions and
+   receipts and violate INV-130/INV-138. Execute the reviewed proposal under the existing CP-12
+   scope lock, preserve explicit per-artifact effect/compensation evidence inside one transaction,
+   record the resulting installation records plus one action receipt, attach it to `ConsumerFlow`,
+   and reload the durable machine (B-030). Compose configured Marketplace offers into the same
+   source. Do not route `run()` until these live-flow tests pass.
 3. Define and test the strangler boundary for existing project/user installation manifests. They
    must remain visible and operable until a kind-neutral canonical receipt/observation replaces
    them; never treat the absence of a canonical MCP receipt as evidence that a Skill/Rule/Hook/

@@ -14,6 +14,7 @@ from typing import Protocol
 
 from agent_artifacts.application.consumer_session import ConsumerMachine
 from agent_artifacts.application.consumer_ui import (
+    ConsumerUiCommand,
     ConsumerUiCommandKind,
     ConsumerUiEvent,
     ConsumerUiEventKind,
@@ -47,6 +48,8 @@ from agent_artifacts.tui_marketplace import MarketplaceArtifactRow, render_artif
 
 __all__ = [
     "CanonicalScreenSource",
+    "ConsumerActionHandler",
+    "ConsumerActionUpdate",
     "ConsumerScreenSource",
     "ConsumerScreens",
     "ConsumerTerminal",
@@ -810,9 +813,31 @@ class ConsumerScreenSource(Protocol):
         """What this screen opens with ticked, or `None` where it has no opinion."""
 
 
+@dataclass(frozen=True, slots=True)
+class ConsumerActionUpdate:
+    """A new immutable screen snapshot and the event that says what the action established."""
+
+    source: ConsumerScreenSource
+    event: ConsumerUiEvent
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.event, ConsumerUiEvent) or self.event.kind not in (
+            ConsumerUiEventKind.ACTION_PREPARED,
+            ConsumerUiEventKind.ACTION_RECORDED,
+        ):
+            raise ValueError("a consumer action update needs a prepared or recorded event")
+
+
+class ConsumerActionHandler(Protocol):
+    """Imperative boundary for planning, executing, recording and re-reading one action."""
+
+    def handle(self, command: ConsumerUiCommand) -> ConsumerActionUpdate: ...
+
+
 _HELP_LINES: tuple[str, ...] = (
     "↑ ↓  move        space  select",
     "enter  details   esc  back",
+    "i  install/update  r  repair  u  uninstall",
     "/  search        v  Fast/Verbose",
     "?  help          q  quit",
 )
@@ -845,6 +870,7 @@ def run_consumer_shell(
     terminal: ConsumerTerminal,
     *,
     state: ConsumerUiState | None = None,
+    action_handler: ConsumerActionHandler | None = None,
 ) -> ConsumerUiState:
     """Run the persistent consumer application until somebody leaves it.
 
@@ -854,6 +880,7 @@ def run_consumer_shell(
     """
 
     current = ConsumerUiState() if state is None else state
+    active_source = source
     if not isinstance(current, ConsumerUiState):
         raise ValueError("the consumer shell needs consumer UI state")
     reloads = frozenset(
@@ -862,19 +889,46 @@ def run_consumer_shell(
             ConsumerUiEventKind.SEARCH_CLOSE,
         }
     )
-    current = _reload(source, current, entering=True)
+    current = _reload(active_source, current, entering=True)
     while not current.exited:
-        terminal.draw(frame(source, current))
+        terminal.draw(frame(active_source, current))
         name = key_name(terminal.key())
         if not name:
             continue
-        event = key_event(name, current, detail=source.detail(current))
+        event = key_event(name, current, detail=active_source.detail(current))
         if event is None:
             continue
         current, commands = reduce_consumer_ui(current, event)
         entering = any(command.kind is ConsumerUiCommandKind.LOAD_SCREEN for command in commands)
+        for command in commands:
+            if command.kind not in (
+                ConsumerUiCommandKind.PREPARE_ACTION,
+                ConsumerUiCommandKind.EXECUTE_ACTION,
+            ):
+                continue
+            if action_handler is None:
+                raise ValueError("a consumer action needs an injected action handler")
+            # The running screen is observable before the synchronous effect boundary returns.
+            # A future streaming handler can redraw individual steps without changing this command.
+            if command.kind is ConsumerUiCommandKind.EXECUTE_ACTION:
+                terminal.draw(frame(active_source, current))
+            update = action_handler.handle(command)
+            if not isinstance(update, ConsumerActionUpdate):
+                raise ValueError("a consumer action handler returned an invalid update")
+            expected = (
+                ConsumerUiEventKind.ACTION_PREPARED
+                if command.kind is ConsumerUiCommandKind.PREPARE_ACTION
+                else ConsumerUiEventKind.ACTION_RECORDED
+            )
+            if update.event.kind is not expected or update.event.action is not command.action:
+                raise ValueError("a consumer action handler returned the wrong action update")
+            active_source = update.source
+            current, followup = reduce_consumer_ui(current, update.event)
+            entering = entering or any(
+                item.kind is ConsumerUiCommandKind.LOAD_SCREEN for item in followup
+            )
         if entering or event.kind in reloads:
-            current = _reload(source, current, entering=entering)
+            current = _reload(active_source, current, entering=entering)
     return current
 
 
@@ -1156,6 +1210,24 @@ class CanonicalScreenSource:
             if self._screens.installed_collection(state.current_row) is not None:
                 return ConsumerScreen.INSTALLED_COLLECTION_DETAILS
             return ConsumerScreen.INSTALLED_ARTIFACT_DETAILS if state.current_row else None
+        if screen is ConsumerScreen.REVIEW_SELECTION:
+            return ConsumerScreen.AUTOMATIC_INSPECTION if self._screens.plan is not None else None
+        if screen is ConsumerScreen.AUTOMATIC_INSPECTION:
+            plan = self._screens.plan
+            if plan is None:
+                return None
+            if plan.inputs:
+                return ConsumerScreen.REQUIRED_INPUTS
+            if plan.remediations:
+                return ConsumerScreen.REMEDIATION
+            return ConsumerScreen.READY
+        if screen is ConsumerScreen.REQUIRED_INPUTS:
+            plan = self._screens.plan
+            if plan is None:
+                return None
+            return ConsumerScreen.REMEDIATION if plan.remediations else ConsumerScreen.READY
+        if screen is ConsumerScreen.REMEDIATION:
+            return ConsumerScreen.READY if self._screens.plan is not None else None
         target = {
             ConsumerScreen.ACTIVITY: ConsumerScreen.ACTIVITY_DETAILS,
             ConsumerScreen.ACTIVITY_DETAILS: ConsumerScreen.RECEIPT_DETAILS,
