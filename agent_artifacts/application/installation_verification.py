@@ -18,7 +18,9 @@ from agent_artifacts.domain.identifiers import ObjectDigest
 from agent_artifacts.domain.receipts import InstallationReceipt
 
 __all__ = [
+    "DeliveryObservation",
     "InstallationObservation",
+    "PlacementObservation",
     "VerificationFinding",
     "installation_verified",
     "verify_installation",
@@ -34,6 +36,49 @@ class VerificationFinding(str, Enum):
     INTERPRETER_MISSING = "interpreter-missing"
     HARNESS_NOT_REGISTERED = "harness-not-registered"
     HARNESS_POINTS_ELSEWHERE = "harness-points-elsewhere"
+
+
+@dataclass(frozen=True, slots=True)
+class DeliveryObservation:
+    """What was found where one harness reads this artifact. Facts only.
+
+    `present` without a `digest` is the case worth naming: something is there and nobody could
+    measure it. That is not the same fact as nothing being there, and collapsing the two would
+    plan a delivery over a file somebody may have been editing.
+    """
+
+    harness: str
+    present: bool = False
+    digest: ObjectDigest | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.harness, str) or not self.harness.strip():
+            raise ValueError("an observed delivery names the harness that reads it")
+        if not isinstance(self.present, bool):
+            raise ValueError("observed delivery presence is invalid")
+        if self.digest is not None and not isinstance(self.digest, ObjectDigest):
+            raise ValueError("observed delivery digest is invalid")
+        if self.digest is not None and not self.present:
+            raise ValueError("a delivery that is not there cannot have been measured")
+
+
+@dataclass(frozen=True, slots=True)
+class PlacementObservation:
+    """What an inspector found for an artifact a harness reads. Facts only."""
+
+    payload_present: bool = False
+    deliveries: tuple[DeliveryObservation, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.payload_present, bool):
+            raise ValueError("observed placement payload presence is invalid")
+        if not isinstance(self.deliveries, tuple) or any(
+            not isinstance(item, DeliveryObservation) for item in self.deliveries
+        ):
+            raise ValueError("observed deliveries are invalid")
+        harnesses = [item.harness for item in self.deliveries]
+        if len(set(harnesses)) != len(harnesses):
+            raise ValueError("one harness reads one delivery of an artifact")
 
 
 @dataclass(frozen=True, slots=True)

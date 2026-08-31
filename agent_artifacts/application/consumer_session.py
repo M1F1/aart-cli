@@ -153,7 +153,7 @@ def _dependants(
 
     reference = observation.reference
     return tuple(
-        item.coordinate for item in inspections if reference in item.record.receipt.credentials
+        item.coordinate for item in inspections if reference in item.record.credential_references
     )
 
 
@@ -225,7 +225,7 @@ def assemble_consumer_machine(
             update_available=item.update_available,
             credentials=tuple(
                 by_reference[str(reference)]
-                for reference in item.record.receipt.credentials
+                for reference in item.record.credential_references
                 if str(reference) in by_reference
             ),
         )

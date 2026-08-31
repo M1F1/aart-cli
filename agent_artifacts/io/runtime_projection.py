@@ -14,16 +14,31 @@ import os
 from dataclasses import dataclass
 from typing import Protocol
 
-from agent_artifacts.application.installation_verification import InstallationObservation
+from agent_artifacts.application.installation_verification import (
+    DeliveryObservation,
+    InstallationObservation,
+    PlacementObservation,
+)
 from agent_artifacts.application.runtime_projection import RuntimeProjection
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from agent_artifacts.domain.effects import DeliveryKind
 from agent_artifacts.domain.harness import McpRegistration
 from agent_artifacts.domain.identifiers import ObjectDigest
 from agent_artifacts.domain.python_runtime import ArtifactEnvironment
-from agent_artifacts.domain.receipts import InstallationReceipt
+from agent_artifacts.domain.receipts import (
+    ArtifactDelivery,
+    InstallationReceipt,
+    PlacedArtifactReceipt,
+)
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.io.fs import write_atomic
-from agent_artifacts.protocol.hashing import sha256_bytes
+from agent_artifacts.protocol.hashing import (
+    directory_entry,
+    file_entry,
+    sha256_bytes,
+    tree_digest,
+)
+from agent_artifacts.protocol.paths import SafeRelativePath, parse_relative_path
 
 PROJECTION_REFUSED = DiagnosticCode("projection-refused")
 PROJECTION_FAILED = DiagnosticCode("projection-failed")
@@ -134,6 +149,67 @@ def observe_installation(
         interpreter_present=os.access(receipt.interpreter, os.X_OK),
         registered_commands=tuple(commands),
     )
+
+
+def observe_placement(receipt: PlacedArtifactReceipt) -> PlacementObservation:
+    """Measure what `receipt` claims about an artifact a harness reads, right now.
+
+    Every failure to measure is reported as a fact rather than raised, and reported as its own
+    fact: a destination that could not be read comes back present with no digest, which is not the
+    same answer as one that is not there.
+    """
+
+    if not isinstance(receipt, PlacedArtifactReceipt):
+        raise ValueError("observing a placement needs a placed artifact receipt")
+
+    observed = []
+    for delivery in receipt.deliveries:
+        present = os.path.lexists(delivery.destination)
+        digest = _delivered_digest(delivery) if present else None
+        observed.append(DeliveryObservation(delivery.harness, present, digest))
+    return PlacementObservation(
+        payload_present=os.path.isdir(ArtifactEnvironment(receipt.artifact, receipt.root).payload),
+        deliveries=tuple(observed),
+    )
+
+
+def _delivered_digest(delivery: ArtifactDelivery) -> ObjectDigest | None:
+    """What is at the destination now, measured the way the package measured it."""
+
+    try:
+        if delivery.kind is DeliveryKind.FILE:
+            if not os.path.isfile(delivery.destination):
+                return None
+            with open(delivery.destination, "rb") as handle:
+                return sha256_bytes(handle.read())
+        if not os.path.isdir(delivery.destination):
+            return None
+        records = []
+        for current, directories, files in os.walk(delivery.destination):
+            relative = os.path.relpath(current, delivery.destination)
+            for name in sorted(directories):
+                path = _relative_entry(relative, name)
+                if path is None:
+                    return None
+                records.append(directory_entry(path))
+            for name in sorted(files):
+                path = _relative_entry(relative, name)
+                if path is None:
+                    return None
+                target = os.path.join(current, name)
+                with open(target, "rb") as handle:
+                    content = handle.read()
+                records.append(file_entry(path, content, executable=os.access(target, os.X_OK)))
+    except OSError:
+        return None
+    digest = tree_digest(records)
+    return None if isinstance(digest, Err) else digest.value
+
+
+def _relative_entry(directory: str, name: str) -> SafeRelativePath | None:
+    joined = name if directory == "." else f"{directory}/{name}"
+    parsed = parse_relative_path(joined)
+    return None if isinstance(parsed, Err) else parsed.value
 
 
 def _observed_command(registry: object, registration: McpRegistration) -> str | None:

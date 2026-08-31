@@ -44,10 +44,15 @@ from agent_artifacts.domain.reconciliation import (
     ObservedComponent,
 )
 
-from .installation_verification import InstallationObservation, VerificationFinding
+from .installation_verification import (
+    InstallationObservation,
+    PlacementObservation,
+    VerificationFinding,
+)
 
 __all__ = [
     "current_state_from_observation",
+    "current_state_from_placement",
     "desired_state_from_placement",
     "desired_state_from_receipt",
     "removal_state_from_placement",
@@ -287,6 +292,46 @@ def removal_state_from_placement(
         for delivery in receipt.deliveries
     )
     return DesiredState(coordinate, tuple(components))
+
+
+def current_state_from_placement(
+    desired: DesiredState,
+    receipt: PlacedArtifactReceipt,
+    observation: PlacementObservation,
+) -> CurrentState:
+    """What was actually found for an artifact a harness reads, in `desired`'s vocabulary.
+
+    A delivery nobody looked at is left out entirely, so the comparison reports it as unobserved
+    rather than as fine. A delivery somebody looked at and could not measure is `UNKNOWN`, which is
+    a different fact again: reading either as absent would plan a delivery over whatever is there.
+    """
+
+    if not isinstance(desired, DesiredState):
+        raise ValueError("current state must be paired with the desired state it answers")
+    if not isinstance(receipt, PlacedArtifactReceipt) or not isinstance(
+        observation, PlacementObservation
+    ):
+        raise ValueError("a placement's current state needs its receipt and observation")
+
+    wanted = {component.id for component in desired.components}
+    expected = {delivery.harness: delivery.digest for delivery in receipt.deliveries}
+    components: list[ObservedComponent] = [
+        ObservedComponent(
+            ComponentId(Component.PAYLOAD),
+            ComponentState.MATCHED if observation.payload_present else ComponentState.ABSENT,
+        )
+    ]
+    for found in observation.deliveries:
+        if not found.present:
+            state = ComponentState.ABSENT
+        elif found.digest is None:
+            state = ComponentState.UNKNOWN
+        elif found.digest == expected.get(found.harness):
+            state = ComponentState.MATCHED
+        else:
+            state = ComponentState.DIVERGENT
+        components.append(ObservedComponent(ComponentId(Component.DELIVERY, found.harness), state))
+    return CurrentState(desired.artifact, tuple(item for item in components if item.id in wanted))
 
 
 def _launcher_state(findings: frozenset[VerificationFinding]) -> ComponentState:

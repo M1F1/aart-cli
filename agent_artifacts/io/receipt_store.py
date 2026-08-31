@@ -36,10 +36,14 @@ from agent_artifacts.domain.identifiers import (
     SourceAlias,
 )
 from agent_artifacts.domain.receipts import (
+    ArtifactReceipt,
     InstallationReceipt,
     InstalledRecord,
+    PlacedArtifactReceipt,
     installation_receipt_from_data,
     installation_receipt_to_data,
+    placed_artifact_receipt_from_data,
+    placed_artifact_receipt_to_data,
 )
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.domain.selection import OwnershipKind, OwnershipReason
@@ -58,6 +62,8 @@ RECEIPT_UNREADABLE = DiagnosticCode("receipt-unreadable")
 RECEIPT_UNWRITABLE = DiagnosticCode("receipt-unwritable")
 
 _MAX_RECEIPT_BYTES = 1024 * 1024
+_INSTALLATION = "installation"
+_PLACED = "placed"
 _KINDS: frozenset[str] = frozenset({"skill", "guideline", "mcp", "hook", "memory", "collection"})
 
 
@@ -207,7 +213,7 @@ class LocalReceiptStore:
     def record_installation(
         self,
         coordinate: ArtifactCoordinate,
-        receipt: InstallationReceipt,
+        receipt: ArtifactReceipt,
         *,
         ownership: tuple[OwnershipReason, ...] | None = None,
     ) -> Result[str]:
@@ -217,7 +223,7 @@ class LocalReceiptStore:
         forward. An empty tuple is an opinion -- that nobody owns this any more -- and replaces it.
         """
 
-        if not isinstance(receipt, InstallationReceipt):
+        if not isinstance(receipt, (InstallationReceipt, PlacedArtifactReceipt)):
             return _error(RECEIPT_UNWRITABLE, "an installation record needs a receipt")
         if ownership is not None and any(
             not isinstance(item, OwnershipReason) for item in ownership
@@ -229,9 +235,16 @@ class LocalReceiptStore:
                 return standing
             ownership = () if isinstance(standing, Err) else standing.value.ownership
         document = {
+            # Which of the two receipts this document holds. A record written before placements
+            # existed carries no marker, and every one of those holds an installation.
+            "kind": _PLACED if isinstance(receipt, PlacedArtifactReceipt) else _INSTALLATION,
             "coordinate": _coordinate_to_data(coordinate),
             "ownership": _ownership_to_data(ownership),
-            "receipt": installation_receipt_to_data(receipt),
+            "receipt": (
+                placed_artifact_receipt_to_data(receipt)
+                if isinstance(receipt, PlacedArtifactReceipt)
+                else installation_receipt_to_data(receipt)
+            ),
         }
         return _write(Path(self.path_for(coordinate)), _canonical(document))
 
@@ -244,7 +257,16 @@ class LocalReceiptStore:
             ownership = _ownership_from_data(read.value.get("ownership"))
         except ValueError as error:
             return _error(RECEIPT_UNREADABLE, f"{path} names no artifact: {error}")
-        parsed = installation_receipt_from_data(read.value.get("receipt"))
+        kind = read.value.get("kind", _INSTALLATION)
+        if kind not in (_INSTALLATION, _PLACED):
+            # Named rather than defaulted. A document claiming a kind this build does not write is
+            # not an older record, and reading it as one would answer for an installation whose
+            # shape nobody here understands.
+            return _error(RECEIPT_UNREADABLE, f"{path} claims to be a {kind!r} record")
+        parse = (
+            placed_artifact_receipt_from_data if kind == _PLACED else installation_receipt_from_data
+        )
+        parsed = parse(read.value.get("receipt"))
         if isinstance(parsed, Err):
             return _unreadable(path, parsed)
         return Ok(InstalledRecord(coordinate, parsed.value, ownership))
@@ -254,7 +276,7 @@ class LocalReceiptStore:
 
         return self._installed_record(Path(self.path_for(coordinate)))
 
-    def installation(self, coordinate: ArtifactCoordinate) -> Result[InstallationReceipt]:
+    def installation(self, coordinate: ArtifactCoordinate) -> Result[ArtifactReceipt]:
         record = self._installed_record(Path(self.path_for(coordinate)))
         return record if isinstance(record, Err) else Ok(record.value.receipt)
 

@@ -31,6 +31,8 @@ from agent_artifacts.application.consumer_session import (
 )
 from agent_artifacts.application.installed_state import (
     current_state_from_observation,
+    current_state_from_placement,
+    desired_state_from_placement,
     desired_state_from_receipt,
 )
 from agent_artifacts.domain.credentials import (
@@ -41,7 +43,7 @@ from agent_artifacts.domain.credentials import (
 )
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.identifiers import ArtifactCoordinate
-from agent_artifacts.domain.receipts import InstalledRecord
+from agent_artifacts.domain.receipts import InstalledRecord, PlacedArtifactReceipt
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.install_state.model import InstallScope
 from agent_artifacts.install_state.paths import install_state_paths
@@ -51,7 +53,7 @@ from .credentials import CredentialProviderPort
 from .harness import LocalHarnessRegistry
 from .installation_observation import COMPONENT_STATE
 from .receipt_store import LocalReceiptStore
-from .runtime_projection import observe_installation
+from .runtime_projection import observe_installation, observe_placement
 
 __all__ = ["INSTALL_STATE_UNREADABLE", "read_consumer_machine"]
 
@@ -78,7 +80,7 @@ def _unversioned(coordinate: ArtifactCoordinate) -> str:
 def _references(records: Iterable[InstalledRecord]) -> tuple[CredentialReference, ...]:
     references: set[CredentialReference] = set()
     for record in records:
-        references.update(record.receipt.credentials)
+        references.update(record.credential_references)
     return tuple(sorted(references))
 
 
@@ -172,6 +174,19 @@ def read_consumer_machine(
     inspections = []
     for record in installed.value:
         receipt = record.receipt
+        if isinstance(receipt, PlacedArtifactReceipt):
+            # An artifact a harness reads. There is no launcher to look for and no interpreter to
+            # find, so none is looked for: reporting a missing process for something that starts
+            # none would make every healthy Skill ask for a repair forever.
+            placed = desired_state_from_placement(record.coordinate, receipt)
+            inspections.append(
+                InstalledInspection(
+                    record,
+                    placed,
+                    current_state_from_placement(placed, receipt, observe_placement(receipt)),
+                )
+            )
+            continue
         desired = desired_state_from_receipt(
             record.coordinate,
             receipt,
