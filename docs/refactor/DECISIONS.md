@@ -1004,3 +1004,21 @@ the Product Specification first instead of hiding the change here.
   than installing a second beside it and leaving somebody to work out which is live -- which is also
   what makes the root stable across the desired-state reconciliation CP-11 and CP-12 are built on.
   No harness name appears anywhere in it.
+
+## D-072 — Supporting an effect means being allowed to carry it out
+- **Decision:** `EffectInterpreter.supports` answers whether this interpreter may perform this
+  effect, not whether it recognizes the effect's type. `FileEffectInterpreter` and
+  `RuntimeEffectInterpreter` additionally require that they own the path the effect names,
+  `HarnessEffectInterpreter` that it holds a matching registration, and
+  `CredentialEffectInterpreter` that it was given the reference.
+- **Status:** accepted.
+- **Reason:** `_dispatch` takes the first interpreter that says yes, and one Selection is one
+  transaction (D-064), so a Collection of two MCP artifacts hands the executor one interpreter tuple
+  with a file interpreter per artifact. Under the type-only answer the first one claimed every
+  `WriteFile` in the transaction -- including the second artifact's -- and then refused it for being
+  outside the environment it owns. A bulk install of two artifacts therefore could not execute at
+  all, which INV-130 and INV-138 require.
+- **Consequence:** an effect nobody may carry out now fails as "no interpreter" rather than as the
+  wrong interpreter's ownership refusal, so the message names the real fault. This narrows dispatch
+  and never widens it: the ownership, registration and reference checks that produced those
+  refusals still run inside `apply`, so an interpreter reached directly refuses exactly as before.

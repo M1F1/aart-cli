@@ -133,7 +133,19 @@ class FileEffectInterpreter:
         return digest
 
     def supports(self, effect: Effect) -> bool:
-        return isinstance(effect, (WriteFile, CopyTree, RemoveOwnedPath))
+        """Whether this interpreter may carry out `effect`, not merely recognize its kind.
+
+        One Selection is one transaction, so a bulk install hands the executor one tuple of
+        interpreters holding one of these per artifact. Dispatch takes the first that says yes. If
+        that answer ignored ownership, the first file interpreter would claim every write in the
+        transaction, including the other artifact's, and then refuse them for being outside the
+        environment it owns -- failing closed on an effect that was perfectly legitimate and had an
+        owner sitting later in the same tuple.
+        """
+
+        return isinstance(effect, (WriteFile, CopyTree, RemoveOwnedPath)) and self.environment.owns(
+            effect.destination
+        )
 
     def apply(self, effect: Effect) -> Result[str]:
         if isinstance(effect, WriteFile):
@@ -216,7 +228,13 @@ class RuntimeEffectInterpreter:
         self.runtime = runtime
 
     def supports(self, effect: Effect) -> bool:
-        return isinstance(effect, (CreatePythonEnvironment, InstallPythonDependencies))
+        """Whether this interpreter owns the environment `effect` names (see the file effects)."""
+
+        if isinstance(effect, CreatePythonEnvironment):
+            return self.runtime.environment.owns(effect.destination)
+        if isinstance(effect, InstallPythonDependencies):
+            return self.runtime.environment.owns(effect.environment)
+        return False
 
     def apply(self, effect: Effect) -> Result[str]:
         if isinstance(effect, CreatePythonEnvironment):
@@ -249,13 +267,10 @@ class HarnessEffectInterpreter:
         self.registry = registry
         self.registrations = tuple(registrations)
 
-    def supports(self, effect: Effect) -> bool:
-        return isinstance(effect, (ConfigureHarness, UnconfigureHarness))
-
-    def apply(self, effect: Effect) -> Result[str]:
+    def _matching(self, effect: Effect) -> tuple[McpRegistration, ...]:
         if not isinstance(effect, (ConfigureHarness, UnconfigureHarness)):
-            return _error(EXECUTION_REFUSED, f"{type(effect).__name__} is not a harness effect")
-        matching = tuple(
+            return ()
+        return tuple(
             registration
             for registration in self.registrations
             if registration.target.harness == effect.harness
@@ -267,6 +282,21 @@ class HarnessEffectInterpreter:
                 )
             )
         )
+
+    def supports(self, effect: Effect) -> bool:
+        """Whether this interpreter holds the registration `effect` needs, not merely its kind.
+
+        A bulk install puts one of these per artifact in the executor's tuple, and dispatch takes
+        the first that says yes. Answering on the effect's type alone would let the first one claim
+        every harness effect in the transaction and then refuse the ones it has no registration for.
+        """
+
+        return bool(self._matching(effect))
+
+    def apply(self, effect: Effect) -> Result[str]:
+        if not isinstance(effect, (ConfigureHarness, UnconfigureHarness)):
+            return _error(EXECUTION_REFUSED, f"{type(effect).__name__} is not a harness effect")
+        matching = self._matching(effect)
         if not matching:
             return _error(
                 EXECUTION_REFUSED,
@@ -307,8 +337,13 @@ class CredentialEffectInterpreter:
         self.references = tuple(references)
 
     def supports(self, effect: Effect) -> bool:
-        return isinstance(
-            effect, (StoreCredential, ReplaceCredential, DeleteCredential, VerifyCredential)
+        """Whether this interpreter was given the reference `effect` names (see the harness one)."""
+
+        return (
+            isinstance(
+                effect, (StoreCredential, ReplaceCredential, DeleteCredential, VerifyCredential)
+            )
+            and self._reference(effect.reference) is not None
         )
 
     def _reference(self, raw: str) -> CredentialReference | None:
