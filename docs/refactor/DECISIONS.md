@@ -558,3 +558,29 @@ the Product Specification first instead of hiding the change here.
   exact re-selection collapses back to the exact Collection because the ticks are ordered by
   membership before projection. Quitting with a Collection open now asks first, because a ticked
   Collection is a selection.
+
+## D-048 — A credential's word is decided by the renderer, its state by the projection
+- **Decision:** `CredentialRecordView.health` stays the canonical `CredentialState` value, and
+  `tui_consumer` maps it to the accepted words: `present` with dependants reads `Ready`, `present`
+  with none reads `Unused`, and `absent`/`invalid` read `Attention`.
+- **Status:** accepted.
+- **Reason:** the accepted screen (161.8) is written in outcomes, not provider states, and the two
+  do not map one to one — material nothing uses is not "Ready" in any useful sense, and material a
+  provider cannot honour is not merely "absent". Deciding this in the projection would put a
+  presentation word where a machine consumer reads state, and deciding it in the domain would put
+  it where no consumer is in view at all.
+- **Consequence:** `--json` keeps the provider vocabulary while the screen keeps the accepted one,
+  and a new provider state gets a word here without changing anything a machine reads.
+
+## D-049 — Screen 09 compresses the review; it does not go quieter
+- **Decision:** screen 09 draws `render_ready` (outcomes, remediations, risks, review identity) in
+  Fast and the unchanged `_verbose_plan` under `Show details`. `render_install_plan` stays the whole
+  plan in one piece: it is what a non-interactive `install` prints, not a screen.
+- **Status:** accepted.
+- **Reason:** 161.5 asks screen 09 for a concise outcome summary and defines `Show details` as "the
+  same InstallPlan in Verbose mode", so the interactive flow spreads one plan across screens 05–09
+  while a command that cannot ask has to print it at once. Both are disclosures of one reviewed
+  plan, never two reviews.
+- **Consequence:** the Fast/Verbose invariant is now asserted on the screen a person actually
+  confirms from — a property test drives generated plans through `render_ready` and requires every
+  risk the plan carries and every remediation it decided to be named there.

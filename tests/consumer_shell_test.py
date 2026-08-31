@@ -177,13 +177,13 @@ class ConsumerShellTest(unittest.TestCase):
         self.assertEqual(returned.focus, "")
         self.assertEqual(returned.current_row, "2026-08-31T14:32:00+00:00")
 
-    def test_a_screen_with_nothing_behind_it_yet_says_so_rather_than_drawing_nothing(self):
+    def test_a_screen_with_nothing_behind_it_says_so_rather_than_drawing_nothing(self):
         source = CanonicalScreenSource(ConsumerScreens(project_dashboard((), registry_count=0)))
 
         lines = frame(source, _at(ConsumerScreen.UPDATES))
 
         self.assertIn("AART / Updates", lines[0])
-        self.assertIn("not available yet", "\n".join(lines))
+        self.assertIn("Nothing here yet.", "\n".join(lines))
 
 
 def _at(screen: ConsumerScreen) -> ConsumerUiState:

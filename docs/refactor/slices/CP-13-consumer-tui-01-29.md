@@ -43,21 +43,21 @@ CP-06 through CP-12 are verified; legacy TUI navigation/search/layout characteri
 | 02 Marketplace | aggregated rows, search, filters and multi-select exist | Use canonical Selection/Collections; add Fast/Verbose toggle without intent mutation |
 | 03 Artifact Details | technical marketplace pane/detail record exists | Add Fast outcome/input guidance and canonical Verbose provenance/requirements |
 | 04/04A Collection | Collection row expands to members before legacy review | Add summary, contents selection and visible exact→custom semantic transition |
-| 05 Review Selection | basket/review boundary exists | Project CP-06 ownership/resolution and unique counts |
-| 06 Automatic inspection | current wizard has manual source/profile/scope stages | Run CP-07 inspection automatically when no decision exists |
-| 07 Required Inputs | legacy setup queue prompts per step | Aggregate CP-08 input models, reuse valid config and show secret references only |
-| 08 Remediation | legacy authorize/setup choices exist | Project capability∩policy remediations only when a decision is required |
-| 09 Ready | legacy review exists | Render concise/verbose projections of one immutable plan and one digest |
-| 10 Installing | quiet vs step-by-step setup queue exists | Project canonical component/effect progress and partial/interrupted outcomes |
-| 11 Success | command/setup outcomes exist | Add outcome actions and canonical execution receipt link |
+| 05 Review Selection | basket/review boundary exists | **DONE** `render_review_selection` names direct/Collection/derived selection and the unique resolved artifacts |
+| 06 Automatic inspection | current wizard has manual source/profile/scope stages | **DONE** `render_inspection` reports requirement states and never asks; Verbose adds the measurement |
+| 07 Required Inputs | legacy setup queue prompts per step | **DONE** `render_required_inputs` over the plan's inputs; an existing secret reads `Configured securely` |
+| 08 Remediation | legacy authorize/setup choices exist | **DONE** `render_remediation` surfaces only the decisions and what will not be touched |
+| 09 Ready | legacy review exists | **DONE** `render_ready` compresses to outcomes, names every risk and remediation, and discloses the same plan in Verbose (D-049) |
+| 10 Installing | quiet vs step-by-step setup queue exists | **DONE** `render_progress` marks each component; the raw effect kind appears only in Verbose |
+| 11 Success | command/setup outcomes exist | **DONE** `render_success` adds View installed / View receipt / Done |
 | 12 Installed | status action filters installed rows | Add persistent health/ownership list for artifacts and Collections |
 | 13 Artifact Details | legacy lifecycle/receipt details are separate | Combine canonical health, safe configuration/reference state and intents |
-| 14 Collection Details | missing | Aggregate member health and name attention members |
-| 15–17 Updates | legacy update action exists | Multi-select canonical update intents, new inputs and restoration outcome |
-| 18–19 Uninstall | legacy ownership-aware uninstall exists | Route through CP-12 absent desired state; explain retained artifacts/credentials |
-| 20 Verify/Repair | receipt verification exists; canonical repair core is uncalled | Surface minimal CP-11 diff and execute reviewed CP-12 repair |
+| 14 Collection Details | missing | **DONE** Installed lists Collections above artifacts; Enter opens whichever the cursor names |
+| 15–17 Updates | legacy update action exists | **DONE** Updates lists only artifacts whose health is `update`; 16 reuses `render_required_inputs`, 17 `render_progress` |
+| 18–19 Uninstall | legacy ownership-aware uninstall exists | **DONE** 18 draws `render_lifecycle_plan` (retention and why), 19 `render_progress` |
+| 20 Verify/Repair | receipt verification exists; canonical repair core is uncalled | **DONE** draws the minimal `LifecyclePlanView` and its review identity |
 | 21 Registries | Sources UI is mature but maintainer-oriented | Consumer availability/count/last-sync projection; sync never updates installs |
-| 22–24 Credentials | missing | Reference/provider/health/dependants views and governed verify/replace/delete |
+| 22–24 Credentials | missing | **DONE** reference rows with accepted health words (D-048), provider/consumers/actions detail, and an action screen that names what a removal would affect |
 | 25–27 Activity | individual receipt view/undo exists | Add user-action timeline; keep technical receipt detail and capability-honest undo |
 | 28 Settings | missing | Fast/Verbose preference, scope, update visibility, Maintainer Mode toggle |
 | 29 Doctor | missing | Add navigation/summary entry; CP-16 owns full global implementation |
@@ -84,9 +84,11 @@ existed; three defects were found by tests rather than by reading:
 5. Wire the persistent curses shell and public commands without duplicating planning.
    **PARTIAL** — the loop, the keymap and a canonical screen source exist and are driven headlessly
    (`run_consumer_shell`, `key_event`, `CanonicalScreenSource`); the curses adapter in `tui.py` is
-   `_CursesTerminal` plus `run_consumer`. Marketplace, artifact details, Collection preview and
-   customization (02–04a) are drawn from canonical offers (B-024 part 1, D-047). Screens 05–11 and
-   15–24 still need the plan-bearing assembly, and `run()` still opens the legacy wizard (B-025).
+   `_CursesTerminal` plus `run_consumer`. Every accepted screen 01–29 now draws from canonical
+   views: Marketplace and Collections from offers (D-047), 05–11 from a `ConsumerPlanView`, 14–20
+   from installed state and lifecycle views, 22–24 from credential records (D-048, D-049). What
+   remains is the assembler that builds a populated `ConsumerScreens` from a real machine (B-024),
+   after which `run()` can stop opening the legacy wizard (B-025).
 5a. Persist canonical installed state and finished actions, so screens 12–16 and 25–27 have
    something to project between processes. **DONE** — `domain/receipts.py` gained the parse that
    inverts its own projection, `application/consumer_views.py` gained `receipt_detail_from_data`
@@ -119,6 +121,14 @@ row they were opened from, and `v` redraws the same screen with more disclosed.
 holds artifacts and Collections together, Enter opens the right screen for whichever the cursor is
 on, a Collection preview lists its members as its rows, unticking one makes the selection custom
 with an identity of its own, and re-ticking every member is the exact Collection again.
+
+`tests/consumer_install_flow_shell_test.py` — screens 05–11 and 14–24, reached by walking the
+accepted navigation map from the Dashboard rather than by handing a state to a renderer: no screen
+in the catalog is still unavailable, inspection reports without asking, Required Inputs says
+`Configured securely` and never the word value, Ready compresses outcomes while Verbose discloses
+the same plan, progress is meaningful until Verbose names the effect kind, Updates lists only what
+has one, a credential is a reference view with an action screen that names what a removal would
+affect, and an installed Collection aggregates its members.
 
 `tests/receipt_recording_test.py` — what a finished action leaves behind, over real reviewed plans
 and a fake store: every action reaches the timeline including the ones that failed, an install that
@@ -162,16 +172,18 @@ own launcher after a repair planned from disk alone, and no stored file contains
 
 ## Remaining
 
-- Step 5 service wiring for screens 05–11 and 15–24 (B-024); 02–04a are done.
+- Step 5 service assembly: one builder that reads a real machine into `ConsumerScreens` (B-024).
+  Every screen that would consume it is done.
 - Routing the default TTY entry to the canonical application (B-025).
 - Step 6: retiring legacy consumer semantic authority, once the above give equivalent public-flow
   evidence.
 
 ## Known compromises
 
-- Screens 05–11 and 15–24 draw an explicit "… is not available yet" line in the canonical shell
-  rather than silently drawing an empty screen. Their projections exist and are tested; what is
-  missing is the assembly that carries a live plan (B-024).
+- Nothing in `agent_artifacts/` builds a populated `ConsumerScreens`: the shell draws every accepted
+  screen from canonical views, but only tests and embedders can supply them (B-024). The fallback
+  line for a screen with no body is kept as a guard against drawing a blank frame; no accepted
+  screen reaches it.
 - `run_consumer` is reachable by embedders and tests but is not yet the default TTY entry (B-025).
   No legacy behavior has been changed or removed to make room for it.
 
@@ -197,12 +209,12 @@ machine-output tests prove every accepted flow now consumes the canonical applic
 
 - Current working state: steps 1–4 complete and verified; step 5 partial; step 6 not started. The
   legacy wizard is untouched and still owns the default TTY entry.
-- Exact next action: B-024 — assemble one `ConsumerScreens` builder over the canonical services,
-  reading installed state and the timeline from `LocalReceiptStore`, so the shell can draw
-  Marketplace and the install flow — then B-025 to route `run()`.
+- Exact next action: B-024's remaining half — one `ConsumerScreens` builder over the canonical
+  services, reading the catalog, `LocalReceiptStore` and the credential providers, refreshed after
+  an action rather than inside a draw — then B-025 to route `run()`.
 - Do not undo: existing curses layout/search/basket/back/quit characterization; one semantic plan
   for both profiles; Maintainer Mode remains opt-in; `key_event` stays the only place a key's
   meaning is decided; no clock in `application/`.
-- Tests last run/results: 2,315 unit + 80 E2E tests, 83.29% coverage, all ten quality gates
+- Tests last run/results: 2,331 unit + 80 E2E tests, 83.31% coverage, all ten quality gates
   green (`make quality`). CP-12 baseline was 2,196 unit + 65 E2E at 83.25%.
 - Failure evidence: three defects found by tests are listed under Characterization / RED evidence.

@@ -260,24 +260,26 @@ test_something_present_that_nothing_desires_is_named_and_not_repaired`.
 Promotion condition: uninstall or scope-level doctor needs to report orphans (CP-12 or CP-16).
 
 ### B-024 — Marketplace and install-flow screens for the canonical consumer shell
-Status: IN PROGRESS (2026-08-31) — 02–04a drawn from canonical offers; 05–11 and 15–24 remain
+Status: IN PROGRESS (2026-08-31) — every accepted screen 01–29 draws from canonical views; what
+remains is assembling those views for a live machine
 Discovered in: CP-13 / `agent_artifacts/tui_consumer.py` / `CanonicalScreenSource`
-Why useful: the persistent consumer application draws Dashboard, Installed, Installed details,
-Activity, receipts, Registries, Settings and Doctor from canonical views. Screens 02–11 and 15–24
-currently draw "… is not available yet" because a screen source for them needs the resolution,
-inspection and input services to be reachable as one assembled consumer session.
-Why noncritical now: the projections for those screens exist and are tested (`project_selection`,
-`project_install_plan`, `project_collection`, `project_required_inputs`); what is missing is the
-service wiring that produces them for a live machine, which is the same wiring CP-14 needs for the
-maintainer catalog. Building it twice would be the waste.
-Potential approach: one assembled `ConsumerScreens` builder over the canonical services, refreshed
-after each action rather than inside a draw, with the marketplace rows coming from
-`project_marketplace_rows` as `tui_marketplace` already produces them.
+Why useful: the persistent consumer application now draws all 29 accepted screens from canonical
+views — Marketplace and Collections from `MarketplaceEntry`/`MarketplaceCollectionEntry` offers,
+screens 05–11 from a `ConsumerPlanView`, 14–20 from installed state and lifecycle views, and 22–24
+from `CredentialRecordView`. No screen draws "… is not available yet" any more. What is still
+missing is the assembler: nothing in `agent_artifacts/` builds a populated `ConsumerScreens` from a
+real machine, so the shell is complete but only tests and embedders can feed it.
+Why noncritical now: the remaining work is one application-level builder over services that all
+exist (marketplace aggregation, `LocalReceiptStore`, credential providers, inspection, planning).
+It is the same assembly CP-14 needs for the maintainer catalog, so it is worth building once.
+Potential approach: an `application/consumer_session.py` that reads the catalog, the receipt store
+and the credential providers into one `ConsumerScreens`, refreshed after an action rather than
+inside a draw, with planning invoked only when the flow enters screen 05.
 Invariants touched: INV-149, INV-152, INV-153.
-Evidence/links: D-041; `tests/consumer_shell_test.py::ConsumerShellTest::
-test_a_screen_with_nothing_behind_it_yet_says_so_rather_than_drawing_nothing`.
+Evidence/links: D-041, D-047, D-048, D-049; `tests/consumer_marketplace_shell_test.py`;
+`tests/consumer_install_flow_shell_test.py`.
 Promotion condition: retiring legacy consumer authority (CP-13 step 6) or routing the default TTY
-entry to the canonical application requires them.
+entry to the canonical application requires it.
 
 ### B-025 — Routing the default TTY entry to the canonical consumer application
 Status: OPEN

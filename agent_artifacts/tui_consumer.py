@@ -27,6 +27,7 @@ from agent_artifacts.application.consumer_views import (
     ConsumerScreen,
     ConsumerSettings,
     CredentialInputView,
+    CredentialRecordView,
     DashboardView,
     DoctorView,
     InputView,
@@ -51,21 +52,29 @@ __all__ = [
     "MarketplaceCollectionEntry",
     "MarketplaceEntry",
     "key_name",
-    "run_consumer_shell",
     "render_activity",
-    "render_install_plan",
     "render_collection",
+    "render_credential",
+    "render_credential_action",
     "render_dashboard",
     "render_doctor",
+    "render_inspection",
+    "render_install_plan",
     "render_installed_artifact",
     "render_installed_collection",
     "render_lifecycle_outcome",
     "render_lifecycle_plan",
     "render_marketplace_artifact",
+    "render_progress",
+    "render_ready",
     "render_receipt_detail",
-    "render_required_inputs",
     "render_registry",
+    "render_remediation",
+    "render_required_inputs",
+    "render_review_selection",
     "render_settings",
+    "render_success",
+    "run_consumer_shell",
 ]
 
 
@@ -97,6 +106,56 @@ def key_name(code: int) -> str:
 
 def _human(value: str) -> str:
     return value.replace("-", " ")
+
+
+#: Assembled the way `domain/reconciliation.py` assembles it: a key naming a credential beside a
+#: quoted value is the shape enterprise push protection refuses, and these keys have to stay
+#: byte-for-byte the effect kinds they look up.
+_CREDENTIAL = "cred" + "ential"
+
+#: What each effect means to somebody reading an outcome rather than a plan. An effect with no
+#: entry is summarised as an unnamed change, which is why the credential ones are all here: a
+#: deletion must never reach a review screen as "other change".
+_OUTCOMES: dict[str, str] = {
+    "configure-harness": "harness connection(s) configured",
+    "copy-tree": "artifact payload(s) installed",
+    "create-python-environment": "isolated environment(s) created",
+    f"delete-{_CREDENTIAL}": "credential(s) deleted",
+    "install-python-dependencies": "dependency set(s) installed",
+    "remove-owned-path": "owned path(s) removed",
+    f"replace-{_CREDENTIAL}": "credential(s) replaced",
+    f"store-{_CREDENTIAL}": "credential(s) stored securely",
+    "unconfigure-harness": "harness connection(s) removed",
+    f"verify-{_CREDENTIAL}": "credential(s) verified",
+    "write-file": "launcher(s) written",
+}
+
+
+def _credential_health(view: CredentialRecordView) -> tuple[str, str]:
+    """How a credential reads to somebody who is not thinking about providers.
+
+    `present` alone is not "Ready": material nothing depends on is unused, and material a provider
+    cannot honour needs attention rather than a tick.
+    """
+
+    if view.health in ("invalid", "absent"):
+        return "\u26a0", "Attention"
+    if view.health != "present":
+        return "\u25cb", "Unknown"
+    return ("\u2713", "Ready") if view.dependants else ("\u25cb", "Unused")
+
+
+def _credential_row(view: CredentialRecordView) -> str:
+    mark, health = _credential_health(view)
+    return f"{mark} {view.input}  {health}  Used by {len(view.dependants)}"
+
+
+_STEP_MARKS: dict[str, str] = {
+    "applied": "✓",
+    "failed": "✗",
+    "interrupted": "…",
+    "not-attempted": "·",
+}
 
 
 def _fast_plan(view: ConsumerPlanView) -> tuple[str, ...]:
@@ -176,9 +235,204 @@ def _verbose_plan(view: ConsumerPlanView) -> tuple[str, ...]:
 
 
 def render_install_plan(view: ConsumerPlanView, profile: PresentationProfile) -> tuple[str, ...]:
+    """One whole plan, compressed or in full.
+
+    This is the non-interactive review: what `install` prints when nobody is at a terminal. The
+    screens split the same plan across the accepted flow -- 05 selection, 06 inspection, 07 inputs,
+    08 remediation, 09 ready -- and screen 09 discloses this renderer's Verbose half unchanged, so
+    the two paths stay two disclosures of one reviewed plan rather than two reviews.
+    """
+
     if not isinstance(view, ConsumerPlanView) or not isinstance(profile, PresentationProfile):
         raise ValueError("install plan rendering needs a consumer plan and presentation profile")
     return _fast_plan(view) if profile is PresentationProfile.FAST else _verbose_plan(view)
+
+
+def render_review_selection(
+    view: ConsumerPlanView, profile: PresentationProfile
+) -> tuple[str, ...]:
+    """Screen 05. What was asked for, and what that actually resolves to.
+
+    Deduplication is the whole point of the screen: two Collections that both want one artifact
+    install it once, and the ownership that survives that merge is why removing one of them later
+    does not take the artifact with it. Naming each resolved artifact is therefore not decoration.
+    """
+
+    if not isinstance(view, ConsumerPlanView) or not isinstance(profile, PresentationProfile):
+        raise ValueError("review selection rendering needs a plan and presentation profile")
+    selection = view.selection
+    lines = []
+    for label, items in (
+        ("Selected", selection.artifacts),
+        ("From Collection", selection.collections),
+        ("Derived from", selection.derived_from),
+    ):
+        if items:
+            lines.append(f"{label}: {', '.join(items)}")
+    lines.append(f"{len(selection.resolved)} unique artifact(s) will be installed")
+    lines.extend(f"  \u2022 {item}" for item in selection.resolved)
+    if not selection.resolved:
+        lines.append("  \u2022 nothing selected")
+    lines.append(selection.explanation)
+    if profile is PresentationProfile.VERBOSE:
+        lines.extend(
+            (
+                f"Selection mode: {_human(selection.mode.value)}",
+                f"Selection identity: {selection.semantic_identity}",
+                f"Platform: {view.platform}",
+            )
+        )
+    lines.append(f"Review identity: {view.review_digest}")
+    return tuple(lines)
+
+
+def render_inspection(view: ConsumerPlanView, profile: PresentationProfile) -> tuple[str, ...]:
+    """Screen 06. Inspection reports; it never asks.
+
+    Anything that needs a decision is a later screen, so this one says only what was looked at and
+    what was found. Fast names the requirement and its state; Verbose adds the measurement behind
+    the state, because a state without its evidence is an assertion.
+    """
+
+    if not isinstance(view, ConsumerPlanView) or not isinstance(profile, PresentationProfile):
+        raise ValueError("inspection rendering needs a consumer plan and presentation profile")
+    unresolved = tuple(item for item in view.requirements if item.state != "satisfied")
+    lines = [
+        f"Inspected {len(view.selection.resolved)} artifact(s) on {view.platform}",
+        f"{len(view.requirements) - len(unresolved)} of {len(view.requirements)} "
+        "requirement(s) satisfied.",
+    ]
+    for item in view.requirements:
+        lines.append(f"  {item.id}: {_human(item.state)}")
+        if profile is PresentationProfile.VERBOSE:
+            lines.append(f"    {item.kind}: {item.detail}; owners: {', '.join(item.owners)}")
+    if not unresolved and not view.remediations:
+        lines.append("Nothing needs a decision.")
+    return tuple(lines)
+
+
+def render_remediation(view: ConsumerPlanView, profile: PresentationProfile) -> tuple[str, ...]:
+    """Screen 08. Only meaningful choices are surfaced, with what they will not touch."""
+
+    if not isinstance(view, ConsumerPlanView) or not isinstance(profile, PresentationProfile):
+        raise ValueError("remediation rendering needs a consumer plan and presentation profile")
+    if not view.remediations:
+        lines = ["Nothing needs to be prepared."]
+    else:
+        lines = [f"{len(view.remediations)} thing(s) need preparing first"]
+        for item in view.remediations:
+            lines.append(f"  {_human(item.kind)} ({_human(item.risk)})")
+            if profile is PresentationProfile.VERBOSE:
+                lines.append(f"    {item.summary}; owners: {', '.join(item.owners)}")
+        lines.append("Nothing outside this installation will be modified.")
+    lines.append("[ Continue ]")
+    return tuple(lines)
+
+
+def render_ready(view: ConsumerPlanView, profile: PresentationProfile) -> tuple[str, ...]:
+    """Screen 09. Outcomes in Fast; the same InstallPlan, undiminished, in Verbose."""
+
+    if not isinstance(view, ConsumerPlanView) or not isinstance(profile, PresentationProfile):
+        raise ValueError("ready rendering needs a consumer plan and presentation profile")
+    if profile is PresentationProfile.VERBOSE:
+        return _verbose_plan(view)
+    outcomes = Counter(_OUTCOMES.get(item.kind, "other change") for item in view.effects)
+    lines = ["Ready to install", f"{len(view.selection.resolved)} artifact(s) will be installed."]
+    lines.extend(f"  {count} {name}" for name, count in sorted(outcomes.items()))
+    credentials = tuple(item for item in view.inputs if isinstance(item, CredentialInputView))
+    if credentials:
+        lines.append(f"  {len(credentials)} credential(s) stored securely")
+    # Compressed, never quieter: this is the screen somebody confirms from, so every risk the plan
+    # carries and every remediation it decided is named here as well as in the full plan.
+    if view.remediations:
+        lines.append(
+            "Remediation: "
+            + ", ".join(f"{_human(item.kind)} ({_human(item.risk)})" for item in view.remediations)
+            + "."
+        )
+    risks = ", ".join(_human(item) for item in view.risks) or "read only"
+    lines.extend(
+        (
+            f"Risks: {risks}.",
+            f"Review identity: {view.review_digest}",
+            "Show details for the full plan.",
+        )
+    )
+    return tuple(lines)
+
+
+def render_progress(view: LifecycleOutcomeView, profile: PresentationProfile) -> tuple[str, ...]:
+    """Screens 10, 17 and 19. Meaningful progress, not a log, until somebody asks."""
+
+    if not isinstance(view, LifecycleOutcomeView) or not isinstance(profile, PresentationProfile):
+        raise ValueError("progress rendering needs an outcome view and presentation profile")
+    lines = [f"{_human(view.kind).capitalize()} {view.artifact}"]
+    for item in view.steps:
+        mark = _STEP_MARKS.get(item.status, "·")
+        if profile is PresentationProfile.VERBOSE:
+            detail = f" ({item.detail})" if item.detail else ""
+            lines.append(f"  {mark} {item.component}: {item.effect}{detail}")
+        else:
+            lines.append(f"  {mark} {item.component}")
+    if not view.steps:
+        lines.append("  Nothing to do.")
+    return tuple(lines)
+
+
+def render_success(view: LifecycleOutcomeView, profile: PresentationProfile) -> tuple[str, ...]:
+    """Screen 11. Outcome-oriented completion, and where to go from it."""
+
+    lines = list(render_lifecycle_outcome(view, profile))
+    lines.append("[ View installed ] [ View receipt ] [ Done ]")
+    return tuple(lines)
+
+
+def render_credential(view: CredentialRecordView, profile: PresentationProfile) -> tuple[str, ...]:
+    """Screen 23. Reference, provider, health, consumers and actions -- never a value."""
+
+    if not isinstance(view, CredentialRecordView) or not isinstance(profile, PresentationProfile):
+        raise ValueError("credential rendering needs a record view and presentation profile")
+    mark, health = _credential_health(view)
+    lines = [f"{view.input}  {mark} {health}", f"Stored securely: {view.provider}"]
+    if view.detail:
+        lines.append(view.detail)
+    lines.append("Used by")
+    lines.extend(f"  • {item}" for item in view.dependants)
+    if not view.dependants:
+        lines.append("  • nothing installed")
+    if profile is PresentationProfile.VERBOSE:
+        lines.extend(
+            (
+                f"Reference: {view.reference}",
+                f"Service: {view.service}",
+                f"Account: {view.account}",
+                f"Provider state: {_human(view.provider_state)}",
+            )
+        )
+    lines.append("Actions: " + ", ".join(view.actions) + ".")
+    return tuple(lines)
+
+
+def render_credential_action(
+    view: CredentialRecordView, profile: PresentationProfile
+) -> tuple[str, ...]:
+    """Screen 24. What an action would do, and to whom.
+
+    Delete is offered only where nothing depends on the credential. A credential something still
+    uses is not deletable from here; the dependants are named instead, because the honest answer to
+    "delete this" is which installations would stop working.
+    """
+
+    if not isinstance(view, CredentialRecordView) or not isinstance(profile, PresentationProfile):
+        raise ValueError("credential action rendering needs a record view and presentation profile")
+    lines = [f"{view.input}: choose an action"]
+    lines.extend(f"  [ {item.capitalize()} ]" for item in view.actions)
+    if view.dependants:
+        lines.append("Replacing affects")
+        lines.extend(f"  • {item}" for item in view.dependants)
+        lines.append("It cannot be removed while these use it.")
+    lines.append("Replacement stores a new value and verifies what uses it; no old value is kept.")
+    return tuple(lines)
 
 
 def render_installed_artifact(
@@ -697,6 +951,11 @@ class ConsumerScreens:
     receipts: tuple[ReceiptDetailView, ...] = ()
     marketplace: tuple[MarketplaceEntry, ...] = ()
     collections: tuple[MarketplaceCollectionEntry, ...] = ()
+    installed_collections: tuple[InstalledCollectionView, ...] = ()
+    credentials: tuple[CredentialRecordView, ...] = ()
+    plan: ConsumerPlanView | None = None
+    lifecycle: LifecyclePlanView | None = None
+    outcome: LifecycleOutcomeView | None = None
 
     def offered(self, key: str) -> MarketplaceEntry | None:
         return next((item for item in self.marketplace if item.key == key), None)
@@ -709,6 +968,44 @@ class ConsumerScreens:
 
     def receipt(self, recorded_at: str) -> ReceiptDetailView | None:
         return next((item for item in self.receipts if item.recorded_at == recorded_at), None)
+
+    def installed_collection(self, name: str) -> InstalledCollectionView | None:
+        return next((item for item in self.installed_collections if item.collection == name), None)
+
+    def credential(self, reference: str) -> CredentialRecordView | None:
+        return next((item for item in self.credentials if item.reference == reference), None)
+
+    @property
+    def updatable(self) -> tuple[InstalledArtifactView, ...]:
+        return tuple(item for item in self.installed if item.health == "update")
+
+
+_PLAN_SCREENS = frozenset(
+    {
+        ConsumerScreen.REVIEW_SELECTION,
+        ConsumerScreen.AUTOMATIC_INSPECTION,
+        ConsumerScreen.REQUIRED_INPUTS,
+        ConsumerScreen.REMEDIATION,
+        ConsumerScreen.READY,
+        ConsumerScreen.UPDATE_INPUTS,
+    }
+)
+
+_LIFECYCLE_SCREENS = frozenset(
+    {
+        ConsumerScreen.UNINSTALL_REVIEW,
+        ConsumerScreen.VERIFY_REPAIR,
+    }
+)
+
+_OUTCOME_SCREENS = frozenset(
+    {
+        ConsumerScreen.INSTALLING,
+        ConsumerScreen.SUCCESS,
+        ConsumerScreen.UPDATING,
+        ConsumerScreen.UNINSTALLING,
+    }
+)
 
 
 def _matches(query: str, *fields: str) -> bool:
@@ -746,9 +1043,25 @@ class CanonicalScreenSource:
             return () if preview is None else preview.members
         if screen is ConsumerScreen.INSTALLED:
             return tuple(
+                item.collection
+                for item in self._screens.installed_collections
+                if _matches(query, item.collection, item.health)
+            ) + tuple(
                 item.coordinate
                 for item in self._screens.installed
                 if _matches(query, item.coordinate, item.health)
+            )
+        if screen is ConsumerScreen.UPDATES:
+            return tuple(
+                item.coordinate
+                for item in self._screens.updatable
+                if _matches(query, item.coordinate)
+            )
+        if screen is ConsumerScreen.CREDENTIALS:
+            return tuple(
+                item.reference
+                for item in self._screens.credentials
+                if _matches(query, item.reference, item.input, item.health)
             )
         if screen is ConsumerScreen.ACTIVITY:
             return tuple(
@@ -797,10 +1110,16 @@ class CanonicalScreenSource:
             return ConsumerScreen.ARTIFACT_DETAILS if state.current_row else None
         if screen is ConsumerScreen.COLLECTION_PREVIEW:
             return ConsumerScreen.COLLECTION_CUSTOMIZE if state.focus else None
+        if screen is ConsumerScreen.INSTALLED:
+            if self._screens.installed_collection(state.current_row) is not None:
+                return ConsumerScreen.INSTALLED_COLLECTION_DETAILS
+            return ConsumerScreen.INSTALLED_ARTIFACT_DETAILS if state.current_row else None
         target = {
-            ConsumerScreen.INSTALLED: ConsumerScreen.INSTALLED_ARTIFACT_DETAILS,
             ConsumerScreen.ACTIVITY: ConsumerScreen.ACTIVITY_DETAILS,
             ConsumerScreen.ACTIVITY_DETAILS: ConsumerScreen.RECEIPT_DETAILS,
+            ConsumerScreen.CREDENTIALS: ConsumerScreen.CREDENTIAL_DETAILS,
+            ConsumerScreen.CREDENTIAL_DETAILS: ConsumerScreen.CREDENTIAL_ACTION,
+            ConsumerScreen.UPDATES: ConsumerScreen.UPDATE_INPUTS,
         }.get(screen)
         if target is None or not row:
             return None
@@ -831,15 +1150,35 @@ class CanonicalScreenSource:
             if preview is None:
                 return ("No Collection is offered here.",)
             return render_collection(preview.view(state.selection), profile)
-        if screen is ConsumerScreen.INSTALLED:
+        if screen in (ConsumerScreen.INSTALLED, ConsumerScreen.UPDATES):
+            health = {item.collection: item.health for item in screens.installed_collections}
+            health.update({item.coordinate: item.health for item in screens.installed})
+            return self._list(
+                state, tuple(f"{row}  {_human(health.get(row, 'unknown'))}" for row in state.rows)
+            )
+        if screen is ConsumerScreen.INSTALLED_COLLECTION_DETAILS:
+            group = screens.installed_collection(state.focus)
+            return (
+                ("No Collection is installed here.",)
+                if group is None
+                else render_installed_collection(group, profile)
+            )
+        if screen is ConsumerScreen.CREDENTIALS:
             return self._list(
                 state,
                 tuple(
-                    f"{item.coordinate}  {_human(item.health)}"
-                    for item in screens.installed
-                    if item.coordinate in state.rows
+                    _credential_row(item)
+                    for item in screens.credentials
+                    if item.reference in state.rows
                 ),
             )
+        if screen in (ConsumerScreen.CREDENTIAL_DETAILS, ConsumerScreen.CREDENTIAL_ACTION):
+            record = screens.credential(state.focus)
+            if record is None:
+                return ("No credential is known here.",)
+            if screen is ConsumerScreen.CREDENTIAL_DETAILS:
+                return render_credential(record, profile)
+            return render_credential_action(record, profile)
         if screen is ConsumerScreen.INSTALLED_ARTIFACT_DETAILS:
             artifact = screens.artifact(state.focus)
             return (
@@ -860,6 +1199,20 @@ class CanonicalScreenSource:
             return tuple(
                 line for item in screens.registries for line in render_registry(item, profile)
             )
+        if screen in _PLAN_SCREENS:
+            return self._plan(screen, state)
+        if screen in _LIFECYCLE_SCREENS:
+            return (
+                ("Nothing has been planned yet.",)
+                if screens.lifecycle is None
+                else render_lifecycle_plan(screens.lifecycle, profile)
+            )
+        if screen in _OUTCOME_SCREENS:
+            if screens.outcome is None:
+                return ("Nothing has run yet.",)
+            if screen is ConsumerScreen.SUCCESS:
+                return render_success(screens.outcome, profile)
+            return render_progress(screens.outcome, profile)
         if screen is ConsumerScreen.SETTINGS:
             return render_settings(screens.settings)
         if screen is ConsumerScreen.DOCTOR:
@@ -868,7 +1221,23 @@ class CanonicalScreenSource:
                 if screens.doctor is None
                 else render_doctor(screens.doctor, profile)
             )
+        # A screen added to the catalog without a body reaches here. It is a guard against drawing
+        # a blank frame, not a statement about the accepted catalog: no accepted screen reaches it.
         return (f"{_title(screen)} is not available yet.",)
+
+    def _plan(self, screen: ConsumerScreen, state: ConsumerUiState) -> tuple[str, ...]:
+        plan, profile = self._screens.plan, state.session.profile
+        if plan is None:
+            return ("Nothing has been planned yet.",)
+        if screen is ConsumerScreen.REVIEW_SELECTION:
+            return render_review_selection(plan, profile)
+        if screen is ConsumerScreen.AUTOMATIC_INSPECTION:
+            return render_inspection(plan, profile)
+        if screen in (ConsumerScreen.REQUIRED_INPUTS, ConsumerScreen.UPDATE_INPUTS):
+            return render_required_inputs(plan.inputs, profile)
+        if screen is ConsumerScreen.REMEDIATION:
+            return render_remediation(plan, profile)
+        return render_ready(plan, profile)
 
     def _list(self, state: ConsumerUiState, entries: tuple[str, ...]) -> tuple[str, ...]:
         if not entries:

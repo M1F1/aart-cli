@@ -83,7 +83,7 @@ from agent_artifacts.domain.selection import (
     ResolvedSelection,
     VersionConstraint,
 )
-from agent_artifacts.tui_consumer import render_activity, render_install_plan
+from agent_artifacts.tui_consumer import render_activity, render_install_plan, render_ready
 from tests.consumer_activity_test import lifecycle_outcome
 
 from agent_artifacts.application.consumer_views import ActivityRecord  # isort: skip
@@ -262,6 +262,24 @@ class FastHidesNoMaterialRiskTest(unittest.TestCase):
         for assessment in plan.requirements:
             if assessment.state is not RequirementState.SATISFIED:
                 self.assertIn(str(assessment.requirement.requirement.id), rendered)
+
+    @SETTINGS
+    @given(plans())
+    def test_the_screen_somebody_confirms_from_names_the_same_risks(
+        self, plan: InstallPlan
+    ) -> None:
+        """Screen 09 compresses the review. Compression is not permission to go quiet: whatever
+        risk or remediation the full plan carries is on the screen the decision is made on."""
+
+        view = project_install_plan(plan)
+
+        rendered = "\n".join(render_ready(view, PresentationProfile.FAST)).lower()
+
+        for risk in plan.mutation.risks:
+            self.assertIn(_human(risk.name), rendered)
+        for remediation in view.remediations:
+            self.assertIn(_human(remediation.kind), rendered)
+        self.assertIn(view.review_digest, rendered)
 
 
 class NoCredentialValueChannelTest(unittest.TestCase):
