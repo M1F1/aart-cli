@@ -46,6 +46,7 @@ from agent_artifacts.application.execution import (
     InstallationExecutionStatus,
     execute_installation,
 )
+from agent_artifacts.application.installation_offer import ArtifactPlacement, offer_installation
 from agent_artifacts.application.installation_planning import inspect_requirements
 from agent_artifacts.application.installation_proposal import (
     desired_state_for,
@@ -384,6 +385,94 @@ class AuthoredInstallationTest(unittest.TestCase):
         return json.loads(reply[0]["result"]["content"][0]["text"])
 
     # -- what has to be true ------------------------------------------------------------------
+
+    def test_the_composed_offer_is_the_one_this_test_wired_by_hand(self) -> None:
+        """`offer_installation` is what production will call, so it has to reach the same answer.
+
+        This test built the plan, the measurement and the remediation offer separately, because
+        until now nothing put them together. If the composition disagreed with the hand-wiring on
+        any of the three, the path a person reaches would not be the path this file proves works.
+        """
+
+        offered = offer_installation(
+            (
+                ArtifactPlacement(
+                    self._resolved(),
+                    self.description,
+                    root=str(self.scope / ".tabnine/agent/aart/mcp/github"),
+                    payload_source=str(self.published),
+                    targets=(mcp_target("tabnine", Scope.PROJECT),),
+                    sources=(
+                        SecretProviderReference(
+                            TOKEN, CredentialProviderRef("test-file", "aart-e2e", "github-token")
+                        ),
+                        PersistedConfigValue(ORG, "acme"),
+                    ),
+                ),
+            ),
+            policy=EffectivePolicy(),
+            facts=EnvironmentFacts(sys.platform, remediation_capabilities=self._capabilities()),
+            inspect=LocalEnvironmentInspector(self._capabilities()),
+            observe=lambda _desired: self._inspect(),
+            base_interpreter=sys.executable,
+            resolvers=(self.provider,),
+        )
+
+        self.assertIsInstance(offered, Ok, getattr(offered, "diagnostics", ()))
+        offer = offered.value
+        self.assertEqual(offer.installations, (self.planned,))
+        self.assertEqual(offer.facts, self.facts)
+        self.assertEqual(offer.selected(), self.remediations)
+        self.assertEqual([str(item) for item, _ in offer.observed], [str(self.package.coordinate)])
+
+    def test_the_composed_offer_installs_for_real(self) -> None:
+        """One offer, accepted and run. Nothing between it and the disk was wired by this test."""
+
+        offered = offer_installation(
+            (
+                ArtifactPlacement(
+                    self._resolved(),
+                    self.description,
+                    root=str(self.scope / ".tabnine/agent/aart/mcp/github"),
+                    payload_source=str(self.published),
+                    targets=(mcp_target("tabnine", Scope.PROJECT),),
+                    sources=(
+                        SecretProviderReference(
+                            TOKEN, CredentialProviderRef("test-file", "aart-e2e", "github-token")
+                        ),
+                        PersistedConfigValue(ORG, "acme"),
+                    ),
+                ),
+            ),
+            policy=EffectivePolicy(),
+            facts=EnvironmentFacts(sys.platform, remediation_capabilities=self._capabilities()),
+            inspect=LocalEnvironmentInspector(self._capabilities()),
+            observe=lambda _desired: self._inspect(),
+            base_interpreter=sys.executable,
+            resolvers=(self.provider,),
+        )
+        self.assertIsInstance(offered, Ok, getattr(offered, "diagnostics", ()))
+        offer = offered.value
+
+        begun = begin_installation(
+            offer.installations,
+            self._selection(),
+            offer.facts,
+            EffectivePolicy(),
+            observed=offer.observed,
+            selected_remediations=offer.selected(),
+        )
+        self.assertIsInstance(begun, Ok, getattr(begun, "diagnostics", ()))
+        executed = execute_installation(
+            begun.value.proposal,
+            policy=EffectivePolicy(),
+            interpreters=self._interpreters(),
+            inspect=self._inspect,
+            lock=LocalMutationLock(self.state_root, str(self.scope)),
+        )
+
+        self.assertIsInstance(executed, Ok, getattr(executed, "diagnostics", ()))
+        self.assertEqual(self._server_answers()["org"], "acme")
 
     def test_an_authored_manifest_installs_and_the_server_answers_what_it_declared(self) -> None:
         _, outcome = self._install()
