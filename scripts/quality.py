@@ -312,6 +312,7 @@ def _run(
     *,
     changed_only: bool = False,
     base: str | None = None,
+    executed: list[str] | None = None,
 ) -> int:
     absent = missing_tools(selected, temp_root)
     if absent:
@@ -352,6 +353,7 @@ def _run(
             flush=True,
         )
     by_name = {gate.name: gate for gate in gates}
+    ran = [] if executed is None else executed
     for name in selected:
         if name in redundant:
             # Named, never silent: a gate that vanishes from a log reads as a gate nobody runs.
@@ -364,6 +366,7 @@ def _run(
             if result.returncode:
                 print(f"quality gate FAILED: {name} ({result.returncode})", file=sys.stderr)
                 return result.returncode
+        ran.append(name)
     return 0
 
 
@@ -384,8 +387,9 @@ def main(argv: tuple[str, ...] | None = None) -> int:
         return 2
     before_paths = workspace_paths(ROOT)
     before = snapshot_paths(before_paths)
+    executed: list[str] = []
     with tempfile.TemporaryDirectory(prefix="aart-quality-") as raw:
-        result = _run(selected, Path(raw), changed_only=changed_only, base=base)
+        result = _run(selected, Path(raw), changed_only=changed_only, base=base, executed=executed)
     after_paths = workspace_paths(ROOT)
     after = snapshot_paths(after_paths)
     if before_paths != after_paths or before != after:
@@ -393,7 +397,11 @@ def main(argv: tuple[str, ...] | None = None) -> int:
         return 3
     if result:
         return result
-    print("\nquality gates OK: " + ", ".join(selected))
+    # What ran, never what was asked for: a gate named on this line has actually passed.
+    print("\nquality gates OK: " + ", ".join(executed))
+    skipped = tuple(name for name in selected if name not in executed)
+    if skipped:
+        print("skipped as redundant or out of scope: " + ", ".join(skipped))
     return 0
 
 
