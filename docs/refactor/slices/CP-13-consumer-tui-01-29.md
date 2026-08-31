@@ -306,6 +306,31 @@ own launcher after a repair planned from disk alone, and no stored file contains
   receipts, actions and local inspection. The attempted default route was reverted when
   characterization showed the shell is not yet an actionable replacement (D-061, D-062).
 
+## B-033 — kind-neutral canonical installation (in progress)
+
+The canonical pipeline required a launcher, an interpreter and a transport of every installation, so
+four of the five artifact kinds could not be planned, executed or recorded through it. Step 6 cannot
+start on those kinds while that is true. Closing it, in the migration order the Product
+Specification itself gives (MCP, skills, guidelines/rules, memory, hooks):
+
+| # | Increment | State |
+|---|---|---|
+| 1 | `PlacedArtifactReceipt` beside `InstallationReceipt`, with no launcher field to leave empty | DONE |
+| 2 | `DeliverArtifact`/`WithdrawArtifact` at `CONFIGURATION_MUTATION`; placed desired/removal state with no LAUNCHER component (D-077) | DONE |
+| 3 | `DeliveryEffectInterpreter`, bound to the deliveries it may make | DONE |
+| 4 | `PlannedPlacement` and `plan_artifact_placement`, refusing anything that starts a process | DONE |
+| 5 | `DELIVERY_TARGETS`: measured delivery locations per harness, scope and kind | DONE |
+| 6 | `package_delivery`: what a compiled package offers a harness, read back from the package | DONE |
+| 7 | Persisting and reading back a placed receipt in the receipt store | TODO |
+| 8 | Observing a placed artifact, and its current state for reconciliation | TODO |
+| 9 | `placement_for` and `interpreters_for` carrying placements | TODO |
+| 10 | A real authored Skill installed, recorded, re-read and uninstalled end to end | TODO |
+
+Hooks and shared-file memory are deliberately not in this list. A hook is a script plus an entry
+merged into a settings file, and every measured memory target is a delimited block inside a file the
+user owns; both need a merge effect that does not exist, recorded as B-034. Delivery replaces its
+destination, so using it for either would destroy the file it merged into.
+
 ## Remaining
 
 - Implement the production action handler over placement, `offer_installation`,
@@ -375,6 +400,9 @@ machine-output tests prove every accepted flow now consumes the canonical applic
   interpreter assembler and one application action from offer through recording, but no production
   adapter connecting configured Selection/input sources and machine reload; step 6 has not started.
   The legacy wizard and command authority remain public by design (D-062, D-063, D-073, D-074).
+- B-033 is in progress and is what step 6 waits on for four of the five kinds; its increment table
+  above is the current state. Increments 1-6 are committed and verified under `make check`; the
+  delivered kinds are Skills and guidelines, and hooks and shared-file memory wait on B-034.
 - Exact next action: characterize the adapter that converts a configured approved Marketplace
   Selection into `ResolvedSelection` plus placements and safe screen-07 input sources, calls the
   D-074 action through `interpreters_for`, and reloads the machine. Then route the public consumer

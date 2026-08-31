@@ -96,18 +96,29 @@ that flow and execution, plus composition of real Marketplace and installed-stat
    install, refusals reported in the envelope rather than as a crash, `--json` and text carrying one
    review digest, and fail-closed review that finalizes nothing and writes nothing while still
    carrying the digest a later invocation must match.
-6. **BLOCKED on B-033 for four of the five artifact kinds.** Route the default TTY and retire
-   legacy consumer semantic authority (`consumer/application.py`, `installation/*`,
-   `setup_engine/*`, `lifecycle/application.py`) path by path, each removal preceded by a
-   public-flow test proving the canonical path already carries it.
+6. **BLOCKED on B-033, which is now in progress.** Route the default TTY and retire legacy
+   consumer semantic authority (`consumer/application.py`, `installation/*`, `setup_engine/*`,
+   `lifecycle/application.py`) path by path, each removal preceded by a public-flow test proving
+   the canonical path already carries it.
 
-   The canonical pipeline refuses any artifact that declares no launch contract, so Skills,
-   guidelines, hooks and memory cannot be planned, executed or recorded through it at all: for those
-   kinds there is no public-flow test to write, and routing `install` today would refuse four kinds
-   that install correctly now. B-033 records the evidence and the reclassification. Either close
-   B-033 first, or make the strangler split explicit at the seam -- `mcp` canonical, the rest
-   legacy -- and accept that `install_state` cannot be retired while it holds records nothing
-   canonical can read.
+   The canonical pipeline refused any artifact that declares no launch contract, so Skills,
+   guidelines, hooks and memory could not be planned, executed or recorded through it at all.
+   B-033 closes that, and its increment table lives in the CP-13 slice file. What exists now: a
+   `PlacedArtifactReceipt` with no launcher field to leave empty; `DeliverArtifact`/
+   `WithdrawArtifact` at `CONFIGURATION_MUTATION`, so a policy ceiling that refuses to register an
+   MCP server also refuses writing a Skill into the directory that harness reads (D-077); a
+   `DeliveryEffectInterpreter` bound to the deliveries it may make; `plan_artifact_placement`,
+   which refuses anything that starts a process, declares dependencies nothing would load or names
+   a secret with no launcher to resolve it into; `DELIVERY_TARGETS`, measured per harness, scope
+   and kind; and `package_delivery`, which reads what a package offers a harness back out of the
+   package. What remains: the receipt store, observation, `placement_for`/`interpreters_for`, and
+   a real authored Skill installed end to end.
+
+   Hooks and shared-file memory are deliberately outside B-033 (B-034): a hook is a script plus an
+   entry merged into a settings file, and every measured memory target is a delimited block in a
+   file the user owns. Delivery replaces its destination, so using it for either would destroy the
+   file it merged into. That order -- MCP, skills, guidelines/rules, memory, hooks -- is the
+   Product Specification's own.
 7. Update the CP-13 coverage table as each command and screen group moves from projection to live
    public flow.
 
