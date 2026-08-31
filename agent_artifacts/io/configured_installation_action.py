@@ -225,6 +225,7 @@ def prepare_configured_installation(
         profiles=host.profiles,
         sources=sources,
         policy=policy,
+        harness_root=host.harness_root,
         resolution_policy=resolution_policy,
         preferred_installer=preferred_installer,
     )

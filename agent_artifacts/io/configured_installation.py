@@ -223,10 +223,16 @@ def prepare_configured_installation_draft(
     profiles: tuple[str, ...],
     sources: tuple[InputValueSource, ...],
     policy: EffectivePolicy,
+    harness_root: str | None = None,
     resolution_policy: ResolutionPolicy | None = None,
     preferred_installer: PythonInstaller | None = None,
 ) -> Result[ConfiguredInstallationDraft]:
-    """Resolve, materialize and place one Selection without planning target-machine mutation."""
+    """Resolve, materialize and place one Selection without planning target-machine mutation.
+
+    `harness_root` is the scope's own root. Only an artifact a harness reads off a path needs it,
+    and `placement_for` refuses by name when one is selected and no root was supplied -- rather
+    than resolving a harness path against whatever directory this process happens to be in.
+    """
 
     resolved = resolve_configured_selection(
         effective,
@@ -249,6 +255,7 @@ def prepare_configured_installation_draft(
             project_root=project_root,
             data_root=data_root,
             store=store,
+            harness_root=harness_root,
             preferred_installer=preferred_installer,
         )
         if isinstance(placed, Err):
