@@ -985,3 +985,22 @@ the Product Specification first instead of hiding the change here.
   at, and a first install would then write over whatever is there. Remediation selection stays out:
   a non-interactive command accepts the whole offer or none of it, while screens 07 and 08 pass the
   subset somebody ticked, and the offer must not decide for either.
+
+## D-071 — An installed artifact's own tree lives beside the manifest that records it
+- **Decision:** `artifact_root(coordinate, scope, project_root=…, data_root=…)` places the tree an
+  artifact owns -- payload, environment, interpreter -- at `<project>/.agent-artifacts/runtimes/
+  <source>/<kind>/<name>` for project scope and `<data_root>/runtimes/<source>/<kind>/<name>` for
+  user scope. Pure path policy in `domain/`: no filesystem, no working directory, no environment.
+- **Status:** accepted.
+- **Reason:** nothing decided this. The only answer in the repository was a path typed into an
+  end-to-end test (`.tabnine/agent/aart/mcp/github`), which is fine for a test and useless to a
+  command, and it is also wrong as a rule: it puts the tree inside one harness's directory when one
+  artifact may register with several, so uninstalling that harness's registration would look like it
+  should take the runtime with it.
+- **Consequence:** the two roots are exactly the two `install_state_paths` already uses, so the
+  manifest and the runtime it records are siblings rather than two places to look. The source is
+  part of the path because two sources may publish the same name and they are not the same artifact.
+  The version is deliberately absent: an update reconciles the one installation that is there rather
+  than installing a second beside it and leaving somebody to work out which is live -- which is also
+  what makes the root stable across the desired-state reconciliation CP-11 and CP-12 are built on.
+  No harness name appears anywhere in it.
