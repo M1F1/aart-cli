@@ -8,12 +8,21 @@ anything it should not.
 Config values are recorded by digest rather than in full. They are not secret -- the launcher holds
 them in the open -- but a policy may forbid persisting a particular one, and a digest detects drift
 just as well as a copy does while leaving that policy nothing to be violated by.
+
+There are two records here because there are two kinds of installation, and INV-010 keeps semantic
+kind separate from runtime protocol. `InstallationReceipt` describes an artifact a harness starts:
+it has a launcher, an interpreter and a transport. `PlacedArtifactReceipt` describes one a harness
+reads -- a Skill, a guideline, a hook, a memory -- which has none of those and is installed by being
+delivered where the harness looks. They are separate types rather than one type with optional
+halves, so an MCP receipt cannot lose its launcher without something noticing, and a Skill has no
+launcher field to leave empty.
 """
 
 from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
+from enum import Enum
 
 from .credentials import CredentialProviderRef, CredentialReference
 from .diagnostics import Diagnostic, DiagnosticCode, Severity
@@ -25,12 +34,17 @@ from .selection import OwnershipKind, OwnershipReason
 
 __all__ = [
     "RECEIPT_INVALID",
+    "ArtifactDelivery",
     "ConfigFingerprint",
+    "DeliveryKind",
     "InstallationReceipt",
     "InstalledRecord",
+    "PlacedArtifactReceipt",
     "config_fingerprint",
     "installation_receipt_from_data",
     "installation_receipt_to_data",
+    "placed_artifact_receipt_from_data",
+    "placed_artifact_receipt_to_data",
 ]
 
 RECEIPT_INVALID = DiagnosticCode("receipt-invalid")
@@ -176,6 +190,103 @@ def installation_receipt_to_data(receipt: InstallationReceipt) -> dict[str, obje
     }
 
 
+class DeliveryKind(str, Enum):
+    """What was put where a harness reads it: a directory, or one file."""
+
+    TREE = "tree"
+    FILE = "file"
+
+
+@dataclass(frozen=True, slots=True)
+class ArtifactDelivery:
+    """Where one harness reads one installed artifact from, and what was put there.
+
+    This is the counterpart of an MCP registration for a kind that starts nothing.  A registration
+    tells a harness a command to run; a delivery is the harness reading a path.  Both are the same
+    statement -- this harness now knows about this artifact -- and both carry a digest, so a later
+    reconciler can tell "still there and unchanged" from "still there".
+    """
+
+    harness: str
+    destination: str
+    kind: DeliveryKind
+    digest: ObjectDigest
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.harness, str) or not self.harness.strip():
+            raise ValueError("a delivery names the harness that reads it")
+        if (
+            not isinstance(self.destination, str)
+            or not self.destination.startswith("/")
+            or any(character in self.destination for character in "\r\n")
+        ):
+            # Absolute, because the harness resolves it from a working directory nobody here
+            # controls -- the same rule a registration's command follows.
+            raise ValueError("a delivery destination must be one absolute path")
+        if not isinstance(self.kind, DeliveryKind) or not isinstance(self.digest, ObjectDigest):
+            raise ValueError("delivery kind or digest is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class PlacedArtifactReceipt:
+    """One installed artifact that a harness reads rather than starts.
+
+    INV-010 keeps semantic kind separate from runtime protocol, and this is where that separation
+    becomes structural: there is no launcher field to leave empty, no interpreter to invent and no
+    transport to default.  A Skill has none of those, and a receipt that carried them anyway would
+    have a later reconciler looking for a process nobody installed and reporting its absence as
+    drift.
+    """
+
+    artifact: str
+    root: str
+    payload_digest: ObjectDigest
+    deliveries: tuple[ArtifactDelivery, ...] = ()
+    config: tuple[ConfigFingerprint, ...] = ()
+
+    def __post_init__(self) -> None:
+        for value, label in ((self.artifact, "artifact"), (self.root, "root")):
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"placed artifact receipt {label} is invalid")
+        if not self.root.startswith("/"):
+            raise ValueError("placed artifact receipt root must be absolute")
+        if not isinstance(self.payload_digest, ObjectDigest):
+            raise ValueError("placed artifact receipt payload digest is invalid")
+        for items, kind, label in (
+            (self.deliveries, ArtifactDelivery, "deliveries"),
+            (self.config, ConfigFingerprint, "config"),
+        ):
+            if not isinstance(items, tuple) or any(not isinstance(item, kind) for item in items):
+                raise ValueError(f"placed artifact receipt {label} are invalid")
+        if not self.deliveries:
+            # Placed in its own tree and read by nobody is a download, not an installation, and
+            # recording it as one would let `status` report an artifact nothing can reach.
+            raise ValueError("a placed artifact is delivered to at least one harness")
+        destinations = [item.destination for item in self.deliveries]
+        if len(set(destinations)) != len(destinations):
+            raise ValueError("two deliveries cannot write the same destination")
+
+
+def placed_artifact_receipt_to_data(receipt: PlacedArtifactReceipt) -> dict[str, object]:
+    return {
+        "artifact": receipt.artifact,
+        "config": [
+            {"digest": str(item.digest), "input": item.input.value} for item in receipt.config
+        ],
+        "deliveries": [
+            {
+                "destination": item.destination,
+                "digest": str(item.digest),
+                "harness": item.harness,
+                "kind": item.kind.value,
+            }
+            for item in receipt.deliveries
+        ],
+        "payload_digest": str(receipt.payload_digest),
+        "root": receipt.root,
+    }
+
+
 def _error(message: str) -> Err:
     return Err((Diagnostic(RECEIPT_INVALID, Severity.ERROR, message),))
 
@@ -187,6 +298,25 @@ def _digest(value: object, label: str) -> ObjectDigest:
     if not algorithm or not digest:
         raise ValueError(f"{label} must be written as algorithm:value")
     return ObjectDigest(algorithm, digest)
+
+
+def _delivery(value: object) -> ArtifactDelivery:
+    if not isinstance(value, dict):
+        raise ValueError("a delivery must be a mapping")
+    for key in ("harness", "destination", "kind", "digest"):
+        if key not in value:
+            raise ValueError(f"a delivery is missing {key}")
+    raw = str(value["kind"])
+    try:
+        kind = DeliveryKind(raw)
+    except ValueError:
+        raise ValueError(f"unknown delivery kind {raw!r}") from None
+    return ArtifactDelivery(
+        str(value["harness"]),
+        str(value["destination"]),
+        kind,
+        _digest(value["digest"], "delivery digest"),
+    )
 
 
 def _reference(data: object) -> CredentialReference:
@@ -212,6 +342,37 @@ def _fingerprint(data: object) -> ConfigFingerprint:
         )
     except KeyError as error:
         raise ValueError(f"config document is missing {error.args[0]}") from None
+
+
+def placed_artifact_receipt_from_data(data: object) -> Result[PlacedArtifactReceipt]:
+    """The exact inverse of :func:`placed_artifact_receipt_to_data`.
+
+    Like the installation receipt, this refuses what it cannot rebuild rather than defaulting a
+    missing field: a record whose deliveries are absent would come back as an artifact delivered
+    nowhere, which reads as an install that never reached a harness rather than as a record this
+    process could not understand.
+    """
+
+    if not isinstance(data, dict):
+        return _error("a placed artifact receipt must be a mapping")
+    try:
+        for key in ("artifact", "root", "payload_digest", "deliveries"):
+            if key not in data:
+                raise ValueError(f"placed artifact receipt is missing {key}")
+        for key in ("deliveries", "config"):
+            if not isinstance(data.get(key, []), list):
+                raise ValueError(f"placed artifact receipt {key} must be a list")
+        return Ok(
+            PlacedArtifactReceipt(
+                str(data["artifact"]),
+                str(data["root"]),
+                _digest(data["payload_digest"], "payload digest"),
+                tuple(_delivery(item) for item in data["deliveries"]),
+                tuple(_fingerprint(item) for item in data.get("config", [])),
+            )
+        )
+    except ValueError as error:
+        return _error(str(error))
 
 
 def installation_receipt_from_data(data: object) -> Result[InstallationReceipt]:
