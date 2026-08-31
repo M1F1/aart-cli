@@ -24,6 +24,7 @@ from agent_artifacts.domain.artifacts import (
     Provenance as ArtifactProvenance,
 )
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity, SourceLocation
+from agent_artifacts.domain.effects import DeliveryKind
 from agent_artifacts.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
@@ -58,7 +59,7 @@ from agent_artifacts.domain.python_runtime import (
 from agent_artifacts.domain.result import Err, Ok, Result
 
 from .codes import AUTHOR_MANIFEST_INVALID, AUTHOR_PAYLOAD_INVALID, AUTHOR_TREE_INVALID
-from .hashing import file_entry, sha256_bytes, tree_digest
+from .hashing import directory_entry, file_entry, sha256_bytes, tree_digest
 from .json import JsonArray, JsonObject, JsonValue, canonical_json_bytes, parse_json
 from .native_models import (
     PAYLOAD_FORMAT_BY_TYPE,
@@ -871,6 +872,90 @@ def package_payload_root(root: str) -> str:
     if not isinstance(root, str) or not root or root.endswith("/"):
         raise ValueError("a package payload root is derived from the package root")
     return f"{root}/{PACKAGE_PAYLOAD_DIRECTORY}"
+
+
+#: What each delivered kind is placed as, read back from the same fact `_INSTALL_EFFECTS` records
+#: at compile time. A hook and a memory are absent: both merge into a file they do not own, which is
+#: not a delivery (B-034), and an MCP server is registered rather than placed.
+_DELIVERED_KINDS: dict[ArtifactKind, DeliveryKind] = {
+    ArtifactKind.SKILL: DeliveryKind.TREE,
+    ArtifactKind.GUIDELINE: DeliveryKind.FILE,
+}
+
+
+@dataclass(frozen=True, slots=True)
+class PackagedDelivery:
+    """What a package offers a harness: where inside its payload, and what is there.
+
+    `source` is relative to the payload root, and empty means the payload directory itself. The
+    digest covers only what is delivered, so a package rebuilt with different provenance around an
+    unchanged payload delivers the same thing and a reconciler sees no drift.
+    """
+
+    source: str
+    delivery: DeliveryKind
+    digest: ObjectDigest
+
+
+def package_delivery(
+    kind: ArtifactKind, entries: tuple[SnapshotEntry, ...]
+) -> Result[PackagedDelivery]:
+    """What installing this package would give a harness to read, from the package itself.
+
+    Read back out of the compiled tree with the parsers that wrote it, never re-derived from the
+    author's repository, which the installing machine has not seen (D-056). A guideline carrying
+    more than one payload file is refused rather than resolved by picking one: two candidates is an
+    author saying something the format cannot express, and guessing would install a file nobody
+    chose under a name it did not have.
+    """
+
+    delivery = _DELIVERED_KINDS.get(kind)
+    if delivery is None:
+        return _error(
+            AUTHOR_PAYLOAD_INVALID,
+            f"a {kind.value} is not installed by being placed where a harness reads it",
+        )
+    prefix = f"{PACKAGE_PAYLOAD_DIRECTORY}/"
+    carried = tuple(
+        entry
+        for entry in entries
+        if str(entry.path).startswith(prefix) and entry.kind is not SnapshotEntryKind.DIRECTORY
+    )
+    if not carried:
+        return _error(
+            AUTHOR_PAYLOAD_INVALID,
+            f"this {kind.value} package carries no payload, so there would be nothing to deliver",
+        )
+    if delivery is DeliveryKind.FILE:
+        files = tuple(entry for entry in carried if entry.kind is SnapshotEntryKind.FILE)
+        if len(files) != 1:
+            return _error(
+                AUTHOR_PAYLOAD_INVALID,
+                f"a {kind.value} is delivered as one file, and this package carries "
+                f"{len(files)} of them",
+            )
+        return Ok(
+            PackagedDelivery(
+                str(files[0].path)[len(prefix) :], delivery, sha256_bytes(files[0].content)
+            )
+        )
+    records = []
+    for entry in entries:
+        path = str(entry.path)
+        if not path.startswith(prefix):
+            continue
+        relative = parse_relative_path(path[len(prefix) :])
+        if isinstance(relative, Err):
+            return relative
+        records.append(
+            directory_entry(relative.value)
+            if entry.kind is SnapshotEntryKind.DIRECTORY
+            else file_entry(relative.value, entry.content, executable=entry.executable)
+        )
+    digest = tree_digest(records)
+    if isinstance(digest, Err):
+        return digest
+    return Ok(PackagedDelivery("", delivery, digest.value))
 
 
 def read_package_description(entries: tuple[SnapshotEntry, ...]) -> Result[InstallDescription]:
