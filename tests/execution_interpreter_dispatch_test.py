@@ -37,7 +37,7 @@ from agent_artifacts.domain.effects import (
 from agent_artifacts.domain.harness import McpRegistration, Scope, mcp_target
 from agent_artifacts.domain.identifiers import InputId
 from agent_artifacts.domain.python_runtime import ArtifactEnvironment
-from agent_artifacts.domain.result import Ok
+from agent_artifacts.domain.result import Err, Ok
 from agent_artifacts.io.execution import (
     CredentialEffectInterpreter,
     FileEffectInterpreter,
@@ -130,12 +130,47 @@ class TwoArtifactDispatchTest(unittest.TestCase):
         """Two artifacts mean two harness interpreters, each holding only its own registrations."""
 
         registry = LocalHarnessRegistry(str(pathlib.Path(self.first.root).parent.parent))
-        first = HarnessEffectInterpreter(registry, (_registration("github"),))
-        second = HarnessEffectInterpreter(registry, (_registration("gitlab"),))
+        first = HarnessEffectInterpreter(
+            registry, (_registration("github"),), artifact="mcp/github"
+        )
+        second = HarnessEffectInterpreter(
+            registry, (_registration("gitlab"),), artifact="mcp/gitlab"
+        )
 
         chosen = _dispatch(UnconfigureHarness("claude", "gitlab", ".mcp.json"), (first, second))
 
         self.assertIs(chosen, second)
+
+    def test_registering_the_second_artifact_does_not_reach_the_first_harness_interpreter(
+        self,
+    ) -> None:
+        """`ConfigureHarness` names the artifact and never the server, and two artifacts may
+        register with the same harness. Matching on the harness alone lets the first interpreter
+        answer for the second artifact's step and register its own server under it -- not a closed
+        failure but a wrong write, so the interpreter is told which artifact it may register."""
+
+        registry = LocalHarnessRegistry(str(pathlib.Path(self.first.root).parent.parent))
+        first = HarnessEffectInterpreter(
+            registry, (_registration("github"),), artifact="mcp/github"
+        )
+        second = HarnessEffectInterpreter(
+            registry, (_registration("gitlab"),), artifact="mcp/gitlab"
+        )
+
+        chosen = _dispatch(ConfigureHarness("claude", "mcp/gitlab", ".mcp.json"), (first, second))
+
+        self.assertIs(chosen, second)
+
+    def test_registering_an_artifact_it_was_not_given_is_refused_outright(self) -> None:
+        registry = LocalHarnessRegistry(str(pathlib.Path(self.first.root).parent.parent))
+        first = HarnessEffectInterpreter(
+            registry, (_registration("github"),), artifact="mcp/github"
+        )
+
+        applied = first.apply(ConfigureHarness("claude", "mcp/gitlab", ".mcp.json"))
+
+        self.assertIsInstance(applied, Err, applied)
+        self.assertIn("mcp/gitlab", applied.diagnostics[0].message)
 
     def test_a_credential_reference_this_interpreter_was_never_given_is_not_its_effect(
         self,

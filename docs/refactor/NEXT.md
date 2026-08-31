@@ -57,10 +57,17 @@ that flow and execution, plus composition of real Marketplace and installed-stat
    (D-070). The real E2E proves the composed offer reaches the same answer as the hand-wiring it
    replaces and installs for real through it.
 
-   What is still missing before a command or the shell's handler can call it: resolving coordinates
-   to `ResolvedArtifact` plus `InstallDescription` out of the object store, deciding each artifact's
-   root and harness targets from scope/profile, and assembling the effect interpreters. Those are
-   the remaining seams; none of them is a design question, all are composition.
+   **DONE:** the remaining composition seams now exist. `placement_for` reads each resolved
+   artifact's verified object and install description, applies the scope/profile root and measured
+   harness targets (D-071), and `interpreters_for` builds the capability-bound adapter set for the
+   whole Selection while refusing a missing credential provider before mutation (D-073). The real
+   authored-package E2E installs through that assembler rather than a hand-wired tuple.
+
+   The next RED seam is therefore the production action handler itself: resolve the requested
+   Selection, turn its members into placements, call `offer_installation`, preserve its review
+   identity through `begin_installation`, assemble and execute the confirmed transaction, record it,
+   and reload one immutable machine. The public command and shell must call that one handler rather
+   than recompose its steps independently.
 5. **DONE:** public-flow characterization now pins each command seam before its dispatch changes --
    durable `status` (a later invocation names what an earlier one installed, and names nothing after
    an uninstall), one envelope across all four seams, a review that names the artifacts it would

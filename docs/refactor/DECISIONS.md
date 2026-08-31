@@ -1022,3 +1022,24 @@ the Product Specification first instead of hiding the change here.
   wrong interpreter's ownership refusal, so the message names the real fault. This narrows dispatch
   and never widens it: the ownership, registration and reference checks that produced those
   refusals still run inside `apply`, so an interpreter reached directly refuses exactly as before.
+
+## D-073 — One confirmed Selection gets one capability-bound interpreter set
+- **Decision:** `interpreters_for` assembles the execution adapters for all planned installations
+  before execution: one file, Python-runtime and artifact-bound harness interpreter per artifact,
+  and one credential interpreter per provider holding the deduplicated references that name it.
+  A referenced credential provider with no supplied adapter refuses the assembly before the
+  mutation lock is taken. No credential value crosses this composition boundary.
+- **Status:** accepted.
+- **Reason:** the public commands and the shell action handler need the same adapter set. Leaving
+  that wiring in each caller would duplicate security-sensitive ownership rules and had already
+  hidden a multi-artifact ambiguity: two artifacts may register with the same harness, while a
+  `ConfigureHarness` effect names the artifact rather than the server. A harness-only interpreter
+  match could therefore carry out the second artifact's effect with the first artifact's
+  registration.
+- **Consequence:** `HarnessEffectInterpreter` is explicitly bound to the artifact whose
+  registrations it holds, and both dispatch and direct application reject another artifact. Two
+  artifacts sharing a provider share its one adapter, while missing providers are named as a
+  composition failure instead of surfacing after files have been written. The authored-package E2E
+  now installs through this assembler, proving the verified object-store package, generated
+  launcher, owned environment, harness registration and provider reference all execute through the
+  production composition rather than a test's hand-wired tuple.

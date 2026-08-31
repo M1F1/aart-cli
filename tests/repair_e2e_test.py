@@ -150,7 +150,9 @@ class InstalledFixture(unittest.TestCase):
         return (
             files,
             RuntimeEffectInterpreter(LocalPythonRuntime(self.environment)),
-            HarnessEffectInterpreter(self.registry, (self.registration,)),
+            HarnessEffectInterpreter(
+                self.registry, (self.registration,), artifact=self.environment.artifact
+            ),
             CredentialEffectInterpreter(
                 self.provider,  # type: ignore[arg-type]
                 self.receipt.credentials,

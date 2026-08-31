@@ -118,7 +118,12 @@ def _sources() -> tuple[InputValueSource, ...]:
     )
 
 
-def _plan(description: InstallDescription | None = None, **overrides: object):
+def _plan(
+    description: InstallDescription | None = None,
+    *,
+    resolved: object | None = None,
+    **overrides: object,
+):
     fields: dict[str, object] = {
         "root": ROOT,
         "payload_source": PAYLOAD_SOURCE,
@@ -131,7 +136,7 @@ def _plan(description: InstallDescription | None = None, **overrides: object):
     }
     fields.update(overrides)
     return plan_artifact_installation(
-        _resolved(),
+        _resolved() if resolved is None else resolved,  # type: ignore[arg-type]
         description or _description(),
         **fields,  # type: ignore[arg-type]
     )

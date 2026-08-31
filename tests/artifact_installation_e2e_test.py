@@ -84,16 +84,10 @@ from agent_artifacts.domain.selection import (
 )
 from agent_artifacts.io.consumer_machine import read_consumer_machine
 from agent_artifacts.io.environment_inspection import LocalEnvironmentInspector
-from agent_artifacts.io.execution import (
-    CredentialEffectInterpreter,
-    FileEffectInterpreter,
-    HarnessEffectInterpreter,
-    LocalMutationLock,
-    RuntimeEffectInterpreter,
-)
+from agent_artifacts.io.execution import LocalMutationLock
 from agent_artifacts.io.harness import LocalHarnessRegistry
+from agent_artifacts.io.installation_execution import interpreters_for
 from agent_artifacts.io.object_store import publish_object, read_object
-from agent_artifacts.io.python_runtime import LocalPythonRuntime
 from agent_artifacts.io.receipt_store import LocalReceiptStore
 from agent_artifacts.io.runtime_projection import observe_installation
 from agent_artifacts.protocol.authoring import (
@@ -311,19 +305,15 @@ class AuthoredInstallationTest(unittest.TestCase):
         )
 
     def _interpreters(self):
-        files = FileEffectInterpreter(self.environment)
-        files.offer(self.planned.launcher.content.encode("utf-8"))
-        return (
-            files,
-            RuntimeEffectInterpreter(
-                LocalPythonRuntime(self.environment, timeout_seconds=300.0, offline=True)
-            ),
-            HarnessEffectInterpreter(self.registry, self.planned.registrations),
-            CredentialEffectInterpreter(
-                self.provider,  # type: ignore[arg-type]
-                self.receipt.credentials,
-            ),
+        assembled = interpreters_for(
+            (self.planned,),
+            registry=self.registry,
+            credential_providers=(self.provider,),  # type: ignore[arg-type]
+            timeout_seconds=300.0,
+            offline=True,
         )
+        self.assertIsInstance(assembled, Ok, getattr(assembled, "diagnostics", ()))
+        return assembled.value
 
     def _begin(self):
         begun = begin_installation(

@@ -255,20 +255,36 @@ class HarnessEffectInterpreter:
 
     The registrations are supplied here rather than read off the effect, because `ConfigureHarness`
     names a harness and this is what tells it which server, at which command.
+
+    `artifact` is which artifact those registrations belong to, and it is required. A
+    `ConfigureHarness` names the artifact and never the server, so with two artifacts registering
+    with the same harness there is nothing else that separates their steps: without it this
+    interpreter would answer for the other artifact's step and write its own server under it.
     """
 
     def __init__(
         self,
         registry: LocalHarnessRegistry,
         registrations: tuple[McpRegistration, ...] = (),
+        *,
+        artifact: str,
     ) -> None:
         if not isinstance(registry, LocalHarnessRegistry):
             raise ValueError("a harness interpreter needs a registry")
+        if (
+            not isinstance(artifact, str)
+            or not artifact.strip()
+            or any(character in artifact for character in "\r\n")
+        ):
+            raise ValueError("a harness interpreter registers one named artifact")
         self.registry = registry
         self.registrations = tuple(registrations)
+        self.artifact = artifact
 
     def _matching(self, effect: Effect) -> tuple[McpRegistration, ...]:
         if not isinstance(effect, (ConfigureHarness, UnconfigureHarness)):
+            return ()
+        if isinstance(effect, ConfigureHarness) and effect.artifact != self.artifact:
             return ()
         return tuple(
             registration
@@ -288,7 +304,8 @@ class HarnessEffectInterpreter:
 
         A bulk install puts one of these per artifact in the executor's tuple, and dispatch takes
         the first that says yes. Answering on the effect's type alone would let the first one claim
-        every harness effect in the transaction and then refuse the ones it has no registration for.
+        every harness effect in the transaction: the ones it has no registration for it would then
+        refuse, and the ones for another artifact at the same harness it would carry out wrongly.
         """
 
         return bool(self._matching(effect))
@@ -296,6 +313,11 @@ class HarnessEffectInterpreter:
     def apply(self, effect: Effect) -> Result[str]:
         if not isinstance(effect, (ConfigureHarness, UnconfigureHarness)):
             return _error(EXECUTION_REFUSED, f"{type(effect).__name__} is not a harness effect")
+        if isinstance(effect, ConfigureHarness) and effect.artifact != self.artifact:
+            return _error(
+                EXECUTION_REFUSED,
+                f"this interpreter registers {self.artifact}, not {effect.artifact}",
+            )
         matching = self._matching(effect)
         if not matching:
             return _error(
