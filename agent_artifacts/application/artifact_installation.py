@@ -51,7 +51,7 @@ from .installation_planning import (
     allowed_remediations,
     assess_requirements,
 )
-from .installation_proposal import PlannedInstallation
+from .installation_proposal import PlannedArtifact, PlannedInstallation
 from .python_environment import dependency_installation, select_python_installer
 from .runtime_projection import CredentialResolutionPort, generate_launcher
 
@@ -220,7 +220,7 @@ def plan_artifact_installation(
 
 
 def installation_remediations(
-    installations: tuple[PlannedInstallation, ...],
+    installations: tuple[PlannedArtifact, ...],
     facts: EnvironmentFacts,
     policy: EffectivePolicy,
 ) -> Result[tuple[PlannedRemediation, ...]]:
@@ -230,6 +230,10 @@ def installation_remediations(
     so the offer and the acceptance are computed by the same three functions. A person choosing
     from a list assembled some other way could pick something the plan then rejects, or -- worse --
     never be offered the one thing that would have made the install possible.
+
+    Either shape of plan answers, because what is read here -- a coordinate and the requirements it
+    carries -- is what the two have in common. A placement's requirements are only the harnesses
+    that read it, so it contributes to the aggregate without ever asking for a runtime.
     """
 
     aggregated = aggregate_requirements(

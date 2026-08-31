@@ -26,13 +26,14 @@ from dataclasses import dataclass, field
 
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.harness import McpTarget
-from agent_artifacts.domain.identifiers import ArtifactCoordinate
+from agent_artifacts.domain.identifiers import ArtifactCoordinate, ObjectDigest
 from agent_artifacts.domain.inputs import InputValueSource
 from agent_artifacts.domain.inspection import EnvironmentFacts
 from agent_artifacts.domain.install_description import InstallDescription
 from agent_artifacts.domain.plans import PlannedRemediation
 from agent_artifacts.domain.policies import EffectivePolicy
 from agent_artifacts.domain.python_runtime import PythonInstaller
+from agent_artifacts.domain.receipts import ArtifactDelivery
 from agent_artifacts.domain.reconciliation import CurrentState
 from agent_artifacts.domain.remediations import Remediation
 from agent_artifacts.domain.requirements import Requirement
@@ -44,12 +45,13 @@ from .artifact_installation import (
     plan_artifact_installation,
     requirements_for,
 )
+from .artifact_placement import placement_requirements_for, plan_artifact_placement
 from .installation_planning import (
     EnvironmentInspectionPort,
     aggregate_requirements,
     inspect_requirements,
 )
-from .installation_proposal import PlannedInstallation
+from .installation_proposal import PlannedArtifact, PlannedInstallation, PlannedPlacement
 
 __all__ = [
     "OFFER_NOT_PLANNABLE",
@@ -79,6 +81,12 @@ class ArtifactPlacement:
     targets: tuple[McpTarget, ...] = ()
     sources: tuple[InputValueSource, ...] = ()
     preferred_installer: PythonInstaller | None = None
+    #: Where each harness reads this artifact from, for the kinds that start no process. Empty for
+    #: an artifact that declares a launch contract, which is read over a transport rather than off
+    #: a path. Both are measured by the adapter, which is the only layer that has seen the package
+    #: and the profile roots.
+    deliveries: tuple[ArtifactDelivery, ...] = ()
+    payload_digest: ObjectDigest | None = None
 
     def __post_init__(self) -> None:
         if (
@@ -90,6 +98,10 @@ class ArtifactPlacement:
             or not self.payload_source
         ):
             raise ValueError("an artifact placement is invalid")
+        if any(not isinstance(item, ArtifactDelivery) for item in self.deliveries) or not (
+            self.payload_digest is None or isinstance(self.payload_digest, ObjectDigest)
+        ):
+            raise ValueError("artifact placement deliveries are invalid")
 
     @property
     def coordinate(self):
@@ -100,7 +112,7 @@ class ArtifactPlacement:
 class InstallationOffer:
     """What this machine would install, what it measured, and what it would need agreed to."""
 
-    installations: tuple[PlannedInstallation, ...]
+    installations: tuple[PlannedArtifact, ...]
     facts: EnvironmentFacts
     remediations: tuple[PlannedRemediation, ...] = field(default=())
     #: What is on this machine right now for each artifact, one entry per installation. An artifact
@@ -111,7 +123,10 @@ class InstallationOffer:
     def __post_init__(self) -> None:
         if (
             not self.installations
-            or any(not isinstance(item, PlannedInstallation) for item in self.installations)
+            or any(
+                not isinstance(item, (PlannedInstallation, PlannedPlacement))
+                for item in self.installations
+            )
             or not isinstance(self.facts, EnvironmentFacts)
             or any(not isinstance(item, PlannedRemediation) for item in self.remediations)
             or len(self.observed) != len(self.installations)
@@ -134,13 +149,34 @@ def _error(message: str) -> Err:
     return Err((Diagnostic(OFFER_NOT_PLANNABLE, Severity.ERROR, message),))
 
 
+def _is_delivered(placement: ArtifactPlacement) -> bool:
+    """Whether this artifact is read off a path rather than started.
+
+    The artifact decides, not a flag a caller passes. An install description that declares a launch
+    contract is something a harness runs; one that declares none is something a harness reads. Both
+    planners refuse the other's case by name, so a caller cannot route an artifact the wrong way and
+    get a plan that quietly omits half of it.
+    """
+
+    return placement.description.contract is None
+
+
+def _requirements_of(placement: ArtifactPlacement) -> tuple[Requirement, ...]:
+    if _is_delivered(placement):
+        # The harnesses that read it, and nothing else: there is no runtime to find and no
+        # credential to resolve. The MCP targets are not consulted, because a delivered artifact
+        # is not registered with anything.
+        return placement_requirements_for(placement.deliveries)
+    return requirements_for(placement.description, targets=placement.targets)
+
+
 def offer_installation(
     placements: tuple[ArtifactPlacement, ...],
     *,
     policy: EffectivePolicy,
     facts: EnvironmentFacts,
     inspect: EnvironmentInspectionPort,
-    observe: Callable[[PlannedInstallation], CurrentState],
+    observe: Callable[[PlannedArtifact], CurrentState],
     base_interpreter: str | None = None,
     resolvers: tuple[object, ...] = (),
 ) -> Result[InstallationOffer]:
@@ -157,21 +193,37 @@ def offer_installation(
     if not isinstance(policy, EffectivePolicy) or not isinstance(facts, EnvironmentFacts):
         return _error("an installation offer needs a policy and this machine's capabilities")
 
-    installations: list[PlannedInstallation] = []
+    installations: list[PlannedArtifact] = []
     for placement in placements:
-        planned = plan_artifact_installation(
-            placement.artifact,
-            placement.description,
-            root=placement.root,
-            payload_source=placement.payload_source,
-            sources=placement.sources,
-            policy=policy,
-            facts=facts,
-            base_interpreter=base_interpreter,
-            targets=placement.targets,
-            resolvers=resolvers,  # type: ignore[arg-type]
-            preferred_installer=placement.preferred_installer,
-        )
+        planned: Result[PlannedArtifact]
+        if _is_delivered(placement):
+            if placement.payload_digest is None:
+                return _error(
+                    f"{placement.coordinate} is read off a path rather than started, so the offer "
+                    "needs the digest of the payload it would deliver"
+                )
+            planned = plan_artifact_placement(
+                placement.artifact,
+                placement.description,
+                root=placement.root,
+                payload_source=placement.payload_source,
+                payload_digest=placement.payload_digest,
+                deliveries=placement.deliveries,
+            )
+        else:
+            planned = plan_artifact_installation(
+                placement.artifact,
+                placement.description,
+                root=placement.root,
+                payload_source=placement.payload_source,
+                sources=placement.sources,
+                policy=policy,
+                facts=facts,
+                base_interpreter=base_interpreter,
+                targets=placement.targets,
+                resolvers=resolvers,  # type: ignore[arg-type]
+                preferred_installer=placement.preferred_installer,
+            )
         if isinstance(planned, Err):
             # Returned as it came: the planner's diagnostic already names the artifact and why,
             # and rewrapping it here would replace a specific refusal with a vaguer one.
@@ -179,13 +231,7 @@ def offer_installation(
         installations.append(planned.value)
 
     owned = aggregate_requirements(
-        tuple(
-            (
-                placement.coordinate,
-                requirements_for(placement.description, targets=placement.targets),
-            )
-            for placement in placements
-        )
+        tuple((placement.coordinate, _requirements_of(placement)) for placement in placements)
     )
     if isinstance(owned, Err):
         return owned

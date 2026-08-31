@@ -58,7 +58,8 @@ from .consumer_views import (
 from .execution import InstallationExecutionOutcome
 from .installation_proposal import (
     InstallationProposal,
-    PlannedInstallation,
+    PlannedArtifact,
+    PlannedPlacement,
     propose_installation,
 )
 from .intents import InstalledHealth, MemberHealth
@@ -300,31 +301,38 @@ def _flow_error(message: str) -> Err:
     return Err((Diagnostic(FLOW_INVALID, Severity.ERROR, message),))
 
 
-def _declared(installations: tuple[PlannedInstallation, ...]) -> tuple[RuntimeInput, ...]:
+def _declared(installations: tuple[PlannedArtifact, ...]) -> tuple[RuntimeInput, ...]:
     """The distinct inputs this selection declares, in the order they were declared.
 
     An input two artifacts both want is asked for once. They agree on what it is because the values
     for a selection are bound from one set of sources, so the first declaration is the declaration
     rather than a choice between rivals.
+
+    A placement contributes nothing: it starts no process, so there is no command line an input
+    could reach and `plan_artifact_placement` has already refused any artifact that declared one.
     """
 
     seen: dict[InputId, RuntimeInput] = {}
     for planned in installations:
+        if isinstance(planned, PlannedPlacement):
+            continue
         for item in planned.declared:
             seen.setdefault(item.id, item)
     return tuple(seen.values())
 
 
-def _bound(installations: tuple[PlannedInstallation, ...]) -> BoundInputs:
+def _bound(installations: tuple[PlannedArtifact, ...]) -> BoundInputs:
     seen: dict[InputId, BoundInput] = {}
     for planned in installations:
+        if isinstance(planned, PlannedPlacement):
+            continue
         for item in planned.bound.inputs:
             seen.setdefault(item.input.id, item)
     return BoundInputs(tuple(seen.values()))
 
 
 def begin_installation(
-    installations: tuple[PlannedInstallation, ...],
+    installations: tuple[PlannedArtifact, ...],
     selection: ResolvedSelection,
     facts: EnvironmentFacts,
     policy: EffectivePolicy,

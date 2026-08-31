@@ -19,6 +19,7 @@ printed and drawn in a terminal, so what it may carry about a launcher is the di
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TypeAlias
 
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.effects import Effect
@@ -32,6 +33,7 @@ from agent_artifacts.domain.policies import EffectivePolicy
 from agent_artifacts.domain.python_runtime import ArtifactEnvironment
 from agent_artifacts.domain.receipts import (
     ArtifactDelivery,
+    ArtifactReceipt,
     InstallationReceipt,
     PlacedArtifactReceipt,
 )
@@ -53,8 +55,11 @@ from .runtime_projection import RuntimeProjection
 __all__ = [
     "PROPOSAL_INVALID",
     "InstallationProposal",
+    "PlannedArtifact",
     "PlannedInstallation",
     "PlannedPlacement",
+    "artifact_desired_state",
+    "artifact_receipt_for",
     "desired_state_for",
     "install_lifecycle_intent",
     "intended_placement_receipt",
@@ -270,6 +275,13 @@ class PlannedPlacement:
         return self.artifact.version.coordinate
 
 
+#: One artifact's plan, whichever shape of installation it is. The two are separate types because
+#: they converge on different components -- one has a launcher and the other has deliveries -- and
+#: everything that treats them alike does so through what they share: a coordinate, requirements
+#: and a lifecycle intent.
+PlannedArtifact: TypeAlias = PlannedInstallation | PlannedPlacement
+
+
 def intended_placement_receipt(planned: PlannedPlacement) -> PlacedArtifactReceipt:
     """The receipt this placement means to leave behind.
 
@@ -301,6 +313,28 @@ def placement_lifecycle_intent(planned: PlannedPlacement) -> LifecycleIntent:
     """The install intent, carrying who asked for the artifact through to the record."""
 
     return install_intent(placement_desired_state(planned), ownership=planned.artifact.ownership)
+
+
+def artifact_receipt_for(planned: PlannedArtifact) -> ArtifactReceipt:
+    """What either shape of plan would leave behind, without the caller deciding which it is.
+
+    The two receipts are different types because they record different things -- one a launcher and
+    a transport, the other the paths harnesses read -- and this is the single place that branch is
+    written down. A caller that made the choice for itself would be a second place for the two to
+    fall out of step.
+    """
+
+    if isinstance(planned, PlannedPlacement):
+        return intended_placement_receipt(planned)
+    return intended_receipt(planned)
+
+
+def artifact_desired_state(planned: PlannedArtifact) -> DesiredState:
+    """The component-level state either shape of plan converges on."""
+
+    if isinstance(planned, PlannedPlacement):
+        return placement_desired_state(planned)
+    return desired_state_for(planned)
 
 
 @dataclass(frozen=True, slots=True)
@@ -359,7 +393,7 @@ class InstallationProposal:
 
 
 def propose_installation(
-    installations: tuple[PlannedInstallation, ...],
+    installations: tuple[PlannedArtifact, ...],
     selection: ResolvedSelection,
     facts: EnvironmentFacts,
     policy: EffectivePolicy,
@@ -374,7 +408,7 @@ def propose_installation(
     state observed on a machine where nothing is installed is how a first install says so.
     """
 
-    if any(not isinstance(item, PlannedInstallation) for item in installations):
+    if any(not isinstance(item, (PlannedInstallation, PlannedPlacement)) for item in installations):
         return _error("proposing an installation needs planned installations")
     if not isinstance(selection, ResolvedSelection) or not isinstance(policy, EffectivePolicy):
         return _error("proposing an installation needs a resolved selection and a policy")
@@ -391,8 +425,19 @@ def propose_installation(
     lifecycle: list[LifecyclePlan] = []
     intents: list[ArtifactInstallIntent] = []
     for planned in installations:
+        # A placement names no runtime and no transport. Leaving both absent is the fact rather
+        # than a default: nothing starts, so there is no interpreter it runs under and no channel
+        # a harness would speak to it over.
+        if isinstance(planned, PlannedPlacement):
+            runtime, transport = None, None
+        else:
+            runtime, transport = planned.runtime, planned.transport
         try:
-            intent = install_lifecycle_intent(planned)
+            intent = (
+                placement_lifecycle_intent(planned)
+                if isinstance(planned, PlannedPlacement)
+                else install_lifecycle_intent(planned)
+            )
         except ValueError as error:
             return _error(f"{planned.coordinate} cannot be installed: {error}")
         reconciled = plan_lifecycle_intent(intent, states[planned.coordinate], policy=policy)
@@ -405,8 +450,8 @@ def propose_installation(
                     planned.artifact,
                     planned.requirements,
                     tuple(step.effect for step in reconciled.value.repair.steps),
-                    runtime=planned.runtime,
-                    transport=planned.transport,
+                    runtime=runtime,
+                    transport=transport,
                 )
             )
         except ValueError as error:

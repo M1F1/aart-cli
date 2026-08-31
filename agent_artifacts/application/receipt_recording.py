@@ -20,7 +20,11 @@ from typing import Protocol
 
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.identifiers import ArtifactCoordinate
-from agent_artifacts.domain.receipts import InstallationReceipt
+from agent_artifacts.domain.receipts import (
+    ArtifactReceipt,
+    InstallationReceipt,
+    PlacedArtifactReceipt,
+)
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.domain.selection import OwnershipReason
 
@@ -61,7 +65,7 @@ class ReceiptStorePort(Protocol):
     def record_installation(
         self,
         coordinate: ArtifactCoordinate,
-        receipt: InstallationReceipt,
+        receipt: ArtifactReceipt,
         *,
         ownership: tuple[OwnershipReason, ...] | None = None,
     ) -> Result[str]: ...
@@ -102,7 +106,7 @@ def record_lifecycle_outcome(
     *,
     recorded_at: str,
     store: ReceiptStorePort,
-    receipt: InstallationReceipt | None = None,
+    receipt: ArtifactReceipt | None = None,
 ) -> Result[RecordedOutcome]:
     """Record one finished action, and whatever it changed about what is installed.
 
@@ -121,7 +125,11 @@ def record_lifecycle_outcome(
     # the record stays and only who owns it narrows.
     releasing = intent.kind is LifecycleIntentKind.UNINSTALL and not intent.retained
     keeping = not releasing and _keeps_installation(outcome)
-    installed = receipt if keeping and isinstance(receipt, InstallationReceipt) else None
+    installed = (
+        receipt
+        if keeping and isinstance(receipt, (InstallationReceipt, PlacedArtifactReceipt))
+        else None
+    )
     if keeping and installed is None:
         return _error(
             f"recording {coordinate} needs the installation receipt the action applied, "
@@ -174,7 +182,7 @@ def record_installation_transaction(
     *,
     recorded_at: str,
     store: ReceiptStorePort,
-    receipts: tuple[tuple[ArtifactCoordinate, InstallationReceipt], ...] = (),
+    receipts: tuple[tuple[ArtifactCoordinate, ArtifactReceipt], ...] = (),
 ) -> Result[RecordedTransaction]:
     """Record one transaction as one action, and each member it left installed.
 
@@ -190,7 +198,7 @@ def record_installation_transaction(
     if len(available) != len(receipts):
         return _error("a transaction was given the same artifact's receipt twice")
 
-    keeping: list[tuple[ArtifactCoordinate, InstallationReceipt, LifecycleExecutionOutcome]] = []
+    keeping: list[tuple[ArtifactCoordinate, ArtifactReceipt, LifecycleExecutionOutcome]] = []
     for member in outcome.artifacts:
         if member.outcome is None or not _keeps_installation(member.outcome):
             continue

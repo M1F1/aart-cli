@@ -34,7 +34,7 @@ from .execution import (
 )
 from .installation_offer import ArtifactPlacement, InstallationOffer, offer_installation
 from .installation_planning import EnvironmentInspectionPort
-from .installation_proposal import PlannedInstallation, intended_receipt
+from .installation_proposal import PlannedArtifact, artifact_receipt_for
 from .receipt_recording import (
     ReceiptStorePort,
     RecordedTransaction,
@@ -78,7 +78,7 @@ class PreparedInstallationAction:
             raise ValueError("a prepared installation action is inconsistent")
 
     @property
-    def installations(self) -> tuple[PlannedInstallation, ...]:
+    def installations(self) -> tuple[PlannedArtifact, ...]:
         return self.offer.installations
 
     @property
@@ -118,7 +118,7 @@ def prepare_installation_action(
     policy: EffectivePolicy,
     facts: EnvironmentFacts,
     inspect: EnvironmentInspectionPort,
-    observe: Callable[[PlannedInstallation], CurrentState],
+    observe: Callable[[PlannedArtifact], CurrentState],
     selected_remediations: tuple[Remediation, ...] | None,
     base_interpreter: str | None = None,
     resolvers: tuple[CredentialResolutionPort, ...] = (),
@@ -200,7 +200,7 @@ def complete_installation_action(
         recorded_at=recorded_at,
         store=store,
         receipts=tuple(
-            (installation.coordinate, intended_receipt(installation))
+            (installation.coordinate, artifact_receipt_for(installation))
             for installation in prepared.installations
         ),
     )

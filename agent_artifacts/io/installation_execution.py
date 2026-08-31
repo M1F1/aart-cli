@@ -12,6 +12,12 @@ the launcher bytes the effect names by digest; one runtime interpreter per artif
 environment; one harness interpreter per artifact, holding that artifact's registrations and its
 name; and one credential interpreter per provider, holding the references that name it.
 
+An artifact a harness reads gets a shorter set, because it does less: a file interpreter for the
+payload it copies into its own tree, and a delivery interpreter bound to the deliveries that
+artifact may make.  It is given no runtime interpreter, no harness interpreter and no launcher
+bytes -- there is no environment to build, nothing to register and nothing to start.  The adapters
+it is not given are the ones it must not be able to reach.
+
 Nothing here reads a secret value.  A credential reaches this module as a reference, and the
 interpreter built from it can verify or delete the value through the provider but never receives it.
 """
@@ -20,7 +26,9 @@ from __future__ import annotations
 
 from agent_artifacts.application.execution import EffectInterpreter
 from agent_artifacts.application.installation_proposal import (
+    PlannedArtifact,
     PlannedInstallation,
+    PlannedPlacement,
     intended_receipt,
 )
 from agent_artifacts.domain.credentials import CredentialReference
@@ -30,6 +38,7 @@ from agent_artifacts.domain.result import Err, Ok, Result
 from .credentials import CredentialProviderPort
 from .execution import (
     CredentialEffectInterpreter,
+    DeliveryEffectInterpreter,
     FileEffectInterpreter,
     HarnessEffectInterpreter,
     RuntimeEffectInterpreter,
@@ -48,7 +57,7 @@ def _error(message: str) -> Err:
 
 
 def interpreters_for(
-    installations: tuple[PlannedInstallation, ...],
+    installations: tuple[PlannedArtifact, ...],
     *,
     registry: LocalHarnessRegistry,
     credential_providers: tuple[CredentialProviderPort, ...] = (),
@@ -66,7 +75,7 @@ def interpreters_for(
     there is no install where the missing adapter would have gone unused.
     """
 
-    if any(not isinstance(item, PlannedInstallation) for item in installations):
+    if any(not isinstance(item, (PlannedInstallation, PlannedPlacement)) for item in installations):
         raise ValueError("assembling interpreters needs planned installations")
     if not isinstance(registry, LocalHarnessRegistry):
         raise ValueError("assembling interpreters needs a harness registry")
@@ -77,6 +86,14 @@ def interpreters_for(
     interpreters: list[EffectInterpreter] = []
     references: dict[str, list[CredentialReference]] = {}
     for installation in installations:
+        if isinstance(installation, PlannedPlacement):
+            interpreters.append(FileEffectInterpreter(installation.environment))
+            interpreters.append(
+                DeliveryEffectInterpreter(
+                    installation.environment.artifact, installation.deliveries
+                )
+            )
+            continue
         files = FileEffectInterpreter(installation.environment)
         files.offer(installation.launcher.content.encode("utf-8"))
         interpreters.append(files)
