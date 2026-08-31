@@ -238,11 +238,14 @@ the token at launch is not an inspector, so the reference comes back `unknown` w
 as its dependant rather than with an invented answer, and neither the drawn screens nor the
 serialized machine carries the token.
 
-`tests/configured_install_command_e2e_test.py` — the first public strangler route (D-079). A direct
+`tests/configured_install_command_e2e_test.py` — the first public strangler routes (D-079, D-080). A direct
 Skill from an enabled configured `RegistryGit` source reaches `marketplace install`, and the command
 prints the canonical plan in JSON and text with one review digest, refuses a stale digest without
 target mutation, installs through the configured action, records canonical installation/activity
-receipts and writes no legacy manifest. The established local-source command matrix remains green.
+receipts and writes no legacy manifest. A later public `status` reads that receipt from disk through
+the canonical machine reader, measures delivery drift and filters the result by scope/profile; an
+empty store remains a successful empty result. The established local-source command matrix remains
+green.
 
 `tests/consumer_session_e2e_test.py` — nothing is handed a view. A real installation is recorded
 with who asked for it; a second process reads that record back, inspects the machine, assembles it
@@ -339,11 +342,11 @@ destination, so using it for either would destroy the file it merged into.
 
 ## Remaining
 
-- Route `status` to the canonical receipt/machine reader for installations created by the new
-  direct-RegistryGit `install` route; then move `update` and `uninstall` one seam at a time. The
-  install adapter already supplies approved Selection resolution, screen-07 input sources,
-  placement, capability-bound interpreters, execution, durable recording and machine reload
-  (D-074–D-079).
+- Route `update` and `uninstall` one seam at a time for installations created by the new
+  direct-RegistryGit `install` route. Canonical `status` is complete; it reads and re-inspects those
+  records without consulting legacy source content (D-080). The install adapter already supplies
+  approved Selection resolution, screen-07 input sources, placement, capability-bound
+  interpreters, execution, durable recording and machine reload (D-074–D-080).
 - Route public commands through the same handler/application boundary.
 - Step 6: retiring legacy consumer semantic authority, once the above give equivalent public-flow
   evidence.
@@ -360,9 +363,9 @@ destination, so using it for either would destroy the file it merged into.
   `plan_artifact_installation` from the package's own description.
 - The canonical shell now emits and transports install/update/repair/uninstall action requests,
   composes real Marketplace offers and can use one configured production adapter. The direct
-  approved-registry CLI install invokes it, but the shell does not and its Collections come from no
-  live source (B-031). Legacy public authority remains until each characterized seam is routed and
-  proven (D-062, D-063, D-076, D-079).
+  approved-registry CLI install and status invoke it, but the shell does not and its Collections
+  come from no live source (B-031). Legacy public authority remains until each characterized seam
+  is routed and proven (D-062, D-063, D-076, D-079, D-080).
 
 ## Backlog discoveries
 
@@ -402,21 +405,20 @@ machine-output tests prove every accepted flow now consumes the canonical applic
   injected/fail-closed shell boundary, object-store placement and a capability-bound transaction
   interpreter assembler, and one configured production action from approved Selection and safe
   screen-07 inputs through review, recording and machine reload. Step 6 has routed direct
-  approved-registry `install`, while the other source kinds and public lifecycle seams remain on
-  legacy authority by design (D-062, D-063, D-073–D-079).
+  approved-registry `install` and its durable, measured `status`, while the other source kinds and
+  mutating lifecycle seams remain on legacy authority by design (D-062, D-063, D-073–D-080).
 - B-033 is complete: all ten increments are verified, and an authored Skill now crosses the real
   promotion/configured-action path, is recorded and re-read, reports delivery drift and uninstalls
   without touching a neighboring Skill. Skills and guidelines are the delivered kinds; hooks and
   shared-file memory wait on B-034.
-- Exact next action: route public `status` for canonically receipted installations through
-  `read_consumer_machine`, so a later invocation reports what the new public install wrote. Then
-  route `update`, `uninstall` and the canonical shell through the same boundary without duplicating
-  its composition.
+- Exact next action: route public `update` for canonically receipted installations through the
+  configured action boundary, preserving review identity and durable machine reload. Then route
+  `uninstall` and the canonical shell through the same boundary without duplicating composition.
 - Do not undo: existing curses layout/search/basket/back/quit characterization; one semantic plan
   for both profiles; Maintainer Mode remains opt-in; `key_event` stays the only place a key's
   meaning is decided; no clock in `application/`; the legacy roots stay required arguments of
   `read_consumer_machine`, and an unadopted installation stays in the one Installed list with no
   offered action rather than moving to a band of its own (D-069).
-- Tests last run/results: 2,735 unit tests (including E2E; 1 skipped), 83.54% coverage, all quality
+- Tests last run/results: 2,739 unit tests (including E2E; 1 skipped), 83.51% coverage, all quality
   gates green (`make quality PYTHON=python3`). CP-12 baseline was 2,196 unit + 65 E2E at 83.25%.
 - Failure evidence: three defects found by tests are listed under Characterization / RED evidence.

@@ -216,6 +216,65 @@ class ConfiguredInstallCommandTest(unittest.TestCase):
                 "the canonical action was not recorded",
             )
 
+    def test_a_later_public_status_reads_the_canonical_installation_from_disk(self) -> None:
+        with _environment() as env:
+            installed, _ = env.run(
+                "marketplace", "install", COORDINATE, "--profile", "claude", "--yes"
+            )
+            self.assertEqual(installed, 0)
+
+            code, payload = env.run("marketplace", "status", "--profile", "claude")
+
+            self.assertEqual(code, 0, payload)
+            self.assertTrue(payload["ok"])
+            self.assertTrue(payload["finalized"])
+            self.assertEqual(payload["operation"], "marketplace.status")
+            self.assertEqual(len(payload["items"]), 1)
+            self.assertEqual(payload["items"][0]["key"], "company/skill/code-review@1.2.0")
+            self.assertEqual(payload["items"][0]["status"], "current")
+
+    def test_public_status_is_empty_before_any_canonical_install(self) -> None:
+        with _environment() as env:
+            code, payload = env.run("marketplace", "status", "--profile", "claude")
+
+            self.assertEqual(code, 0, payload)
+            self.assertTrue(payload["ok"])
+            self.assertEqual(payload["items"], [])
+
+    def test_public_status_measures_delivery_drift_instead_of_trusting_the_receipt(self) -> None:
+        with _environment() as env:
+            installed, _ = env.run(
+                "marketplace", "install", COORDINATE, "--profile", "claude", "--yes"
+            )
+            self.assertEqual(installed, 0)
+            delivered = env.project / ".claude/skills/code-review/SKILL.md"
+            delivered.chmod(0o600)
+            delivered.write_text("# changed after installation\n", encoding="utf-8")
+
+            code, payload = env.run("marketplace", "status", "--profile", "claude")
+
+            self.assertEqual(code, 0, payload)
+            self.assertEqual(payload["items"][0]["status"], "current")
+            self.assertEqual(payload["items"][0]["health"], "attention")
+            self.assertEqual(payload["items"][0]["detail"], "health: attention")
+
+    def test_public_status_reports_only_the_requested_installation_scope(self) -> None:
+        with _environment() as env:
+            installed, _ = env.run(
+                "marketplace", "install", COORDINATE, "--profile", "claude", "--yes"
+            )
+            self.assertEqual(installed, 0)
+
+            user_code, user_payload = env.run(
+                "marketplace", "status", "--profile", "claude", "--scope", "user"
+            )
+            project_code, project_payload = env.run("marketplace", "status", "--profile", "claude")
+
+            self.assertEqual(user_code, 0, user_payload)
+            self.assertEqual(user_payload["items"], [])
+            self.assertEqual(project_code, 0, project_payload)
+            self.assertEqual(len(project_payload["items"]), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

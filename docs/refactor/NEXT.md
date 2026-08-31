@@ -90,8 +90,13 @@ that flow and execution, plus composition of real Marketplace and installed-stat
    an enabled `RegistryGit` source now enters this adapter from public `marketplace install`
    (D-079). Its JSON review is `consumer_plan_to_data`, its text review renders that same plan, its
    completion carries `receipt_detail_to_data`, and a stale digest refuses before mutation. Direct
-   and local sources plus Collections stay on the characterized legacy route. `status`, `update`,
-   `uninstall` and the default TTY have not moved yet.
+   and local sources plus Collections stay on the characterized legacy route.
+
+   **Status is routed for the same approved-registry authority** (D-080). A later invocation reads
+   canonical receipts through `read_consumer_machine`, re-inspects the installed targets, filters
+   by the requested scope/profile and renders the resulting `InstalledArtifactView`; an edited
+   Skill delivery therefore reports measured `attention` rather than receipt-derived success.
+   Direct/local status, `update`, `uninstall` and the default TTY have not moved yet.
 5. **DONE:** public-flow characterization now pins each command seam before its dispatch changes --
    durable `status` (a later invocation names what an earlier one installed, and names nothing after
    an uninstall), one envelope across all four seams, a review that names the artifacts it would
@@ -120,11 +125,10 @@ that flow and execution, plus composition of real Marketplace and installed-stat
    drift detection and uninstall. Withdrawal restores owner access only inside the exact read-only
    tree it is removing and never follows a symlink (D-078).
 
-   The first public route from item 4 is now live for direct approved-registry artifacts (D-079).
-   The next executable work is `status`: a later public invocation must read the canonical receipt
-   this install wrote and name it without consulting the legacy manifest. Then switch `update` and
-   `uninstall` one seam at a time with their existing public-flow tests green before removing any
-   legacy authority.
+   Public direct approved-registry `install` and `status` are now live (D-079, D-080). The next
+   executable work is `update`: resolve the installed canonical record and approved replacement,
+   preserve the review/digest boundary, execute and re-read the machine. Then switch `uninstall`
+   with its existing public-flow tests green before removing any legacy authority.
 
    Hooks and shared-file memory are deliberately outside completed B-033 (B-034): a hook is a
    script plus an entry merged into a settings file, and every measured memory target is a

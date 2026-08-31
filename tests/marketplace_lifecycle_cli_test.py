@@ -198,6 +198,10 @@ def _run(argv, service):
             "agent_artifacts.commands.marketplace.load_local_consumer_service",
             return_value=Ok(service),
         ),
+        # These request-mapping tests inject the characterized legacy service. Canonical registry
+        # routing has its own disk-backed command E2E; do not let a developer's real configured
+        # default registry choose a different seam while this isolated unit test is running.
+        mock.patch("agent_artifacts.commands.marketplace._configured_status", return_value=None),
         contextlib.redirect_stdout(stdout),
     ):
         code = cli.main(argv)

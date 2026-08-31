@@ -80,6 +80,7 @@ from agent_artifacts.io.configured_installation_action import (
     complete_configured_installation,
     prepare_configured_installation,
 )
+from agent_artifacts.io.consumer_machine import read_consumer_machine
 from agent_artifacts.io.credentials import MacOsKeychainProvider
 from agent_artifacts.marketplace.catalog import marketplace_catalog_bytes, render_marketplace
 from agent_artifacts.marketplace.search import Document, search, summary_line
@@ -124,7 +125,11 @@ from agent_artifacts.setup_render import (
     render_verification_payload,
 )
 from agent_artifacts.store.model import ObjectReadRequest
-from agent_artifacts.tui_consumer import render_install_plan, render_transaction_success
+from agent_artifacts.tui_consumer import (
+    render_install_plan,
+    render_installed_artifact,
+    render_transaction_success,
+)
 
 from ._configured_runtime import load_runtime_configuration
 
@@ -1141,6 +1146,97 @@ def _configured_install(request: Request, selectors: tuple[ArtifactSelector, ...
     return _common.OK if successful else _common.ERROR
 
 
+def _status_matches(selector: ArtifactSelector, coordinate: str) -> bool:
+    """Match a validated selector against a canonical view without reparsing domain identity."""
+
+    body, separator, version = coordinate.rpartition("@")
+    if not separator:
+        body, version = coordinate, ""
+    source, kind, name = body.split("/", 2)
+    return (
+        (selector.source is None or str(selector.source) == source)
+        and selector.identity.kind == kind
+        and selector.identity.name == name
+        and (selector.version is None or selector.version == version)
+    )
+
+
+def _configured_status(request: Request, selectors: tuple[ArtifactSelector, ...]) -> int | None:
+    """Read canonical status when the configured registry owns this public selection."""
+
+    operation = "marketplace.status"
+    runtime = load_runtime_configuration(request, content_required=False)
+    if isinstance(runtime, Err):
+        return _emit_error(request, runtime, operation)
+    effective = runtime.value.loaded.effective
+    registry_aliases = {
+        source.alias
+        for source in effective.configuration.sources
+        if source.enabled and source.kind is SourceKind.REGISTRY_GIT
+    }
+    if selectors:
+        if _configured_registry_selection(selectors, effective) is None:
+            return None
+    elif effective.configuration.default_registry not in registry_aliases:
+        return None
+
+    project_root, user_home = resolved_paths(
+        data_root=runtime.value.paths.data_root,
+        project=request.project,
+        user_home=request.user_home,
+    )
+    harness_root = project_root if request.scope == "project" else user_home
+    credential_providers = (MacOsKeychainProvider(),) if sys.platform == "darwin" else ()
+    machine = read_consumer_machine(
+        state_root=os.path.join(runtime.value.paths.data_root, "state"),
+        harness_root=harness_root,
+        today=datetime.now(timezone.utc).date(),
+        project_root=project_root,
+        user_home=user_home,
+        data_root=runtime.value.paths.data_root,
+        credential_providers=credential_providers,
+        scope=Scope(request.scope),
+        profiles=tuple(request.profiles),
+    )
+    if isinstance(machine, Err):
+        return _emit_error(request, machine, operation)
+    installed = tuple(
+        item
+        for item in machine.value.installed
+        if not selectors
+        or any(_status_matches(selector, item.coordinate) for selector in selectors)
+    )
+    payload = {
+        "schema_version": 1,
+        "ok": True,
+        "operation": operation,
+        "finalized": True,
+        "items": [
+            {
+                "key": item.coordinate,
+                # Preserve the public command's record-oriented status while exposing the
+                # measured health separately. Presence in this list means the durable record is
+                # current; readiness is an observation and may be unknown or drifted.
+                "status": "current",
+                "detail": "" if item.health == "ready" else f"health: {item.health}",
+                "health": item.health,
+            }
+            for item in installed
+        ],
+    }
+    _emit(
+        request,
+        operation,
+        payload,
+        tuple(
+            line
+            for item in installed
+            for line in render_installed_artifact(item, PresentationProfile.FAST)
+        ),
+    )
+    return _common.OK
+
+
 def _lifecycle(request: Request, action: str) -> int:
     operation = f"marketplace.{action}"
     selection = _selection(request, action)
@@ -1148,6 +1244,10 @@ def _lifecycle(request: Request, action: str) -> int:
         return _emit_error(request, selection, operation)
     if action == "install":
         configured = _configured_install(request, selection.value)
+        if configured is not None:
+            return configured
+    if action == "status":
+        configured = _configured_status(request, selection.value)
         if configured is not None:
             return configured
     service = load_local_consumer_service(

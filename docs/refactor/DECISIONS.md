@@ -1180,3 +1180,25 @@ the Product Specification first instead of hiding the change here.
   is now the next seam because the legacy status reader cannot report that receipt. Explicit
   symlink mode is refused rather than silently copied until B-035 exists; this does not alter the
   local/direct legacy behavior still under characterization.
+
+## D-080 — Public canonical status measures the requested durable view
+
+- **Decision:** `marketplace status` reads `read_consumer_machine` when its explicit Selection, or
+  its configured default when no coordinate is supplied, belongs to an enabled `RegistryGit`
+  source. The machine reader may be narrowed by scope and harness profile: canonical receipts are
+  selected by their measured registrations or delivery destinations, and legacy manifest records
+  by their recorded scope/profile. The stable command item keeps `status: current` to mean that a
+  durable installation record is present, while the additive `health` field carries the measured
+  `ready`/`update`/`attention`/`broken`/`unknown` state. Human text renders the same
+  `InstalledArtifactView`.
+- **Status:** accepted.
+- **Reason:** the new public install writes a canonical installation receipt and no legacy
+  manifest, so the legacy status path necessarily reported it as absent (and could fail earlier
+  while trying to parse a registry root as a legacy source). Reading a receipt alone would still
+  be insufficient: status must detect drift on disk, and a project-scoped request must not expose a
+  user-scoped installation merely because canonical receipts share a durable store.
+- **Consequence:** a later invocation reports an approved-registry Skill installed by the public
+  command, an edited delivery reports `health: attention`, and the opposite scope/profile remains
+  absent. Empty canonical state remains a successful empty result. Direct/local sources retain
+  their characterized legacy source-availability semantics until their own route moves; `update`
+  is the next public lifecycle seam.

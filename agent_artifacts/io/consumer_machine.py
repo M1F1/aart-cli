@@ -19,6 +19,7 @@ them.  An unreadable manifest is a refusal, never an empty list.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterable
 from datetime import date
 from pathlib import Path
@@ -35,6 +36,7 @@ from agent_artifacts.application.installed_state import (
     desired_state_from_placement,
     desired_state_from_receipt,
 )
+from agent_artifacts.domain.artifacts import ArtifactKind
 from agent_artifacts.domain.credentials import (
     CredentialObservation,
     CredentialReference,
@@ -42,8 +44,13 @@ from agent_artifacts.domain.credentials import (
     ProviderState,
 )
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from agent_artifacts.domain.harness import Scope, delivery_destination, delivery_target
 from agent_artifacts.domain.identifiers import ArtifactCoordinate
-from agent_artifacts.domain.receipts import InstalledRecord, PlacedArtifactReceipt
+from agent_artifacts.domain.receipts import (
+    InstallationReceipt,
+    InstalledRecord,
+    PlacedArtifactReceipt,
+)
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.install_state.model import InstallScope
 from agent_artifacts.install_state.paths import install_state_paths
@@ -94,7 +101,12 @@ def _unknown(reference: CredentialReference) -> CredentialObservation:
 
 
 def _unadopted(
-    scope: InstallScope, *, project_root: str, user_home: str, data_root: str
+    scope: InstallScope,
+    *,
+    project_root: str,
+    user_home: str,
+    data_root: str,
+    profiles: tuple[str, ...] = (),
 ) -> Result[tuple[UnadoptedInstallation, ...]]:
     """Read one legacy manifest, or report why it could not be read.
 
@@ -121,8 +133,43 @@ def _unadopted(
         tuple(
             UnadoptedInstallation(str(record.coordinate), record.scope)
             for record in parsed.value.installations
+            if not profiles or record.profile in profiles
         )
     )
+
+
+def _targets_scope_and_profile(
+    record: InstalledRecord,
+    *,
+    scope: Scope,
+    profiles: tuple[str, ...],
+    harness_root: str,
+) -> bool:
+    """Whether a durable receipt belongs to the public status view being requested."""
+
+    receipt = record.receipt
+    if isinstance(receipt, InstallationReceipt):
+        return any(
+            registration.target.scope is scope
+            and (not profiles or registration.target.harness in profiles)
+            for registration in receipt.registrations
+        )
+
+    kind = ArtifactKind(record.coordinate.artifact.kind)
+    for delivery in receipt.deliveries:
+        if profiles and delivery.harness not in profiles:
+            continue
+        try:
+            target = delivery_target(delivery.harness, scope, kind)
+        except KeyError:
+            continue
+        expected = os.path.join(
+            harness_root,
+            delivery_destination(target, record.coordinate.artifact.name),
+        )
+        if delivery.destination == expected:
+            return True
+    return False
 
 
 def read_consumer_machine(
@@ -134,6 +181,8 @@ def read_consumer_machine(
     user_home: str,
     data_root: str,
     credential_providers: tuple[CredentialProviderPort, ...] = (),
+    scope: Scope | None = None,
+    profiles: tuple[str, ...] = (),
 ) -> Result[ConsumerMachine]:
     """Read, inspect and assemble the machine the canonical consumer shell opens on.
 
@@ -144,11 +193,20 @@ def read_consumer_machine(
     The legacy roots are required rather than optional for the same reason.  A caller that omitted
     them would get a machine that quietly reports every Skill, guideline, hook and memory on the
     disk as absent, and there is no signature that should make that easy to ask for by accident.
+
+    ``scope`` and ``profiles`` narrow a command-facing read to the harness targets the caller
+    requested.  The persistent TUI omits them and retains its whole-machine view; a scoped public
+    status must not report a user installation while answering for a project, or vice versa.
     """
 
     providers = {item.provider: item for item in credential_providers}
     if len(providers) != len(credential_providers):
         raise ValueError("consumer machine reading needs one adapter per credential provider")
+
+    if scope is not None and not isinstance(scope, Scope):
+        raise ValueError("consumer machine scope is invalid")
+    if any(not isinstance(profile, str) or not profile for profile in profiles):
+        raise ValueError("consumer machine profiles are invalid")
 
     store = LocalReceiptStore(state_root)
     installed = store.installations()
@@ -158,8 +216,21 @@ def read_consumer_machine(
     if isinstance(actions, Err):
         return actions
 
+    records = installed.value
+    if scope is not None:
+        records = tuple(
+            record
+            for record in records
+            if _targets_scope_and_profile(
+                record,
+                scope=scope,
+                profiles=profiles,
+                harness_root=harness_root,
+            )
+        )
+
     observations: list[CredentialObservation] = []
-    for reference in _references(installed.value):
+    for reference in _references(records):
         provider = providers.get(reference.provider.provider)
         if provider is None:
             observations.append(_unknown(reference))
@@ -172,7 +243,7 @@ def read_consumer_machine(
     by_reference = {item.reference: item for item in observations}
     registry = LocalHarnessRegistry(harness_root)
     inspections = []
-    for record in installed.value:
+    for record in records:
         receipt = record.receipt
         if isinstance(receipt, PlacedArtifactReceipt):
             # An artifact a harness reads. There is no launcher to look for and no interpreter to
@@ -205,10 +276,17 @@ def read_consumer_machine(
         inspections.append(InstalledInspection(record, desired, current))
 
     unadopted: list[UnadoptedInstallation] = []
-    receipted = {_unversioned(record.coordinate) for record in installed.value}
-    for scope in ("project", "user"):
+    receipted = {_unversioned(record.coordinate) for record in records}
+    legacy_scopes: tuple[InstallScope, ...] = (
+        (scope.value,) if scope is not None else ("project", "user")
+    )
+    for legacy_scope in legacy_scopes:
         legacy = _unadopted(
-            scope, project_root=project_root, user_home=user_home, data_root=data_root
+            legacy_scope,
+            project_root=project_root,
+            user_home=user_home,
+            data_root=data_root,
+            profiles=profiles,
         )
         if isinstance(legacy, Err):
             return legacy
