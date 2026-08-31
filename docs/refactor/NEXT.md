@@ -78,10 +78,18 @@ that flow and execution, plus composition of real Marketplace and installed-stat
    digests are two different values (D-075), which had made `placement_for` unable to find the
    object it had just resolved.
 
-   The next RED seam is the single production adapter that ties those to the D-074 action: the
-   shell and the public commands must call one adapter rather than recompose its steps
-   independently, and it must reload one immutable machine after completion. B-032 records the
-   input boundary that this audit proved is on the critical path.
+   **DONE (composition):** `prepare_configured_installation` and
+   `complete_configured_installation` are that single adapter (D-076). `InstallationHost` derives
+   the state root, harness root and lock scope from the data/project/home roots and the scope, so
+   preparation and completion cannot act on different machines; unanswered inputs come back as the
+   screen-07 form rather than a refusal; completion executes only the confirmed review digest and
+   re-reads the machine from disk. The E2E installs a configured approved artifact end to end and
+   checks the machine rather than the executor's verdict.
+
+   **What remains in this item is routing, not composition.** No public command calls the adapter
+   yet: `install`, `update`, `uninstall` and `status` still dispatch into the legacy setup queue.
+   That routing is the first half of item 6, and the characterization in item 5 is what each
+   switched seam has to keep satisfying.
 5. **DONE:** public-flow characterization now pins each command seam before its dispatch changes --
    durable `status` (a later invocation names what an earlier one installed, and names nothing after
    an uninstall), one envelope across all four seams, a review that names the artifacts it would
