@@ -238,6 +238,12 @@ the token at launch is not an inspector, so the reference comes back `unknown` w
 as its dependant rather than with an invented answer, and neither the drawn screens nor the
 serialized machine carries the token.
 
+`tests/configured_install_command_e2e_test.py` — the first public strangler route (D-079). A direct
+Skill from an enabled configured `RegistryGit` source reaches `marketplace install`, and the command
+prints the canonical plan in JSON and text with one review digest, refuses a stale digest without
+target mutation, installs through the configured action, records canonical installation/activity
+receipts and writes no legacy manifest. The established local-source command matrix remains green.
+
 `tests/consumer_session_e2e_test.py` — nothing is handed a view. A real installation is recorded
 with who asked for it; a second process reads that record back, inspects the machine, assembles it
 once and draws the screens. The Dashboard counts what is really installed and opens with what just
@@ -333,29 +339,30 @@ destination, so using it for either would destroy the file it merged into.
 
 ## Remaining
 
-- Route the public `install` seam through the configured action adapter for MCP and delivered
-  artifacts, preserving the characterized review/output contract; then move `status`, `update` and
-  `uninstall` one seam at a time. The adapter already supplies approved Selection resolution,
-  screen-07 input sources, placement, capability-bound interpreters, execution, durable recording
-  and machine reload (D-074–D-078).
+- Route `status` to the canonical receipt/machine reader for installations created by the new
+  direct-RegistryGit `install` route; then move `update` and `uninstall` one seam at a time. The
+  install adapter already supplies approved Selection resolution, screen-07 input sources,
+  placement, capability-bound interpreters, execution, durable recording and machine reload
+  (D-074–D-079).
 - Route public commands through the same handler/application boundary.
 - Step 6: retiring legacy consumer semantic authority, once the above give equivalent public-flow
   evidence.
 
 ## Known compromises
 
-- The install flow's screens draw "Nothing has been planned yet." only when no flow is held. A flow
-  now exists and is drawn end to end, but no public entry point starts one: the E2E supplies it, a
-  command does not yet. The fallback line for a screen with no body at all is kept as a guard
-  against drawing a blank frame; no accepted screen reaches it.
+- The install flow's screens draw "Nothing has been planned yet." only when no flow is held. The
+  direct approved-registry command now starts the action, but the persistent shell still has no
+  production handler. The fallback line for a screen with no body at all is kept as a guard against
+  drawing a blank frame; no accepted screen reaches it.
 - `PlannedInstallation.declared` is checked against what is bound only when it is recorded. A plan
   built without it keeps the old behavior rather than failing, which is what let the field be added
   without rewriting every construction site; the one that matters is filled by
   `plan_artifact_installation` from the package's own description.
 - The canonical shell now emits and transports install/update/repair/uninstall action requests,
-  composes real Marketplace offers and can use one configured production adapter, but no public
-  entry invokes that adapter yet and its Collections come from no live source (B-031). The legacy
-  public entry remains until each characterized seam is routed and proven (D-062, D-063, D-076).
+  composes real Marketplace offers and can use one configured production adapter. The direct
+  approved-registry CLI install invokes it, but the shell does not and its Collections come from no
+  live source (B-031). Legacy public authority remains until each characterized seam is routed and
+  proven (D-062, D-063, D-076, D-079).
 
 ## Backlog discoveries
 
@@ -394,21 +401,22 @@ machine-output tests prove every accepted flow now consumes the canonical applic
   also sees legacy project/user manifests, a composed Marketplace, an action-capable reducer, an
   injected/fail-closed shell boundary, object-store placement and a capability-bound transaction
   interpreter assembler, and one configured production action from approved Selection and safe
-  screen-07 inputs through review, recording and machine reload. Step 6 has not routed a public seam
-  yet. The legacy wizard and command authority remain public by design (D-062, D-063, D-073–D-078).
+  screen-07 inputs through review, recording and machine reload. Step 6 has routed direct
+  approved-registry `install`, while the other source kinds and public lifecycle seams remain on
+  legacy authority by design (D-062, D-063, D-073–D-079).
 - B-033 is complete: all ten increments are verified, and an authored Skill now crosses the real
   promotion/configured-action path, is recorded and re-read, reports delivery drift and uninstalls
   without touching a neighboring Skill. Skills and guidelines are the delivered kinds; hooks and
   shared-file memory wait on B-034.
-- Exact next action: route the public `install` seam through the configured action adapter for MCP,
-  Skills and guidelines while preserving the item-5 review/output characterization. Then route
-  `status`, `update`, `uninstall` and the canonical shell through that same boundary without
-  duplicating its composition.
+- Exact next action: route public `status` for canonically receipted installations through
+  `read_consumer_machine`, so a later invocation reports what the new public install wrote. Then
+  route `update`, `uninstall` and the canonical shell through the same boundary without duplicating
+  its composition.
 - Do not undo: existing curses layout/search/basket/back/quit characterization; one semantic plan
   for both profiles; Maintainer Mode remains opt-in; `key_event` stays the only place a key's
   meaning is decided; no clock in `application/`; the legacy roots stay required arguments of
   `read_consumer_machine`, and an unadopted installation stays in the one Installed list with no
   offered action rather than moving to a band of its own (D-069).
-- Tests last run/results: 2,731 unit tests (including E2E; 1 skipped), 83.53% coverage, all quality
+- Tests last run/results: 2,735 unit tests (including E2E; 1 skipped), 83.54% coverage, all quality
   gates green (`make quality PYTHON=python3`). CP-12 baseline was 2,196 unit + 65 E2E at 83.25%.
 - Failure evidence: three defects found by tests are listed under Characterization / RED evidence.

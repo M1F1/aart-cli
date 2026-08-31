@@ -21,14 +21,26 @@ import json
 import os
 import sys
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 from agent_artifacts import command_outcome as _common
+from agent_artifacts.application.consumer_views import (
+    PresentationProfile,
+    consumer_plan_to_data,
+    receipt_detail_to_data,
+)
+from agent_artifacts.configuration.model import SourceKind
+from agent_artifacts.configuration.policy import EffectiveConfiguration
 from agent_artifacts.consumer.application import (
     CONSUMER_REVIEW_MISMATCH,
     ConsumerApplicationService,
 )
-from agent_artifacts.consumer.coordinates import CONSUMER_INVALID, parse_artifact_selectors
+from agent_artifacts.consumer.coordinates import (
+    CONSUMER_INVALID,
+    ArtifactSelector,
+    parse_artifact_selectors,
+)
 from agent_artifacts.consumer.model import (
     ConsumerAction,
     ConsumerActionRequest,
@@ -54,7 +66,21 @@ from agent_artifacts.consumer.runtime_requirements import (
     runtime_check_to_data,
 )
 from agent_artifacts.domain.diagnostics import Diagnostic, Severity, diagnostic_to_data
+from agent_artifacts.domain.harness import Scope
+from agent_artifacts.domain.inputs import SecretInput
+from agent_artifacts.domain.policies import EffectivePolicy
 from agent_artifacts.domain.result import Err, Ok, Result
+from agent_artifacts.domain.selection import (
+    ArtifactRequest,
+    ArtifactSelection,
+    VersionConstraint,
+)
+from agent_artifacts.io.configured_installation_action import (
+    InstallationHost,
+    complete_configured_installation,
+    prepare_configured_installation,
+)
+from agent_artifacts.io.credentials import MacOsKeychainProvider
 from agent_artifacts.marketplace.catalog import marketplace_catalog_bytes, render_marketplace
 from agent_artifacts.marketplace.search import Document, search, summary_line
 from agent_artifacts.model import Request, SetupManualReference
@@ -98,6 +124,7 @@ from agent_artifacts.setup_render import (
     render_verification_payload,
 )
 from agent_artifacts.store.model import ObjectReadRequest
+from agent_artifacts.tui_consumer import render_install_plan, render_transaction_success
 
 from ._configured_runtime import load_runtime_configuration
 
@@ -893,11 +920,236 @@ def _emit(
         print(line)
 
 
+def _configured_registry_selection(
+    selectors: tuple[ArtifactSelector, ...], effective: EffectiveConfiguration
+) -> ArtifactSelection | None:
+    """Return the direct Selection whose source is wholly owned by the new registry seam.
+
+    Collections and direct/local sources stay on the characterized path until their own public
+    replacement evidence exists. An unqualified selector reaches this seam only when the configured
+    default is an approved registry; otherwise choosing a source here would be new product policy.
+    """
+
+    registry_aliases = {
+        source.alias
+        for source in effective.configuration.sources
+        if source.enabled and source.kind is SourceKind.REGISTRY_GIT
+    }
+    default = effective.configuration.default_registry
+    if not registry_aliases or any(item.identity.kind == "collection" for item in selectors):
+        return None
+    if any(
+        (item.source is not None and item.source not in registry_aliases)
+        or (item.source is None and default not in registry_aliases)
+        for item in selectors
+    ):
+        return None
+    try:
+        return ArtifactSelection(
+            tuple(
+                ArtifactRequest(
+                    item.identity,
+                    VersionConstraint(item.version or "*"),
+                    item.source or default,
+                )
+                for item in selectors
+            )
+        )
+    except ValueError:
+        return None
+
+
+def _configured_review_items(prepared) -> list[dict[str, str]]:
+    action = prepared.action
+    if action is None:
+        return []
+    return [
+        {"key": str(item.coordinate), "status": "planned", "detail": ""}
+        for item in action.installations
+    ]
+
+
+def _configured_install(request: Request, selectors: tuple[ArtifactSelector, ...]) -> int | None:
+    """Run the canonical install seam, or decline when this Selection still belongs to legacy."""
+
+    operation = "marketplace.install"
+    runtime = load_runtime_configuration(request, content_required=True)
+    if isinstance(runtime, Err):
+        return _emit_error(request, runtime, operation)
+    selection = _configured_registry_selection(selectors, runtime.value.loaded.effective)
+    if selection is None:
+        return None
+    if request.install_mode != "copy":
+        return _emit_error(
+            request,
+            _invalid(
+                "approved registry installation currently supports copy mode only",
+                "omit --mode or pass --mode copy",
+            ),
+            operation,
+        )
+
+    project_root, user_home = resolved_paths(
+        data_root=runtime.value.paths.data_root,
+        project=request.project,
+        user_home=request.user_home,
+    )
+    host = InstallationHost(
+        runtime.value.paths.data_root,
+        project_root,
+        user_home,
+        Scope(request.scope),
+        tuple(request.profiles),
+    )
+    policy = EffectivePolicy()
+    credential_providers = (MacOsKeychainProvider(),) if sys.platform == "darwin" else ()
+    prepared = prepare_configured_installation(
+        runtime.value.loaded.effective,
+        selection,
+        host=host,
+        sources=(),
+        policy=policy,
+        selected_remediations=None,
+        credential_providers=credential_providers,
+        resolvers=credential_providers,
+    )
+    if isinstance(prepared, Err):
+        return _emit_error(request, prepared, operation)
+    if not prepared.value.ready:
+        unanswered = [
+            {
+                "id": field.input.id.value,
+                "kind": "credential" if isinstance(field.input, SecretInput) else "config",
+                "dependants": [str(item) for item in field.dependants],
+            }
+            for field in prepared.value.draft.inputs.unanswered
+        ]
+        diagnostic = Diagnostic(
+            CONSUMER_INVALID,
+            Severity.ERROR,
+            "required installation inputs are unanswered",
+            remediation=("answer the required-input form before confirming this install",),
+        )
+        _emit(
+            request,
+            operation,
+            {
+                "schema_version": 1,
+                "ok": False,
+                "operation": operation,
+                "finalized": False,
+                "diagnostics": [diagnostic_to_data(diagnostic)],
+                "inputs": unanswered,
+            },
+            (
+                f"{diagnostic.severity.value}: {diagnostic.message}",
+                *(f"  - {item['id']} ({item['kind']})" for item in unanswered),
+            ),
+        )
+        return _common.ERROR
+
+    assert prepared.value.action is not None
+    view = prepared.value.action.flow.plan
+    review_data = consumer_plan_to_data(view)
+    review_data["items"] = _configured_review_items(prepared.value)
+    digest = str(prepared.value.review_digest)
+    if not request.yes:
+        _emit(
+            request,
+            operation,
+            {
+                "schema_version": 1,
+                "ok": True,
+                "operation": operation,
+                "finalized": False,
+                "review_digest": digest,
+                "review": review_data,
+            },
+            render_install_plan(view, PresentationProfile.FAST)
+            + ("Reviewed only; re-run with --yes to apply this exact plan.",),
+        )
+        return _common.OK
+
+    if request.expect is not None and request.expect != digest:
+        refusal = Diagnostic(
+            CONSUMER_REVIEW_MISMATCH,
+            Severity.ERROR,
+            f"the plan changed since it was reviewed: expected {request.expect}, recomputed {digest}",
+            remediation=("re-read the review below, then re-run --expect with its review_digest",),
+        )
+        _emit(
+            request,
+            operation,
+            {
+                "schema_version": 1,
+                "ok": False,
+                "operation": operation,
+                "finalized": False,
+                "diagnostics": [diagnostic_to_data(refusal)],
+                "expected_review_digest": request.expect,
+                "review_digest": digest,
+                "review": review_data,
+            },
+            (
+                f"{refusal.severity.value}: {refusal.message}",
+                *(f"  remediation: {item}" for item in refusal.remediation),
+                *render_install_plan(view, PresentationProfile.FAST),
+            ),
+        )
+        return _common.ERROR
+
+    now = datetime.now(timezone.utc)
+    completed = complete_configured_installation(
+        prepared.value,
+        expected_review_digest=prepared.value.review_digest,
+        host=host,
+        policy=policy,
+        credential_providers=credential_providers,
+        recorded_at=now.isoformat(),
+        today=now.date(),
+        offline=request.offline,
+    )
+    if isinstance(completed, Err):
+        return _emit_error(request, completed, operation)
+    receipt = completed.value.action.flow.outcome
+    assert receipt is not None
+    receipt_data = receipt_detail_to_data(receipt)
+    successful = receipt.outcome.value in {"succeeded", "attention"}
+    payload = {
+        "schema_version": 1,
+        "ok": successful,
+        "operation": operation,
+        "finalized": True,
+        "review_digest": digest,
+        "session_status": receipt.outcome.value,
+        "items": [
+            {
+                "key": item.coordinate,
+                "status": "current" if item.status == "converged" else item.status,
+                "detail": item.detail,
+            }
+            for item in receipt.artifacts
+        ],
+        "receipt": receipt_data,
+    }
+    _emit(
+        request,
+        operation,
+        payload,
+        render_transaction_success(receipt, PresentationProfile.FAST),
+    )
+    return _common.OK if successful else _common.ERROR
+
+
 def _lifecycle(request: Request, action: str) -> int:
     operation = f"marketplace.{action}"
     selection = _selection(request, action)
     if isinstance(selection, Err):
         return _emit_error(request, selection, operation)
+    if action == "install":
+        configured = _configured_install(request, selection.value)
+        if configured is not None:
+            return configured
     service = load_local_consumer_service(
         project=request.project,
         user_home=request.user_home,

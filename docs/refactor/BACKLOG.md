@@ -522,3 +522,19 @@ order is MCP, then skills, then guidelines/rules, then memory, then hooks. Deliv
 and guidelines with the effect they actually need; inventing a merge effect at the same time would
 be designing for hooks before anything exercises them. Item 6 can retire legacy authority for the
 delivered kinds first, and this item is what unblocks the last two.
+
+## B-035 — Canonical public installation has no symlink placement effect
+
+**Classification: BACKLOG; required before removing the legacy install route if `--mode symlink`
+remains part of the public contract.**
+
+The first direct-RegistryGit command route deliberately supports copy mode. The canonical delivery
+and owned-payload effects materialize copies and record their digests; no reviewed effect describes
+a live symlink or its target ownership. Silently accepting `--mode symlink` and making a copy would
+therefore execute a different plan from the one the operator requested, so D-079 refuses it by name.
+
+Before the legacy route can be removed, either characterize and implement a symlink placement,
+observation, receipt and safe withdrawal path, or explicitly remove the option through a product
+decision. Do not approximate it with `DeliverArtifact`: the Product Specification distinguishes the
+copy/symlink relationship, and CP-04's package boundary forbids importing source symlinks for a
+different reason.

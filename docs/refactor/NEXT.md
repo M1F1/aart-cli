@@ -86,10 +86,12 @@ that flow and execution, plus composition of real Marketplace and installed-stat
    re-reads the machine from disk. The E2E installs a configured approved artifact end to end and
    checks the machine rather than the executor's verdict.
 
-   **What remains in this item is routing, not composition.** No public command calls the adapter
-   yet: `install`, `update`, `uninstall` and `status` still dispatch into the legacy setup queue.
-   That routing is the first half of item 6, and the characterization in item 5 is what each
-   switched seam has to keep satisfying.
+   **Routing has started.** A direct artifact whose explicit source -- or configured default -- is
+   an enabled `RegistryGit` source now enters this adapter from public `marketplace install`
+   (D-079). Its JSON review is `consumer_plan_to_data`, its text review renders that same plan, its
+   completion carries `receipt_detail_to_data`, and a stale digest refuses before mutation. Direct
+   and local sources plus Collections stay on the characterized legacy route. `status`, `update`,
+   `uninstall` and the default TTY have not moved yet.
 5. **DONE:** public-flow characterization now pins each command seam before its dispatch changes --
    durable `status` (a later invocation names what an earlier one installed, and names nothing after
    an uninstall), one envelope across all four seams, a review that names the artifacts it would
@@ -118,10 +120,11 @@ that flow and execution, plus composition of real Marketplace and installed-stat
    drift detection and uninstall. Withdrawal restores owner access only inside the exact read-only
    tree it is removing and never follows a symlink (D-078).
 
-   The next executable work is the first public route from item 4: switch the characterized
-   `install` seam for MCP and delivered artifacts to the one configured action adapter, preserving
-   its review digest and output envelope. Then switch `status`, `update` and `uninstall` one seam at
-   a time with their existing public-flow tests green before removing any legacy authority.
+   The first public route from item 4 is now live for direct approved-registry artifacts (D-079).
+   The next executable work is `status`: a later public invocation must read the canonical receipt
+   this install wrote and name it without consulting the legacy manifest. Then switch `update` and
+   `uninstall` one seam at a time with their existing public-flow tests green before removing any
+   legacy authority.
 
    Hooks and shared-file memory are deliberately outside completed B-033 (B-034): a hook is a
    script plus an entry merged into a settings file, and every measured memory target is a

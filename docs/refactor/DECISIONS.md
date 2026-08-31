@@ -1160,3 +1160,23 @@ the Product Specification first instead of hiding the change here.
   with, and a file interpreter only paths its `ArtifactEnvironment` owns. Tests freeze nested trees
   read-only, preserve neighboring harness artifacts and prove symlink targets survive both removal
   paths.
+
+## D-079 — Public install strangles by configured source kind
+
+- **Decision:** `marketplace install` routes a Selection through the configured canonical action
+  when every member is a direct artifact and its explicit source, or the configured default for an
+  unqualified selector, is an enabled `RegistryGit` source. Direct/local sources and Collections
+  remain on the characterized legacy route. The public envelope stays stable while `review` is the
+  `consumer_plan_to_data` projection and `receipt` is `receipt_detail_to_data`; human text renders
+  those same canonical values.
+- **Status:** accepted.
+- **Reason:** a promoted registry snapshot has approved version and object identities that the
+  legacy root-manifest reader neither understands nor may infer. Routing by coordinate kind alone
+  would send an unapproved local Skill through the approved resolver, while routing every install
+  at once would strand Collections that protocol v1 cannot version (B-031). Source kind is the
+  narrow authority boundary already present in configuration.
+- **Consequence:** a stale `--expect` digest refuses before target mutation, and completion writes
+  canonical installation and activity receipts rather than the legacy manifest. Canonical `status`
+  is now the next seam because the legacy status reader cannot report that receipt. Explicit
+  symlink mode is refused rather than silently copied until B-035 exists; this does not alter the
+  local/direct legacy behavior still under characterization.
