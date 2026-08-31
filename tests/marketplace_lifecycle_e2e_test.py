@@ -144,6 +144,25 @@ class _Environment:
         raw = stdout.getvalue()
         return code, (json.loads(raw) if raw.strip() else None)
 
+    def run_text(self, *argv: str) -> tuple[int, str]:
+        """Invoke the real CLI without ``--json`` and return ``(exit_code, stdout)``.
+
+        The same command, asked for the other rendering.  Tests that compare the two need a way to
+        ask for the human one; everything else about the invocation is identical on purpose, so a
+        difference between them is a difference in rendering rather than in setup.
+        """
+
+        scoped_to_user = "user" in argv
+        arguments = list(argv) if scoped_to_user else [*argv, "--project", str(self.project)]
+        stdout = io.StringIO()
+        with (
+            mock.patch.dict(os.environ, self.xdg, clear=False),
+            contextlib.redirect_stdout(stdout),
+            mock.patch("os.getcwd", return_value=str(self.project)),
+        ):
+            code = cli.main(arguments)
+        return code, stdout.getvalue()
+
 
 @contextlib.contextmanager
 def _environment(source_location: Path | None = None):
