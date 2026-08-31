@@ -602,3 +602,21 @@ the Product Specification first instead of hiding the change here.
   happens to know. An uninstall that retained the artifact now narrows the record's ownership
   instead of forgetting it — a defect the test found: the recorder forgot the installation on any
   converged uninstall, including one that deliberately removed nothing.
+
+## D-051 — The machine is assembled once, never inside a draw
+- **Decision:** `application/consumer_session.py` turns what was read of a machine into one
+  `ConsumerMachine`; `tui_consumer.screens_from` turns that plus the current offers and flow into
+  `ConsumerScreens`. Inspection is an argument — each installed record arrives paired with the
+  desired state it describes and the current state something else measured.
+- **Status:** accepted.
+- **Reason:** drawing the same screen twice must not be able to give two answers, and a screen that
+  re-derived health while somebody scrolled would do exactly that. Splitting it in two also keeps
+  the boundary honest: the decisions no projection can make (which Collection an artifact belongs
+  to, which installations depend on a credential, what the Dashboard counts) stay in `application/`,
+  while the offers — which wrap `tui_marketplace` rows — stay in the interface layer where they are
+  already defined.
+- **Consequence:** Collection membership comes from recorded ownership rather than from a
+  Collection's current manifest, so a Collection that has since published a new member has not
+  thereby installed it. Credential dependants are matched by reference, not by provider account:
+  two artifacts sharing an account but binding different inputs are not dependants of each other's
+  credential. CP-14 can assemble the maintainer catalog the same way.

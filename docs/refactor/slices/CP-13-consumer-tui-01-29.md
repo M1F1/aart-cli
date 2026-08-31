@@ -86,9 +86,11 @@ existed; three defects were found by tests rather than by reading:
    (`run_consumer_shell`, `key_event`, `CanonicalScreenSource`); the curses adapter in `tui.py` is
    `_CursesTerminal` plus `run_consumer`. Every accepted screen 01–29 now draws from canonical
    views: Marketplace and Collections from offers (D-047), 05–11 from a `ConsumerPlanView`, 14–20
-   from installed state and lifecycle views, 22–24 from credential records (D-048, D-049). What
-   remains is the assembler that builds a populated `ConsumerScreens` from a real machine (B-024),
-   after which `run()` can stop opening the legacy wizard (B-025).
+   from installed state and lifecycle views, 22–24 from credential records (D-048, D-049). A real
+   machine is assembled once into a `ConsumerMachine` and turned into screens by `screens_from`
+   (D-051), proven end to end from a real installation read back by a second process (B-024
+   closed). What remains is the flow that produces a live plan when somebody starts an install,
+   and routing `run()` away from the legacy wizard (B-025).
 5a. Persist canonical installed state and finished actions, so screens 12–16 and 25–27 have
    something to project between processes. **DONE** — `domain/receipts.py` gained the parse that
    inverts its own projection, `application/consumer_views.py` gained `receipt_detail_from_data`
@@ -97,6 +99,13 @@ existed; three defects were found by tests rather than by reading:
    D-044, D-045, D-046).
 6. Retire legacy semantic authority only after equivalent public-flow/E2E evidence. **NOT STARTED**
    — blocked on step 5 by design; no legacy authority has been removed.
+
+`tests/consumer_session_test.py` — the assembly rules nothing else can decide: an installed record
+becomes a row whose health is measured rather than assumed from the record existing, artifacts a
+Collection owns aggregate into that Collection, a credential's dependants are the installations
+whose receipts name it, one nothing uses is still listed owing nothing and offering delete, an
+unresolvable credential is counted as needing attention, and an empty machine is an empty machine
+rather than an error.
 
 ## Property tests
 
@@ -148,6 +157,13 @@ from disk reads the same as the one projected in memory.
 
 ## E2E/live acceptance
 
+`tests/consumer_session_e2e_test.py` — nothing is handed a view. A real installation is recorded
+with who asked for it; a second process reads that record back, inspects the machine, assembles it
+once and draws the screens. The Dashboard counts what is really installed and opens with what just
+happened, Installed names the Collection and the artifact, a launcher broken afterwards is what the
+screen and the Doctor say, the Collection's health is its members', Credentials names the
+installation that depends on it, and no screen this machine draws contains the real secret.
+
 `tests/consumer_flow_e2e_test.py` — the CP-12 real installation (owned interpreter, generated
 launcher, harness entry, provider-held credential), seen through the consumer screens: Installed
 reads ready → the launcher is broken on disk → Installed reads broken and names only the launcher →
@@ -178,24 +194,26 @@ own launcher after a repair planned from disk alone, and no stored file contains
 
 ## Remaining
 
-- Step 5 service assembly: one builder that reads a real machine into `ConsumerScreens` (B-024).
-  Every screen that would consume it is done.
+- Step 5 flow wiring: producing a live `ConsumerPlanView` when somebody starts an install, and
+  routing the public commands through `plan_lifecycle_intent`/`execute_lifecycle`. The machine
+  assembly behind every other screen is done (B-024 closed).
 - Routing the default TTY entry to the canonical application (B-025).
 - Step 6: retiring legacy consumer semantic authority, once the above give equivalent public-flow
   evidence.
 
 ## Known compromises
 
-- Nothing in `agent_artifacts/` builds a populated `ConsumerScreens`: the shell draws every accepted
-  screen from canonical views, but only tests and embedders can supply them (B-024). The fallback
-  line for a screen with no body is kept as a guard against drawing a blank frame; no accepted
-  screen reaches it.
+- The install flow's screens draw "Nothing has been planned yet." until a plan is assembled for
+  them: `screens_from` carries a plan when the flow holds one, but no public entry point starts
+  that flow yet. The fallback line for a screen with no body at all is kept as a guard against
+  drawing a blank frame; no accepted screen reaches it.
 - `run_consumer` is reachable by embedders and tests but is not yet the default TTY entry (B-025).
   No legacy behavior has been changed or removed to make room for it.
 
 ## Backlog discoveries
 
-- B-024 — Marketplace and install-flow screens for the canonical consumer shell.
+- B-024 — Marketplace and install-flow screens for the canonical consumer shell. **Closed**: every
+  accepted screen draws from canonical views and a real machine assembles into them.
 - B-025 — Routing the default TTY entry to the canonical consumer application.
 - B-026 — Canonical installation-receipt persistence. **Promoted to the critical path and
   completed**: B-024 cannot assemble Installed, Updates or Activity over a machine whose canonical
@@ -215,12 +233,12 @@ machine-output tests prove every accepted flow now consumes the canonical applic
 
 - Current working state: steps 1–4 complete and verified; step 5 partial; step 6 not started. The
   legacy wizard is untouched and still owns the default TTY entry.
-- Exact next action: B-024's remaining half — one `ConsumerScreens` builder over the canonical
-  services, reading the catalog, `LocalReceiptStore` and the credential providers, refreshed after
-  an action rather than inside a draw — then B-025 to route `run()`.
+- Exact next action: B-025 — route `tui.py::run` to `run_consumer` over `screens_from`, behind the
+  existing curses-availability check, keeping the legacy wizard reachable until step 6 evidence
+  exists. Then the public commands, then step 6.
 - Do not undo: existing curses layout/search/basket/back/quit characterization; one semantic plan
   for both profiles; Maintainer Mode remains opt-in; `key_event` stays the only place a key's
   meaning is decided; no clock in `application/`.
-- Tests last run/results: 2,342 unit + 83 E2E tests, 83.32% coverage, all ten quality gates
+- Tests last run/results: 2,356 unit + 89 E2E tests, 83.34% coverage, all ten quality gates
   green (`make quality`). CP-12 baseline was 2,196 unit + 65 E2E at 83.25%.
 - Failure evidence: three defects found by tests are listed under Characterization / RED evidence.

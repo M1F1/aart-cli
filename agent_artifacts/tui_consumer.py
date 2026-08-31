@@ -12,6 +12,7 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Protocol
 
+from agent_artifacts.application.consumer_session import ConsumerMachine
 from agent_artifacts.application.consumer_ui import (
     ConsumerUiCommandKind,
     ConsumerUiEvent,
@@ -51,6 +52,7 @@ __all__ = [
     "ConsumerTerminal",
     "MarketplaceCollectionEntry",
     "MarketplaceEntry",
+    "screens_from",
     "key_name",
     "render_activity",
     "render_collection",
@@ -978,6 +980,46 @@ class ConsumerScreens:
     @property
     def updatable(self) -> tuple[InstalledArtifactView, ...]:
         return tuple(item for item in self.installed if item.health == "update")
+
+
+_DEFAULT_SETTINGS = ConsumerSettings()
+
+
+def screens_from(
+    machine: ConsumerMachine,
+    *,
+    marketplace: tuple[MarketplaceEntry, ...] = (),
+    collections: tuple[MarketplaceCollectionEntry, ...] = (),
+    settings: ConsumerSettings | None = None,
+    plan: ConsumerPlanView | None = None,
+    lifecycle: LifecyclePlanView | None = None,
+    outcome: LifecycleOutcomeView | None = None,
+) -> ConsumerScreens:
+    """The screens for one assembled machine, plus whatever the current flow is holding.
+
+    What is offered is separate from what is installed because they are read from different places
+    and go stale at different rates: a catalog is fetched, a machine is inspected, and a flow's plan
+    belongs to the action somebody is in the middle of.
+    """
+
+    if not isinstance(machine, ConsumerMachine):
+        raise ValueError("consumer screens need an assembled machine")
+    return ConsumerScreens(
+        machine.dashboard,
+        machine.installed,
+        machine.activity,
+        machine.registries,
+        _DEFAULT_SETTINGS if settings is None else settings,
+        machine.doctor,
+        machine.receipts,
+        marketplace,
+        collections,
+        machine.collections,
+        machine.credentials,
+        plan,
+        lifecycle,
+        outcome,
+    )
 
 
 _PLAN_SCREENS = frozenset(

@@ -18,14 +18,16 @@ from dataclasses import dataclass
 from .credentials import CredentialProviderRef, CredentialReference
 from .diagnostics import Diagnostic, DiagnosticCode, Severity
 from .harness import McpRegistration, registration_from_data, registration_to_data
-from .identifiers import InputId, ObjectDigest
+from .identifiers import ArtifactCoordinate, InputId, ObjectDigest
 from .launch import Transport
 from .result import Err, Ok, Result
+from .selection import OwnershipKind, OwnershipReason
 
 __all__ = [
     "RECEIPT_INVALID",
     "ConfigFingerprint",
     "InstallationReceipt",
+    "InstalledRecord",
     "config_fingerprint",
     "installation_receipt_from_data",
     "installation_receipt_to_data",
@@ -105,6 +107,38 @@ class InstallationReceipt:
         object.__setattr__(
             self, "config", tuple(sorted(self.config, key=lambda item: item.input.value))
         )
+
+
+@dataclass(frozen=True, slots=True)
+class InstalledRecord:
+    """One installed artifact: what it left behind, and why it is there.
+
+    Ownership is kept beside the receipt rather than inside it because the two answer different
+    questions and are established at different times. A receipt records the effects that ran; the
+    reasons an artifact is installed come from the Selection that asked for it, and they change
+    when another Collection starts or stops needing it without any effect running at all.
+    """
+
+    coordinate: ArtifactCoordinate
+    receipt: InstallationReceipt
+    ownership: tuple[OwnershipReason, ...] = ()
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.coordinate, ArtifactCoordinate)
+            or not isinstance(self.receipt, InstallationReceipt)
+            or any(not isinstance(item, OwnershipReason) for item in self.ownership)
+        ):
+            raise ValueError("an installed record is invalid")
+        object.__setattr__(
+            self, "ownership", tuple(sorted(set(self.ownership), key=lambda item: item.sort_key))
+        )
+
+    @property
+    def collections(self) -> tuple[str, ...]:
+        """The Collections that want this artifact, in the order they are named."""
+
+        return tuple(item.owner for item in self.ownership if item.kind is OwnershipKind.COLLECTION)
 
 
 def installation_receipt_to_data(receipt: InstallationReceipt) -> dict[str, object]:

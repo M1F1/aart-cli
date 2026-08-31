@@ -12,15 +12,14 @@ What remains is the wiring that makes the canonical application the one a person
 
 ## Immediate next actions
 
-1. **B-024** — the assembler, which is all that is left of it. Every accepted screen 01–29 now
-   draws from canonical views, but nothing in `agent_artifacts/` builds a populated
-   `ConsumerScreens`: the marketplace offers, installed state from `LocalReceiptStore`, credential
-   records from the providers, the timeline and a `ConsumerPlanView` for the install flow all have
-   to be read into one value, refreshed after an action rather than derived inside a draw. Planning
-   belongs at the entry to screen 05, not in `lines()`. Build it once: CP-14 needs the same
-   assembly for the maintainer catalog.
-2. **B-025** — route the default TTY entry in `tui.py::run` to `run_consumer` behind the existing
-   curses-availability check, keeping the legacy wizard reachable until step 6 evidence exists.
+1. **B-025** — route the default TTY entry in `tui.py::run` to `run_consumer` behind the existing
+   curses-availability check, building its source with `screens_from(assemble_consumer_machine(...))`
+   over `LocalReceiptStore` and the local inspector. Keep the legacy wizard reachable until step 6
+   evidence exists.
+2. Start the canonical install flow from a public entry point, so screens 05–11 carry a live
+   `ConsumerPlanView` instead of "Nothing has been planned yet": resolution → inspection → input
+   binding → `plan_install`, held by the session and passed to `screens_from`, refreshed after an
+   action rather than derived inside a draw (D-051).
 3. Route the public consumer commands (`install`, `update`, `uninstall`, `status`) through
    `plan_lifecycle_intent`/`execute_lifecycle` rather than the legacy setup queue, projecting their
    output with `consumer_plan_to_data` and `receipt_detail_to_data` so text, curses and `--json`
@@ -65,3 +64,7 @@ What remains is the wiring that makes the canonical application the one a person
 - A screen is implemented when it is reachable by the accepted navigation map, not when a renderer
   draws it from a state handed to it directly. Presentation words (credential health) are decided
   in the renderer; the projection keeps the canonical state a machine consumer reads (D-048).
+- Ownership is persisted beside the receipt, and only intents that speak to it may change it: a
+  repair that carried the nothing it knows would release a Collection's claim (D-050).
+- The machine is assembled once and never inside a draw (D-051). Collection membership comes from
+  recorded ownership, not from a Collection's current manifest.

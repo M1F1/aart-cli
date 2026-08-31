@@ -37,6 +37,7 @@ from agent_artifacts.domain.identifiers import (
 )
 from agent_artifacts.domain.receipts import (
     InstallationReceipt,
+    InstalledRecord,
     installation_receipt_from_data,
     installation_receipt_to_data,
 )
@@ -58,21 +59,6 @@ RECEIPT_UNWRITABLE = DiagnosticCode("receipt-unwritable")
 
 _MAX_RECEIPT_BYTES = 1024 * 1024
 _KINDS: frozenset[str] = frozenset({"skill", "guideline", "mcp", "hook", "memory", "collection"})
-
-
-@dataclass(frozen=True, slots=True)
-class InstalledRecord:
-    """One recorded installation: what it left behind, and why it is there.
-
-    Ownership is kept beside the receipt rather than inside it because the two answer different
-    questions and are established at different times. A receipt records the effects that ran; the
-    reasons an artifact is installed come from the Selection that asked for it, and they change
-    when another Collection starts or stops needing it without any effect running at all.
-    """
-
-    coordinate: ArtifactCoordinate
-    receipt: InstallationReceipt
-    ownership: tuple[OwnershipReason, ...] = ()
 
 
 def _error(code: DiagnosticCode, message: str) -> Err:

@@ -260,26 +260,25 @@ test_something_present_that_nothing_desires_is_named_and_not_repaired`.
 Promotion condition: uninstall or scope-level doctor needs to report orphans (CP-12 or CP-16).
 
 ### B-024 — Marketplace and install-flow screens for the canonical consumer shell
-Status: IN PROGRESS (2026-08-31) — every accepted screen 01–29 draws from canonical views; what
-remains is assembling those views for a live machine
+Status: CLOSED (2026-08-31)
 Discovered in: CP-13 / `agent_artifacts/tui_consumer.py` / `CanonicalScreenSource`
-Why useful: the persistent consumer application now draws all 29 accepted screens from canonical
-views — Marketplace and Collections from `MarketplaceEntry`/`MarketplaceCollectionEntry` offers,
-screens 05–11 from a `ConsumerPlanView`, 14–20 from installed state and lifecycle views, and 22–24
-from `CredentialRecordView`. No screen draws "… is not available yet" any more. What is still
-missing is the assembler: nothing in `agent_artifacts/` builds a populated `ConsumerScreens` from a
-real machine, so the shell is complete but only tests and embedders can feed it.
-Why noncritical now: the remaining work is one application-level builder over services that all
-exist (marketplace aggregation, `LocalReceiptStore`, credential providers, inspection, planning).
-It is the same assembly CP-14 needs for the maintainer catalog, so it is worth building once.
-Potential approach: an `application/consumer_session.py` that reads the catalog, the receipt store
-and the credential providers into one `ConsumerScreens`, refreshed after an action rather than
-inside a draw, with planning invoked only when the flow enters screen 05.
+Why useful: the persistent consumer application drew Dashboard, Installed, Activity, receipts,
+Registries, Settings and Doctor from canonical views, but screens 02–11 and 15–24 drew "… is not
+available yet", and nothing assembled any of it from a real machine.
+Resolution: every accepted screen 01–29 now draws from canonical views — Marketplace and
+Collections from `MarketplaceEntry`/`MarketplaceCollectionEntry` offers (D-047), 05–11 from a
+`ConsumerPlanView` (D-049), 14–20 from installed state and lifecycle views, 22–24 from
+`CredentialRecordView` (D-048). `application/consumer_session.py` assembles one `ConsumerMachine`
+from what was read of a machine and `tui_consumer.screens_from` turns it into `ConsumerScreens`
+(D-051). Ownership had to be persisted first, so Installed can name the Collection that asked for
+an artifact and uninstall can retain it (D-050).
 Invariants touched: INV-149, INV-152, INV-153.
-Evidence/links: D-041, D-047, D-048, D-049; `tests/consumer_marketplace_shell_test.py`;
-`tests/consumer_install_flow_shell_test.py`.
-Promotion condition: retiring legacy consumer authority (CP-13 step 6) or routing the default TTY
-entry to the canonical application requires it.
+Evidence/links: D-047, D-048, D-049, D-050, D-051; `tests/consumer_marketplace_shell_test.py`;
+`tests/consumer_install_flow_shell_test.py`; `tests/consumer_session_test.py`;
+`tests/consumer_session_e2e_test.py` — a real installation, read back by a second process,
+inspected, assembled and drawn, with the real secret on no screen.
+Remaining: the flow that produces a live `ConsumerPlanView` when somebody starts an install is the
+public-command wiring, tracked as CP-13 step 5 rather than here.
 
 ### B-025 — Routing the default TTY entry to the canonical consumer application
 Status: OPEN
