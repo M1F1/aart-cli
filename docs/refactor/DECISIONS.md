@@ -961,3 +961,27 @@ the Product Specification first instead of hiding the change here.
   unknown. The roots are required because a caller that omitted them would silently get the lying
   machine, and no signature should make that easy to ask for by accident. A missing manifest is no
   installations in that scope; a manifest that exists and cannot be parsed is a refusal.
+
+## D-070 — One Selection becomes one offer, and accepting it is a separate call
+- **Decision:** `offer_installation` composes the four functions an install already had --
+  `plan_artifact_installation`, `aggregate_requirements`, `inspect_requirements` and
+  `installation_remediations` -- into one `InstallationOffer` carrying the planned installations,
+  the measured facts, the remediations that could be agreed to, and one observation per artifact.
+  It selects nothing and mutates nothing; `begin_installation` remains the second call, and
+  `InstallationOffer.selected()` is the convenience for a caller with nobody to ask.
+- **Status:** accepted.
+- **Reason:** every part of a canonical install was verified and none of it was reachable. The only
+  caller of `plan_artifact_installation` was a test that wired the four together by hand, so the
+  shell's action handler and the public commands would each have had to repeat that wiring -- and
+  two copies of it disagree the first time one changes. This is the composition both need.
+- **Consequence:** the whole Selection plans or the offer refuses, because offering the half that
+  planned would let somebody confirm an install of two artifacts and receive one, which is the
+  failure `execute_installation` prevents one layer down (D-064). `facts` in and `facts` out are
+  deliberately different values: going in they are this machine's remediation capabilities, which
+  decide which installer a plan may choose, and coming out they are what the inspection port
+  measured. Observation is a required port rather than a default, because `begin_installation`
+  refuses an unobserved artifact on purpose (D-029): an observer that cannot look refuses, since
+  reporting an empty state would say "nothing is installed" about a machine nobody managed to look
+  at, and a first install would then write over whatever is there. Remediation selection stays out:
+  a non-interactive command accepts the whole offer or none of it, while screens 07 and 08 pass the
+  subset somebody ticked, and the offer must not decide for either.
