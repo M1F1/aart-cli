@@ -30,7 +30,11 @@ from agent_artifacts.domain.launch import LaunchContract
 from agent_artifacts.domain.plans import InstallPlan
 from agent_artifacts.domain.policies import EffectivePolicy
 from agent_artifacts.domain.python_runtime import ArtifactEnvironment
-from agent_artifacts.domain.receipts import InstallationReceipt
+from agent_artifacts.domain.receipts import (
+    ArtifactDelivery,
+    InstallationReceipt,
+    PlacedArtifactReceipt,
+)
 from agent_artifacts.domain.reconciliation import CurrentState, DesiredState
 from agent_artifacts.domain.remediations import Remediation
 from agent_artifacts.domain.requirements import Requirement
@@ -42,7 +46,7 @@ from agent_artifacts.domain.selection import (
 )
 
 from .installation_planning import ArtifactInstallIntent, prepare_install_plan
-from .installed_state import desired_state_from_receipt
+from .installed_state import desired_state_from_placement, desired_state_from_receipt
 from .intents import LifecycleIntent, LifecyclePlan, install_intent, plan_lifecycle_intent
 from .runtime_projection import RuntimeProjection
 
@@ -50,9 +54,13 @@ __all__ = [
     "PROPOSAL_INVALID",
     "InstallationProposal",
     "PlannedInstallation",
+    "PlannedPlacement",
     "desired_state_for",
     "install_lifecycle_intent",
+    "intended_placement_receipt",
     "intended_receipt",
+    "placement_desired_state",
+    "placement_lifecycle_intent",
     "propose_installation",
 ]
 
@@ -198,6 +206,101 @@ def install_lifecycle_intent(planned: PlannedInstallation) -> LifecycleIntent:
     """The install intent, carrying who asked for the artifact through to the record."""
 
     return install_intent(desired_state_for(planned), ownership=planned.artifact.ownership)
+
+
+@dataclass(frozen=True, slots=True)
+class PlannedPlacement:
+    """Everything decided about placing one artifact a harness reads, before anything is touched.
+
+    The counterpart of `PlannedInstallation` for the four kinds that start no process. There is no
+    contract, no launcher and no environment to build, and those are absent rather than optional:
+    INV-010 keeps semantic kind separate from runtime protocol, and a placement carrying an empty
+    launcher would converge on a component nobody installed.
+    """
+
+    artifact: ResolvedArtifact
+    environment: ArtifactEnvironment
+    payload_digest: ObjectDigest
+    deliveries: tuple[ArtifactDelivery, ...] = ()
+    payload_source: str | None = None
+    requirements: tuple[Requirement, ...] = ()
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.artifact, ResolvedArtifact)
+            or not isinstance(self.environment, ArtifactEnvironment)
+            or not isinstance(self.payload_digest, ObjectDigest)
+        ):
+            raise ValueError("a planned placement is invalid")
+        if not self.deliveries or any(
+            not isinstance(item, ArtifactDelivery) for item in self.deliveries
+        ):
+            # Placed in its own tree and read by nobody is a download, not an installation.
+            raise ValueError("a planned placement is delivered to at least one harness")
+        if self.payload_source is not None and (
+            not isinstance(self.payload_source, str)
+            or not self.payload_source.strip()
+            or any(character in self.payload_source for character in "\r\n")
+        ):
+            raise ValueError("a planned placement payload source must be one non-empty line")
+        if any(not isinstance(item, Requirement) for item in self.requirements):
+            raise ValueError("planned placement requirements are invalid")
+        if not self.environment.root.startswith("/"):
+            # The harness resolves nothing on this artifact's behalf: a relative root would be
+            # read against whatever working directory the run that repaired it happened to have.
+            raise ValueError("a planned placement root must be one absolute path")
+        prefix = self.environment.root.rstrip("/") + "/"
+        for delivery in self.deliveries:
+            if delivery.source != self.environment.root and not delivery.source.startswith(prefix):
+                # A delivery is made from the artifact that owns it, so a repair copies from what
+                # this installation placed rather than from somewhere nobody chose.
+                raise ValueError(
+                    f"a delivery to {delivery.harness} comes from outside "
+                    f"{self.environment.artifact}"
+                )
+        harnesses = [delivery.harness for delivery in self.deliveries]
+        if len(set(harnesses)) != len(harnesses):
+            raise ValueError("one harness reads one delivery of an artifact")
+        object.__setattr__(
+            self, "deliveries", tuple(sorted(self.deliveries, key=lambda item: item.harness))
+        )
+
+    @property
+    def coordinate(self) -> ArtifactCoordinate:
+        return self.artifact.version.coordinate
+
+
+def intended_placement_receipt(planned: PlannedPlacement) -> PlacedArtifactReceipt:
+    """The receipt this placement means to leave behind.
+
+    Written before the delivery for the same reason `intended_receipt` is: the state to converge on
+    and the state a later repair reads back are built by one function from one description.
+    """
+
+    if not isinstance(planned, PlannedPlacement):
+        raise ValueError("an intended placement receipt needs a planned placement")
+    return PlacedArtifactReceipt(
+        planned.environment.artifact,
+        planned.environment.root,
+        planned.payload_digest,
+        planned.deliveries,
+    )
+
+
+def placement_desired_state(planned: PlannedPlacement) -> DesiredState:
+    """The component-level state this placement converges on."""
+
+    return desired_state_from_placement(
+        planned.coordinate,
+        intended_placement_receipt(planned),
+        payload_source=planned.payload_source,
+    )
+
+
+def placement_lifecycle_intent(planned: PlannedPlacement) -> LifecycleIntent:
+    """The install intent, carrying who asked for the artifact through to the record."""
+
+    return install_intent(placement_desired_state(planned), ownership=planned.artifact.ownership)
 
 
 @dataclass(frozen=True, slots=True)
