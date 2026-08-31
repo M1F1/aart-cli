@@ -781,7 +781,7 @@ the Product Specification first instead of hiding the change here.
   action once, inspects each installation once, and assembles one immutable `ConsumerMachine`.
   A credential reference for which no matching provider was supplied is observed as `UNKNOWN`, not
   absent; that unverifiable component gives the installation `Attention`, never a false `Ready`.
-- **Status:** accepted.
+- **Status:** superseded by D-062 after public-entry characterization.
 - **Reason:** D-051's "assemble once" rule is only useful if the public composition root uses it.
   Reading or inspecting inside a draw could change the answer while somebody scrolls. Treating an
   unavailable provider as absence would invent a missing credential, while treating it as matched
@@ -792,3 +792,21 @@ the Product Specification first instead of hiding the change here.
   line-oriented legacy path; an unreadable durable record fails closed instead of reopening a
   wizard over a machine that appears empty. B-025 is closed, while public flag commands remain the
   next migration boundary.
+
+## D-062 — Rendering every screen is not authority to replace a working entry point
+- **Decision:** keep `run_consumer` and `_canonical_consumer_source` available at the composition
+  boundary, but do not route bare `aart` to them until the consumer reducer can start and apply the
+  accepted lifecycle actions and its source includes the configured Marketplace as well as durable
+  installed state. The characterized legacy curses/text wizard remains the public entry meanwhile.
+- **Status:** accepted; reverses only D-061's routing consequence, not its durable-reader design.
+- **Reason:** public-entry characterization after D-061 found two facts the renderer tests did not
+  cover. `ConsumerUiCommandKind` contains only load, quit confirmation and exit, so Enter can reach
+  Ready but cannot install, update, repair or uninstall. The composed source also supplied no
+  Marketplace offers, and public installs still write the existing project manifest rather than
+  `LocalReceiptStore`; a real user would therefore open an empty, read-only application and their
+  valid existing installations would disappear from view. That violates the strangler rule and
+  INV-149 even though all 29 screen renderers exist.
+- **Consequence:** B-025 is reopened with concrete promotion evidence: live action commands, a
+  configured Marketplace in the source, and a migration/adapter for existing project/user install
+  records. The canonical durable reader, receipt provenance and all headless screen evidence remain
+  useful and verified; only the premature public dispatch is removed.

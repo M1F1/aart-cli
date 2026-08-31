@@ -6281,28 +6281,6 @@ def run(
             "add a canonical registry in Sources instead."
         )
         return 2
-    failure_context = InternalFailureContext()
-    try:
-        curses_supported = _curses_supported()
-    except Exception as error:
-        return _render_internal_failure(error, failure_context)
-    if curses_supported:
-        consumer_source = _canonical_consumer_source(
-            project=project,
-            user_home=user_home,
-            today=date.today(),
-        )
-        if isinstance(consumer_source, DomainErr):
-            return _render_consumer_startup_failure(consumer_source)
-        try:
-            run_consumer(consumer_source.value)
-            return 0
-        except CursesUnavailable:
-            # Capability failure before interaction retains the line-oriented legacy fallback.
-            curses_supported = False
-        except Exception as error:
-            return _render_internal_failure(error, failure_context)
-
     source_context = _runtime_source_stage_context(
         source_dir=source_dir,
         repo=repo,
@@ -6360,6 +6338,11 @@ def run(
             )
 
         reporting_service_factory = runtime_reporting_service
+    failure_context = InternalFailureContext()
+    try:
+        curses_supported = _curses_supported()
+    except Exception as error:
+        return _render_internal_failure(error, failure_context)
     if not curses_supported:
         return _run_text(
             source_dir=source_dir,

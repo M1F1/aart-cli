@@ -21,8 +21,8 @@ navigation map in sections 161–162.
   and detailed evidence.
 - `wizard.py` owns stage state and Back/quit/basket behavior.
 - `consumer/application.py`, `installation/*`, `lifecycle/*` and `setup_engine/*` remain the public
-  flag-command semantic path. The default full-screen TTY is canonical; the legacy line-oriented
-  wizard remains only as the expected pre-interaction curses fallback.
+  flag-command semantic path. The characterized legacy wizard remains the default TTY until the
+  canonical shell has live lifecycle commands and preserves existing installed state (D-062).
 
 ## Target paths/owners
 
@@ -94,10 +94,11 @@ existed; three defects were found by tests rather than by reading:
    `InstallationProposal` with the review projected from it, `begin_installation` builds one and
    `record_installation` attaches what ran, refusing an outcome from a plan the flow never proposed
    (D-059). `PlannedInstallation` carries `declared`, so a review shows what somebody will be asked
-   for rather than only what was already answered. `io/consumer_machine.py` now reads durable
-   records and fresh local observations once, and the supported-curses branch of `tui.py::run`
-   opens `run_consumer` over that immutable snapshot before initializing legacy state (D-060,
-   D-061; B-025 closed). What remains is routing the public flag commands through this flow.
+   for rather than only what was already answered. `io/consumer_machine.py` now reads canonical
+   durable records and fresh local observations once (D-060). A public routing attempt proved the
+   missing boundary: the reducer cannot request lifecycle actions, the composed source has no
+   configured Marketplace, and existing public installations live in the project/user manifest.
+   The route was reverted under D-062 and B-025 remains open until those facts are addressed.
 5a. Persist canonical installed state and finished actions, so screens 12–16 and 25–27 have
    something to project between processes. **DONE** — `domain/receipts.py` gained the parse that
    inverts its own projection, `application/consumer_views.py` gained `receipt_detail_from_data`
@@ -135,9 +136,10 @@ row they were opened from, and `v` redraws the same screen with more disclosed.
 
 `tests/consumer_machine_read_test.py` and `tests/tui_consumer_entry_test.py` — a second process reads
 the whole machine from durable records, detects missing runtime and launcher state, preserves an
-uninspectable credential as unknown, and fails on an unreadable receipt. The bare supported TTY
-opens that canonical source without loading legacy wizard state; expected curses initialization
-failure remains the one boundary that reaches the text fallback (D-060, D-061).
+uninspectable credential as unknown, and fails on an unreadable receipt. The composition helper
+passes the managed state and harness roots correctly, while bare TTY remains on the characterized
+wizard until the canonical shell can execute actions without hiding existing installs (D-060,
+D-062).
 
 `tests/consumer_marketplace_shell_test.py` — screens 02–04a over a real built marketplace: the list
 holds artifacts and Collections together, Enter opens the right screen for whichever the cursor is
@@ -240,10 +242,10 @@ own launcher after a repair planned from disk alone, and no stored file contains
   every healthy artifact with dependencies reported unobserved drift forever. It is now reported
   through the environment that holds it, with the observation saying what it did not check (D-057,
   B-029).
-- The public full-screen composition root is migrated: new receipts remember the base interpreter
-  needed to inspect runtime health after restart while old receipts remain readable (D-060), and
-  `tui.py::run` opens one machine assembled from durable receipts, actions and local inspection
-  through `run_consumer` (D-061; B-025 closed).
+- New receipts remember the base interpreter needed to inspect runtime health after restart while
+  old receipts remain readable (D-060), and the composition helper builds one machine from durable
+  receipts, actions and local inspection. The attempted default route was reverted when
+  characterization showed the shell is not yet an actionable replacement (D-061, D-062).
 
 ## Remaining
 
@@ -261,17 +263,17 @@ own launcher after a repair planned from disk alone, and no stored file contains
   built without it keeps the old behavior rather than failing, which is what let the field be added
   without rewriting every construction site; the one that matters is filled by
   `plan_artifact_installation` from the package's own description.
-- The canonical full-screen entry has no live public install-start action yet: its screens can hold
-  and render a `ConsumerFlow`, but the public flag-command seam is still what creates installs.
-  Expected curses capability failure retains the legacy line-oriented fallback until equivalent
-  public-flow evidence permits its removal.
+- The canonical shell can hold and render a `ConsumerFlow`, but its reducer emits no command to
+  start or apply install/update/repair/uninstall. Its current composition also lacks configured
+  Marketplace offers and an adapter for existing project/user installation records. The legacy
+  public entry remains until those replacement facts are proven (D-062).
 
 ## Backlog discoveries
 
 - B-024 — Marketplace and install-flow screens for the canonical consumer shell. **Closed**: every
   accepted screen draws from canonical views and a real machine assembles into them.
-- B-025 — Routing the default TTY entry to the canonical consumer application. **Closed** by the
-  durable machine reader and public composition-root cutover (D-060, D-061).
+- B-025 — Routing the default TTY entry to the canonical consumer application. **Open** after the
+  first route exposed missing action, Marketplace and existing-state boundaries (D-062).
 - B-026 — Canonical installation-receipt persistence. **Promoted to the critical path and
   completed**: B-024 cannot assemble Installed, Updates or Activity over a machine whose canonical
   state does not survive a process, and step 6 cannot retire legacy authority whose remaining
@@ -295,12 +297,12 @@ machine-output tests prove every accepted flow now consumes the canonical applic
 
 ## Handoff
 
-- Current working state: steps 1–4 complete and verified; step 5 has migrated the default
-  full-screen TTY and still needs the public flag commands; step 6 has not started. The legacy text
-  wizard remains the expected curses-capability fallback, and legacy command authority remains.
-- Exact next action: characterize and route the public `install`, `update`, `uninstall` and
-  `status` commands through `begin_installation`/`execute_lifecycle`/`record_installation`, one
-  command seam at a time. Then retire only the authority each public-flow test proves replaced.
+- Current working state: steps 1–4 complete and verified; step 5 has a durable machine reader and a
+  rendering loop but no live lifecycle command boundary; step 6 has not started. The legacy wizard
+  and command authority remain public by design (D-062).
+- Exact next action: add typed reducer commands and injected handlers for the accepted lifecycle
+  transitions, compose the configured Marketplace, and preserve existing project/user install
+  records. Only then retry B-025 and route public flag commands one seam at a time.
 - Do not undo: existing curses layout/search/basket/back/quit characterization; one semantic plan
   for both profiles; Maintainer Mode remains opt-in; `key_event` stays the only place a key's
   meaning is decided; no clock in `application/`.

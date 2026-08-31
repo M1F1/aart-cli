@@ -281,20 +281,23 @@ Remaining: the flow that produces a live `ConsumerPlanView` when somebody starts
 public-command wiring, tracked as CP-13 step 5 rather than here.
 
 ### B-025 — Routing the default TTY entry to the canonical consumer application
-Status: CLOSED (2026-08-31)
+Status: OPEN — attempted and reverted on 2026-08-31 (D-062)
 Discovered in: CP-13 / `agent_artifacts/tui.py` / `run`
 Why useful: `run_consumer` exists, is typed, and drives the canonical application over curses, but
 nothing calls it — `run()` still opens the legacy wizard. Until it is routed, the canonical shell is
 reachable only from tests and embedders.
-Resolution: `io/consumer_machine.py` now reads durable installation/action records, inspects each
-recorded installation once, and assembles the immutable machine used by every screen (D-060,
-D-061). The supported-curses branch of `tui.py::run` builds
-`CanonicalScreenSource(screens_from(machine))` and calls `run_consumer` before any legacy wizard
-state is loaded. Expected curses initialization failure still reaches the characterized text
-fallback; an unreadable durable record fails closed.
+Progress: `io/consumer_machine.py` reads canonical installation/action records, inspects each
+recorded installation once, and assembles the immutable machine used by every screen (D-060).
+The first routing attempt was reverted after characterization proved the shell has no action
+command beyond navigation/load/quit, its composed source contains no configured Marketplace
+offers, and existing public installs live only in the project/user installation manifest. Routing
+that source would open an empty, read-only application and hide valid installed artifacts (D-062).
 Invariants touched: INV-149, INV-168.
-Evidence/links: B-024; D-060, D-061; `tests/consumer_machine_read_test.py`;
+Evidence/links: B-024; D-060, D-061, D-062; `tests/consumer_machine_read_test.py`;
 `tests/tui_consumer_entry_test.py`; `tests/consumer_shell_test.py`.
+Promotion condition: the canonical shell has typed commands and injected handlers for install,
+update, repair and uninstall; configured Marketplace offers are composed into its source; and
+existing project/user installation records are adapted or migrated without disappearing.
 
 ### B-026 — Canonical installation-receipt persistence
 Status: CLOSED (2026-08-31) — promoted to the critical path and completed

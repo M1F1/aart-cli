@@ -166,12 +166,9 @@ class CursesFallbackBoundaryTests(unittest.TestCase):
     def test_run_starts_the_text_wizard_once_when_curses_is_unavailable(self):
         with (
             mock.patch.object(tui, "_runtime_source_stage_context", return_value=Ok(_runtime())),
-            mock.patch.object(tui, "_canonical_consumer_source", return_value=Ok(mock.Mock())),
             mock.patch.object(tui.sys.stdin, "isatty", return_value=True),
             mock.patch.object(tui.sys.stdout, "isatty", return_value=True),
-            mock.patch.object(
-                tui, "run_consumer", side_effect=tui.CursesUnavailable("no terminal")
-            ),
+            mock.patch.object(tui, "_run_curses", side_effect=tui.CursesUnavailable("no terminal")),
             mock.patch.object(tui, "_run_text", return_value=0) as fallback,
         ):
             code = tui.run(user_home="/tmp/aart-home")
@@ -209,10 +206,9 @@ class CursesFallbackBoundaryTests(unittest.TestCase):
         output = _TtyCapture()
         with (
             mock.patch.object(tui, "_runtime_source_stage_context", return_value=Ok(_runtime())),
-            mock.patch.object(tui, "_canonical_consumer_source", return_value=Ok(mock.Mock())),
             mock.patch.object(tui.sys.stdin, "isatty", return_value=True),
             mock.patch.object(
-                tui, "run_consumer", side_effect=ValueError("duplicate claude:current")
+                tui, "_run_curses", side_effect=ValueError("duplicate claude:current")
             ),
             mock.patch.object(tui, "_run_text", return_value=0) as fallback,
             redirect_stdout(output),
@@ -232,10 +228,9 @@ class CursesFallbackBoundaryTests(unittest.TestCase):
         output = _TtyCapture()
         with (
             mock.patch.object(tui, "_runtime_source_stage_context", return_value=Ok(_runtime())),
-            mock.patch.object(tui, "_canonical_consumer_source", return_value=Ok(mock.Mock())),
             mock.patch.object(tui.sys.stdin, "isatty", return_value=True),
             mock.patch.object(
-                tui, "run_consumer", side_effect=ValueError("/Users/secret/path leaked")
+                tui, "_run_curses", side_effect=ValueError("/Users/secret/path leaked")
             ),
             mock.patch.object(tui, "_run_text", return_value=0),
             redirect_stdout(output),
@@ -252,10 +247,9 @@ class CursesFallbackBoundaryTests(unittest.TestCase):
         debug = io.StringIO()
         with (
             mock.patch.object(tui, "_runtime_source_stage_context", return_value=Ok(_runtime())),
-            mock.patch.object(tui, "_canonical_consumer_source", return_value=Ok(mock.Mock())),
             mock.patch.object(tui.sys.stdin, "isatty", return_value=True),
             mock.patch.object(
-                tui, "run_consumer", side_effect=ValueError("/Users/secret/path leaked")
+                tui, "_run_curses", side_effect=ValueError("/Users/secret/path leaked")
             ),
             mock.patch.object(tui, "_run_text", return_value=0) as fallback,
             mock.patch.dict(tui.os.environ, {"AART_DEBUG": "1"}, clear=False),

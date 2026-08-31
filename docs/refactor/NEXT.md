@@ -2,32 +2,45 @@
 
 ## Current objective
 
-Finish **CP-13 Consumer TUI 01–29**. Steps 1–4 are verified and the default full-screen TTY now
-opens one canonical `ConsumerMachine` assembled from durable receipts and fresh local inspection
-(D-060, D-061; B-025 closed). The remaining critical path is the public flag-command cutover and
-then evidence-led retirement of the legacy consumer authority those commands still call.
+Finish **CP-13 Consumer TUI 01–29**. Steps 1–4 and the durable canonical machine reader are
+verified, but public-entry characterization found that the canonical shell only navigates and
+renders: it cannot start or apply lifecycle actions, has no configured Marketplace in its composed
+source, and cannot yet see existing project/user install records. The premature default-TTY route
+was therefore removed under D-062 and B-025 is open again.
 
 What remains is the wiring that makes the canonical application the one a person actually reaches.
 
 ## Immediate next actions
 
-The TTY composition root is migrated. A package can be compiled, published, read back and installed
-end to end (D-056), and a flow holds that install for the screens that draw it (D-059). What remains
-is making the public commands construct and execute those same values rather than the legacy setup
-queue.
+The renderers are not the missing layer. A package can be compiled, published, read back and
+installed end to end (D-056), and a flow holds that install for the screens that draw it (D-059).
+The missing layer is typed application commands/handlers that turn selection and confirmation into
+that flow and execution, plus composition of real Marketplace and installed-state sources.
 
-1. Route the public consumer commands (`install`, `update`, `uninstall`, `status`) through
+1. Add RED interaction tests for the accepted action transitions: Marketplace selection → Review,
+   Ready → execute, Installed → verify/repair/uninstall, and outcome → refreshed machine/Activity.
+   Extend `ConsumerUiCommandKind` only with semantic application requests; the reducer still does
+   no I/O and `key_event` remains the sole key interpreter.
+2. Add an injected consumer application handler that builds `ConsumerFlow` with
+   `begin_installation`, executes its reviewed lifecycle plans under the existing CP-12 lock, calls
+   `record_installation`, and reloads the durable machine. Compose configured Marketplace offers
+   into the same source. Do not route `run()` until these live-flow tests pass.
+3. Define and test the strangler boundary for existing project/user installation manifests. They
+   must remain visible and operable until a kind-neutral canonical receipt/observation replaces
+   them; never treat the absence of a canonical MCP receipt as evidence that a Skill/Rule/Hook/
+   Memory installation does not exist.
+4. Route the public consumer commands (`install`, `update`, `uninstall`, `status`) through
    `begin_installation`/`execute_lifecycle`/`record_installation` rather than the legacy setup
    queue, projecting their output with `consumer_plan_to_data` and `receipt_detail_to_data` so
    text, curses and `--json` are three renderings of one plan. `render_install_plan` is already the
    whole-plan review a non-interactive command prints (D-049).
-2. Add public-flow characterization at each command seam before changing its dispatch, including
+5. Add public-flow characterization at each command seam before changing its dispatch, including
    non-interactive fail-closed review, machine-output completeness, and a real persisted install
    that a subsequent `status` invocation reads without in-memory state.
-3. Only then step 6: retire legacy consumer semantic authority (`consumer/application.py`,
+6. Only then route the default TTY and retire legacy consumer semantic authority (`consumer/application.py`,
    `installation/*`, `setup_engine/*`, `lifecycle/application.py`) path by path, each removal
    preceded by a public-flow test proving the canonical path already carries it.
-4. Update the CP-13 coverage table as each command and screen group moves from projection to live
+7. Update the CP-13 coverage table as each command and screen group moves from projection to live
    public flow.
 
 ## Do not do yet
