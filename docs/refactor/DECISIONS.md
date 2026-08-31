@@ -888,3 +888,27 @@ the Product Specification first instead of hiding the change here.
   inventing an answer, and no drawn screen or serialized machine carries the token. What remains
   before the default TTY route is Marketplace composition and legacy installed-state visibility,
   not durability.
+
+## D-067 — The developer loop narrows tests; the release gate still runs all of them
+- **Decision:** `scripts/affected.py` maps a change to the test modules that could have been
+  affected, and `scripts/quality.py --changed` (`make check`) runs every cheap gate in full plus
+  only those tests. `make quality` is unchanged in meaning: every gate, every test. Separately,
+  `quality.py` now skips a gate whose tests are *provably* a subset of another selected gate's --
+  `integration` discovers `*e2e_test.py`, which `unit`'s `*_test.py` already matches -- after
+  checking the containment at run time rather than assuming it, and it prints the skip and its
+  reason rather than dropping the gate silently.
+- **Status:** accepted.
+- **Reason:** the full suite took ~485s, and ~275s of that was the same tests running two and three
+  times: `integration` re-ran 107 tests `unit` had just run, and `coverage` re-ran all 2,506 again.
+  Every non-test gate together takes 5.7 seconds, so gate-level selection was never the lever --
+  test execution was.
+- **Consequence:** `make quality` is ~372s (the redundant `integration` run removed, no assertion
+  lost) and `make check` is ~112s for a typical source change. The narrowing refuses far more
+  readily than it narrows: any changed path that is not a `.py` file under `agent_artifacts/` or
+  `tests/` -- a build file, a script, a fixture, a doc -- makes it decline and run everything, and
+  so does a module it cannot parse, find, or place in the graph. A test that crosses a subprocess
+  boundary is outside the import graph, so it runs whenever any source module changes; the
+  narrower rule that would have released 30 such modules was rejected because it would have
+  released `registry_cli_integration_test` and others that do drive the package, and a wrongly
+  skipped test reports green without running. `coverage` is never narrowed: a percentage measured
+  over part of a suite is not this repository's percentage.
