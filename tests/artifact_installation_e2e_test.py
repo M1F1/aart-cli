@@ -41,7 +41,10 @@ from agent_artifacts.application.consumer_ui import (
     reduce_consumer_ui,
 )
 from agent_artifacts.application.consumer_views import ConsumerScreen
-from agent_artifacts.application.execution import LifecycleExecutionStatus, execute_lifecycle
+from agent_artifacts.application.execution import (
+    InstallationExecutionStatus,
+    execute_installation,
+)
 from agent_artifacts.application.installation_planning import inspect_requirements
 from agent_artifacts.application.installation_proposal import (
     desired_state_for,
@@ -104,6 +107,8 @@ from agent_artifacts.store.model import (
 from agent_artifacts.tui_consumer import CanonicalScreenSource, _reload, frame, screens_from
 from tests.consumer_session_e2e_test import TODAY, _route
 from tests.mcp_stdio_e2e_test import SERVER_SOURCE, _FileProvider, speak
+
+MOMENT = "2026-08-31T17:05:00+00:00"
 
 TOKEN = InputId("github-token")
 ORG = InputId("github-org")
@@ -328,9 +333,15 @@ class AuthoredInstallationTest(unittest.TestCase):
         return begun.value
 
     def _install(self, flow=None):
+        """Run the whole confirmed Selection, the way a confirmation runs it.
+
+        One artifact is a transaction with one member, so this goes through the same
+        `execute_installation` a bulk install goes through rather than a per-artifact shortcut.
+        """
+
         flow = self._begin() if flow is None else flow
-        executed = execute_lifecycle(
-            flow.proposal.lifecycle[0],
+        executed = execute_installation(
+            flow.proposal,
             policy=EffectivePolicy(),
             interpreters=self._interpreters(),
             inspect=self._inspect,
@@ -346,7 +357,7 @@ class AuthoredInstallationTest(unittest.TestCase):
             screens_from(
                 assemble_consumer_machine((), today=TODAY),
                 plan=flow.plan,
-                outcome=flow.outcome,
+                transaction=flow.outcome,
             )
         )
         state = _reload(source, ConsumerUiState(), entering=True)
@@ -373,7 +384,7 @@ class AuthoredInstallationTest(unittest.TestCase):
     def test_an_authored_manifest_installs_and_the_server_answers_what_it_declared(self) -> None:
         _, outcome = self._install()
 
-        self.assertIs(outcome.status, LifecycleExecutionStatus.COMPLETED)
+        self.assertIs(outcome.status, InstallationExecutionStatus.COMPLETED)
         answers = self._server_answers()
         self.assertEqual(answers["argv"], ["--strict"])
         self.assertEqual(answers["org"], "acme")
@@ -425,7 +436,7 @@ class AuthoredInstallationTest(unittest.TestCase):
         flow = self._begin()
         _, outcome = self._install(flow)
 
-        recorded = record_installation(flow, outcome)
+        recorded = record_installation(flow, outcome, recorded_at=MOMENT)
         self.assertIsInstance(recorded, Ok, getattr(recorded, "diagnostics", ()))
 
         drawn = self._drawn(ConsumerScreen.SUCCESS, recorded.value)
@@ -437,7 +448,7 @@ class AuthoredInstallationTest(unittest.TestCase):
 
         flow = self._begin()
         _, outcome = self._install(flow)
-        recorded = record_installation(flow, outcome).value
+        recorded = record_installation(flow, outcome, recorded_at=MOMENT).value
 
         drawn = "\n".join(
             self._drawn(screen, recorded)
@@ -461,7 +472,12 @@ class AuthoredInstallationTest(unittest.TestCase):
             {
                 "plan": [str(item.effect) for item in proposal.plan.mutation.effects],
                 "digest": str(proposal.review_digest),
-                "outcome": [str(item) for item in outcome.primary.applied],
+                "outcome": [
+                    str(item)
+                    for member in outcome.artifacts
+                    if member.outcome is not None
+                    for item in member.outcome.primary.applied
+                ],
             }
         )
         self.assertNotIn(self.token, surfaces)

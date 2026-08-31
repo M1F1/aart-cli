@@ -39,6 +39,7 @@ from agent_artifacts.application.consumer_views import (
     LifecyclePlanView,
     MarketplaceCollectionView,
     PresentationProfile,
+    ReceiptArtifactView,
     ReceiptDetailView,
     RegistryView,
     project_collection,
@@ -71,6 +72,8 @@ __all__ = [
     "render_lifecycle_plan",
     "render_marketplace_artifact",
     "render_progress",
+    "render_transaction_progress",
+    "render_transaction_success",
     "render_ready",
     "render_receipt_detail",
     "render_registry",
@@ -381,6 +384,62 @@ def render_progress(view: LifecycleOutcomeView, profile: PresentationProfile) ->
             lines.append(f"  {mark} {item.component}")
     if not view.steps:
         lines.append("  Nothing to do.")
+    return tuple(lines)
+
+
+def _transaction_member(view: ReceiptArtifactView, profile: PresentationProfile) -> tuple[str, ...]:
+    lines = [f"{_STEP_MARKS.get(view.status, '·')} {view.coordinate}  {_human(view.status)}"]
+    if view.detail:
+        lines.append(f"    {view.detail}")
+    for message in view.diagnostics:
+        lines.append(f"    {message}")
+    for step in view.steps:
+        mark = _STEP_MARKS.get(step.status, "·")
+        if profile is PresentationProfile.VERBOSE:
+            detail = f" ({step.detail})" if step.detail else ""
+            lines.append(f"    {mark} {step.component}: {step.effect}{detail}")
+        else:
+            lines.append(f"    {mark} {step.component}")
+    return tuple(lines)
+
+
+def render_transaction_progress(
+    view: ReceiptDetailView, profile: PresentationProfile
+) -> tuple[str, ...]:
+    """Screen 10 for a Selection: every member of the transaction, including the ones that did not
+    run.
+
+    A member nobody attempted is the member somebody most needs to see, so it is drawn rather than
+    filtered out for having no steps.
+    """
+
+    if not isinstance(view, ReceiptDetailView) or not isinstance(profile, PresentationProfile):
+        raise ValueError("transaction rendering needs a receipt view and presentation profile")
+    lines = [view.summary]
+    for member in view.artifacts:
+        lines.extend(_transaction_member(member, profile))
+    if not view.artifacts:
+        lines.append("  Nothing to do.")
+    if profile is PresentationProfile.VERBOSE:
+        lines.append(f"Review identity: {view.review_digest}")
+    return tuple(lines)
+
+
+def render_transaction_success(
+    view: ReceiptDetailView, profile: PresentationProfile
+) -> tuple[str, ...]:
+    """Screen 11 for a Selection. Undo is offered only where the transaction can actually be
+    reversed, and the refusal names the member that refuses it."""
+
+    lines = list(render_transaction_progress(view, profile))
+    lines.append(f"{view.outcome.mark} {_human(view.outcome.value).capitalize()}")
+    for drift in view.residual_drift:
+        lines.append(f"  Still needs attention: {drift.component} ({_human(drift.kind)})")
+    lines.append(
+        "[ View installed ] [ View receipt ] [ Undo ] [ Done ]"
+        if view.undo.available
+        else f"[ View installed ] [ View receipt ] [ Done ]  Undo unavailable: {view.undo.reason}"
+    )
     return tuple(lines)
 
 
@@ -1012,6 +1071,10 @@ class ConsumerScreens:
     plan: ConsumerPlanView | None = None
     lifecycle: LifecyclePlanView | None = None
     outcome: LifecycleOutcomeView | None = None
+    #: What one confirmed Selection produced. Screens 10 and 11 prefer it, because an install is a
+    #: transaction; 17 and 19 stay on `outcome`, because an update or an uninstall is about one
+    #: artifact.
+    transaction: ReceiptDetailView | None = None
 
     def offered(self, key: str) -> MarketplaceEntry | None:
         return next((item for item in self.marketplace if item.key == key), None)
@@ -1048,6 +1111,7 @@ def screens_from(
     plan: ConsumerPlanView | None = None,
     lifecycle: LifecyclePlanView | None = None,
     outcome: LifecycleOutcomeView | None = None,
+    transaction: ReceiptDetailView | None = None,
 ) -> ConsumerScreens:
     """The screens for one assembled machine, plus whatever the current flow is holding.
 
@@ -1073,6 +1137,7 @@ def screens_from(
         plan,
         lifecycle,
         outcome,
+        transaction,
     )
 
 
@@ -1093,6 +1158,10 @@ _LIFECYCLE_SCREENS = frozenset(
         ConsumerScreen.VERIFY_REPAIR,
     }
 )
+
+#: The two screens an install lands on. An update or an uninstall is one artifact's lifecycle
+#: action and keeps the single-outcome renderers.
+_TRANSACTION_SCREENS = frozenset({ConsumerScreen.INSTALLING, ConsumerScreen.SUCCESS})
 
 _OUTCOME_SCREENS = frozenset(
     {
@@ -1322,6 +1391,10 @@ class CanonicalScreenSource:
                 else render_lifecycle_plan(screens.lifecycle, profile)
             )
         if screen in _OUTCOME_SCREENS:
+            if screen in _TRANSACTION_SCREENS and screens.transaction is not None:
+                if screen is ConsumerScreen.SUCCESS:
+                    return render_transaction_success(screens.transaction, profile)
+                return render_transaction_progress(screens.transaction, profile)
             if screens.outcome is None:
                 return ("Nothing has run yet.",)
             if screen is ConsumerScreen.SUCCESS:

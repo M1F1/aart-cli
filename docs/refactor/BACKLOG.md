@@ -388,7 +388,15 @@ each artifact outcome and any compensation, then atomically record one action re
 resulting per-artifact installation records. Project screens 10/11 and Activity from that aggregate
 rather than selecting an arbitrary member outcome.
 Invariants touched: INV-130, INV-133, INV-138, INV-149, INV-152.
-Evidence/links: D-052, D-059, D-063; `tests/consumer_ui_actions_test.py`;
-`tests/consumer_action_shell_test.py`.
+Evidence/links: D-052, D-059, D-063, D-064, D-065; `tests/consumer_ui_actions_test.py`;
+`tests/consumer_action_shell_test.py`; `tests/installation_transaction_test.py`;
+`tests/installation_transaction_receipt_test.py`; `tests/consumer_transaction_screens_test.py`;
+`tests/artifact_installation_e2e_test.py`.
+Progress (2026-08-31): aggregate execution under one lease (D-064), one Activity receipt plus one
+installed record per applied member, and screens 10/11 drawn from that transaction (D-065) are
+verified for single and multi-artifact Selection, including the partially-applied and
+never-attempted cases. What remains under this number is reloading the durable machine after a
+transaction, so Installed and Activity refresh from what was just recorded.
 Unblock condition: aggregate execution, durable recording and screen projections are verified for
-single and multi-artifact Selection, including partial execution and compensation evidence.
+single and multi-artifact Selection, including partial execution and compensation evidence, and a
+recorded transaction is visible to the next assembled machine without hand-built state.

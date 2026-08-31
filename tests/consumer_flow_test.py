@@ -19,8 +19,11 @@ from agent_artifacts.application.consumer_session import (
     begin_installation,
     record_installation,
 )
-from agent_artifacts.application.consumer_views import ConsumerPlanView
-from agent_artifacts.application.execution import ExecutionOutcome, LifecycleExecutionOutcome
+from agent_artifacts.application.consumer_views import ConsumerPlanView, ReceiptDetailView
+from agent_artifacts.application.execution import (
+    InstallationArtifactExecution,
+    InstallationExecutionOutcome,
+)
 from agent_artifacts.domain.credentials import (
     CredentialObservation,
     CredentialProviderRef,
@@ -66,11 +69,21 @@ def _begin(planned=None, **overrides):
     )
 
 
-def _outcome(flow: ConsumerFlow) -> LifecycleExecutionOutcome:
-    """What executing this flow's own plan, changing nothing, would report."""
+MOMENT = "2026-08-31T17:05:00+00:00"
 
-    plan = flow.proposal.lifecycle[0]
-    return LifecycleExecutionOutcome(plan, ExecutionOutcome(plan.review_digest, (), True))
+
+def _outcome(flow: ConsumerFlow) -> InstallationExecutionOutcome:
+    """What running this flow's own proposal, changing nothing, would report."""
+
+    return InstallationExecutionOutcome(
+        flow.proposal,
+        tuple(
+            InstallationArtifactExecution(
+                plan, not_attempted=True, detail="everything was already true"
+            )
+            for plan in flow.proposal.lifecycle
+        ),
+    )
 
 
 def _reason(result) -> str:
@@ -144,26 +157,35 @@ class BegunFlowTest(unittest.TestCase):
 
 
 class RecordedOutcomeTest(unittest.TestCase):
-    def test_an_outcome_is_recorded_onto_the_flow_that_planned_it(self) -> None:
+    def test_what_ran_is_recorded_onto_the_flow_that_reviewed_it(self) -> None:
         flow = _begin().value
 
-        after = record_installation(flow, _outcome(flow))
+        after = record_installation(flow, _outcome(flow), recorded_at=MOMENT)
 
         self.assertIsInstance(after, Ok, getattr(after, "diagnostics", ()))
-        self.assertEqual(
-            after.value.outcome.review_digest, str(flow.proposal.lifecycle[0].review_digest)
-        )
+        self.assertIsInstance(after.value.outcome, ReceiptDetailView)
+        self.assertEqual(after.value.outcome.review_digest, str(flow.proposal.review_digest))
         self.assertIs(after.value.proposal, flow.proposal)
+
+    def test_a_selection_of_one_is_still_recorded_as_a_transaction(self) -> None:
+        """One path, not two. A single-artifact install is a transaction with one member."""
+
+        flow = _begin().value
+
+        after = record_installation(flow, _outcome(flow), recorded_at=MOMENT).value
+
+        self.assertEqual(after.outcome.summary, "Installed 1 artifact")
+        self.assertEqual(len(after.outcome.artifacts), 1)
 
     def test_recording_an_outcome_leaves_the_reviewed_plan_alone(self) -> None:
         flow = _begin().value
 
-        after = record_installation(flow, _outcome(flow)).value
+        after = record_installation(flow, _outcome(flow), recorded_at=MOMENT).value
 
         self.assertIs(after.plan, flow.plan)
         self.assertIsNone(flow.outcome)
 
-    def test_an_outcome_from_a_plan_this_flow_never_proposed_is_refused(self) -> None:
+    def test_an_outcome_from_a_proposal_this_flow_never_made_is_refused(self) -> None:
         """Screens 10 and 11 report what ran.
 
         Reporting one flow's result against another's review is how somebody reads "installed"
@@ -173,7 +195,7 @@ class RecordedOutcomeTest(unittest.TestCase):
         flow = _begin().value
         other = _begin(_planned(registrations=())).value
 
-        refused = record_installation(flow, _outcome(other))
+        refused = record_installation(flow, _outcome(other), recorded_at=MOMENT)
 
         self.assertIsInstance(refused, Err)
         self.assertEqual(refused.diagnostics[0].code, FLOW_INVALID)

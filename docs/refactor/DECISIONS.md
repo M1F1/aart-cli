@@ -849,3 +849,22 @@ the Product Specification first instead of hiding the change here.
   is refused rather than silently forgotten. Undo for a transaction is the weakest of its members,
   never the average: if any member did not run, or mutated a credential, or applied something
   irreversible, the transaction cannot be undone and the reason given is that member's own.
+
+## D-065 — Screens 10 and 11 draw the transaction; 17 and 19 stay on one lifecycle action
+- **Decision:** `ConsumerScreens` gained `transaction: ReceiptDetailView | None`, and
+  `render_transaction_progress`/`render_transaction_success` draw a whole Selection: the summary,
+  every member with its status, detail, diagnostics and steps, residual drift, and an `[ Undo ]`
+  offered only when the transaction can actually be reversed. `INSTALLING` and `SUCCESS` prefer the
+  transaction when one is present and fall back to the singular outcome; `UPDATING` and
+  `UNINSTALLING` keep the lifecycle renderers, because an update or an uninstall is one artifact's
+  action.
+- **Status:** accepted.
+- **Reason:** an install is confirmed once and may establish several artifacts (D-064), so drawing
+  it through `render_success` would have to pick one member to name and drop the rest — including a
+  member that never ran, which is exactly the member somebody needs to see. Offering an undo the
+  transaction cannot perform would be worse than offering none.
+- **Consequence:** a `not-attempted` member is drawn like every other status rather than filtered
+  out for having no steps, and the undo refusal on screen 11 carries the member's own reason. The
+  authored-manifest E2E now installs through `execute_installation` and draws 10/11 from the
+  receipt that real run produced, so the transaction path has end-to-end evidence rather than
+  view-level evidence only.

@@ -43,7 +43,6 @@ from .consumer_views import (
     DoctorView,
     InstalledArtifactView,
     InstalledCollectionView,
-    LifecycleOutcomeView,
     ReceiptDetailView,
     RegistryView,
     activity_from_receipts,
@@ -51,11 +50,11 @@ from .consumer_views import (
     project_dashboard,
     project_doctor,
     project_install_plan,
+    project_installation_receipt,
     project_installed_artifact,
     project_installed_collection,
-    project_lifecycle_outcome,
 )
-from .execution import LifecycleExecutionOutcome
+from .execution import InstallationExecutionOutcome
 from .installation_proposal import (
     InstallationProposal,
     PlannedInstallation,
@@ -232,7 +231,7 @@ class ConsumerFlow:
 
     proposal: InstallationProposal
     plan: ConsumerPlanView
-    outcome: LifecycleOutcomeView | None = None
+    outcome: ReceiptDetailView | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.proposal, InstallationProposal) or not isinstance(
@@ -241,7 +240,7 @@ class ConsumerFlow:
             raise ValueError("a consumer flow needs a proposal and the review projected from it")
         if self.plan.review_digest != str(self.proposal.review_digest):
             raise ValueError("a consumer flow would show a review of a different plan")
-        if self.outcome is not None and not isinstance(self.outcome, LifecycleOutcomeView):
+        if self.outcome is not None and not isinstance(self.outcome, ReceiptDetailView):
             raise ValueError("a consumer flow outcome is invalid")
 
     @property
@@ -323,23 +322,32 @@ def begin_installation(
 
 def record_installation(
     flow: ConsumerFlow,
-    outcome: LifecycleExecutionOutcome,
+    outcome: InstallationExecutionOutcome,
+    *,
+    recorded_at: str,
 ) -> Result[ConsumerFlow]:
-    """Carry what ran back onto the flow that planned it, for screens 10 and 11.
+    """Carry what ran back onto the flow that reviewed it, for screens 10 and 11.
 
-    The outcome has to belong to this flow's own reviewed plan. Anything else would let one action's
+    A flow is always about one proposal, so what it records is always one transaction -- an install
+    of a single artifact is a transaction with one member rather than a second kind of result
+    (D-064). The outcome has to be of this flow's own proposal. Anything else would let one action's
     result be drawn under another's review, which is how somebody reads "installed" about an
     install that never happened.
+
+    `recorded_at` is supplied rather than read: this layer has no clock, and a receipt that dated
+    itself when somebody drew it would be a record of the drawing, not of the action.
     """
 
-    if not isinstance(flow, ConsumerFlow) or not isinstance(outcome, LifecycleExecutionOutcome):
+    if not isinstance(flow, ConsumerFlow) or not isinstance(outcome, InstallationExecutionOutcome):
         return _flow_error("recording an installation needs a flow and what running it produced")
-    if outcome.plan.review_digest not in {item.review_digest for item in flow.proposal.lifecycle}:
+    if outcome.proposal.review_digest != flow.proposal.review_digest:
         return _flow_error(
-            "this outcome is from a plan this flow never proposed; a result is only ever "
+            "this outcome is from a proposal this flow never made; a result is only ever "
             "reported under the review it belongs to"
         )
     try:
-        return Ok(replace(flow, outcome=project_lifecycle_outcome(outcome)))
+        return Ok(
+            replace(flow, outcome=project_installation_receipt(outcome, recorded_at=recorded_at))
+        )
     except ValueError as error:
         return _flow_error(f"this outcome cannot be reported: {error}")

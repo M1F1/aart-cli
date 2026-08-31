@@ -27,9 +27,13 @@ that flow and execution, plus composition of real Marketplace and installed-stat
    transaction becomes one Activity receipt plus one installed record per member that applied
    (D-064). A member that never ran stays named in the receipt as `not-attempted`; a member that
    applied but has no receipt is refused rather than forgotten; undo is the weakest member's answer.
-   **Remaining:** attach the transaction outcome to `ConsumerFlow`, reload the durable machine after
-   it (B-030), and compose configured Marketplace offers into the same source. Do not route `run()`
-   until these live-flow tests pass.
+   `ConsumerFlow` now holds that transaction receipt, and screens 10/11 draw it: every member is
+   named with its status and steps, a member that never ran is drawn rather than dropped, and undo
+   is offered only where the transaction can be reversed (D-065). The authored-manifest E2E installs
+   through `execute_installation` and draws those screens from the receipt that run produced.
+   **Remaining:** reload the durable machine after a transaction (B-030) so Installed and Activity
+   show it without reassembling by hand, and compose configured Marketplace offers into the same
+   source. Do not route `run()` until these live-flow tests pass.
 3. Define and test the strangler boundary for existing project/user installation manifests. They
    must remain visible and operable until a kind-neutral canonical receipt/observation replaces
    them; never treat the absence of a canonical MCP receipt as evidence that a Skill/Rule/Hook/
@@ -111,4 +115,5 @@ that flow and execution, plus composition of real Marketplace and installed-stat
   `InstallationProposal`, and an outcome may only be reported under the review it belongs to.
 - The transaction is the unit recorded because it is the unit reviewed (D-064): one confirmation
   leaves one action receipt naming the Selection, with every member accounted for beneath it and one
-  installed record per member that applied.
+  installed record per member that applied. Screens 10 and 11 draw that transaction; 17 and 19 stay
+  on one artifact's lifecycle action (D-065).

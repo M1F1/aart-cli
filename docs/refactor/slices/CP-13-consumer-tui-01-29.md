@@ -193,6 +193,12 @@ receipt is refused rather than forgotten, the same artifact cannot be given two 
 that applied is still recorded when a later member fails, a member that never ran stays named as
 `not-attempted`, and a transaction nobody finished cannot be undone.
 
+`tests/consumer_transaction_screens_test.py` — screens 10 and 11 for a Selection rather than for
+one artifact, reached through the real reducer and shell. The transaction's summary and every
+member's coordinate are drawn; a member that never ran is drawn like every other status rather than
+filtered out for having no steps; the screen offers no `[ Undo ]` the transaction cannot perform;
+and a flow that has not run still says nothing has.
+
 ## E2E/live acceptance
 
 `tests/artifact_installation_e2e_test.py` — the authored package of D-056/D-058, drawn. The same
@@ -272,9 +278,10 @@ own launcher after a repair planned from disk alone, and no stored file contains
 
 ## Remaining
 
-- Aggregate the proposal's lifecycle executions and record one transaction receipt (B-030), then
-  implement the production action handler over `begin_installation`, CP-12 execution, durable
-  recording and machine reload.
+- Reload the durable machine after a transaction (B-030), so Installed and Activity refresh from
+  the receipt it recorded, then implement the production action handler over `begin_installation`,
+  CP-12 execution, durable recording and that reload. Execution, recording and the screens that
+  draw the result are done (D-064, D-065).
 - Compose configured Marketplace and preserve/adapt existing kind-neutral project/user install
   state before retrying the default route.
 - Route public commands through the same handler/application boundary.
@@ -293,9 +300,9 @@ own launcher after a repair planned from disk alone, and no stored file contains
   `plan_artifact_installation` from the package's own description.
 - The canonical shell now emits and transports install/update/repair/uninstall action requests, but
   its current composition has no production handler, configured Marketplace offers or adapter for
-  existing project/user installation records. The singular lifecycle receipt cannot be used as the
-  bulk transaction receipt (B-030). The legacy public entry remains until those replacement facts
-  are proven (D-062, D-063).
+  existing project/user installation records, and the durable machine is not reloaded after a
+  transaction (B-030). The legacy public entry remains until those replacement facts are proven
+  (D-062, D-063).
 
 ## Backlog discoveries
 
@@ -316,7 +323,8 @@ own launcher after a repair planned from disk alone, and no stored file contains
   dependencies through the environment that holds them (D-057).
 - B-030 — Aggregate installation execution and one transaction receipt. **Promoted to CP-13:** the
   production handler cannot fragment one reviewed Selection into N actions without violating
-  INV-130/INV-138.
+  INV-130/INV-138. Execution, recording and rendering are done (D-064, D-065); what remains under
+  this number is reloading the durable machine after a transaction.
 
 ## Blockers
 
