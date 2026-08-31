@@ -1009,8 +1009,8 @@ the Product Specification first instead of hiding the change here.
 - **Decision:** `EffectInterpreter.supports` answers whether this interpreter may perform this
   effect, not whether it recognizes the effect's type. `FileEffectInterpreter` and
   `RuntimeEffectInterpreter` additionally require that they own the path the effect names,
-  `HarnessEffectInterpreter` that it holds a matching registration, and
-  `CredentialEffectInterpreter` that it was given the reference.
+  `HarnessEffectInterpreter` that it holds a matching registration *and* that the effect names the
+  artifact it was built for, and `CredentialEffectInterpreter` that it was given the reference.
 - **Status:** accepted.
 - **Reason:** `_dispatch` takes the first interpreter that says yes, and one Selection is one
   transaction (D-064), so a Collection of two MCP artifacts hands the executor one interpreter tuple
@@ -1022,6 +1022,15 @@ the Product Specification first instead of hiding the change here.
   wrong interpreter's ownership refusal, so the message names the real fault. This narrows dispatch
   and never widens it: the ownership, registration and reference checks that produced those
   refusals still run inside `apply`, so an interpreter reached directly refuses exactly as before.
+
+  The harness half is the one that was not failing closed. `ConfigureHarness` names the harness and
+  the artifact but never the server, so two artifacts registering with the same harness were
+  indistinguishable to an interpreter matching on the harness alone: the first would answer for the
+  second artifact's step and register *its own* server under it. That is a wrong write rather than a
+  refused one, and no later inspection of the second artifact would notice, because the entry it
+  looked for would be present and correct. `HarnessEffectInterpreter` therefore takes the artifact
+  it may register as a required argument -- the same doctrine as the content it may write and the
+  reference it may act on, which are also supplied at construction rather than read off the effect.
 
 ## D-073 — One confirmed Selection gets one capability-bound interpreter set
 - **Decision:** `interpreters_for` assembles the execution adapters for all planned installations
@@ -1062,3 +1071,23 @@ the Product Specification first instead of hiding the change here.
   of them. The authored-package E2E now uses this action and the D-073 assembler, proving one
   verified object-store package is offered, reviewed, executed, durably recorded and started by its
   harness without test-only orchestration between those stages.
+
+## D-075 — A version's package digest and its store object digest are two values
+- **Decision:** `RegistryArtifactVersion` carries `canonical_digest` and `object_digest`.
+  `canonical_digest` stays the CP-05 tree digest of the promoted package with `provenance.json`
+  excluded; `object_digest` is the store envelope digest over every entry, provenance included.
+  Promotion computes the second where it writes the package and records it in the version record,
+  the reference record and the catalogue, and `validate_promoted_registry` checks it against the
+  vendored files exactly as it already checks the first.
+- **Status:** accepted.
+- **Reason:** CP-13 had treated them as one value, and they are not equal by construction. The
+  consequence was silent and total: `placement_for` asked the object store for the package digest,
+  the store addresses objects by their envelope digest, and the read returned nothing -- an install
+  that resolves a version correctly and then reports that this machine does not hold what it just
+  resolved. Nothing in the resolver or the store was wrong; the two were being asked to agree on a
+  value neither of them computes.
+- **Consequence:** the seam between an approved version and the bytes on this machine now names
+  which digest it means, so neither can be substituted for the other by inference. A legacy row is
+  still not evidence of approval and cannot manufacture either digest. The cost is one more
+  immutable field on a published version, which is deliberate: both digests are part of what
+  `_immutable_version_fields` refuses to let a republication change.

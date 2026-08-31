@@ -69,12 +69,19 @@ that flow and execution, plus composition of real Marketplace and installed-stat
    refuses before the mutation lease, and the real authored-package E2E uses this operation plus
    the D-073 assembler rather than test-only orchestration.
 
-   The next RED seam is the production adapter around that action: bridge a configured approved
-   Marketplace Selection to `ResolvedSelection` and placements without fabricating registry
-   identity, bind the accepted screen-07 input sources/provider references, then reload one
-   immutable machine after completion. The shell and public commands must call that one adapter
-   rather than recompose its steps independently. B-032 records the input boundary that this audit
-   proved is on the critical path.
+   **DONE (source half):** `configured_selection` resolves a Selection from configured approved
+   registry snapshots, taking approval identity only from validated `registry/versions/*` records so
+   a legacy Marketplace row is never upgraded into an approval by inference; `installation_inputs`
+   owns the pre-plan form state screen 07 needs, where unanswered fields stay visible and a secret
+   can become configured only through a `SecretProviderReference`; and `configured_installation`
+   drafts the installation from both. That work also proved the approved-version and store-object
+   digests are two different values (D-075), which had made `placement_for` unable to find the
+   object it had just resolved.
+
+   The next RED seam is the single production adapter that ties those to the D-074 action: the
+   shell and the public commands must call one adapter rather than recompose its steps
+   independently, and it must reload one immutable machine after completion. B-032 records the
+   input boundary that this audit proved is on the critical path.
 5. **DONE:** public-flow characterization now pins each command seam before its dispatch changes --
    durable `status` (a later invocation names what an earlier one installed, and names nothing after
    an uninstall), one envelope across all four seams, a review that names the artifacts it would
