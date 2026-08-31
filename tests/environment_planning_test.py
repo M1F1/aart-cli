@@ -79,6 +79,7 @@ def _resolved(name: str, *, character: str) -> ResolvedArtifact:
         _digest("a"),
         _digest(character),
         _digest(character),
+        _digest(character),
         _digest("f"),
         PromotionMode.VENDORED,
         PublicationStage.PUBLISHED,

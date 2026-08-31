@@ -35,6 +35,7 @@ from agent_artifacts.protocol.native_tree import (
     SourceSnapshot,
 )
 from agent_artifacts.protocol.paths import parse_relative_path
+from agent_artifacts.store.model import make_object_candidate
 
 
 def _digest(character: str) -> ObjectDigest:
@@ -143,6 +144,16 @@ class PromotionPlanningTest(unittest.TestCase):
         self.assertIn("registry/snapshot.json", paths)
         self.assertEqual(len(plan.versions), 2)
         self.assertEqual(len(plan.audits), 2)
+        object_digests = {
+            bundle.candidate.artifact.coordinate.artifact: make_object_candidate(
+                bundle.artifact.canonical_entries
+            ).value.digest
+            for bundle in (first, second)
+        }
+        self.assertEqual(
+            {item.coordinate.artifact: item.object_digest for item in plan.versions},
+            object_digests,
+        )
         self.assertTrue(
             all(item.registry_snapshot == plan.next_registry_snapshot for item in plan.versions)
         )
@@ -173,6 +184,7 @@ class PromotionPlanningTest(unittest.TestCase):
         changed = _ready_bundle(server="print('new')\n")
         approved = registry_version_from_candidate(
             published.candidate,
+            object_digest=make_object_candidate(published.artifact.canonical_entries).value.digest,
             registry_snapshot=_digest("1"),
             mode=PromotionMode.VENDORED,
         )

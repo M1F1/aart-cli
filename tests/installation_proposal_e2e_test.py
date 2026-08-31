@@ -162,6 +162,7 @@ class ProposedInstallationTest(unittest.TestCase):
                 _digest("a"),
                 _digest("c"),
                 _digest("d"),
+                _digest("d"),
                 _digest("e"),
                 PromotionMode.VENDORED,
                 PublicationStage.PUBLISHED,

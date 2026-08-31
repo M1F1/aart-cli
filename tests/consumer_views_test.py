@@ -96,6 +96,7 @@ def _resolved(*, ownership: OwnershipReason) -> ResolvedArtifact:
         _digest("a"),
         _digest("b"),
         _digest("c"),
+        _digest("c"),
         _digest("d"),
         PromotionMode.VENDORED,
         PublicationStage.PUBLISHED,

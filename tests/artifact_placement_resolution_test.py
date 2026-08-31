@@ -177,6 +177,7 @@ def _stored_artifact(package, digest: ObjectDigest):
             payload,
             digest,
             digest,
+            digest,
             PromotionMode.VENDORED,
             PublicationStage.PUBLISHED,
         ),

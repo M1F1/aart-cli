@@ -217,6 +217,7 @@ def project_selection(selection: ResolvedSelection) -> SelectionView:
             {
                 "coordinate": str(item.version.coordinate),
                 "digest": str(item.version.canonical_digest),
+                "object_digest": str(item.version.object_digest),
                 "ownership": [
                     {"kind": owner.kind.value, "owner": owner.owner} for owner in item.ownership
                 ],

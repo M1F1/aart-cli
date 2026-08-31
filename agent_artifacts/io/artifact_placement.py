@@ -62,12 +62,12 @@ def placement_for(
         )
 
     coordinate = artifact.version.coordinate
-    stored = read_object(ObjectReadRequest(store, artifact.version.canonical_digest))
+    stored = read_object(ObjectReadRequest(store, artifact.version.object_digest))
     if isinstance(stored, Err):
         return stored
     if stored.value is None:
         return _error(
-            f"{coordinate} resolves to object {artifact.version.canonical_digest}, which this "
+            f"{coordinate} resolves to object {artifact.version.object_digest}, which this "
             "machine's store does not hold",
             "synchronize the source that publishes it, then plan the install again",
         )

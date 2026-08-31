@@ -104,6 +104,7 @@ def _resolved(name: str = "github", *, version: str = "1.5.0") -> ResolvedArtifa
             _digest("a"),
             _digest("c"),
             _digest("d"),
+            _digest("d"),
             _digest("e"),
             PromotionMode.VENDORED,
             PublicationStage.PUBLISHED,

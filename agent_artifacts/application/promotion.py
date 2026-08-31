@@ -50,6 +50,7 @@ from agent_artifacts.protocol.native_tree import (
 )
 from agent_artifacts.protocol.paths import SafeRelativePath, parse_relative_path
 from agent_artifacts.sources.model import source_snapshot_digest
+from agent_artifacts.store.model import make_object_candidate
 
 PROMOTION_INVALID = DiagnosticCode("promotion-invalid")
 PROMOTION_IMMUTABLE_CONFLICT = DiagnosticCode("promotion-immutable-conflict")
@@ -513,7 +514,7 @@ def _project(
     return Ok(SourceSnapshot(snapshot.origin, tuple(output.values())))
 
 
-def _reference_content(bundle: CandidateBundle) -> bytes:
+def _reference_content(bundle: CandidateBundle, object_digest: ObjectDigest) -> bytes:
     candidate = bundle.candidate
     artifact = candidate.artifact
     return canonical_json_bytes(
@@ -524,6 +525,7 @@ def _reference_content(bundle: CandidateBundle) -> bytes:
                 ("coordinate", str(artifact.coordinate)),
                 ("input_digest", str(artifact.provenance.input_digest)),
                 ("manifest_path", artifact.provenance.manifest_path),
+                ("object_digest", str(object_digest)),
                 ("payload_digest", str(artifact.payload_digest)),
                 ("revision", artifact.provenance.revision),
                 ("source", artifact.provenance.source),
@@ -564,6 +566,7 @@ def _version_content(version: RegistryArtifactVersion) -> bytes:
                 ("lifecycle", version.lifecycle.value),
                 ("lifecycle_reason", version.lifecycle_reason),
                 ("name", identity.name),
+                ("object_digest", str(version.object_digest)),
                 ("payload_digest", str(version.payload_digest)),
                 ("promotion_mode", version.mode.value),
                 ("publication", version.publication.value),
@@ -596,6 +599,7 @@ def _registry_catalog_content(
                                     ("canonical_digest", str(item.canonical_digest)),
                                     ("coordinate", str(item.coordinate)),
                                     ("lifecycle", item.lifecycle.value),
+                                    ("object_digest", str(item.object_digest)),
                                     ("promotion_mode", item.mode.value),
                                     ("publication", item.publication.value),
                                 )
@@ -648,6 +652,16 @@ def plan_bulk_promotion(
     evidence_by_id = dict(evidence)
     if len(evidence_by_id) != len(evidence) or set(evidence_by_id) != set(candidate_ids):
         return _error("each selected candidate requires exactly one promotion evidence record")
+    # Named `stored` rather than `candidate`: the later loops bind `candidate` to the promotion
+    # candidate itself, and reusing the name here would make every one of them a Result.
+    object_digests: dict[CandidateId, ObjectDigest] = {}
+    for bundle in ordered:
+        stored = make_object_candidate(bundle.artifact.canonical_entries)
+        if isinstance(stored, Err):
+            return _error(
+                f"candidate {bundle.candidate.id} does not form one immutable store object"
+            )
+        object_digests[bundle.candidate.id] = stored.value.digest
 
     files = _files(snapshot)
     if isinstance(files, Err):
@@ -668,6 +682,7 @@ def plan_bulk_promotion(
             str(
                 registry_version_from_candidate(
                     candidate,
+                    object_digest=object_digests[candidate.id],
                     registry_snapshot=registry_before.value,
                     mode=mode,
                 ).coordinate
@@ -719,7 +734,11 @@ def plan_bulk_promotion(
             path = _path(f"references/{identity.kind}/{identity.name}/{version}.json")
             if isinstance(path, Err):
                 return path
-            change = _change(files.value, path.value, _reference_content(bundle))
+            change = _change(
+                files.value,
+                path.value,
+                _reference_content(bundle, object_digests[candidate.id]),
+            )
             if isinstance(change, Err):
                 return change
             package_changes.append(change.value)
@@ -755,6 +774,7 @@ def plan_bulk_promotion(
         versions.append(
             registry_version_from_candidate(
                 candidate,
+                object_digest=object_digests[candidate.id],
                 registry_snapshot=registry_after.value,
                 mode=mode,
             )
@@ -901,6 +921,7 @@ def _immutable_version_fields(version: RegistryArtifactVersion) -> tuple[object,
         version.input_digest,
         version.payload_digest,
         version.canonical_digest,
+        version.object_digest,
         version.registry_snapshot,
         version.mode,
     )
@@ -1063,6 +1084,7 @@ def validate_promoted_registry(
         if version.mode is PromotionMode.VENDORED:
             prefix = f"artifacts/{identity.kind}/{identity.name}/{version.coordinate.version}/"
             canonical_entries = []
+            object_entries = []
             raw_paths = {
                 raw
                 for raw, entry in files.value.items()
@@ -1075,18 +1097,32 @@ def validate_promoted_registry(
                 return _error(f"vendored registry package is incomplete: {version.coordinate}")
             for raw in sorted(raw_paths):
                 relative = raw.removeprefix(prefix)
-                if relative == "provenance.json":
-                    continue
                 parsed = parse_relative_path(relative)
                 entry = files.value[raw]
                 if isinstance(parsed, Err):
                     return _error(f"vendored registry path is invalid: {raw}")
+                object_entries.append(
+                    SnapshotEntry(
+                        parsed.value,
+                        SnapshotEntryKind.FILE,
+                        entry.content,
+                        entry.executable,
+                    )
+                )
+                if relative == "provenance.json":
+                    continue
                 canonical_entries.append(
                     file_entry(parsed.value, entry.content, executable=entry.executable)
                 )
             digest = tree_digest(canonical_entries)
             if isinstance(digest, Err) or digest.value != version.canonical_digest:
                 return _error(f"vendored registry package digest is invalid: {version.coordinate}")
+            stored = make_object_candidate(
+                object_entries,
+                expected_digest=version.object_digest,
+            )
+            if isinstance(stored, Err):
+                return _error(f"vendored registry object digest is invalid: {version.coordinate}")
         else:
             reference_path = (
                 f"references/{identity.kind}/{identity.name}/{version.coordinate.version}.json"
@@ -1099,6 +1135,7 @@ def validate_promoted_registry(
                 not isinstance(parsed_reference, Ok)
                 or not isinstance(parsed_reference.value, JsonObject)
                 or parsed_reference.value.get("candidate_digest") != str(version.canonical_digest)
+                or parsed_reference.value.get("object_digest") != str(version.object_digest)
             ):
                 return _error(f"referenced registry record is invalid: {version.coordinate}")
     actual_version_paths = {
@@ -1165,6 +1202,7 @@ def _parse_version_record(content: bytes, path: str) -> Result[RegistryArtifactV
             _required_digest(value, "input_digest"),
             _required_digest(value, "payload_digest"),
             _required_digest(value, "canonical_digest"),
+            _required_digest(value, "object_digest"),
             _required_digest(value, "registry_snapshot"),
             PromotionMode(_required_text(value, "promotion_mode")),
             PublicationStage(_required_text(value, "publication")),

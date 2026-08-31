@@ -32,6 +32,7 @@ class RegistryArtifactVersion:
     input_digest: ObjectDigest
     payload_digest: ObjectDigest
     canonical_digest: ObjectDigest
+    object_digest: ObjectDigest
     registry_snapshot: ObjectDigest
     mode: PromotionMode
     publication: PublicationStage = PublicationStage.PROMOTED_LOCAL
@@ -50,6 +51,7 @@ class RegistryArtifactVersion:
                     self.input_digest,
                     self.payload_digest,
                     self.canonical_digest,
+                    self.object_digest,
                     self.registry_snapshot,
                 )
             )
@@ -79,6 +81,7 @@ class RegistryArtifactVersion:
 def registry_version_from_candidate(
     candidate: Candidate,
     *,
+    object_digest: ObjectDigest,
     registry_snapshot: ObjectDigest,
     mode: PromotionMode,
 ) -> RegistryArtifactVersion:
@@ -100,6 +103,7 @@ def registry_version_from_candidate(
         artifact.provenance.input_digest,
         artifact.payload_digest,
         candidate.canonical_digest,
+        object_digest,
         registry_snapshot,
         mode,
     )

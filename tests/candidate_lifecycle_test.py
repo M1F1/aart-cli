@@ -147,6 +147,7 @@ class CandidateLifecycleTest(unittest.TestCase):
         )
         local = registry_version_from_candidate(
             candidate,
+            object_digest=_digest("e"),
             registry_snapshot=_digest("1"),
             mode=PromotionMode.VENDORED,
         )
@@ -166,7 +167,13 @@ class CandidateLifecycleTest(unittest.TestCase):
         self.assertEqual(published.publication, PublicationStage.PUBLISHED)
         self.assertEqual(deprecated.lifecycle, RegistryLifecycle.DEPRECATED)
         self.assertEqual(revoked.lifecycle, RegistryLifecycle.REVOKED)
-        immutable_fields = ("coordinate", "input_digest", "payload_digest", "canonical_digest")
+        immutable_fields = (
+            "coordinate",
+            "input_digest",
+            "payload_digest",
+            "canonical_digest",
+            "object_digest",
+        )
         for field in immutable_fields:
             self.assertEqual(getattr(local, field), getattr(revoked, field))
         self.assertEqual(local.mode, PromotionMode.VENDORED)

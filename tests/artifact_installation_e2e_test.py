@@ -230,6 +230,7 @@ class AuthoredInstallationTest(unittest.TestCase):
                 self.package.provenance.input_digest,
                 digest,
                 digest,
+                self.object_digest,
                 digest,
                 PromotionMode.VENDORED,
                 PublicationStage.PUBLISHED,

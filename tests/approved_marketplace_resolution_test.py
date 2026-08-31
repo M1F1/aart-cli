@@ -66,6 +66,7 @@ def _version(
         _digest("2"),
         _digest(payload_character),
         _digest(payload_character),
+        _digest(payload_character),
         _digest(snapshot_character),
         PromotionMode.VENDORED,
         publication,

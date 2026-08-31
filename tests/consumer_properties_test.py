@@ -113,6 +113,7 @@ def _resolved(coordinate: ArtifactCoordinate, ownership: OwnershipReason) -> Res
         _digest("a"),
         _digest("b"),
         _digest("c"),
+        _digest("c"),
         _digest("d"),
         PromotionMode.VENDORED,
         PublicationStage.PUBLISHED,

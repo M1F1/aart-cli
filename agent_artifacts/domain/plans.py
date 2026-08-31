@@ -167,6 +167,7 @@ def _selection_data(selection: ResolvedSelection) -> dict[str, object]:
             {
                 "coordinate": _coordinate_data(item.version.coordinate),
                 "canonical_digest": str(item.version.canonical_digest),
+                "object_digest": str(item.version.object_digest),
                 "dependencies": [_coordinate_data(dependency) for dependency in item.dependencies],
                 "lifecycle": item.version.lifecycle.value,
                 "mode": item.version.mode.value,

@@ -240,6 +240,7 @@ class MaintainerSourceScanTest(unittest.TestCase):
         )
         approved = registry_version_from_candidate(
             ready.candidate,
+            object_digest=_digest("2"),
             registry_snapshot=_digest("1"),
             mode=PromotionMode.VENDORED,
         )
