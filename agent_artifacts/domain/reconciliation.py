@@ -54,11 +54,14 @@ class Component(str, Enum):
     # literal that enterprise push protection (and the repository's matching gate) rejects.
     CREDENTIAL = _COMPONENT_CRED
     LAUNCHER = "launcher"
+    DELIVERY = "delivery"
     HARNESS = "harness"
 
 
 #: Components an artifact has more than one of, which therefore have to say which one they are.
-_NAMED = frozenset({Component.CONFIGURATION, Component.CREDENTIAL, Component.HARNESS})
+_NAMED = frozenset(
+    {Component.CONFIGURATION, Component.CREDENTIAL, Component.DELIVERY, Component.HARNESS}
+)
 _ORDER = {component: index for index, component in enumerate(Component)}
 
 

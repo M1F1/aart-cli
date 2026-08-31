@@ -37,6 +37,7 @@ def _digest(character: str = "a") -> ObjectDigest:
 def _delivery(harness: str = "claude", destination: str | None = None) -> ArtifactDelivery:
     return ArtifactDelivery(
         harness,
+        f"{ROOT}/payload/skill",
         destination or f"/work/project/.{harness}/skills/code-review",
         DeliveryKind.TREE,
         _digest("b"),
@@ -119,6 +120,35 @@ class PlacedArtifactReceiptRoundTripTest(unittest.TestCase):
         parsed = placed_artifact_receipt_from_data(data)
 
         self.assertIsInstance(parsed, Err, parsed)
+
+
+class DeliverySourceTest(unittest.TestCase):
+    def test_a_delivery_is_made_from_inside_the_artifact_that_owns_it(self) -> None:
+        outside = ArtifactDelivery(
+            "claude",
+            "/etc/anything",
+            "/work/project/.claude/skills/code-review",
+            DeliveryKind.TREE,
+            _digest("b"),
+        )
+        with self.assertRaises(ValueError):
+            _receipt(deliveries=(outside,))
+
+    def test_a_relative_delivery_source_is_refused(self) -> None:
+        with self.assertRaises(ValueError):
+            ArtifactDelivery("claude", "payload/skill", "/work/x", DeliveryKind.TREE, _digest("b"))
+
+    def test_the_source_survives_a_round_trip(self) -> None:
+        restored = placed_artifact_receipt_from_data(placed_artifact_receipt_to_data(_receipt()))
+        assert isinstance(restored, Ok)
+        self.assertEqual(f"{ROOT}/payload/skill", restored.value.deliveries[0].source)
+
+    def test_a_delivery_missing_its_source_is_reported_not_defaulted(self) -> None:
+        data = placed_artifact_receipt_to_data(_receipt())
+        deliveries = data["deliveries"]
+        assert isinstance(deliveries, list)
+        del deliveries[0]["source"]
+        self.assertIsInstance(placed_artifact_receipt_from_data(data), Err)
 
 
 if __name__ == "__main__":

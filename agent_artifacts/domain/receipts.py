@@ -22,10 +22,10 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from enum import Enum
 
 from .credentials import CredentialProviderRef, CredentialReference
 from .diagnostics import Diagnostic, DiagnosticCode, Severity
+from .effects import DeliveryKind
 from .harness import McpRegistration, registration_from_data, registration_to_data
 from .identifiers import ArtifactCoordinate, InputId, ObjectDigest
 from .launch import Transport
@@ -190,13 +190,6 @@ def installation_receipt_to_data(receipt: InstallationReceipt) -> dict[str, obje
     }
 
 
-class DeliveryKind(str, Enum):
-    """What was put where a harness reads it: a directory, or one file."""
-
-    TREE = "tree"
-    FILE = "file"
-
-
 @dataclass(frozen=True, slots=True)
 class ArtifactDelivery:
     """Where one harness reads one installed artifact from, and what was put there.
@@ -208,6 +201,7 @@ class ArtifactDelivery:
     """
 
     harness: str
+    source: str
     destination: str
     kind: DeliveryKind
     digest: ObjectDigest
@@ -215,14 +209,17 @@ class ArtifactDelivery:
     def __post_init__(self) -> None:
         if not isinstance(self.harness, str) or not self.harness.strip():
             raise ValueError("a delivery names the harness that reads it")
-        if (
-            not isinstance(self.destination, str)
-            or not self.destination.startswith("/")
-            or any(character in self.destination for character in "\r\n")
-        ):
-            # Absolute, because the harness resolves it from a working directory nobody here
-            # controls -- the same rule a registration's command follows.
-            raise ValueError("a delivery destination must be one absolute path")
+        for value, label in ((self.source, "source"), (self.destination, "destination")):
+            if (
+                not isinstance(value, str)
+                or not value.startswith("/")
+                or any(character in value for character in "\r\n")
+            ):
+                # Absolute, because the harness resolves the destination from a working directory
+                # nobody here controls -- the same rule a registration's command follows -- and
+                # because a relative source would be resolved against whatever happened to be the
+                # working directory of the run that repaired it.
+                raise ValueError(f"a delivery {label} must be one absolute path")
         if not isinstance(self.kind, DeliveryKind) or not isinstance(self.digest, ObjectDigest):
             raise ValueError("delivery kind or digest is invalid")
 
@@ -265,6 +262,21 @@ class PlacedArtifactReceipt:
         destinations = [item.destination for item in self.deliveries]
         if len(set(destinations)) != len(destinations):
             raise ValueError("two deliveries cannot write the same destination")
+        for item in self.deliveries:
+            if not _within(self.root, item.source):
+                # Re-delivery copies from the artifact's own tree. A source outside it would let
+                # a repair place content this installation never owned.
+                raise ValueError("a delivery source lies inside the artifact root")
+        harnesses = [item.harness for item in self.deliveries]
+        if len(set(harnesses)) != len(harnesses):
+            # One delivery per harness, so the reconciler can name a delivery component by the
+            # harness that reads it. Two would collide into one component and the second would
+            # be silently dropped from the state everything else compares against.
+            raise ValueError("one harness reads one delivery of an artifact")
+
+
+def _within(root: str, path: str) -> bool:
+    return path == root or path.startswith(root.rstrip("/") + "/")
 
 
 def placed_artifact_receipt_to_data(receipt: PlacedArtifactReceipt) -> dict[str, object]:
@@ -279,6 +291,7 @@ def placed_artifact_receipt_to_data(receipt: PlacedArtifactReceipt) -> dict[str,
                 "digest": str(item.digest),
                 "harness": item.harness,
                 "kind": item.kind.value,
+                "source": item.source,
             }
             for item in receipt.deliveries
         ],
@@ -303,7 +316,7 @@ def _digest(value: object, label: str) -> ObjectDigest:
 def _delivery(value: object) -> ArtifactDelivery:
     if not isinstance(value, dict):
         raise ValueError("a delivery must be a mapping")
-    for key in ("harness", "destination", "kind", "digest"):
+    for key in ("harness", "source", "destination", "kind", "digest"):
         if key not in value:
             raise ValueError(f"a delivery is missing {key}")
     raw = str(value["kind"])
@@ -313,6 +326,7 @@ def _delivery(value: object) -> ArtifactDelivery:
         raise ValueError(f"unknown delivery kind {raw!r}") from None
     return ArtifactDelivery(
         str(value["harness"]),
+        str(value["source"]),
         str(value["destination"]),
         kind,
         _digest(value["digest"], "delivery digest"),

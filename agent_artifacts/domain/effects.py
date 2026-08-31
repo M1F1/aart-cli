@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import IntEnum
+from enum import Enum, IntEnum
 from typing import ClassVar, TypeAlias
 
 
@@ -15,6 +15,13 @@ class RiskClass(IntEnum):
     EXECUTABLE_INSTALL = 40
     NETWORK_MUTATION = 50
     HIGH_RISK_EXECUTION = 60
+
+
+class DeliveryKind(str, Enum):
+    """What is put where a harness reads it: a directory, or one file."""
+
+    TREE = "tree"
+    FILE = "file"
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,6 +52,13 @@ _RECREATABLE = EffectCapabilities(True, True, False, True)
 _CREDENTIAL = EffectCapabilities(True, False, False, True)
 _HARNESS = EffectCapabilities(True, True, True, True)
 _REMOVAL = EffectCapabilities(True, True, False, True)
+
+
+def _delivery_kind(value: object) -> DeliveryKind:
+    try:
+        return DeliveryKind(value)
+    except ValueError:
+        raise ValueError(f"{value!r} is not a shape an artifact can be delivered as") from None
 
 
 def _line(value: str, label: str) -> None:
@@ -222,6 +236,53 @@ class UnconfigureHarness:
 
 
 @dataclass(frozen=True, slots=True)
+class DeliverArtifact:
+    """Place an installed artifact where one harness reads it.
+
+    This is a configuration mutation rather than a local one. The destination belongs to the
+    harness, not to AART, and a policy ceiling that refuses to register an MCP server has to refuse
+    writing a Skill straight into the directory that same harness reads. A `CopyTree` would have
+    carried LOCAL_MUTATION and slipped underneath that ceiling.
+
+    The source is inside the artifact's own tree, so a withdrawal can be undone while the payload
+    stands -- which is why this is reversible in the same way an entry in a settings file is.
+    """
+
+    harness: str
+    artifact: str
+    source: str
+    destination: str
+    delivery: DeliveryKind
+    risk: ClassVar[RiskClass] = RiskClass.CONFIGURATION_MUTATION
+    capabilities: ClassVar[EffectCapabilities] = _HARNESS
+
+    def __post_init__(self) -> None:
+        _line(self.harness, "harness")
+        _line(self.artifact, "artifact")
+        _line(self.source, "delivery source")
+        _line(self.destination, "delivery destination")
+        object.__setattr__(self, "delivery", _delivery_kind(self.delivery))
+
+
+@dataclass(frozen=True, slots=True)
+class WithdrawArtifact:
+    """Remove only the delivery this artifact owns from where a harness reads it."""
+
+    harness: str
+    artifact: str
+    destination: str
+    delivery: DeliveryKind
+    risk: ClassVar[RiskClass] = RiskClass.CONFIGURATION_MUTATION
+    capabilities: ClassVar[EffectCapabilities] = _HARNESS
+
+    def __post_init__(self) -> None:
+        _line(self.harness, "harness")
+        _line(self.artifact, "artifact")
+        _line(self.destination, "delivery destination")
+        object.__setattr__(self, "delivery", _delivery_kind(self.delivery))
+
+
+@dataclass(frozen=True, slots=True)
 class VerifyRequirement:
     requirement: str
     risk: ClassVar[RiskClass] = RiskClass.READ_ONLY
@@ -243,6 +304,8 @@ Effect: TypeAlias = (
     | VerifyCredential
     | ConfigureHarness
     | UnconfigureHarness
+    | DeliverArtifact
+    | WithdrawArtifact
     | VerifyRequirement
 )
 
@@ -308,6 +371,23 @@ def effect_to_data(effect: Effect) -> dict[str, object]:
             harness=effect.harness,
             server=effect.server,
             destination=effect.destination,
+        )
+    elif isinstance(effect, DeliverArtifact):
+        data.update(
+            kind="deliver-artifact",
+            harness=effect.harness,
+            artifact=effect.artifact,
+            source=effect.source,
+            destination=effect.destination,
+            delivery=effect.delivery.value,
+        )
+    elif isinstance(effect, WithdrawArtifact):
+        data.update(
+            kind="withdraw-artifact",
+            harness=effect.harness,
+            artifact=effect.artifact,
+            destination=effect.destination,
+            delivery=effect.delivery.value,
         )
     else:
         data.update(kind="verify-requirement", requirement=effect.requirement)

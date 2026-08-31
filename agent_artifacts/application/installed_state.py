@@ -22,16 +22,18 @@ from agent_artifacts.domain.effects import (
     CopyTree,
     CreatePythonEnvironment,
     DeleteCredential,
+    DeliverArtifact,
     InstallPythonDependencies,
     RemoveOwnedPath,
     ReplaceCredential,
     StoreCredential,
     UnconfigureHarness,
+    WithdrawArtifact,
     WriteFile,
 )
 from agent_artifacts.domain.identifiers import ArtifactCoordinate
 from agent_artifacts.domain.python_runtime import ArtifactEnvironment
-from agent_artifacts.domain.receipts import InstallationReceipt
+from agent_artifacts.domain.receipts import InstallationReceipt, PlacedArtifactReceipt
 from agent_artifacts.domain.reconciliation import (
     Component,
     ComponentId,
@@ -46,7 +48,9 @@ from .installation_verification import InstallationObservation, VerificationFind
 
 __all__ = [
     "current_state_from_observation",
+    "desired_state_from_placement",
     "desired_state_from_receipt",
+    "removal_state_from_placement",
     "removal_state_from_receipt",
 ]
 
@@ -194,6 +198,94 @@ def removal_state_from_receipt(
             )
             for reference in receipt.credentials
         )
+    return DesiredState(coordinate, tuple(components))
+
+
+def desired_state_from_placement(
+    coordinate: ArtifactCoordinate,
+    receipt: PlacedArtifactReceipt,
+    *,
+    payload_source: str | None = None,
+) -> DesiredState:
+    """The component-level desired state an artifact a harness reads converges to.
+
+    A placed artifact is a payload and one delivery per harness, and that is the whole of it. There
+    is no launcher, no environment and no dependency component -- not omitted as an unknown, but
+    absent because the artifact starts no process. INV-010 keeps kind separate from runtime
+    protocol, and a LAUNCHER component here would have a reconciler report the absence of a process
+    nobody installed as drift and then repair it into existence.
+
+    `payload_source` is plan knowledge for the same reason it is on the MCP builder: omitting it
+    omits the payload component rather than guessing where the tree should be copied from.
+    """
+
+    if not isinstance(receipt, PlacedArtifactReceipt):
+        raise ValueError("desired state needs a placed artifact receipt")
+
+    environment = ArtifactEnvironment(receipt.artifact, receipt.root)
+    components: list[DesiredComponent] = []
+    if payload_source is not None:
+        components.append(
+            DesiredComponent(
+                ComponentId(Component.PAYLOAD),
+                (CopyTree(payload_source, environment.payload),),
+            )
+        )
+    components.extend(
+        DesiredComponent(
+            ComponentId(Component.DELIVERY, delivery.harness),
+            (
+                DeliverArtifact(
+                    delivery.harness,
+                    receipt.artifact,
+                    delivery.source,
+                    delivery.destination,
+                    delivery.kind,
+                ),
+            ),
+        )
+        for delivery in receipt.deliveries
+    )
+    return DesiredState(coordinate, tuple(components))
+
+
+def removal_state_from_placement(
+    coordinate: ArtifactCoordinate, receipt: PlacedArtifactReceipt
+) -> DesiredState:
+    """The absent desired state uninstalling a placed artifact converges to.
+
+    The delivery is withdrawn rather than deleted as a path AART owns, because it is not one: it
+    sits where the harness reads, and CP-12 teardown has to leave anything there this installation
+    did not put there alone.
+    """
+
+    if not isinstance(receipt, PlacedArtifactReceipt):
+        raise ValueError("removal state needs a placed artifact receipt")
+
+    environment = ArtifactEnvironment(receipt.artifact, receipt.root)
+    absent = ComponentState.ABSENT
+    components: list[DesiredComponent] = [
+        DesiredComponent(
+            ComponentId(Component.PAYLOAD),
+            (RemoveOwnedPath(environment.root, recursive=True),),
+            target=absent,
+        )
+    ]
+    components.extend(
+        DesiredComponent(
+            ComponentId(Component.DELIVERY, delivery.harness),
+            (
+                WithdrawArtifact(
+                    delivery.harness,
+                    receipt.artifact,
+                    delivery.destination,
+                    delivery.kind,
+                ),
+            ),
+            target=absent,
+        )
+        for delivery in receipt.deliveries
+    )
     return DesiredState(coordinate, tuple(components))
 
 

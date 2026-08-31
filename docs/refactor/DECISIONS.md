@@ -1116,3 +1116,29 @@ the Product Specification first instead of hiding the change here.
   one per targeted profile: nothing is assumed to exist because it usually does. The returned
   machine is read after the run rather than assembled from the run, so an install that half-worked
   is visible as what it left behind instead of what it intended.
+
+## D-077 — Delivering an artifact into a harness is a configuration mutation
+
+- **Decision:** an artifact a harness reads rather than starts is installed by `DeliverArtifact`
+  and removed by `WithdrawArtifact`, two effects at `CONFIGURATION_MUTATION` beside
+  `ConfigureHarness`/`UnconfigureHarness` -- not by `CopyTree`/`RemoveOwnedPath`. A placed
+  installation is recorded by `PlacedArtifactReceipt` and converges to a payload plus one
+  `DELIVERY` component per harness, with no launcher, environment or dependency component at all.
+- **Status:** accepted.
+- **Reason:** INV-010 keeps artifact kind, package format and runtime protocol separate, and the
+  canonical pipeline had not: it required a launcher, an interpreter and a transport of every
+  installation, so four of the five kinds could not be planned, executed or recorded through it
+  (B-033). Reusing `CopyTree` would have carried `LOCAL_MUTATION`, and a policy ceiling set there
+  would then refuse to register an MCP server while permitting a Skill to be written straight into
+  the directory that same harness reads. That is the same act at a lower stated risk, which is
+  exactly what Fast review is forbidden to hide.
+- **Consequence:** the delivery destination is the harness's, so withdrawal removes only what this
+  installation delivered rather than a path AART claims to own; a withdrawal is reversible in the
+  way an entry in a settings file is, because the payload it was made from still stands. The
+  receipt records each delivery's source and the receipt refuses one outside the artifact root, so
+  a repair copies from the artifact that owns it and never from somewhere nobody chose. One harness
+  reads one delivery, because the reconciler names a delivery component by its harness and two
+  would collide into one -- a hook's settings entry stays a `ConfigureHarness`, which is what it is.
+  No `LAUNCHER` component is emitted for a placed artifact rather than an empty one: a reconciler
+  comparing components would read a missing launcher as drift and repair it into a process nobody
+  installed.
