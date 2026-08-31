@@ -96,9 +96,18 @@ that flow and execution, plus composition of real Marketplace and installed-stat
    install, refusals reported in the envelope rather than as a crash, `--json` and text carrying one
    review digest, and fail-closed review that finalizes nothing and writes nothing while still
    carrying the digest a later invocation must match.
-6. Only then route the default TTY and retire legacy consumer semantic authority (`consumer/application.py`,
-   `installation/*`, `setup_engine/*`, `lifecycle/application.py`) path by path, each removal
-   preceded by a public-flow test proving the canonical path already carries it.
+6. **BLOCKED on B-033 for four of the five artifact kinds.** Route the default TTY and retire
+   legacy consumer semantic authority (`consumer/application.py`, `installation/*`,
+   `setup_engine/*`, `lifecycle/application.py`) path by path, each removal preceded by a
+   public-flow test proving the canonical path already carries it.
+
+   The canonical pipeline refuses any artifact that declares no launch contract, so Skills,
+   guidelines, hooks and memory cannot be planned, executed or recorded through it at all: for those
+   kinds there is no public-flow test to write, and routing `install` today would refuse four kinds
+   that install correctly now. B-033 records the evidence and the reclassification. Either close
+   B-033 first, or make the strangler split explicit at the seam -- `mcp` canonical, the rest
+   legacy -- and accept that `install_state` cannot be retired while it holds records nothing
+   canonical can read.
 7. Update the CP-13 coverage table as each command and screen group moves from projection to live
    public flow.
 

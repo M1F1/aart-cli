@@ -446,3 +446,40 @@ Evidence/links: D-054, D-056, D-074; `application/input_binding.py`;
 Unblock condition: the real action adapter can prepare and complete an authored MCP with config and
 secret declarations through provider references/provider-owned entry, while the secret value is
 absent from every application value and serialized/drawn surface.
+
+### B-033 — Canonical installation is MCP-shaped and cannot record four of the five kinds
+**Classification: CRITICAL PATH.** Reclassified from backlog on evidence, per the rule that an item
+becomes critical when it can be shown that a critical-path slice cannot complete without it.
+
+The canonical install pipeline refuses any artifact that does not declare a launch contract:
+
+- `plan_artifact_installation` returns `INSTALLATION_NOT_DESCRIBED` when `description.contract is
+  None` -- "does not declare how it starts, so there is no launcher to generate and nothing for a
+  harness to run";
+- `PlannedInstallation` requires both a `LaunchContract` and a `RuntimeProjection`;
+- `InstallationReceipt` requires `launcher`, `launcher_digest`, `interpreter` and `transport`, none
+  of which a Skill, guideline, hook or memory has.
+
+A manifest may declare five kinds (`skill`, `guideline`, `mcp`, `hook`, `memory`). Only `mcp` starts
+a process. So four of the five cannot be planned, executed, recorded or reconciled canonically, and
+`install_state` remains the only thing that can describe them -- which is why D-069 had to carry
+them as unadopted rather than adopt them.
+
+**Why this blocks the critical path.** `NEXT.md` item 6 retires the legacy consumer authority path
+by path, each removal preceded by a public-flow test proving the canonical path already carries that
+behavior. For a Skill there is no such test to write: routing `install` to the canonical adapter
+would refuse four kinds that install correctly today. Item 6 is the bulk of what remains in CP-13,
+and it cannot start on the artifact kinds that are not MCP servers.
+
+**Shape of the work.** An installation whose payload is placed and registered but which starts no
+process: a receipt whose launcher/interpreter/transport are absent rather than invented, a desired
+state built from payload and placement without a launcher component, and reconciliation that does
+not read the absence of a process as drift. The narrowest safe version keeps `InstallationReceipt`
+as the MCP case and introduces the kind-neutral record beside it; widening the existing type by
+making four required fields optional would let an MCP receipt lose its launcher without any type
+noticing.
+
+**Alternative if this is deferred.** Route only `mcp` coordinates through the canonical adapter and
+leave the other four kinds on the legacy path, with the split made explicit at the seam rather than
+implicit. That is a strangler boundary rather than a workaround, but it leaves two installers live
+for longer and `install_state` cannot be retired while it holds records nothing canonical can read.
