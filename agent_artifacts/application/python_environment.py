@@ -95,6 +95,24 @@ def select_python_installer(
     return Ok(sorted(candidates, key=lambda item: item.value)[0])
 
 
+def dependency_installation(
+    environment: ArtifactEnvironment,
+    spec: PythonDependencySpec,
+    installer: PythonInstaller,
+) -> tuple[str, str, str]:
+    """The descriptor an installer reads, what kind it is, and the backend chosen for it.
+
+    A locked project is a different kind from the project it locks: the installer is told to honour
+    the lock rather than to resolve afresh, and approving one is not approving the other. One
+    function decides that, because the effect that runs and the desired state a later repair keeps
+    have to agree about it.
+    """
+
+    descriptor = environment.payload_path(spec_descriptor_path(spec))
+    locked = isinstance(spec, PyProjectSpec) and spec.lock_format is not None
+    return (descriptor, "locked-project" if locked else spec_kind(spec), installer.value)
+
+
 def plan_python_environment(
     environment: ArtifactEnvironment,
     spec: PythonDependencySpec,
@@ -121,17 +139,13 @@ def plan_python_environment(
             f"installer {installer.value} cannot install the declared specification",
         )
     try:
-        descriptor = environment.payload_path(spec_descriptor_path(spec))
-        locked = isinstance(spec, PyProjectSpec) and spec.lock_format is not None
-        kind = "locked-project" if locked else spec_kind(spec)
+        descriptor, kind, backend = dependency_installation(environment, spec, installer)
         return Ok(
             (
                 CreatePythonEnvironment(
                     environment.artifact, environment.environment, base_interpreter
                 ),
-                InstallPythonDependencies(
-                    environment.environment, descriptor, kind, installer.value
-                ),
+                InstallPythonDependencies(environment.environment, descriptor, kind, backend),
             )
         )
     except ValueError as error:

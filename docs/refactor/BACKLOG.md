@@ -346,3 +346,21 @@ Invariants touched: INV-091.
 Evidence/links: D-023, D-024, D-054.
 Promotion condition: evidence that an artifact reached a consumer carrying a binding its transport
 could never deliver.
+
+### B-029 — Verify installed distributions against the declared descriptor
+Status: OPEN
+Discovered in: CP-13 / `application/installed_state.py` / `current_state_from_observation`
+Why useful: the `runtime-dependencies` component is currently reported through the environment that
+holds it (D-057), so a package somebody removed or upgraded by hand inside a healthy environment is
+invisible. A dependency drifting under an installed artifact is exactly the failure a package
+manager exists to catch.
+Why noncritical now: the failure that matters most — the environment being gone — is detected and
+repaired today, and the observation's detail states what was and was not checked rather than
+claiming more than it measured. A real check needs to parse a requirements file or a lock and query
+the environment's installed distributions, which is a descriptor parser this build does not have.
+Potential approach: ask the environment's own interpreter which distributions it holds
+(`importlib.metadata`) and compare against the names the descriptor declares; report
+`UNVERIFIABLE` rather than `MATCHED` where a lock cannot be read.
+Invariants touched: INV-107, INV-108.
+Evidence/links: D-057; `tests/artifact_installation_e2e_test.py`.
+Promotion condition: evidence that a silently drifted environment reached a consumer as healthy.

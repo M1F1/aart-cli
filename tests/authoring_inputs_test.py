@@ -70,7 +70,9 @@ def _document(**overrides: object) -> dict[str, object]:
         "python": {"dependencies": {"type": "requirements", "path": "requirements.txt"}},
     }
     document.update(overrides)
-    return document
+    # A `None` override removes the key rather than declaring a null, so a fixture can describe an
+    # artifact that says nothing about a runtime as easily as one that says something wrong.
+    return {key: value for key, value in document.items() if value is not None}
 
 
 def _manifest(**overrides: object):

@@ -206,15 +206,24 @@ own launcher after a repair planned from disk alone, and no stored file contains
   written as an assignment is refused by the rule that already existed rather than by a second copy
   of it (D-054). A manifest naming an entrypoint, descriptor or lock its payload does not ship is
   refused at compile time (D-055).
+- The read half, which closes the gap: `InstallDescription` holds what an artifact declares and
+  nothing about any machine; `read_install_description` reads it back out of a compiled package's
+  `aart.authoring` extension with the parsers that wrote it; and
+  `application/artifact_installation.py` joins it to a root, an interpreter, input value sources,
+  harness targets and a policy to produce the `PlannedInstallation` D-052 lowers (D-056). Proven
+  end to end from an author's repository: compiled, written to a store as bytes, read back by a
+  process that has not seen the repository, installed, and answering its harness afterwards with
+  the arguments, the configuration value and the launch-time secret the manifest declared.
+- A defect that first install surfaced: the `runtime-dependencies` component was never observed, so
+  every healthy artifact with dependencies reported unobserved drift forever. It is now reported
+  through the environment that holds it, with the observation saying what it did not check (D-057,
+  B-029).
 
 ## Remaining
 
-- Step 5 flow wiring, in order: nothing canonical yet *produces* a `PlannedInstallation`. The
-  manifest now carries the declarations (D-054), but nothing reads a stored package back into the
-  `LaunchContract`, bound inputs and harness targets a `PlannedInstallation` needs. That read side
-  is the remaining gap between a resolved Selection and a real install: an artifact-store read,
-  `generate_launcher` over the declared contract, `bind_runtime_inputs` over the declared inputs,
-  and the harness targets the Selection asked for.
+- Step 5 flow wiring: the install path now exists end to end and is proven, but nothing reads a
+  package out of a local artifact store -- the E2E writes the canonical entries itself -- so a
+  store read is the first remaining piece.
 - Then holding the flow in the session so screens 05–11 carry a live `ConsumerPlanView`, and
   routing the public commands through `propose_installation`/`execute_lifecycle`.
 - Routing the default TTY entry to the canonical application (B-025). This follows the install
@@ -246,6 +255,8 @@ own launcher after a repair planned from disk alone, and no stored file contains
 - B-028 — Cross-checking an input's binding against the transport at authoring time. Deliberately
   declined: the launcher generator is the single authority on what a binding can deliver (D-023,
   D-024), and a second copy of that rule in the parser would be the one nobody updates.
+- B-029 — Verifying installed distributions against the declared descriptor, rather than reporting
+  dependencies through the environment that holds them (D-057).
 
 ## Blockers
 
@@ -260,14 +271,13 @@ machine-output tests prove every accepted flow now consumes the canonical applic
 
 - Current working state: steps 1–4 complete and verified; step 5 partial; step 6 not started. The
   legacy wizard is untouched and still owns the default TTY entry.
-- Exact next action: lower a compiled artifact into a `PlannedInstallation` -- read the package
-  back from the artifact store, generate its launcher from the declared `LaunchContract`, bind the
-  declared inputs, and attach the Selection's harness targets. The authoring half of that step is
-  done (D-054, D-055). Then hold the flow in the session, then B-025, then the public commands,
-  then step 6.
+- Exact next action: read a package out of a local artifact store, then hold the whole flow in the
+  consumer session so screens 05–11 carry a live `ConsumerPlanView`. The order is the one
+  `tests/artifact_installation_e2e_test.py` already runs: describe, plan, inspect, offer
+  remediations, propose, execute. Then B-025, then the public commands, then step 6.
 - Do not undo: existing curses layout/search/basket/back/quit characterization; one semantic plan
   for both profiles; Maintainer Mode remains opt-in; `key_event` stays the only place a key's
   meaning is decided; no clock in `application/`.
-- Tests last run/results: 2,395 unit + 94 E2E tests, 83.35% coverage, all ten quality gates
+- Tests last run/results: 2,430 unit + 97 E2E tests, 83.51% coverage, all ten quality gates
   green (`make quality`). CP-12 baseline was 2,196 unit + 65 E2E at 83.25%.
 - Failure evidence: three defects found by tests are listed under Characterization / RED evidence.

@@ -687,3 +687,41 @@ the Product Specification first instead of hiding the change here.
   than approximated by installing the loose project the lock exists to prevent (B-027). The check
   runs after the input digest is computed and before canonical lowering, so a refused manifest never
   produces a package.
+
+## D-056 — One value stands between what an artifact declares and what a machine offers
+- **Decision:** `domain/install_description.py` holds `InstallDescription` — the launch contract,
+  the runtime and its constraint, the declared runtime inputs and the dependency descriptor, and
+  nothing about any machine. `protocol/authoring.py` produces one from a parsed manifest
+  (`describe_installation`) and reads one back out of a compiled package's `aart.authoring`
+  extension (`read_install_description`), using the same sub-parsers in both directions.
+  `application/artifact_installation.py` joins that description to a root, an interpreter, input
+  value sources, harness targets and a policy, and produces the `PlannedInstallation` that D-052
+  lowers.
+- **Status:** accepted.
+- **Reason:** the package half knows nothing about any machine and the machine half knows nothing
+  about any artifact; neither can produce an installation alone, and until now nothing joined them
+  outside tests. Reading the description back through the writer's own parsers is what makes the
+  round trip safe: a second grammar for reading what the first one wrote works right up until an
+  author uses a field the reader forgot.
+- **Consequence:** the machine installing an artifact reads what it needs from `artifact.json` on
+  disk, never from the author's repository, which it has not seen. A description with no launch
+  contract is refused by name rather than installed as something that starts nothing. Keys the
+  reader does not need are ignored rather than refused, so a later manifest field is not a breaking
+  change for installations that predate it. Which backend installs the dependencies stays
+  `select_python_installer`'s intersection and what a launcher can deliver stays
+  `generate_launcher`'s refusal — both are asked, never restated.
+
+## D-057 — Dependencies are reported through the environment that holds them
+- **Decision:** `current_state_from_observation` reports the `runtime-dependencies` component as
+  matched when the artifact's interpreter is present and absent when it is not, with a detail
+  saying the packages themselves were not re-resolved.
+- **Status:** accepted, with the limitation recorded as B-029.
+- **Reason:** the first install driven from a real dependency declaration ended
+  `COMPLETED_WITH_ATTENTION` forever: the desired state named a dependency component and nothing
+  ever observed one, so every healthy artifact with dependencies reported unobserved drift. A
+  component nothing measures is worse than a partial measurement here, because "needs attention"
+  on a working installation is the alarm people learn to ignore.
+- **Consequence:** losing the environment is detected and repaired, since the repair rebuilds the
+  environment and reinstalls into it. Drift *inside* the environment — a package removed or
+  upgraded by hand — is not detected, and the detail says so rather than letting a partial check
+  read as a full one. Verifying installed distributions against the descriptor is B-029.

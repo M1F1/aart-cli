@@ -254,6 +254,23 @@ def current_state_from_observation(
             ObservedComponent(ComponentId(Component.RUNTIME_ENVIRONMENT), ComponentState.ABSENT)
         )
 
+    # Dependencies are reported through the environment they were installed into, because that
+    # environment is what installing them produces: when it is gone they are gone, and repairing
+    # it reinstalls them. What is deliberately not claimed is that the packages inside it still
+    # match the descriptor -- nothing here re-resolves that, and the detail says so rather than
+    # letting a partial check read as a full one. Reporting nothing instead would leave the
+    # component permanently unobserved, so every artifact with dependencies would ask for
+    # attention forever while being perfectly healthy (B-029).
+    components.append(
+        ObservedComponent(
+            ComponentId(Component.RUNTIME_DEPENDENCIES),
+            ComponentState.MATCHED if observation.interpreter_present else ComponentState.ABSENT,
+            "the environment they were installed into is present; not re-resolved"
+            if observation.interpreter_present
+            else "the environment they were installed into is gone",
+        )
+    )
+
     for harness, _server, command in observation.registered_commands:
         expected = next(
             (

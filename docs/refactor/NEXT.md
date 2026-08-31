@@ -14,34 +14,32 @@ What remains is the wiring that makes the canonical application the one a person
 
 The install flow comes before the TTY entry. Routing `run()` at the canonical application while no
 public entry point can start an install would take away the flows the legacy wizard still owns
-alone; B-025 is therefore item 3 here, not item 1.
+alone; B-025 is therefore item 2 here, not item 1. A package can now be compiled, published, read
+back and installed end to end (D-056), so what remains is carrying that flow into the shell and the
+public commands rather than building it.
 
-1. **Lower a compiled artifact into a `PlannedInstallation`.** Half of this is done:
-   `protocol/authoring.py` now reads the §91 `inputs` array and the §107/§108 `python.dependencies`
-   descriptor, so an author's declarations survive compilation into `RuntimeInput` and
-   `PythonDependencySpec` values (D-054), and a manifest naming a file its payload does not ship is
-   refused (D-055). What remains is the read side: nothing yet turns a stored package back into the
-   `PlannedInstallation` that `propose_installation` lowers (D-052) — that needs an artifact-store
-   read, `generate_launcher` over the declared `LaunchContract`, `bind_runtime_inputs` over the
-   declared inputs, and the harness targets the Selection asked for. This is the one remaining gap
-   between a resolved Selection and a real install, and it is critical path.
-2. Hold the flow in the consumer session, so screens 05–11 carry a live `ConsumerPlanView` instead
-   of "Nothing has been planned yet": resolution → inspection → input binding →
-   `propose_installation`, held beside the `ConsumerMachine` and passed to `screens_from`, refreshed
-   after an action rather than derived inside a draw (D-051).
-3. **B-025** — route the default TTY entry in `tui.py::run` to `run_consumer` behind the existing
+1. Hold the flow in the consumer session, so screens 05–11 carry a live `ConsumerPlanView` instead
+   of "Nothing has been planned yet". The pieces now all exist and the E2E in
+   `tests/artifact_installation_e2e_test.py` shows the order they go in: read the package's
+   `InstallDescription` (D-056) → `plan_artifact_installation` → `inspect_requirements` →
+   `installation_remediations` → `propose_installation` → `execute_lifecycle`. Hold that beside the
+   `ConsumerMachine` and pass it to `screens_from`, refreshed after an action rather than derived
+   inside a draw (D-051). One thing is still missing on this path: nothing reads a package out of a
+   local artifact store — the E2E writes the canonical entries itself — so a store read is the
+   first piece of this step.
+2. **B-025** — route the default TTY entry in `tui.py::run` to `run_consumer` behind the existing
    curses-availability check, building its source with `screens_from(assemble_consumer_machine(...))`
    over `LocalReceiptStore` and the local inspector. Keep the legacy wizard reachable until step 6
    evidence exists.
-4. Route the public consumer commands (`install`, `update`, `uninstall`, `status`) through
+3. Route the public consumer commands (`install`, `update`, `uninstall`, `status`) through
    `propose_installation`/`execute_lifecycle` rather than the legacy setup queue, projecting their
    output with `consumer_plan_to_data` and `receipt_detail_to_data` so text, curses and `--json`
    are three renderings of one plan. `render_install_plan` is already the whole-plan review a
    non-interactive command prints (D-049).
-5. Only then step 6: retire legacy consumer semantic authority (`consumer/application.py`,
+4. Only then step 6: retire legacy consumer semantic authority (`consumer/application.py`,
    `installation/*`, `setup_engine/*`, `lifecycle/application.py`) path by path, each removal
    preceded by a public-flow test proving the canonical path already carries it.
-6. Update the CP-13 coverage table as each screen group moves from projection to live flow.
+5. Update the CP-13 coverage table as each screen group moves from projection to live flow.
 
 ## Do not do yet
 
@@ -93,3 +91,9 @@ alone; B-025 is therefore item 3 here, not item 1.
   into. Declarations reach the input digest exactly as the author wrote them, in declared order.
 - A descriptor an artifact points at travels inside its payload, or the manifest is refused at
   compile time (D-055). A resolver with no installer backend is refused by name, never approximated.
+- One value stands between what an artifact declares and what a machine offers (D-056). The
+  description is read back out of the package with the parsers that wrote it, never re-derived from
+  the author's repository, which the installing machine has not seen.
+- Dependencies are reported through the environment that holds them (D-057). Losing the environment
+  is drift; a package changed by hand inside a healthy one is not yet detected, and the observation
+  says so instead of claiming more than it measured (B-029).

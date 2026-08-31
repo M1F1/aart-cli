@@ -47,6 +47,8 @@ from agent_artifacts.domain.inputs import (
     SecretInput,
     StdinBinding,
 )
+from agent_artifacts.domain.install_description import InstallDescription
+from agent_artifacts.domain.launch import LaunchContract, Transport
 from agent_artifacts.domain.python_runtime import (
     PyProjectSpec,
     PythonDependencySpec,
@@ -143,6 +145,7 @@ class AuthorManifest:
     runtime_version: str | None
     launch: str | None
     entrypoint: SafeRelativePath | None
+    contract: LaunchContract | None
     inputs: tuple[RuntimeInput, ...]
     dependencies: PythonDependencySpec | None
     harnesses: tuple[str, ...]
@@ -318,6 +321,24 @@ def _strings(
             return parsed
         result.append(parsed.value)
     return Ok(tuple(sorted(set(result))))
+
+
+def _ordered_strings(value: JsonValue, label: str, *, path: str) -> Result[tuple[str, ...]]:
+    """A string array kept as written. Unlike `_strings`, order and repetition survive.
+
+    Both matter for an argument vector: `--verbose --verbose` is not `--verbose`, and the position
+    of a flag relative to a positional argument is the difference between two commands.
+    """
+
+    if not isinstance(value, JsonArray):
+        return _error(AUTHOR_MANIFEST_INVALID, f"{label} must be an array of strings", path=path)
+    result: list[str] = []
+    for item in value.items:
+        parsed = _string(item, f"{label} item", path=path)
+        if isinstance(parsed, Err):
+            return parsed
+        result.append(parsed.value)
+    return Ok(tuple(result))
 
 
 def _nested_type(
@@ -681,6 +702,159 @@ def _parse_python(value: JsonValue, *, path: str) -> Result[PythonDependencySpec
     return _parse_dependencies(fields.value["dependencies"], path=path)
 
 
+def _parse_launch(
+    value: JsonValue, *, path: str
+) -> Result[tuple[str, str | None, tuple[str, ...]]]:
+    """The launch declaration: what starts it, which file, and the arguments it is always given."""
+
+    parsed = _nested_type(
+        value,
+        "launch",
+        path=path,
+        optional=frozenset({"entrypoint", "path", "arguments"}),
+    )
+    if isinstance(parsed, Err):
+        return parsed
+    kind, fields, _object_value = parsed.value
+    located = set(fields) & {"entrypoint", "path"}
+    if len(located) > 1:
+        return _error(
+            AUTHOR_MANIFEST_INVALID,
+            "launch must declare only one of entrypoint or path",
+            path=path,
+        )
+    entrypoint: str | None = None
+    if located:
+        field = next(iter(located))
+        raw = _string(fields[field], f"launch.{field}", path=path)
+        if isinstance(raw, Err):
+            return raw
+        entrypoint = raw.value
+    arguments: tuple[str, ...] = ()
+    if "arguments" in fields:
+        parsed_arguments = _ordered_strings(fields["arguments"], "launch.arguments", path=path)
+        if isinstance(parsed_arguments, Err):
+            return parsed_arguments
+        arguments = parsed_arguments.value
+    return Ok((kind, entrypoint, arguments))
+
+
+def _launch_contract(
+    entrypoint: str | None,
+    transport: str | None,
+    arguments: tuple[str, ...],
+    *,
+    path: str,
+) -> Result[LaunchContract | None]:
+    """The contract an artifact is started by, or nothing when it declares no way to start.
+
+    Both directions of a manifest come through here, so what the compiler wrote and what an
+    installer later reads back are the same value built by the same rules.
+    """
+
+    if entrypoint is None:
+        return Ok(None)
+    if transport is not None and transport not in {item.value for item in Transport}:
+        return _error(
+            AUTHOR_MANIFEST_INVALID,
+            f"transport.type {transport!r} is not a transport this build can start",
+            path=path,
+        )
+    chosen = Transport.STDIO if transport is None else Transport(transport)
+    return _built(lambda: LaunchContract(entrypoint, chosen, arguments), "launch", path=path)
+
+
+def describe_installation(manifest: AuthorManifest) -> InstallDescription:
+    """What this manifest says an installation of the artifact needs.
+
+    Total, because a manifest that parsed is a manifest whose contract was already built: the
+    failure a launch declaration can have is reported when the manifest is read, not later when
+    somebody is halfway through an install.
+    """
+
+    if not isinstance(manifest, AuthorManifest):
+        raise ValueError("an install description is described from an author manifest")
+    return InstallDescription(
+        manifest.contract,
+        manifest.runtime,
+        manifest.runtime_version,
+        manifest.inputs,
+        manifest.dependencies,
+    )
+
+
+def read_install_description(intent: JsonValue, *, path: str) -> Result[InstallDescription]:
+    """The install description a compiled package still carries, read from `aart.authoring`.
+
+    The machine doing an installation has the package, not the author's repository, so what an
+    install needs has to survive compilation and be readable back out of `artifact.json`. This
+    reads it with the same parsers that wrote it -- a second grammar for reading what the first one
+    wrote works until an author uses a field the reader forgot.
+
+    Keys this function does not need are ignored rather than refused. The extension was written by
+    a compiler that had already validated the whole manifest, and a reader that refused an
+    unfamiliar key would make every later manifest field a breaking change for old installations.
+    """
+
+    parsed = _object(intent, "aart.authoring", path=path)
+    if isinstance(parsed, Err):
+        return parsed
+    fields = dict(parsed.value.entries)
+
+    transport: str | None = None
+    if "transport" in fields:
+        parsed_transport = _nested_type(fields["transport"], "transport", path=path)
+        if isinstance(parsed_transport, Err):
+            return parsed_transport
+        transport = parsed_transport.value[0]
+
+    runtime: str | None = None
+    runtime_version: str | None = None
+    if "runtime" in fields:
+        parsed_runtime = _nested_type(
+            fields["runtime"], "runtime", path=path, optional=frozenset({"version"})
+        )
+        if isinstance(parsed_runtime, Err):
+            return parsed_runtime
+        runtime, runtime_fields, _runtime_object = parsed_runtime.value
+        if "version" in runtime_fields:
+            parsed_version = _string(runtime_fields["version"], "runtime.version", path=path)
+            if isinstance(parsed_version, Err):
+                return parsed_version
+            runtime_version = parsed_version.value
+
+    entrypoint: str | None = None
+    arguments: tuple[str, ...] = ()
+    if "launch" in fields:
+        parsed_launch = _parse_launch(fields["launch"], path=path)
+        if isinstance(parsed_launch, Err):
+            return parsed_launch
+        _kind, entrypoint, arguments = parsed_launch.value
+    contract = _launch_contract(entrypoint, transport, arguments, path=path)
+    if isinstance(contract, Err):
+        return contract
+
+    inputs: tuple[RuntimeInput, ...] = ()
+    if "inputs" in fields:
+        parsed_inputs = _parse_inputs(fields["inputs"], path=path)
+        if isinstance(parsed_inputs, Err):
+            return parsed_inputs
+        inputs = parsed_inputs.value
+
+    dependencies: PythonDependencySpec | None = None
+    if "python" in fields:
+        parsed_python = _parse_python(fields["python"], path=path)
+        if isinstance(parsed_python, Err):
+            return parsed_python
+        dependencies = parsed_python.value
+
+    return _built(
+        lambda: InstallDescription(contract.value, runtime, runtime_version, inputs, dependencies),
+        "the install description",
+        path=path,
+    )
+
+
 def _declared_payload_files(manifest: AuthorManifest) -> tuple[str, ...]:
     """Every payload file the manifest points at and an installation would then need.
 
@@ -885,41 +1059,34 @@ def parse_author_manifest(manifest: DiscoveredAuthorManifest) -> Result[AuthorMa
     launch: str | None = None
     entrypoint: SafeRelativePath | None = None
     launch_object: JsonObject | None = None
+    launch_arguments: tuple[str, ...] = ()
     if "launch" in root:
-        parsed_launch = _nested_type(
-            root["launch"],
-            "launch",
-            path=raw_path,
-            optional=frozenset({"entrypoint", "path"}),
-        )
+        parsed_launch = _parse_launch(root["launch"], path=raw_path)
         if isinstance(parsed_launch, Err):
             return parsed_launch
-        launch, launch_fields, launch_object = parsed_launch.value
-        launch_location_fields = set(launch_fields) & {"entrypoint", "path"}
-        if len(launch_location_fields) > 1:
-            return _error(
-                AUTHOR_MANIFEST_INVALID,
-                "launch must declare only one of entrypoint or path",
-                path=raw_path,
-            )
-        if launch_location_fields:
-            location_field = next(iter(launch_location_fields))
-            raw_entrypoint = _string(
-                launch_fields[location_field], f"launch.{location_field}", path=raw_path
-            )
-            if isinstance(raw_entrypoint, Err):
-                return raw_entrypoint
+        launch, raw_entrypoint, launch_arguments = parsed_launch.value
+        launch_object = cast(JsonObject, root["launch"])
+        if raw_entrypoint is not None:
             parsed_entrypoint = parse_relative_path(
-                raw_entrypoint.value,
+                raw_entrypoint,
                 location=SourceLocation(path=raw_path, pointer="/launch/entrypoint"),
             )
             if isinstance(parsed_entrypoint, Err):
                 return _error(
                     AUTHOR_MANIFEST_INVALID,
-                    f"launch.{location_field} must be a safe path below the manifest root",
+                    "launch entrypoint must be a safe path below the manifest root",
                     path=raw_path,
                 )
             entrypoint = parsed_entrypoint.value
+
+    contract = _launch_contract(
+        None if entrypoint is None else str(entrypoint),
+        transport,
+        launch_arguments,
+        path=raw_path,
+    )
+    if isinstance(contract, Err):
+        return contract
 
     compliance = ComplianceLevel.AART_NATIVE
     if author_kind == "mcp":
@@ -1037,6 +1204,7 @@ def parse_author_manifest(manifest: DiscoveredAuthorManifest) -> Result[AuthorMa
             runtime_version,
             launch,
             entrypoint,
+            contract.value,
             inputs,
             dependencies,
             harnesses,

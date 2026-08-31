@@ -1,0 +1,359 @@
+"""End to end: an author's repository, compiled, published, and installed from what it declares.
+
+The other install E2E starts from a `PlannedInstallation` a test wrote. This one starts from an
+author's manifest and never writes one: the runtime, the dependency descriptor, the launch
+arguments and both runtime inputs are declared once in `aart.json`, compiled into a package,
+written to a store as bytes, and read back out of `artifact.json` by the machine doing the
+installing -- which has never seen the author's repository.
+
+The proof is what happens afterwards. The server the author wrote starts through a launcher nobody
+wrote, with the arguments the manifest declared, the configuration value a person supplied and a
+secret read at launch from a provider, out of an interpreter the installation owns.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import pathlib
+import secrets
+import sys
+import tempfile
+import unittest
+
+from agent_artifacts.application.artifact_installation import (
+    installation_remediations,
+    plan_artifact_installation,
+)
+from agent_artifacts.application.execution import LifecycleExecutionStatus, execute_lifecycle
+from agent_artifacts.application.installation_planning import inspect_requirements
+from agent_artifacts.application.installation_proposal import (
+    desired_state_for,
+    intended_receipt,
+    propose_installation,
+)
+from agent_artifacts.application.installed_state import current_state_from_observation
+from agent_artifacts.configuration.model import ConfiguredSource, SourceKind
+from agent_artifacts.domain.candidates import CandidateId
+from agent_artifacts.domain.credentials import CredentialProviderRef
+from agent_artifacts.domain.harness import Scope, mcp_target
+from agent_artifacts.domain.identifiers import InputId, SourceAlias
+from agent_artifacts.domain.inputs import PersistedConfigValue, SecretProviderReference
+from agent_artifacts.domain.inspection import (
+    EnvironmentFacts,
+    RemediationCapability,
+    RemediationCapabilityKind,
+)
+from agent_artifacts.domain.policies import EffectivePolicy
+from agent_artifacts.domain.reconciliation import ComponentState
+from agent_artifacts.domain.registry import (
+    PromotionMode,
+    PublicationStage,
+    RegistryArtifactVersion,
+)
+from agent_artifacts.domain.result import Ok
+from agent_artifacts.domain.selection import (
+    ArtifactRequest,
+    ArtifactSelection,
+    OwnershipKind,
+    OwnershipReason,
+    ResolvedArtifact,
+    ResolvedSelection,
+    VersionConstraint,
+)
+from agent_artifacts.io.environment_inspection import LocalEnvironmentInspector
+from agent_artifacts.io.execution import (
+    CredentialEffectInterpreter,
+    FileEffectInterpreter,
+    HarnessEffectInterpreter,
+    LocalMutationLock,
+    RuntimeEffectInterpreter,
+)
+from agent_artifacts.io.harness import LocalHarnessRegistry
+from agent_artifacts.io.python_runtime import LocalPythonRuntime
+from agent_artifacts.io.runtime_projection import observe_installation
+from agent_artifacts.protocol.authoring import compile_author_snapshot, read_install_description
+from agent_artifacts.protocol.native_schema import parse_artifact_manifest
+from agent_artifacts.sources.local import read_local_snapshot
+from agent_artifacts.sources.model import LocalSnapshotRequest, SnapshotLimits, source_instance_id
+from tests.mcp_stdio_e2e_test import SERVER_SOURCE, _FileProvider, speak
+
+TOKEN = InputId("github-token")
+ORG = InputId("github-org")
+KIT = OwnershipReason(OwnershipKind.COLLECTION, "public/collection/data-scientist@1.0.0")
+
+MANIFEST = {
+    "schema": "aart.dev/mcp/v1",
+    "artifact": {"name": "github", "kind": "mcp", "version": "1.5.0"},
+    "payload": {"include": ["server.py", "requirements.txt"]},
+    "transport": {"type": "stdio"},
+    "runtime": {"type": "python", "version": ">=3.11"},
+    "launch": {"type": "python", "entrypoint": "server.py", "arguments": ["--strict"]},
+    "inputs": [
+        {
+            "id": "github-token",
+            "kind": "secret",
+            "inject": {"type": "environment", "variable": "GITHUB_TOKEN"},
+            "help": {"label": "GitHub token", "format_hint": "ghp_..."},
+        },
+        {
+            "id": "github-org",
+            "kind": "config",
+            "default": "acme",
+            "inject": {"type": "environment", "variable": "GITHUB_ORG"},
+            "help": {"label": "GitHub organisation"},
+        },
+    ],
+    "python": {"dependencies": {"type": "requirements", "path": "requirements.txt"}},
+    "compatibility": {"harnesses": ["tabnine"]},
+}
+
+
+class AuthoredInstallationTest(unittest.TestCase):
+    def setUp(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.scope = pathlib.Path(temporary.name).resolve()
+        self.state_root = str(self.scope / "state")
+        self.registry = LocalHarnessRegistry(str(self.scope))
+
+        self.package = self._publish(self._compile())
+        self.description = self._describe()
+
+        self.token = secrets.token_hex(32)
+        secret_file = self.scope / "provider-store"
+        secret_file.write_text(self.token, encoding="utf-8")
+        secret_file.chmod(0o600)
+        self.provider = _FileProvider(str(secret_file))
+
+        self.planned = self._plan()
+        self.environment = self.planned.environment
+        self.desired = desired_state_for(self.planned)
+        self.receipt = intended_receipt(self.planned)
+        self.facts, self.remediations = self._offer()
+
+    # -- the author's side -------------------------------------------------------------------
+
+    def _compile(self):
+        repository = self.scope / "author"
+        (repository / "github").mkdir(parents=True)
+        (repository / "github/aart.json").write_text(json.dumps(MANIFEST), encoding="utf-8")
+        (repository / "github/server.py").write_text(SERVER_SOURCE, encoding="utf-8")
+        # Empty of packages on purpose: this proves the descriptor is carried, read and honoured
+        # without the test reaching a package index.
+        (repository / "github/requirements.txt").write_text(
+            "# no third-party packages\n", encoding="utf-8"
+        )
+
+        alias = SourceAlias("company")
+        configured = ConfiguredSource(alias, SourceKind.SOURCE_LOCAL, str(repository), None, True)
+        acquired = read_local_snapshot(
+            LocalSnapshotRequest(
+                source_instance_id(configured), alias, str(repository), SnapshotLimits()
+            )
+        )
+        self.assertIsInstance(acquired, Ok, getattr(acquired, "diagnostics", ()))
+        compiled = compile_author_snapshot(
+            acquired.value.snapshot,
+            source_alias=alias,
+            source="https://github.company/company/servers.git",
+            revision="c" * 40,
+        )
+        self.assertIsInstance(compiled, Ok, getattr(compiled, "diagnostics", ()))
+        return compiled.value[0]
+
+    def _publish(self, compiled):
+        """Write the canonical package to a store, the way anything downstream would receive it."""
+
+        self.published = self.scope / "store/mcp/github/1.5.0"
+        for entry in compiled.canonical_entries:
+            destination = self.published / str(entry.path)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(entry.content)
+        return compiled.package
+
+    # -- the installing machine's side -------------------------------------------------------
+
+    def _describe(self):
+        """Read what the artifact needs from the bytes on disk, not from the compiler in memory."""
+
+        manifest = parse_artifact_manifest((self.published / "artifact.json").read_bytes())
+        self.assertIsInstance(manifest, Ok, getattr(manifest, "diagnostics", ()))
+        extension = dict(manifest.value.extensions)["aart.authoring"]
+        described = read_install_description(extension, path="artifact.json")
+        self.assertIsInstance(described, Ok, getattr(described, "diagnostics", ()))
+        return described.value
+
+    def _resolved(self) -> ResolvedArtifact:
+        digest = self.package.payload_digest
+        return ResolvedArtifact(
+            RegistryArtifactVersion(
+                self.package.coordinate,
+                CandidateId("b" * 64),
+                self.package.provenance.input_digest,
+                digest,
+                digest,
+                digest,
+                PromotionMode.VENDORED,
+                PublicationStage.PUBLISHED,
+            ),
+            (KIT,),
+        )
+
+    def _capabilities(self) -> tuple[RemediationCapability, ...]:
+        """What this machine can actually be asked to fix, and nothing it cannot."""
+
+        return (
+            RemediationCapability(RemediationCapabilityKind.PYTHON_INSTALLER, "pip"),
+            RemediationCapability(RemediationCapabilityKind.CREDENTIAL_PROVIDER, "test-file"),
+            RemediationCapability(RemediationCapabilityKind.HARNESS_CONFIGURATION, "tabnine"),
+        )
+
+    def _plan(self):
+        planned = plan_artifact_installation(
+            self._resolved(),
+            self.description,
+            root=str(self.scope / ".tabnine/agent/aart/mcp/github"),
+            payload_source=str(self.published / "payload"),
+            sources=(
+                SecretProviderReference(
+                    TOKEN, CredentialProviderRef("test-file", "aart-e2e", "github-token")
+                ),
+                PersistedConfigValue(ORG, "acme"),
+            ),
+            policy=EffectivePolicy(),
+            facts=EnvironmentFacts(sys.platform, remediation_capabilities=self._capabilities()),
+            base_interpreter=sys.executable,
+            targets=(mcp_target("tabnine", Scope.PROJECT),),
+            resolvers=(self.provider,),  # type: ignore[arg-type]
+        )
+        self.assertIsInstance(planned, Ok, getattr(planned, "diagnostics", ()))
+        return planned.value
+
+    def _offer(self):
+        """Inspect this machine for what the package asked for, and offer what would fix it."""
+
+        inspected = inspect_requirements(
+            self.planned.requirements, LocalEnvironmentInspector(self._capabilities())
+        )
+        self.assertIsInstance(inspected, Ok, getattr(inspected, "diagnostics", ()))
+        options = installation_remediations((self.planned,), inspected.value, EffectivePolicy())
+        self.assertIsInstance(options, Ok, getattr(options, "diagnostics", ()))
+        return inspected.value, tuple(item.remediation for item in options.value)
+
+    def _selection(self) -> ResolvedSelection:
+        coordinate = self.package.coordinate
+        return ResolvedSelection(
+            ArtifactSelection(
+                (
+                    ArtifactRequest(
+                        coordinate.artifact,
+                        VersionConstraint(coordinate.version or "*"),
+                        coordinate.source,
+                    ),
+                )
+            ),
+            (self.planned.artifact,),
+        )
+
+    def _inspect(self, _=None):
+        return current_state_from_observation(
+            self.desired,
+            self.receipt,
+            observe_installation(self.receipt, registry=self.registry),
+            credentials=(
+                (
+                    str(TOKEN),
+                    ComponentState.MATCHED
+                    if os.path.exists(self.provider.path)
+                    else ComponentState.ABSENT,
+                ),
+            ),
+        )
+
+    def _interpreters(self):
+        files = FileEffectInterpreter(self.environment)
+        files.offer(self.planned.launcher.content.encode("utf-8"))
+        return (
+            files,
+            RuntimeEffectInterpreter(
+                LocalPythonRuntime(self.environment, timeout_seconds=300.0, offline=True)
+            ),
+            HarnessEffectInterpreter(self.registry, self.planned.registrations),
+            CredentialEffectInterpreter(
+                self.provider,  # type: ignore[arg-type]
+                self.receipt.credentials,
+            ),
+        )
+
+    def _install(self):
+        proposed = propose_installation(
+            (self.planned,),
+            self._selection(),
+            self.facts,
+            EffectivePolicy(),
+            observed=((self.package.coordinate, self._inspect()),),
+            selected_remediations=self.remediations,
+        )
+        self.assertIsInstance(proposed, Ok, getattr(proposed, "diagnostics", ()))
+        executed = execute_lifecycle(
+            proposed.value.lifecycle[0],
+            policy=EffectivePolicy(),
+            interpreters=self._interpreters(),
+            inspect=self._inspect,
+            lock=LocalMutationLock(self.state_root, str(self.scope)),
+        )
+        self.assertIsInstance(executed, Ok, getattr(executed, "diagnostics", ()))
+        return proposed.value, executed.value
+
+    def _server_answers(self) -> dict:
+        settings = json.loads(
+            (self.scope / ".tabnine/agent/settings.json").read_text(encoding="utf-8")
+        )
+        reply = speak(
+            settings["mcpServers"]["github"]["command"],
+            [{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {}}],
+        )
+        return json.loads(reply[0]["result"]["content"][0]["text"])
+
+    # -- what has to be true ------------------------------------------------------------------
+
+    def test_an_authored_manifest_installs_and_the_server_answers_what_it_declared(self) -> None:
+        _, outcome = self._install()
+
+        self.assertIs(outcome.status, LifecycleExecutionStatus.COMPLETED)
+        answers = self._server_answers()
+        self.assertEqual(answers["argv"], ["--strict"])
+        self.assertEqual(answers["org"], "acme")
+        self.assertTrue(answers["token_present"])
+        self.assertTrue(self.environment.owns(answers["executable"]))
+        self.assertFalse(answers["aart_importable"])
+
+    def test_the_declared_dependencies_are_installed_into_the_environment_it_owns(self) -> None:
+        proposal, _ = self._install()
+
+        installed = {type(effect).__name__ for effect in proposal.effects}
+        self.assertIn("InstallPythonDependencies", installed)
+        self.assertTrue(pathlib.Path(self.environment.interpreter).exists())
+        self.assertTrue(
+            pathlib.Path(self.environment.payload_path("requirements.txt")).exists(),
+            "the descriptor an installer read has to have travelled inside the payload",
+        )
+
+    def test_no_reviewed_surface_carries_the_secret_the_install_arranges_to_read(self) -> None:
+        proposal, outcome = self._install()
+
+        surfaces = json.dumps(
+            {
+                "plan": [str(item.effect) for item in proposal.plan.mutation.effects],
+                "digest": str(proposal.review_digest),
+                "outcome": [str(item) for item in outcome.primary.applied],
+            }
+        )
+        self.assertNotIn(self.token, surfaces)
+        self.assertNotIn(self.token, self.planned.launcher.content)
+        self.assertTrue(self._server_answers()["token_present"])
+
+
+if __name__ == "__main__":
+    unittest.main()
