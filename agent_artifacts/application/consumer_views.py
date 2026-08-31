@@ -1276,6 +1276,16 @@ def _transaction_undo(outcome: InstallationExecutionOutcome) -> UndoAvailability
     )
 
 
+#: How each lifecycle reads in a transaction summary. Only the kinds a reviewed Selection can
+#: actually carry out appear here; anything else falls back to the neutral verb.
+_TRANSACTION_VERBS: dict[LifecycleIntentKind, str] = {
+    LifecycleIntentKind.INSTALL: "Installed",
+    LifecycleIntentKind.UPDATE: "Updated",
+    LifecycleIntentKind.REPAIR: "Repaired",
+    LifecycleIntentKind.DOWNGRADE: "Downgraded",
+}
+
+
 def project_installation_receipt(
     outcome: InstallationExecutionOutcome,
     *,
@@ -1305,11 +1315,16 @@ def project_installation_receipt(
         for item in outcome.artifacts
     )
     count = len(artifacts)
+    # What the transaction was, taken from its members rather than assumed. Members can disagree
+    # -- an update of several artifacts finds some already at the approved version, which is a
+    # repair -- and in that case the verb somebody used is the one that named the whole action.
+    kinds = {item.plan.intent.kind for item in outcome.artifacts}
+    kind = kinds.pop() if len(kinds) == 1 else LifecycleIntentKind.UPDATE
     return ReceiptDetailView(
         recorded_at,
-        LifecycleIntentKind.INSTALL.value,
+        kind.value,
         ", ".join(item.coordinate for item in artifacts),
-        f"Installed {count} artifact{'' if count == 1 else 's'}",
+        f"{_TRANSACTION_VERBS.get(kind, 'Installed')} {count} artifact{'' if count == 1 else 's'}",
         outcome.status.value,
         _TRANSACTION_OUTCOMES[outcome.status],
         str(outcome.proposal.review_digest),

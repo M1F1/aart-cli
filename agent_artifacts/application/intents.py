@@ -43,6 +43,7 @@ __all__ = [
     "installation_health",
     "plan_lifecycle_intent",
     "repair_intent",
+    "supersession_intent",
     "uninstall_intent",
     "update_intent",
 ]
@@ -273,6 +274,32 @@ def update_intent(
     if not before < after:
         raise ValueError("an update must select a newer version")
     return LifecycleIntent(LifecycleIntentKind.UPDATE, desired, previous, ownership)
+
+
+def supersession_intent(
+    previous: DesiredState,
+    desired: DesiredState,
+    *,
+    ownership: tuple[OwnershipReason, ...] = (),
+) -> LifecycleIntent:
+    """The intent for installing over something already installed, whichever way the versions go.
+
+    Three cases, and none of them is the same action. A newer version is an update. The version
+    already installed is a repair: somebody asked to converge on what they have, and converging on
+    a machine that already matches is the no-op that answers them. An older version is a downgrade,
+    and this refuses rather than returning one -- a downgrade undoes work and can lose state a
+    newer version wrote, so it has to be asked for by name instead of being what "update" quietly
+    did when a registry was rolled back.
+    """
+
+    before, after = _versions(previous, desired)
+    if before < after:
+        return LifecycleIntent(LifecycleIntentKind.UPDATE, desired, previous, ownership)
+    if after < before:
+        raise ValueError(
+            f"{after} is older than the installed {before}; moving back a version is a downgrade"
+        )
+    return LifecycleIntent(LifecycleIntentKind.REPAIR, desired, previous, ownership)
 
 
 def downgrade_intent(

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Iterable
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
@@ -62,7 +63,12 @@ from .installation_observation import COMPONENT_STATE
 from .receipt_store import LocalReceiptStore
 from .runtime_projection import observe_installation, observe_placement
 
-__all__ = ["INSTALL_STATE_UNREADABLE", "read_consumer_machine"]
+__all__ = [
+    "INSTALL_STATE_UNREADABLE",
+    "InspectedInstallations",
+    "read_consumer_machine",
+    "read_installed_inspections",
+]
 
 #: An installation manifest exists and could not be read.  Distinct from a missing manifest:
 #: one means nothing was installed in that scope, the other means this process cannot tell.
@@ -172,31 +178,34 @@ def _targets_scope_and_profile(
     return False
 
 
-def read_consumer_machine(
+@dataclass(frozen=True, slots=True)
+class InspectedInstallations:
+    """Every canonical installation this machine holds, as read and as measured.
+
+    The pair travels together because it was produced together: the credential observations are
+    what the component states were derived from, and separating them invites a second, disagreeing
+    inspection of the same references.
+    """
+
+    inspections: tuple[InstalledInspection, ...]
+    credentials: tuple[CredentialObservation, ...]
+
+
+def read_installed_inspections(
     *,
     state_root: str,
     harness_root: str,
-    today: date,
-    project_root: str,
-    user_home: str,
-    data_root: str,
     credential_providers: tuple[CredentialProviderPort, ...] = (),
     scope: Scope | None = None,
     profiles: tuple[str, ...] = (),
-) -> Result[ConsumerMachine]:
-    """Read, inspect and assemble the machine the canonical consumer shell opens on.
+) -> Result[InspectedInstallations]:
+    """Read every canonical receipt in scope and measure what is actually there.
 
-    Providers are injected because credential inspection is an effect boundary.  A reference with
-    no matching provider is kept as unknown; a provider that was explicitly supplied and then
-    failed is reported as an inspection failure rather than silently downgraded.
-
-    The legacy roots are required rather than optional for the same reason.  A caller that omitted
-    them would get a machine that quietly reports every Skill, guideline, hook and memory on the
-    disk as absent, and there is no signature that should make that easy to ask for by accident.
-
-    ``scope`` and ``profiles`` narrow a command-facing read to the harness targets the caller
-    requested.  The persistent TUI omits them and retains its whole-machine view; a scoped public
-    status must not report a user installation while answering for a project, or vice versa.
+    This is the half of :func:`read_consumer_machine` that answers "what is installed, and what
+    state is it in". It is separate because a lifecycle action needs exactly that and nothing
+    else: an update has to know the version it replaces and the state that version converged on,
+    and assembling a dashboard, an activity feed and the legacy manifests to find out would make a
+    command depend on projections it never draws.
     """
 
     providers = {item.provider: item for item in credential_providers}
@@ -208,13 +217,9 @@ def read_consumer_machine(
     if any(not isinstance(profile, str) or not profile for profile in profiles):
         raise ValueError("consumer machine profiles are invalid")
 
-    store = LocalReceiptStore(state_root)
-    installed = store.installations()
+    installed = LocalReceiptStore(state_root).installations()
     if isinstance(installed, Err):
         return installed
-    actions = store.actions()
-    if isinstance(actions, Err):
-        return actions
 
     records = installed.value
     if scope is not None:
@@ -275,8 +280,53 @@ def read_consumer_machine(
         )
         inspections.append(InstalledInspection(record, desired, current))
 
+    return Ok(InspectedInstallations(tuple(inspections), tuple(observations)))
+
+
+def read_consumer_machine(
+    *,
+    state_root: str,
+    harness_root: str,
+    today: date,
+    project_root: str,
+    user_home: str,
+    data_root: str,
+    credential_providers: tuple[CredentialProviderPort, ...] = (),
+    scope: Scope | None = None,
+    profiles: tuple[str, ...] = (),
+) -> Result[ConsumerMachine]:
+    """Read, inspect and assemble the machine the canonical consumer shell opens on.
+
+    Providers are injected because credential inspection is an effect boundary.  A reference with
+    no matching provider is kept as unknown; a provider that was explicitly supplied and then
+    failed is reported as an inspection failure rather than silently downgraded.
+
+    The legacy roots are required rather than optional for the same reason.  A caller that omitted
+    them would get a machine that quietly reports every Skill, guideline, hook and memory on the
+    disk as absent, and there is no signature that should make that easy to ask for by accident.
+
+    ``scope`` and ``profiles`` narrow a command-facing read to the harness targets the caller
+    requested.  The persistent TUI omits them and retains its whole-machine view; a scoped public
+    status must not report a user installation while answering for a project, or vice versa.
+    """
+
+    read = read_installed_inspections(
+        state_root=state_root,
+        harness_root=harness_root,
+        credential_providers=credential_providers,
+        scope=scope,
+        profiles=profiles,
+    )
+    if isinstance(read, Err):
+        return read
+    inspections = list(read.value.inspections)
+    observations = list(read.value.credentials)
+    actions = LocalReceiptStore(state_root).actions()
+    if isinstance(actions, Err):
+        return actions
+
     unadopted: list[UnadoptedInstallation] = []
-    receipted = {_unversioned(record.coordinate) for record in records}
+    receipted = {_unversioned(item.record.coordinate) for item in inspections}
     legacy_scopes: tuple[InstallScope, ...] = (
         (scope.value,) if scope is not None else ("project", "user")
     )

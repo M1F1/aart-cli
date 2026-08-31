@@ -37,7 +37,7 @@ from agent_artifacts.application.installation_action import (
 from agent_artifacts.application.marketplace_resolution import ResolutionPolicy
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.harness import Scope
-from agent_artifacts.domain.identifiers import ObjectDigest
+from agent_artifacts.domain.identifiers import ArtifactCoordinate, ObjectDigest
 from agent_artifacts.domain.inputs import InputValueSource
 from agent_artifacts.domain.inspection import (
     EnvironmentFacts,
@@ -46,6 +46,7 @@ from agent_artifacts.domain.inspection import (
 )
 from agent_artifacts.domain.policies import EffectivePolicy
 from agent_artifacts.domain.python_runtime import PythonInstaller
+from agent_artifacts.domain.receipts import ArtifactReceipt
 from agent_artifacts.domain.reconciliation import CurrentState, DesiredState
 from agent_artifacts.domain.remediations import Remediation
 from agent_artifacts.domain.result import Err, Ok, Result
@@ -61,7 +62,10 @@ from .environment_inspection import LocalEnvironmentInspector, platform_name
 from .execution import LocalMutationLock
 from .harness import LocalHarnessRegistry
 from .installation_execution import interpreters_for
-from .installation_observation import observe_planned_installation
+from .installation_observation import (
+    observe_planned_installation,
+    observe_recorded_installation,
+)
 from .python_runtime import observe_python_installers
 from .receipt_store import LocalReceiptStore
 
@@ -211,8 +215,15 @@ def prepare_configured_installation(
     base_interpreter: str | None = None,
     resolution_policy: ResolutionPolicy | None = None,
     preferred_installer: PythonInstaller | None = None,
+    previous: tuple[tuple[ArtifactCoordinate, DesiredState], ...] = (),
 ) -> Result[PreparedConfiguredInstallation]:
-    """Resolve, place and offer one configured Selection without mutating the target machine."""
+    """Resolve, place and offer one configured Selection without mutating the target machine.
+
+    `previous` is how a caller says this Selection replaces versions already installed here. It
+    comes from the receipts on this machine rather than from anything resolved, which is why it is
+    the caller's to supply: this module composes the install, and what is already installed is a
+    fact about the machine that was read before the composition began.
+    """
 
     if not isinstance(host, InstallationHost):
         return _error("preparing a configured installation needs an installation host")
@@ -254,6 +265,7 @@ def prepare_configured_installation(
         selected_remediations=selected_remediations,
         base_interpreter=base_interpreter or sys.executable,
         resolvers=resolvers,  # type: ignore[arg-type]
+        previous=previous,
     )
     if isinstance(prepared, Err):
         return prepared
@@ -272,10 +284,17 @@ def complete_configured_installation(
     recorded_at: str,
     today: date,
     credential_providers: tuple[CredentialProviderPort, ...] = (),
+    previous_receipts: tuple[tuple[ArtifactCoordinate, ArtifactReceipt], ...] = (),
     timeout_seconds: float = 900.0,
     offline: bool = False,
 ) -> Result[CompletedConfiguredInstallation]:
-    """Execute the confirmed review, record it, and re-read the machine it left behind."""
+    """Execute the confirmed review, record it, and re-read the machine it left behind.
+
+    `previous_receipts` are what an update is leaving. The executor asks for the previous state
+    when it has to put a failed update back, and that state can only be measured against the
+    receipt the version being replaced wrote -- so a caller that supplies `previous` states to
+    preparation supplies the matching receipts here.
+    """
 
     if not isinstance(prepared, PreparedConfiguredInstallation) or not isinstance(
         host, InstallationHost
@@ -300,12 +319,30 @@ def complete_configured_installation(
         return interpreters
 
     planned = {installation.coordinate: installation for installation in action.installations}
+    recorded = dict(previous_receipts)
 
     def inspect(desired: DesiredState) -> CurrentState:
-        # Re-inspection is the whole point of the executor's verdict, so an artifact it asks about
-        # that this action never planned is a bug here rather than a fact about the machine.
-        return observe_planned_installation(
-            planned[desired.artifact],
+        # Two vocabularies, and which one applies is decided by the state being asked about. A
+        # coordinate this action planned is measured against the plan. The version an update is
+        # leaving was never planned here, so it is measured against the receipt it wrote -- and a
+        # state that is neither is a bug in this composition rather than a fact about the machine,
+        # which is why it refuses instead of measuring something adjacent and calling it the answer.
+        installation = planned.get(desired.artifact)
+        if installation is not None:
+            return observe_planned_installation(
+                installation,
+                registry=registry,
+                credential_providers=credential_providers,
+            )
+        receipt = recorded.get(desired.artifact)
+        if receipt is None:
+            raise ValueError(
+                f"{desired.artifact} is neither planned by this action nor recorded as the "
+                "version it replaces, so nothing here can measure it"
+            )
+        return observe_recorded_installation(
+            desired,
+            receipt,
             registry=registry,
             credential_providers=credential_providers,
         )

@@ -294,6 +294,28 @@ def removal_state_from_placement(
     return DesiredState(coordinate, tuple(components))
 
 
+def _payload_state(
+    receipt: PlacedArtifactReceipt, observation: PlacementObservation
+) -> ComponentState:
+    """Whether the artifact's own tree holds what the receipt says it holds.
+
+    Presence is not the question. The tree an installation owns is version-independent -- an update
+    converges in place -- so the payload of the version being replaced is present at exactly the
+    path the new one wants. Judging that as matched skips the copy, and the delivery that follows
+    then places the old content under the new version's name, reporting success.
+    """
+
+    if not observation.payload_present:
+        return ComponentState.ABSENT
+    if observation.payload_digest is None:
+        return ComponentState.UNKNOWN
+    return (
+        ComponentState.MATCHED
+        if observation.payload_digest == receipt.payload_digest
+        else ComponentState.DIVERGENT
+    )
+
+
 def current_state_from_placement(
     desired: DesiredState,
     receipt: PlacedArtifactReceipt,
@@ -316,10 +338,7 @@ def current_state_from_placement(
     wanted = {component.id for component in desired.components}
     expected = {delivery.harness: delivery.digest for delivery in receipt.deliveries}
     components: list[ObservedComponent] = [
-        ObservedComponent(
-            ComponentId(Component.PAYLOAD),
-            ComponentState.MATCHED if observation.payload_present else ComponentState.ABSENT,
-        )
+        ObservedComponent(ComponentId(Component.PAYLOAD), _payload_state(receipt, observation))
     ]
     for found in observation.deliveries:
         if not found.present:

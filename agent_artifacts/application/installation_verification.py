@@ -67,11 +67,18 @@ class PlacementObservation:
     """What an inspector found for an artifact a harness reads. Facts only."""
 
     payload_present: bool = False
+    #: What the payload tree hashes to now, or `None` when nobody could measure it. Absent for a
+    #: payload that is not there at all, which `payload_present` already says.
+    payload_digest: ObjectDigest | None = None
     deliveries: tuple[DeliveryObservation, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.payload_present, bool):
             raise ValueError("observed placement payload presence is invalid")
+        if self.payload_digest is not None and not isinstance(self.payload_digest, ObjectDigest):
+            raise ValueError("observed placement payload digest is invalid")
+        if self.payload_digest is not None and not self.payload_present:
+            raise ValueError("a payload that is not there cannot have been measured")
         if not isinstance(self.deliveries, tuple) or any(
             not isinstance(item, DeliveryObservation) for item in self.deliveries
         ):

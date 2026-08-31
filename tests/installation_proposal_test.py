@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import unittest
+from dataclasses import replace
 
 from agent_artifacts.application.installation_proposal import (
     PROPOSAL_INVALID,
@@ -25,6 +26,7 @@ from agent_artifacts.application.installed_state import (
     current_state_from_observation,
     desired_state_from_receipt,
 )
+from agent_artifacts.application.intents import LifecycleIntentKind
 from agent_artifacts.application.runtime_projection import RuntimeProjection
 from agent_artifacts.domain.candidates import CandidateId
 from agent_artifacts.domain.credentials import CredentialProviderRef
@@ -450,6 +452,87 @@ class InstallationProposalTest(unittest.TestCase):
         self.assertIn(self.planned.launcher.digest.value, encoded)
         for rendered in ("GITHUB_TOKEN", "GITHUB_ORG", "acme", "find-generic-password"):
             self.assertNotIn(rendered, encoded)
+
+
+class InstallationSupersessionTest(unittest.TestCase):
+    """Planning an install that replaces a version already on this machine.
+
+    The transition is what makes an update reviewable. Without the version being left, the plan
+    reads as a first install of the newer one, and a reviewer cannot see that something is being
+    replaced -- so the version being left is passed in rather than inferred from the observation,
+    which knows what is on disk but not what was intended to be there.
+    """
+
+    def setUp(self) -> None:
+        self.installed = _planned(_resolved(version="1.5.0"))
+        self.newer = _planned(_resolved(version="1.6.0"))
+        self.selection = _selection(self.newer.artifact)
+        self.facts = EnvironmentFacts("darwin", ())
+        self.coordinate = replace(self.newer.coordinate, version=None)
+
+    def propose(self, **overrides):
+        arguments: dict[str, object] = {
+            "observed": ((self.newer.coordinate, _nothing_installed(self.newer)),),
+        }
+        arguments.update(overrides)
+        return propose_installation(
+            (self.newer,),
+            self.selection,
+            self.facts,
+            EffectivePolicy(),
+            **arguments,  # type: ignore[arg-type]
+        )
+
+    def test_a_named_previous_version_makes_the_plan_an_update(self) -> None:
+        proposed = self.propose(
+            previous=((self.coordinate, desired_state_for(self.installed)),),
+        )
+
+        self.assertIsInstance(proposed, Ok, getattr(proposed, "diagnostics", ()))
+        intent = proposed.value.lifecycle[0].intent
+        self.assertEqual(intent.kind, LifecycleIntentKind.UPDATE)
+        self.assertIsNotNone(intent.previous)
+        assert intent.previous is not None
+        self.assertEqual(intent.previous.artifact.version, "1.5.0")
+        self.assertEqual(intent.desired.artifact.version, "1.6.0")
+
+    def test_without_a_previous_version_the_same_plan_is_an_install(self) -> None:
+        proposal = self.propose().value
+
+        self.assertEqual(proposal.lifecycle[0].intent.kind, LifecycleIntentKind.INSTALL)
+        self.assertIsNone(proposal.lifecycle[0].intent.previous)
+
+    def test_the_installed_version_named_again_is_a_repair_rather_than_an_update(self) -> None:
+        proposed = self.propose(
+            previous=((self.coordinate, desired_state_for(_planned(_resolved(version="1.6.0")))),),
+        )
+
+        self.assertIsInstance(proposed, Ok, getattr(proposed, "diagnostics", ()))
+        self.assertEqual(proposed.value.lifecycle[0].intent.kind, LifecycleIntentKind.REPAIR)
+
+    def test_an_older_version_is_refused_as_a_downgrade_rather_than_planned_as_an_update(
+        self,
+    ) -> None:
+        proposed = self.propose(
+            previous=((self.coordinate, desired_state_for(_planned(_resolved(version="1.7.0")))),),
+        )
+
+        self.assertIsInstance(proposed, Err)
+        self.assertEqual(proposed.diagnostics[0].code, PROPOSAL_INVALID)
+        self.assertIn("downgrade", proposed.diagnostics[0].message)
+
+    def test_a_previous_version_for_an_artifact_nobody_planned_is_refused(self) -> None:
+        proposed = self.propose(
+            previous=(
+                (
+                    replace(_resolved("elsewhere").version.coordinate, version=None),
+                    desired_state_for(_planned(_resolved("elsewhere"))),
+                ),
+            ),
+        )
+
+        self.assertIsInstance(proposed, Err)
+        self.assertIn("not being installed", proposed.diagnostics[0].message)
 
 
 if __name__ == "__main__":

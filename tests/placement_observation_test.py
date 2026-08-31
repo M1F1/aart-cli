@@ -39,7 +39,7 @@ from agent_artifacts.domain.reconciliation import (
     DriftKind,
     compare_states,
 )
-from agent_artifacts.io.runtime_projection import observe_placement
+from agent_artifacts.io.runtime_projection import observe_placement, tree_digest_at
 
 COORDINATE = ArtifactCoordinate(
     SourceAlias("public"), ArtifactIdentity("skill", "code-review"), "2.0.0"
@@ -67,10 +67,16 @@ class _Placed:
     def _receipt(self, digest: ObjectDigest | None = None) -> PlacedArtifactReceipt:
         from agent_artifacts.protocol.hashing import sha256_bytes
 
+        # Measured when the tree is there, and an arbitrary digest when a test has removed it --
+        # a receipt outlives the payload it describes, which is the case being exercised.
+        payload = tree_digest_at(str(self.root / "payload")) or _digest()
         return PlacedArtifactReceipt(
             "skill/code-review",
             str(self.root),
-            _digest(),
+            # The tree that is actually there. A receipt naming some other digest would describe a
+            # different installation, and "untouched" below would then be asserting that a payload
+            # nobody has is intact.
+            payload,
             (
                 ArtifactDelivery(
                     "claude",
@@ -137,7 +143,9 @@ class PlacementCurrentStateTest(_Placed, unittest.TestCase):
         self.assertEqual(ComponentState.ABSENT, states[ComponentId(Component.DELIVERY, "claude")])
 
     def test_a_delivery_nobody_could_measure_is_unknown_rather_than_absent(self) -> None:
-        observation = PlacementObservation(True, (DeliveryObservation("claude", True, None),))
+        observation = PlacementObservation(
+            True, deliveries=(DeliveryObservation("claude", True, None),)
+        )
         states = self._states(observation)
         self.assertEqual(ComponentState.UNKNOWN, states[ComponentId(Component.DELIVERY, "claude")])
 
@@ -146,7 +154,9 @@ class PlacementCurrentStateTest(_Placed, unittest.TestCase):
         # current state, and the comparison is what names it.
         receipt = self._receipt()
         desired = desired_state_from_placement(COORDINATE, receipt, payload_source="/store/x")
-        current = current_state_from_placement(desired, receipt, PlacementObservation(True, ()))
+        current = current_state_from_placement(
+            desired, receipt, PlacementObservation(True, receipt.payload_digest)
+        )
         self.assertNotIn(
             ComponentId(Component.DELIVERY, "claude"),
             {component.id for component in current.components},
@@ -155,8 +165,26 @@ class PlacementCurrentStateTest(_Placed, unittest.TestCase):
         self.assertEqual(ComponentId(Component.DELIVERY, "claude"), drift.component)
         self.assertEqual(DriftKind.UNOBSERVED, drift.kind)
 
+    def test_a_payload_somebody_edited_is_divergent_rather_than_matched(self) -> None:
+        # Presence is not the question. An artifact's tree is version-independent, so the payload
+        # of the version being replaced sits at exactly the path the new one wants -- and an
+        # update that read presence as "already correct" would deliver the old content under the
+        # new version's name.
+        receipt = self._receipt()
+        (self.root / "payload" / "SKILL.md").write_text("# something else\n", encoding="utf-8")
+        states = self._states(observe_placement(receipt), receipt=receipt)
+        self.assertEqual(ComponentState.DIVERGENT, states[ComponentId(Component.PAYLOAD)])
+
+    def test_a_payload_nobody_could_measure_is_unknown_rather_than_matched(self) -> None:
+        states = self._states(
+            PlacementObservation(True, deliveries=(DeliveryObservation("claude", False),))
+        )
+        self.assertEqual(ComponentState.UNKNOWN, states[ComponentId(Component.PAYLOAD)])
+
     def test_a_missing_payload_is_absent(self) -> None:
-        states = self._states(PlacementObservation(False, (DeliveryObservation("claude", False),)))
+        states = self._states(
+            PlacementObservation(False, deliveries=(DeliveryObservation("claude", False),))
+        )
         self.assertEqual(ComponentState.ABSENT, states[ComponentId(Component.PAYLOAD)])
 
 

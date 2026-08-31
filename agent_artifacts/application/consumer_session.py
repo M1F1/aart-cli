@@ -338,6 +338,7 @@ def begin_installation(
     policy: EffectivePolicy,
     *,
     observed: tuple[tuple[ArtifactCoordinate, CurrentState], ...] = (),
+    previous: tuple[tuple[ArtifactCoordinate, DesiredState], ...] = (),
     selected_remediations: tuple[Remediation, ...] = (),
     credential_observations: tuple[CredentialObservation, ...] = (),
 ) -> Result[ConsumerFlow]:
@@ -354,6 +355,7 @@ def begin_installation(
         facts,
         policy,
         observed=observed,
+        previous=previous,
         selected_remediations=selected_remediations,
     )
     if isinstance(proposed, Err):

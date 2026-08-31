@@ -232,4 +232,15 @@ def record_installation_transaction(
         if isinstance(written, Err):
             return written
         recorded.append((coordinate, written.value))
+        # A record is per version, and an artifact is installed at one version at a time. The
+        # version an update left is therefore forgotten as part of recording the one that replaced
+        # it -- keeping both would report one artifact as two installations, and a later repair
+        # would try to converge a version that is no longer anywhere on the disk. This happens
+        # after the new record is written, so a store that fails half-way leaves the artifact
+        # recorded twice rather than not at all.
+        superseded = intent.previous
+        if superseded is not None and superseded.artifact != coordinate:
+            forgotten = store.forget_installation(superseded.artifact)
+            if isinstance(forgotten, Err):
+                return forgotten
     return Ok(RecordedTransaction(detail, action.value, tuple(recorded)))

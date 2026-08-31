@@ -226,6 +226,15 @@ class FileEffectInterpreter:
         if not os.path.isdir(effect.source):
             return _error(EXECUTION_FAILED, f"{effect.source} is not a directory to copy")
         try:
+            if os.path.isdir(effect.destination):
+                # Converge rather than merge. An artifact's tree is version-independent, so this
+                # destination is where the version being replaced already lives -- copying over it
+                # would keep files the new version dropped, and would fail outright on the ones it
+                # kept, because a payload copied out of the object store carries the store's
+                # read-only modes. Access is restored inside this exact tree and nowhere else
+                # (D-078), and the tree is one this environment owns, checked above.
+                _make_tree_removable(effect.destination)
+                shutil.rmtree(effect.destination)
             shutil.copytree(effect.source, effect.destination, dirs_exist_ok=True)
         except OSError as error:
             return _error(

@@ -76,11 +76,21 @@ class _Environment:
         config_path.parent.mkdir(parents=True, exist_ok=True)
         config_path.write_bytes(user_configuration_bytes(configuration))
 
+        self.publish(AUTHORED_SKILL)
+
+    def publish(self, authored: tuple[tuple[str, str], ...]) -> None:
+        """Make `authored` the approved snapshot this machine's configured registry offers.
+
+        Publishing again is how a source that has since synchronized is modelled. It replaces what
+        the registry approves without touching anything installed, which is the precondition
+        INV-188 describes: learning about a newer version is not itself an update.
+        """
+
         candidate = make_source_candidate(
             source_instance_id(self.source),
             self.source.alias,
             "a" * 40,
-            _published_registry(AUTHORED_SKILL),
+            _published_registry(authored),
         )
         assert isinstance(candidate, Ok), candidate
         published = publish_source_snapshot(

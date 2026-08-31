@@ -167,8 +167,14 @@ def observe_placement(receipt: PlacedArtifactReceipt) -> PlacementObservation:
         present = os.path.lexists(delivery.destination)
         digest = _delivered_digest(delivery) if present else None
         observed.append(DeliveryObservation(delivery.harness, present, digest))
+    payload = ArtifactEnvironment(receipt.artifact, receipt.root).payload
+    present = os.path.isdir(payload)
     return PlacementObservation(
-        payload_present=os.path.isdir(ArtifactEnvironment(receipt.artifact, receipt.root).payload),
+        payload_present=present,
+        # Measured, not merely counted. A payload directory left over from the version being
+        # replaced is present and wrong, and an update that read presence as "already correct"
+        # would skip the copy and then deliver the old content under the new version's name.
+        payload_digest=tree_digest_at(payload) if present else None,
         deliveries=tuple(observed),
     )
 
@@ -176,17 +182,33 @@ def observe_placement(receipt: PlacedArtifactReceipt) -> PlacementObservation:
 def _delivered_digest(delivery: ArtifactDelivery) -> ObjectDigest | None:
     """What is at the destination now, measured the way the package measured it."""
 
-    try:
-        if delivery.kind is DeliveryKind.FILE:
+    if delivery.kind is DeliveryKind.FILE:
+        try:
             if not os.path.isfile(delivery.destination):
                 return None
             with open(delivery.destination, "rb") as handle:
                 return sha256_bytes(handle.read())
-        if not os.path.isdir(delivery.destination):
+        except OSError:
             return None
-        records = []
-        for current, directories, files in os.walk(delivery.destination):
-            relative = os.path.relpath(current, delivery.destination)
+    return tree_digest_at(delivery.destination)
+
+
+def tree_digest_at(root: str) -> ObjectDigest | None:
+    """Hash the directory at `root` the way a package's payload tree was hashed when it was built.
+
+    The same construction as `_payload_digest`: every file relative to the root, plus an entry for
+    each directory holding one. That correspondence is the point -- it is what lets a tree on disk
+    be compared against a digest a registry attested, rather than merely checked for existence.
+    Anything that cannot be read comes back as `None`, which is "nobody could measure this" and not
+    "there is nothing there".
+    """
+
+    records = []
+    try:
+        if not os.path.isdir(root):
+            return None
+        for current, directories, files in os.walk(root):
+            relative = os.path.relpath(current, root)
             for name in sorted(directories):
                 path = _relative_entry(relative, name)
                 if path is None:

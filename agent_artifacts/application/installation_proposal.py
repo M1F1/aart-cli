@@ -18,7 +18,7 @@ printed and drawn in a terminal, so what it may carry about a launcher is the di
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TypeAlias
 
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
@@ -49,7 +49,13 @@ from agent_artifacts.domain.selection import (
 
 from .installation_planning import ArtifactInstallIntent, prepare_install_plan
 from .installed_state import desired_state_from_placement, desired_state_from_receipt
-from .intents import LifecycleIntent, LifecyclePlan, install_intent, plan_lifecycle_intent
+from .intents import (
+    LifecycleIntent,
+    LifecyclePlan,
+    install_intent,
+    plan_lifecycle_intent,
+    supersession_intent,
+)
 from .runtime_projection import RuntimeProjection
 
 __all__ = [
@@ -315,6 +321,17 @@ def placement_lifecycle_intent(planned: PlannedPlacement) -> LifecycleIntent:
     return install_intent(placement_desired_state(planned), ownership=planned.artifact.ownership)
 
 
+def _unversioned(coordinate: ArtifactCoordinate) -> ArtifactCoordinate:
+    """The artifact a coordinate names, without the version it happens to be at.
+
+    Supersession is keyed by this. An update names the artifact, not the version -- the version
+    being left is what the previous state records, and the version being taken is what resolution
+    chose, so a key carrying either of them could only agree with one side.
+    """
+
+    return replace(coordinate, version=None)
+
+
 def artifact_receipt_for(planned: PlannedArtifact) -> ArtifactReceipt:
     """What either shape of plan would leave behind, without the caller deciding which it is.
 
@@ -399,6 +416,7 @@ def propose_installation(
     policy: EffectivePolicy,
     *,
     observed: tuple[tuple[ArtifactCoordinate, CurrentState], ...] = (),
+    previous: tuple[tuple[ArtifactCoordinate, DesiredState], ...] = (),
     selected_remediations: tuple[Remediation, ...] = (),
 ) -> Result[InstallationProposal]:
     """Lower a resolved Selection into the plan a person reviews and the plans that run it.
@@ -406,6 +424,14 @@ def propose_installation(
     `observed` is required for every artifact rather than defaulted, because "nobody looked" and
     "it is not there" call for different installs and a default would quietly pick one. Passing a
     state observed on a machine where nothing is installed is how a first install says so.
+
+    `previous` names, for an artifact that already has one, the state the installed version
+    converged on. It makes that artifact's plan a transition rather than a first install, which is
+    what lets a review state what is being left as well as what is being taken. It is passed
+    rather than inferred from `observed`, because an observation is what is on the disk and a
+    transition is between two things somebody intended -- a drifted installation is still an update
+    from the version it records, not from the damage. Which transition it is follows from the two
+    versions (`supersession_intent`), including the refusal to call a move backwards an update.
     """
 
     if any(not isinstance(item, (PlannedInstallation, PlannedPlacement)) for item in installations):
@@ -415,6 +441,24 @@ def propose_installation(
     states = dict(observed)
     if len(states) != len(observed):
         return _error("an artifact was observed twice")
+    superseded = dict(previous)
+    if len(superseded) != len(previous):
+        return _error("an artifact was superseded twice")
+    if any(coordinate.version is not None for coordinate in superseded):
+        return _error(
+            "a superseded artifact is named without a version; the version being left is the one "
+            "its previous state records"
+        )
+    planned_coordinates = {_unversioned(item.coordinate) for item in installations}
+    unplanned = tuple(
+        str(coordinate) for coordinate in superseded if coordinate not in planned_coordinates
+    )
+    if unplanned:
+        return _error(
+            "a previous version was named for "
+            + ", ".join(sorted(unplanned))
+            + ", which is not being installed"
+        )
     missing = tuple(str(item.coordinate) for item in installations if item.coordinate not in states)
     if missing:
         return _error(
@@ -432,12 +476,18 @@ def propose_installation(
             runtime, transport = None, None
         else:
             runtime, transport = planned.runtime, planned.transport
+        replaced = superseded.get(_unversioned(planned.coordinate))
         try:
-            intent = (
-                placement_lifecycle_intent(planned)
-                if isinstance(planned, PlannedPlacement)
-                else install_lifecycle_intent(planned)
-            )
+            if replaced is not None:
+                intent = supersession_intent(
+                    replaced,
+                    artifact_desired_state(planned),
+                    ownership=planned.artifact.ownership,
+                )
+            elif isinstance(planned, PlannedPlacement):
+                intent = placement_lifecycle_intent(planned)
+            else:
+                intent = install_lifecycle_intent(planned)
         except ValueError as error:
             return _error(f"{planned.coordinate} cannot be installed: {error}")
         reconciled = plan_lifecycle_intent(intent, states[planned.coordinate], policy=policy)

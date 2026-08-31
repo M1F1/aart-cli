@@ -17,7 +17,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.identifiers import ObjectDigest
+from agent_artifacts.domain.identifiers import ArtifactCoordinate, ObjectDigest
 from agent_artifacts.domain.inspection import EnvironmentFacts
 from agent_artifacts.domain.policies import EffectivePolicy
 from agent_artifacts.domain.reconciliation import CurrentState, DesiredState
@@ -122,12 +122,18 @@ def prepare_installation_action(
     selected_remediations: tuple[Remediation, ...] | None,
     base_interpreter: str | None = None,
     resolvers: tuple[CredentialResolutionPort, ...] = (),
+    previous: tuple[tuple[ArtifactCoordinate, DesiredState], ...] = (),
 ) -> Result[PreparedInstallationAction]:
     """Offer and begin one action without mutating the machine.
 
     ``selected_remediations`` is explicit for an interactive caller.  ``None`` means the caller is
     non-interactive and has already authorized the whole offer (the command's ``--yes`` path); an
     empty tuple means somebody selected no remediation.
+
+    ``previous`` names the version each artifact replaces, for the artifacts that replace one. It
+    is what separates an update from an install at this boundary, and it is empty for an install
+    rather than defaulted to the observation: an artifact nobody installed has no previous version,
+    and one that is installed and is being reinstalled is not thereby being updated.
     """
 
     if not isinstance(selection, ResolvedSelection):
@@ -150,6 +156,7 @@ def prepare_installation_action(
         offered.value.facts,
         policy,
         observed=offered.value.observed,
+        previous=previous,
         selected_remediations=chosen,
     )
     if isinstance(begun, Err):

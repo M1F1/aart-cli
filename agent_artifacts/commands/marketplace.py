@@ -20,13 +20,14 @@ from __future__ import annotations
 import json
 import os
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 
 from agent_artifacts import command_outcome as _common
 from agent_artifacts.application.consumer_views import (
     PresentationProfile,
+    ReceiptArtifactView,
     consumer_plan_to_data,
     receipt_detail_to_data,
 )
@@ -67,8 +68,11 @@ from agent_artifacts.consumer.runtime_requirements import (
 )
 from agent_artifacts.domain.diagnostics import Diagnostic, Severity, diagnostic_to_data
 from agent_artifacts.domain.harness import Scope
+from agent_artifacts.domain.identifiers import ArtifactCoordinate
 from agent_artifacts.domain.inputs import SecretInput
 from agent_artifacts.domain.policies import EffectivePolicy
+from agent_artifacts.domain.receipts import ArtifactReceipt
+from agent_artifacts.domain.reconciliation import DesiredState
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.domain.selection import (
     ArtifactRequest,
@@ -80,7 +84,10 @@ from agent_artifacts.io.configured_installation_action import (
     complete_configured_installation,
     prepare_configured_installation,
 )
-from agent_artifacts.io.consumer_machine import read_consumer_machine
+from agent_artifacts.io.consumer_machine import (
+    read_consumer_machine,
+    read_installed_inspections,
+)
 from agent_artifacts.io.credentials import MacOsKeychainProvider
 from agent_artifacts.marketplace.catalog import marketplace_catalog_bytes, render_marketplace
 from agent_artifacts.marketplace.search import Document, search, summary_line
@@ -131,7 +138,7 @@ from agent_artifacts.tui_consumer import (
     render_transaction_success,
 )
 
-from ._configured_runtime import load_runtime_configuration
+from ._configured_runtime import ConfiguredRuntime, load_runtime_configuration
 
 _LIST_OPERATION = "marketplace.list"
 _SEARCH_OPERATION = "marketplace.search"
@@ -984,6 +991,31 @@ def _configured_install(request: Request, selectors: tuple[ArtifactSelector, ...
     selection = _configured_registry_selection(selectors, runtime.value.loaded.effective)
     if selection is None:
         return None
+    return _configured_lifecycle(request, operation, runtime.value, selection)
+
+
+def _unchanged(artifact: ReceiptArtifactView) -> bool:
+    """Whether this member of a finished transaction left the machine exactly as it found it."""
+
+    return not artifact.steps and artifact.status == "completed"
+
+
+def _configured_lifecycle(
+    request: Request,
+    operation: str,
+    runtime: ConfiguredRuntime,
+    selection: ArtifactSelection,
+    previous: tuple[tuple[ArtifactCoordinate, DesiredState], ...] = (),
+    previous_receipts: tuple[tuple[ArtifactCoordinate, ArtifactReceipt], ...] = (),
+) -> int:
+    """Review one canonical Selection, and apply exactly the review that was confirmed.
+
+    Install and update are the same three steps -- prepare without touching anything, project the
+    review, execute only the digest somebody confirmed -- differing in one input: whether each
+    artifact replaces a version already here. Writing that flow twice would let the two drift, and
+    the half that drifted would be the half that mutates the machine.
+    """
+
     if request.install_mode != "copy":
         return _emit_error(
             request,
@@ -995,12 +1027,12 @@ def _configured_install(request: Request, selectors: tuple[ArtifactSelector, ...
         )
 
     project_root, user_home = resolved_paths(
-        data_root=runtime.value.paths.data_root,
+        data_root=runtime.paths.data_root,
         project=request.project,
         user_home=request.user_home,
     )
     host = InstallationHost(
-        runtime.value.paths.data_root,
+        runtime.paths.data_root,
         project_root,
         user_home,
         Scope(request.scope),
@@ -1009,7 +1041,7 @@ def _configured_install(request: Request, selectors: tuple[ArtifactSelector, ...
     policy = EffectivePolicy()
     credential_providers = (MacOsKeychainProvider(),) if sys.platform == "darwin" else ()
     prepared = prepare_configured_installation(
-        runtime.value.loaded.effective,
+        runtime.loaded.effective,
         selection,
         host=host,
         sources=(),
@@ -1017,6 +1049,7 @@ def _configured_install(request: Request, selectors: tuple[ArtifactSelector, ...
         selected_remediations=None,
         credential_providers=credential_providers,
         resolvers=credential_providers,
+        previous=previous,
     )
     if isinstance(prepared, Err):
         return _emit_error(request, prepared, operation)
@@ -1110,6 +1143,7 @@ def _configured_install(request: Request, selectors: tuple[ArtifactSelector, ...
         host=host,
         policy=policy,
         credential_providers=credential_providers,
+        previous_receipts=previous_receipts,
         recorded_at=now.isoformat(),
         today=now.date(),
         offline=request.offline,
@@ -1130,7 +1164,11 @@ def _configured_install(request: Request, selectors: tuple[ArtifactSelector, ...
         "items": [
             {
                 "key": item.coordinate,
-                "status": "current" if item.status == "converged" else item.status,
+                # A member that finished without running a single step changed nothing, because
+                # the machine already matched what was asked for. Reporting that as "completed"
+                # is true and useless -- it reads as though an update happened -- so it is
+                # reported as what it is.
+                "status": "current" if _unchanged(item) else item.status,
                 "detail": item.detail,
             }
             for item in receipt.artifacts
@@ -1144,6 +1182,91 @@ def _configured_install(request: Request, selectors: tuple[ArtifactSelector, ...
         render_transaction_success(receipt, PresentationProfile.FAST),
     )
     return _common.OK if successful else _common.ERROR
+
+
+def _configured_update(request: Request, selectors: tuple[ArtifactSelector, ...]) -> int | None:
+    """Converge canonical installs onto what the approved registry now offers, or decline.
+
+    Update acts on something already installed, so the record decides whether this seam owns the
+    request: an artifact with no canonical receipt is left to the characterized path rather than
+    installed here under a verb that promises to replace something. That is also why the selection
+    is rebuilt from the records instead of from the coordinates somebody typed -- what is being
+    updated is what is installed, and its source is the one it came from.
+
+    No version is pinned unless somebody pinned one. `update` asks for what the registry approves
+    now; whether that is newer, the same, or older than what is installed is answered by the plan
+    (`supersession_intent`), which is where the refusal to call a rollback an update lives.
+    """
+
+    operation = "marketplace.update"
+    runtime = load_runtime_configuration(request, content_required=True)
+    if isinstance(runtime, Err):
+        return _emit_error(request, runtime, operation)
+    effective = runtime.value.loaded.effective
+    registry_aliases = {
+        source.alias
+        for source in effective.configuration.sources
+        if source.enabled and source.kind is SourceKind.REGISTRY_GIT
+    }
+    if not registry_aliases:
+        return None
+    if selectors and _configured_registry_selection(selectors, effective) is None:
+        return None
+
+    project_root, user_home = resolved_paths(
+        data_root=runtime.value.paths.data_root,
+        project=request.project,
+        user_home=request.user_home,
+    )
+    scope = Scope(request.scope)
+    inspected = read_installed_inspections(
+        state_root=os.path.join(runtime.value.paths.data_root, "state"),
+        harness_root=project_root if scope is Scope.PROJECT else user_home,
+        credential_providers=(MacOsKeychainProvider(),) if sys.platform == "darwin" else (),
+        scope=scope,
+        profiles=tuple(request.profiles),
+    )
+    if isinstance(inspected, Err):
+        return _emit_error(request, inspected, operation)
+    installed = tuple(
+        item
+        for item in inspected.value.inspections
+        if item.record.coordinate.source in registry_aliases
+        and (
+            not selectors
+            or any(_status_matches(selector, item.coordinate) for selector in selectors)
+        )
+    )
+    if not installed:
+        return None
+
+    try:
+        selection = ArtifactSelection(
+            tuple(
+                ArtifactRequest(
+                    item.record.coordinate.artifact,
+                    VersionConstraint(_pinned_version(selectors, item.coordinate) or "*"),
+                    item.record.coordinate.source,
+                )
+                for item in installed
+            )
+        )
+    except ValueError:
+        return None
+    previous = tuple(
+        (replace(item.record.coordinate, version=None), item.desired) for item in installed
+    )
+    receipts = tuple((item.record.coordinate, item.record.receipt) for item in installed)
+    return _configured_lifecycle(request, operation, runtime.value, selection, previous, receipts)
+
+
+def _pinned_version(selectors: tuple[ArtifactSelector, ...], coordinate: str) -> str | None:
+    """The version somebody asked for by name, if they asked for one at all."""
+
+    for selector in selectors:
+        if _status_matches(selector, coordinate) and selector.version:
+            return selector.version
+    return None
 
 
 def _status_matches(selector: ArtifactSelector, coordinate: str) -> bool:
@@ -1244,6 +1367,10 @@ def _lifecycle(request: Request, action: str) -> int:
         return _emit_error(request, selection, operation)
     if action == "install":
         configured = _configured_install(request, selection.value)
+        if configured is not None:
+            return configured
+    if action == "update":
+        configured = _configured_update(request, selection.value)
         if configured is not None:
             return configured
     if action == "status":
