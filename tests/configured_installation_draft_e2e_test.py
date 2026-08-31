@@ -51,15 +51,27 @@ from tests.promotion_planning_test import _entry, _evidence
 KEYCHAIN = CredentialProviderRef("macos-keychain", "aart/mcp/github", "default")
 
 
-def _published_registry() -> SourceSnapshot:
+#: One MCP server, as an author's repository holds it before anything compiles it.
+AUTHORED_MCP: tuple[tuple[str, str], ...] = (
+    ("github/aart.json", json.dumps(MANIFEST)),
+    ("github/server.py", SERVER_SOURCE),
+    ("github/requirements.txt", "# no third-party packages\n"),
+)
+
+
+def _published_registry(authored: tuple[tuple[str, str], ...] = AUTHORED_MCP) -> SourceSnapshot:
+    """Take an author's files all the way to a published registry snapshot.
+
+    Every step is the real one -- compile, scan, assess, promote, publish -- because the point of
+    the fixture is that what an install resolves is what a registry approved, not a value this test
+    handed it. `authored` is a parameter so the same path can carry an artifact a harness reads;
+    nothing else about the pipeline changes for one.
+    """
+
     compiled = compile_author_snapshot(
         SourceSnapshot(
             SnapshotOrigin.IMMUTABLE_GIT,
-            (
-                _entry("github/aart.json", json.dumps(MANIFEST)),
-                _entry("github/server.py", SERVER_SOURCE),
-                _entry("github/requirements.txt", "# no third-party packages\n"),
-            ),
+            tuple(_entry(path, content) for path, content in authored),
         ),
         source_alias=SourceAlias("authors"),
         source="https://git.example/servers.git",

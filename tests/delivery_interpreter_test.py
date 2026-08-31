@@ -105,6 +105,8 @@ class DeliveryInterpreterTest(_Delivers, unittest.TestCase):
     def test_withdrawing_takes_back_what_was_delivered(self) -> None:
         interpreter = self._interpreter()
         self.assertIsInstance(interpreter.apply(self._deliver()), Ok)
+        self.destination.chmod(0o500)
+        self.assertEqual(0, os.stat(self.destination).st_mode & 0o200)
         withdraw = WithdrawArtifact(
             "claude", "skill/code-review", str(self.destination), DeliveryKind.TREE
         )
@@ -127,6 +129,21 @@ class DeliveryInterpreterTest(_Delivers, unittest.TestCase):
         )
         self.assertIsInstance(interpreter.apply(withdraw), Ok)
         self.assertTrue(neighbour.is_dir())
+
+    def test_withdrawing_a_symlink_removes_only_the_link(self) -> None:
+        target = self.base / "somebody-elses-skill"
+        target.mkdir()
+        (target / "SKILL.md").write_text("still theirs\n", encoding="utf-8")
+        self.destination.parent.mkdir(parents=True)
+        self.destination.symlink_to(target, target_is_directory=True)
+        withdraw = WithdrawArtifact(
+            "claude", "skill/code-review", str(self.destination), DeliveryKind.TREE
+        )
+
+        self.assertIsInstance(self._interpreter().apply(withdraw), Ok)
+
+        self.assertFalse(self.destination.exists())
+        self.assertEqual("still theirs\n", (target / "SKILL.md").read_text(encoding="utf-8"))
 
 
 class DeliveryDispatchTest(_Delivers, unittest.TestCase):

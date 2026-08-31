@@ -451,7 +451,14 @@ absent from every application value and serialized/drawn surface.
 **Classification: CRITICAL PATH.** Reclassified from backlog on evidence, per the rule that an item
 becomes critical when it can be shown that a critical-path slice cannot complete without it.
 
-The canonical install pipeline refuses any artifact that does not declare a launch contract:
+**Status: COMPLETED and verified.** `PlacedArtifactReceipt`, delivery effects, receipt persistence,
+observation, placement/interpreter composition and the configured action now carry Skills and
+guidelines. A real authored Skill crosses compile/scan/promote/publish, configured resolution,
+review, execution, durable reload, drift detection and reverse uninstall. Hooks and shared-file
+memory remain B-034 because they require merge semantics rather than replacement delivery.
+
+Before B-033, the canonical install pipeline refused any artifact that did not declare a launch
+contract:
 
 - `plan_artifact_installation` returns `INSTALLATION_NOT_DESCRIBED` when `description.contract is
   None` -- "does not declare how it starts, so there is no launcher to generate and nothing for a

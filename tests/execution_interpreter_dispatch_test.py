@@ -198,5 +198,43 @@ class TwoArtifactDispatchTest(unittest.TestCase):
         self.assertIsInstance(applied, Ok, getattr(applied, "diagnostics", ()))
 
 
+class OwnedPathRemovalTest(unittest.TestCase):
+    def setUp(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.base = pathlib.Path(temporary.name).resolve()
+        self.environment = ArtifactEnvironment(
+            "skill/code-review", str(self.base / "runtimes/skill/code-review")
+        )
+        self.interpreter = FileEffectInterpreter(self.environment)
+
+    def test_recursive_removal_takes_back_an_owned_read_only_tree(self) -> None:
+        payload = pathlib.Path(self.environment.payload)
+        nested = payload / "reference"
+        nested.mkdir(parents=True)
+        (nested / "style.md").write_text("guide\n", encoding="utf-8")
+        nested.chmod(0o500)
+        payload.chmod(0o500)
+
+        result = self.interpreter.apply(RemoveOwnedPath(str(payload), recursive=True))
+
+        self.assertIsInstance(result, Ok)
+        self.assertFalse(payload.exists())
+
+    def test_recursive_removal_does_not_follow_a_symlink_inside_the_owned_tree(self) -> None:
+        payload = pathlib.Path(self.environment.payload)
+        payload.mkdir(parents=True)
+        outside = self.base / "somebody-elses-tree"
+        outside.mkdir()
+        (outside / "keep.md").write_text("theirs\n", encoding="utf-8")
+        (payload / "linked").symlink_to(outside, target_is_directory=True)
+        payload.chmod(0o500)
+
+        result = self.interpreter.apply(RemoveOwnedPath(str(payload), recursive=True))
+
+        self.assertIsInstance(result, Ok)
+        self.assertEqual("theirs\n", (outside / "keep.md").read_text(encoding="utf-8"))
+
+
 if __name__ == "__main__":
     unittest.main()

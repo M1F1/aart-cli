@@ -96,29 +96,38 @@ that flow and execution, plus composition of real Marketplace and installed-stat
    install, refusals reported in the envelope rather than as a crash, `--json` and text carrying one
    review digest, and fail-closed review that finalizes nothing and writes nothing while still
    carrying the digest a later invocation must match.
-6. **BLOCKED on B-033, which is now in progress.** Route the default TTY and retire legacy
+6. **IN PROGRESS; B-033 is complete.** Route the default TTY and retire legacy
    consumer semantic authority (`consumer/application.py`, `installation/*`, `setup_engine/*`,
    `lifecycle/application.py`) path by path, each removal preceded by a public-flow test proving
    the canonical path already carries it.
 
    The canonical pipeline refused any artifact that declares no launch contract, so Skills,
    guidelines, hooks and memory could not be planned, executed or recorded through it at all.
-   B-033 closes that, and its increment table lives in the CP-13 slice file. What exists now: a
+   B-033 closes that, and its completed increment table lives in the CP-13 slice file. What exists
+   now: a
    `PlacedArtifactReceipt` with no launcher field to leave empty; `DeliverArtifact`/
    `WithdrawArtifact` at `CONFIGURATION_MUTATION`, so a policy ceiling that refuses to register an
    MCP server also refuses writing a Skill into the directory that harness reads (D-077); a
    `DeliveryEffectInterpreter` bound to the deliveries it may make; `plan_artifact_placement`,
    which refuses anything that starts a process, declares dependencies nothing would load or names
    a secret with no launcher to resolve it into; `DELIVERY_TARGETS`, measured per harness, scope
-   and kind; and `package_delivery`, which reads what a package offers a harness back out of the
-   package. What remains: the receipt store, observation, `placement_for`/`interpreters_for`, and
-   a real authored Skill installed end to end.
+   and kind; `package_delivery`, which reads what a package offers a harness back out of the
+   package; a receipt-store codec and machine reader for placed installations; placement-aware
+   observation, resolution and interpreter composition; and a real authored Skill taken from its
+   author tree through promotion, configured resolution, review, installation, durable reload,
+   drift detection and uninstall. Withdrawal restores owner access only inside the exact read-only
+   tree it is removing and never follows a symlink (D-078).
 
-   Hooks and shared-file memory are deliberately outside B-033 (B-034): a hook is a script plus an
-   entry merged into a settings file, and every measured memory target is a delimited block in a
-   file the user owns. Delivery replaces its destination, so using it for either would destroy the
-   file it merged into. That order -- MCP, skills, guidelines/rules, memory, hooks -- is the
-   Product Specification's own.
+   The next executable work is the first public route from item 4: switch the characterized
+   `install` seam for MCP and delivered artifacts to the one configured action adapter, preserving
+   its review digest and output envelope. Then switch `status`, `update` and `uninstall` one seam at
+   a time with their existing public-flow tests green before removing any legacy authority.
+
+   Hooks and shared-file memory are deliberately outside completed B-033 (B-034): a hook is a
+   script plus an entry merged into a settings file, and every measured memory target is a
+   delimited block in a file the user owns. Delivery replaces its destination, so using it for
+   either would destroy the file it merged into. That order -- MCP, skills, guidelines/rules,
+   memory, hooks -- is the Product Specification's own.
 7. Update the CP-13 coverage table as each command and screen group moves from projection to live
    public flow.
 

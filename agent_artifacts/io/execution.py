@@ -17,6 +17,7 @@ from __future__ import annotations
 import hashlib
 import os
 import shutil
+import stat
 from typing import Mapping
 
 from agent_artifacts.domain.credentials import CredentialReference
@@ -84,6 +85,22 @@ def _restrict(path: str) -> None:
         for name in files:
             own(os.path.join(current, name))
         own(current)
+
+
+def _make_tree_removable(path: str) -> None:
+    """Restore owner access only inside one exact tree immediately before removal.
+
+    Installed and delivered trees may intentionally be read-only. Recursive removal still needs
+    owner write and search permission on each directory. Directory symlinks are never followed or
+    changed: they remain leaves for ``shutil.rmtree``.
+    """
+
+    os.chmod(path, os.lstat(path).st_mode | stat.S_IRWXU)
+    for current, directories, _files in os.walk(path, followlinks=False):
+        for name in directories:
+            child = os.path.join(current, name)
+            if not os.path.islink(child):
+                os.chmod(child, os.lstat(child).st_mode | stat.S_IRWXU)
 
 
 def _error(code: DiagnosticCode, message: str) -> Err:
@@ -230,6 +247,7 @@ class FileEffectInterpreter:
                 and os.path.isdir(effect.destination)
                 and not os.path.islink(effect.destination)
             ):
+                _make_tree_removable(effect.destination)
                 shutil.rmtree(effect.destination)
             elif os.path.isdir(effect.destination) and not os.path.islink(effect.destination):
                 os.rmdir(effect.destination)
@@ -467,6 +485,7 @@ class DeliveryEffectInterpreter:
             return Ok(None)
         try:
             if os.path.isdir(destination) and not os.path.islink(destination):
+                _make_tree_removable(destination)
                 shutil.rmtree(destination)
             else:
                 os.unlink(destination)

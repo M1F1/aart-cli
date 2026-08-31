@@ -306,7 +306,7 @@ own launcher after a repair planned from disk alone, and no stored file contains
   receipts, actions and local inspection. The attempted default route was reverted when
   characterization showed the shell is not yet an actionable replacement (D-061, D-062).
 
-## B-033 — kind-neutral canonical installation (in progress)
+## B-033 — kind-neutral canonical installation (verified)
 
 The canonical pipeline required a launcher, an interpreter and a transport of every installation, so
 four of the five artifact kinds could not be planned, executed or recorded through it. Step 6 cannot
@@ -321,10 +321,10 @@ Specification itself gives (MCP, skills, guidelines/rules, memory, hooks):
 | 4 | `PlannedPlacement` and `plan_artifact_placement`, refusing anything that starts a process | DONE |
 | 5 | `DELIVERY_TARGETS`: measured delivery locations per harness, scope and kind | DONE |
 | 6 | `package_delivery`: what a compiled package offers a harness, read back from the package | DONE |
-| 7 | Persisting and reading back a placed receipt in the receipt store | TODO |
-| 8 | Observing a placed artifact, and its current state for reconciliation | TODO |
-| 9 | `placement_for` and `interpreters_for` carrying placements | TODO |
-| 10 | A real authored Skill installed, recorded, re-read and uninstalled end to end | TODO |
+| 7 | Persisting and reading back a placed receipt in the receipt store | DONE |
+| 8 | Observing a placed artifact, and its current state for reconciliation | DONE |
+| 9 | `placement_for` and `interpreters_for` carrying placements | DONE |
+| 10 | A real authored Skill installed, recorded, re-read and uninstalled end to end | DONE |
 
 Hooks and shared-file memory are deliberately not in this list. A hook is a script plus an entry
 merged into a settings file, and every measured memory target is a delimited block inside a file the
@@ -333,15 +333,11 @@ destination, so using it for either would destroy the file it merged into.
 
 ## Remaining
 
-- Implement the production action handler over placement, `offer_installation`,
-  `begin_installation`, CP-12 execution, durable recording and machine reload. The application half
-  is now one verified operation (D-074), over object-store placement and root/target policy,
-  interpreter assembly (D-073), execution and recording (D-064), and the screens that draw the
-  result (D-065). The remaining adapter must supply approved Selection resolution and screen-07
-  input sources/provider entry, then reload the machine (D-066, B-032).
-- Preserve/adapt existing kind-neutral project/user install state before retrying the default
-  route. Configured Marketplace composition is done (D-068); Collections still do not cross that
-  seam (B-031).
+- Route the public `install` seam through the configured action adapter for MCP and delivered
+  artifacts, preserving the characterized review/output contract; then move `status`, `update` and
+  `uninstall` one seam at a time. The adapter already supplies approved Selection resolution,
+  screen-07 input sources, placement, capability-bound interpreters, execution, durable recording
+  and machine reload (D-074–D-078).
 - Route public commands through the same handler/application boundary.
 - Step 6: retiring legacy consumer semantic authority, once the above give equivalent public-flow
   evidence.
@@ -356,10 +352,10 @@ destination, so using it for either would destroy the file it merged into.
   built without it keeps the old behavior rather than failing, which is what let the field be added
   without rewriting every construction site; the one that matters is filled by
   `plan_artifact_installation` from the package's own description.
-- The canonical shell now emits and transports install/update/repair/uninstall action requests and
-  composes real Marketplace offers, but it still has no production handler and no adapter for
-  existing project/user installation records, and its Collections come from no live source (B-031).
-  The legacy public entry remains until those replacement facts are proven (D-062, D-063).
+- The canonical shell now emits and transports install/update/repair/uninstall action requests,
+  composes real Marketplace offers and can use one configured production adapter, but no public
+  entry invokes that adapter yet and its Collections come from no live source (B-031). The legacy
+  public entry remains until each characterized seam is routed and proven (D-062, D-063, D-076).
 
 ## Backlog discoveries
 
@@ -397,23 +393,22 @@ machine-output tests prove every accepted flow now consumes the canonical applic
 - Current working state: steps 1–4 complete and verified; step 5 has a durable machine reader that
   also sees legacy project/user manifests, a composed Marketplace, an action-capable reducer, an
   injected/fail-closed shell boundary, object-store placement and a capability-bound transaction
-  interpreter assembler and one application action from offer through recording, but no production
-  adapter connecting configured Selection/input sources and machine reload; step 6 has not started.
-  The legacy wizard and command authority remain public by design (D-062, D-063, D-073, D-074).
-- B-033 is in progress and is what step 6 waits on for four of the five kinds; its increment table
-  above is the current state. Increments 1-6 are committed and verified under `make check`; the
-  delivered kinds are Skills and guidelines, and hooks and shared-file memory wait on B-034.
-- Exact next action: characterize the adapter that converts a configured approved Marketplace
-  Selection into `ResolvedSelection` plus placements and safe screen-07 input sources, calls the
-  D-074 action through `interpreters_for`, and reloads the machine. Then route the public consumer
-  commands (`install`, `update`, `uninstall`, `status`) and canonical shell through that boundary
-  without duplicating its composition. B-030 is done, the configured Marketplace is composed
-  (D-068), and existing project/user install records are visible as unadopted installations (D-069).
+  interpreter assembler, and one configured production action from approved Selection and safe
+  screen-07 inputs through review, recording and machine reload. Step 6 has not routed a public seam
+  yet. The legacy wizard and command authority remain public by design (D-062, D-063, D-073–D-078).
+- B-033 is complete: all ten increments are verified, and an authored Skill now crosses the real
+  promotion/configured-action path, is recorded and re-read, reports delivery drift and uninstalls
+  without touching a neighboring Skill. Skills and guidelines are the delivered kinds; hooks and
+  shared-file memory wait on B-034.
+- Exact next action: route the public `install` seam through the configured action adapter for MCP,
+  Skills and guidelines while preserving the item-5 review/output characterization. Then route
+  `status`, `update`, `uninstall` and the canonical shell through that same boundary without
+  duplicating its composition.
 - Do not undo: existing curses layout/search/basket/back/quit characterization; one semantic plan
   for both profiles; Maintainer Mode remains opt-in; `key_event` stays the only place a key's
   meaning is decided; no clock in `application/`; the legacy roots stay required arguments of
   `read_consumer_machine`, and an unadopted installation stays in the one Installed list with no
   offered action rather than moving to a band of its own (D-069).
-- Tests last run/results: 2,599 unit tests (including 120 E2E), 83.50% coverage, all ten quality
+- Tests last run/results: 2,731 unit tests (including E2E; 1 skipped), 83.53% coverage, all quality
   gates green (`make quality PYTHON=python3`). CP-12 baseline was 2,196 unit + 65 E2E at 83.25%.
 - Failure evidence: three defects found by tests are listed under Characterization / RED evidence.

@@ -235,9 +235,7 @@ class DeliveredPlacementTest(unittest.TestCase):
         self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
         (delivery,) = placed.value.deliveries
         self.assertEqual("claude", delivery.harness)
-        self.assertEqual(
-            f"{self.harness}/.claude/skills/code-review", delivery.destination
-        )
+        self.assertEqual(f"{self.harness}/.claude/skills/code-review", delivery.destination)
         self.assertIs(DeliveryKind.TREE, delivery.kind)
 
     def test_the_delivery_is_made_from_the_copy_this_install_owns(self) -> None:

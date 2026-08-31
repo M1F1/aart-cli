@@ -1142,3 +1142,21 @@ the Product Specification first instead of hiding the change here.
   No `LAUNCHER` component is emitted for a placed artifact rather than an empty one: a reconciler
   comparing components would read a missing launcher as drift and repair it into a process nobody
   installed.
+
+## D-078 — Permission hardening must remain reversibly owned
+
+- **Decision:** immediately before recursively removing an AART-owned payload or an exact
+  capability-bound harness delivery, restore owner read/write/search bits on directories inside
+  that tree. Do not follow or chmod directory symlinks, and never change the parent directory or a
+  sibling. File contents and permissions outside the named tree remain untouched.
+- **Status:** accepted.
+- **Reason:** promoted object trees and their delivered copies may deliberately retain read-only
+  owner modes. On macOS, recursive removal then fails at the first child because deleting a
+  directory entry requires write permission on its parent. The effect had already passed its
+  ownership/capability check, but AART's own hardening made a reviewed uninstall impossible and
+  left a half-removed installation.
+- **Consequence:** permission restoration is a removal implementation detail, not a new effect or a
+  widened authority. A delivery interpreter can alter only the destinations it was constructed
+  with, and a file interpreter only paths its `ArtifactEnvironment` owns. Tests freeze nested trees
+  read-only, preserve neighboring harness artifacts and prove symlink targets survive both removal
+  paths.
