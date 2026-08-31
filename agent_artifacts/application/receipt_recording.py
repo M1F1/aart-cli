@@ -7,7 +7,8 @@ An action that took effect is recorded even when it did not finish: its leftover
 machine either way, and a record is what makes them somebody's -- drift a repair can find rather
 than files nothing knows about.  An action that took no effect leaves the store exactly as it was.
 A rolled-back update leaves the record it already had standing, because the previous installation
-is the one that is still true.
+is the one that is still true.  An uninstall that retained the artifact removed nothing, so it
+narrows who owns the record rather than forgetting it.
 
 The store is a port. This module decides; the adapter writes.
 """
@@ -21,6 +22,7 @@ from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Sever
 from agent_artifacts.domain.identifiers import ArtifactCoordinate
 from agent_artifacts.domain.receipts import InstallationReceipt
 from agent_artifacts.domain.result import Err, Ok, Result
+from agent_artifacts.domain.selection import OwnershipReason
 
 from .consumer_views import ActivityRecord, ReceiptDetailView, project_receipt_detail
 from .execution import ExecutionStatus, LifecycleExecutionOutcome, LifecycleExecutionStatus
@@ -45,7 +47,11 @@ class ReceiptStorePort(Protocol):
     """Somewhere a receipt outlives this process."""
 
     def record_installation(
-        self, coordinate: ArtifactCoordinate, receipt: InstallationReceipt
+        self,
+        coordinate: ArtifactCoordinate,
+        receipt: InstallationReceipt,
+        *,
+        ownership: tuple[OwnershipReason, ...] | None = None,
     ) -> Result[str]: ...
 
     def forget_installation(self, coordinate: ArtifactCoordinate) -> Result[str]: ...
@@ -98,8 +104,11 @@ def record_lifecycle_outcome(
     if not isinstance(outcome, LifecycleExecutionOutcome):
         return _error("recording needs a lifecycle execution outcome")
     coordinate = outcome.plan.repair.artifact
-    uninstalling = outcome.plan.intent.kind is LifecycleIntentKind.UNINSTALL
-    keeping = not uninstalling and _keeps_installation(outcome)
+    intent = outcome.plan.intent
+    # An uninstall that retained the artifact removed nothing: something else still owns it, so
+    # the record stays and only who owns it narrows.
+    releasing = intent.kind is LifecycleIntentKind.UNINSTALL and not intent.retained
+    keeping = not releasing and _keeps_installation(outcome)
     installed = receipt if keeping and isinstance(receipt, InstallationReceipt) else None
     if keeping and installed is None:
         return _error(
@@ -114,13 +123,19 @@ def record_lifecycle_outcome(
     if isinstance(action, Err):
         return action
 
-    if uninstalling and outcome.primary.status is ExecutionStatus.CONVERGED:
+    if releasing and outcome.primary.status is ExecutionStatus.CONVERGED:
         forgotten = store.forget_installation(coordinate)
         if isinstance(forgotten, Err):
             return forgotten
         return Ok(RecordedOutcome(detail, action.value, forgotten=True))
     if installed is not None:
-        recorded = store.record_installation(coordinate, installed)
+        # The intent is the authority on who wants this. An action with no opinion about
+        # ownership says so, rather than recording the nothing it happens to carry.
+        recorded = store.record_installation(
+            coordinate,
+            installed,
+            ownership=intent.resulting_ownership if intent.establishes_ownership else None,
+        )
         if isinstance(recorded, Err):
             return recorded
         return Ok(RecordedOutcome(detail, action.value, recorded.value))

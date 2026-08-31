@@ -48,9 +48,12 @@ from agent_artifacts.domain.reconciliation import (
     ObservedComponent,
 )
 from agent_artifacts.domain.result import Err, Ok, Result
+from agent_artifacts.domain.selection import OwnershipKind, OwnershipReason
 
 MOMENT = "2026-08-31T14:32:00+00:00"
 ROOT = "/opt/agents/mcp/github"
+DIRECT = OwnershipReason(OwnershipKind.DIRECT, "public/mcp/github@1.6.0")
+KIT = OwnershipReason(OwnershipKind.COLLECTION, "public/collection/data-scientist@1.0.0")
 LAUNCHER = ComponentId(Component.LAUNCHER)
 HARNESS = ComponentId(Component.HARNESS, "tabnine")
 
@@ -101,14 +104,22 @@ class FakeStore:
 
     def __init__(self, *, failing: bool = False) -> None:
         self.installations: dict[str, InstallationReceipt] = {}
+        self.ownership: dict[str, tuple[OwnershipReason, ...] | None] = {}
         self.forgotten: list[str] = []
         self.actions: list[object] = []
         self.failing = failing
 
-    def record_installation(self, key: ArtifactCoordinate, value: InstallationReceipt):
+    def record_installation(
+        self,
+        key: ArtifactCoordinate,
+        value: InstallationReceipt,
+        *,
+        ownership: tuple[OwnershipReason, ...] | None = None,
+    ):
         if self.failing:
             return Err((Diagnostic(DiagnosticCode("store-refused"), Severity.ERROR, "no"),))
         self.installations[str(key)] = value
+        self.ownership[str(key)] = ownership
         return Ok(f"/store/{key}.json")
 
     def forget_installation(self, key: ArtifactCoordinate) -> Result[str]:
@@ -145,6 +156,40 @@ class RecordingTest(unittest.TestCase):
         store = FakeStore() if store is None else store
         recorded = record_lifecycle_outcome(outcome, recorded_at=MOMENT, store=store, **kwargs)
         return store, recorded
+
+    def test_an_install_records_who_asked_for_the_artifact(self):
+        outcome = self.outcome(install_intent(desired(), ownership=(KIT, DIRECT)))
+
+        store, recorded = self.record(outcome, receipt=receipt())
+
+        self.assertIsInstance(recorded, Ok, getattr(recorded, "diagnostics", ()))
+        self.assertEqual(store.ownership[str(coordinate())], (KIT, DIRECT))
+
+    def test_a_repair_says_nothing_about_who_owns_the_artifact_it_repaired(self):
+        """A repair is about the machine, not about who wants the artifact.
+
+        Passing the ownership it happens to know -- which for a repair is none -- would let fixing
+        a launcher quietly release a Collection's claim, and the next uninstall would then delete
+        an artifact something else still needs.
+        """
+
+        outcome = self.outcome(repair_intent(desired()))
+
+        store, recorded = self.record(outcome, receipt=receipt())
+
+        self.assertIsInstance(recorded, Ok, getattr(recorded, "diagnostics", ()))
+        self.assertIsNone(store.ownership[str(coordinate())])
+
+    def test_an_uninstall_that_retained_the_artifact_records_what_is_still_owed_on_it(self):
+        intent = uninstall_intent(desired(), removal(), ownership=(KIT, DIRECT), release=(DIRECT,))
+
+        store, recorded = self.record(
+            self.outcome(intent, state=ComponentState.MATCHED, converged=True), receipt=receipt()
+        )
+
+        self.assertIsInstance(recorded, Ok, getattr(recorded, "diagnostics", ()))
+        self.assertEqual(store.forgotten, [])
+        self.assertEqual(store.ownership[str(coordinate())], (KIT,))
 
     def test_every_finished_action_reaches_the_timeline_including_the_ones_that_failed(self):
         outcome = self.outcome(

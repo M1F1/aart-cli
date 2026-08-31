@@ -584,3 +584,21 @@ the Product Specification first instead of hiding the change here.
 - **Consequence:** the Fast/Verbose invariant is now asserted on the screen a person actually
   confirms from — a property test drives generated plans through `render_ready` and requires every
   risk the plan carries and every remediation it decided to be named there.
+
+## D-050 — Why an artifact is installed is recorded beside what it left behind
+- **Decision:** `InstalledRecord` is a value of coordinate, receipt and `ownership`, persisted
+  together by `LocalReceiptStore`. Ownership stays outside `InstallationReceipt`. Only intents that
+  speak to ownership set it (`establishes_ownership`: install, update, downgrade, uninstall); every
+  other action records `ownership=None`, which the store reads as "carry forward what is there".
+  An empty tuple is an opinion — nobody owns this — and replaces what was recorded.
+- **Status:** accepted.
+- **Reason:** ownership-aware uninstall is an accepted invariant (161.6), and the process that
+  removes an artifact is rarely the one that installed it. Without persistence a later uninstall
+  either deletes an artifact another Collection still needs or retains everything forever. It does
+  not belong *inside* the receipt because the two answer different questions: a receipt records the
+  effects that ran, while ownership comes from the Selection that asked and changes when another
+  Collection starts or stops needing the artifact, with no effect running at all.
+- **Consequence:** a repair cannot silently release a Collection's claim by carrying the nothing it
+  happens to know. An uninstall that retained the artifact now narrows the record's ownership
+  instead of forgetting it — a defect the test found: the recorder forgot the installation on any
+  converged uninstall, including one that deliberately removed nothing.

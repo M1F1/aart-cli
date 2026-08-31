@@ -41,6 +41,7 @@ from agent_artifacts.domain.receipts import (
     installation_receipt_to_data,
 )
 from agent_artifacts.domain.result import Err, Ok, Result
+from agent_artifacts.domain.selection import OwnershipKind, OwnershipReason
 from agent_artifacts.domain.serialization import CanonicalValue, canonical_json_bytes
 
 __all__ = [
@@ -58,7 +59,20 @@ RECEIPT_UNWRITABLE = DiagnosticCode("receipt-unwritable")
 _MAX_RECEIPT_BYTES = 1024 * 1024
 _KINDS: frozenset[str] = frozenset({"skill", "guideline", "mcp", "hook", "memory", "collection"})
 
-InstalledRecord = tuple[ArtifactCoordinate, InstallationReceipt]
+
+@dataclass(frozen=True, slots=True)
+class InstalledRecord:
+    """One recorded installation: what it left behind, and why it is there.
+
+    Ownership is kept beside the receipt rather than inside it because the two answer different
+    questions and are established at different times. A receipt records the effects that ran; the
+    reasons an artifact is installed come from the Selection that asked for it, and they change
+    when another Collection starts or stops needing it without any effect running at all.
+    """
+
+    coordinate: ArtifactCoordinate
+    receipt: InstallationReceipt
+    ownership: tuple[OwnershipReason, ...] = ()
 
 
 def _error(code: DiagnosticCode, message: str) -> Err:
@@ -87,6 +101,31 @@ def _coordinate_from_data(data: object) -> ArtifactCoordinate:
         raise ValueError("a stored coordinate version must be a string or absent")
     identity = cast("ArtifactKind", kind)
     return ArtifactCoordinate(SourceAlias(source), ArtifactIdentity(identity, name), version)
+
+
+def _ownership_to_data(ownership: tuple[OwnershipReason, ...]) -> list[dict[str, object]]:
+    return [{"kind": item.kind.value, "owner": item.owner} for item in ownership]
+
+
+def _ownership_from_data(data: object) -> tuple[OwnershipReason, ...]:
+    if data is None:
+        return ()
+    if not isinstance(data, list):
+        raise ValueError("recorded ownership must be a list")
+    reasons = []
+    for item in data:
+        if not isinstance(item, dict):
+            raise ValueError("an ownership reason must be a mapping")
+        try:
+            kind = OwnershipKind(str(item["kind"]))
+            reasons.append(OwnershipReason(kind, str(item["owner"])))
+        except KeyError as error:
+            raise ValueError(f"an ownership reason is missing {error.args[0]}") from None
+        except ValueError:
+            # A kind this build does not know is refused rather than dropped: an owner nobody can
+            # name is an owner uninstall would quietly ignore.
+            raise ValueError(f"{item['kind']} is not an ownership this build understands") from None
+    return tuple(reasons)
 
 
 def _canonical(document: Mapping[str, object]) -> bytes:
@@ -180,12 +219,32 @@ class LocalReceiptStore:
         return str(Path(self.installations_directory) / f"{name}.json")
 
     def record_installation(
-        self, coordinate: ArtifactCoordinate, receipt: InstallationReceipt
+        self,
+        coordinate: ArtifactCoordinate,
+        receipt: InstallationReceipt,
+        *,
+        ownership: tuple[OwnershipReason, ...] | None = None,
     ) -> Result[str]:
+        """Record what one installation left behind, and optionally who owns it.
+
+        `ownership=None` means this action has no opinion: whatever was already recorded is carried
+        forward. An empty tuple is an opinion -- that nobody owns this any more -- and replaces it.
+        """
+
         if not isinstance(receipt, InstallationReceipt):
             return _error(RECEIPT_UNWRITABLE, "an installation record needs a receipt")
+        if ownership is not None and any(
+            not isinstance(item, OwnershipReason) for item in ownership
+        ):
+            return _error(RECEIPT_UNWRITABLE, "an installation is owned by ownership reasons")
+        if ownership is None:
+            standing = self.record(coordinate)
+            if isinstance(standing, Err) and standing.diagnostics[0].code is not RECEIPT_ABSENT:
+                return standing
+            ownership = () if isinstance(standing, Err) else standing.value.ownership
         document = {
             "coordinate": _coordinate_to_data(coordinate),
+            "ownership": _ownership_to_data(ownership),
             "receipt": installation_receipt_to_data(receipt),
         }
         return _write(Path(self.path_for(coordinate)), _canonical(document))
@@ -196,16 +255,22 @@ class LocalReceiptStore:
             return read
         try:
             coordinate = _coordinate_from_data(read.value.get("coordinate"))
+            ownership = _ownership_from_data(read.value.get("ownership"))
         except ValueError as error:
             return _error(RECEIPT_UNREADABLE, f"{path} names no artifact: {error}")
         parsed = installation_receipt_from_data(read.value.get("receipt"))
         if isinstance(parsed, Err):
             return _unreadable(path, parsed)
-        return Ok((coordinate, parsed.value))
+        return Ok(InstalledRecord(coordinate, parsed.value, ownership))
+
+    def record(self, coordinate: ArtifactCoordinate) -> Result[InstalledRecord]:
+        """One recorded installation in full: the receipt and why it is installed."""
+
+        return self._installed_record(Path(self.path_for(coordinate)))
 
     def installation(self, coordinate: ArtifactCoordinate) -> Result[InstallationReceipt]:
         record = self._installed_record(Path(self.path_for(coordinate)))
-        return record if isinstance(record, Err) else Ok(record.value[1])
+        return record if isinstance(record, Err) else Ok(record.value.receipt)
 
     def installations(self) -> Result[tuple[InstalledRecord, ...]]:
         """Every recorded installation, or the first reason one of them could not be read."""
@@ -216,7 +281,7 @@ class LocalReceiptStore:
             if isinstance(record, Err):
                 return record
             records.append(record.value)
-        return Ok(tuple(sorted(records, key=lambda item: str(item[0]))))
+        return Ok(tuple(sorted(records, key=lambda item: str(item.coordinate))))
 
     def forget_installation(self, coordinate: ArtifactCoordinate) -> Result[str]:
         path = Path(self.path_for(coordinate))

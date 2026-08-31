@@ -101,6 +101,25 @@ class LifecycleIntent:
     def retained(self) -> bool:
         return self.kind is LifecycleIntentKind.UNINSTALL and bool(self.retained_ownership)
 
+    @property
+    def establishes_ownership(self) -> bool:
+        """Whether this action decides who wants the artifact, or only what state it is in.
+
+        A repair, a reconfiguration and a credential rotation are about the machine. They carry no
+        ownership because they have no opinion about it, and reading that silence as "nobody wants
+        this" would let fixing a launcher release a Collection's claim on the artifact.
+        """
+
+        return self.kind in _OWNERSHIP_INTENTS
+
+    @property
+    def resulting_ownership(self) -> tuple[OwnershipReason, ...]:
+        """Who owns the artifact once this action has run."""
+
+        if self.kind is LifecycleIntentKind.UNINSTALL:
+            return self.retained_ownership
+        return self.ownership
+
 
 @dataclass(frozen=True, slots=True)
 class LifecyclePlan:
@@ -156,6 +175,17 @@ class CollectionHealth:
         )
 
 
+#: The intents that speak to who wants an artifact. The rest change only what is true of it.
+_OWNERSHIP_INTENTS = frozenset(
+    {
+        LifecycleIntentKind.INSTALL,
+        LifecycleIntentKind.UPDATE,
+        LifecycleIntentKind.DOWNGRADE,
+        LifecycleIntentKind.UNINSTALL,
+    }
+)
+
+
 def _same_identity(previous: DesiredState, desired: DesiredState) -> None:
     before, after = previous.artifact, desired.artifact
     if before.source != after.source or before.artifact != after.artifact:
@@ -189,8 +219,10 @@ def _replace_components(
     return DesiredState(previous.artifact, tuple(by_id.values()))
 
 
-def install_intent(desired: DesiredState) -> LifecycleIntent:
-    return LifecycleIntent(LifecycleIntentKind.INSTALL, desired)
+def install_intent(
+    desired: DesiredState, *, ownership: tuple[OwnershipReason, ...] = ()
+) -> LifecycleIntent:
+    return LifecycleIntent(LifecycleIntentKind.INSTALL, desired, None, ownership)
 
 
 def repair_intent(desired: DesiredState) -> LifecycleIntent:
@@ -222,18 +254,28 @@ def harness_reconfiguration_intent(
     return LifecycleIntent(LifecycleIntentKind.HARNESS_RECONFIGURATION, desired, previous)
 
 
-def update_intent(previous: DesiredState, desired: DesiredState) -> LifecycleIntent:
+def update_intent(
+    previous: DesiredState,
+    desired: DesiredState,
+    *,
+    ownership: tuple[OwnershipReason, ...] = (),
+) -> LifecycleIntent:
     before, after = _versions(previous, desired)
     if not before < after:
         raise ValueError("an update must select a newer version")
-    return LifecycleIntent(LifecycleIntentKind.UPDATE, desired, previous)
+    return LifecycleIntent(LifecycleIntentKind.UPDATE, desired, previous, ownership)
 
 
-def downgrade_intent(previous: DesiredState, desired: DesiredState) -> LifecycleIntent:
+def downgrade_intent(
+    previous: DesiredState,
+    desired: DesiredState,
+    *,
+    ownership: tuple[OwnershipReason, ...] = (),
+) -> LifecycleIntent:
     before, after = _versions(previous, desired)
     if not after < before:
         raise ValueError("a downgrade must select an older version")
-    return LifecycleIntent(LifecycleIntentKind.DOWNGRADE, desired, previous)
+    return LifecycleIntent(LifecycleIntentKind.DOWNGRADE, desired, previous, ownership)
 
 
 def uninstall_intent(

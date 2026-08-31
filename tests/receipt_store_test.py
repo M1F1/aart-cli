@@ -37,10 +37,13 @@ from agent_artifacts.domain.receipts import (
     installation_receipt_to_data,
 )
 from agent_artifacts.domain.result import Err, Ok
+from agent_artifacts.domain.selection import OwnershipKind, OwnershipReason
 from agent_artifacts.io.receipt_store import RECEIPT_UNREADABLE, LocalReceiptStore
 from tests.consumer_activity_test import lifecycle_outcome
 
 COORDINATE = ArtifactCoordinate(SourceAlias("public"), ArtifactIdentity("mcp", "github"), "1.6.0")
+DIRECT = OwnershipReason(OwnershipKind.DIRECT, "public/mcp/github@1.6.0")
+KIT = OwnershipReason(OwnershipKind.COLLECTION, "public/collection/data-scientist@1.0.0")
 ROOT = "/opt/agents/.tabnine/agent/aart/mcp/github"
 TODAY = dt.date(2026, 8, 31)
 
@@ -139,8 +142,8 @@ class ReceiptStoreTest(unittest.TestCase):
 
         self.assertIsInstance(listed, Ok, getattr(listed, "diagnostics", ()))
         self.assertEqual(len(listed.value), 1)
-        self.assertEqual(listed.value[0][0], COORDINATE)
-        self.assertTrue(listed.value[0][1].interpreter.endswith("other/python"))
+        self.assertEqual(listed.value[0].coordinate, COORDINATE)
+        self.assertTrue(listed.value[0].receipt.interpreter.endswith("other/python"))
 
     def test_an_artifact_nothing_installed_is_absent_rather_than_an_error(self):
         self.assertIsInstance(self.store.installation(COORDINATE), Err)
@@ -154,7 +157,7 @@ class ReceiptStoreTest(unittest.TestCase):
         self.assertIsInstance(self.store.forget_installation(COORDINATE), Ok)
 
         remaining = self.store.installations().value
-        self.assertEqual([item[0] for item in remaining], [other])
+        self.assertEqual([item.coordinate for item in remaining], [other])
 
     def test_a_corrupt_record_is_reported_rather_than_returned_as_an_installation(self):
         self.store.record_installation(COORDINATE, receipt())
@@ -167,6 +170,50 @@ class ReceiptStoreTest(unittest.TestCase):
         self.assertIsInstance(read, Err)
         self.assertEqual(read.diagnostics[0].code, RECEIPT_UNREADABLE)
         self.assertIsInstance(listed, Err)
+
+    def test_why_an_artifact_is_installed_is_recorded_beside_what_it_left_behind(self):
+        self.store.record_installation(COORDINATE, receipt(), ownership=(KIT, DIRECT))
+
+        listed = self.store.installations()
+
+        self.assertIsInstance(listed, Ok, getattr(listed, "diagnostics", ()))
+        self.assertEqual(listed.value[0].ownership, (KIT, DIRECT))
+        self.assertEqual(listed.value[0].coordinate, COORDINATE)
+        self.assertEqual(listed.value[0].receipt, receipt())
+
+    def test_an_installation_nobody_claimed_reads_back_owned_by_nobody(self):
+        self.store.record_installation(COORDINATE, receipt())
+
+        self.assertEqual(self.store.installations().value[0].ownership, ())
+
+    def test_a_record_rewritten_without_saying_who_owns_it_keeps_the_owners_it_had(self):
+        self.store.record_installation(COORDINATE, receipt(), ownership=(KIT,))
+
+        self.store.record_installation(COORDINATE, receipt(interpreter=f"{ROOT}/other/python"))
+
+        record = self.store.record(COORDINATE)
+        self.assertIsInstance(record, Ok, getattr(record, "diagnostics", ()))
+        self.assertEqual(record.value.ownership, (KIT,))
+        self.assertTrue(record.value.receipt.interpreter.endswith("other/python"))
+
+    def test_a_record_told_that_nobody_owns_it_says_nobody_owns_it(self):
+        self.store.record_installation(COORDINATE, receipt(), ownership=(KIT,))
+
+        self.store.record_installation(COORDINATE, receipt(), ownership=())
+
+        self.assertEqual(self.store.record(COORDINATE).value.ownership, ())
+
+    def test_ownership_that_is_not_ownership_is_refused_rather_than_dropped(self):
+        self.store.record_installation(COORDINATE, receipt(), ownership=(DIRECT,))
+        path = pathlib.Path(self.store.path_for(COORDINATE))
+        document = json.loads(path.read_text(encoding="utf-8"))
+        document["ownership"] = [{"kind": "borrowed", "owner": "somebody"}]
+        path.write_text(json.dumps(document), encoding="utf-8")
+
+        read = self.store.installations()
+
+        self.assertIsInstance(read, Err)
+        self.assertEqual(read.diagnostics[0].code, RECEIPT_UNREADABLE)
 
     def test_a_recorded_receipt_is_readable_only_by_its_owner(self):
         self.store.record_installation(COORDINATE, receipt())

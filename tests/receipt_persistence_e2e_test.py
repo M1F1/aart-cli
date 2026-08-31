@@ -24,6 +24,7 @@ from agent_artifacts.application.installed_state import (
     removal_state_from_receipt,
 )
 from agent_artifacts.application.intents import (
+    install_intent,
     plan_lifecycle_intent,
     repair_intent,
     uninstall_intent,
@@ -32,12 +33,15 @@ from agent_artifacts.application.receipt_recording import record_lifecycle_outco
 from agent_artifacts.domain.policies import EffectivePolicy
 from agent_artifacts.domain.reconciliation import Component, ComponentId, ComponentState
 from agent_artifacts.domain.result import Err, Ok
+from agent_artifacts.domain.selection import OwnershipKind, OwnershipReason
 from agent_artifacts.io.execution import LocalMutationLock
 from agent_artifacts.io.receipt_store import LocalReceiptStore
 from agent_artifacts.io.runtime_projection import observe_installation
 from tests.repair_e2e_test import COORDINATE, InstalledFixture
 
 TODAY = dt.date(2026, 8, 31)
+DIRECT = OwnershipReason(OwnershipKind.DIRECT, str(COORDINATE))
+KIT = OwnershipReason(OwnershipKind.COLLECTION, "public/collection/data-scientist@1.0.0")
 
 
 class ReceiptPersistenceTest(InstalledFixture):
@@ -84,20 +88,45 @@ class ReceiptPersistenceTest(InstalledFixture):
         self.assertIsInstance(executed, Ok, getattr(executed, "diagnostics", ()))
         return desired, executed.value
 
-    def uninstalled(self):
+    def installed(self, ownership: tuple[OwnershipReason, ...]):
+        """Record the installation the way a real install would: with who asked for it."""
+
+        desired = desired_state_from_receipt(
+            COORDINATE, self.receipt, base_interpreter=sys.executable
+        )
+
+        def inspect(_=None):
+            return self.inspect_for(desired)
+
+        planned = plan_lifecycle_intent(
+            install_intent(desired, ownership=ownership), inspect(), policy=EffectivePolicy()
+        )
+        self.assertIsInstance(planned, Ok, getattr(planned, "diagnostics", ()))
+        executed = execute_lifecycle(
+            planned.value,
+            policy=EffectivePolicy(),
+            interpreters=self.interpreters(),
+            inspect=inspect,
+            lock=self.lock(),
+        )
+        self.assertIsInstance(executed, Ok, getattr(executed, "diagnostics", ()))
+        return self.record(executed.value, receipt=self.receipt)
+
+    def uninstalled(self, *, ownership: tuple[OwnershipReason, ...] = (), release=None):
         """Tear the installation down for real, through the same reviewed, locked path."""
 
         removal = removal_state_from_receipt(COORDINATE, self.receipt)
         desired = desired_state_from_receipt(
             COORDINATE, self.receipt, base_interpreter=sys.executable
         )
+        intent = uninstall_intent(
+            desired, removal, ownership=ownership, release=ownership if release is None else release
+        )
 
         def inspect(_=None):
-            return self.inspect_for(removal)
+            return self.inspect_for(intent.desired)
 
-        planned = plan_lifecycle_intent(
-            uninstall_intent(desired, removal), inspect(), policy=EffectivePolicy()
-        )
+        planned = plan_lifecycle_intent(intent, inspect(), policy=EffectivePolicy())
         self.assertIsInstance(planned, Ok, getattr(planned, "diagnostics", ()))
         executed = execute_lifecycle(
             planned.value,
@@ -173,6 +202,48 @@ class ReceiptPersistenceTest(InstalledFixture):
         self.assertIsInstance(later.installation(COORDINATE), Err)
         self.assertEqual(later.installations().value, ())
         self.assertEqual(len(later.actions().value), 2)
+
+    def test_an_artifact_a_collection_still_owns_survives_an_uninstall_from_another_process(self):
+        """Ownership is why an uninstall is allowed to leave something behind.
+
+        The process that removes an artifact is rarely the one that installed it, so if `why` is
+        not recorded beside `what`, a later uninstall either deletes something another Collection
+        still needs or retains everything forever. Here the second process reads the owners off
+        disk and releases only the direct request.
+        """
+
+        self.installed((KIT, DIRECT))
+
+        record = self.another_process().record(COORDINATE)
+        self.assertIsInstance(record, Ok, getattr(record, "diagnostics", ()))
+        self.assertEqual(record.value.ownership, (KIT, DIRECT))
+        outcome = self.uninstalled(ownership=record.value.ownership, release=(DIRECT,))
+        self.record(outcome, receipt=record.value.receipt)
+
+        self.assertIs(outcome.status, LifecycleExecutionStatus.COMPLETED)
+        self.assertEqual(self.server_answers()["org"], "acme")
+        later = self.another_process().record(COORDINATE)
+        self.assertIsInstance(later, Ok, getattr(later, "diagnostics", ()))
+        self.assertEqual(later.value.ownership, (KIT,))
+
+    def test_releasing_the_last_owner_removes_the_artifact_and_the_record(self):
+        self.installed((KIT,))
+
+        owners = self.another_process().record(COORDINATE).value.ownership
+        self.record(self.uninstalled(ownership=owners))
+
+        self.assertIsInstance(self.another_process().record(COORDINATE), Err)
+        self.assertFalse(pathlib.Path(self.receipt.launcher).exists())
+
+    def test_repairing_an_artifact_does_not_release_the_collection_that_owns_it(self):
+        self.installed((KIT,))
+        pathlib.Path(self.receipt.launcher).write_text("#!/bin/sh\nexit 9\n", encoding="utf-8")
+
+        stored = self.another_process().record(COORDINATE).value
+        _, outcome = self.reconcile(stored.receipt)
+        self.record(outcome, receipt=stored.receipt)
+
+        self.assertEqual(self.another_process().record(COORDINATE).value.ownership, (KIT,))
 
     def test_no_stored_file_anywhere_contains_the_real_secret(self):
         _, outcome = self.reconcile(self.receipt)

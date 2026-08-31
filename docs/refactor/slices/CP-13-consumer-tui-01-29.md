@@ -136,7 +136,10 @@ took effect is recorded even when it did not finish, one that took no effect lea
 untouched, a completed uninstall forgets rather than rewrites, an interrupted one keeps the record
 that describes its residue, and a rolled-back update leaves the previous record standing.
 
-`tests/receipt_store_test.py` — persistence across a process boundary: a receipt written down and
+`tests/receipt_store_test.py` — persistence across a process boundary, including that ownership is
+recorded beside the receipt, that a rewrite which says nothing about ownership keeps the owners the
+record had, that one saying nobody owns it means it, and that an ownership kind this build cannot
+name is refused rather than dropped (D-050): a receipt written down and
 read back is the receipt that was written, including a credential reference whose service and
 account contain the separators its printed form uses; six malformed documents are refused rather
 than guessed at; records are private (0o600), replaced rather than duplicated, forgotten
@@ -154,7 +157,10 @@ honest undo → uninstall is ownership-aware and retains the credential. One tes
 consumer surface and asserts the real secret appears on none of them.
 
 `tests/receipt_persistence_e2e_test.py` — the same real installation, then nothing in memory is
-trusted: a second store built fresh over the same directory reads the receipt back off disk, and
+trusted. A second process reads the owners off disk, releases only the direct request and the real
+MCP server still answers through its own launcher; releasing the last owner removes both the
+artifact and the record; and repairing an artifact does not release the Collection that owns it.
+Also: a second store built fresh over the same directory reads the receipt back off disk, and
 the desired state, the review digest, the repair of a launcher broken after the write, the timeline
 and the uninstall are all decided from that read-back receipt. The server answers again through its
 own launcher after a repair planned from disk alone, and no stored file contains the real secret.
@@ -215,6 +221,6 @@ machine-output tests prove every accepted flow now consumes the canonical applic
 - Do not undo: existing curses layout/search/basket/back/quit characterization; one semantic plan
   for both profiles; Maintainer Mode remains opt-in; `key_event` stays the only place a key's
   meaning is decided; no clock in `application/`.
-- Tests last run/results: 2,331 unit + 80 E2E tests, 83.31% coverage, all ten quality gates
+- Tests last run/results: 2,342 unit + 83 E2E tests, 83.32% coverage, all ten quality gates
   green (`make quality`). CP-12 baseline was 2,196 unit + 65 E2E at 83.25%.
 - Failure evidence: three defects found by tests are listed under Characterization / RED evidence.
