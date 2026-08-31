@@ -63,11 +63,18 @@ that flow and execution, plus composition of real Marketplace and installed-stat
    whole Selection while refusing a missing credential provider before mutation (D-073). The real
    authored-package E2E installs through that assembler rather than a hand-wired tuple.
 
-   The next RED seam is therefore the production action handler itself: resolve the requested
-   Selection, turn its members into placements, call `offer_installation`, preserve its review
-   identity through `begin_installation`, assemble and execute the confirmed transaction, record it,
-   and reload one immutable machine. The public command and shell must call that one handler rather
-   than recompose its steps independently.
+   **DONE (application half):** `prepare_installation_action` and
+   `complete_installation_action` now preserve one structural review identity across offer,
+   confirmation, aggregate execution and durable transaction/member recording (D-074). A mismatch
+   refuses before the mutation lease, and the real authored-package E2E uses this operation plus
+   the D-073 assembler rather than test-only orchestration.
+
+   The next RED seam is the production adapter around that action: bridge a configured approved
+   Marketplace Selection to `ResolvedSelection` and placements without fabricating registry
+   identity, bind the accepted screen-07 input sources/provider references, then reload one
+   immutable machine after completion. The shell and public commands must call that one adapter
+   rather than recompose its steps independently. B-032 records the input boundary that this audit
+   proved is on the critical path.
 5. **DONE:** public-flow characterization now pins each command seam before its dispatch changes --
    durable `status` (a later invocation names what an earlier one installed, and names nothing after
    an uninstall), one envelope across all four seams, a review that names the artifacts it would

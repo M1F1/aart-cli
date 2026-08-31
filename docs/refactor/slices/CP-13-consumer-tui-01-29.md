@@ -222,6 +222,13 @@ adapter per provider and refuses a referenced provider that was not supplied bef
 (D-073). Multi-artifact dispatch tests include two servers on the same harness, proving the second
 artifact cannot be claimed and registered by the first artifact's interpreter.
 
+That same E2E now crosses the shared application action as well (D-074): preparation stops at one
+review without mutation, completion accepts only its `ObjectDigest`, executes the whole Selection,
+records one transaction and its installed member, and hands the success screen the exact receipt
+that was written. The public command and shell adapter therefore no longer need to reproduce this
+ordering; they still need configured Selection resolution, the screen-07 input/provider boundary,
+and machine reload around it.
+
 The same run is then recorded and re-read (D-066): `record_installation_transaction` writes to a
 real `LocalReceiptStore`, and `read_consumer_machine` — which has never seen the proposal — reads
 the state root and harness root this install wrote and produces a machine whose Installed names the
@@ -302,11 +309,11 @@ own launcher after a repair planned from disk alone, and no stored file contains
 ## Remaining
 
 - Implement the production action handler over placement, `offer_installation`,
-  `begin_installation`, CP-12 execution, durable recording and machine reload. Every part it
-  composes is done and verified: object-store placement and root/target policy, interpreter
-  assembly (D-073), execution and recording (D-064), the screens that draw the result (D-065), and
-  the reload that shows it to the next machine (D-066). What the handler adds is the wiring, not a
-  missing capability.
+  `begin_installation`, CP-12 execution, durable recording and machine reload. The application half
+  is now one verified operation (D-074), over object-store placement and root/target policy,
+  interpreter assembly (D-073), execution and recording (D-064), and the screens that draw the
+  result (D-065). The remaining adapter must supply approved Selection resolution and screen-07
+  input sources/provider entry, then reload the machine (D-066, B-032).
 - Preserve/adapt existing kind-neutral project/user install state before retrying the default
   route. Configured Marketplace composition is done (D-068); Collections still do not cross that
   seam (B-031).
@@ -365,20 +372,20 @@ machine-output tests prove every accepted flow now consumes the canonical applic
 - Current working state: steps 1–4 complete and verified; step 5 has a durable machine reader that
   also sees legacy project/user manifests, a composed Marketplace, an action-capable reducer, an
   injected/fail-closed shell boundary, object-store placement and a capability-bound transaction
-  interpreter assembler, but no production handler; step 6 has not started. The legacy wizard and
-  command authority remain public by design (D-062, D-063, D-073).
-- Exact next action: characterize and implement the one production action handler that resolves the
-  requested Selection, places and offers it, preserves its review identity through confirmation,
-  executes it through `interpreters_for`, records the transaction, and reloads the machine. Then
-  route the public consumer commands (`install`, `update`, `uninstall`, `status`) and canonical shell
-  through that boundary without duplicating its composition. B-030 is done, the configured
-  Marketplace is composed (D-068), and existing project/user install records are visible as
-  unadopted installations (D-069).
+  interpreter assembler and one application action from offer through recording, but no production
+  adapter connecting configured Selection/input sources and machine reload; step 6 has not started.
+  The legacy wizard and command authority remain public by design (D-062, D-063, D-073, D-074).
+- Exact next action: characterize the adapter that converts a configured approved Marketplace
+  Selection into `ResolvedSelection` plus placements and safe screen-07 input sources, calls the
+  D-074 action through `interpreters_for`, and reloads the machine. Then route the public consumer
+  commands (`install`, `update`, `uninstall`, `status`) and canonical shell through that boundary
+  without duplicating its composition. B-030 is done, the configured Marketplace is composed
+  (D-068), and existing project/user install records are visible as unadopted installations (D-069).
 - Do not undo: existing curses layout/search/basket/back/quit characterization; one semantic plan
   for both profiles; Maintainer Mode remains opt-in; `key_event` stays the only place a key's
   meaning is decided; no clock in `application/`; the legacy roots stay required arguments of
   `read_consumer_machine`, and an unadopted installation stays in the one Installed list with no
   offered action rather than moving to a band of its own (D-069).
-- Tests last run/results: 2,595 unit tests (including 120 E2E), 83.51% coverage, all ten quality
+- Tests last run/results: 2,599 unit tests (including 120 E2E), 83.50% coverage, all ten quality
   gates green (`make quality PYTHON=python3`). CP-12 baseline was 2,196 unit + 65 E2E at 83.25%.
 - Failure evidence: three defects found by tests are listed under Characterization / RED evidence.

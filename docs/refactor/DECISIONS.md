@@ -1043,3 +1043,22 @@ the Product Specification first instead of hiding the change here.
   now installs through this assembler, proving the verified object-store package, generated
   launcher, owned environment, harness registration and provider reference all execute through the
   production composition rather than a test's hand-wired tuple.
+
+## D-074 — Preparation and completion are the two halves of one installation action
+- **Decision:** `prepare_installation_action` composes an `InstallationOffer` and
+  `begin_installation` into one immutable `PreparedInstallationAction`; the caller supplies the
+  remediation subset somebody selected, while `None` is the explicit non-interactive convention
+  for accepting the whole offer. `complete_installation_action` accepts only that preparation's
+  structural `ObjectDigest`, executes its whole proposal once, records one transaction plus each
+  installed member, and returns a flow whose outcome is the exact durable transaction receipt.
+- **Status:** accepted.
+- **Reason:** the shell and four public command seams otherwise have to repeat the most sensitive
+  order in the workflow: offer, accept, compare review, execute, project, record action, record
+  installed members. Preserving the digest only inside either adapter would allow the other to
+  execute a recomputed plan, while recording per member would reopen D-064's fragmented receipt.
+- **Consequence:** a mismatched review is refused before the mutation lease, inspection or store is
+  touched. Resolution, placement, input collection, effect adapters, inspection, the lease,
+  persistence and the clock remain explicit caller-owned boundaries; this operation invents none
+  of them. The authored-package E2E now uses this action and the D-073 assembler, proving one
+  verified object-store package is offered, reviewed, executed, durably recorded and started by its
+  harness without test-only orchestration between those stages.

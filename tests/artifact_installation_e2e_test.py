@@ -46,6 +46,10 @@ from agent_artifacts.application.execution import (
     InstallationExecutionStatus,
     execute_installation,
 )
+from agent_artifacts.application.installation_action import (
+    complete_installation_action,
+    prepare_installation_action,
+)
 from agent_artifacts.application.installation_offer import ArtifactPlacement, offer_installation
 from agent_artifacts.application.installation_planning import inspect_requirements
 from agent_artifacts.application.installation_proposal import (
@@ -304,9 +308,9 @@ class AuthoredInstallationTest(unittest.TestCase):
             ),
         )
 
-    def _interpreters(self):
+    def _interpreters(self, installations=None):
         assembled = interpreters_for(
-            (self.planned,),
+            (self.planned,) if installations is None else installations,
             registry=self.registry,
             credential_providers=(self.provider,),  # type: ignore[arg-type]
             timeout_seconds=300.0,
@@ -416,9 +420,10 @@ class AuthoredInstallationTest(unittest.TestCase):
         self.assertEqual([str(item) for item, _ in offer.observed], [str(self.package.coordinate)])
 
     def test_the_composed_offer_installs_for_real(self) -> None:
-        """One offer, accepted and run. Nothing between it and the disk was wired by this test."""
+        """One action, reviewed, accepted, run and recorded through the shared application seam."""
 
-        offered = offer_installation(
+        prepared = prepare_installation_action(
+            self._selection(),
             (
                 ArtifactPlacement(
                     self._resolved(),
@@ -438,30 +443,26 @@ class AuthoredInstallationTest(unittest.TestCase):
             facts=EnvironmentFacts(sys.platform, remediation_capabilities=self._capabilities()),
             inspect=LocalEnvironmentInspector(self._capabilities()),
             observe=lambda _planned: self._inspect(),
+            selected_remediations=None,
             base_interpreter=sys.executable,
             resolvers=(self.provider,),
         )
-        self.assertIsInstance(offered, Ok, getattr(offered, "diagnostics", ()))
-        offer = offered.value
-
-        begun = begin_installation(
-            offer.installations,
-            self._selection(),
-            offer.facts,
-            EffectivePolicy(),
-            observed=offer.observed,
-            selected_remediations=offer.selected(),
-        )
-        self.assertIsInstance(begun, Ok, getattr(begun, "diagnostics", ()))
-        executed = execute_installation(
-            begun.value.proposal,
+        self.assertIsInstance(prepared, Ok, getattr(prepared, "diagnostics", ()))
+        completed = complete_installation_action(
+            prepared.value,
+            expected_review_digest=prepared.value.review_digest,
             policy=EffectivePolicy(),
-            interpreters=self._interpreters(),
+            interpreters=self._interpreters(prepared.value.installations),
             inspect=self._inspect,
             lock=LocalMutationLock(self.state_root, str(self.scope)),
+            store=LocalReceiptStore(self.state_root),
+            recorded_at=MOMENT,
         )
 
-        self.assertIsInstance(executed, Ok, getattr(executed, "diagnostics", ()))
+        self.assertIsInstance(completed, Ok, getattr(completed, "diagnostics", ()))
+        self.assertEqual(
+            completed.value.recorded.receipt.review_digest, str(prepared.value.review_digest)
+        )
         self.assertEqual(self._server_answers()["org"], "acme")
 
     def test_an_authored_manifest_installs_and_the_server_answers_what_it_declared(self) -> None:

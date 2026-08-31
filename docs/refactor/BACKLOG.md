@@ -422,3 +422,27 @@ Evidence/links: D-044, D-045, D-068; `tests/consumer_marketplace_composition_e2e
 ComposedMarketplaceTest::test_an_unversioned_collection_is_declined_by_name_rather_than_dropped`.
 Promotion condition: an accepted screen or acceptance test requires installing a Collection through
 the canonical consumer shell from a configured source.
+
+### B-032 — Live input-source and provider-entry boundary for screen 07
+Status: PROMOTED TO CP-13 (2026-08-31)
+Discovered in: CP-13 / production consumer action handler
+Why useful: `placement_for` reads an artifact's declared `InstallDescription`, but
+`plan_artifact_installation` correctly refuses a required input with no `InputValueSource`.
+Existing screen-07 tests draw already-bound plans, and the authored-package E2E supplies its config
+value and provider reference directly; the live shell has no boundary that produces either. A
+handler wired without one could browse an MCP offer but could not prepare the accepted Required
+Inputs flow, or would have to invent values/references inside planning.
+Promotion evidence: accepted screen 07 is on CP-13's mandatory path, and the first production MCP
+vertical slice declares both config and secret inputs. The production action cannot reach Ready or
+execute that artifact without this boundary, so this is not optional UX polish.
+Required shape: derive input rows from the verified install descriptions; prefill only declared
+config defaults or previously persisted safe config; bind secrets to explicit provider references;
+inspect provider state without reading a value; and let provider-owned interactive entry store or
+replace a value without it entering application state, plans, receipts, logs or JSON. Required
+config with no value must remain an unanswered form field, never a guessed default.
+Invariants touched: INV-132, INV-149, INV-155, INV-156, INV-157, INV-165.
+Evidence/links: D-054, D-056, D-074; `application/input_binding.py`;
+`tests/artifact_installation_e2e_test.py`; accepted Product Specification screen 07.
+Unblock condition: the real action adapter can prepare and complete an authored MCP with config and
+secret declarations through provider references/provider-owned entry, while the secret value is
+absent from every application value and serialized/drawn surface.
