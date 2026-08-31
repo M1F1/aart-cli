@@ -26,6 +26,8 @@ from agent_artifacts.domain.effects import (
     CopyTree,
     CreatePythonEnvironment,
     DeleteCredential,
+    DeliverArtifact,
+    DeliveryKind,
     Effect,
     InstallPythonDependencies,
     RemoveOwnedPath,
@@ -33,10 +35,12 @@ from agent_artifacts.domain.effects import (
     StoreCredential,
     UnconfigureHarness,
     VerifyCredential,
+    WithdrawArtifact,
     WriteFile,
 )
 from agent_artifacts.domain.harness import McpRegistration
 from agent_artifacts.domain.python_runtime import ArtifactEnvironment
+from agent_artifacts.domain.receipts import ArtifactDelivery
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.io.credentials import CredentialProviderPort
 from agent_artifacts.io.fs import write_atomic
@@ -55,11 +59,31 @@ __all__ = [
     "EXECUTION_NEEDS_A_PERSON",
     "EXECUTION_REFUSED",
     "CredentialEffectInterpreter",
+    "DeliveryEffectInterpreter",
     "FileEffectInterpreter",
     "HarnessEffectInterpreter",
     "LocalMutationLock",
     "RuntimeEffectInterpreter",
 ]
+
+
+def _restrict(path: str) -> None:
+    """Take away group and world access from what was just delivered, owner bits intact.
+
+    The owner's bits are kept rather than a mode imposed, because a delivered hook script has to
+    stay executable and a blanket 0o600 would leave the harness unable to run what it was given.
+    """
+
+    def own(target: str) -> None:
+        os.chmod(target, os.stat(target).st_mode & 0o700)
+
+    if not os.path.isdir(path):
+        own(path)
+        return
+    for current, _directories, files in os.walk(path):
+        for name in files:
+            own(os.path.join(current, name))
+        own(current)
 
 
 def _error(code: DiagnosticCode, message: str) -> Err:
@@ -336,6 +360,121 @@ class HarnessEffectInterpreter:
             verb = "registered" if isinstance(effect, ConfigureHarness) else "unregistered"
             recorded.append(f"{verb} {registration.server} -> {result.value.path}")
         return Ok("; ".join(recorded))
+
+
+class DeliveryEffectInterpreter:
+    """Puts one artifact where a harness reads it, and takes back only what it put there.
+
+    This is the one interpreter that writes outside AART's own tree, so it cannot prove ownership
+    structurally the way `FileEffectInterpreter` does -- the destination belongs to the harness.
+    It proves it the way the harness interpreter does instead: it is handed the deliveries it may
+    make, and a delivery it was not given is refused rather than carried out. With two artifacts
+    delivering to the same harness that is the only thing separating their steps.
+
+    Delivering replaces the destination rather than merging into it, so a file the previous version
+    shipped and this one dropped does not linger where the harness would still read it. That is
+    safe because CP-12 compares the desired state against a real inspection before the first effect
+    runs: a destination already occupied by something this installation did not put there is a
+    conflict the review reports, not a surprise the executor discovers.
+    """
+
+    def __init__(self, artifact: str, deliveries: tuple[ArtifactDelivery, ...]) -> None:
+        if (
+            not isinstance(artifact, str)
+            or not artifact.strip()
+            or any(character in artifact for character in "\r\n")
+        ):
+            raise ValueError("a delivery interpreter delivers one named artifact")
+        deliveries = tuple(deliveries)
+        if not deliveries or any(
+            not isinstance(delivery, ArtifactDelivery) for delivery in deliveries
+        ):
+            raise ValueError("a delivery interpreter needs the deliveries it may make")
+        self.artifact = artifact
+        self.deliveries = deliveries
+
+    def _matching(self, effect: Effect) -> ArtifactDelivery | None:
+        if not isinstance(effect, (DeliverArtifact, WithdrawArtifact)):
+            return None
+        if effect.artifact != self.artifact:
+            return None
+        for delivery in self.deliveries:
+            if delivery.harness == effect.harness and delivery.destination == effect.destination:
+                return delivery
+        return None
+
+    def supports(self, effect: Effect) -> bool:
+        """Whether this interpreter holds the delivery `effect` names, not merely its kind."""
+
+        return self._matching(effect) is not None
+
+    def apply(self, effect: Effect) -> Result[str]:
+        if not isinstance(effect, (DeliverArtifact, WithdrawArtifact)):
+            return _error(EXECUTION_REFUSED, f"{type(effect).__name__} is not a delivery effect")
+        if effect.artifact != self.artifact:
+            return _error(
+                EXECUTION_REFUSED,
+                f"this interpreter delivers {self.artifact}, not {effect.artifact}",
+            )
+        if self._matching(effect) is None:
+            return _error(
+                EXECUTION_REFUSED,
+                f"nothing here says {self.artifact} is delivered to {effect.destination}",
+            )
+        if isinstance(effect, DeliverArtifact):
+            return self._deliver(effect)
+        return self._withdraw(effect)
+
+    def _deliver(self, effect: DeliverArtifact) -> Result[str]:
+        tree = effect.delivery is DeliveryKind.TREE
+        present = os.path.isdir(effect.source) if tree else os.path.isfile(effect.source)
+        if not present:
+            shape = "directory" if tree else "file"
+            return _error(
+                EXECUTION_FAILED,
+                f"{effect.source} is not a {shape} to deliver, so {effect.destination} is "
+                f"left as it was",
+            )
+        removed = self._remove(effect.destination)
+        if isinstance(removed, Err):
+            return removed
+        try:
+            os.makedirs(os.path.dirname(effect.destination) or "/", exist_ok=True)
+            if tree:
+                shutil.copytree(effect.source, effect.destination)
+            else:
+                with open(effect.source, "rb") as handle:
+                    write_atomic(effect.destination, handle.read())
+                shutil.copymode(effect.source, effect.destination)
+            _restrict(effect.destination)
+        except OSError as error:
+            return _error(
+                EXECUTION_FAILED,
+                f"cannot deliver to {effect.destination}: {error.strerror or error}",
+            )
+        return Ok(f"delivered {self.artifact} to {effect.harness} at {effect.destination}")
+
+    def _withdraw(self, effect: WithdrawArtifact) -> Result[str]:
+        if not os.path.lexists(effect.destination):
+            return Ok(f"{effect.destination} was already absent")
+        removed = self._remove(effect.destination)
+        if isinstance(removed, Err):
+            return removed
+        return Ok(f"withdrew {self.artifact} from {effect.harness} at {effect.destination}")
+
+    def _remove(self, destination: str) -> Result[None]:
+        if not os.path.lexists(destination):
+            return Ok(None)
+        try:
+            if os.path.isdir(destination) and not os.path.islink(destination):
+                shutil.rmtree(destination)
+            else:
+                os.unlink(destination)
+        except OSError as error:
+            return _error(
+                EXECUTION_FAILED, f"cannot remove {destination}: {error.strerror or error}"
+            )
+        return Ok(None)
 
 
 class CredentialEffectInterpreter:
