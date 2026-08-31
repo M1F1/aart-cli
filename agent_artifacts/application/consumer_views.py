@@ -50,6 +50,7 @@ from .execution import (
     LifecycleExecutionOutcome,
     LifecycleExecutionStatus,
 )
+from .installation_proposal import InstallationProposal
 from .intents import (
     InstalledHealth,
     LifecycleIntentKind,
@@ -58,6 +59,7 @@ from .intents import (
     collection_health,
     installation_health,
 )
+from .removal_proposal import RemovalProposal
 
 __all__ = [
     "ActivityDayView",
@@ -1283,6 +1285,7 @@ _TRANSACTION_VERBS: dict[LifecycleIntentKind, str] = {
     LifecycleIntentKind.UPDATE: "Updated",
     LifecycleIntentKind.REPAIR: "Repaired",
     LifecycleIntentKind.DOWNGRADE: "Downgraded",
+    LifecycleIntentKind.UNINSTALL: "Removed",
 }
 
 
@@ -1301,7 +1304,12 @@ def project_installation_receipt(
 
     if not isinstance(outcome, InstallationExecutionOutcome):
         raise ValueError("transaction receipt projection needs an installation execution outcome")
-    selection = project_selection(outcome.proposal.plan.selection)
+    # A removal has no Selection. It is planned from what is recorded rather than from what a
+    # registry offers -- an artifact stays installed after its source is gone -- so there is no
+    # resolution to project, and the members below say what was taken out.
+    proposal = outcome.proposal
+    plan = proposal.plan if isinstance(proposal, InstallationProposal) else None
+    selection = None if plan is None else project_selection(plan.selection)
     artifacts = tuple(
         ReceiptArtifactView(
             str(item.plan.intent.desired.artifact),
@@ -1327,8 +1335,12 @@ def project_installation_receipt(
         f"{_TRANSACTION_VERBS.get(kind, 'Installed')} {count} artifact{'' if count == 1 else 's'}",
         outcome.status.value,
         _TRANSACTION_OUTCOMES[outcome.status],
-        str(outcome.proposal.review_digest),
-        str(outcome.proposal.plan.policy_digest),
+        str(proposal.review_digest),
+        str(
+            plan.policy_digest
+            if plan is not None
+            else cast(RemovalProposal, proposal).policy_digest
+        ),
         tuple(step for item in artifacts for step in item.steps),
         tuple(drift for item in artifacts for drift in item.residual_drift),
         None,

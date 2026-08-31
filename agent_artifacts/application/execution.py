@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from enum import Enum
-from typing import Callable, Protocol
+from typing import Callable, Protocol, TypeAlias
 
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.effects import Effect, effect_to_data
@@ -38,10 +38,18 @@ from agent_artifacts.domain.result import Err, Ok, Result
 from .installation_proposal import InstallationProposal
 from .intents import LifecycleIntentKind, LifecyclePlan, plan_lifecycle_intent
 from .reconciliation import RepairPlan, plan_repair
+from .removal_proposal import RemovalProposal
 
 EXECUTION_INCOMPLETE = DiagnosticCode("execution-incomplete")
 EXECUTION_INVALID = DiagnosticCode("execution-invalid")
 EXECUTION_REVIEW_STALE = DiagnosticCode("execution-review-stale")
+
+#: One reviewed transaction, whichever direction it goes. Install and removal are separate types
+#: because they are lowered from different things -- a resolved Selection, and what is recorded --
+#: but by the time either reaches execution they are the same shape: an ordered tuple of reviewed
+#: lifecycle plans under one digest.
+ReviewedTransaction: TypeAlias = InstallationProposal | RemovalProposal
+
 
 __all__ = [
     "EXECUTION_INCOMPLETE",
@@ -56,6 +64,7 @@ __all__ = [
     "LifecycleExecutionOutcome",
     "LifecycleExecutionStatus",
     "MutationLockPort",
+    "ReviewedTransaction",
     "StepOutcome",
     "StepStatus",
     "execute_repair",
@@ -261,13 +270,13 @@ class InstallationArtifactExecution:
 class InstallationExecutionOutcome:
     """One reviewed bulk plan, with an explicit terminal result for every resolved artifact."""
 
-    proposal: InstallationProposal
+    proposal: ReviewedTransaction
     artifacts: tuple[InstallationArtifactExecution, ...]
     detail: str = ""
 
     def __post_init__(self) -> None:
         if (
-            not isinstance(self.proposal, InstallationProposal)
+            not isinstance(self.proposal, (InstallationProposal, RemovalProposal))
             or any(not isinstance(item, InstallationArtifactExecution) for item in self.artifacts)
             or not isinstance(self.detail, str)
             or tuple(item.plan for item in self.artifacts) != self.proposal.lifecycle
@@ -489,7 +498,7 @@ def _execute_lifecycle_locked(
 
 
 def _preflight_installation(
-    proposal: InstallationProposal,
+    proposal: ReviewedTransaction,
     *,
     policy: EffectivePolicy,
     inspect: Callable[[DesiredState], CurrentState],
@@ -518,7 +527,7 @@ def _preflight_installation(
 
 
 def _execute_installation_locked(
-    proposal: InstallationProposal,
+    proposal: ReviewedTransaction,
     *,
     policy: EffectivePolicy,
     interpreters: tuple[EffectInterpreter, ...],
@@ -558,22 +567,27 @@ def _execute_installation_locked(
 
 
 def execute_installation(
-    proposal: InstallationProposal,
+    proposal: ReviewedTransaction,
     *,
     policy: EffectivePolicy,
     interpreters: tuple[EffectInterpreter, ...],
     inspect: Callable[[DesiredState], CurrentState],
     lock: MutationLockPort,
 ) -> Result[InstallationExecutionOutcome]:
-    """Execute one single-or-bulk proposal under one lease and one review boundary.
+    """Execute one single-or-bulk transaction under one lease and one review boundary.
 
     Every member is compared under the lease before the first effect runs. Once execution starts,
     a member that does not complete stops the transaction and every later member is retained as an
     explicit ``not-attempted`` result rather than disappearing from the receipt.
+
+    A removal runs through here rather than through a second executor, because the properties that
+    make this correct are not about installing: one lease, one review, every member accounted for.
+    A transaction that took some artifacts out and abandoned the rest has to say which, whichever
+    direction it was going.
     """
 
-    if not isinstance(proposal, InstallationProposal):
-        return _error(EXECUTION_INVALID, "installation execution needs a reviewed proposal")
+    if not isinstance(proposal, (InstallationProposal, RemovalProposal)):
+        return _error(EXECUTION_INVALID, "execution needs a reviewed transaction")
     acquired = lock.acquire()
     if isinstance(acquired, Err):
         return acquired
@@ -659,6 +673,8 @@ def installation_execution_to_data(
 
     if not isinstance(outcome, InstallationExecutionOutcome):
         raise ValueError("installation execution projection needs an installation outcome")
+    if not isinstance(outcome.proposal, InstallationProposal):
+        raise ValueError("this projection describes an install, and that was not one")
     plan = install_plan_to_data(outcome.proposal.plan)
     return {
         "artifacts": [

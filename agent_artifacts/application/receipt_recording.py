@@ -199,10 +199,22 @@ def record_installation_transaction(
         return _error("a transaction was given the same artifact's receipt twice")
 
     keeping: list[tuple[ArtifactCoordinate, ArtifactReceipt, LifecycleExecutionOutcome]] = []
+    releasing: list[ArtifactCoordinate] = []
     for member in outcome.artifacts:
-        if member.outcome is None or not _keeps_installation(member.outcome):
+        if member.outcome is None:
             continue
         coordinate = member.plan.repair.artifact
+        intent = member.plan.intent
+        # The same rule one action follows, applied per member. A member that gave up the last
+        # claim on an artifact and converged is forgotten; one that retained a claim removed
+        # nothing and keeps its record; anything that took effect is recorded, because its
+        # leftovers are on the machine either way.
+        if intent.kind is LifecycleIntentKind.UNINSTALL and not intent.retained:
+            if member.outcome.primary.status is ExecutionStatus.CONVERGED:
+                releasing.append(coordinate)
+            continue
+        if not _keeps_installation(member.outcome):
+            continue
         installed = available.get(coordinate)
         if installed is None:
             return _error(
@@ -243,4 +255,8 @@ def record_installation_transaction(
             forgotten = store.forget_installation(superseded.artifact)
             if isinstance(forgotten, Err):
                 return forgotten
+    for coordinate in releasing:
+        dropped = store.forget_installation(coordinate)
+        if isinstance(dropped, Err):
+            return dropped
     return Ok(RecordedTransaction(detail, action.value, tuple(recorded)))

@@ -102,6 +102,14 @@ class _Environment:
         )
         assert isinstance(published, Ok), published
 
+    def disable_source(self) -> None:
+        """Remove the registry subscription, leaving what it delivered installed."""
+
+        configuration = UserConfiguration(1, (), None, SyncSettings(), ReportingSettings())
+        pathlib.Path(self.paths.user_config_file).write_bytes(
+            user_configuration_bytes(configuration)
+        )
+
     def run(self, *argv: str) -> tuple[int, dict]:
         output = io.StringIO()
         with (

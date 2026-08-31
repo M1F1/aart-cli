@@ -67,6 +67,7 @@ from agent_artifacts.consumer.runtime_requirements import (
     runtime_check_to_data,
 )
 from agent_artifacts.domain.diagnostics import Diagnostic, Severity, diagnostic_to_data
+from agent_artifacts.domain.effects import effect_to_data
 from agent_artifacts.domain.harness import Scope
 from agent_artifacts.domain.identifiers import ArtifactCoordinate
 from agent_artifacts.domain.inputs import SecretInput
@@ -83,6 +84,10 @@ from agent_artifacts.io.configured_installation_action import (
     InstallationHost,
     complete_configured_installation,
     prepare_configured_installation,
+)
+from agent_artifacts.io.configured_uninstall_action import (
+    complete_configured_uninstall,
+    prepare_configured_uninstall,
 )
 from agent_artifacts.io.consumer_machine import (
     read_consumer_machine,
@@ -1284,6 +1289,173 @@ def _status_matches(selector: ArtifactSelector, coordinate: str) -> bool:
     )
 
 
+def _configured_uninstall(request: Request, selectors: tuple[ArtifactSelector, ...]) -> int | None:
+    """Take canonical installations back out from what this machine recorded, or decline.
+
+    Nothing here reads a registry. An artifact stays installed after the source that delivered it
+    is removed from the configuration, so the receipts are the authority on what is removed and
+    where from; requiring the source would refuse exactly when somebody most needs this to work.
+    That is also why the runtime is loaded without content: the configuration is consulted for the
+    paths this machine keeps its state under, not for anything to resolve.
+
+    Declining means there is no canonical record matching what was asked for, which is left to the
+    characterized path rather than answered here -- an uninstall of something this seam has never
+    heard of is not an uninstall it can claim to have performed.
+    """
+
+    operation = "marketplace.uninstall"
+    runtime = load_runtime_configuration(request, content_required=False)
+    if isinstance(runtime, Err):
+        return _emit_error(request, runtime, operation)
+
+    project_root, user_home = resolved_paths(
+        data_root=runtime.value.paths.data_root,
+        project=request.project,
+        user_home=request.user_home,
+    )
+    scope = Scope(request.scope)
+    credential_providers = (MacOsKeychainProvider(),) if sys.platform == "darwin" else ()
+    inspected = read_installed_inspections(
+        state_root=os.path.join(runtime.value.paths.data_root, "state"),
+        harness_root=project_root if scope is Scope.PROJECT else user_home,
+        credential_providers=credential_providers,
+        scope=scope,
+        profiles=tuple(request.profiles),
+    )
+    if isinstance(inspected, Err):
+        return _emit_error(request, inspected, operation)
+    installed = tuple(
+        item
+        for item in inspected.value.inspections
+        if not selectors
+        or any(_status_matches(selector, item.coordinate) for selector in selectors)
+    )
+    if not installed:
+        return None
+
+    host = InstallationHost(
+        runtime.value.paths.data_root,
+        project_root,
+        user_home,
+        scope,
+        tuple(request.profiles),
+    )
+    policy = EffectivePolicy()
+    prepared = prepare_configured_uninstall(
+        tuple(item.record for item in installed),
+        host=host,
+        policy=policy,
+        credential_providers=credential_providers,
+    )
+    if isinstance(prepared, Err):
+        return _emit_error(request, prepared, operation)
+
+    proposal = prepared.value.proposal
+    digest = str(prepared.value.review_digest)
+    removing = [
+        {"key": str(item.coordinate), "status": "planned", "detail": ""}
+        for item in prepared.value.removals
+    ]
+    review_data: dict[str, object] = {
+        "items": removing,
+        "effects": [effect_to_data(effect) for effect in proposal.effects],
+        "risks": [risk.name.lower().replace("_", "-") for risk in proposal.risks],
+        # Credentials are retained unless somebody says otherwise, and a review that stayed silent
+        # about that would leave the reader to assume the opposite.
+        "credentials": "retained",
+    }
+    review_lines = (
+        f"Removing {len(removing)} artifact(s):",
+        *(f"  - {item['key']}" for item in removing),
+        "Credentials: retained.",
+    )
+    if not request.yes:
+        _emit(
+            request,
+            operation,
+            {
+                "schema_version": 1,
+                "ok": True,
+                "operation": operation,
+                "finalized": False,
+                "review_digest": digest,
+                "review": review_data,
+            },
+            review_lines + ("Reviewed only; re-run with --yes to apply this exact removal.",),
+        )
+        return _common.OK
+
+    if request.expect is not None and request.expect != digest:
+        refusal = Diagnostic(
+            CONSUMER_REVIEW_MISMATCH,
+            Severity.ERROR,
+            f"the removal changed since it was reviewed: expected {request.expect}, "
+            f"recomputed {digest}",
+            remediation=("re-read the review below, then re-run --expect with its review_digest",),
+        )
+        _emit(
+            request,
+            operation,
+            {
+                "schema_version": 1,
+                "ok": False,
+                "operation": operation,
+                "finalized": False,
+                "diagnostics": [diagnostic_to_data(refusal)],
+                "expected_review_digest": request.expect,
+                "review_digest": digest,
+                "review": review_data,
+            },
+            (
+                f"{refusal.severity.value}: {refusal.message}",
+                *(f"  remediation: {item}" for item in refusal.remediation),
+                *review_lines,
+            ),
+        )
+        return _common.ERROR
+
+    now = datetime.now(timezone.utc)
+    completed = complete_configured_uninstall(
+        prepared.value,
+        expected_review_digest=prepared.value.review_digest,
+        host=host,
+        policy=policy,
+        credential_providers=credential_providers,
+        recorded_at=now.isoformat(),
+        today=now.date(),
+    )
+    if isinstance(completed, Err):
+        return _emit_error(request, completed, operation)
+    receipt = completed.value.recorded.receipt
+    successful = receipt.outcome.value in {"succeeded", "attention"}
+    payload = {
+        "schema_version": 1,
+        "ok": successful,
+        "operation": operation,
+        "finalized": True,
+        "review_digest": digest,
+        "session_status": receipt.outcome.value,
+        "items": [
+            {
+                "key": item.coordinate,
+                # Nothing to do means it was not here to take away, which is a different fact
+                # from having removed it and worth saying so.
+                "status": "absent" if _unchanged(item) else "removed",
+                "detail": item.detail,
+            }
+            for item in receipt.artifacts
+        ],
+        "receipt": receipt_detail_to_data(receipt),
+    }
+    _emit(
+        request,
+        operation,
+        payload,
+        render_transaction_success(receipt, PresentationProfile.FAST),
+    )
+    return _common.OK if successful else _common.ERROR
+
+
 def _configured_status(request: Request, selectors: tuple[ArtifactSelector, ...]) -> int | None:
     """Read canonical status when the configured registry owns this public selection."""
 
@@ -1371,6 +1543,10 @@ def _lifecycle(request: Request, action: str) -> int:
             return configured
     if action == "update":
         configured = _configured_update(request, selection.value)
+        if configured is not None:
+            return configured
+    if action == "uninstall":
+        configured = _configured_uninstall(request, selection.value)
         if configured is not None:
             return configured
     if action == "status":
