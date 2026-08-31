@@ -1091,3 +1091,28 @@ the Product Specification first instead of hiding the change here.
   still not evidence of approval and cannot manufacture either digest. The cost is one more
   immutable field on a published version, which is deliberate: both digests are part of what
   `_immutable_version_fields` refuses to let a republication change.
+
+## D-076 — One adapter composes a configured install, and it derives its own roots
+- **Decision:** `prepare_configured_installation` and `complete_configured_installation` are the
+  single production composition over the D-074 action. They take an `InstallationHost` -- data root,
+  project root, user home, scope, profiles -- and derive the state root, the harness root and the
+  lock scope from it rather than accepting them. Preparation returns the screen-07 form when an
+  input is unanswered and a reviewable action when none is; completion executes only the confirmed
+  review digest and then re-reads the machine from disk.
+- **Status:** accepted.
+- **Reason:** every port the action needs was explicit and correct, and nothing supplied them. The
+  shell's action handler and each of `install`/`update`/`uninstall` would have composed resolution,
+  placement, capabilities, inspection, observation, interpreters, the lease, the receipt store and
+  the clock independently. Two copies of that disagree the first time one changes, and the
+  disagreement is silent, because both copies install something.
+- **Consequence:** the roots are derived because preparation and completion have to act on the same
+  machine, and a pair of roots passed twice can be passed differently -- an install prepared against
+  project scope and completed against user scope would take the wrong lease and record into the
+  wrong store, which no later inspection would report as anything but a missing installation.
+  Unanswered inputs come back as the form rather than as a refusal, because screen 07 exists for the
+  answer "not yet"; `action is None` holds exactly while the draft is not ready, and the type
+  refuses to exist in any other combination. Remediation capabilities are measured or supplied, one
+  per dependency backend this interpreter can actually run, one per credential adapter handed in and
+  one per targeted profile: nothing is assumed to exist because it usually does. The returned
+  machine is read after the run rather than assembled from the run, so an install that half-worked
+  is visible as what it left behind instead of what it intended.

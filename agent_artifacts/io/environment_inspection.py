@@ -26,7 +26,9 @@ from agent_artifacts.domain.requirements import (
 from agent_artifacts.domain.result import Ok, Result
 
 
-def _platform() -> str:
+def platform_name() -> str:
+    """The canonical platform name planning compares facts against."""
+
     if sys.platform == "darwin":
         return "darwin"
     if sys.platform.startswith("linux"):
@@ -76,4 +78,4 @@ class LocalEnvironmentInspector:
                 )
             else:
                 facts.append(EnvironmentFact(requirement.id, FactState.UNKNOWN))
-        return Ok(EnvironmentFacts(_platform(), tuple(facts), self.remediation_capabilities))
+        return Ok(EnvironmentFacts(platform_name(), tuple(facts), self.remediation_capabilities))
