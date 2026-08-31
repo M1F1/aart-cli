@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from enum import Enum, IntEnum
 from typing import ClassVar, TypeAlias
 
+from .managed_blocks import BlockPosition, is_block_name
+
 
 class RiskClass(IntEnum):
     READ_ONLY = 0
@@ -292,6 +294,60 @@ class VerifyRequirement:
         _line(self.requirement, "verified requirement")
 
 
+@dataclass(frozen=True, slots=True)
+class MergeManagedBlock:
+    """Make one named region of a file somebody else owns say what this artifact says.
+
+    Every measured memory target is a file the user writes in, so this is the effect a memory
+    artifact is installed by. It is a configuration mutation for the same reason a delivery is
+    (D-077): the file belongs to the harness and its user, not to AART, and a policy ceiling that
+    refuses to register an MCP server has to refuse writing into `CLAUDE.md` as well.
+
+    `region` names the delimited block this artifact owns, and is what makes the effect reversible
+    without owning the file: withdrawal takes back that block and nothing around it. `source` is a
+    file inside the artifact's own tree, the same way a delivery's is, so the body being merged is
+    content that was installed and measured rather than text carried inside a plan.
+    """
+
+    harness: str
+    artifact: str
+    destination: str
+    region: str
+    source: str
+    position: BlockPosition = BlockPosition.BOTTOM
+    risk: ClassVar[RiskClass] = RiskClass.CONFIGURATION_MUTATION
+    capabilities: ClassVar[EffectCapabilities] = _HARNESS
+
+    def __post_init__(self) -> None:
+        _line(self.harness, "harness")
+        _line(self.artifact, "artifact")
+        _line(self.destination, "merge destination")
+        _line(self.source, "merge source")
+        if not is_block_name(self.region):
+            raise ValueError("a merged block names the region it owns")
+        if not isinstance(self.position, BlockPosition):
+            raise ValueError("a merged block needs a position")
+
+
+@dataclass(frozen=True, slots=True)
+class UnmergeManagedBlock:
+    """Take back only the region this artifact owns, and leave the file it was in."""
+
+    harness: str
+    artifact: str
+    destination: str
+    region: str
+    risk: ClassVar[RiskClass] = RiskClass.CONFIGURATION_MUTATION
+    capabilities: ClassVar[EffectCapabilities] = _HARNESS
+
+    def __post_init__(self) -> None:
+        _line(self.harness, "harness")
+        _line(self.artifact, "artifact")
+        _line(self.destination, "merge destination")
+        if not is_block_name(self.region):
+            raise ValueError("a withdrawn block names the region it owns")
+
+
 Effect: TypeAlias = (
     CopyTree
     | WriteFile
@@ -306,6 +362,8 @@ Effect: TypeAlias = (
     | UnconfigureHarness
     | DeliverArtifact
     | WithdrawArtifact
+    | MergeManagedBlock
+    | UnmergeManagedBlock
     | VerifyRequirement
 )
 
@@ -388,6 +446,24 @@ def effect_to_data(effect: Effect) -> dict[str, object]:
             artifact=effect.artifact,
             destination=effect.destination,
             delivery=effect.delivery.value,
+        )
+    elif isinstance(effect, MergeManagedBlock):
+        data.update(
+            kind="merge-managed-block",
+            harness=effect.harness,
+            artifact=effect.artifact,
+            destination=effect.destination,
+            region=effect.region,
+            source=effect.source,
+            position=effect.position.value,
+        )
+    elif isinstance(effect, UnmergeManagedBlock):
+        data.update(
+            kind="unmerge-managed-block",
+            harness=effect.harness,
+            artifact=effect.artifact,
+            destination=effect.destination,
+            region=effect.region,
         )
     else:
         data.update(kind="verify-requirement", requirement=effect.requirement)

@@ -125,10 +125,26 @@ that flow and execution, plus composition of real Marketplace and installed-stat
    drift detection and uninstall. Withdrawal restores owner access only inside the exact read-only
    tree it is removing and never follows a symlink (D-078).
 
-   Public direct approved-registry `install` and `status` are now live (D-079, D-080). The next
-   executable work is `update`: resolve the installed canonical record and approved replacement,
-   preserve the review/digest boundary, execute and re-read the machine. Then switch `uninstall`
-   with its existing public-flow tests green before removing any legacy authority.
+   Public direct approved-registry `install`, `status`, `update` and `uninstall` are now all live
+   (D-079, D-080, D-081, D-083). `update` rebuilds its Selection from the canonical records, pins
+   no version unless somebody pinned one, and lets `supersession_intent` decide update / repair /
+   refused-downgrade (D-081); converging in place also forced the payload to be judged by content
+   rather than presence (D-082). `uninstall` plans from receipts alone and runs through the same
+   executor (D-083), so removing the source that delivered an artifact no longer strands it.
+
+   **Memory now installs canonically (D-084).** `MergeManagedBlock`/`UnmergeManagedBlock`,
+   `MEMORY_TARGETS`, `package_merge`, `ArtifactMerge` on the placed receipt and a `MERGE`
+   reconciliation component close the first half of B-034: a memory artifact is installed by owning
+   a delimited region of a file the user writes in, measured by digesting that region rather than
+   the file, and uninstalled by taking the region back and leaving the file. Proven end to end
+   through the public command in `tests/merged_installation_e2e_test.py`.
+
+   The next executable work is the second half of B-034: a **hook** is a script plus an entry merged
+   into a list inside a JSON settings file, identified by `(matcher, command)` from a profile-owned
+   template. That is the last kind the canonical pipeline cannot install. After it, the default TTY
+   route (B-025) and then retiring legacy consumer authority path by path --
+   `consumer/application.py`, `lifecycle/application.py`, `installation/*`, `setup_engine/*` -- each
+   removal preceded by a public-flow test proving the canonical path already carries it.
 
    Hooks and shared-file memory are deliberately outside completed B-033 (B-034): a hook is a
    script plus an entry merged into a settings file, and every measured memory target is a

@@ -30,17 +30,20 @@ from agent_artifacts.domain.harness import (
     delivery_destination,
     delivery_target,
     mcp_target,
+    memory_target,
 )
 from agent_artifacts.domain.identifiers import ArtifactIdentity
 from agent_artifacts.domain.inputs import InputValueSource
 from agent_artifacts.domain.install_description import InstallDescription
+from agent_artifacts.domain.managed_blocks import is_block_name
 from agent_artifacts.domain.placement import artifact_root
 from agent_artifacts.domain.python_runtime import ArtifactEnvironment, PythonInstaller
-from agent_artifacts.domain.receipts import ArtifactDelivery
+from agent_artifacts.domain.receipts import ArtifactDelivery, ArtifactMerge
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.domain.selection import ResolvedArtifact
 from agent_artifacts.protocol.authoring import (
     package_delivery,
+    package_merge,
     package_payload_root,
     read_package_description,
 )
@@ -61,10 +64,62 @@ def _error(message: str, *remediation: str) -> Err:
     )
 
 
+#: The kinds a harness reads out of a file somebody else owns rather than off a path of their own.
+#: A hook is deliberately absent: it is a script plus an entry merged into a settings file, which
+#: needs a list merge this build does not have yet (B-034).
+_MERGED_KINDS = frozenset({ArtifactKind.MEMORY})
+
+
 def _delivered(description: InstallDescription) -> bool:
     """Whether this artifact is read off a path rather than started, as the package declares it."""
 
     return description.contract is None
+
+
+def _merges(
+    identity: ArtifactIdentity,
+    entries: object,
+    *,
+    kind: ArtifactKind,
+    scope: Scope,
+    profiles: tuple[str, ...],
+    root: str,
+    harness_root: str,
+) -> Result[tuple[ArtifactMerge, ...]]:
+    """Which region of which shared file each requested harness would read this artifact from.
+
+    The destination is a file the user writes in, so what is recorded is the region rather than the
+    file, and the digest covers only the body that goes in it. The source is inside `root` for the
+    same reason a delivery's is: the store's object is shared and may be pruned, and a repair has to
+    re-merge from the copy this installation owns.
+    """
+
+    packaged = package_merge(kind, entries)  # type: ignore[arg-type]
+    if isinstance(packaged, Err):
+        return packaged
+    payload = ArtifactEnvironment(str(identity), root).payload
+    if not is_block_name(identity.name):
+        return _error(f"{identity} cannot name a region of a file somebody else owns")
+
+    merges: list[ArtifactMerge] = []
+    for profile in profiles:
+        try:
+            target = memory_target(profile, scope)
+        except KeyError as error:
+            # Named rather than skipped, for the same reason a missing delivery target is: an
+            # install that reports success and merges nowhere leaves the harness somebody asked for
+            # with nothing to read.
+            return _error(str(error).strip("'"))
+        merges.append(
+            ArtifactMerge(
+                profile,
+                f"{payload}/{packaged.value.source}",
+                os.path.join(harness_root, target.destination),
+                identity.name,
+                packaged.value.digest,
+            )
+        )
+    return Ok(tuple(merges))
 
 
 def _deliveries(
@@ -174,6 +229,13 @@ def placement_for(
 
     root = artifact_root(coordinate, scope, project_root=project_root, data_root=data_root)
     delivered = _delivered(described.value)
+    # A coordinate's kind is a plain string; the measured tables are keyed by the enum. An
+    # unrecognized kind is left as `None` here and named by whichever branch needs it, rather than
+    # becoming a lookup that happens to miss.
+    try:
+        kind: ArtifactKind | None = ArtifactKind(coordinate.artifact.kind)
+    except ValueError:
+        kind = None
 
     targets = []
     if not delivered:
@@ -187,6 +249,7 @@ def placement_for(
                 return _error(str(error).strip("'"))
 
     deliveries: tuple[ArtifactDelivery, ...] = ()
+    merges: tuple[ArtifactMerge, ...] = ()
     if delivered:
         if harness_root is None or not os.path.isabs(harness_root):
             return _error(
@@ -194,17 +257,32 @@ def placement_for(
                 "path is resolved against",
                 "supply the project root for a project install, or the user home for a user one",
             )
-        made = _deliveries(
-            coordinate.artifact,
-            stored.value.candidate.entries,
-            scope=scope,
-            profiles=profiles,
-            root=root,
-            harness_root=harness_root,
-        )
-        if isinstance(made, Err):
-            return made
-        deliveries = made.value
+        if kind in _MERGED_KINDS:
+            assert kind is not None
+            blocks = _merges(
+                coordinate.artifact,
+                stored.value.candidate.entries,
+                kind=kind,
+                scope=scope,
+                profiles=profiles,
+                root=root,
+                harness_root=harness_root,
+            )
+            if isinstance(blocks, Err):
+                return blocks
+            merges = blocks.value
+        else:
+            made = _deliveries(
+                coordinate.artifact,
+                stored.value.candidate.entries,
+                scope=scope,
+                profiles=profiles,
+                root=root,
+                harness_root=harness_root,
+            )
+            if isinstance(made, Err):
+                return made
+            deliveries = made.value
 
     try:
         return Ok(
@@ -217,6 +295,7 @@ def placement_for(
                 sources=sources,
                 preferred_installer=preferred_installer,
                 deliveries=deliveries,
+                merges=merges,
                 # The registry's attested digest of the payload, not one re-derived here. The
                 # installing machine records what the approved version says it placed.
                 payload_digest=artifact.version.payload_digest if delivered else None,

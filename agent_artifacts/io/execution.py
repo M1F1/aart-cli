@@ -31,17 +31,23 @@ from agent_artifacts.domain.effects import (
     DeliveryKind,
     Effect,
     InstallPythonDependencies,
+    MergeManagedBlock,
     RemoveOwnedPath,
     ReplaceCredential,
     StoreCredential,
     UnconfigureHarness,
+    UnmergeManagedBlock,
     VerifyCredential,
     WithdrawArtifact,
     WriteFile,
 )
 from agent_artifacts.domain.harness import McpRegistration
+from agent_artifacts.domain.managed_blocks import (
+    merge_managed_block,
+    remove_managed_block,
+)
 from agent_artifacts.domain.python_runtime import ArtifactEnvironment
-from agent_artifacts.domain.receipts import ArtifactDelivery
+from agent_artifacts.domain.receipts import ArtifactDelivery, ArtifactMerge
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.io.credentials import CredentialProviderPort
 from agent_artifacts.io.fs import write_atomic
@@ -64,6 +70,7 @@ __all__ = [
     "FileEffectInterpreter",
     "HarnessEffectInterpreter",
     "LocalMutationLock",
+    "ManagedBlockInterpreter",
     "RuntimeEffectInterpreter",
 ]
 
@@ -299,6 +306,155 @@ class RuntimeEffectInterpreter:
                 return installed
             return Ok(f"installed {effect.descriptor} with {effect.installer}")
         return _error(EXECUTION_REFUSED, f"{type(effect).__name__} is not a runtime effect")
+
+
+class ManagedBlockInterpreter:
+    """Writes one artifact's region into a file it does not own, and takes back only that region.
+
+    Every measured memory target is a file the user writes in, so this interpreter is the one that
+    has to leave a file standing after taking something out of it. It cannot prove ownership
+    structurally the way `FileEffectInterpreter` does -- the file is not AART's. It proves it the
+    way the delivery and harness interpreters do (D-072): it is handed the merges it may make, and a
+    (destination, region) pair it was not given is refused rather than written.
+
+    Three refusals matter more than the writing. A destination that is a symlink is refused rather
+    than followed, so an installation never writes through somebody's arrangement into a path nobody
+    reviewed. A destination that is not UTF-8 text is refused rather than replaced. And a file whose
+    markers are damaged is left exactly as it is, because the text around a stray marker is the
+    user's and no rule here can tell where they meant it to resume.
+    """
+
+    def __init__(self, artifact: str, merges: tuple[ArtifactMerge, ...]) -> None:
+        if (
+            not isinstance(artifact, str)
+            or not artifact.strip()
+            or any(character in artifact for character in "\r\n")
+        ):
+            raise ValueError("a managed-block interpreter merges for one named artifact")
+        merges = tuple(merges)
+        if not merges or any(not isinstance(merge, ArtifactMerge) for merge in merges):
+            raise ValueError("a managed-block interpreter needs the merges it may make")
+        self.artifact = artifact
+        self.merges = merges
+
+    def _matching(self, effect: Effect) -> ArtifactMerge | None:
+        if not isinstance(effect, (MergeManagedBlock, UnmergeManagedBlock)):
+            return None
+        if effect.artifact != self.artifact:
+            return None
+        for merge in self.merges:
+            if (
+                merge.harness == effect.harness
+                and merge.destination == effect.destination
+                and merge.region == effect.region
+            ):
+                return merge
+        return None
+
+    def supports(self, effect: Effect) -> bool:
+        """Whether this interpreter holds the exact region `effect` names, not merely its kind."""
+
+        return self._matching(effect) is not None
+
+    def apply(self, effect: Effect) -> Result[str]:
+        if not isinstance(effect, (MergeManagedBlock, UnmergeManagedBlock)):
+            return _error(EXECUTION_REFUSED, f"{type(effect).__name__} is not a merge effect")
+        if self._matching(effect) is None:
+            return _error(
+                EXECUTION_REFUSED,
+                f"nothing here says {self.artifact} owns {effect.region} in {effect.destination}",
+            )
+        if isinstance(effect, MergeManagedBlock):
+            return self._merge(effect)
+        return self._unmerge(effect)
+
+    def _read(self, destination: str) -> Result[str | None]:
+        """What the destination currently says, or `None` when there is no file there yet."""
+
+        if os.path.islink(destination):
+            return _error(
+                EXECUTION_REFUSED,
+                f"{destination} is a symlink; merging would write through it into a path nobody "
+                f"reviewed, or replace the arrangement somebody made",
+            )
+        if not os.path.exists(destination):
+            return Ok(None)
+        if not os.path.isfile(destination):
+            return _error(EXECUTION_REFUSED, f"{destination} is not a regular file to merge into")
+        try:
+            with open(destination, "rb") as handle:
+                raw = handle.read()
+        except OSError as error:
+            return _error(EXECUTION_FAILED, f"cannot read {destination}: {error.strerror}")
+        try:
+            return Ok(raw.decode("utf-8"))
+        except UnicodeDecodeError:
+            return _error(
+                EXECUTION_REFUSED,
+                f"{destination} is not UTF-8 text, so the region it should hold cannot be found "
+                f"without replacing what is there",
+            )
+
+    def _write(self, destination: str, text: str) -> Result[str]:
+        """Replace the file's content, keeping the mode whoever owns it chose."""
+
+        mode: int | None = None
+        try:
+            mode = stat.S_IMODE(os.stat(destination).st_mode)
+        except OSError:
+            mode = None
+        try:
+            write_atomic(destination, text.encode("utf-8"))
+            # `write_atomic` stages through a private temporary file, so a new file would land at
+            # 0600 and an existing one would silently lose the mode its owner chose.
+            os.chmod(destination, 0o644 if mode is None else mode)
+        except OSError as error:
+            return _error(EXECUTION_FAILED, f"cannot write {destination}: {error.strerror}")
+        return Ok(destination)
+
+    def _merge(self, effect: MergeManagedBlock) -> Result[str]:
+        if not os.path.isfile(effect.source):
+            return _error(
+                EXECUTION_FAILED,
+                f"{effect.source} is not a file to merge, so {effect.destination} is left as it was",
+            )
+        try:
+            with open(effect.source, "rb") as handle:
+                body = handle.read().decode("utf-8")
+        except OSError as error:
+            return _error(EXECUTION_FAILED, f"cannot read {effect.source}: {error.strerror}")
+        except UnicodeDecodeError:
+            return _error(EXECUTION_REFUSED, f"{effect.source} is not UTF-8 text to merge")
+        existing = self._read(effect.destination)
+        if isinstance(existing, Err):
+            return existing
+        merged = merge_managed_block(
+            existing.value or "", effect.region, body, position=effect.position
+        )
+        if isinstance(merged, Err):
+            # The file could not be merged into without guessing where AART's region begins or
+            # ends, so it is left exactly as it is and the refusal names why.
+            return merged
+        written = self._write(effect.destination, merged.value)
+        if isinstance(written, Err):
+            return written
+        return Ok(f"merged {effect.region} into {effect.destination}")
+
+    def _unmerge(self, effect: UnmergeManagedBlock) -> Result[str]:
+        existing = self._read(effect.destination)
+        if isinstance(existing, Err):
+            return existing
+        if existing.value is None:
+            return Ok(f"{effect.destination} is already gone, so {effect.region} is too")
+        remaining = remove_managed_block(existing.value, effect.region)
+        if isinstance(remaining, Err):
+            return remaining
+        if remaining.value == existing.value:
+            return Ok(f"{effect.destination} does not hold {effect.region}")
+        written = self._write(effect.destination, remaining.value)
+        if isinstance(written, Err):
+            return written
+        return Ok(f"removed {effect.region} from {effect.destination}")
 
 
 class HarnessEffectInterpreter:

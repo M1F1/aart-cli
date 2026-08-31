@@ -45,7 +45,12 @@ from agent_artifacts.domain.credentials import (
     ProviderState,
 )
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.harness import Scope, delivery_destination, delivery_target
+from agent_artifacts.domain.harness import (
+    Scope,
+    delivery_destination,
+    delivery_target,
+    memory_target,
+)
 from agent_artifacts.domain.identifiers import ArtifactCoordinate
 from agent_artifacts.domain.receipts import (
     InstallationReceipt,
@@ -174,6 +179,17 @@ def _targets_scope_and_profile(
             delivery_destination(target, record.coordinate.artifact.name),
         )
         if delivery.destination == expected:
+            return True
+    # An artifact merged into a shared file belongs to the same view for the same reason: what
+    # decides is where this scope's harness reads it, not how it reads it.
+    for merge in receipt.merges:
+        if profiles and merge.harness not in profiles:
+            continue
+        try:
+            memory = memory_target(merge.harness, scope)
+        except KeyError:
+            continue
+        if merge.destination == os.path.join(harness_root, memory.destination):
             return True
     return False
 

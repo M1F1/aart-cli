@@ -55,12 +55,19 @@ class Component(str, Enum):
     CREDENTIAL = _COMPONENT_CRED
     LAUNCHER = "launcher"
     DELIVERY = "delivery"
+    MERGE = "merge"
     HARNESS = "harness"
 
 
 #: Components an artifact has more than one of, which therefore have to say which one they are.
 _NAMED = frozenset(
-    {Component.CONFIGURATION, Component.CREDENTIAL, Component.DELIVERY, Component.HARNESS}
+    {
+        Component.CONFIGURATION,
+        Component.CREDENTIAL,
+        Component.DELIVERY,
+        Component.MERGE,
+        Component.HARNESS,
+    }
 )
 _ORDER = {component: index for index, component in enumerate(Component)}
 

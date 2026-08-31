@@ -19,7 +19,9 @@ import unittest
 
 from agent_artifacts.domain.managed_blocks import (
     BlockPosition,
+    is_block_name,
     managed_block,
+    managed_block_body,
     merge_managed_block,
     remove_managed_block,
 )
@@ -194,3 +196,51 @@ class ManagedBlockRemovalTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ManagedBlockBodyTest(unittest.TestCase):
+    """Reading back what a region says, which is how drift in it is measured.
+
+    A merge digests the body it puts in the region, so detecting an edit means reading the region
+    back out. Reading the file would report every note the user added to their own `CLAUDE.md` as
+    drift in an artifact that has not changed at all.
+    """
+
+    def test_a_file_without_the_region_has_no_body(self) -> None:
+        found = managed_block_body(NOTES, NAME)
+
+        self.assertIsInstance(found, Ok)
+        self.assertIsNone(found.value)
+
+    def test_an_empty_file_has_no_body(self) -> None:
+        self.assertIsNone(managed_block_body("", NAME).value)
+
+    def test_the_body_reads_back_as_what_was_merged(self) -> None:
+        found = managed_block_body(_merged(NOTES), NAME)
+
+        self.assertIsInstance(found, Ok)
+        self.assertEqual(BODY.strip("\n"), found.value)
+
+    def test_a_body_somebody_edited_reads_back_as_the_edit(self) -> None:
+        edited = _merged(NOTES).replace("Always name the failure.", "Somebody changed this.")
+
+        self.assertEqual("Somebody changed this.", managed_block_body(edited, NAME).value)
+
+    def test_a_half_open_region_is_refused_rather_than_read_to_the_end_of_the_file(self) -> None:
+        damaged = f"{NOTES}<!-- >>> agent-artifacts memory:{NAME} >>> -->\nstill mine\n"
+
+        self.assertIsInstance(managed_block_body(damaged, NAME), Err)
+
+    def test_a_name_that_could_not_delimit_a_region_is_refused(self) -> None:
+        self.assertIsInstance(managed_block_body(NOTES, "not a name"), Err)
+
+
+class BlockNameTest(unittest.TestCase):
+    def test_a_slug_can_name_a_region(self) -> None:
+        self.assertTrue(is_block_name(NAME))
+
+    def test_a_name_carrying_marker_syntax_cannot(self) -> None:
+        self.assertFalse(is_block_name("house style >>> -->"))
+
+    def test_nothing_at_all_cannot(self) -> None:
+        self.assertFalse(is_block_name(None))

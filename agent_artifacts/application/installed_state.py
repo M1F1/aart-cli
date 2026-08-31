@@ -24,10 +24,12 @@ from agent_artifacts.domain.effects import (
     DeleteCredential,
     DeliverArtifact,
     InstallPythonDependencies,
+    MergeManagedBlock,
     RemoveOwnedPath,
     ReplaceCredential,
     StoreCredential,
     UnconfigureHarness,
+    UnmergeManagedBlock,
     WithdrawArtifact,
     WriteFile,
 )
@@ -251,6 +253,21 @@ def desired_state_from_placement(
         )
         for delivery in receipt.deliveries
     )
+    components.extend(
+        DesiredComponent(
+            ComponentId(Component.MERGE, merge.harness),
+            (
+                MergeManagedBlock(
+                    merge.harness,
+                    receipt.artifact,
+                    merge.destination,
+                    merge.region,
+                    merge.source,
+                ),
+            ),
+        )
+        for merge in receipt.merges
+    )
     return DesiredState(coordinate, tuple(components))
 
 
@@ -290,6 +307,21 @@ def removal_state_from_placement(
             target=absent,
         )
         for delivery in receipt.deliveries
+    )
+    components.extend(
+        DesiredComponent(
+            ComponentId(Component.MERGE, merge.harness),
+            (
+                UnmergeManagedBlock(
+                    merge.harness,
+                    receipt.artifact,
+                    merge.destination,
+                    merge.region,
+                ),
+            ),
+            target=absent,
+        )
+        for merge in receipt.merges
     )
     return DesiredState(coordinate, tuple(components))
 
@@ -350,6 +382,17 @@ def current_state_from_placement(
         else:
             state = ComponentState.DIVERGENT
         components.append(ObservedComponent(ComponentId(Component.DELIVERY, found.harness), state))
+    merged = {merge.harness: merge.digest for merge in receipt.merges}
+    for region in observation.merges:
+        if not region.present:
+            state = ComponentState.ABSENT
+        elif region.digest is None:
+            state = ComponentState.UNKNOWN
+        elif region.digest == merged.get(region.harness):
+            state = ComponentState.MATCHED
+        else:
+            state = ComponentState.DIVERGENT
+        components.append(ObservedComponent(ComponentId(Component.MERGE, region.harness), state))
     return CurrentState(desired.artifact, tuple(item for item in components if item.id in wanted))
 
 

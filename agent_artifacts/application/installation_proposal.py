@@ -33,6 +33,7 @@ from agent_artifacts.domain.policies import EffectivePolicy
 from agent_artifacts.domain.python_runtime import ArtifactEnvironment
 from agent_artifacts.domain.receipts import (
     ArtifactDelivery,
+    ArtifactMerge,
     ArtifactReceipt,
     InstallationReceipt,
     PlacedArtifactReceipt,
@@ -235,6 +236,9 @@ class PlannedPlacement:
     deliveries: tuple[ArtifactDelivery, ...] = ()
     payload_source: str | None = None
     requirements: tuple[Requirement, ...] = ()
+    #: The regions of files this machine's user owns that this artifact writes into. A memory
+    #: artifact has these and no deliveries; a Skill has deliveries and none of these.
+    merges: tuple[ArtifactMerge, ...] = ()
 
     def __post_init__(self) -> None:
         if (
@@ -243,11 +247,13 @@ class PlannedPlacement:
             or not isinstance(self.payload_digest, ObjectDigest)
         ):
             raise ValueError("a planned placement is invalid")
-        if not self.deliveries or any(
-            not isinstance(item, ArtifactDelivery) for item in self.deliveries
+        if any(not isinstance(item, ArtifactDelivery) for item in self.deliveries) or any(
+            not isinstance(item, ArtifactMerge) for item in self.merges
         ):
+            raise ValueError("planned placement deliveries or merges are invalid")
+        if not self.deliveries and not self.merges:
             # Placed in its own tree and read by nobody is a download, not an installation.
-            raise ValueError("a planned placement is delivered to at least one harness")
+            raise ValueError("a planned placement is read by at least one harness")
         if self.payload_source is not None and (
             not isinstance(self.payload_source, str)
             or not self.payload_source.strip()
@@ -261,19 +267,23 @@ class PlannedPlacement:
             # read against whatever working directory the run that repaired it happened to have.
             raise ValueError("a planned placement root must be one absolute path")
         prefix = self.environment.root.rstrip("/") + "/"
-        for delivery in self.deliveries:
-            if delivery.source != self.environment.root and not delivery.source.startswith(prefix):
+        placed: tuple[ArtifactDelivery | ArtifactMerge, ...] = (*self.deliveries, *self.merges)
+        for item in placed:
+            if item.source != self.environment.root and not item.source.startswith(prefix):
                 # A delivery is made from the artifact that owns it, so a repair copies from what
                 # this installation placed rather than from somewhere nobody chose.
                 raise ValueError(
-                    f"a delivery to {delivery.harness} comes from outside "
-                    f"{self.environment.artifact}"
+                    f"a delivery to {item.harness} comes from outside {self.environment.artifact}"
                 )
-        harnesses = [delivery.harness for delivery in self.deliveries]
-        if len(set(harnesses)) != len(harnesses):
-            raise ValueError("one harness reads one delivery of an artifact")
+        for items, label in ((self.deliveries, "delivery"), (self.merges, "merge")):
+            harnesses = [item.harness for item in items]
+            if len(set(harnesses)) != len(harnesses):
+                raise ValueError(f"one harness reads one {label} of an artifact")
         object.__setattr__(
             self, "deliveries", tuple(sorted(self.deliveries, key=lambda item: item.harness))
+        )
+        object.__setattr__(
+            self, "merges", tuple(sorted(self.merges, key=lambda item: item.harness))
         )
 
     @property
@@ -302,6 +312,7 @@ def intended_placement_receipt(planned: PlannedPlacement) -> PlacedArtifactRecei
         planned.environment.root,
         planned.payload_digest,
         planned.deliveries,
+        merges=planned.merges,
     )
 
 

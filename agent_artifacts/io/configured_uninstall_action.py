@@ -52,6 +52,7 @@ from .execution import (
     FileEffectInterpreter,
     HarnessEffectInterpreter,
     LocalMutationLock,
+    ManagedBlockInterpreter,
 )
 from .harness import LocalHarnessRegistry
 from .installation_observation import observe_recorded_installation
@@ -133,7 +134,13 @@ def _interpreters(
             FileEffectInterpreter(ArtifactEnvironment(receipt.artifact, receipt.root))
         )
         if isinstance(receipt, PlacedArtifactReceipt):
-            interpreters.append(DeliveryEffectInterpreter(receipt.artifact, receipt.deliveries))
+            # Only what this receipt actually recorded: both adapters refuse to exist empty, and
+            # one holding nothing would claim every effect of its kind in the transaction and then
+            # refuse it as one it was not given.
+            if receipt.deliveries:
+                interpreters.append(DeliveryEffectInterpreter(receipt.artifact, receipt.deliveries))
+            if receipt.merges:
+                interpreters.append(ManagedBlockInterpreter(receipt.artifact, receipt.merges))
             continue
         interpreters.append(
             HarnessEffectInterpreter(registry, receipt.registrations, artifact=receipt.artifact)

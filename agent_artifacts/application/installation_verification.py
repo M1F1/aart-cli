@@ -20,6 +20,7 @@ from agent_artifacts.domain.receipts import InstallationReceipt
 __all__ = [
     "DeliveryObservation",
     "InstallationObservation",
+    "MergeObservation",
     "PlacementObservation",
     "VerificationFinding",
     "installation_verified",
@@ -63,6 +64,30 @@ class DeliveryObservation:
 
 
 @dataclass(frozen=True, slots=True)
+class MergeObservation:
+    """What one region of a shared file says now. Facts only.
+
+    Distinct from a delivery observation because absent means something narrower: the file may be
+    full of the user's own writing and simply not contain this artifact's region. `present` is about
+    the region, never about the file.
+    """
+
+    harness: str
+    present: bool = False
+    digest: ObjectDigest | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.harness, str) or not self.harness.strip():
+            raise ValueError("an observed merge names the harness that reads it")
+        if not isinstance(self.present, bool):
+            raise ValueError("observed merge presence is invalid")
+        if self.digest is not None and not isinstance(self.digest, ObjectDigest):
+            raise ValueError("observed merge digest is invalid")
+        if self.digest is not None and not self.present:
+            raise ValueError("a region that is not there cannot have been measured")
+
+
+@dataclass(frozen=True, slots=True)
 class PlacementObservation:
     """What an inspector found for an artifact a harness reads. Facts only."""
 
@@ -71,6 +96,7 @@ class PlacementObservation:
     #: payload that is not there at all, which `payload_present` already says.
     payload_digest: ObjectDigest | None = None
     deliveries: tuple[DeliveryObservation, ...] = ()
+    merges: tuple[MergeObservation, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.payload_present, bool):
@@ -83,9 +109,14 @@ class PlacementObservation:
             not isinstance(item, DeliveryObservation) for item in self.deliveries
         ):
             raise ValueError("observed deliveries are invalid")
-        harnesses = [item.harness for item in self.deliveries]
-        if len(set(harnesses)) != len(harnesses):
-            raise ValueError("one harness reads one delivery of an artifact")
+        if not isinstance(self.merges, tuple) or any(
+            not isinstance(item, MergeObservation) for item in self.merges
+        ):
+            raise ValueError("observed merges are invalid")
+        for items, label in ((self.deliveries, "delivery"), (self.merges, "merge")):
+            harnesses = [item.harness for item in items]
+            if len(set(harnesses)) != len(harnesses):
+                raise ValueError(f"one harness reads one {label} of an artifact")
 
 
 @dataclass(frozen=True, slots=True)

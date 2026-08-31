@@ -30,12 +30,14 @@ from .effects import DeliveryKind
 from .harness import McpRegistration, registration_from_data, registration_to_data
 from .identifiers import ArtifactCoordinate, InputId, ObjectDigest
 from .launch import Transport
+from .managed_blocks import is_block_name
 from .result import Err, Ok, Result
 from .selection import OwnershipKind, OwnershipReason
 
 __all__ = [
     "RECEIPT_INVALID",
     "ArtifactDelivery",
+    "ArtifactMerge",
     "ArtifactReceipt",
     "ConfigFingerprint",
     "DeliveryKind",
@@ -195,6 +197,39 @@ class ArtifactDelivery:
 
 
 @dataclass(frozen=True, slots=True)
+class ArtifactMerge:
+    """One region of a file somebody else owns that this artifact writes into, and what it says.
+
+    A delivery and a merge are both a harness reading an artifact, but they are not the same
+    statement about the destination. A delivery owns its path outright; a merge owns a delimited
+    region of a file the user writes in, which is why it records the region by name and digests the
+    block rather than the file. Digesting the file would report every edit the user made to their
+    own notes as drift in the artifact.
+    """
+
+    harness: str
+    source: str
+    destination: str
+    region: str
+    digest: ObjectDigest
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.harness, str) or not self.harness.strip():
+            raise ValueError("a merge names the harness that reads it")
+        for value, label in ((self.source, "source"), (self.destination, "destination")):
+            if (
+                not isinstance(value, str)
+                or not value.startswith("/")
+                or any(character in value for character in "\r\n")
+            ):
+                raise ValueError(f"a merge {label} must be one absolute path")
+        if not is_block_name(self.region):
+            raise ValueError("a merge names the region of the file it owns")
+        if not isinstance(self.digest, ObjectDigest):
+            raise ValueError("merge digest is invalid")
+
+
+@dataclass(frozen=True, slots=True)
 class PlacedArtifactReceipt:
     """One installed artifact that a harness reads rather than starts.
 
@@ -210,6 +245,7 @@ class PlacedArtifactReceipt:
     payload_digest: ObjectDigest
     deliveries: tuple[ArtifactDelivery, ...] = ()
     config: tuple[ConfigFingerprint, ...] = ()
+    merges: tuple[ArtifactMerge, ...] = ()
 
     def __post_init__(self) -> None:
         for value, label in ((self.artifact, "artifact"), (self.root, "root")):
@@ -222,27 +258,37 @@ class PlacedArtifactReceipt:
         for items, kind, label in (
             (self.deliveries, ArtifactDelivery, "deliveries"),
             (self.config, ConfigFingerprint, "config"),
+            (self.merges, ArtifactMerge, "merges"),
         ):
             if not isinstance(items, tuple) or any(not isinstance(item, kind) for item in items):
                 raise ValueError(f"placed artifact receipt {label} are invalid")
-        if not self.deliveries:
+        if not self.deliveries and not self.merges:
             # Placed in its own tree and read by nobody is a download, not an installation, and
             # recording it as one would let `status` report an artifact nothing can reach.
-            raise ValueError("a placed artifact is delivered to at least one harness")
+            raise ValueError("a placed artifact is read by at least one harness")
         destinations = [item.destination for item in self.deliveries]
         if len(set(destinations)) != len(destinations):
             raise ValueError("two deliveries cannot write the same destination")
-        for item in self.deliveries:
+        regions = [(item.destination, item.region) for item in self.merges]
+        if len(set(regions)) != len(regions):
+            raise ValueError("two merges cannot own the same region of the same file")
+        if set(destinations) & {item.destination for item in self.merges}:
+            # One of them replaces the destination and the other preserves it. Whichever ran
+            # second would undo the first.
+            raise ValueError("a destination is either delivered or merged into, not both")
+        sources: tuple[ArtifactDelivery | ArtifactMerge, ...] = (*self.deliveries, *self.merges)
+        for item in sources:
             if not _within(self.root, item.source):
                 # Re-delivery copies from the artifact's own tree. A source outside it would let
                 # a repair place content this installation never owned.
                 raise ValueError("a delivery source lies inside the artifact root")
-        harnesses = [item.harness for item in self.deliveries]
-        if len(set(harnesses)) != len(harnesses):
-            # One delivery per harness, so the reconciler can name a delivery component by the
-            # harness that reads it. Two would collide into one component and the second would
-            # be silently dropped from the state everything else compares against.
-            raise ValueError("one harness reads one delivery of an artifact")
+        for items, label in ((self.deliveries, "delivery"), (self.merges, "merge")):
+            harnesses = [item.harness for item in items]
+            if len(set(harnesses)) != len(harnesses):
+                # One per harness, so the reconciler can name the component by the harness that
+                # reads it. Two would collide into one component and the second would be silently
+                # dropped from the state everything else compares against.
+                raise ValueError(f"one harness reads one {label} of an artifact")
 
 
 def _within(root: str, path: str) -> bool:
@@ -316,6 +362,16 @@ def placed_artifact_receipt_to_data(receipt: PlacedArtifactReceipt) -> dict[str,
             }
             for item in receipt.deliveries
         ],
+        "merges": [
+            {
+                "destination": item.destination,
+                "digest": str(item.digest),
+                "harness": item.harness,
+                "region": item.region,
+                "source": item.source,
+            }
+            for item in receipt.merges
+        ],
         "payload_digest": str(receipt.payload_digest),
         "root": receipt.root,
     }
@@ -351,6 +407,21 @@ def _delivery(value: object) -> ArtifactDelivery:
         str(value["destination"]),
         kind,
         _digest(value["digest"], "delivery digest"),
+    )
+
+
+def _merge(value: object) -> ArtifactMerge:
+    if not isinstance(value, dict):
+        raise ValueError("a merge must be a mapping")
+    for key in ("harness", "source", "destination", "region", "digest"):
+        if key not in value:
+            raise ValueError(f"a merge is missing {key}")
+    return ArtifactMerge(
+        str(value["harness"]),
+        str(value["source"]),
+        str(value["destination"]),
+        str(value["region"]),
+        _digest(value["digest"], "merge digest"),
     )
 
 
@@ -394,7 +465,7 @@ def placed_artifact_receipt_from_data(data: object) -> Result[PlacedArtifactRece
         for key in ("artifact", "root", "payload_digest", "deliveries"):
             if key not in data:
                 raise ValueError(f"placed artifact receipt is missing {key}")
-        for key in ("deliveries", "config"):
+        for key in ("deliveries", "config", "merges"):
             if not isinstance(data.get(key, []), list):
                 raise ValueError(f"placed artifact receipt {key} must be a list")
         return Ok(
@@ -404,6 +475,9 @@ def placed_artifact_receipt_from_data(data: object) -> Result[PlacedArtifactRece
                 _digest(data["payload_digest"], "payload digest"),
                 tuple(_delivery(item) for item in data["deliveries"]),
                 tuple(_fingerprint(item) for item in data.get("config", [])),
+                # Absent rather than required: a receipt written before merges existed records an
+                # artifact that merged into nothing, which is exactly what it did.
+                tuple(_merge(item) for item in data.get("merges", [])),
             )
         )
     except ValueError as error:

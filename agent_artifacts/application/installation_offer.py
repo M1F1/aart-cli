@@ -33,7 +33,7 @@ from agent_artifacts.domain.install_description import InstallDescription
 from agent_artifacts.domain.plans import PlannedRemediation
 from agent_artifacts.domain.policies import EffectivePolicy
 from agent_artifacts.domain.python_runtime import PythonInstaller
-from agent_artifacts.domain.receipts import ArtifactDelivery
+from agent_artifacts.domain.receipts import ArtifactDelivery, ArtifactMerge
 from agent_artifacts.domain.reconciliation import CurrentState
 from agent_artifacts.domain.remediations import Remediation
 from agent_artifacts.domain.requirements import Requirement
@@ -86,6 +86,9 @@ class ArtifactPlacement:
     #: a path. Both are measured by the adapter, which is the only layer that has seen the package
     #: and the profile roots.
     deliveries: tuple[ArtifactDelivery, ...] = ()
+    #: The regions of shared files this artifact writes into, for the kinds that are installed by
+    #: being merged rather than placed. A memory artifact has these instead of deliveries.
+    merges: tuple[ArtifactMerge, ...] = ()
     payload_digest: ObjectDigest | None = None
 
     def __post_init__(self) -> None:
@@ -98,10 +101,12 @@ class ArtifactPlacement:
             or not self.payload_source
         ):
             raise ValueError("an artifact placement is invalid")
-        if any(not isinstance(item, ArtifactDelivery) for item in self.deliveries) or not (
-            self.payload_digest is None or isinstance(self.payload_digest, ObjectDigest)
+        if (
+            any(not isinstance(item, ArtifactDelivery) for item in self.deliveries)
+            or any(not isinstance(item, ArtifactMerge) for item in self.merges)
+            or not (self.payload_digest is None or isinstance(self.payload_digest, ObjectDigest))
         ):
-            raise ValueError("artifact placement deliveries are invalid")
+            raise ValueError("artifact placement deliveries or merges are invalid")
 
     @property
     def coordinate(self):
@@ -166,7 +171,7 @@ def _requirements_of(placement: ArtifactPlacement) -> tuple[Requirement, ...]:
         # The harnesses that read it, and nothing else: there is no runtime to find and no
         # credential to resolve. The MCP targets are not consulted, because a delivered artifact
         # is not registered with anything.
-        return placement_requirements_for(placement.deliveries)
+        return placement_requirements_for(placement.deliveries, placement.merges)
     return requirements_for(placement.description, targets=placement.targets)
 
 
@@ -209,6 +214,7 @@ def offer_installation(
                 payload_source=placement.payload_source,
                 payload_digest=placement.payload_digest,
                 deliveries=placement.deliveries,
+                merges=placement.merges,
             )
         else:
             planned = plan_artifact_installation(

@@ -19,17 +19,21 @@ from enum import Enum
 from .artifacts import ArtifactKind
 from .effects import DeliveryKind
 from .launch import Transport
+from .managed_blocks import BlockPosition
 
 __all__ = [
     "DELIVERY_TARGETS",
     "MCP_TARGETS",
+    "MEMORY_TARGETS",
     "DeliveryTarget",
     "McpRegistration",
     "McpTarget",
+    "MemoryTarget",
     "Scope",
     "delivery_destination",
     "delivery_target",
     "mcp_target",
+    "memory_target",
     "registration_entry",
     "registration_from_data",
     "registration_to_data",
@@ -223,6 +227,67 @@ DELIVERY_TARGETS: dict[tuple[str, Scope, ArtifactKind], DeliveryTarget] = {
         DeliveryKind.FILE,
     ),
 }
+
+
+@dataclass(frozen=True, slots=True)
+class MemoryTarget:
+    """One harness's shared instruction file, relative to that scope's root.
+
+    Deliberately not a `DeliveryTarget`. A delivery destination is required to name the artifact,
+    because withdrawing one Skill must not take away the directory the harness reads them all from.
+    A memory file is the opposite: every memory artifact for a harness writes into the same file the
+    *user* also writes in, and each owns a delimited region of it (B-034). Naming the artifact in
+    the path would be a file the harness never reads.
+    """
+
+    harness: str
+    scope: Scope
+    destination: str
+    position: BlockPosition = BlockPosition.BOTTOM
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.harness, str) or _SLUG_RE.fullmatch(self.harness) is None:
+            raise ValueError("harness must be a canonical slug")
+        if not isinstance(self.scope, Scope) or not isinstance(self.position, BlockPosition):
+            raise ValueError("memory target scope or position is invalid")
+        if (
+            not isinstance(self.destination, str)
+            or not self.destination
+            or self.destination.startswith("/")
+            or any(part in ("", "..") for part in self.destination.split("/"))
+            or any(character in self.destination for character in "\r\n")
+        ):
+            raise ValueError("a memory destination must stay inside its scope root")
+        if _NAME_SLOT in self.destination:
+            raise ValueError(
+                "a memory destination is shared by every memory artifact for this harness, so it "
+                "cannot name one of them"
+            )
+
+
+#: Measured shared instruction files, taken from the harness profiles this repository has observed.
+#: A file here is the user's; an artifact installed into it owns one delimited block and nothing
+#: else. Tabnine has no user-scope entry on purpose: that build documents a project-root
+#: `TABNINE.md` and no always-loaded global instruction file, and inventing one would write a block
+#: into a file nothing reads.
+MEMORY_TARGETS: dict[tuple[str, Scope], MemoryTarget] = {
+    # Claude Code: `CLAUDE.md` at the project root, `~/.claude/CLAUDE.md` for the user.
+    ("claude", Scope.PROJECT): MemoryTarget("claude", Scope.PROJECT, "CLAUDE.md"),
+    ("claude", Scope.USER): MemoryTarget("claude", Scope.USER, ".claude/CLAUDE.md"),
+    # Tabnine: project-root `TABNINE.md`.
+    ("tabnine", Scope.PROJECT): MemoryTarget("tabnine", Scope.PROJECT, "TABNINE.md"),
+}
+
+
+def memory_target(harness: str, scope: Scope) -> MemoryTarget:
+    """The measured shared instruction file for `harness`, or `KeyError` if nobody measured one."""
+
+    try:
+        return MEMORY_TARGETS[(harness, scope)]
+    except KeyError:
+        raise KeyError(
+            f"no measured memory file for harness {harness!r} at {scope.value} scope"
+        ) from None
 
 
 def delivery_target(harness: str, scope: Scope, kind: ArtifactKind) -> DeliveryTarget:

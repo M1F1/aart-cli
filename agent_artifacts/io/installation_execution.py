@@ -41,6 +41,7 @@ from .execution import (
     DeliveryEffectInterpreter,
     FileEffectInterpreter,
     HarnessEffectInterpreter,
+    ManagedBlockInterpreter,
     RuntimeEffectInterpreter,
 )
 from .harness import LocalHarnessRegistry
@@ -88,11 +89,19 @@ def interpreters_for(
     for installation in installations:
         if isinstance(installation, PlannedPlacement):
             interpreters.append(FileEffectInterpreter(installation.environment))
-            interpreters.append(
-                DeliveryEffectInterpreter(
-                    installation.environment.artifact, installation.deliveries
+            # Each adapter is built only when there is something for it to carry out, because both
+            # refuse to exist empty: an interpreter holding no deliveries would accept every
+            # delivery in the transaction and then refuse it as one it was not given.
+            if installation.deliveries:
+                interpreters.append(
+                    DeliveryEffectInterpreter(
+                        installation.environment.artifact, installation.deliveries
+                    )
                 )
-            )
+            if installation.merges:
+                interpreters.append(
+                    ManagedBlockInterpreter(installation.environment.artifact, installation.merges)
+                )
             continue
         files = FileEffectInterpreter(installation.environment)
         files.offer(installation.launcher.content.encode("utf-8"))

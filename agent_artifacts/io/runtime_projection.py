@@ -17,6 +17,7 @@ from typing import Protocol
 from agent_artifacts.application.installation_verification import (
     DeliveryObservation,
     InstallationObservation,
+    MergeObservation,
     PlacementObservation,
 )
 from agent_artifacts.application.runtime_projection import RuntimeProjection
@@ -24,9 +25,11 @@ from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Sever
 from agent_artifacts.domain.effects import DeliveryKind
 from agent_artifacts.domain.harness import McpRegistration
 from agent_artifacts.domain.identifiers import ObjectDigest
+from agent_artifacts.domain.managed_blocks import managed_block_body
 from agent_artifacts.domain.python_runtime import ArtifactEnvironment
 from agent_artifacts.domain.receipts import (
     ArtifactDelivery,
+    ArtifactMerge,
     InstallationReceipt,
     PlacedArtifactReceipt,
 )
@@ -167,6 +170,10 @@ def observe_placement(receipt: PlacedArtifactReceipt) -> PlacementObservation:
         present = os.path.lexists(delivery.destination)
         digest = _delivered_digest(delivery) if present else None
         observed.append(DeliveryObservation(delivery.harness, present, digest))
+    merged = [
+        MergeObservation(merge.harness, body is not None, body)
+        for merge, body in ((item, _merged_digest(item)) for item in receipt.merges)
+    ]
     payload = ArtifactEnvironment(receipt.artifact, receipt.root).payload
     present = os.path.isdir(payload)
     return PlacementObservation(
@@ -176,7 +183,33 @@ def observe_placement(receipt: PlacedArtifactReceipt) -> PlacementObservation:
         # would skip the copy and then deliver the old content under the new version's name.
         payload_digest=tree_digest_at(payload) if present else None,
         deliveries=tuple(observed),
+        merges=tuple(merged),
     )
+
+
+def _merged_digest(merge: ArtifactMerge) -> ObjectDigest | None:
+    """What this artifact's region of a shared file says now, or `None` when it is not there.
+
+    The region is digested, never the file. Digesting the file would report every note the user
+    added to their own `CLAUDE.md` as drift in an artifact that has not changed at all.
+
+    A file nobody could read, and one whose markers are damaged, both come back as `None` -- the
+    same answer as a region that is absent. That is weaker than it could be, and deliberate here:
+    the merge that follows refuses damage by name rather than acting on this measurement, so
+    reporting the region as present-but-unmeasurable would only offer a repair that then refuses.
+    """
+
+    try:
+        if not os.path.isfile(merge.destination) or os.path.islink(merge.destination):
+            return None
+        with open(merge.destination, "rb") as handle:
+            text = handle.read().decode("utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+    body = managed_block_body(text, merge.region)
+    if isinstance(body, Err) or body.value is None:
+        return None
+    return sha256_bytes(body.value.encode("utf-8"))
 
 
 def _delivered_digest(delivery: ArtifactDelivery) -> ObjectDigest | None:

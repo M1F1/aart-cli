@@ -25,8 +25,11 @@ from .result import Err, Ok, Result
 
 __all__ = [
     "BLOCK_UNMERGEABLE",
+    "MANAGED_MARKER",
     "BlockPosition",
+    "is_block_name",
     "managed_block",
+    "managed_block_body",
     "merge_managed_block",
     "remove_managed_block",
 ]
@@ -38,6 +41,11 @@ BLOCK_UNMERGEABLE = DiagnosticCode("managed-block-unmergeable")
 #: content would become part of what the agent is told.
 _BEGIN = "<!-- >>> agent-artifacts memory:{name} >>> -->"
 _END = "<!-- <<< agent-artifacts memory:{name} <<< -->"
+
+#: The string every marker contains. A body carrying it is refused before it is ever written,
+#: because an artifact that can write a marker chooses where AART's region stops, and everything
+#: past it becomes the user's text as far as a later withdrawal is concerned.
+MANAGED_MARKER = "agent-artifacts"
 
 #: The name reaches a marker that is later matched literally, so it may not carry a newline, a
 #: space or any part of the delimiter syntax -- a name that did could close its own region early.
@@ -53,6 +61,12 @@ class BlockPosition(str, Enum):
 
 def _error(message: str) -> Err:
     return Err((Diagnostic(BLOCK_UNMERGEABLE, Severity.ERROR, message),))
+
+
+def is_block_name(value: object) -> bool:
+    """Whether `value` can name a region, for the constructors that validate rather than report."""
+
+    return isinstance(value, str) and _NAME_RE.fullmatch(value) is not None
 
 
 def managed_block(name: str, body: str) -> str:
@@ -81,6 +95,28 @@ def _region(existing: str, name: str) -> Result[tuple[int, int] | None]:
             "is unknown; restore or remove the stray marker and install again"
         )
     return Ok((opens[0], closes[0]))
+
+
+def managed_block_body(existing: str, name: str) -> Result[str | None]:
+    """What this artifact's region currently says, or `None` when the region is not there.
+
+    What the file says now, not what was put there: an edited block reads back as the edit, which
+    is what makes drift detectable rather than assumed away. The same two refusals apply, because a
+    file whose region cannot be located is not a file whose region is absent.
+    """
+
+    if not is_block_name(name):
+        return _error(f"{name!r} cannot name a managed region")
+    if not isinstance(existing, str):
+        return _error("reading a managed region needs the file's text")
+    found = _region(existing, name)
+    if isinstance(found, Err):
+        return found
+    if found.value is None:
+        return Ok(None)
+    start, stop = found.value
+    begin, end = _BEGIN.format(name=name), _END.format(name=name)
+    return Ok(existing[start + len(begin) : stop - len(end)].strip("\n"))
 
 
 def merge_managed_block(

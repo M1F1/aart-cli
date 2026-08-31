@@ -50,6 +50,7 @@ from agent_artifacts.domain.inputs import (
 )
 from agent_artifacts.domain.install_description import InstallDescription
 from agent_artifacts.domain.launch import LaunchContract, Transport
+from agent_artifacts.domain.managed_blocks import MANAGED_MARKER
 from agent_artifacts.domain.python_runtime import (
     PyProjectSpec,
     PythonDependencySpec,
@@ -881,6 +882,71 @@ _DELIVERED_KINDS: dict[ArtifactKind, DeliveryKind] = {
     ArtifactKind.SKILL: DeliveryKind.TREE,
     ArtifactKind.GUIDELINE: DeliveryKind.FILE,
 }
+
+
+#: What each merged kind writes into a file it does not own. A memory artifact is a delimited block
+#: in a shared instruction file the user also writes in; a hook is a script plus a list entry in a
+#: settings file, and is deliberately still absent (B-034).
+_MERGED_KINDS: frozenset[ArtifactKind] = frozenset({ArtifactKind.MEMORY})
+
+
+@dataclass(frozen=True, slots=True)
+class PackagedMerge:
+    """What a package offers a file somebody else owns: one body, and what that body hashes to.
+
+    `source` is relative to the payload root. The digest covers the body exactly as it will be
+    stored in the managed region -- stripped of the blank lines around it, the way the merge stores
+    it -- and never the file it goes into: digesting the file would report every note the user added
+    to their own `CLAUDE.md` as drift in an artifact that has not changed.
+    """
+
+    source: str
+    digest: ObjectDigest
+
+
+def package_merge(kind: ArtifactKind, entries: tuple[SnapshotEntry, ...]) -> Result[PackagedMerge]:
+    """What installing this package would write into a file the user owns, from the package itself.
+
+    Read back out of the compiled tree the same way a delivery is (D-056). Two refusals here are
+    about the destination rather than the package: a body that is not UTF-8 text cannot be put into
+    a text file without replacing what is there, and a body containing a managed-block marker could
+    close its own region early and take ownership of whatever the user wrote after it.
+    """
+
+    if kind not in _MERGED_KINDS:
+        return _error(
+            AUTHOR_PAYLOAD_INVALID,
+            f"a {kind.value} is not installed by being merged into a file somebody else owns",
+        )
+    prefix = f"{PACKAGE_PAYLOAD_DIRECTORY}/"
+    files = tuple(
+        entry
+        for entry in entries
+        if str(entry.path).startswith(prefix) and entry.kind is SnapshotEntryKind.FILE
+    )
+    if len(files) != 1:
+        return _error(
+            AUTHOR_PAYLOAD_INVALID,
+            f"a {kind.value} is merged from one file, and this package carries {len(files)} "
+            "of them",
+        )
+    try:
+        body = files[0].content.decode("utf-8").strip("\n")
+    except UnicodeDecodeError:
+        return _error(
+            AUTHOR_PAYLOAD_INVALID,
+            f"this {kind.value} package carries a body that is not UTF-8 text, so it cannot be "
+            "merged into a text file without replacing what is in it",
+        )
+    if MANAGED_MARKER in body:
+        # Refused here rather than at the merge, so an author learns at compile time. A body that
+        # can write a marker chooses where AART's region stops, and everything past it becomes the
+        # user's text as far as a later withdrawal is concerned.
+        return _error(
+            AUTHOR_PAYLOAD_INVALID,
+            f"this {kind.value} package carries a managed-block marker in its body",
+        )
+    return Ok(PackagedMerge(str(files[0].path)[len(prefix) :], sha256_bytes(body.encode("utf-8"))))
 
 
 @dataclass(frozen=True, slots=True)

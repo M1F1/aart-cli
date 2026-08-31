@@ -1202,3 +1202,74 @@ the Product Specification first instead of hiding the change here.
   absent. Empty canonical state remains a successful empty result. Direct/local sources retain
   their characterized legacy source-availability semantics until their own route moves; `update`
   is the next public lifecycle seam.
+
+## D-081 — Supersession is decided by the plan, not by the command
+
+- **Decision:** `propose_installation` accepts a `previous` mapping of unversioned coordinate to the
+  `DesiredState` each artifact is replacing, and `supersession_intent` turns the pair into
+  `UPDATE`, `REPAIR` or a refusal. Public `marketplace update` therefore rebuilds its Selection from
+  the canonical records rather than from typed coordinates, pins no version unless somebody pinned
+  one, and never decides for itself whether the approved version is newer.
+- **Status:** accepted.
+- **Reason:** the command does not know the resolved version until after resolution, so deciding
+  update-vs-install there would need a second, throwaway preparation. Keying `previous` by
+  unversioned coordinate is what lets one side carry the installed version and the other the
+  resolved one; a versioned key could only ever agree with one of them.
+- **Consequence:** `update` on an artifact already at the approved version reports `current` and
+  writes nothing; an older approved version is refused by name as a downgrade rather than applied;
+  and `artifact_root` staying version-independent means an update converges in place.
+
+## D-082 — A payload is judged by its content, not by its presence
+
+- **Decision:** `PlacementObservation` carries a measured `payload_digest` beside
+  `payload_present`, produced by the extracted `tree_digest_at`. `ComponentState` for the payload is
+  `MATCHED` only when that digest equals the receipt's, `DIVERGENT` when it differs, and `UNKNOWN`
+  when nobody could measure it.
+- **Status:** accepted.
+- **Reason:** `artifact_root` is version-independent, so an update writes the new version into the
+  directory the old one occupies. Presence-only judgement therefore reported an already-converged
+  payload, the `CopyTree` was skipped, and the harness kept reading the previous version's content
+  under the new version's name -- reported as a successful update.
+- **Consequence:** an edited payload is drift a repair can find, an unmeasurable one says so rather
+  than passing, and `FileEffectInterpreter._copy` had to become convergent: it removes an existing
+  destination tree (clearing the object store's read-only modes first) before copying.
+
+## D-083 — Uninstall runs through the install executor, from receipts alone
+
+- **Decision:** `RemovalProposal` is planned from `InstalledRecord`s -- never from resolution -- and
+  `execute_installation` is widened to `ReviewedTransaction = InstallationProposal | RemovalProposal`
+  so a removal runs under the same scope lease, the same confirmed review digest and the same
+  per-member accounting. `prepare_configured_uninstall` measures each member against the state the
+  removal converges to, which is the vocabulary the executor re-measures in at preflight.
+- **Status:** accepted.
+- **Reason:** the load-bearing properties of a transaction -- one lease, one review, every member
+  accounted for -- are direction-independent, and a second executor would be the half that drifts.
+  Planning from receipts is what keeps `_PROJECT_LOCAL`'s existing guarantee: an installed artifact
+  outlives the configured source that delivered it, so removing the subscription must not strand it.
+- **Consequence:** a converged release forgets its record, so a later `status` reports nothing
+  installed rather than an installation nothing can find; withdrawal interpreters stay bound to the
+  deliveries the receipt names, so a neighbouring Skill in the same harness directory survives; and
+  credentials are retained by default, with no credential adapter required unless the reviewed
+  removal actually deletes one.
+
+## D-084 — A memory artifact owns a region of a file, not the file
+
+- **Decision:** memory is installed by `MergeManagedBlock`/`UnmergeManagedBlock` rather than
+  `DeliverArtifact`. `MEMORY_TARGETS` is its own measured table, deliberately not a
+  `DeliveryTarget`: a delivery destination must name the artifact, and a memory destination must
+  not, because every memory artifact for a harness shares one file with the user. The receipt
+  records an `ArtifactMerge` whose digest covers the block body as stored, never the file, and the
+  reconciliation component is `MERGE`, named by the harness that reads it.
+- **Status:** accepted.
+- **Reason:** every measured memory location -- `CLAUDE.md`, `.claude/CLAUDE.md`, `TABNINE.md` -- is
+  a file a person writes in. Delivery replaces its destination, so installing memory as a delivery
+  would destroy the user's own notes, and digesting the file would report every note they added
+  afterwards as drift in an artifact that had not changed.
+- **Consequence:** a memory artifact installs, reports health, detects an edited block as drift,
+  ignores writing beside it, and uninstalls leaving the file. The `ManagedBlockInterpreter` refuses
+  three things rather than guessing: a symlinked destination (never followed, per D-078), a
+  destination that is not UTF-8 text, and a file whose markers are damaged. It also preserves the
+  mode of a file it did not create, which `write_atomic` alone would have reduced to 0600. Tabnine
+  has no user-scope memory target on purpose: that build documents no always-loaded global
+  instruction file. Hooks stay open (B-034), because a hook needs a list merge with an identity
+  tuple rather than a delimited block.

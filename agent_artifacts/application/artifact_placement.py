@@ -24,7 +24,7 @@ from agent_artifacts.domain.identifiers import ObjectDigest
 from agent_artifacts.domain.inputs import SecretInput
 from agent_artifacts.domain.install_description import InstallDescription
 from agent_artifacts.domain.python_runtime import ArtifactEnvironment
-from agent_artifacts.domain.receipts import ArtifactDelivery
+from agent_artifacts.domain.receipts import ArtifactDelivery, ArtifactMerge
 from agent_artifacts.domain.requirements import HarnessRequirement, Requirement, RequirementId
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.domain.selection import ResolvedArtifact
@@ -46,6 +46,7 @@ def _error(message: str) -> Err:
 
 def placement_requirements_for(
     deliveries: tuple[ArtifactDelivery, ...],
+    merges: tuple[ArtifactMerge, ...] = (),
 ) -> tuple[Requirement, ...]:
     """What has to be true of a machine before this artifact can be delivered to it.
 
@@ -53,11 +54,15 @@ def placement_requirements_for(
     no dependencies and no credentials, so the harnesses are the whole of what a machine has to
     offer -- and they come from the request rather than the package, because an artifact declares
     what it is compatible with and a person chooses where it goes.
+
+    A harness that reads a merged region counts the same way one that reads a delivery does: the
+    requirement is that the harness is there, not how it reads what it is given.
     """
 
+    read_by: tuple[ArtifactDelivery | ArtifactMerge, ...] = (*deliveries, *merges)
     return tuple(
         HarnessRequirement(RequirementId(f"harness-{harness}"), harness)
-        for harness in sorted({delivery.harness for delivery in deliveries})
+        for harness in sorted({item.harness for item in read_by})
     )
 
 
@@ -69,6 +74,7 @@ def plan_artifact_placement(
     payload_source: str,
     payload_digest: ObjectDigest,
     deliveries: tuple[ArtifactDelivery, ...],
+    merges: tuple[ArtifactMerge, ...] = (),
 ) -> Result[PlannedPlacement]:
     """Everything decided about placing `artifact` here, before anything is touched."""
 
@@ -108,7 +114,8 @@ def plan_artifact_placement(
                 payload_digest,
                 tuple(deliveries),
                 payload_source,
-                placement_requirements_for(tuple(deliveries)),
+                placement_requirements_for(tuple(deliveries), tuple(merges)),
+                tuple(merges),
             )
         )
     except ValueError as error:
