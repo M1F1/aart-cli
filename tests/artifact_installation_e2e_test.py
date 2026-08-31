@@ -9,6 +9,10 @@ installing -- which has never seen the author's repository.
 The proof is what happens afterwards. The server the author wrote starts through a launcher nobody
 wrote, with the arguments the manifest declared, the configuration value a person supplied and a
 secret read at launch from a provider, out of an interpreter the installation owns.
+
+The same run is drawn. Screens 05 to 11 are read out of the running consumer application, reached
+by the routes a person navigates, so what somebody would have confirmed before this install is the
+install that ran.
 """
 
 from __future__ import annotations
@@ -25,12 +29,23 @@ from agent_artifacts.application.artifact_installation import (
     installation_remediations,
     plan_artifact_installation,
 )
+from agent_artifacts.application.consumer_session import (
+    assemble_consumer_machine,
+    begin_installation,
+    record_installation,
+)
+from agent_artifacts.application.consumer_ui import (
+    ConsumerUiEvent,
+    ConsumerUiEventKind,
+    ConsumerUiState,
+    reduce_consumer_ui,
+)
+from agent_artifacts.application.consumer_views import ConsumerScreen
 from agent_artifacts.application.execution import LifecycleExecutionStatus, execute_lifecycle
 from agent_artifacts.application.installation_planning import inspect_requirements
 from agent_artifacts.application.installation_proposal import (
     desired_state_for,
     intended_receipt,
-    propose_installation,
 )
 from agent_artifacts.application.installed_state import current_state_from_observation
 from agent_artifacts.configuration.model import ConfiguredSource, SourceKind
@@ -86,6 +101,8 @@ from agent_artifacts.store.model import (
     make_object_candidate,
     object_store_paths,
 )
+from agent_artifacts.tui_consumer import CanonicalScreenSource, _reload, frame, screens_from
+from tests.consumer_session_e2e_test import TODAY, _route
 from tests.mcp_stdio_e2e_test import SERVER_SOURCE, _FileProvider, speak
 
 TOKEN = InputId("github-token")
@@ -298,8 +315,8 @@ class AuthoredInstallationTest(unittest.TestCase):
             ),
         )
 
-    def _install(self):
-        proposed = propose_installation(
+    def _begin(self):
+        begun = begin_installation(
             (self.planned,),
             self._selection(),
             self.facts,
@@ -307,16 +324,39 @@ class AuthoredInstallationTest(unittest.TestCase):
             observed=((self.package.coordinate, self._inspect()),),
             selected_remediations=self.remediations,
         )
-        self.assertIsInstance(proposed, Ok, getattr(proposed, "diagnostics", ()))
+        self.assertIsInstance(begun, Ok, getattr(begun, "diagnostics", ()))
+        return begun.value
+
+    def _install(self, flow=None):
+        flow = self._begin() if flow is None else flow
         executed = execute_lifecycle(
-            proposed.value.lifecycle[0],
+            flow.proposal.lifecycle[0],
             policy=EffectivePolicy(),
             interpreters=self._interpreters(),
             inspect=self._inspect,
             lock=LocalMutationLock(self.state_root, str(self.scope)),
         )
         self.assertIsInstance(executed, Ok, getattr(executed, "diagnostics", ()))
-        return proposed.value, executed.value
+        return flow.proposal, executed.value
+
+    def _drawn(self, screen: ConsumerScreen, flow) -> str:
+        """Draw one screen of this flow, reached the way a person reaches it."""
+
+        source = CanonicalScreenSource(
+            screens_from(
+                assemble_consumer_machine((), today=TODAY),
+                plan=flow.plan,
+                outcome=flow.outcome,
+            )
+        )
+        state = _reload(source, ConsumerUiState(), entering=True)
+        for hop in _route(screen):
+            state, _ = reduce_consumer_ui(
+                state, ConsumerUiEvent(ConsumerUiEventKind.NAVIGATE, screen=hop)
+            )
+            state = _reload(source, state, entering=True)
+        self.assertIs(state.session.screen, screen)
+        return "\n".join(frame(source, state))
 
     def _server_answers(self) -> dict:
         settings = json.loads(
@@ -363,6 +403,56 @@ class AuthoredInstallationTest(unittest.TestCase):
             pathlib.Path(self.environment.payload_path("requirements.txt")).exists(),
             "the descriptor an installer read has to have travelled inside the payload",
         )
+
+    def test_the_review_screens_draw_this_install_rather_than_an_empty_flow(self) -> None:
+        """Screens 05 to 09, read out of the shell rather than out of a view a test built."""
+
+        flow = self._begin()
+
+        review = self._drawn(ConsumerScreen.REVIEW_SELECTION, flow)
+        inspection = self._drawn(ConsumerScreen.AUTOMATIC_INSPECTION, flow)
+        inputs = self._drawn(ConsumerScreen.REQUIRED_INPUTS, flow)
+        ready = self._drawn(ConsumerScreen.READY, flow)
+
+        for drawn in (review, inspection, inputs, ready):
+            self.assertNotIn("Nothing has been planned yet", drawn)
+        self.assertIn(str(self.package.coordinate), review)
+        self.assertIn("python-runtime", inspection)
+        self.assertIn("GitHub token", inputs)
+        self.assertIn("GitHub organisation", inputs)
+
+    def test_the_success_screen_reports_the_install_that_actually_ran(self) -> None:
+        flow = self._begin()
+        _, outcome = self._install(flow)
+
+        recorded = record_installation(flow, outcome)
+        self.assertIsInstance(recorded, Ok, getattr(recorded, "diagnostics", ()))
+
+        drawn = self._drawn(ConsumerScreen.SUCCESS, recorded.value)
+        self.assertNotIn("Nothing has run yet", drawn)
+        self.assertIn(str(self.package.coordinate), drawn)
+
+    def test_no_drawn_screen_carries_the_secret_the_install_arranges_to_read(self) -> None:
+        """§156: what a person reads is a surface, and a surface never carries a credential."""
+
+        flow = self._begin()
+        _, outcome = self._install(flow)
+        recorded = record_installation(flow, outcome).value
+
+        drawn = "\n".join(
+            self._drawn(screen, recorded)
+            for screen in (
+                ConsumerScreen.REVIEW_SELECTION,
+                ConsumerScreen.AUTOMATIC_INSPECTION,
+                ConsumerScreen.REQUIRED_INPUTS,
+                ConsumerScreen.REMEDIATION,
+                ConsumerScreen.READY,
+                ConsumerScreen.SUCCESS,
+            )
+        )
+
+        self.assertNotIn(self.token, drawn)
+        self.assertIn("github-token", drawn)
 
     def test_no_reviewed_surface_carries_the_secret_the_install_arranges_to_read(self) -> None:
         proposal, outcome = self._install()

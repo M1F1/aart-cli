@@ -212,6 +212,7 @@ def plan_artifact_installation(
                 dependencies,
                 requirements_for(description, targets=targets),
                 description.runtime,
+                description.inputs,
             )
         )
     except ValueError as error:

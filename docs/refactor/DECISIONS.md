@@ -740,3 +740,21 @@ the Product Specification first instead of hiding the change here.
   published, read back with its digest verified, described, planned and installed, and the payload
   an install copies from is the store's verified copy rather than any other tree with the same
   files.
+
+## D-059 — A flow is held beside the machine, and an outcome is only reported under its own review
+- **Decision:** `ConsumerFlow` holds an `InstallationProposal` together with the `ConsumerPlanView`
+  projected from it, and refuses to exist when the review it would draw names a different plan than
+  the proposal it carries. `begin_installation` builds one; `record_installation` attaches a
+  `LifecycleOutcomeView` and refuses an outcome whose plan is not one this flow proposed.
+  `PlannedInstallation` gained `declared`, the inputs the artifact asked for, so the review can show
+  what somebody will be asked for rather than only what has already been answered.
+- **Status:** accepted.
+- **Reason:** screens 05–11 are projections of an action, not of a machine, and nothing built one:
+  every piece existed and a running application still drew "Nothing has been planned yet". Building
+  the plan view inside a draw was the alternative and is the one D-051 already rejects — a review
+  re-derived while somebody scrolled is not the review they confirmed.
+- **Consequence:** the guarantee `InstallationProposal` makes is now visible: what a person reads on
+  05–09 is projected from the proposal whose effects run, and screens 10–11 can only report an
+  outcome belonging to that proposal's own lifecycle plan. An input two artifacts both declare is
+  asked for once; they agree because a selection's values are bound from one set of sources, so the
+  first declaration is the declaration rather than a choice between rivals.

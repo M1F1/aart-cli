@@ -179,6 +179,7 @@ def _planned(
     )
     fields: dict[str, object] = {
         "bound": _bound(),
+        "declared": tuple(item.input for item in _bound().inputs),
         "registrations": registered,
         "payload_source": "/var/lib/aart/store/github",
         "base_interpreter": "/usr/bin/python3",

@@ -24,7 +24,7 @@ from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Sever
 from agent_artifacts.domain.effects import Effect
 from agent_artifacts.domain.harness import McpRegistration
 from agent_artifacts.domain.identifiers import ArtifactCoordinate, ObjectDigest
-from agent_artifacts.domain.inputs import BoundInputs
+from agent_artifacts.domain.inputs import BoundInputs, ConfigInput, RuntimeInput, SecretInput
 from agent_artifacts.domain.inspection import EnvironmentFacts
 from agent_artifacts.domain.launch import LaunchContract
 from agent_artifacts.domain.plans import InstallPlan
@@ -83,6 +83,7 @@ class PlannedInstallation:
     dependencies: tuple[str, str, str] | None = None
     requirements: tuple[Requirement, ...] = ()
     runtime: str | None = None
+    declared: tuple[RuntimeInput, ...] = ()
 
     def __post_init__(self) -> None:
         if (
@@ -130,6 +131,20 @@ class PlannedInstallation:
                 )
         if any(not isinstance(item, Requirement) for item in self.requirements):
             raise ValueError("planned requirements are invalid")
+        if any(not isinstance(item, (SecretInput, ConfigInput)) for item in self.declared):
+            raise ValueError("planned declared inputs are invalid")
+        if self.declared:
+            # A value bound to an input the artifact never declared would be delivered to the
+            # process without appearing on the screen that asked for it.
+            declared = {item.id for item in self.declared}
+            undeclared = sorted(
+                str(item.input.id) for item in self.bound.inputs if item.input.id not in declared
+            )
+            if undeclared:
+                raise ValueError(
+                    "an installation binds inputs this artifact does not declare: "
+                    + ", ".join(undeclared)
+                )
         object.__setattr__(
             self,
             "registrations",

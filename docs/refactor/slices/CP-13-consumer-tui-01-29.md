@@ -89,8 +89,12 @@ existed; three defects were found by tests rather than by reading:
    from installed state and lifecycle views, 22–24 from credential records (D-048, D-049). A real
    machine is assembled once into a `ConsumerMachine` and turned into screens by `screens_from`
    (D-051), proven end to end from a real installation read back by a second process (B-024
-   closed). What remains is the flow that produces a live plan when somebody starts an install,
-   and routing `run()` away from the legacy wizard (B-025).
+   closed). The flow that produces a live plan now exists: `ConsumerFlow` holds an
+   `InstallationProposal` with the review projected from it, `begin_installation` builds one and
+   `record_installation` attaches what ran, refusing an outcome from a plan the flow never proposed
+   (D-059). `PlannedInstallation` carries `declared`, so a review shows what somebody will be asked
+   for rather than only what was already answered. What remains is routing `run()` away from the
+   legacy wizard (B-025) and the public commands through this flow.
 5a. Persist canonical installed state and finished actions, so screens 12–16 and 25–27 have
    something to project between processes. **DONE** — `domain/receipts.py` gained the parse that
    inverts its own projection, `application/consumer_views.py` gained `receipt_detail_from_data`
@@ -156,6 +160,13 @@ individually; a corrupt record is reported rather than silently skipped; and a t
 from disk reads the same as the one projected in memory.
 
 ## E2E/live acceptance
+
+`tests/artifact_installation_e2e_test.py` — the authored package of D-056/D-058, drawn. The same
+run that installs a compiled and published artifact is read out of the running consumer shell by the
+accepted navigation routes: 05 names the coordinate, 06 the four requirements this machine measured,
+07 the two declared inputs with the secret shown as configured and no value anywhere, 09 the risks
+and the review identity, and 11 the install that actually ran. None of them says "Nothing has been
+planned yet", and the real secret appears on none of them.
 
 `tests/consumer_session_e2e_test.py` — nothing is handed a view. A real installation is recorded
 with who asked for it; a second process reads that record back, inspects the machine, assembles it
@@ -223,20 +234,22 @@ own launcher after a repair planned from disk alone, and no stored file contains
 
 ## Remaining
 
-- Step 5 flow wiring: holding the flow in the session so screens 05–11 carry a live `ConsumerPlanView`, and
-  routing the public commands through `propose_installation`/`execute_lifecycle`.
-- Routing the default TTY entry to the canonical application (B-025). This follows the install
-  flow rather than preceding it: routing `run()` while no public entry point can start an install
-  would take away flows the legacy wizard still owns alone.
+- Routing the default TTY entry to the canonical application (B-025), which needs an `io`-side
+  reader that assembles a `ConsumerMachine` from what is on disk.
+- Routing the public commands through `begin_installation`/`execute_lifecycle`.
 - Step 6: retiring legacy consumer semantic authority, once the above give equivalent public-flow
   evidence.
 
 ## Known compromises
 
-- The install flow's screens draw "Nothing has been planned yet." until a plan is assembled for
-  them: `screens_from` carries a plan when the flow holds one, but no public entry point starts
-  that flow yet. The fallback line for a screen with no body at all is kept as a guard against
-  drawing a blank frame; no accepted screen reaches it.
+- The install flow's screens draw "Nothing has been planned yet." only when no flow is held. A flow
+  now exists and is drawn end to end, but no public entry point starts one: the E2E supplies it, a
+  command does not yet. The fallback line for a screen with no body at all is kept as a guard
+  against drawing a blank frame; no accepted screen reaches it.
+- `PlannedInstallation.declared` is checked against what is bound only when it is recorded. A plan
+  built without it keeps the old behavior rather than failing, which is what let the field be added
+  without rewriting every construction site; the one that matters is filled by
+  `plan_artifact_installation` from the package's own description.
 - `run_consumer` is reachable by embedders and tests but is not yet the default TTY entry (B-025).
   No legacy behavior has been changed or removed to make room for it.
 
@@ -270,13 +283,12 @@ machine-output tests prove every accepted flow now consumes the canonical applic
 
 - Current working state: steps 1–4 complete and verified; step 5 partial; step 6 not started. The
   legacy wizard is untouched and still owns the default TTY entry.
-- Exact next action: hold the whole flow in the consumer session so screens 05–11 carry a live
-  `ConsumerPlanView`. The order is the one
-  `tests/artifact_installation_e2e_test.py` already runs: describe, plan, inspect, offer
-  remediations, propose, execute. Then B-025, then the public commands, then step 6.
+- Exact next action: B-025 — route `tui.py::run` to `run_consumer`, which has no caller today.
+  The missing piece is an `io`-side reader that assembles a `ConsumerMachine` from disk the way
+  `tests/consumer_session_e2e_test.py` does by hand. Then the public commands, then step 6.
 - Do not undo: existing curses layout/search/basket/back/quit characterization; one semantic plan
   for both profiles; Maintainer Mode remains opt-in; `key_event` stays the only place a key's
   meaning is decided; no clock in `application/`.
-- Tests last run/results: 2,435 unit + 98 E2E tests, 83.51% coverage, all ten quality gates
+- Tests last run/results: 2,450 unit + 101 E2E tests, 83.52% coverage, all ten quality gates
   green (`make quality`). CP-12 baseline was 2,196 unit + 65 E2E at 83.25%.
 - Failure evidence: three defects found by tests are listed under Characterization / RED evidence.

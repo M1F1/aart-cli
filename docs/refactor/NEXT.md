@@ -14,32 +14,25 @@ What remains is the wiring that makes the canonical application the one a person
 
 The install flow comes before the TTY entry. Routing `run()` at the canonical application while no
 public entry point can start an install would take away the flows the legacy wizard still owns
-alone; B-025 is therefore item 2 here, not item 1. A package can now be compiled, published, read
-back and installed end to end (D-056), so what remains is carrying that flow into the shell and the
-public commands rather than building it.
+alone; B-025 is therefore item 1 here. A package can now be compiled, published, read back and
+installed end to end (D-056), and a flow holds that install for the screens that draw it (D-059),
+so what remains is carrying it into the shell and the public commands rather than building it.
 
-1. Hold the flow in the consumer session, so screens 05–11 carry a live `ConsumerPlanView` instead
-   of "Nothing has been planned yet". The pieces now all exist and the E2E in
-   `tests/artifact_installation_e2e_test.py` shows the order they go in: read the package's
-   `InstallDescription` (D-056) → `plan_artifact_installation` → `inspect_requirements` →
-   `installation_remediations` → `propose_installation` → `execute_lifecycle`. Hold that beside the
-   `ConsumerMachine` and pass it to `screens_from`, refreshed after an action rather than derived
-   inside a draw (D-051). The store read exists now: `read_package_description` describes a package
-   read back out of the content-addressed object store, digest verified, and the payload an install
-   copies from is the store's own verified copy (D-058).
-2. **B-025** — route the default TTY entry in `tui.py::run` to `run_consumer` behind the existing
+1. **B-025** — route the default TTY entry in `tui.py::run` to `run_consumer` behind the existing
    curses-availability check, building its source with `screens_from(assemble_consumer_machine(...))`
-   over `LocalReceiptStore` and the local inspector. Keep the legacy wizard reachable until step 6
-   evidence exists.
-3. Route the public consumer commands (`install`, `update`, `uninstall`, `status`) through
-   `propose_installation`/`execute_lifecycle` rather than the legacy setup queue, projecting their
-   output with `consumer_plan_to_data` and `receipt_detail_to_data` so text, curses and `--json`
-   are three renderings of one plan. `render_install_plan` is already the whole-plan review a
-   non-interactive command prints (D-049).
-4. Only then step 6: retire legacy consumer semantic authority (`consumer/application.py`,
+   over `LocalReceiptStore` and the local inspector. `run_consumer` has no caller today, so the
+   canonical application is unreachable from the CLI. Assembling the machine from what is on disk
+   is the missing piece: `tests/consumer_session_e2e_test.py` does it by hand, and an `io`-side
+   reader should do it once. Keep the legacy wizard reachable until step 6 evidence exists.
+2. Route the public consumer commands (`install`, `update`, `uninstall`, `status`) through
+   `begin_installation`/`execute_lifecycle`/`record_installation` rather than the legacy setup
+   queue, projecting their output with `consumer_plan_to_data` and `receipt_detail_to_data` so
+   text, curses and `--json` are three renderings of one plan. `render_install_plan` is already the
+   whole-plan review a non-interactive command prints (D-049).
+3. Only then step 6: retire legacy consumer semantic authority (`consumer/application.py`,
    `installation/*`, `setup_engine/*`, `lifecycle/application.py`) path by path, each removal
    preceded by a public-flow test proving the canonical path already carries it.
-5. Update the CP-13 coverage table as each screen group moves from projection to live flow.
+4. Update the CP-13 coverage table as each screen group moves from projection to live flow.
 
 ## Do not do yet
 
@@ -100,3 +93,5 @@ public commands rather than building it.
 - A package carrying no authoring extension is refused rather than read as declaring nothing
   (D-058): an artifact that needs nothing and a package that never recorded what it needs are
   different facts, and only one of them is safe to install.
+- A flow is held beside the machine, never derived inside a draw (D-059): screens 05–11 project one
+  `InstallationProposal`, and an outcome may only be reported under the review it belongs to.
