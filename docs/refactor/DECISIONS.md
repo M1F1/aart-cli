@@ -912,3 +912,23 @@ the Product Specification first instead of hiding the change here.
   released `registry_cli_integration_test` and others that do drive the package, and a wrongly
   skipped test reports green without running. `coverage` is never narrowed: a percentage measured
   over part of a suite is not this repository's percentage.
+
+## D-068 — The canonical shell composes real offers; Collections do not cross the seam yet
+- **Decision:** `read_consumer_offers` reads the configured Marketplace once at composition and
+  `_canonical_consumer_source` hands the result to `screens_from`, so screens 02–04a draw what the
+  configured sources actually published. The catalog is still assembled by the characterized
+  `load_read_only_marketplace`; that is the strangler seam, and where the offers come from can move
+  to `aggregate_approved_marketplace` without the shell noticing. The compatibility target is built
+  from the measured `MCP_TARGETS`, never from a list written beside them.
+- **Status:** accepted.
+- **Reason:** the composed application read the machine and passed `screens_from` no offers at all,
+  so a person opening the canonical shell saw an empty Marketplace with their configured sources on
+  disk beside it. Reading offers is an effect, so it belongs at composition rather than inside a
+  draw (D-051).
+- **Consequence:** Collections are declined rather than offered. A protocol-v1 Collection is
+  identified by source and name alone; a canonical `Collection` is versioned and bound to the
+  registry snapshot it was read from, so producing one here would mean inventing the version that
+  tells two of them apart. Each is declined by name in `ConsumerOffers.declined`, because an offer
+  missing from the Marketplace with no explanation reads as a source that published nothing. An
+  unreadable configuration refuses startup rather than drawing an empty Marketplace: an empty one
+  and an unreadable one are different facts.

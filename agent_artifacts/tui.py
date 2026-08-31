@@ -109,7 +109,9 @@ from .setup import (
 from .sources.model import SourceIdentityTransition, SourceSyncOutcome
 from .tui_consumer import (
     CanonicalScreenSource,
+    ConsumerOffers,
     ConsumerScreenSource,
+    read_consumer_offers,
     run_consumer_shell,
     screens_from,
 )
@@ -6234,7 +6236,69 @@ def _canonical_consumer_source(
     )
     if isinstance(machine, DomainErr):
         return machine
-    return DomainOk(CanonicalScreenSource(screens_from(machine.value)))
+    offers = _canonical_consumer_offers(paths)
+    if isinstance(offers, DomainErr):
+        return offers
+    return DomainOk(
+        CanonicalScreenSource(
+            screens_from(
+                machine.value,
+                marketplace=offers.value.artifacts,
+                collections=offers.value.collections,
+            )
+        )
+    )
+
+
+def _canonical_consumer_offers(paths) -> DomainResult[ConsumerOffers]:
+    """Read the configured Marketplace once, beside the one read of the machine.
+
+    Composition is where an effect belongs; a draw must never reach the source store (D-051).
+    """
+
+    from .application.configuration import (
+        ConfigurationPorts,
+        ConfigurationRequest,
+        load_configuration,
+    )
+    from .configuration.policy import RuntimeOverrides
+    from .io.config_cas import checked_config_writer
+    from .io.config_store import read_configuration, recover_configuration, write_configuration
+
+    loaded = load_configuration(
+        ConfigurationRequest(paths, RuntimeOverrides(), content_required=False),
+        ConfigurationPorts(
+            read_configuration,
+            write_configuration,
+            recover_configuration,
+            checked_config_writer,
+        ),
+    )
+    if isinstance(loaded, DomainErr):
+        return loaded
+    return read_consumer_offers(
+        loaded.value.effective,
+        data_root=paths.data_root,
+        target=_canonical_marketplace_target(),
+    )
+
+
+def _canonical_marketplace_target() -> MarketplaceTarget:
+    """What this machine can actually accept.
+
+    The harnesses come from the measured `MCP_TARGETS`, never from a list written beside them: an
+    offer marked compatible with a harness nobody has measured is a compatibility claim AART cannot
+    keep.
+    """
+
+    from .domain.harness import MCP_TARGETS
+
+    return MarketplaceTarget(
+        tuple(sorted({harness for harness, _ in MCP_TARGETS})),
+        "darwin" if sys.platform == "darwin" else "linux",
+        "project",
+        "copy",
+    )
 
 
 def _render_consumer_startup_failure(failure: DomainErr) -> int:

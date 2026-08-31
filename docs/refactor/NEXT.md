@@ -33,8 +33,9 @@ that flow and execution, plus composition of real Marketplace and installed-stat
    through `execute_installation` and draws those screens from the receipt that run produced.
    A real install recorded as a transaction is re-read from disk by `read_consumer_machine` and
    appears in Installed, Collections and Activity with the token absent from every surface (D-066),
-   so B-030 is closed. **Remaining:** compose configured Marketplace offers into the same source.
-   Do not route `run()` until that lands with live-flow tests.
+   so B-030 is closed. Configured Marketplace offers are now composed into the same source and drawn
+   on screens 02–04a (D-068). **DONE**, except that Collections do not cross that seam: they are
+   declined by name until a versioned Collection reaches it (B-031).
 3. Define and test the strangler boundary for existing project/user installation manifests. They
    must remain visible and operable until a kind-neutral canonical receipt/observation replaces
    them; never treat the absence of a canonical MCP receipt as evidence that a Skill/Rule/Hook/
@@ -118,3 +119,6 @@ that flow and execution, plus composition of real Marketplace and installed-stat
   leaves one action receipt naming the Selection, with every member accounted for beneath it and one
   installed record per member that applied. Screens 10 and 11 draw that transaction; 17 and 19 stay
   on one artifact's lifecycle action (D-065).
+- Reading offers is an effect and happens once at composition, never inside a draw (D-068). What a
+  source published but this seam cannot offer is declined by name, because an offer missing with no
+  explanation reads as a source that published nothing.

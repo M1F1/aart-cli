@@ -8,9 +8,22 @@ from unittest import mock
 
 from agent_artifacts import tui
 from agent_artifacts.application.consumer_session import assemble_consumer_machine
-from agent_artifacts.domain.result import Ok
+from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from agent_artifacts.domain.harness import MCP_TARGETS
+from agent_artifacts.domain.result import Err, Ok
+from agent_artifacts.tui_consumer import ConsumerOffers, MarketplaceEntry
+from tests.tui_marketplace_test import _catalog
 
 TODAY = dt.date(2026, 8, 31)
+
+
+def _row():
+    from agent_artifacts.tui_marketplace import MarketplaceTarget, project_marketplace_rows
+
+    rows = project_marketplace_rows(
+        _catalog(), MarketplaceTarget(("claude",), "darwin", "project", "copy")
+    )
+    return rows[0]
 
 
 class CanonicalConsumerEntryTest(unittest.TestCase):
@@ -42,6 +55,49 @@ class CanonicalConsumerEntryTest(unittest.TestCase):
         self.assertTrue(arguments["state_root"].endswith("agent-artifacts/state"))
         self.assertEqual(arguments["today"], TODAY)
         self.assertEqual(arguments["credential_providers"][0].provider, "macos-keychain")
+
+    def test_the_composed_source_carries_the_configured_marketplace(self) -> None:
+        """The offers are read once, beside the machine, not derived inside a draw (D-051)."""
+
+        machine = assemble_consumer_machine((), today=TODAY)
+        offers = ConsumerOffers((MarketplaceEntry(_row()),))
+        with (
+            mock.patch.object(tui, "read_consumer_machine", return_value=Ok(machine)),
+            mock.patch.object(tui, "read_consumer_offers", return_value=Ok(offers)) as read,
+        ):
+            loaded = tui._canonical_consumer_source(
+                project="/work/project",
+                user_home="/users/alice",
+                today=TODAY,
+            )
+
+        self.assertIsInstance(loaded, Ok)
+        self.assertEqual(loaded.value.screens.marketplace, offers.artifacts)
+        # Measured harnesses only: an offer marked compatible with one nobody measured is a claim
+        # AART cannot keep.
+        self.assertEqual(
+            read.call_args.kwargs["target"].profiles,
+            tuple(sorted({harness for harness, _ in MCP_TARGETS})),
+        )
+
+    def test_an_unreadable_configuration_refuses_rather_than_offering_nothing(self) -> None:
+        """An empty Marketplace and an unreadable one are different facts."""
+
+        machine = assemble_consumer_machine((), today=TODAY)
+        refusal = Err(
+            (Diagnostic(DiagnosticCode("configuration-unreadable"), Severity.ERROR, "no"),)
+        )
+        with (
+            mock.patch.object(tui, "read_consumer_machine", return_value=Ok(machine)),
+            mock.patch.object(tui, "read_consumer_offers", return_value=refusal),
+        ):
+            loaded = tui._canonical_consumer_source(
+                project="/work/project",
+                user_home="/users/alice",
+                today=TODAY,
+            )
+
+        self.assertIsInstance(loaded, Err)
 
 
 if __name__ == "__main__":

@@ -199,6 +199,12 @@ member's coordinate are drawn; a member that never ran is drawn like every other
 filtered out for having no steps; the screen offers no `[ Undo ]` the transaction cannot perform;
 and a flow that has not run still says nothing has.
 
+`tests/consumer_marketplace_composition_e2e_test.py` — the Marketplace the canonical shell draws is
+the configured one. A source is published to a real source store the way sync publishes it, the
+offers are read once at composition, and a person browsing the running shell sees exactly those rows
+rather than a projection a test built. No configured source is an empty Marketplace, not a failure;
+an unversioned Collection is declined by name rather than dropped.
+
 ## E2E/live acceptance
 
 `tests/artifact_installation_e2e_test.py` — the authored package of D-056/D-058, drawn. The same
@@ -293,8 +299,9 @@ own launcher after a repair planned from disk alone, and no stored file contains
   recording and machine reload. Every part it composes is done and verified: execution and
   recording (D-064), the screens that draw the result (D-065), and the reload that shows it to the
   next machine (D-066). What the handler adds is the wiring, not a missing capability.
-- Compose configured Marketplace and preserve/adapt existing kind-neutral project/user install
-  state before retrying the default route.
+- Preserve/adapt existing kind-neutral project/user install state before retrying the default
+  route. Configured Marketplace composition is done (D-068); Collections still do not cross that
+  seam (B-031).
 - Route public commands through the same handler/application boundary.
 - Step 6: retiring legacy consumer semantic authority, once the above give equivalent public-flow
   evidence.
@@ -309,10 +316,10 @@ own launcher after a repair planned from disk alone, and no stored file contains
   built without it keeps the old behavior rather than failing, which is what let the field be added
   without rewriting every construction site; the one that matters is filled by
   `plan_artifact_installation` from the package's own description.
-- The canonical shell now emits and transports install/update/repair/uninstall action requests, but
-  its current composition has no production handler, configured Marketplace offers or adapter for
-  existing project/user installation records. The legacy public entry remains until those
-  replacement facts are proven (D-062, D-063).
+- The canonical shell now emits and transports install/update/repair/uninstall action requests and
+  composes real Marketplace offers, but it still has no production handler and no adapter for
+  existing project/user installation records, and its Collections come from no live source (B-031).
+  The legacy public entry remains until those replacement facts are proven (D-062, D-063).
 
 ## Backlog discoveries
 

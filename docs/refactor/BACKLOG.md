@@ -401,3 +401,24 @@ what the next machine reads.
 Unblock condition: aggregate execution, durable recording and screen projections are verified for
 single and multi-artifact Selection, including partial execution and compensation evidence, and a
 recorded transaction is visible to the next assembled machine without hand-built state.
+
+### B-031 — Versioned Collections across the Marketplace composition seam
+Status: OPEN
+Discovered in: CP-13 / `agent_artifacts/tui_consumer.py` / `read_consumer_offers`
+Why useful: the canonical shell now composes real artifact offers from configured sources (D-068),
+but not Collections. A protocol-v1 compiled Collection is identified by source and name alone,
+while the canonical `Collection` CP-06 established is versioned and bound to the registry snapshot
+it was read from. Nothing in the compiled graph supplies that version, so screens 04/04a have no
+Collection to draw from a real source.
+Why noncritical now: producing one would mean inventing the version that tells two Collections
+apart, which is exactly the fabricated identity D-044/D-045 refuse. Declining by name keeps the
+absence visible and keeps every offer that *can* be made honest. No accepted screen is blocked from
+being reachable; only its content from a live source is.
+Potential approach: carry the Collection version and registry snapshot through the compiled graph,
+or read Collections from `aggregate_approved_marketplace` directly and let the artifact rows keep
+coming from the characterized loader until both move together.
+Invariants touched: INV-130, INV-138.
+Evidence/links: D-044, D-045, D-068; `tests/consumer_marketplace_composition_e2e_test.py::
+ComposedMarketplaceTest::test_an_unversioned_collection_is_declined_by_name_rather_than_dropped`.
+Promotion condition: an accepted screen or acceptance test requires installing a Collection through
+the canonical consumer shell from a configured source.

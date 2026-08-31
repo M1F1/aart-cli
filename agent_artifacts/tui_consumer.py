@@ -44,8 +44,14 @@ from agent_artifacts.application.consumer_views import (
     RegistryView,
     project_collection,
 )
+from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.domain.selection import Collection
-from agent_artifacts.tui_marketplace import MarketplaceArtifactRow, render_artifact_detail
+from agent_artifacts.tui_marketplace import (
+    MarketplaceArtifactRow,
+    MarketplaceTarget,
+    project_marketplace_rows,
+    render_artifact_detail,
+)
 
 __all__ = [
     "CanonicalScreenSource",
@@ -56,6 +62,8 @@ __all__ = [
     "ConsumerTerminal",
     "MarketplaceCollectionEntry",
     "MarketplaceEntry",
+    "ConsumerOffers",
+    "read_consumer_offers",
     "screens_from",
     "key_name",
     "render_activity",
@@ -1100,6 +1108,60 @@ class ConsumerScreens:
 
 
 _DEFAULT_SETTINGS = ConsumerSettings()
+
+
+@dataclass(frozen=True, slots=True)
+class ConsumerOffers:
+    """What the configured sources are offering right now, ready for :func:`screens_from`.
+
+    `declined` names what a source published but this seam cannot offer yet. It is carried rather
+    than dropped: an offer missing from the Marketplace with no explanation reads as a source that
+    published nothing.
+    """
+
+    artifacts: tuple[MarketplaceEntry, ...] = ()
+    collections: tuple[MarketplaceCollectionEntry, ...] = ()
+    declined: tuple[str, ...] = ()
+
+
+def read_consumer_offers(
+    effective,
+    *,
+    data_root: str,
+    target: MarketplaceTarget,
+    observe_freshness: bool = False,
+) -> Result[ConsumerOffers]:
+    """Read the configured Marketplace once, so a draw never reaches the source store (D-051).
+
+    The catalog is still assembled by the characterized read-only loader. That is the strangler
+    seam: the shell now composes real offers, and where those offers come from can move to
+    `aggregate_approved_marketplace` without the shell noticing.
+
+    Collections do not cross it. A protocol-v1 Collection is identified by source and name alone,
+    and a canonical Collection is versioned and bound to the registry snapshot it was read from, so
+    offering one here would mean inventing the version that tells two of them apart. Each is
+    declined by name instead, until a versioned Collection reaches this seam.
+    """
+
+    from agent_artifacts.consumer.runtime import load_read_only_marketplace
+
+    catalog = load_read_only_marketplace(
+        effective, data_root=data_root, observe_freshness=observe_freshness
+    )
+    if isinstance(catalog, Err):
+        return catalog
+    rows = project_marketplace_rows(catalog.value, target)
+    return Ok(
+        ConsumerOffers(
+            tuple(MarketplaceEntry(row) for row in rows),
+            (),
+            tuple(
+                f"{collection.coordinate}: a Collection is offered by version, and this source "
+                "published it without one"
+                for collection in catalog.value.collections
+            ),
+        )
+    )
 
 
 def screens_from(
