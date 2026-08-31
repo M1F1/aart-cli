@@ -72,6 +72,7 @@ class InstallationReceipt:
     registrations: tuple[McpRegistration, ...] = ()
     credentials: tuple[CredentialReference, ...] = ()
     config: tuple[ConfigFingerprint, ...] = ()
+    base_interpreter: str | None = None
 
     def __post_init__(self) -> None:
         for value, label in (
@@ -85,6 +86,12 @@ class InstallationReceipt:
         for path, label in ((self.root, "root"), (self.launcher, "launcher")):
             if not path.startswith("/"):
                 raise ValueError(f"installation receipt {label} must be absolute")
+        if self.base_interpreter is not None and (
+            not isinstance(self.base_interpreter, str)
+            or not self.base_interpreter.startswith("/")
+            or any(character in self.base_interpreter for character in "\r\n")
+        ):
+            raise ValueError("installation receipt base interpreter must be an absolute path")
         if not self.launcher.startswith(f"{self.root}/"):
             raise ValueError("a receipt's launcher belongs to the root it records")
         if not isinstance(self.launcher_digest, ObjectDigest) or not isinstance(
@@ -144,6 +151,7 @@ class InstalledRecord:
 def installation_receipt_to_data(receipt: InstallationReceipt) -> dict[str, object]:
     return {
         "artifact": receipt.artifact,
+        "base_interpreter": receipt.base_interpreter,
         "config": [
             {"digest": str(item.digest), "input": item.input.value} for item in receipt.config
         ],
@@ -235,6 +243,7 @@ def installation_receipt_from_data(data: object) -> Result[InstallationReceipt]:
                 tuple(registration_from_data(item) for item in data.get("registrations", [])),
                 tuple(_reference(item) for item in data.get("credentials", [])),
                 tuple(_fingerprint(item) for item in data.get("config", [])),
+                None if data.get("base_interpreter") is None else str(data["base_interpreter"]),
             )
         )
     except ValueError as error:

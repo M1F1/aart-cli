@@ -178,6 +178,7 @@ def intended_receipt(planned: PlannedInstallation) -> InstallationReceipt:
         planned.contract.transport,
         planned.registrations,
         planned.bound.credential_references,
+        base_interpreter=planned.base_interpreter,
     )
 
 

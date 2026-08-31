@@ -758,3 +758,37 @@ the Product Specification first instead of hiding the change here.
   outcome belonging to that proposal's own lifecycle plan. An input two artifacts both declare is
   asked for once; they agree because a selection's values are bound from one set of sources, so the
   first declaration is the declaration rather than a choice between rivals.
+
+## D-060 — A later process reads environment provenance; it does not guess it
+- **Decision:** `InstallationReceipt` records the optional absolute `base_interpreter` used to
+  create the artifact environment. `intended_receipt` fills it from the reviewed
+  `PlannedInstallation`; old receipt documents without the field still parse with `None`.
+- **Status:** accepted.
+- **Reason:** the durable consumer reader must construct the desired runtime state before it can
+  compare an installed artifact with the machine. The environment interpreter is an effect, while
+  the interpreter it was built from is the provenance needed to reproduce that effect. Guessing
+  the current process's interpreter would make a later repair silently change what was reviewed;
+  omitting the component would make a missing environment invisible to Installed health.
+- **Consequence:** a receipt predating this evidence can still be displayed and its launcher and
+  harness inspected, but the reader does not claim to know or repair its runtime origin. New
+  canonical installs detect a missing environment after a process restart without consulting the
+  plan that happened to be in memory when they were installed.
+
+## D-061 — The full-screen entry opens one durable machine snapshot
+- **Decision:** the supported-curses branch of `tui.py::run` composes
+  `CanonicalScreenSource(screens_from(read_consumer_machine(...)))` and calls `run_consumer` before
+  initializing any legacy source/wizard state. `read_consumer_machine` reads every installation and
+  action once, inspects each installation once, and assembles one immutable `ConsumerMachine`.
+  A credential reference for which no matching provider was supplied is observed as `UNKNOWN`, not
+  absent; that unverifiable component gives the installation `Attention`, never a false `Ready`.
+- **Status:** accepted.
+- **Reason:** D-051's "assemble once" rule is only useful if the public composition root uses it.
+  Reading or inspecting inside a draw could change the answer while somebody scrolls. Treating an
+  unavailable provider as absence would invent a missing credential, while treating it as matched
+  would certify material nobody inspected. The canonical component algebra already has `UNKNOWN`
+  for exactly this evidence boundary.
+- **Consequence:** bare full-screen use reaches the CP-13 application and its accepted screens.
+  A curses capability failure before interaction still falls back to the characterized
+  line-oriented legacy path; an unreadable durable record fails closed instead of reopening a
+  wizard over a machine that appears empty. B-025 is closed, while public flag commands remain the
+  next migration boundary.

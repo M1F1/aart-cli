@@ -221,7 +221,8 @@ def run_counted_pipeline(
 class CredentialProviderPort(Protocol):
     """The boundary every secret provider crosses. No method returns a credential value."""
 
-    provider: str
+    @property
+    def provider(self) -> str: ...
 
     def available(self) -> ProviderState: ...
 

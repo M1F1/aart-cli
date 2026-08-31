@@ -281,18 +281,20 @@ Remaining: the flow that produces a live `ConsumerPlanView` when somebody starts
 public-command wiring, tracked as CP-13 step 5 rather than here.
 
 ### B-025 — Routing the default TTY entry to the canonical consumer application
-Status: OPEN
+Status: CLOSED (2026-08-31)
 Discovered in: CP-13 / `agent_artifacts/tui.py` / `run`
 Why useful: `run_consumer` exists, is typed, and drives the canonical application over curses, but
 nothing calls it — `run()` still opens the legacy wizard. Until it is routed, the canonical shell is
 reachable only from tests and embedders.
-Why noncritical now: routing it now would regress the flows the legacy wizard still owns alone
-(Marketplace browse, install, sources maintenance), because the screens behind them are B-024.
-Potential approach: route once B-024 lands, behind the existing curses-availability check, keeping
-the legacy wizard reachable until the public-flow evidence for step 6 exists.
+Resolution: `io/consumer_machine.py` now reads durable installation/action records, inspects each
+recorded installation once, and assembles the immutable machine used by every screen (D-060,
+D-061). The supported-curses branch of `tui.py::run` builds
+`CanonicalScreenSource(screens_from(machine))` and calls `run_consumer` before any legacy wizard
+state is loaded. Expected curses initialization failure still reaches the characterized text
+fallback; an unreadable durable record fails closed.
 Invariants touched: INV-149, INV-168.
-Evidence/links: B-024; `tests/consumer_shell_test.py`.
-Promotion condition: B-024 is complete and equivalent public-flow evidence exists.
+Evidence/links: B-024; D-060, D-061; `tests/consumer_machine_read_test.py`;
+`tests/tui_consumer_entry_test.py`; `tests/consumer_shell_test.py`.
 
 ### B-026 — Canonical installation-receipt persistence
 Status: CLOSED (2026-08-31) — promoted to the critical path and completed

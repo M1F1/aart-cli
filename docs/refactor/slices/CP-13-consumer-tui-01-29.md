@@ -1,5 +1,5 @@
 # CP-13 — Consumer TUI 01–29
-Status: IN PROGRESS (steps 1–4 VERIFIED; step 5 partial; step 6 open)
+Status: IN PROGRESS (steps 1–4 VERIFIED; step 5 TTY migrated/public commands pending; step 6 open)
 
 ## Goal
 
@@ -21,7 +21,8 @@ navigation map in sections 161–162.
   and detailed evidence.
 - `wizard.py` owns stage state and Back/quit/basket behavior.
 - `consumer/application.py`, `installation/*`, `lifecycle/*` and `setup_engine/*` remain the public
-  semantic path; CP-06–CP-12 are not yet the TUI's authority.
+  flag-command semantic path. The default full-screen TTY is canonical; the legacy line-oriented
+  wizard remains only as the expected pre-interaction curses fallback.
 
 ## Target paths/owners
 
@@ -93,8 +94,10 @@ existed; three defects were found by tests rather than by reading:
    `InstallationProposal` with the review projected from it, `begin_installation` builds one and
    `record_installation` attaches what ran, refusing an outcome from a plan the flow never proposed
    (D-059). `PlannedInstallation` carries `declared`, so a review shows what somebody will be asked
-   for rather than only what was already answered. What remains is routing `run()` away from the
-   legacy wizard (B-025) and the public commands through this flow.
+   for rather than only what was already answered. `io/consumer_machine.py` now reads durable
+   records and fresh local observations once, and the supported-curses branch of `tui.py::run`
+   opens `run_consumer` over that immutable snapshot before initializing legacy state (D-060,
+   D-061; B-025 closed). What remains is routing the public flag commands through this flow.
 5a. Persist canonical installed state and finished actions, so screens 12–16 and 25–27 have
    something to project between processes. **DONE** — `domain/receipts.py` gained the parse that
    inverts its own projection, `application/consumer_views.py` gained `receipt_detail_from_data`
@@ -129,6 +132,12 @@ the quit prompt where only the answer keys act.
 `tests/consumer_shell_test.py` — the persistent application driven through its own loop with a
 scripted terminal: rows load per screen, filters narrow and restore them, details stay about the
 row they were opened from, and `v` redraws the same screen with more disclosed.
+
+`tests/consumer_machine_read_test.py` and `tests/tui_consumer_entry_test.py` — a second process reads
+the whole machine from durable records, detects missing runtime and launcher state, preserves an
+uninspectable credential as unknown, and fails on an unreadable receipt. The bare supported TTY
+opens that canonical source without loading legacy wizard state; expected curses initialization
+failure remains the one boundary that reaches the text fallback (D-060, D-061).
 
 `tests/consumer_marketplace_shell_test.py` — screens 02–04a over a real built marketplace: the list
 holds artifacts and Collections together, Enter opens the right screen for whichever the cursor is
@@ -231,11 +240,13 @@ own launcher after a repair planned from disk alone, and no stored file contains
   every healthy artifact with dependencies reported unobserved drift forever. It is now reported
   through the environment that holds it, with the observation saying what it did not check (D-057,
   B-029).
+- The public full-screen composition root is migrated: new receipts remember the base interpreter
+  needed to inspect runtime health after restart while old receipts remain readable (D-060), and
+  `tui.py::run` opens one machine assembled from durable receipts, actions and local inspection
+  through `run_consumer` (D-061; B-025 closed).
 
 ## Remaining
 
-- Routing the default TTY entry to the canonical application (B-025), which needs an `io`-side
-  reader that assembles a `ConsumerMachine` from what is on disk.
 - Routing the public commands through `begin_installation`/`execute_lifecycle`.
 - Step 6: retiring legacy consumer semantic authority, once the above give equivalent public-flow
   evidence.
@@ -250,14 +261,17 @@ own launcher after a repair planned from disk alone, and no stored file contains
   built without it keeps the old behavior rather than failing, which is what let the field be added
   without rewriting every construction site; the one that matters is filled by
   `plan_artifact_installation` from the package's own description.
-- `run_consumer` is reachable by embedders and tests but is not yet the default TTY entry (B-025).
-  No legacy behavior has been changed or removed to make room for it.
+- The canonical full-screen entry has no live public install-start action yet: its screens can hold
+  and render a `ConsumerFlow`, but the public flag-command seam is still what creates installs.
+  Expected curses capability failure retains the legacy line-oriented fallback until equivalent
+  public-flow evidence permits its removal.
 
 ## Backlog discoveries
 
 - B-024 — Marketplace and install-flow screens for the canonical consumer shell. **Closed**: every
   accepted screen draws from canonical views and a real machine assembles into them.
-- B-025 — Routing the default TTY entry to the canonical consumer application.
+- B-025 — Routing the default TTY entry to the canonical consumer application. **Closed** by the
+  durable machine reader and public composition-root cutover (D-060, D-061).
 - B-026 — Canonical installation-receipt persistence. **Promoted to the critical path and
   completed**: B-024 cannot assemble Installed, Updates or Activity over a machine whose canonical
   state does not survive a process, and step 6 cannot retire legacy authority whose remaining
@@ -281,14 +295,15 @@ machine-output tests prove every accepted flow now consumes the canonical applic
 
 ## Handoff
 
-- Current working state: steps 1–4 complete and verified; step 5 partial; step 6 not started. The
-  legacy wizard is untouched and still owns the default TTY entry.
-- Exact next action: B-025 — route `tui.py::run` to `run_consumer`, which has no caller today.
-  The missing piece is an `io`-side reader that assembles a `ConsumerMachine` from disk the way
-  `tests/consumer_session_e2e_test.py` does by hand. Then the public commands, then step 6.
+- Current working state: steps 1–4 complete and verified; step 5 has migrated the default
+  full-screen TTY and still needs the public flag commands; step 6 has not started. The legacy text
+  wizard remains the expected curses-capability fallback, and legacy command authority remains.
+- Exact next action: characterize and route the public `install`, `update`, `uninstall` and
+  `status` commands through `begin_installation`/`execute_lifecycle`/`record_installation`, one
+  command seam at a time. Then retire only the authority each public-flow test proves replaced.
 - Do not undo: existing curses layout/search/basket/back/quit characterization; one semantic plan
   for both profiles; Maintainer Mode remains opt-in; `key_event` stays the only place a key's
   meaning is decided; no clock in `application/`.
-- Tests last run/results: 2,450 unit + 101 E2E tests, 83.52% coverage, all ten quality gates
-  green (`make quality`). CP-12 baseline was 2,196 unit + 65 E2E at 83.25%.
+- Tests last run/results: 2,461 unit + 101 E2E tests, 83.49% coverage, all ten quality gates green
+  (`make quality`). CP-12 baseline was 2,196 unit + 65 E2E at 83.25%.
 - Failure evidence: three defects found by tests are listed under Characterization / RED evidence.

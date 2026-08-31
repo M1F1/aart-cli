@@ -121,6 +121,7 @@ class InstalledFixture(unittest.TestCase):
             Transport.STDIO,
             (self.registration,),
             self.bound().credential_references,
+            base_interpreter=sys.executable,
         )
         self.desired = desired_state_from_receipt(
             COORDINATE, self.receipt, base_interpreter=sys.executable

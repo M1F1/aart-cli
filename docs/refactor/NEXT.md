@@ -2,37 +2,33 @@
 
 ## Current objective
 
-Finish **CP-13 Consumer TUI 01–29**. Steps 1–4 of the slice are complete and verified: all 29
-accepted screens have canonical projections and Fast/Verbose renderers over CP-06–CP-12 values, the
-keyboard and the persistent application loop are pure and headlessly driven, and a consumer flow
-E2E runs the real CP-12 installation through Installed → drift → repair → Activity → receipt →
-ownership-aware uninstall.
+Finish **CP-13 Consumer TUI 01–29**. Steps 1–4 are verified and the default full-screen TTY now
+opens one canonical `ConsumerMachine` assembled from durable receipts and fresh local inspection
+(D-060, D-061; B-025 closed). The remaining critical path is the public flag-command cutover and
+then evidence-led retirement of the legacy consumer authority those commands still call.
 
 What remains is the wiring that makes the canonical application the one a person actually reaches.
 
 ## Immediate next actions
 
-The install flow comes before the TTY entry. Routing `run()` at the canonical application while no
-public entry point can start an install would take away the flows the legacy wizard still owns
-alone; B-025 is therefore item 1 here. A package can now be compiled, published, read back and
-installed end to end (D-056), and a flow holds that install for the screens that draw it (D-059),
-so what remains is carrying it into the shell and the public commands rather than building it.
+The TTY composition root is migrated. A package can be compiled, published, read back and installed
+end to end (D-056), and a flow holds that install for the screens that draw it (D-059). What remains
+is making the public commands construct and execute those same values rather than the legacy setup
+queue.
 
-1. **B-025** — route the default TTY entry in `tui.py::run` to `run_consumer` behind the existing
-   curses-availability check, building its source with `screens_from(assemble_consumer_machine(...))`
-   over `LocalReceiptStore` and the local inspector. `run_consumer` has no caller today, so the
-   canonical application is unreachable from the CLI. Assembling the machine from what is on disk
-   is the missing piece: `tests/consumer_session_e2e_test.py` does it by hand, and an `io`-side
-   reader should do it once. Keep the legacy wizard reachable until step 6 evidence exists.
-2. Route the public consumer commands (`install`, `update`, `uninstall`, `status`) through
+1. Route the public consumer commands (`install`, `update`, `uninstall`, `status`) through
    `begin_installation`/`execute_lifecycle`/`record_installation` rather than the legacy setup
    queue, projecting their output with `consumer_plan_to_data` and `receipt_detail_to_data` so
    text, curses and `--json` are three renderings of one plan. `render_install_plan` is already the
    whole-plan review a non-interactive command prints (D-049).
+2. Add public-flow characterization at each command seam before changing its dispatch, including
+   non-interactive fail-closed review, machine-output completeness, and a real persisted install
+   that a subsequent `status` invocation reads without in-memory state.
 3. Only then step 6: retire legacy consumer semantic authority (`consumer/application.py`,
    `installation/*`, `setup_engine/*`, `lifecycle/application.py`) path by path, each removal
    preceded by a public-flow test proving the canonical path already carries it.
-4. Update the CP-13 coverage table as each screen group moves from projection to live flow.
+4. Update the CP-13 coverage table as each command and screen group moves from projection to live
+   public flow.
 
 ## Do not do yet
 

@@ -249,6 +249,7 @@ class PlannedInstallationTest(unittest.TestCase):
         self.assertEqual(receipt.root, ROOT)
         self.assertEqual(receipt.launcher, f"{ROOT}/launch")
         self.assertEqual(receipt.interpreter, ENVIRONMENT.interpreter)
+        self.assertEqual(receipt.base_interpreter, "/usr/bin/python3")
         self.assertIs(receipt.transport, Transport.STDIO)
         self.assertEqual([str(item.input) for item in receipt.credentials], ["github-token"])
 

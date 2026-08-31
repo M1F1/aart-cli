@@ -30,6 +30,7 @@ import shutil
 import sys
 import traceback
 from dataclasses import dataclass, replace
+from datetime import date
 from typing import Callable, List, Literal, Mapping, Optional, Sequence, Tuple
 
 from . import __version__
@@ -65,6 +66,8 @@ from .domain.identifiers import ArtifactCoordinate, SourceAlias
 from .domain.result import Err as DomainErr
 from .domain.result import Ok as DomainOk
 from .domain.result import Result as DomainResult
+from .io.consumer_machine import read_consumer_machine
+from .io.credentials import MacOsKeychainProvider
 from .marketplace.model import MarketplaceCatalog
 from .marketplace.search import Document, search, summary_line
 from .model import (
@@ -104,7 +107,12 @@ from .setup import (
     setup_retry_command,
 )
 from .sources.model import SourceIdentityTransition, SourceSyncOutcome
-from .tui_consumer import ConsumerScreenSource, run_consumer_shell
+from .tui_consumer import (
+    CanonicalScreenSource,
+    ConsumerScreenSource,
+    run_consumer_shell,
+    screens_from,
+)
 from .tui_failures import (
     WizardOperation,
     WizardStageFailure,
@@ -6199,6 +6207,45 @@ def run_consumer(source: ConsumerScreenSource) -> ConsumerUiState:
     return state
 
 
+def _canonical_consumer_source(
+    *,
+    project: str | None,
+    user_home: str | None,
+    today: date,
+) -> DomainResult[CanonicalScreenSource]:
+    """Compose the canonical shell from one durable read of the local machine."""
+
+    from .configuration.paths import Platform, resolve_config_paths
+
+    platform = Platform.DARWIN if sys.platform == "darwin" else Platform.LINUX
+    home = os.path.abspath(user_home or os.path.expanduser("~"))
+    paths = resolve_config_paths(
+        platform,
+        home=home,
+        xdg_config_home=os.environ.get("XDG_CONFIG_HOME"),
+        xdg_data_home=os.environ.get("XDG_DATA_HOME"),
+        xdg_cache_home=os.environ.get("XDG_CACHE_HOME"),
+    )
+    machine = read_consumer_machine(
+        state_root=os.path.join(paths.data_root, "state"),
+        harness_root=os.path.abspath(project or os.getcwd()),
+        today=today,
+        credential_providers=(MacOsKeychainProvider(),),
+    )
+    if isinstance(machine, DomainErr):
+        return machine
+    return DomainOk(CanonicalScreenSource(screens_from(machine.value)))
+
+
+def _render_consumer_startup_failure(failure: DomainErr) -> int:
+    print("The local AART state could not be loaded.")
+    for diagnostic in failure.diagnostics:
+        print(f"{diagnostic.severity.value} [{diagnostic.code.value}]: {diagnostic.message}")
+        for remediation in diagnostic.remediation:
+            print(f"  fix: {remediation}")
+    return 2
+
+
 def _curses_supported() -> bool:
     """Return false only for expected pre-interaction terminal capability failures."""
 
@@ -6234,6 +6281,28 @@ def run(
             "add a canonical registry in Sources instead."
         )
         return 2
+    failure_context = InternalFailureContext()
+    try:
+        curses_supported = _curses_supported()
+    except Exception as error:
+        return _render_internal_failure(error, failure_context)
+    if curses_supported:
+        consumer_source = _canonical_consumer_source(
+            project=project,
+            user_home=user_home,
+            today=date.today(),
+        )
+        if isinstance(consumer_source, DomainErr):
+            return _render_consumer_startup_failure(consumer_source)
+        try:
+            run_consumer(consumer_source.value)
+            return 0
+        except CursesUnavailable:
+            # Capability failure before interaction retains the line-oriented legacy fallback.
+            curses_supported = False
+        except Exception as error:
+            return _render_internal_failure(error, failure_context)
+
     source_context = _runtime_source_stage_context(
         source_dir=source_dir,
         repo=repo,
@@ -6291,11 +6360,6 @@ def run(
             )
 
         reporting_service_factory = runtime_reporting_service
-    failure_context = InternalFailureContext()
-    try:
-        curses_supported = _curses_supported()
-    except Exception as error:
-        return _render_internal_failure(error, failure_context)
     if not curses_supported:
         return _run_text(
             source_dir=source_dir,
