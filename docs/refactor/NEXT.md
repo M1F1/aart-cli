@@ -4,9 +4,9 @@
 
 Finish **CP-13 Consumer TUI 01–29**. Steps 1–4 and the durable canonical machine reader are
 verified, but public-entry characterization found that the canonical shell only navigates and
-renders: it cannot start or apply lifecycle actions, has no configured Marketplace in its composed
-source, and cannot yet see existing project/user install records. The premature default-TTY route
-was therefore removed under D-062 and B-025 is open again.
+renders: it cannot start or apply lifecycle actions. Its composed source now carries the configured
+Marketplace (D-068) and existing project/user install records (D-069), but the premature default-TTY
+route was removed under D-062 and B-025 stays open until a real action handler exists.
 
 What remains is the wiring that makes the canonical application the one a person actually reaches.
 
@@ -36,10 +36,14 @@ that flow and execution, plus composition of real Marketplace and installed-stat
    so B-030 is closed. Configured Marketplace offers are now composed into the same source and drawn
    on screens 02–04a (D-068). **DONE**, except that Collections do not cross that seam: they are
    declined by name until a versioned Collection reaches it (B-031).
-3. Define and test the strangler boundary for existing project/user installation manifests. They
-   must remain visible and operable until a kind-neutral canonical receipt/observation replaces
-   them; never treat the absence of a canonical MCP receipt as evidence that a Skill/Rule/Hook/
-   Memory installation does not exist.
+3. **DONE:** the strangler boundary for existing project/user installation manifests is defined
+   and tested. `read_consumer_machine` reads both manifests beside the receipt store, and every
+   record no canonical receipt already answers for is carried into the same `machine.installed`
+   list as an unadopted installation: health `unknown`, one `unobserved` drift that is not
+   repairable, and no offered action. The absence of a canonical MCP receipt is therefore never
+   evidence that a Skill/guideline/hook/memory installation does not exist (D-069). The legacy
+   path remains the one that operates them; the canonical shell shows them without claiming to
+   understand them.
 4. Route the public consumer commands (`install`, `update`, `uninstall`, `status`) through
    `begin_installation`/`execute_lifecycle`/`record_installation` rather than the legacy setup
    queue, projecting their output with `consumer_plan_to_data` and `receipt_detail_to_data` so

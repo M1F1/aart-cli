@@ -932,3 +932,32 @@ the Product Specification first instead of hiding the change here.
   missing from the Marketplace with no explanation reads as a source that published nothing. An
   unreadable configuration refuses startup rather than drawing an empty Marketplace: an empty one
   and an unreadable one are different facts.
+
+## D-069 — A legacy installation is unknown, never absent
+- **Decision:** `read_consumer_machine` reads the project and user `manifest.json` beside the
+  canonical receipt store, and every record it finds that no canonical receipt already answers for
+  becomes an `UnadoptedInstallation`. Those are assembled into the same `machine.installed` list as
+  measured installations, projected by `project_unadopted_installation` with the new
+  `InstalledHealth.UNKNOWN`, a single `unobserved` drift that is not repairable, and no actions at
+  all. The legacy roots are required keyword arguments rather than optional ones.
+- **Status:** accepted.
+- **Reason:** canonical receipts are MCP-specific, while Skills, guidelines, hooks and memory are
+  still installed through the setup path into `install_state`. A reader that consulted only the
+  receipt store therefore reported a machine with a Skill installed as a machine with nothing
+  installed, and that emptiness is not inert: it is what a later install writes over and what a
+  repair finds nothing to repair. This is D-029 applied across the strangler seam -- a component
+  nobody observed is drift rather than a match -- and the same rule that keeps an uninspectable
+  credential `UNKNOWN` rather than absent.
+- **Consequence:** one list, not two. Splitting unadopted installations into their own band would
+  leave `machine.installed` still able to answer "not installed" about something installed, which
+  is the exact failure being closed. `UNKNOWN` is not a fifth degree of badness and nothing derives
+  it from drift; the Dashboard counts such a row as installed but neither ready, updatable nor
+  needing attention, and the Doctor neither reports it as an issue nor offers to repair it. No
+  action is offered because `repair` would promise reconciliation against a desired state nobody
+  holds and `uninstall` a removal the canonical effects cannot describe; the legacy path remains
+  the one that operates these until a kind-neutral canonical receipt replaces them. Deduplication
+  compares coordinates with the version stripped: a manifest record cannot carry a version and a
+  receipt can, so comparing printed forms would list one installation twice, once measured and once
+  unknown. The roots are required because a caller that omitted them would silently get the lying
+  machine, and no signature should make that easy to ask for by accident. A missing manifest is no
+  installations in that scope; a manifest that exists and cannot be parsed is a refusal.

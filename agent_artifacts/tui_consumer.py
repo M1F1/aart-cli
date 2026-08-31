@@ -513,11 +513,18 @@ def render_installed_artifact(
     if not isinstance(view, InstalledArtifactView) or not isinstance(profile, PresentationProfile):
         raise ValueError("installed artifact rendering needs a view and presentation profile")
     lines = [f"{view.coordinate} — {_human(view.health)}"]
-    if view.drift:
+    if view.health == "unknown":
+        # Not a fault and not a clean bill: nothing measured it. Saying "needs attention" would
+        # invent a problem, and "verified" would invent a verification.
+        lines.append("Installed here, but nothing canonical has observed it yet.")
+    elif view.drift:
         lines.append("Needs attention: " + ", ".join(item.component for item in view.drift) + ".")
     else:
         lines.append("Verified against its desired state.")
-    lines.append("Actions: " + ", ".join(view.actions) + ".")
+    if view.actions:
+        lines.append("Actions: " + ", ".join(view.actions) + ".")
+    else:
+        lines.append("No action is offered until it is observed.")
     if profile is PresentationProfile.VERBOSE:
         lines.append("Ownership:")
         lines.extend(f"  - {item.kind}: {item.owner}" for item in view.ownership)

@@ -488,7 +488,12 @@ class AuthoredInstallationTest(unittest.TestCase):
         self.assertIsInstance(recorded, Ok, getattr(recorded, "diagnostics", ()))
 
         reread = read_consumer_machine(
-            state_root=self.state_root, harness_root=str(self.scope), today=TODAY
+            state_root=self.state_root,
+            harness_root=str(self.scope),
+            today=TODAY,
+            project_root=str(self.scope),
+            user_home=str(self.scope / "home"),
+            data_root=str(self.scope / "data"),
         )
 
         self.assertIsInstance(reread, Ok, getattr(reread, "diagnostics", ()))
@@ -524,7 +529,12 @@ class AuthoredInstallationTest(unittest.TestCase):
         )
 
         machine = read_consumer_machine(
-            state_root=self.state_root, harness_root=str(self.scope), today=TODAY
+            state_root=self.state_root,
+            harness_root=str(self.scope),
+            today=TODAY,
+            project_root=str(self.scope),
+            user_home=str(self.scope / "home"),
+            data_root=str(self.scope / "data"),
         ).value
 
         drawn = "\n".join(

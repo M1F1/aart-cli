@@ -60,8 +60,17 @@ class LifecycleIntentKind(str, Enum):
 
 
 class InstalledHealth(str, Enum):
+    """What is known about one installation, including that nothing is.
+
+    ``UNKNOWN`` is not a fifth degree of badness. It is the absence of a measurement, and it exists
+    because the alternative -- reporting an unmeasured installation as ready, or omitting it -- is
+    the one answer that is never safe. Nothing derives it from drift; it is asserted only where the
+    evidence to measure health does not exist at all.
+    """
+
     READY = "ready"
     UPDATE = "update"
+    UNKNOWN = "unknown"
     ATTENTION = "attention"
     BROKEN = "broken"
 
@@ -346,11 +355,15 @@ def collection_health(members: tuple[MemberHealth, ...]) -> CollectionHealth:
     if not members or len({item.artifact for item in members}) != len(members):
         raise ValueError("collection health needs unique members")
     ordered = tuple(sorted(members, key=lambda item: item.artifact))
+    # An unmeasured member outranks a healthy one -- the Collection cannot be called ready when
+    # part of it was never looked at -- but a measured problem outranks it in turn, because that
+    # is the one somebody can act on.
     rank = {
         InstalledHealth.READY: 0,
         InstalledHealth.UPDATE: 1,
-        InstalledHealth.ATTENTION: 2,
-        InstalledHealth.BROKEN: 3,
+        InstalledHealth.UNKNOWN: 2,
+        InstalledHealth.ATTENTION: 3,
+        InstalledHealth.BROKEN: 4,
     }
     status = max((item.health for item in ordered), key=rank.__getitem__)
     return CollectionHealth(status, ordered)

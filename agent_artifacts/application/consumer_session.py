@@ -53,6 +53,7 @@ from .consumer_views import (
     project_installation_receipt,
     project_installed_artifact,
     project_installed_collection,
+    project_unadopted_installation,
 )
 from .execution import InstallationExecutionOutcome
 from .installation_proposal import (
@@ -67,6 +68,7 @@ __all__ = [
     "ConsumerFlow",
     "ConsumerMachine",
     "InstalledInspection",
+    "UnadoptedInstallation",
     "assemble_consumer_machine",
     "begin_installation",
     "record_installation",
@@ -100,6 +102,30 @@ class InstalledInspection:
     @property
     def coordinate(self) -> str:
         return str(self.record.coordinate)
+
+
+@dataclass(frozen=True, slots=True)
+class UnadoptedInstallation:
+    """One installation recorded in the project or user manifest and nowhere canonical.
+
+    This is the strangler boundary, and it is deliberately thin: a coordinate and the scope it was
+    installed into, which is everything the canonical model can honestly carry about a record it
+    does not yet own. Nothing here is a receipt, a desired state or an observation, and it must not
+    grow into one by inference -- the moment this can be projected from a kind-neutral canonical
+    receipt instead, the record stops being unadopted and this type stops being needed.
+    """
+
+    coordinate: str
+    scope: str
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.coordinate, str)
+            or not self.coordinate
+            or any(character in self.coordinate for character in "\r\n")
+            or self.scope not in {"project", "user"}
+        ):
+            raise ValueError("an unadopted installation is invalid")
 
 
 @dataclass(frozen=True, slots=True)
@@ -159,6 +185,7 @@ def assemble_consumer_machine(
     credentials: tuple[CredentialObservation, ...] = (),
     actions: tuple[ReceiptDetailView, ...] = (),
     registries: tuple[RegistryView, ...] = (),
+    unadopted: tuple[UnadoptedInstallation, ...] = (),
     today: date,
 ) -> ConsumerMachine:
     """Assemble everything the consumer screens draw from, from what was read of this machine.
@@ -176,6 +203,14 @@ def assemble_consumer_machine(
         not isinstance(item, RegistryView) for item in registries
     ):
         raise ValueError("consumer assembly needs recorded actions and registry views")
+    if any(not isinstance(item, UnadoptedInstallation) for item in unadopted):
+        raise ValueError("consumer assembly needs unadopted installations")
+    inspected = {item.coordinate for item in inspections}
+    if len({item.coordinate for item in unadopted} & inspected):
+        raise ValueError(
+            "an installation cannot be both canonically receipted and unadopted; the caller "
+            "decides which record answers for it before assembly, not the screens"
+        )
 
     records = tuple(
         project_credential_record(item, dependants=_dependants(item, inspections))
@@ -195,6 +230,13 @@ def assemble_consumer_machine(
             ),
         )
         for item in inspections
+    )
+    # Drawn in the same list, because two lists would let the canonical one answer "not installed"
+    # about something that is. Ordered after the measured ones and marked unknown, so nothing reads
+    # an unmeasured installation as a healthy one.
+    views += tuple(
+        project_unadopted_installation(item.coordinate)
+        for item in sorted(unadopted, key=lambda item: (item.coordinate, item.scope))
     )
     timeline = activity_from_receipts(actions, today=today)
     recent = tuple(entry.summary for day in timeline.days for entry in day.entries)[:_RECENT]

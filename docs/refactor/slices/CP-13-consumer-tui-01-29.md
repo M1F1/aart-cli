@@ -354,17 +354,20 @@ machine-output tests prove every accepted flow now consumes the canonical applic
 
 ## Handoff
 
-- Current working state: steps 1–4 complete and verified; step 5 has a durable machine reader,
-  action-capable reducer and an injected/fail-closed shell boundary, but no production handler;
-  step 6 has not started. The legacy wizard and command authority remain public by design (D-062,
+- Current working state: steps 1–4 complete and verified; step 5 has a durable machine reader that
+  now also sees the legacy project/user manifests, a composed Marketplace, an action-capable reducer
+  and an injected/fail-closed shell boundary, but no production handler; step 6 has not started. The legacy wizard and command authority remain public by design (D-062,
   D-063).
-- Exact next action: implement B-030's aggregate execution/receipt with single-and-bulk tests, then
-  use it in the production handler. Compose configured Marketplace and preserve existing
-  project/user install records before retrying B-025 and routing public flag commands one seam at a
-  time.
+- Exact next action: route the public consumer commands (`install`, `update`, `uninstall`,
+  `status`) through `begin_installation`/`execute_installation`/`record_installation`, adding
+  public-flow characterization at each seam first. B-030 is done, the configured Marketplace is
+  composed (D-068) and existing project/user install records are visible as unadopted installations
+  (D-069); what remains before B-025 can be retried is the production action handler.
 - Do not undo: existing curses layout/search/basket/back/quit characterization; one semantic plan
   for both profiles; Maintainer Mode remains opt-in; `key_event` stays the only place a key's
-  meaning is decided; no clock in `application/`.
+  meaning is decided; no clock in `application/`; the legacy roots stay required arguments of
+  `read_consumer_machine`, and an unadopted installation stays in the one Installed list with no
+  offered action rather than moving to a band of its own (D-069).
 - Tests last run/results: 2,484 unit + 101 E2E tests, 83.44% coverage, all ten quality gates green
   (`make quality PYTHON=python3`). CP-12 baseline was 2,196 unit + 65 E2E at 83.25%.
 - Failure evidence: three defects found by tests are listed under Characterization / RED evidence.

@@ -6228,10 +6228,14 @@ def _canonical_consumer_source(
         xdg_data_home=os.environ.get("XDG_DATA_HOME"),
         xdg_cache_home=os.environ.get("XDG_CACHE_HOME"),
     )
+    project_root = os.path.abspath(project or os.getcwd())
     machine = read_consumer_machine(
         state_root=os.path.join(paths.data_root, "state"),
-        harness_root=os.path.abspath(project or os.getcwd()),
+        harness_root=project_root,
         today=today,
+        project_root=project_root,
+        user_home=home,
+        data_root=paths.data_root,
         credential_providers=(MacOsKeychainProvider(),),
     )
     if isinstance(machine, DomainErr):

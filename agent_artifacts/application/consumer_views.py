@@ -31,7 +31,12 @@ from agent_artifacts.domain.inputs import (
 )
 from agent_artifacts.domain.plans import InstallPlan, install_plan_to_data
 from agent_artifacts.domain.receipts import RECEIPT_INVALID
-from agent_artifacts.domain.reconciliation import CurrentState, DesiredState, compare_states
+from agent_artifacts.domain.reconciliation import (
+    CurrentState,
+    DesiredState,
+    DriftKind,
+    compare_states,
+)
 from agent_artifacts.domain.remediations import remediation_to_data
 from agent_artifacts.domain.requirements import requirement_to_data
 from agent_artifacts.domain.result import Err, Ok, Result
@@ -46,6 +51,7 @@ from .execution import (
     LifecycleExecutionStatus,
 )
 from .intents import (
+    InstalledHealth,
     LifecycleIntentKind,
     LifecyclePlan,
     MemberHealth,
@@ -100,6 +106,7 @@ __all__ = [
     "project_install_plan",
     "project_installed_artifact",
     "project_installed_collection",
+    "project_unadopted_installation",
     "project_lifecycle_outcome",
     "project_lifecycle_plan",
     "project_credential_record",
@@ -743,6 +750,35 @@ def project_installed_artifact(
         _drift_view(desired, current),
         tuple(actions),
         credentials,
+    )
+
+
+def project_unadopted_installation(coordinate: str) -> InstalledArtifactView:
+    """Project an installation only the legacy manifest knows about.
+
+    AART installed this and recorded it, but it recorded it in the project or user manifest rather
+    than as a canonical receipt, and canonical receipts are what the desired/current comparison is
+    built from. There is therefore no desired state to compare against and nothing measured it, so
+    every honest field here is a refusal to claim: health is unknown rather than ready, the single
+    drift is ``unobserved`` rather than a fault, and no action is offered.
+
+    Offering ``repair`` would promise reconciliation against a desired state nobody holds; offering
+    ``uninstall`` would promise a removal the canonical effects cannot describe. Both are worse than
+    an empty list, which at least says plainly that this is somebody else's to operate for now.
+
+    What is *not* optional is that it appears at all. Leaving it out would let the canonical view
+    answer "not installed" about something that is installed, which is the one answer that lets a
+    later install quietly write over it.
+    """
+
+    if not isinstance(coordinate, str) or not coordinate or any(c in coordinate for c in "\r\n"):
+        raise ValueError("an unadopted installation projection needs a coordinate")
+    return InstalledArtifactView(
+        coordinate,
+        InstalledHealth.UNKNOWN.value,
+        (),
+        (LifecycleDriftView("installation", DriftKind.UNOBSERVED.value, False),),
+        (),
     )
 
 

@@ -19,15 +19,31 @@ import pathlib
 import unittest
 
 from agent_artifacts.application.consumer_session import ConsumerMachine
-from agent_artifacts.domain.identifiers import ObjectDigest
+from agent_artifacts.configuration.model import SourceKind
+from agent_artifacts.domain.identifiers import (
+    ArtifactCoordinate,
+    ArtifactIdentity,
+    ObjectDigest,
+    SourceAlias,
+    SourceId,
+)
 from agent_artifacts.domain.receipts import (
     InstallationReceipt,
     installation_receipt_from_data,
     installation_receipt_to_data,
 )
 from agent_artifacts.domain.result import Err, Ok
+from agent_artifacts.install_state.model import (
+    ArtifactEvidence,
+    EffectProof,
+    InstallationRecord,
+    InstallState,
+    SourceEvidence,
+)
+from agent_artifacts.install_state.schema import install_state_bytes
 from agent_artifacts.io.consumer_machine import read_consumer_machine
 from agent_artifacts.io.receipt_store import LocalReceiptStore
+from agent_artifacts.protocol.semver import SemVer
 from tests.repair_e2e_test import COORDINATE, InstalledFixture
 
 TODAY = dt.date(2026, 8, 31)
@@ -72,6 +88,45 @@ class RememberedEnvironmentTest(unittest.TestCase):
             self.receipt(base_interpreter="python3\n")
 
 
+def _shadow_of_the_receipt() -> InstallationRecord:
+    """The legacy manifest's record of the very installation the receipt store already holds."""
+
+    identity = ArtifactIdentity("mcp", "github")
+    return InstallationRecord(
+        coordinate=ArtifactCoordinate(SourceAlias("public"), identity),
+        source=SourceEvidence(
+            alias=SourceAlias("public"),
+            declared_id=SourceId("public-agent-artifacts"),
+            kind=SourceKind.REGISTRY_GIT,
+            origin="https://github.com/acme/agent-artifacts-registry.git",
+            resolved_commit="a" * 40,
+            subscription_ref="main",
+        ),
+        artifact=ArtifactEvidence(
+            identity=identity,
+            version=SemVer(1, 5, 0),
+            manifest_digest=ObjectDigest("sha256", "1" * 64),
+            payload_digest=ObjectDigest("sha256", "2" * 64),
+            object_digest=ObjectDigest("sha256", "3" * 64),
+        ),
+        profile="claude",
+        profile_version=1,
+        scope="project",
+        requested_mode="copy",
+        effects=(
+            EffectProof(
+                kind="copy-tree",
+                destination=".claude/mcp/github",
+                actual_mode="copy",
+                installed_digest=ObjectDigest("sha256", "4" * 64),
+                source_path="mcp/github",
+                created_destination=True,
+                overwrote=False,
+            ),
+        ),
+    )
+
+
 class MachineFromDiskTest(InstalledFixture):
     """What a second process, holding nothing in memory, can say about this machine."""
 
@@ -87,7 +142,17 @@ class MachineFromDiskTest(InstalledFixture):
             state_root=self.state_root,
             harness_root=str(self.scope),
             today=TODAY,
+            **self.roots(),
         )
+
+    def roots(self) -> dict[str, str]:
+        """Where a legacy manifest would be, if this machine had one. It does not."""
+
+        return {
+            "project_root": str(self.scope),
+            "user_home": str(self.scope / "home"),
+            "data_root": str(self.scope / "data"),
+        }
 
     def test_a_machine_read_from_disk_counts_what_is_really_installed(self) -> None:
         read = self.read()
@@ -132,11 +197,31 @@ class MachineFromDiskTest(InstalledFixture):
 
         self.assertIsInstance(self.read(), Err)
 
+    def test_the_same_installation_seen_through_both_lenses_is_one_installation(self) -> None:
+        """The manifest cannot record a version and the receipt can, so the printed forms differ.
+
+        Comparing them as printed would list `public/mcp/github` twice -- once measured, once
+        unknown -- which reads as two installs where somebody performed one, and would make the
+        unknown row an invitation to install what is already here.
+        """
+
+        manifest = pathlib.Path(self.scope) / ".agent-artifacts" / "manifest.json"
+        manifest.parent.mkdir(parents=True, exist_ok=True)
+        manifest.write_bytes(install_state_bytes(InstallState(2, (_shadow_of_the_receipt(),))))
+
+        read = self.read()
+
+        self.assertIsInstance(read, Ok, getattr(read, "diagnostics", ()))
+        self.assertEqual([item.coordinate for item in read.value.installed], [str(COORDINATE)])
+        # The measured answer wins: it is the one backed by an observation.
+        self.assertEqual(read.value.installed[0].health, "attention")
+
     def test_an_empty_machine_is_a_machine_rather_than_a_failure(self) -> None:
         read = read_consumer_machine(
             state_root=str(self.scope / "empty"),
             harness_root=str(self.scope),
             today=TODAY,
+            **self.roots(),
         )
 
         self.assertIsInstance(read, Ok, getattr(read, "diagnostics", ()))
