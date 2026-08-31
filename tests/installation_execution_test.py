@@ -63,8 +63,8 @@ class _Vault:
         return ("vault", "read", reference.provider.service)
 
 
-def _planned(**overrides):
-    planned = _plan(**overrides)
+def _planned(description=None, **overrides):
+    planned = _plan(description, **overrides)
     assert isinstance(planned, Ok), getattr(planned, "diagnostics", ())
     return planned.value
 
