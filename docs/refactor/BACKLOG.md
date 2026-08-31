@@ -483,3 +483,35 @@ noticing.
 leave the other four kinds on the legacy path, with the split made explicit at the seam rather than
 implicit. That is a strangler boundary rather than a workaround, but it leaves two installers live
 for longer and `install_state` cannot be retired while it holds records nothing canonical can read.
+
+## B-034 — A hook and a shared memory file need a merge effect, not a delivery
+
+**Classification: CRITICAL PATH for `NEXT.md` item 6, after B-033.**
+
+B-033 makes an artifact installable by being delivered where a harness reads it, which is the whole
+of a Skill and a guideline. Two of the five kinds are not only that:
+
+- a **hook** is a script placed in `hooks/<name>/` *and* an entry merged into a list inside a
+  settings file (`.claude/settings.json` at `hooks.PreToolUse`, `.tabnine/agent/settings.json` at
+  `hooks.BeforeTool`), with an identity of `(matcher, command)` and a profile-owned entry template;
+- every measured **memory** target is `kind="file"` -- `CLAUDE.md`, `TABNINE.md`, `AGENTS.md` --
+  where the artifact's body is inserted as a delimited block into a file the user owns and edits,
+  not written as a file of its own. Only a profile in directory mode makes memory a delivery.
+
+Neither is `DeliverArtifact`, which replaces a destination. Replacing `CLAUDE.md` would destroy
+everything the user wrote in it, and replacing `settings.json` would remove every hook and MCP entry
+in it. `ConfigureHarness` is the nearest canonical effect and it is MCP-shaped: it takes an
+`McpRegistration` and writes one server under a key.
+
+**Shape of the work.** A merge effect that owns a named region of a file it does not own: the key
+merge `ConfigureHarness` already performs, a list merge with an identity tuple, and a delimited
+block in a text file. Withdrawal removes only that region, and the rest of the file is evidence that
+must survive. The legacy engine already does all three (`installation/application.py`
+`_render_template`, `_memory_block`, and the merge specs in `profiles/builtin.py`), so this is
+characterization before replacement rather than new semantics.
+
+**Why it is deferred rather than folded into B-033.** The Product Specification's own migration
+order is MCP, then skills, then guidelines/rules, then memory, then hooks. Delivery closes skills
+and guidelines with the effect they actually need; inventing a merge effect at the same time would
+be designing for hooks before anything exercises them. Item 6 can retire legacy authority for the
+delivered kinds first, and this item is what unblocks the last two.

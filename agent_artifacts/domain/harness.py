@@ -16,13 +16,19 @@ import re
 from dataclasses import dataclass
 from enum import Enum
 
+from .artifacts import ArtifactKind
+from .effects import DeliveryKind
 from .launch import Transport
 
 __all__ = [
+    "DELIVERY_TARGETS",
     "MCP_TARGETS",
+    "DeliveryTarget",
     "McpRegistration",
     "McpTarget",
     "Scope",
+    "delivery_destination",
+    "delivery_target",
     "mcp_target",
     "registration_entry",
     "registration_from_data",
@@ -32,6 +38,8 @@ __all__ = [
 _SERVER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 _SLUG_RE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 _STDIO = frozenset({Transport.STDIO})
+_NAME_SLOT = "<name>"
+_DELIVERED_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 
 
 class Scope(str, Enum):
@@ -127,6 +135,123 @@ def mcp_target(harness: str, scope: Scope) -> McpTarget:
         raise KeyError(
             f"no measured MCP target for harness {harness!r} at {scope.value} scope"
         ) from None
+
+
+@dataclass(frozen=True, slots=True)
+class DeliveryTarget:
+    """Where one harness reads one kind of artifact from, relative to that scope's root.
+
+    The counterpart of `McpTarget` for the kinds that start no process. A destination has to name
+    the artifact it delivers: without `<name>` every Skill for a harness would be delivered to one
+    directory, and withdrawing one on uninstall would take away the directory the harness reads all
+    of them from.
+    """
+
+    harness: str
+    scope: Scope
+    kind: ArtifactKind
+    destination: str
+    delivery: DeliveryKind
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.harness, str) or _SLUG_RE.fullmatch(self.harness) is None:
+            raise ValueError("harness must be a canonical slug")
+        if not isinstance(self.scope, Scope) or not isinstance(self.kind, ArtifactKind):
+            raise ValueError("delivery target scope or kind is invalid")
+        if not isinstance(self.delivery, DeliveryKind):
+            raise ValueError("delivery target shape is invalid")
+        if (
+            not isinstance(self.destination, str)
+            or not self.destination
+            or self.destination.startswith("/")
+            or any(part in ("", "..") for part in self.destination.split("/"))
+            or any(character in self.destination for character in "\r\n")
+        ):
+            raise ValueError("a delivery destination must stay inside its scope root")
+        if _NAME_SLOT not in self.destination:
+            raise ValueError(
+                f"a {self.kind.value} destination must name the artifact it delivers, or "
+                "uninstalling one would take away where the harness reads them all"
+            )
+
+
+#: Measured delivery locations, taken from the harness profiles this repository has observed.
+#: Only the kinds that are installed purely by being placed appear here. A hook is a script plus an
+#: entry merged into a settings file, and every measured memory target is a block merged into a
+#: shared file: neither is a delivery, and both wait on a merge effect (B-034). The Product
+#: Specification's own migration order is MCP, skills, guidelines/rules, memory, hooks.
+DELIVERY_TARGETS: dict[tuple[str, Scope, ArtifactKind], DeliveryTarget] = {
+    # Claude Code, project scope: `.claude/skills/<name>/` and `.claude/guidelines/`.
+    ("claude", Scope.PROJECT, ArtifactKind.SKILL): DeliveryTarget(
+        "claude", Scope.PROJECT, ArtifactKind.SKILL, ".claude/skills/<name>", DeliveryKind.TREE
+    ),
+    ("claude", Scope.PROJECT, ArtifactKind.GUIDELINE): DeliveryTarget(
+        "claude",
+        Scope.PROJECT,
+        ArtifactKind.GUIDELINE,
+        ".claude/guidelines/<name>.md",
+        DeliveryKind.FILE,
+    ),
+    # Claude Code, user scope: guidelines are read from `rules/`, not `guidelines/`.
+    ("claude", Scope.USER, ArtifactKind.SKILL): DeliveryTarget(
+        "claude", Scope.USER, ArtifactKind.SKILL, ".claude/skills/<name>", DeliveryKind.TREE
+    ),
+    ("claude", Scope.USER, ArtifactKind.GUIDELINE): DeliveryTarget(
+        "claude", Scope.USER, ArtifactKind.GUIDELINE, ".claude/rules/<name>.md", DeliveryKind.FILE
+    ),
+    # Tabnine, project scope. There is deliberately no user-scope Skill target: that build
+    # documents no Agent Skills discovery location outside a project.
+    ("tabnine", Scope.PROJECT, ArtifactKind.SKILL): DeliveryTarget(
+        "tabnine",
+        Scope.PROJECT,
+        ArtifactKind.SKILL,
+        ".tabnine/agent/skills/<name>",
+        DeliveryKind.TREE,
+    ),
+    ("tabnine", Scope.PROJECT, ArtifactKind.GUIDELINE): DeliveryTarget(
+        "tabnine",
+        Scope.PROJECT,
+        ArtifactKind.GUIDELINE,
+        ".tabnine/guidelines/<name>.md",
+        DeliveryKind.FILE,
+    ),
+    ("tabnine", Scope.USER, ArtifactKind.GUIDELINE): DeliveryTarget(
+        "tabnine",
+        Scope.USER,
+        ArtifactKind.GUIDELINE,
+        ".tabnine/guidelines/<name>.md",
+        DeliveryKind.FILE,
+    ),
+}
+
+
+def delivery_target(harness: str, scope: Scope, kind: ArtifactKind) -> DeliveryTarget:
+    """The measured target for `kind` at `harness`, or `KeyError` if nobody has measured it.
+
+    A `KeyError` here covers three different facts, and the message says which: a harness this
+    build has never looked at, a kind that build documents no location for, and a kind that starts
+    a process and is registered rather than delivered.
+    """
+
+    try:
+        return DELIVERY_TARGETS[(harness, scope, kind)]
+    except KeyError:
+        raise KeyError(
+            f"no measured {kind.value} delivery target for harness {harness!r} at "
+            f"{scope.value} scope"
+        ) from None
+
+
+def delivery_destination(target: DeliveryTarget, name: str) -> str:
+    """`target`'s destination for one artifact, still relative to that scope's root."""
+
+    if not isinstance(target, DeliveryTarget):
+        raise ValueError("a delivery destination needs a measured target")
+    if not isinstance(name, str) or _DELIVERED_NAME_RE.fullmatch(name) is None:
+        # The name reaches a path, so it may not carry a separator or a parent reference: a
+        # delivery whose name walked out of its directory would land somewhere nobody measured.
+        raise ValueError(f"{name!r} is not a name an artifact can be delivered under")
+    return target.destination.replace(_NAME_SLOT, name)
 
 
 def registration_entry(registration: McpRegistration) -> dict[str, object]:
