@@ -24,14 +24,26 @@ from agent_artifacts.domain.receipts import InstallationReceipt
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.domain.selection import OwnershipReason
 
-from .consumer_views import ActivityRecord, ReceiptDetailView, project_receipt_detail
-from .execution import ExecutionStatus, LifecycleExecutionOutcome, LifecycleExecutionStatus
+from .consumer_views import (
+    ActivityRecord,
+    ReceiptDetailView,
+    project_installation_receipt,
+    project_receipt_detail,
+)
+from .execution import (
+    ExecutionStatus,
+    InstallationExecutionOutcome,
+    LifecycleExecutionOutcome,
+    LifecycleExecutionStatus,
+)
 from .intents import LifecycleIntentKind
 
 __all__ = [
     "RECORDING_INCOMPLETE",
     "ReceiptStorePort",
     "RecordedOutcome",
+    "RecordedTransaction",
+    "record_installation_transaction",
     "record_lifecycle_outcome",
 ]
 
@@ -140,3 +152,76 @@ def record_lifecycle_outcome(
             return recorded
         return Ok(RecordedOutcome(detail, action.value, recorded.value))
     return Ok(RecordedOutcome(detail, action.value))
+
+
+@dataclass(frozen=True, slots=True)
+class RecordedTransaction:
+    """What the store now holds because of one whole reviewed Selection."""
+
+    receipt: ReceiptDetailView
+    action: str
+    installations: tuple[tuple[ArtifactCoordinate, str], ...] = ()
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.receipt, ReceiptDetailView) or not isinstance(self.action, str):
+            raise ValueError("a recorded transaction needs the receipt it recorded")
+        if len({coordinate for coordinate, _ in self.installations}) != len(self.installations):
+            raise ValueError("a transaction records each installation once")
+
+
+def record_installation_transaction(
+    outcome: InstallationExecutionOutcome,
+    *,
+    recorded_at: str,
+    store: ReceiptStorePort,
+    receipts: tuple[tuple[ArtifactCoordinate, InstallationReceipt], ...] = (),
+) -> Result[RecordedTransaction]:
+    """Record one transaction as one action, and each member it left installed.
+
+    The Selection is what somebody reviewed, so it is what reaches the timeline: one entry, naming
+    every member. What is installed is still per-artifact, because that is the unit a later repair
+    reconciles -- a member that applied is recorded even when a later member failed, since its
+    leftovers are on the machine either way and a record is what makes them somebody's.
+    """
+
+    if not isinstance(outcome, InstallationExecutionOutcome):
+        return _error("recording needs an installation execution outcome")
+    available = dict(receipts)
+    if len(available) != len(receipts):
+        return _error("a transaction was given the same artifact's receipt twice")
+
+    keeping: list[tuple[ArtifactCoordinate, InstallationReceipt, LifecycleExecutionOutcome]] = []
+    for member in outcome.artifacts:
+        if member.outcome is None or not _keeps_installation(member.outcome):
+            continue
+        coordinate = member.plan.repair.artifact
+        installed = available.get(coordinate)
+        if installed is None:
+            return _error(
+                f"recording {coordinate} needs the installation receipt the action applied, "
+                "because the action took effect"
+            )
+        keeping.append((coordinate, installed, member.outcome))
+
+    try:
+        detail = project_installation_receipt(outcome, recorded_at=recorded_at)
+    except ValueError as error:
+        return _error(str(error))
+    # The action reaches the timeline first, so a store that then refuses an installation still
+    # leaves the attempt visible rather than losing the whole transaction.
+    action = store.record_action(detail)
+    if isinstance(action, Err):
+        return action
+
+    recorded: list[tuple[ArtifactCoordinate, str]] = []
+    for coordinate, installed, applied in keeping:
+        intent = applied.plan.intent
+        written = store.record_installation(
+            coordinate,
+            installed,
+            ownership=intent.resulting_ownership if intent.establishes_ownership else None,
+        )
+        if isinstance(written, Err):
+            return written
+        recorded.append((coordinate, written.value))
+    return Ok(RecordedTransaction(detail, action.value, tuple(recorded)))

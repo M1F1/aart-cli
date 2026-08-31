@@ -23,6 +23,7 @@ from typing import Callable, Protocol
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.effects import Effect, effect_to_data
 from agent_artifacts.domain.identifiers import ObjectDigest
+from agent_artifacts.domain.plans import install_plan_to_data
 from agent_artifacts.domain.policies import EffectivePolicy
 from agent_artifacts.domain.reconciliation import (
     ComponentId,
@@ -34,6 +35,7 @@ from agent_artifacts.domain.reconciliation import (
 )
 from agent_artifacts.domain.result import Err, Ok, Result
 
+from .installation_proposal import InstallationProposal
 from .intents import LifecycleIntentKind, LifecyclePlan, plan_lifecycle_intent
 from .reconciliation import RepairPlan, plan_repair
 
@@ -48,15 +50,20 @@ __all__ = [
     "EffectInterpreter",
     "ExecutionOutcome",
     "ExecutionStatus",
+    "InstallationArtifactExecution",
+    "InstallationExecutionOutcome",
+    "InstallationExecutionStatus",
     "LifecycleExecutionOutcome",
     "LifecycleExecutionStatus",
     "MutationLockPort",
     "StepOutcome",
     "StepStatus",
     "execute_repair",
+    "execute_installation",
     "execute_lifecycle",
     "execution_outcome_to_data",
     "lifecycle_execution_to_data",
+    "installation_execution_to_data",
 ]
 
 
@@ -85,6 +92,16 @@ class LifecycleExecutionStatus(str, Enum):
     PARTIALLY_APPLIED = "partially-applied"
     RESTORED = "restored"
     RESTORATION_FAILED = "restoration-failed"
+
+
+class InstallationExecutionStatus(str, Enum):
+    """The terminal state of one whole reviewed Selection transaction."""
+
+    COMPLETED = "completed"
+    COMPLETED_WITH_ATTENTION = "completed-with-attention"
+    FAILED = "failed"
+    INTERRUPTED = "interrupted"
+    PARTIALLY_APPLIED = "partially-applied"
 
 
 class EffectInterpreter(Protocol):
@@ -205,6 +222,83 @@ class LifecycleExecutionOutcome:
             if self.primary.applied
             else LifecycleExecutionStatus.FAILED
         )
+
+
+@dataclass(frozen=True, slots=True)
+class InstallationArtifactExecution:
+    """One proposal member's evidence, including a member deliberately not attempted."""
+
+    plan: LifecyclePlan
+    outcome: LifecycleExecutionOutcome | None = None
+    diagnostics: tuple[Diagnostic, ...] = ()
+    not_attempted: bool = False
+    detail: str = ""
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.plan, LifecyclePlan)
+            or not (self.outcome is None or isinstance(self.outcome, LifecycleExecutionOutcome))
+            or any(not isinstance(item, Diagnostic) for item in self.diagnostics)
+            or not isinstance(self.not_attempted, bool)
+            or not isinstance(self.detail, str)
+        ):
+            raise ValueError("installation artifact execution is invalid")
+        if self.outcome is not None and self.outcome.plan != self.plan:
+            raise ValueError("an artifact execution belongs to a different reviewed plan")
+        evidence = sum((self.outcome is not None, bool(self.diagnostics), self.not_attempted))
+        if evidence != 1:
+            raise ValueError("an artifact execution needs exactly one terminal kind of evidence")
+        object.__setattr__(self, "detail", " ".join(self.detail.split()))
+
+    @property
+    def status(self) -> str:
+        if self.outcome is not None:
+            return self.outcome.status.value
+        return "not-attempted" if self.not_attempted else "failed"
+
+
+@dataclass(frozen=True, slots=True)
+class InstallationExecutionOutcome:
+    """One reviewed bulk plan, with an explicit terminal result for every resolved artifact."""
+
+    proposal: InstallationProposal
+    artifacts: tuple[InstallationArtifactExecution, ...]
+    detail: str = ""
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.proposal, InstallationProposal)
+            or any(not isinstance(item, InstallationArtifactExecution) for item in self.artifacts)
+            or not isinstance(self.detail, str)
+            or tuple(item.plan for item in self.artifacts) != self.proposal.lifecycle
+        ):
+            raise ValueError("an installation execution must account for the whole proposal")
+        object.__setattr__(self, "detail", " ".join(self.detail.split()))
+
+    @property
+    def status(self) -> InstallationExecutionStatus:
+        outcomes = tuple(item.outcome for item in self.artifacts if item.outcome is not None)
+        statuses = tuple(item.status for item in self.artifacts)
+        if statuses and all(
+            status == LifecycleExecutionStatus.COMPLETED.value for status in statuses
+        ):
+            return InstallationExecutionStatus.COMPLETED
+        applied = any(item.primary.applied for item in outcomes)
+        completed = any(item.status is LifecycleExecutionStatus.COMPLETED for item in outcomes)
+        if applied or completed:
+            return InstallationExecutionStatus.PARTIALLY_APPLIED
+        if any(item.status is LifecycleExecutionStatus.INTERRUPTED for item in outcomes):
+            return InstallationExecutionStatus.INTERRUPTED
+        if (
+            statuses
+            and "not-attempted" not in statuses
+            and all(
+                status == LifecycleExecutionStatus.COMPLETED_WITH_ATTENTION.value
+                for status in statuses
+            )
+        ):
+            return InstallationExecutionStatus.COMPLETED_WITH_ATTENTION
+        return InstallationExecutionStatus.FAILED
 
 
 def _dispatch(
@@ -394,6 +488,114 @@ def _execute_lifecycle_locked(
     return Ok(LifecycleExecutionOutcome(reviewed, primary.value, restoration, detail))
 
 
+def _preflight_installation(
+    proposal: InstallationProposal,
+    *,
+    policy: EffectivePolicy,
+    inspect: Callable[[DesiredState], CurrentState],
+) -> Result[None]:
+    """Revalidate every member before any member is allowed to mutate the scope."""
+
+    for reviewed in proposal.lifecycle:
+        coordinate = reviewed.intent.desired.artifact
+        try:
+            current = inspect(reviewed.intent.desired)
+        except (OSError, RuntimeError, ValueError) as error:
+            return _error(
+                EXECUTION_INVALID,
+                f"installation precondition inspection failed for {coordinate}: {error}",
+            )
+        fresh = plan_lifecycle_intent(reviewed.intent, current, policy=policy)
+        if isinstance(fresh, Err):
+            return fresh
+        if fresh.value.review_digest != reviewed.review_digest:
+            return _error(
+                EXECUTION_REVIEW_STALE,
+                f"installed state for {coordinate} changed after Review; inspect and review "
+                "a fresh installation transaction",
+            )
+    return Ok(None)
+
+
+def _execute_installation_locked(
+    proposal: InstallationProposal,
+    *,
+    policy: EffectivePolicy,
+    interpreters: tuple[EffectInterpreter, ...],
+    inspect: Callable[[DesiredState], CurrentState],
+) -> Result[InstallationExecutionOutcome]:
+    preflight = _preflight_installation(proposal, policy=policy, inspect=inspect)
+    if isinstance(preflight, Err):
+        return preflight
+
+    artifacts: list[InstallationArtifactExecution] = []
+    stopped = False
+    for reviewed in proposal.lifecycle:
+        if stopped:
+            artifacts.append(
+                InstallationArtifactExecution(
+                    reviewed,
+                    not_attempted=True,
+                    detail="not attempted because an earlier artifact did not complete",
+                )
+            )
+            continue
+        executed = _execute_lifecycle_locked(
+            reviewed,
+            policy=policy,
+            interpreters=interpreters,
+            inspect=inspect,
+        )
+        if isinstance(executed, Err):
+            artifacts.append(
+                InstallationArtifactExecution(reviewed, diagnostics=executed.diagnostics)
+            )
+            stopped = True
+            continue
+        artifacts.append(InstallationArtifactExecution(reviewed, outcome=executed.value))
+        stopped = executed.value.status is not LifecycleExecutionStatus.COMPLETED
+    return Ok(InstallationExecutionOutcome(proposal, tuple(artifacts)))
+
+
+def execute_installation(
+    proposal: InstallationProposal,
+    *,
+    policy: EffectivePolicy,
+    interpreters: tuple[EffectInterpreter, ...],
+    inspect: Callable[[DesiredState], CurrentState],
+    lock: MutationLockPort,
+) -> Result[InstallationExecutionOutcome]:
+    """Execute one single-or-bulk proposal under one lease and one review boundary.
+
+    Every member is compared under the lease before the first effect runs. Once execution starts,
+    a member that does not complete stops the transaction and every later member is retained as an
+    explicit ``not-attempted`` result rather than disappearing from the receipt.
+    """
+
+    if not isinstance(proposal, InstallationProposal):
+        return _error(EXECUTION_INVALID, "installation execution needs a reviewed proposal")
+    acquired = lock.acquire()
+    if isinstance(acquired, Err):
+        return acquired
+    try:
+        result = _execute_installation_locked(
+            proposal,
+            policy=policy,
+            interpreters=interpreters,
+            inspect=inspect,
+        )
+    finally:
+        released = lock.release(acquired.value)
+    if isinstance(released, Err):
+        warning = "; ".join(item.message for item in released.diagnostics)
+        if isinstance(result, Err):
+            return Err((*result.diagnostics, *released.diagnostics))
+        return Ok(
+            replace(result.value, detail="; ".join(filter(None, (result.value.detail, warning))))
+        )
+    return result
+
+
 def execute_lifecycle(
     reviewed: LifecyclePlan,
     *,
@@ -446,5 +648,46 @@ def lifecycle_execution_to_data(outcome: LifecycleExecutionOutcome) -> dict[str,
         "restoration": (
             None if outcome.restoration is None else execution_outcome_to_data(outcome.restoration)
         ),
+        "status": outcome.status.value,
+    }
+
+
+def installation_execution_to_data(
+    outcome: InstallationExecutionOutcome,
+) -> dict[str, object]:
+    """Complete machine projection for one Selection transaction."""
+
+    if not isinstance(outcome, InstallationExecutionOutcome):
+        raise ValueError("installation execution projection needs an installation outcome")
+    plan = install_plan_to_data(outcome.proposal.plan)
+    return {
+        "artifacts": [
+            {
+                "coordinate": str(item.plan.intent.desired.artifact),
+                "detail": item.detail,
+                "diagnostics": [
+                    {
+                        "code": str(diagnostic.code),
+                        "message": diagnostic.message,
+                        "severity": diagnostic.severity.value,
+                    }
+                    for diagnostic in item.diagnostics
+                ],
+                "execution": (
+                    None if item.outcome is None else lifecycle_execution_to_data(item.outcome)
+                ),
+                "ownership": [
+                    {"kind": reason.kind.value, "owner": reason.owner}
+                    for reason in item.plan.intent.resulting_ownership
+                ],
+                "status": item.status,
+            }
+            for item in outcome.artifacts
+        ],
+        "detail": outcome.detail,
+        "effects": plan["mutation"],
+        "policy_digest": plan["policy_digest"],
+        "review_digest": str(outcome.proposal.review_digest),
+        "selection": plan["selection"],
         "status": outcome.status.value,
     }

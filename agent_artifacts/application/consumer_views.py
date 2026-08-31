@@ -39,7 +39,12 @@ from agent_artifacts.domain.selection import Collection, OwnershipReason, Resolv
 from agent_artifacts.domain.serialization import CanonicalValue, canonical_json_bytes
 from agent_artifacts.marketplace.model import MarketplaceCatalog
 
-from .execution import LifecycleExecutionOutcome, LifecycleExecutionStatus
+from .execution import (
+    InstallationExecutionOutcome,
+    InstallationExecutionStatus,
+    LifecycleExecutionOutcome,
+    LifecycleExecutionStatus,
+)
 from .intents import (
     LifecycleIntentKind,
     LifecyclePlan,
@@ -73,6 +78,7 @@ __all__ = [
     "MarketplaceCollectionView",
     "OwnershipView",
     "PresentationProfile",
+    "ReceiptArtifactView",
     "ReceiptDetailView",
     "RemediationView",
     "RequirementView",
@@ -99,6 +105,7 @@ __all__ = [
     "project_credential_record",
     "project_collection",
     "project_required_inputs",
+    "project_installation_receipt",
     "project_receipt_detail",
     "project_registries",
     "project_selection",
@@ -1136,6 +1143,23 @@ def _undo_availability(outcome: LifecycleExecutionOutcome) -> UndoAvailability:
 
 
 @dataclass(frozen=True, slots=True)
+class ReceiptArtifactView:
+    """One member of a transaction, as that transaction's receipt accounts for it.
+
+    A member that was never attempted is here too. A receipt that listed only what ran would make
+    an abandoned half of a Selection indistinguishable from one nobody asked for.
+    """
+
+    coordinate: str
+    status: str
+    ownership: tuple[OwnershipView, ...] = ()
+    steps: tuple[LifecycleStepOutcomeView, ...] = ()
+    residual_drift: tuple[LifecycleDriftView, ...] = ()
+    diagnostics: tuple[str, ...] = ()
+    detail: str = ""
+
+
+@dataclass(frozen=True, slots=True)
 class ReceiptDetailView:
     recorded_at: str
     intent: str
@@ -1150,6 +1174,8 @@ class ReceiptDetailView:
     restoration_status: str | None
     undo: UndoAvailability
     detail: str
+    selection: SelectionView | None = None
+    artifacts: tuple[ReceiptArtifactView, ...] = ()
     moment: datetime = field(init=False)
 
     def __post_init__(self) -> None:
@@ -1177,6 +1203,87 @@ def project_receipt_detail(record: ActivityRecord) -> ReceiptDetailView:
         projected.restoration_status,
         _undo_availability(outcome),
         projected.detail,
+    )
+
+
+#: What one whole Selection transaction amounts to, in the words a timeline already uses.
+_TRANSACTION_OUTCOMES: dict[InstallationExecutionStatus, ActivityOutcome] = {
+    InstallationExecutionStatus.COMPLETED: ActivityOutcome.SUCCEEDED,
+    InstallationExecutionStatus.COMPLETED_WITH_ATTENTION: ActivityOutcome.ATTENTION,
+    InstallationExecutionStatus.PARTIALLY_APPLIED: ActivityOutcome.PARTIAL,
+    InstallationExecutionStatus.INTERRUPTED: ActivityOutcome.INTERRUPTED,
+    InstallationExecutionStatus.FAILED: ActivityOutcome.FAILED,
+}
+
+
+def _transaction_undo(outcome: InstallationExecutionOutcome) -> UndoAvailability:
+    """Undo for a transaction is the weakest of its members, never the average.
+
+    Reversing half a Selection is not reversing it. If any member cannot be undone -- because it
+    mutated a credential, because it applied something irreversible, or because it never ran and so
+    left nothing to reverse -- the transaction as a whole cannot be, and the reason given is that
+    member's own.
+    """
+
+    members = tuple(item.outcome for item in outcome.artifacts if item.outcome is not None)
+    if len(members) != len(outcome.artifacts) or not members:
+        return UndoAvailability(False, "not every artifact in this transaction ran")
+    availabilities = tuple(_undo_availability(item) for item in members)
+    refused = next((item for item in availabilities if not item.available), None)
+    if refused is not None:
+        return refused
+    return UndoAvailability(
+        True,
+        _UNDO_AVAILABLE,
+        tuple(sorted({component for item in availabilities for component in item.components})),
+    )
+
+
+def project_installation_receipt(
+    outcome: InstallationExecutionOutcome,
+    *,
+    recorded_at: str,
+) -> ReceiptDetailView:
+    """One reviewed Selection transaction, as the single receipt a person reads.
+
+    The transaction is the unit somebody confirmed, so it is the unit recorded: one entry on the
+    timeline naming the Selection, with every member accounted for beneath it. Recording a receipt
+    per artifact instead would leave no record of the thing that was actually reviewed, and no way
+    to tell a Selection that half-applied from two unrelated installs.
+    """
+
+    if not isinstance(outcome, InstallationExecutionOutcome):
+        raise ValueError("transaction receipt projection needs an installation execution outcome")
+    selection = project_selection(outcome.proposal.plan.selection)
+    artifacts = tuple(
+        ReceiptArtifactView(
+            str(item.plan.intent.desired.artifact),
+            item.status,
+            _ownership_view(item.plan.intent.resulting_ownership),
+            () if item.outcome is None else project_lifecycle_outcome(item.outcome).steps,
+            () if item.outcome is None else project_lifecycle_outcome(item.outcome).residual_drift,
+            tuple(diagnostic.message for diagnostic in item.diagnostics),
+            item.detail,
+        )
+        for item in outcome.artifacts
+    )
+    count = len(artifacts)
+    return ReceiptDetailView(
+        recorded_at,
+        LifecycleIntentKind.INSTALL.value,
+        ", ".join(item.coordinate for item in artifacts),
+        f"Installed {count} artifact{'' if count == 1 else 's'}",
+        outcome.status.value,
+        _TRANSACTION_OUTCOMES[outcome.status],
+        str(outcome.proposal.review_digest),
+        str(outcome.proposal.plan.policy_digest),
+        tuple(step for item in artifacts for step in item.steps),
+        tuple(drift for item in artifacts for drift in item.residual_drift),
+        None,
+        _transaction_undo(outcome),
+        outcome.detail,
+        selection,
+        artifacts,
     )
 
 
@@ -1212,7 +1319,80 @@ def receipt_detail_to_data(view: ReceiptDetailView) -> dict[str, object]:
             "components": list(view.undo.components),
             "reason": view.undo.reason,
         },
+        # Absent rather than null for a single-artifact receipt: a receipt written before
+        # transactions existed has no Selection, and inventing an empty one would claim it did.
+        **(
+            {} if view.selection is None else {"selection": _selection_view_to_data(view.selection)}
+        ),
+        **(
+            {}
+            if not view.artifacts
+            else {
+                "artifacts": [
+                    {
+                        "coordinate": item.coordinate,
+                        "detail": item.detail,
+                        "diagnostics": list(item.diagnostics),
+                        "drift": [
+                            {
+                                "component": drift.component,
+                                "kind": drift.kind,
+                                "repairable": drift.repairable,
+                            }
+                            for drift in item.residual_drift
+                        ],
+                        "ownership": [
+                            {"kind": owner.kind, "owner": owner.owner} for owner in item.ownership
+                        ],
+                        "status": item.status,
+                        "steps": [
+                            {
+                                "component": step.component,
+                                "detail": step.detail,
+                                "effect": step.effect,
+                                "status": step.status,
+                            }
+                            for step in item.steps
+                        ],
+                    }
+                    for item in view.artifacts
+                ]
+            }
+        ),
     }
+
+
+def _selection_view_to_data(view: SelectionView) -> dict[str, object]:
+    return {
+        "artifacts": list(view.artifacts),
+        "collections": list(view.collections),
+        "derived_from": list(view.derived_from),
+        "explanation": view.explanation,
+        "mode": view.mode.value,
+        "resolved": list(view.resolved),
+        "semantic_identity": view.semantic_identity,
+    }
+
+
+def _selection_view_from_data(data: object) -> SelectionView:
+    if not isinstance(data, dict):
+        raise ValueError("a receipt's selection must be a mapping")
+    return SelectionView(
+        SelectionMode(_string(data, "mode")),
+        _strings(data, "artifacts"),
+        _strings(data, "collections"),
+        _strings(data, "derived_from"),
+        _strings(data, "resolved"),
+        _string(data, "semantic_identity"),
+        _string(data, "explanation"),
+    )
+
+
+def _strings(data: dict[str, object], key: str) -> tuple[str, ...]:
+    values = data.get(key, [])
+    if not isinstance(values, list) or any(not isinstance(item, str) for item in values):
+        raise ValueError(f"a receipt's {key} must be strings")
+    return tuple(cast("list[str]", values))
 
 
 _NAVIGATION: dict[ConsumerScreen, tuple[ConsumerScreen, ...]] = {
@@ -1515,6 +1695,37 @@ def receipt_detail_from_data(data: object) -> Result[ReceiptDetailView]:
                     tuple(cast("list[str]", components)),
                 ),
                 _string(data, "detail"),
+                None if "selection" not in data else _selection_view_from_data(data["selection"]),
+                tuple(
+                    ReceiptArtifactView(
+                        _string(row, "coordinate"),
+                        _string(row, "status"),
+                        tuple(
+                            OwnershipView(_string(owner, "kind"), _string(owner, "owner"))
+                            for owner in _rows(row, "ownership")
+                        ),
+                        tuple(
+                            LifecycleStepOutcomeView(
+                                _string(step, "component"),
+                                _string(step, "effect"),
+                                _string(step, "status"),
+                                _string(step, "detail"),
+                            )
+                            for step in _rows(row, "steps")
+                        ),
+                        tuple(
+                            LifecycleDriftView(
+                                _string(drift, "component"),
+                                _string(drift, "kind"),
+                                bool(drift.get("repairable")),
+                            )
+                            for drift in _rows(row, "drift")
+                        ),
+                        _strings(row, "diagnostics"),
+                        _string(row, "detail"),
+                    )
+                    for row in _rows(data, "artifacts")
+                ),
             )
         )
     except ValueError as error:

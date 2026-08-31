@@ -830,3 +830,22 @@ the Product Specification first instead of hiding the change here.
   dependency in the reducer. The production handler is still deliberately absent: multi-artifact
   execution must first gain one aggregate transaction outcome/receipt (B-030), because calling the
   singular CP-12 recorder once per artifact would violate INV-130 and INV-138.
+
+## D-064 — The transaction is the unit recorded, because it is the unit reviewed
+- **Decision:** `execute_installation` runs a whole `InstallationProposal` under one lease, and
+  `project_installation_receipt`/`record_installation_transaction` turn it into **one** Activity
+  receipt naming the Selection with every member accounted for beneath it, plus one installed
+  record per member that actually applied. `ReceiptDetailView` gained `selection` and `artifacts`;
+  both are omitted from the stored document when absent, so a receipt written before transactions
+  existed still reads.
+- **Status:** accepted.
+- **Reason:** looping `execute_lifecycle`/`record_lifecycle_outcome` per artifact would produce N
+  actions for one confirmation, violating INV-130/INV-138 and leaving no record of the thing that
+  was actually reviewed. It would also make a Selection that half-applied indistinguishable from
+  two unrelated installs on the timeline.
+- **Consequence:** a member that applied is recorded even when a later member failed — its
+  leftovers are on the machine either way, and a record is what makes them drift a repair can find
+  rather than files nothing knows about. A member that applied and whose receipt was not supplied
+  is refused rather than silently forgotten. Undo for a transaction is the weakest of its members,
+  never the average: if any member did not run, or mutated a credential, or applied something
+  irreversible, the transaction cannot be undone and the reason given is that member's own.

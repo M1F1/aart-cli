@@ -185,6 +185,14 @@ than guessed at; records are private (0o600), replaced rather than duplicated, f
 individually; a corrupt record is reported rather than silently skipped; and a timeline rebuilt
 from disk reads the same as the one projected in memory.
 
+`tests/installation_transaction_receipt_test.py` — one reviewed Selection becomes one durable
+record. A two-artifact transaction produces one Activity receipt naming the Selection and both
+members, round-trips through the stored document and rebuilds a single timeline entry, and writes
+one installed record per member. The refusals are the point: a member that applied and has no
+receipt is refused rather than forgotten, the same artifact cannot be given two receipts, a member
+that applied is still recorded when a later member fails, a member that never ran stays named as
+`not-attempted`, and a transaction nobody finished cannot be undone.
+
 ## E2E/live acceptance
 
 `tests/artifact_installation_e2e_test.py` — the authored package of D-056/D-058, drawn. The same
@@ -332,6 +340,6 @@ machine-output tests prove every accepted flow now consumes the canonical applic
 - Do not undo: existing curses layout/search/basket/back/quit characterization; one semantic plan
   for both profiles; Maintainer Mode remains opt-in; `key_event` stays the only place a key's
   meaning is decided; no clock in `application/`.
-- Tests last run/results: 2,471 unit + 101 E2E tests, 83.46% coverage, all ten quality gates green
+- Tests last run/results: 2,484 unit + 101 E2E tests, 83.44% coverage, all ten quality gates green
   (`make quality PYTHON=python3`). CP-12 baseline was 2,196 unit + 65 E2E at 83.25%.
 - Failure evidence: three defects found by tests are listed under Characterization / RED evidence.

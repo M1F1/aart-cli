@@ -22,14 +22,14 @@ that flow and execution, plus composition of real Marketplace and installed-stat
    `PREPARE_ACTION` and `EXECUTE_ACTION` carry only typed intent, coordinates/selection and review
    identity. The reducer remains pure, `key_event` remains the sole key interpreter, and the shell
    accepts matching prepared/recorded updates only through an injected handler (D-063).
-2. Add the real consumer application handler. Before connecting effects, introduce one aggregate
-   installation execution/recording outcome for the whole `InstallationProposal`: looping
-   `execute_lifecycle`/`record_lifecycle_outcome` per selected artifact would create N actions and
-   receipts and violate INV-130/INV-138. Execute the reviewed proposal under the existing CP-12
-   scope lock, preserve explicit per-artifact effect/compensation evidence inside one transaction,
-   record the resulting installation records plus one action receipt, attach it to `ConsumerFlow`,
-   and reload the durable machine (B-030). Compose configured Marketplace offers into the same
-   source. Do not route `run()` until these live-flow tests pass.
+2. **DONE (transaction half):** `execute_installation` runs a whole `InstallationProposal` under
+   one CP-12 scope lease with every member's precondition compared before the first effect, and one
+   transaction becomes one Activity receipt plus one installed record per member that applied
+   (D-064). A member that never ran stays named in the receipt as `not-attempted`; a member that
+   applied but has no receipt is refused rather than forgotten; undo is the weakest member's answer.
+   **Remaining:** attach the transaction outcome to `ConsumerFlow`, reload the durable machine after
+   it (B-030), and compose configured Marketplace offers into the same source. Do not route `run()`
+   until these live-flow tests pass.
 3. Define and test the strangler boundary for existing project/user installation manifests. They
    must remain visible and operable until a kind-neutral canonical receipt/observation replaces
    them; never treat the absence of a canonical MCP receipt as evidence that a Skill/Rule/Hook/
@@ -109,3 +109,6 @@ that flow and execution, plus composition of real Marketplace and installed-stat
   different facts, and only one of them is safe to install.
 - A flow is held beside the machine, never derived inside a draw (D-059): screens 05–11 project one
   `InstallationProposal`, and an outcome may only be reported under the review it belongs to.
+- The transaction is the unit recorded because it is the unit reviewed (D-064): one confirmation
+  leaves one action receipt naming the Selection, with every member accounted for beneath it and one
+  installed record per member that applied.
