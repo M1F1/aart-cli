@@ -44,14 +44,29 @@ that flow and execution, plus composition of real Marketplace and installed-stat
    evidence that a Skill/guideline/hook/memory installation does not exist (D-069). The legacy
    path remains the one that operates them; the canonical shell shows them without claiming to
    understand them.
-4. Route the public consumer commands (`install`, `update`, `uninstall`, `status`) through
-   `begin_installation`/`execute_lifecycle`/`record_installation` rather than the legacy setup
-   queue, projecting their output with `consumer_plan_to_data` and `receipt_detail_to_data` so
-   text, curses and `--json` are three renderings of one plan. `render_install_plan` is already the
-   whole-plan review a non-interactive command prints (D-049).
-5. Add public-flow characterization at each command seam before changing its dispatch, including
-   non-interactive fail-closed review, machine-output completeness, and a real persisted install
-   that a subsequent `status` invocation reads without in-memory state.
+4. **IN PROGRESS.** Route the public consumer commands (`install`, `update`, `uninstall`,
+   `status`) through `offer_installation`/`begin_installation`/`execute_installation`/
+   `record_installation` rather than the legacy setup queue, projecting their output with
+   `consumer_plan_to_data` and `receipt_detail_to_data` so text, curses and `--json` are three
+   renderings of one plan. `render_install_plan` is already the whole-plan review a non-interactive
+   command prints (D-049).
+
+   The composition those callers were missing now exists: `offer_installation` plans a whole
+   Selection, measures this machine once, lists what would have to be agreed to and observes what is
+   already at the paths the install would occupy, and `observe_planned_installation` is its adapter
+   (D-070). The real E2E proves the composed offer reaches the same answer as the hand-wiring it
+   replaces and installs for real through it.
+
+   What is still missing before a command or the shell's handler can call it: resolving coordinates
+   to `ResolvedArtifact` plus `InstallDescription` out of the object store, deciding each artifact's
+   root and harness targets from scope/profile, and assembling the effect interpreters. Those are
+   the remaining seams; none of them is a design question, all are composition.
+5. **DONE:** public-flow characterization now pins each command seam before its dispatch changes --
+   durable `status` (a later invocation names what an earlier one installed, and names nothing after
+   an uninstall), one envelope across all four seams, a review that names the artifacts it would
+   install, refusals reported in the envelope rather than as a crash, `--json` and text carrying one
+   review digest, and fail-closed review that finalizes nothing and writes nothing while still
+   carrying the digest a later invocation must match.
 6. Only then route the default TTY and retire legacy consumer semantic authority (`consumer/application.py`,
    `installation/*`, `setup_engine/*`, `lifecycle/application.py`) path by path, each removal
    preceded by a public-flow test proving the canonical path already carries it.
