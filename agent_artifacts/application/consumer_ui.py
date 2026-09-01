@@ -17,12 +17,14 @@ from enum import Enum
 
 from .consumer_views import (
     SETTING_ROWS,
+    ApplicationScreen,
     ConsumerScreen,
     ConsumerSession,
     ConsumerSettings,
     keeps_focus,
     navigation_targets,
 )
+from .maintainer_views import MaintainerScreen
 
 __all__ = [
     "ConsumerActionKind",
@@ -79,7 +81,7 @@ class ConsumerUiCommandKind(str, Enum):
 @dataclass(frozen=True, slots=True)
 class ConsumerUiEvent:
     kind: ConsumerUiEventKind
-    screen: ConsumerScreen | None = None
+    screen: ApplicationScreen | None = None
     action: ConsumerActionKind | None = None
     key: str = ""
     text: str = ""
@@ -92,7 +94,10 @@ class ConsumerUiEvent:
     def __post_init__(self) -> None:
         if (
             not isinstance(self.kind, ConsumerUiEventKind)
-            or (self.screen is not None and not isinstance(self.screen, ConsumerScreen))
+            or (
+                self.screen is not None
+                and not isinstance(self.screen, (ConsumerScreen, MaintainerScreen))
+            )
             or (self.action is not None and not isinstance(self.action, ConsumerActionKind))
             or not isinstance(self.key, str)
             or any(character in self.key for character in "\r\n")
@@ -110,7 +115,7 @@ class ConsumerUiEvent:
 @dataclass(frozen=True, slots=True)
 class ConsumerUiCommand:
     kind: ConsumerUiCommandKind
-    screen: ConsumerScreen | None = None
+    screen: ApplicationScreen | None = None
     action: ConsumerActionKind | None = None
     selection: tuple[str, ...] = ()
     focus: str = ""
@@ -119,7 +124,10 @@ class ConsumerUiCommand:
     def __post_init__(self) -> None:
         if (
             not isinstance(self.kind, ConsumerUiCommandKind)
-            or (self.screen is not None and not isinstance(self.screen, ConsumerScreen))
+            or (
+                self.screen is not None
+                and not isinstance(self.screen, (ConsumerScreen, MaintainerScreen))
+            )
             or (self.action is not None and not isinstance(self.action, ConsumerActionKind))
             or not _rows_valid(self.selection)
             or not isinstance(self.focus, str)
@@ -222,6 +230,11 @@ class ConsumerUiState:
             raise ValueError("consumer UI state is invalid")
         if self.session.profile is not self.settings.profile:
             object.__setattr__(self, "settings", self.settings.with_profile(self.session.profile))
+        if not self.settings.maintainer_mode and any(
+            isinstance(screen, MaintainerScreen)
+            for screen in (self.session.screen, *self.session.history)
+        ):
+            raise ValueError("a Maintainer screen needs Maintainer Mode enabled")
 
     @property
     def current_row(self) -> str:
@@ -246,9 +259,11 @@ def opening_state(settings: ConsumerSettings) -> ConsumerUiState:
 
 
 def _navigate(
-    state: ConsumerUiState, screen: ConsumerScreen | None
+    state: ConsumerUiState, screen: ApplicationScreen | None
 ) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
-    if screen is None or screen not in navigation_targets(state.session.screen):
+    if screen is None or screen not in navigation_targets(
+        state.session.screen, maintainer_mode=state.settings.maintainer_mode
+    ):
         return state, ()
     # What the next screen is about: the row somebody was on, or -- where this screen has no rows
     # of its own -- whatever the screen before it was already about.  A detail opened from a
@@ -364,7 +379,7 @@ _ACTION_REVIEW: dict[tuple[ConsumerActionKind, ConsumerScreen], ConsumerScreen] 
 def _request_action(
     state: ConsumerUiState, action: ConsumerActionKind | None
 ) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
-    if action is None:
+    if action is None or not isinstance(state.session.screen, ConsumerScreen):
         return state, ()
     target = _ACTION_REVIEW.get((action, state.session.screen))
     focus = state.focus or state.current_row
@@ -463,7 +478,12 @@ def _action_recorded(
     state: ConsumerUiState, event: ConsumerUiEvent
 ) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
     action = event.action
-    if action is None or action is not state.action or not event.text:
+    if (
+        action is None
+        or action is not state.action
+        or not event.text
+        or not isinstance(state.session.screen, ConsumerScreen)
+    ):
         return state, ()
     target = _ACTION_RESULT.get((action, state.session.screen))
     if target is None:
@@ -575,7 +595,7 @@ def key_event(
     state: ConsumerUiState,
     *,
     cursor: str = "",
-    detail: ConsumerScreen | None = None,
+    detail: ApplicationScreen | None = None,
 ) -> ConsumerUiEvent | None:
     """The event one key means here, or None where it means nothing on this screen.
 
@@ -591,7 +611,7 @@ def key_event(
         or not key
         or (len(key) != 1 and key not in _SPECIAL_KEYS)
         or not isinstance(state, ConsumerUiState)
-        or not (detail is None or isinstance(detail, ConsumerScreen))
+        or not (detail is None or isinstance(detail, (ConsumerScreen, MaintainerScreen)))
     ):
         raise ValueError("key translation needs a key name and consumer UI state")
 

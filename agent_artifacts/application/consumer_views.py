@@ -59,6 +59,7 @@ from .intents import (
     collection_health,
     installation_health,
 )
+from .maintainer_views import MaintainerScreen, maintainer_navigation_targets
 from .removal_proposal import RemovalProposal
 
 __all__ = [
@@ -67,6 +68,7 @@ __all__ = [
     "ActivityOutcome",
     "ActivityRecord",
     "ActivityView",
+    "ApplicationScreen",
     "ConfigInputView",
     "ConsumerPlanView",
     "ConsumerScreen",
@@ -165,6 +167,9 @@ class ConsumerScreen(str, Enum):
     RECEIPT_DETAILS = "27-receipt-details"
     SETTINGS = "28-settings"
     DOCTOR = "29-doctor"
+
+
+ApplicationScreen = ConsumerScreen | MaintainerScreen
 
 
 class SelectionMode(str, Enum):
@@ -615,12 +620,12 @@ def install_flow_screens(view: ConsumerPlanView) -> tuple[ConsumerScreen, ...]:
 
 @dataclass(frozen=True, slots=True)
 class ConsumerSession:
-    screen: ConsumerScreen
+    screen: ApplicationScreen
     profile: PresentationProfile = PresentationProfile.FAST
     semantic_identity: str | None = None
     selection_identity: str | None = None
     review_digest: str | None = None
-    history: tuple[ConsumerScreen, ...] = ()
+    history: tuple[ApplicationScreen, ...] = ()
 
     @classmethod
     def from_plan(cls, view: ConsumerPlanView) -> ConsumerSession:
@@ -637,9 +642,9 @@ class ConsumerSession:
             raise ValueError("consumer presentation profile is invalid")
         return replace(self, profile=profile)
 
-    def navigate(self, screen: ConsumerScreen) -> ConsumerSession:
-        if not isinstance(screen, ConsumerScreen):
-            raise ValueError("consumer screen is invalid")
+    def navigate(self, screen: ApplicationScreen) -> ConsumerSession:
+        if not isinstance(screen, (ConsumerScreen, MaintainerScreen)):
+            raise ValueError("application screen is invalid")
         if screen is self.screen:
             return self
         return replace(self, screen=screen, history=(*self.history, self.screen))
@@ -1532,7 +1537,7 @@ _KEEPS_FOCUS: frozenset[tuple[ConsumerScreen, ConsumerScreen]] = frozenset(
 )
 
 
-def keeps_focus(current: ConsumerScreen, target: ConsumerScreen) -> bool:
+def keeps_focus(current: ApplicationScreen, target: ApplicationScreen) -> bool:
     """Whether stepping between these two screens stays about the same thing.
 
     Normally the next screen is about the row somebody was on. A Collection is the exception: its
@@ -1540,17 +1545,28 @@ def keeps_focus(current: ConsumerScreen, target: ConsumerScreen) -> bool:
     about the Collection itself.
     """
 
-    if not isinstance(current, ConsumerScreen) or not isinstance(target, ConsumerScreen):
-        raise ValueError("consumer navigation needs two screens")
+    if not isinstance(current, (ConsumerScreen, MaintainerScreen)) or not isinstance(
+        target, (ConsumerScreen, MaintainerScreen)
+    ):
+        raise ValueError("application navigation needs two screens")
     return (current, target) in _KEEPS_FOCUS
 
 
-def navigation_targets(screen: ConsumerScreen) -> tuple[ConsumerScreen, ...]:
-    """Accepted forward routes. Back remains session history rather than a second graph."""
+def navigation_targets(
+    screen: ApplicationScreen, *, maintainer_mode: bool = False
+) -> tuple[ApplicationScreen, ...]:
+    """Accepted forward routes, with the complete Maintainer surface behind its opt-in."""
 
-    if not isinstance(screen, ConsumerScreen):
-        raise ValueError("consumer navigation needs a screen")
-    return _NAVIGATION[screen]
+    if not isinstance(screen, (ConsumerScreen, MaintainerScreen)) or not isinstance(
+        maintainer_mode, bool
+    ):
+        raise ValueError("application navigation needs a screen and a mode boundary")
+    if isinstance(screen, MaintainerScreen):
+        return maintainer_navigation_targets(screen) if maintainer_mode else ()
+    targets: tuple[ApplicationScreen, ...] = _NAVIGATION[screen]
+    if screen is ConsumerScreen.DASHBOARD and maintainer_mode:
+        return (*targets, MaintainerScreen.DASHBOARD)
+    return targets
 
 
 #: Refusal for a stored preference file this frontend cannot mean.

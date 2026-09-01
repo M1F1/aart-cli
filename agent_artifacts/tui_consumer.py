@@ -25,6 +25,7 @@ from agent_artifacts.application.consumer_ui import (
 from agent_artifacts.application.consumer_views import (
     SETTING_ROWS,
     ActivityView,
+    ApplicationScreen,
     ConfigInputView,
     ConsumerPlanView,
     ConsumerScreen,
@@ -43,6 +44,7 @@ from agent_artifacts.application.consumer_views import (
     ReceiptArtifactView,
     ReceiptDetailView,
     RegistryView,
+    navigation_targets,
     project_collection,
 )
 from agent_artifacts.domain.result import Err, Ok, Result
@@ -900,7 +902,7 @@ class ConsumerScreenSource(Protocol):
     def lines(self, state: ConsumerUiState) -> tuple[str, ...]:
         """The body of the screen, rendered at the profile `state` holds."""
 
-    def detail(self, state: ConsumerUiState) -> ConsumerScreen | None:
+    def detail(self, state: ConsumerUiState) -> ApplicationScreen | None:
         """Where Enter goes from the row under the cursor, if anywhere."""
 
     def selected(self, state: ConsumerUiState) -> tuple[str, ...] | None:
@@ -937,7 +939,7 @@ _HELP_LINES: tuple[str, ...] = (
 )
 
 
-def _title(screen: ConsumerScreen) -> str:
+def _title(screen: ApplicationScreen) -> str:
     return _human(screen.value.split("-", 1)[1]).title()
 
 
@@ -1306,6 +1308,13 @@ class CanonicalScreenSource:
 
     def rows(self, state: ConsumerUiState) -> tuple[str, ...]:
         screen, query = state.session.screen, state.search
+        if screen is ConsumerScreen.DASHBOARD:
+            return tuple(
+                target.value
+                for target in navigation_targets(
+                    screen, maintainer_mode=state.settings.maintainer_mode
+                )
+            )
         if screen is ConsumerScreen.MARKETPLACE:
             return tuple(
                 item.key
@@ -1376,10 +1385,21 @@ class CanonicalScreenSource:
         entry = self._screens.offered_collection(state.focus)
         return None if entry is None else entry.members
 
-    def detail(self, state: ConsumerUiState) -> ConsumerScreen | None:
+    def detail(self, state: ConsumerUiState) -> ApplicationScreen | None:
         """Enter opens the detail of whatever this screen is currently about."""
 
         screen, row = state.session.screen, state.current_row or state.focus
+        if screen is ConsumerScreen.DASHBOARD:
+            return next(
+                (
+                    target
+                    for target in navigation_targets(
+                        screen, maintainer_mode=state.settings.maintainer_mode
+                    )
+                    if target.value == row
+                ),
+                None,
+            )
         if screen is ConsumerScreen.MARKETPLACE:
             if self._screens.offered_collection(state.current_row) is not None:
                 return ConsumerScreen.COLLECTION_PREVIEW
@@ -1408,6 +1428,8 @@ class CanonicalScreenSource:
             return ConsumerScreen.REMEDIATION if plan.remediations else ConsumerScreen.READY
         if screen is ConsumerScreen.REMEDIATION:
             return ConsumerScreen.READY if self._screens.plan is not None else None
+        if not isinstance(screen, ConsumerScreen):
+            return None
         target = {
             ConsumerScreen.ACTIVITY: ConsumerScreen.ACTIVITY_DETAILS,
             ConsumerScreen.ACTIVITY_DETAILS: ConsumerScreen.RECEIPT_DETAILS,
@@ -1436,7 +1458,15 @@ class CanonicalScreenSource:
         screen, profile = state.session.screen, state.session.profile
         screens = self._screens
         if screen is ConsumerScreen.DASHBOARD:
-            return render_dashboard(screens.dashboard)
+            menu = tuple(
+                f"{'>' if row == state.current_row else ' '} {_title(target)}"
+                for row, target in zip(
+                    state.rows,
+                    navigation_targets(screen, maintainer_mode=state.settings.maintainer_mode),
+                    strict=False,
+                )
+            )
+            return ("Navigation:", *menu, "", *render_dashboard(screens.dashboard))
         if screen is ConsumerScreen.MARKETPLACE:
             offered = {item.key: item for item in self._offers()}
             return self._list(
@@ -1506,6 +1536,8 @@ class CanonicalScreenSource:
             return tuple(
                 line for item in screens.registries for line in render_registry(item, profile)
             )
+        if not isinstance(screen, ConsumerScreen):
+            return (f"{_title(screen)} is not available yet.",)
         if screen in _PLAN_SCREENS:
             return self._plan(screen, state)
         if screen in _LIFECYCLE_SCREENS:

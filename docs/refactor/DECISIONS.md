@@ -1442,3 +1442,25 @@ the Product Specification first instead of hiding the change here.
   acceptance does not wait on that removal, and the removal criteria in the slice file stand as
   written -- public machine-output tests first, deletion after.
 
+## D-092 — Maintainer screens are a separate catalog inside the one application state machine
+
+- **Decision:** screens 30–53 are `MaintainerScreen`, separate from the consumer-only
+  `ConsumerScreen` enum, and `ApplicationScreen` is the union carried by the existing
+  `ConsumerSession`, UI events, commands, reducer, keymap and shell. `navigation_targets` takes the
+  durable Maintainer Mode value: while off it exposes no Maintainer target and even a direct forged
+  navigation event is refused; while on it adds only screen 30 to the Dashboard roots, with the
+  complete Maintainer graph reachable beneath it. A state cannot be seeded on a Maintainer screen
+  while the setting is off. Dashboard rows and Enter targets derive from this same graph.
+- **Status:** accepted.
+- **Reason:** Product Specification 161.10, 162 and INV-193 make the whole Maintainer surface an
+  opt-in advanced area, while 164 requires screens 30–53 to share the persistent application. One
+  widened enum would make CP-13's invariant that every consumer screen is implemented falsely
+  include unfinished Maintainer bodies; a second reducer would split navigation and key semantics.
+  Separate catalogs inside one typed state preserve both truths. Deriving the drawn Dashboard menu
+  from the guarded graph also fixes a discovered reachability defect: the canonical Dashboard had
+  no rows or Enter target, so a default terminal could not reach Settings to enable the mode.
+- **Consequence:** disabling the preference hides Sources, Candidates, Validation, Promotion,
+  Registry Diff and Publish by construction, not by renderer convention. The grouped accepted
+  screens have stable internal identities for incremental implementation without being counted as
+  implemented merely because their names exist. Every future Maintainer renderer/action joins the
+  existing session and keymap, and a test that bypasses the terminal cannot cross the mode boundary.
