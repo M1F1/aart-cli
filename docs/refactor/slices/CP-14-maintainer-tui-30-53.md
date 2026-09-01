@@ -106,10 +106,29 @@ Evidence: `tests/maintainer_navigation_test.py`. Full repository result on 2026-
 tests and 204 E2E tests green, 83.45% branch coverage, format, lint, typecheck, validation,
 packaging, docs and secret-shape gates green.
 
+### Step 2a — pure screen 30–32 projections and renderers
+
+- `MaintainerSourceView` binds a configured authoring Source, its durable health and one Source Scan
+  only when aliases and pinned revisions agree. Manifest/Candidate counts, validation failures,
+  Ready counts and target registries are projected from active canonical Candidates (D-093).
+- `MaintainerDashboardView` aggregates those immutable Source views plus supplied recent activity;
+  no projection reads a filesystem, source, clock or registry.
+- `tui_maintainer.py` owns pure Fast/Verbose renderers. Fast abbreviates the pinned revision and
+  emphasizes status/counts; Verbose reveals the full revision, target registries, Candidate state
+  breakdown, sync epoch and redacted diagnostics.
+- `ConsumerScreens` accepts an optional composed `MaintainerViews`; the existing
+  `CanonicalScreenSource` now gives screen 30, Source list and Source detail real rows, Enter targets
+  and bodies. No production composition claims them yet because CP-05 did not persist Source Scan /
+  Candidate history.
+
+Evidence: RED-first `tests/maintainer_views_test.py`; affected gate 1,255 tests green plus format,
+lint, typecheck, validation, packaging, docs and secret-shape gates.
+
 ## Handoff
 
-- Current working state: step 1 committed-ready; screens 30–53 have identities and guarded routes,
-  but no Maintainer body is claimed implemented yet.
-- Exact next action: step 2 RED tests for `MaintainerDashboardView` and Sources list/detail
-  projections over canonical Source scan/Candidate values, followed by one IO composition that
-  reads them outside draw.
+- Current working state: step 1 is committed at `a48b0b0`; pure screen 30–32 views/renderers and
+  injected shared-source navigation are green and commit-ready.
+- Exact next action: persist/read the CP-05 Source Scan and Candidate history at an IO boundary,
+  then compose matching Source health + scan views once in `_canonical_consumer_actions`. Do not
+  reconstruct every Candidate as New on application startup; reviewed/rejected/superseded state is
+  durable product history (INV-229, INV-239).

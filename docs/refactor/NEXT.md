@@ -2,8 +2,8 @@
 
 ## Current objective
 
-Continue **CP-14 Maintainer TUI 30–53**, step 2: implement screen 30 and Sources screens 31–34
-over the canonical Source scan and Candidate lifecycle.
+Continue **CP-14 Maintainer TUI 30–53**, step 2: make the now-green screen 30–32 projections live
+over durable Source Scan / Candidate history, then implement Source Sync screens 33–34.
 
 CP-14 step 1 is complete (D-092):
 
@@ -22,24 +22,30 @@ CP-14 step 1 is complete (D-092):
 Evidence: `tests/maintainer_navigation_test.py`; 2,963 unit tests, 204 E2E tests, 83.45% branch
 coverage, and every repository quality gate green on 2026-09-01.
 
+The next pure increment is also green (D-093): `MaintainerDashboardView`,
+`MaintainerSourceView`, `MaintainerViews` and `tui_maintainer.py` render screen 30, Source list and
+Source detail from matching typed `ConfiguredSource` + `SourceHealth` + `SourceScan` observations.
+They are integrated with `CanonicalScreenSource` but intentionally not yet composed in production.
+Affected evidence: 1,255 tests and all changed-file gates green.
+
 ## Exact next action
 
-Start RED tests for immutable `MaintainerDashboardView` and Source list/detail projections in
-`application/maintainer_views.py`:
+Start RED tests for a canonical Candidate-history store and one Maintainer composition reader:
 
-1. Project screen 30 counts for configured Sources, Candidates, validation failures and Ready
-   candidates, plus supplied recent maintainer activity. The projection takes already-read
-   canonical values and no clock or IO.
-2. Project screens 31–32 from canonical configured Source state and the CP-05 source scan: alias,
-   URL, branch, last successful revision, explicit manifest count, invalid count and candidate
-   summary.
-3. Add a maintainer machine reader under `io/` that reads those inputs once at composition. Draws
-   remain pure and never fetch, discover, validate or promote.
-4. Add pure Fast/Verbose renderers in `tui_maintainer.py`, then compose them into the existing
-   `CanonicalScreenSource` so screen 30 and Sources are reachable through the step-1 graph.
-5. Add Source Sync review/result commands only after the read-only projections are green. Prove
-   sync creates or updates Candidates while returning no registry mutation (INV-200), and prove
-   discovery accepts only `aart.yaml`/`aart.json` (INV-201).
+1. Define strict serialization for `SourceScan` / `CandidateBundle` history using the canonical
+   package formats that already round-trip Candidates and compiled artifacts; reject unreadable,
+   duplicate, mismatched-alias or mismatched-revision state rather than returning an empty scan.
+2. Persist a successful Source Sync + compile + reconcile result atomically beneath the configured
+   source instance. A scan with `registry_mutations != ()` remains unrepresentable (INV-200).
+3. Read configured authoring Source health and the matching persisted scan once, project D-093's
+   views, and carry them in `ConsumerActionContext` so every redraw/action refresh retains the
+   Maintainer snapshot.
+4. Compose this reader in `_canonical_consumer_actions`; add a real-filesystem application test that
+   enables Maintainer Mode and reaches screen 30 → Sources → Source detail without hand-injected
+   views.
+5. Then implement screens 33–34 as reviewed Source Sync/result commands. Sync may fetch/discover,
+   compile and update Candidate history, but must produce no registry mutation and no promotion
+   (INV-200); discovery remains exact `aart.yaml`/`aart.json` only (INV-201).
 
 ## Critical boundaries for this slice
 

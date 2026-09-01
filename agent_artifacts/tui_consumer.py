@@ -47,8 +47,14 @@ from agent_artifacts.application.consumer_views import (
     navigation_targets,
     project_collection,
 )
+from agent_artifacts.application.maintainer_views import MaintainerScreen, MaintainerViews
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.domain.selection import Collection
+from agent_artifacts.tui_maintainer import (
+    render_maintainer_dashboard,
+    render_maintainer_source,
+    render_maintainer_sources,
+)
 from agent_artifacts.tui_marketplace import (
     MarketplaceArtifactRow,
     MarketplaceTarget,
@@ -1132,6 +1138,7 @@ class ConsumerScreens:
     #: somebody is looking at, and a review that cannot say what went wrong is a Fast projection
     #: hiding material risk.
     notice: tuple[str, ...] = ()
+    maintainer: MaintainerViews | None = None
 
     def offered(self, key: str) -> MarketplaceEntry | None:
         return next((item for item in self.marketplace if item.key == key), None)
@@ -1315,6 +1322,19 @@ class CanonicalScreenSource:
                     screen, maintainer_mode=state.settings.maintainer_mode
                 )
             )
+        if screen is MaintainerScreen.DASHBOARD:
+            return tuple(
+                target.value
+                for target in navigation_targets(
+                    screen, maintainer_mode=state.settings.maintainer_mode
+                )
+            )
+        if screen is MaintainerScreen.SOURCES:
+            return (
+                ()
+                if self._screens.maintainer is None
+                else tuple(source.alias for source in self._screens.maintainer.sources)
+            )
         if screen is ConsumerScreen.MARKETPLACE:
             return tuple(
                 item.key
@@ -1400,6 +1420,24 @@ class CanonicalScreenSource:
                 ),
                 None,
             )
+        if screen is MaintainerScreen.DASHBOARD:
+            return next(
+                (
+                    target
+                    for target in navigation_targets(
+                        screen, maintainer_mode=state.settings.maintainer_mode
+                    )
+                    if target.value == row
+                ),
+                None,
+            )
+        if screen is MaintainerScreen.SOURCES:
+            maintainer = self._screens.maintainer
+            return (
+                MaintainerScreen.SOURCE_DETAILS
+                if maintainer is not None and maintainer.source(row) is not None
+                else None
+            )
         if screen is ConsumerScreen.MARKETPLACE:
             if self._screens.offered_collection(state.current_row) is not None:
                 return ConsumerScreen.COLLECTION_PREVIEW
@@ -1467,6 +1505,40 @@ class CanonicalScreenSource:
                 )
             )
             return ("Navigation:", *menu, "", *render_dashboard(screens.dashboard))
+        if screen is MaintainerScreen.DASHBOARD:
+            if screens.maintainer is None:
+                return ("Maintainer state is not available yet.",)
+            menu = tuple(
+                f"{'>' if row == state.current_row else ' '} {_title(target)}"
+                for row, target in zip(
+                    state.rows,
+                    navigation_targets(screen, maintainer_mode=state.settings.maintainer_mode),
+                    strict=False,
+                )
+            )
+            return (
+                "Maintainer navigation:",
+                *menu,
+                "",
+                *render_maintainer_dashboard(screens.maintainer.dashboard, profile),
+            )
+        if screen is MaintainerScreen.SOURCES:
+            return (
+                ("Maintainer state is not available yet.",)
+                if screens.maintainer is None
+                else render_maintainer_sources(
+                    screens.maintainer.sources,
+                    cursor=state.current_row,
+                    profile=profile,
+                )
+            )
+        if screen is MaintainerScreen.SOURCE_DETAILS:
+            source = None if screens.maintainer is None else screens.maintainer.source(state.focus)
+            return (
+                ("That authoring Source is not available.",)
+                if source is None
+                else render_maintainer_source(source, profile)
+            )
         if screen is ConsumerScreen.MARKETPLACE:
             offered = {item.key: item for item in self._offers()}
             return self._list(

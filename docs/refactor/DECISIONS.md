@@ -1464,3 +1464,23 @@ the Product Specification first instead of hiding the change here.
   screens have stable internal identities for incremental implementation without being counted as
   implemented merely because their names exist. Every future Maintainer renderer/action joins the
   existing session and keymap, and a test that bypasses the terminal cannot cross the mode boundary.
+
+## D-093 — Maintainer Source views bind configuration, health and one exact Source Scan
+
+- **Decision:** screens 30–32 project from a `MaintainerSourceView` that binds one non-registry
+  `ConfiguredSource`, its `SourceHealth`, and an optional `SourceScan`. When a scan is present its
+  alias and pinned revision must equal the current durable Source observation; mismatched or
+  source-less scans are refused. Candidate/manifest counts and target registries come only from the
+  scan's active `CandidateBundle`s. `MaintainerDashboardView` aggregates those already-projected
+  values and supplied activity; it performs no read, discovery, validation or clock access.
+- **Status:** accepted.
+- **Reason:** Product Specification 164.1–164.2 requires the Maintainer Dashboard and Sources views
+  to distinguish authoring Sources from registries and to report real Candidate state. Configuration
+  alone cannot say what was discovered, Source health alone cannot say what compiled, and a scan
+  from another revision would combine observations that never coexisted. Counts inferred from file
+  names in a renderer would also duplicate CP-04/CP-05 discovery authority.
+- **Consequence:** Fast shows source/candidate outcomes and an abbreviated revision; Verbose reveals
+  the full pinned revision, target registries, state counts and already-redacted diagnostics. The
+  shared screen source can draw and navigate screen 30, Source list and Source detail from injected
+  immutable views. Production composition must now provide the matching durable scan; it may not
+  silently reconstruct a previously reviewed Candidate state as New on every application start.
