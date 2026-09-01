@@ -1,0 +1,90 @@
+"""Compose immutable Maintainer Source views from one durable machine observation.
+
+Configuration says which authoring Sources exist, the Source store says which pinned snapshot is
+current and how healthy it is, and Candidate history says what that exact snapshot produced. The
+three reads meet here, outside every renderer and reducer.
+"""
+
+from __future__ import annotations
+
+import time
+
+from agent_artifacts.application.maintainer_views import (
+    MaintainerViews,
+    project_maintainer_dashboard,
+    project_maintainer_candidates,
+    project_maintainer_source,
+)
+from agent_artifacts.application.sources import SourceStatusRequest, source_status
+from agent_artifacts.configuration.model import SourceKind
+from agent_artifacts.configuration.policy import EffectiveConfiguration, redact_text
+from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from agent_artifacts.domain.result import Err, Ok, Result
+from agent_artifacts.sources.model import (
+    CurrentSourceRequest,
+    source_instance_id,
+    source_store_paths,
+)
+
+from .candidate_store import candidate_history_paths, read_candidate_history
+from .source_store import read_current_source
+
+__all__ = ["MAINTAINER_COMPOSITION_INVALID", "read_maintainer_views"]
+
+MAINTAINER_COMPOSITION_INVALID = DiagnosticCode("maintainer-composition-invalid")
+
+
+def _error(message: str) -> Err:
+    return Err(
+        (
+            Diagnostic(
+                MAINTAINER_COMPOSITION_INVALID,
+                Severity.ERROR,
+                redact_text(message),
+            ),
+        )
+    )
+
+
+def read_maintainer_views(
+    effective: EffectiveConfiguration,
+    *,
+    data_root: str,
+    observed_at_epoch_seconds: int | None = None,
+) -> Result[MaintainerViews]:
+    """Read each configured authoring Source once and bind only matching Candidate history."""
+
+    if not isinstance(effective, EffectiveConfiguration) or not isinstance(data_root, str):
+        return _error("reading Maintainer views needs effective configuration and a data root")
+    now = int(time.time()) if observed_at_epoch_seconds is None else observed_at_epoch_seconds
+    if not isinstance(now, int) or isinstance(now, bool) or now < 0:
+        return _error("reading Maintainer views needs a non-negative observation time")
+    projected = []
+    scans = []
+    for configured in effective.configuration.sources:
+        if configured.kind is SourceKind.REGISTRY_GIT:
+            continue
+        paths = source_store_paths(data_root, source_instance_id(configured))
+        health = source_status(
+            SourceStatusRequest(
+                CurrentSourceRequest(paths, configured.alias),
+                now,
+                effective.configuration.sync.max_age_seconds,
+            ),
+            read_current_source,
+        )
+        history = read_candidate_history(candidate_history_paths(paths))
+        if isinstance(history, Err):
+            return history
+        try:
+            projected.append(project_maintainer_source(configured, health, history.value))
+            if history.value is not None:
+                scans.append(history.value)
+        except ValueError as error:
+            return _error(f"cannot bind Candidate history for {configured.alias}: {error}")
+    sources = tuple(projected)
+    try:
+        candidates = project_maintainer_candidates(tuple(scans))
+        return Ok(MaintainerViews(project_maintainer_dashboard(sources), sources, candidates))
+    except ValueError as error:
+        return _error(f"cannot project durable Candidates: {error}")

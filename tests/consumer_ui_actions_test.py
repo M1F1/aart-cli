@@ -14,6 +14,7 @@ from agent_artifacts.application.consumer_ui import (
     reduce_consumer_ui,
 )
 from agent_artifacts.application.consumer_views import ConsumerScreen, ConsumerSession
+from agent_artifacts.application.maintainer_views import MaintainerScreen
 
 ARTIFACT = "public/mcp/github@1.6.0"
 OTHER = "public/mcp/jira@2.2.0"
@@ -202,6 +203,79 @@ class ConsumerInstalledActionTest(unittest.TestCase):
         after, invalid = _request(marketplace, ConsumerActionKind.VERIFY_REPAIR)
         self.assertIs(after, marketplace)
         self.assertEqual(invalid, ())
+
+
+class MaintainerSourceSyncActionTest(unittest.TestCase):
+    def _state(self, screen: MaintainerScreen) -> ConsumerUiState:
+        return ConsumerUiState(
+            ConsumerSession(screen),
+            settings=ConsumerUiState().settings.with_maintainer_mode(True),
+            focus="authors",
+            rows=(("authors",) if screen is MaintainerScreen.SOURCES else ()),
+        )
+
+    def test_source_sync_is_a_reviewed_typed_action_from_list_or_detail(self) -> None:
+        for screen in (MaintainerScreen.SOURCES, MaintainerScreen.SOURCE_DETAILS):
+            with self.subTest(screen=screen):
+                state = self._state(screen)
+                event = key_event("s", state)
+
+                self.assertEqual(
+                    event,
+                    ConsumerUiEvent(
+                        ConsumerUiEventKind.REQUEST_ACTION,
+                        action=ConsumerActionKind.SOURCE_SYNC,
+                    ),
+                )
+                assert event is not None
+                review, commands = reduce_consumer_ui(state, event)
+
+                self.assertEqual(review.session.screen, MaintainerScreen.SOURCE_SYNC)
+                self.assertIs(review.action, ConsumerActionKind.SOURCE_SYNC)
+                self.assertEqual(commands[0].kind, ConsumerUiCommandKind.PREPARE_ACTION)
+                self.assertEqual(commands[0].focus, "authors")
+                self.assertEqual(commands[1].kind, ConsumerUiCommandKind.LOAD_SCREEN)
+
+    def test_confirmed_source_sync_opens_result_without_losing_source_focus(self) -> None:
+        state = self._state(MaintainerScreen.SOURCE_DETAILS)
+        requested, _ = _request(state, ConsumerActionKind.SOURCE_SYNC)
+        prepared, _ = reduce_consumer_ui(
+            requested,
+            ConsumerUiEvent(
+                ConsumerUiEventKind.ACTION_PREPARED,
+                action=ConsumerActionKind.SOURCE_SYNC,
+                review_digest=REVIEW,
+            ),
+        )
+
+        event = key_event("enter", prepared)
+        self.assertEqual(event, ConsumerUiEvent(ConsumerUiEventKind.CONFIRM_ACTION))
+        assert event is not None
+        running, commands = reduce_consumer_ui(prepared, event)
+        self.assertEqual(running.session.screen, MaintainerScreen.SOURCE_SYNC)
+        self.assertEqual(commands[0].kind, ConsumerUiCommandKind.EXECUTE_ACTION)
+        self.assertEqual(commands[0].review_digest, REVIEW)
+
+        completed, load = reduce_consumer_ui(
+            running,
+            ConsumerUiEvent(
+                ConsumerUiEventKind.ACTION_RECORDED,
+                action=ConsumerActionKind.SOURCE_SYNC,
+                text=RECORDED_AT,
+            ),
+        )
+        self.assertEqual(completed.session.screen, MaintainerScreen.SOURCE_SYNC_RESULT)
+        self.assertEqual(completed.focus, "authors")
+        self.assertIsNone(completed.action)
+        self.assertEqual(load[0].kind, ConsumerUiCommandKind.LOAD_SCREEN)
+
+    def test_source_sync_cannot_be_requested_outside_the_source_surface(self) -> None:
+        state = ConsumerUiState(ConsumerSession(ConsumerScreen.DASHBOARD))
+
+        after, commands = _request(state, ConsumerActionKind.SOURCE_SYNC)
+
+        self.assertIs(after, state)
+        self.assertEqual(commands, ())
 
 
 if __name__ == "__main__":

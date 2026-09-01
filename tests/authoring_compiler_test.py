@@ -438,5 +438,45 @@ class AuthorCompilerTest(unittest.TestCase):
         self.assertEqual(left.value[0].canonical_entries, right.value[0].canonical_entries)
 
 
+class LocalAuthorRevisionTest(unittest.TestCase):
+    def test_local_snapshot_digest_is_a_canonical_pinned_author_revision(self) -> None:
+        revision = "local:" + "b" * 64
+        compiled = compile_author_snapshot(
+            SourceSnapshot(
+                SnapshotOrigin.LOCAL,
+                (
+                    _json_manifest(),
+                    _file("github/server.py", "print()\n"),
+                    _file("github/requirements.txt", "mcp==1.0.0\n"),
+                ),
+            ),
+            source_alias=SourceAlias("local-authors"),
+            source="/work/authors",
+            revision=revision,
+        )
+
+        self.assertIsInstance(compiled, Ok)
+        assert isinstance(compiled, Ok)
+        artifact = compiled.value[0]
+        self.assertEqual(artifact.package.provenance.revision, revision)
+        native = compile_native_package(artifact.canonical_entries)
+        self.assertIsInstance(native, Ok)
+        assert isinstance(native, Ok)
+        assert native.value.provenance is not None
+        self.assertEqual(native.value.provenance.origin.kind, "local")
+        self.assertEqual(native.value.provenance.origin.url, "/work/authors")
+        self.assertEqual(native.value.provenance.origin.resolved_commit, revision)
+
+    def test_local_revision_requires_an_absolute_normalized_location(self) -> None:
+        compiled = compile_author_snapshot(
+            _snapshot(),
+            source_alias=SourceAlias("local-authors"),
+            source="relative/authors",
+            revision="local:" + "b" * 64,
+        )
+
+        self.assertIsInstance(compiled, Err)
+
+
 if __name__ == "__main__":
     unittest.main()

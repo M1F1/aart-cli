@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, replace
 
 from agent_artifacts.domain.candidates import (
@@ -18,13 +17,12 @@ from agent_artifacts.domain.candidates import (
     supersede_candidate,
 )
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.identifiers import ObjectDigest, SourceAlias
+from agent_artifacts.domain.identifiers import ObjectDigest, SourceAlias, is_pinned_source_revision
 from agent_artifacts.domain.registry import RegistryArtifactVersion
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.protocol.authoring import CompiledAuthorArtifact
 from agent_artifacts.protocol.hashing import file_entry, tree_digest
 
-_COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 SOURCE_SCAN_INVALID = DiagnosticCode("source-scan-invalid")
 
 
@@ -50,7 +48,7 @@ class SourceScan:
     def __post_init__(self) -> None:
         if (
             not isinstance(self.source_alias, SourceAlias)
-            or _COMMIT_RE.fullmatch(self.revision) is None
+            or not is_pinned_source_revision(self.revision)
             or self.manifest_count != len(self.active)
             or self.registry_mutations
         ):
@@ -136,7 +134,7 @@ def reconcile_source_scan(
         or not source_alias.value
         or not isinstance(target_registry, SourceAlias)
         or not target_registry.value
-        or _COMMIT_RE.fullmatch(revision) is None
+        or not is_pinned_source_revision(revision)
     ):
         return _error("source scan requires aliases and one pinned source revision")
     for compiled_artifact in compiled:

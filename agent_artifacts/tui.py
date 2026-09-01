@@ -72,6 +72,7 @@ from .io.consumer_actions import ConsumerActionContext, LocalConsumerActions
 from .io.consumer_machine import read_consumer_machine
 from .io.consumer_settings import read_consumer_settings
 from .io.credentials import MacOsKeychainProvider
+from .io.maintainer_views import read_maintainer_views
 from .marketplace.model import MarketplaceCatalog
 from .marketplace.search import Document, search, summary_line
 from .model import (
@@ -6274,6 +6275,9 @@ def _canonical_consumer_actions(
     settings = read_consumer_settings(paths.data_root)
     if isinstance(settings, DomainErr):
         return settings
+    maintainer = read_maintainer_views(loaded.value, data_root=paths.data_root)
+    if isinstance(maintainer, DomainErr):
+        return maintainer
     return DomainOk(
         LocalConsumerActions(
             ConsumerActionContext(
@@ -6284,6 +6288,7 @@ def _canonical_consumer_actions(
                 machine.value,
                 offers=offers.value,
                 settings=settings.value,
+                maintainer=maintainer.value,
                 credential_providers=providers,
             ),
             data_root=paths.data_root,

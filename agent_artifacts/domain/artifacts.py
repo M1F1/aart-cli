@@ -6,10 +6,9 @@ import re
 from dataclasses import dataclass
 from enum import Enum
 
-from .identifiers import ArtifactCoordinate, ObjectDigest
+from .identifiers import ArtifactCoordinate, ObjectDigest, is_pinned_source_revision
 
 _TOKEN_RE = re.compile(r"^[a-z][a-z0-9]*(?:[._/-][a-z0-9]+)*$")
-_COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 
 
 class ArtifactKind(str, Enum):
@@ -91,7 +90,7 @@ class Provenance:
             or not self.source
             or self.source != self.source.strip()
             or any(character in self.source for character in "\r\n")
-            or _COMMIT_RE.fullmatch(self.revision) is None
+            or not is_pinned_source_revision(self.revision)
             or not self.manifest_path
             or self.manifest_path.startswith("/")
             or any(part in {"", ".", ".."} for part in path_parts)

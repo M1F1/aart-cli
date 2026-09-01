@@ -1508,3 +1508,65 @@ the Product Specification first instead of hiding the change here.
   pinned revision or non-canonical ordering. Source Sync must perform the write while holding the
   existing per-instance mutation lease; this adapter supplies atomic publication, not a second lock
   or lifecycle authority.
+
+## D-095 — Maintainer Source screens are one composed observation, not live draw-time reads
+
+- **Decision:** `io/maintainer_views.read_maintainer_views` walks configured non-registry Sources
+  once, reads each current Source observation and its Candidate-history index once, and projects the
+  already-bound D-093 views. Registry Sources are excluded because screens 31–34 are authoring
+  Sources, not approved registries. The resulting immutable `MaintainerViews` travels in
+  `ConsumerActionContext` and through every `screens_from` refresh; `_canonical_consumer_actions`
+  composes it beside the consumer machine, offers and settings before the shell starts.
+- **Status:** accepted.
+- **Reason:** Product Specification 164.1–164.2 requires Source health and Candidate counts to
+  describe the same pinned observation, while D-051 keeps filesystem and clock effects outside a
+  draw. Re-reading either side in a renderer could combine a new Source pointer with old Candidate
+  state. Silently dropping a corrupt or previous-revision history would instead present an observed
+  failure as zero Candidates.
+- **Consequence:** absent history means a configured Source has not produced a durable scan yet;
+  corrupt, missing-object or mismatched-revision history refuses the composition. A real production
+  application journey now enters Dashboard → Maintainer Dashboard → Sources → Source Details and
+  renders the persisted Candidate count with no hand-injected view. Screens 33–34 must refresh this
+  same context only after a successful Source Sync and durable reconcile write.
+
+## D-096 — Pinned Source revisions retain their origin kind
+
+- **Decision:** the canonical immutable revision of a Git Source remains its 40-lowercase-hex
+  commit, while a local authoring Source uses `local:<snapshot-sha256>`. The shared domain accepts
+  exactly those two forms. Native authoring provenance records `origin.kind: local`, the normalized
+  absolute configured location and that tagged revision for a local Source; the existing v1 JSON
+  field remains named `resolved_commit` for wire compatibility even though its value is the tagged
+  Source revision. `SourceScan`, artifact provenance and Candidate history carry the same value
+  end to end.
+- **Status:** accepted.
+- **Reason:** `read_local_snapshot` already establishes immutability by hashing the exact safe tree,
+  and the Source pointer already requires `local:<that digest>`. Narrowing screens 33–34 to Git would
+  violate the accepted local Source kind; truncating or disguising a SHA-256 as a Git commit would
+  destroy the origin distinction and weaken audit evidence.
+- **Consequence:** local Source Sync can compile, persist and strictly reread Candidate history
+  without invented Git identity. Git-only registry index/provenance projections remain intentionally
+  narrow for now; the CP-14 promotion increment must make the local-origin handling explicit before
+  it claims that a local Candidate can be promoted, rather than silently rewriting its provenance.
+
+## D-097 — Source Sync is one reviewed transaction under the Source lease
+
+- **Decision:** `SOURCE_SYNC` joins the shared typed action reducer. Preparation reads the focused
+  enabled authoring Source, its exact current pointer and Candidate-history index, and the configured
+  default registry's exact approved snapshot, then binds those observations plus acquisition limits,
+  runtime capabilities and offline/fallback semantics into one review digest. Confirmation rereads
+  the registry before mutation, acquires the configured Source instance lease, rechecks the
+  Source/history baseline, acquires/validates/publishes through `SourceSyncPorts`, discovers and
+  compiles exact author manifests, reconciles against retained history and approved versions,
+  atomically writes Candidate history, and rereads the exact scan before releasing the lease.
+- **Status:** accepted.
+- **Reason:** INV-007 requires review before mutation, INV-200 forbids Source Sync from promoting,
+  and D-094 requires Candidate history publication to share the Source mutation lease. A nested
+  `sync_source()` followed by an unlocked history write would expose a new Source pointer beside old
+  Candidates; recomputing the review at confirmation would execute a plan nobody saw.
+- **Consequence:** `sync_source_while_locked` is the narrow application seam for a caller that owns
+  the correct instance lease. A changed approved registry refuses before the Source lock; a changed
+  Source/history baseline refuses under the lock before acquisition. Successful screen 34 state is
+  projected from the persisted readback, and both Fast and Verbose say that registry mutations are
+  none. Compilation failure after a valid Source publication remains an explicit partial failure:
+  no Candidate index is published, and the next production composition refuses the revision mismatch
+  rather than presenting zero or stale Candidates.

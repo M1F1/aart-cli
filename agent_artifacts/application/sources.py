@@ -380,13 +380,36 @@ def sync_source(
     )
     if isinstance(lease, Err):
         return lease
-    outcome = _sync_locked(request, ports)
+    outcome = sync_source_while_locked(request, ports, lease.value)
     released = ports.release_lock(lease.value)
     if isinstance(released, Err):
         if isinstance(outcome, Err):
             return Err((*outcome.diagnostics, *released.diagnostics))
         return released
     return outcome
+
+
+def sync_source_while_locked(
+    request: SourceSyncRequest,
+    ports: SourceSyncPorts,
+    lease: SourceLockLease,
+) -> Result[SourceSyncOutcome]:
+    """Synchronize through a lease owned by a wider Source transaction.
+
+    Candidate reconciliation needs the same per-instance serialization as pointer publication.
+    The explicit lease prevents a caller from accidentally holding another Source's lock or from
+    nesting the ordinary :func:`sync_source` lock around that wider transaction.
+    """
+
+    if not request.source.enabled:
+        return _failure("source-invalid", "disabled source cannot be synchronized")
+    paths = source_store_paths(request.data_root, source_instance_id(request.source))
+    if not isinstance(lease, SourceLockLease) or lease.lock_directory != paths.lock_directory:
+        return _failure(
+            "source-lock-invalid",
+            "source synchronization lease does not belong to the configured Source instance",
+        )
+    return _sync_locked(request, ports)
 
 
 def discard_source(

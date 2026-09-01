@@ -73,7 +73,7 @@ durable preference as of D-090, without which the opt-in boundary could not hold
 
 1. **DONE:** Maintainer screen catalog, navigation and the Maintainer Mode boundary in the one
    reducer (D-092).
-2. Screen 30 and screens 31–34 over the canonical source scan.
+2. **DONE:** Screen 30 and screens 31–34 over the canonical source scan.
 3. Screens 35–37: candidate list, detail and semantic diff.
 4. Screens 38–40: validation pipeline and policy review.
 5. Screens 41–47: promotion review, registry diff, explicit commit, registry view, bulk promotion.
@@ -142,12 +142,54 @@ Evidence: RED-first `tests/candidate_history_test.py` and `tests/candidate_store
 repository result on 2026-09-01: 2,982 unit tests and 204 E2E tests green, 83.37% branch coverage,
 and all ten quality gates green.
 
+### Step 2c — production screen 30–32 composition
+
+- `io/maintainer_views.py` reads configured authoring Source health and matching persisted Candidate
+  history once, then projects D-093's immutable views. Registry Sources never enter screens 31–34;
+  missing history is distinct from corrupt or previous-revision history, which refuse.
+- `ConsumerActionContext` carries the composed `MaintainerViews`, and `screens_from` retains them
+  through redraws and consumer actions. `_canonical_consumer_actions` now assembles them beside the
+  machine, Marketplace and durable settings; no renderer reads a filesystem or clock (D-095).
+- The real production composition, configured Source store, Candidate store and shared shell are
+  exercised together from the ordinary Dashboard through screen 30 and Source list to screen 32.
+
+Evidence: RED-first `tests/maintainer_composition_test.py` and
+`tests/maintainer_composition_e2e_test.py`; 36 focused composition/application tests plus full
+format, lint and typecheck gates green.
+
+### Step 2d — reviewed Source Sync and persisted result, screens 33–34
+
+- `SOURCE_SYNC` is a typed action in the existing reducer/keymap/shell. `s` works only on a focused
+  Source row/detail; Enter executes only the prepared review digest and keeps the Source focus into
+  screen 34. Preparation creates no Source-store path and changes no registry observation.
+- `PreparedSourceSync` binds the configured Source, current pointer, strict Candidate-history digest,
+  default target registry snapshot, acquisition constraints and runtime semantics. Execution checks
+  the registry before mutation and the Source/history baseline under the correct instance lease.
+- The existing `SourceSyncPorts` still own acquire/validate/publish. The wider transaction then uses
+  exact `compile_author_snapshot` discovery, `reconcile_source_scan`, atomic Candidate-history write
+  and strict readback before releasing that lease. `registry_mutations` remains empty and screen 34
+  states that fact in both profiles (D-097, INV-200/201).
+- Local Sources retain their existing immutable pointer identity, `local:<snapshot-sha256>`, through
+  native/domain provenance, Source Scan and Candidate history instead of being presented as Git
+  commits (D-096). A temporary production installation proves the whole local path and proves the
+  approved registry `CurrentSource` is unchanged.
+
+Evidence: RED-first `tests/consumer_ui_actions_test.py`,
+`tests/maintainer_source_sync_application_test.py`, `tests/authoring_compiler_test.py` and
+`tests/maintainer_composition_e2e_test.py`. Full E2E gate: 207 tests green in 119s with real
+environment permissions. Focused unit tests, format, lint and typecheck green; broad unit discovery
+accounted for all tests, with its six sandbox-only keychain/uv failures rerun green with the required
+permissions.
+
 ## Handoff
 
-- Current working state: step 1 is committed at `a48b0b0`; pure screen 30–32 views/renderers are
-  committed at `791d530`; strict Candidate history serialization and atomic per-Source persistence
-  are implemented as D-094.
-- Exact next action: compose matching Source health + persisted scans once in
-  `_canonical_consumer_actions`, carry the immutable `MaintainerViews` in `ConsumerActionContext`,
-  and prove Dashboard → Sources → Source detail using a real filesystem with no hand-injected view.
-  Then route screens 33–34 Source Sync through the same store while its instance lease is held.
+- Current working state: step 1 is committed at `a48b0b0`; pure screen 30–32 views/renderers at
+  `791d530`; durable history at `a7db021`; production composition is implemented as D-095.
+- Exact next action: implement screens 35–37 from the durable scans screens 33–34 now establish.
+  Add immutable Candidate list/detail/diff views, production composition over active plus retained
+  history, status filters and typed row/detail navigation. Candidate review is semantic diff first;
+  raw file diff is explicit on demand. Preserve Source revision/input/payload/canonical digest
+  evidence and do not infer Candidate state in a renderer.
+- Later CP-14 promotion work must widen the currently Git-only registry-index provenance projection
+  deliberately for D-096 local origins before claiming local Candidate promotion; it may not rewrite
+  a local snapshot identity as Git provenance.

@@ -19,6 +19,7 @@ from agent_artifacts.tui_consumer import (
     MarketplaceEntry,
     run_consumer_shell,
 )
+from tests.marketplace_fixtures import effective_configuration
 from tests.tui_marketplace_test import _catalog
 
 TODAY = dt.date(2026, 8, 31)
@@ -73,7 +74,9 @@ class CanonicalConsumerEntryTest(unittest.TestCase):
             mock.patch.object(tui, "read_consumer_machine", return_value=Ok(machine)),
             mock.patch.object(tui, "read_consumer_offers", return_value=Ok(ConsumerOffers())),
             mock.patch.object(
-                tui, "_canonical_consumer_configuration", return_value=Ok(mock.Mock())
+                tui,
+                "_canonical_consumer_configuration",
+                return_value=Ok(effective_configuration(())),
             ),
         ):
             composed = tui._canonical_consumer_actions(

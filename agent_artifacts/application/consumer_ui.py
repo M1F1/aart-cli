@@ -46,6 +46,7 @@ class ConsumerActionKind(str, Enum):
     UPDATE = "update"
     VERIFY_REPAIR = "verify-repair"
     UNINSTALL = "uninstall"
+    SOURCE_SYNC = "source-sync"
 
 
 class ConsumerUiEventKind(str, Enum):
@@ -348,7 +349,7 @@ def _toggle_selection(
     return replace(state, selection=selected, quit_pending=False), ()
 
 
-_ACTION_REVIEW: dict[tuple[ConsumerActionKind, ConsumerScreen], ConsumerScreen] = {
+_ACTION_REVIEW: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationScreen] = {
     (ConsumerActionKind.INSTALL, ConsumerScreen.MARKETPLACE): ConsumerScreen.REVIEW_SELECTION,
     (ConsumerActionKind.INSTALL, ConsumerScreen.ARTIFACT_DETAILS): ConsumerScreen.REVIEW_SELECTION,
     (
@@ -373,13 +374,18 @@ _ACTION_REVIEW: dict[tuple[ConsumerActionKind, ConsumerScreen], ConsumerScreen] 
         ConsumerActionKind.UNINSTALL,
         ConsumerScreen.INSTALLED_COLLECTION_DETAILS,
     ): ConsumerScreen.UNINSTALL_REVIEW,
+    (ConsumerActionKind.SOURCE_SYNC, MaintainerScreen.SOURCES): MaintainerScreen.SOURCE_SYNC,
+    (
+        ConsumerActionKind.SOURCE_SYNC,
+        MaintainerScreen.SOURCE_DETAILS,
+    ): MaintainerScreen.SOURCE_SYNC,
 }
 
 
 def _request_action(
     state: ConsumerUiState, action: ConsumerActionKind | None
 ) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
-    if action is None or not isinstance(state.session.screen, ConsumerScreen):
+    if action is None:
         return state, ()
     target = _ACTION_REVIEW.get((action, state.session.screen))
     focus = state.focus or state.current_row
@@ -429,7 +435,7 @@ def _action_prepared(
     return replace(state, session=session, quit_pending=False), ()
 
 
-_ACTION_RUNNING: dict[tuple[ConsumerActionKind, ConsumerScreen], ConsumerScreen | None] = {
+_ACTION_RUNNING: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationScreen | None] = {
     (ConsumerActionKind.INSTALL, ConsumerScreen.READY): ConsumerScreen.INSTALLING,
     (ConsumerActionKind.UPDATE, ConsumerScreen.UPDATE_INPUTS): ConsumerScreen.UPDATING,
     (
@@ -437,6 +443,7 @@ _ACTION_RUNNING: dict[tuple[ConsumerActionKind, ConsumerScreen], ConsumerScreen 
         ConsumerScreen.VERIFY_REPAIR,
     ): None,
     (ConsumerActionKind.UNINSTALL, ConsumerScreen.UNINSTALL_REVIEW): ConsumerScreen.UNINSTALLING,
+    (ConsumerActionKind.SOURCE_SYNC, MaintainerScreen.SOURCE_SYNC): None,
 }
 
 
@@ -463,7 +470,7 @@ def _confirm_action(
     return moved, (command, *navigation)
 
 
-_ACTION_RESULT: dict[tuple[ConsumerActionKind, ConsumerScreen], ConsumerScreen] = {
+_ACTION_RESULT: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationScreen] = {
     (ConsumerActionKind.INSTALL, ConsumerScreen.INSTALLING): ConsumerScreen.SUCCESS,
     (ConsumerActionKind.UPDATE, ConsumerScreen.UPDATING): ConsumerScreen.ACTIVITY_DETAILS,
     (
@@ -471,6 +478,10 @@ _ACTION_RESULT: dict[tuple[ConsumerActionKind, ConsumerScreen], ConsumerScreen] 
         ConsumerScreen.VERIFY_REPAIR,
     ): ConsumerScreen.ACTIVITY_DETAILS,
     (ConsumerActionKind.UNINSTALL, ConsumerScreen.UNINSTALLING): ConsumerScreen.ACTIVITY_DETAILS,
+    (
+        ConsumerActionKind.SOURCE_SYNC,
+        MaintainerScreen.SOURCE_SYNC,
+    ): MaintainerScreen.SOURCE_SYNC_RESULT,
 }
 
 
@@ -478,21 +489,17 @@ def _action_recorded(
     state: ConsumerUiState, event: ConsumerUiEvent
 ) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
     action = event.action
-    if (
-        action is None
-        or action is not state.action
-        or not event.text
-        or not isinstance(state.session.screen, ConsumerScreen)
-    ):
+    if action is None or action is not state.action or not event.text:
         return state, ()
     target = _ACTION_RESULT.get((action, state.session.screen))
     if target is None:
         return state, ()
     moved, commands = _navigate(state, target)
+    focus = state.focus if action is ConsumerActionKind.SOURCE_SYNC else event.text
     return replace(
         moved,
         selection=(),
-        focus=event.text,
+        focus=focus,
         quit_pending=False,
         action=None,
     ), commands
@@ -679,11 +686,20 @@ def key_event(
             ConsumerUiEventKind.REQUEST_ACTION,
             action=ConsumerActionKind.UNINSTALL,
         )
+    if key == "s" and state.session.screen in (
+        MaintainerScreen.SOURCES,
+        MaintainerScreen.SOURCE_DETAILS,
+    ):
+        return ConsumerUiEvent(
+            ConsumerUiEventKind.REQUEST_ACTION,
+            action=ConsumerActionKind.SOURCE_SYNC,
+        )
     if key == "enter" and state.session.screen in (
         ConsumerScreen.READY,
         ConsumerScreen.UPDATE_INPUTS,
         ConsumerScreen.UNINSTALL_REVIEW,
         ConsumerScreen.VERIFY_REPAIR,
+        MaintainerScreen.SOURCE_SYNC,
     ):
         return ConsumerUiEvent(ConsumerUiEventKind.CONFIRM_ACTION)
     if key == "enter" and detail is not None:

@@ -6,6 +6,7 @@ stays outside this module; no repository-shape heuristic can create an artifact 
 
 from __future__ import annotations
 
+import posixpath
 import re
 from dataclasses import dataclass
 from enum import Enum
@@ -31,6 +32,7 @@ from agent_artifacts.domain.identifiers import (
     InputId,
     ObjectDigest,
     SourceAlias,
+    source_revision_kind,
 )
 from agent_artifacts.domain.identifiers import (
     ArtifactKind as IdentityKind,
@@ -94,7 +96,6 @@ AuthorKind = Literal["skill", "guideline", "mcp", "hook", "memory"]
 
 _MANIFEST_NAMES = frozenset({"aart.json", "aart.yaml"})
 _SLUG_RE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
-_COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 _KIND_BY_VALUE: dict[AuthorKind, ArtifactKind] = {
     "skill": ArtifactKind.SKILL,
     "guideline": ArtifactKind.GUIDELINE,
@@ -1729,10 +1730,12 @@ def _compile_one(
         InstallSpec(("project", "user"), ("copy",), _INSTALL_EFFECTS[manifest.kind]),
         extensions=((AUTHORING_EXTENSION, manifest.canonical_intent),),
     )
+    revision_kind = source_revision_kind(revision)
+    assert revision_kind is not None
     native_provenance = Provenance(
         1,
         OriginProvenance(
-            "git",
+            revision_kind,
             source,
             revision,
             source_manifest.path,
@@ -1821,11 +1824,16 @@ def compile_author_snapshot(
         or source_alias.value != source_alias.value.strip()
         or not source
         or source != source.strip()
-        or _COMMIT_RE.fullmatch(revision) is None
+        or source_revision_kind(revision) is None
+        or (
+            source_revision_kind(revision) == "local"
+            and (not posixpath.isabs(source) or posixpath.normpath(source) != source)
+        )
     ):
         return _error(
             AUTHOR_TREE_INVALID,
-            "author compilation requires a source alias, credential-free source, and pinned commit",
+            "author compilation requires a source alias, canonical source location, and pinned "
+            "source revision",
         )
     validated = _validated_snapshot(snapshot)
     if isinstance(validated, Err):

@@ -2,70 +2,60 @@
 
 ## Current objective
 
-Continue **CP-14 Maintainer TUI 30–53**, step 2: compose the now-durable screen 30–32 Source Scan /
-Candidate history into the production application, then implement Source Sync screens 33–34.
+Continue **CP-14 Maintainer TUI 30–53**, step 3: implement Candidate list, detail and semantic diff
+screens 35–37 over the durable Source Scan history now established by screens 33–34.
 
-CP-14 step 1 is complete (D-092):
+Screens 30–34 are live in the production shared shell:
 
-- `MaintainerScreen` names every accepted screen 30–53 exactly once without widening the
-  consumer-only catalog used by CP-13's completeness tests;
-- the existing `ConsumerSession`, `ConsumerUiEvent`, `ConsumerUiCommand`, reducer, keymap and shell
-  carry both catalogs, so there is still one application state machine;
-- disabled Maintainer Mode removes the entire Maintainer graph and refuses a forged direct
-  navigation event or invalid seeded state;
-- enabled Maintainer Mode adds only screen 30 to the Dashboard roots, from which all screens 30–53
-  are reachable through the accepted forward graph;
-- the Dashboard now exposes its navigation roots as real cursor rows. This closes the discovered
-  CP-13 reachability gap that otherwise made Settings—and therefore the Maintainer opt-in—unreachable
-  from a default terminal session.
+- screen 30 and screens 31–32 compose configured authoring Sources, durable health and only an exact
+  matching Candidate-history observation (D-093–D-095);
+- `s` on a focused Source enters typed screen-33 review, and Enter executes only its digest;
+- preparation is read-only and binds the Source/history baseline plus the configured default
+  registry's approved snapshot;
+- execution rechecks registry and Source baselines, uses `SourceSyncPorts`, compiles exact
+  `aart.yaml`/`aart.json` manifests, reconciles and atomically writes/rereads Candidate history while
+  the Source instance lease remains held;
+- local Sources carry `local:<snapshot-sha256>` rather than invented Git commits (D-096);
+- screen 34 renders the persisted readback and explicitly reports no registry mutation (D-097,
+  INV-200).
 
-Evidence: `tests/maintainer_navigation_test.py`; 2,963 unit tests, 204 E2E tests, 83.45% branch
-coverage, and every repository quality gate green on 2026-09-01.
-
-The next pure increment is also green (D-093): `MaintainerDashboardView`,
-`MaintainerSourceView`, `MaintainerViews` and `tui_maintainer.py` render screen 30, Source list and
-Source detail from matching typed `ConfiguredSource` + `SourceHealth` + `SourceScan` observations.
-They are integrated with `CanonicalScreenSource` but intentionally not yet composed in production.
-Affected evidence: 1,255 tests and all changed-file gates green.
-
-The durability prerequisite is now implemented (D-094): a strict canonical Candidate-history index
-references retained content-addressed compiled artifact envelopes beneath each managed Source
-instance. Private atomic writes publish objects before replacing the index; reads distinguish absent
-history from corrupt, missing-object or symlinked state. RED-first evidence lives in
-`candidate_history_test.py` and `candidate_store_test.py`.
-
-Latest full repository evidence: 2,982 unit tests, 204 E2E tests, 83.37% branch coverage and every
-quality, validation, packaging, documentation and secret-shape gate green on 2026-09-01.
+Evidence: RED-first reducer/application/local-provenance tests and a real temporary production
+installation in `tests/maintainer_composition_e2e_test.py`. The complete E2E gate is 207 tests green;
+focused unit, format, lint and typecheck gates are green. Broad discovery's six environment-only
+keychain/uv failures were rerun with their required permissions and are green.
 
 ## Exact next action
 
-Start RED tests for one Maintainer composition reader and its production application journey:
+Start RED tests for screens 35–37:
 
-1. Read configured authoring Source health and the matching persisted scan once, project D-093's
-   views, and carry them in `ConsumerActionContext` so every redraw/action refresh retains the
-   Maintainer snapshot.
-2. Compose this reader in `_canonical_consumer_actions`; add a real-filesystem application test that
-   enables Maintainer Mode and reaches screen 30 → Sources → Source detail without hand-injected
-   views.
-3. Implement screens 33–34 as reviewed Source Sync/result commands. Persist every successful
-   compile + reconcile result with `write_candidate_history` while the configured Source instance
-   lease remains held. A scan with `registry_mutations != ()` remains unrepresentable (INV-200).
-4. Sync may fetch/discover,
-   compile and update Candidate history, but must produce no registry mutation and no promotion
-   (INV-200); discovery remains exact `aart.yaml`/`aart.json` only (INV-201).
+1. Project immutable Candidate rows from every composed authoring Source's exact durable
+   `SourceScan`: status, artifact, version and Source. Keep active records distinct from retained
+   lifecycle history and make filters typed application state, not renderer string logic.
+2. Add Candidate Detail with identity, kind/version, Source alias and revision, manifest path,
+   input/payload/canonical digests, runtime/transport/inputs/dependency description and findings.
+   Navigate by stable Candidate ID so duplicate artifact names across Sources cannot collide.
+3. Add semantic Candidate Diff against the locator's prior Candidate and/or approved registry
+   version. Semantic changes are primary; raw canonical file diff is an explicit secondary view and
+   bounded for terminal rendering (INV-202).
+4. Extend production Maintainer composition to carry the exact scans it already reads once; do not
+   rescan, recompile, reread or infer Candidate state during drawing. Corrupt history still refuses
+   the whole observation.
 
 ## Critical boundaries for this slice
 
 - Product Specification is the sole product authority.
 - Source, Candidate, Registry and Marketplace remain distinct values and screens (INV-199).
 - Source Sync never promotes and never mutates approved registry state (INV-200).
-- Maintainer review will be semantic diff first and raw file diff on demand (INV-202).
-- Promotion vendors by default, does not push, and bulk promotion has one transaction boundary
-  (INV-204–INV-206).
+- Discovery remains exact `aart.yaml`/`aart.json` only (INV-201).
+- Maintainer review is semantic diff first and raw file diff only on demand (INV-202).
+- Published coordinate/version content is immutable; digest conflicts are explicit, never repaired
+  in place (INV-203/239).
+- Superseded, rejected and source-removed records remain durable audit history (INV-229).
 - Secret values never enter views, state, plans, receipts, logs, fixtures or committed files.
-- `key_event` remains the only place a key's meaning is decided; no second TUI reducer or framework.
-- Machine state is assembled once outside draw functions; application projections have no IO or
-  clock.
+- `key_event` remains the only key interpreter; there is one reducer and one persistent stdlib TUI.
+- Machine state is assembled once outside draw functions; application projections have no IO/clock.
+- When screens 41–47 land, local Candidate promotion must preserve D-096 local provenance instead of
+  passing through the currently Git-only registry-index projection by disguise.
 - Do not retire legacy direct/local or Collection authority until the corresponding CP-14 public
   flow is proven. B-031, B-038 and B-039 remain ordered behind that evidence (D-091).
 - Do not modify older AART repositories.

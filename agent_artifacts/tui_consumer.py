@@ -47,13 +47,20 @@ from agent_artifacts.application.consumer_views import (
     navigation_targets,
     project_collection,
 )
-from agent_artifacts.application.maintainer_views import MaintainerScreen, MaintainerViews
+from agent_artifacts.application.maintainer_views import (
+    MaintainerScreen,
+    MaintainerSourceSyncResultView,
+    MaintainerSourceSyncReviewView,
+    MaintainerViews,
+)
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.domain.selection import Collection
 from agent_artifacts.tui_maintainer import (
     render_maintainer_dashboard,
     render_maintainer_source,
     render_maintainer_sources,
+    render_source_sync_result,
+    render_source_sync_review,
 )
 from agent_artifacts.tui_marketplace import (
     MarketplaceArtifactRow,
@@ -940,6 +947,7 @@ _HELP_LINES: tuple[str, ...] = (
     "↑ ↓  move        space  select",
     "enter  details   esc  back",
     "i  install/update  r  repair  u  uninstall",
+    "s  sync focused Source (Maintainer Mode)",
     "/  search        v  Fast/Verbose",
     "?  help          q  quit",
 )
@@ -1139,6 +1147,8 @@ class ConsumerScreens:
     #: hiding material risk.
     notice: tuple[str, ...] = ()
     maintainer: MaintainerViews | None = None
+    source_sync_review: MaintainerSourceSyncReviewView | None = None
+    source_sync_result: MaintainerSourceSyncResultView | None = None
 
     def offered(self, key: str) -> MarketplaceEntry | None:
         return next((item for item in self.marketplace if item.key == key), None)
@@ -1219,6 +1229,9 @@ def screens_from(
     marketplace: tuple[MarketplaceEntry, ...] = (),
     collections: tuple[MarketplaceCollectionEntry, ...] = (),
     settings: ConsumerSettings | None = None,
+    maintainer: MaintainerViews | None = None,
+    source_sync_review: MaintainerSourceSyncReviewView | None = None,
+    source_sync_result: MaintainerSourceSyncResultView | None = None,
     plan: ConsumerPlanView | None = None,
     lifecycle: LifecyclePlanView | None = None,
     outcome: LifecycleOutcomeView | None = None,
@@ -1251,6 +1264,9 @@ def screens_from(
         outcome,
         transaction,
         notice,
+        maintainer,
+        source_sync_review,
+        source_sync_result,
     )
 
 
@@ -1288,7 +1304,12 @@ _OUTCOME_SCREENS = frozenset(
 
 #: Where an action's refusal is worth drawing: the screens `_request_action` and `_confirm_action`
 #: move to. Everywhere else the notice would be an answer to a question nobody asked here.
-_ANSWERABLE = _PLAN_SCREENS | _LIFECYCLE_SCREENS | _OUTCOME_SCREENS
+_ANSWERABLE = (
+    _PLAN_SCREENS
+    | _LIFECYCLE_SCREENS
+    | _OUTCOME_SCREENS
+    | frozenset({MaintainerScreen.SOURCE_SYNC})
+)
 
 
 def _matches(query: str, *fields: str) -> bool:
@@ -1538,6 +1559,18 @@ class CanonicalScreenSource:
                 ("That authoring Source is not available.",)
                 if source is None
                 else render_maintainer_source(source, profile)
+            )
+        if screen is MaintainerScreen.SOURCE_SYNC:
+            return (
+                ("No Source Sync has been prepared.",)
+                if screens.source_sync_review is None
+                else render_source_sync_review(screens.source_sync_review, profile)
+            )
+        if screen is MaintainerScreen.SOURCE_SYNC_RESULT:
+            return (
+                ("No Source Sync result has been persisted.",)
+                if screens.source_sync_result is None
+                else render_source_sync_result(screens.source_sync_result, profile)
             )
         if screen is ConsumerScreen.MARKETPLACE:
             offered = {item.key: item for item in self._offers()}

@@ -40,9 +40,15 @@ from agent_artifacts.application.consumer_views import (
     LifecyclePlanView,
     project_lifecycle_plan,
 )
+from agent_artifacts.application.maintainer_sync import PreparedSourceSync
+from agent_artifacts.application.maintainer_views import (
+    MaintainerViews,
+    project_source_sync_result,
+    project_source_sync_review,
+)
 from agent_artifacts.configuration.policy import EffectiveConfiguration
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.identifiers import ArtifactCoordinate
+from agent_artifacts.domain.identifiers import ArtifactCoordinate, SourceAlias
 from agent_artifacts.domain.policies import EffectivePolicy
 from agent_artifacts.domain.receipts import ArtifactReceipt
 from agent_artifacts.domain.reconciliation import DesiredState
@@ -75,6 +81,11 @@ from .configured_uninstall_action import (
 from .consumer_machine import read_installed_inspections
 from .consumer_settings import write_consumer_settings
 from .credentials import CredentialProviderPort
+from .maintainer_sync import (
+    complete_configured_source_sync,
+    prepare_configured_source_sync,
+)
+from .maintainer_views import read_maintainer_views
 
 __all__ = [
     "CONSUMER_ACTION_NOT_INSTALLED",
@@ -117,6 +128,7 @@ class ConsumerActionContext:
     machine: ConsumerMachine
     offers: ConsumerOffers = ConsumerOffers()
     settings: ConsumerSettings = ConsumerSettings()
+    maintainer: MaintainerViews | None = None
     policy: EffectivePolicy = EffectivePolicy()
     credential_providers: tuple[CredentialProviderPort, ...] = ()
     offline: bool = False
@@ -127,6 +139,7 @@ class ConsumerActionContext:
             or not isinstance(self.machine, ConsumerMachine)
             or not isinstance(self.offers, ConsumerOffers)
             or not isinstance(self.settings, ConsumerSettings)
+            or not (self.maintainer is None or isinstance(self.maintainer, MaintainerViews))
             or not isinstance(self.policy, EffectivePolicy)
         ):
             raise ValueError("a consumer action context is invalid")
@@ -140,7 +153,9 @@ class _PendingInstall:
 
 #: What one reviewed-but-unconfirmed action is holding. Each carries the review digest the
 #: confirmation has to name, so nothing runs against a plan nobody read.
-_Pending = _PendingInstall | PreparedConfiguredRepair | PreparedConfiguredUninstall
+_Pending = (
+    _PendingInstall | PreparedConfiguredRepair | PreparedConfiguredUninstall | PreparedSourceSync
+)
 
 
 class LocalConsumerActions:
@@ -194,6 +209,8 @@ class LocalConsumerActions:
         lifecycle: LifecyclePlanView | None = None,
         outcome=None,
         transaction=None,
+        source_sync_review=None,
+        source_sync_result=None,
         notice: tuple[str, ...] = (),
     ) -> CanonicalScreenSource:
         """The screens for the machine as it currently stands, plus whatever a flow is holding."""
@@ -204,10 +221,13 @@ class LocalConsumerActions:
                 marketplace=self._context.offers.artifacts,
                 collections=self._context.offers.collections,
                 settings=self._context.settings,
+                maintainer=self._context.maintainer,
                 plan=plan,
                 lifecycle=lifecycle,
                 outcome=outcome,
                 transaction=transaction,
+                source_sync_review=source_sync_review,
+                source_sync_result=source_sync_result,
                 notice=notice,
             )
         )
@@ -250,7 +270,38 @@ class LocalConsumerActions:
             return self._prepare_update(command)
         if action is ConsumerActionKind.VERIFY_REPAIR:
             return self._prepare_repair(command)
+        if action is ConsumerActionKind.SOURCE_SYNC:
+            return self._prepare_source_sync(command)
         return self._prepare_uninstall(command)
+
+    def _prepare_source_sync(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        if self._data_root is None:
+            return self._declined(
+                command,
+                _lines("Source Sync needs the configured durable data root"),
+            )
+        if not command.focus:
+            return self._declined(command, _lines("Source Sync needs one focused authoring Source"))
+        prepared = prepare_configured_source_sync(
+            self._context.effective,
+            SourceAlias(command.focus),
+            data_root=self._data_root,
+            observed_at_epoch_seconds=int(self._now().timestamp()),
+            offline=self._context.offline,
+        )
+        if isinstance(prepared, Err):
+            return self._declined(command, _refusal(prepared.diagnostics))
+        self._pending = prepared.value
+        self._pending_action = command.action
+        review = project_source_sync_review(prepared.value)
+        return ConsumerActionUpdate(
+            self.source(source_sync_review=review),
+            ConsumerUiEvent(
+                ConsumerUiEventKind.ACTION_PREPARED,
+                action=command.action,
+                review_digest=review.review_digest,
+            ),
+        )
 
     def _targets(self, command: ConsumerUiCommand) -> tuple[str, ...]:
         """What this command is about: what was ticked, or the row it was requested from."""
@@ -523,8 +574,41 @@ class LocalConsumerActions:
             return self._execute_installation(command, pending)
         if isinstance(pending, PreparedConfiguredRepair):
             return self._execute_repair(command, pending)
+        if isinstance(pending, PreparedSourceSync):
+            return self._execute_source_sync(command, pending)
         assert isinstance(pending, PreparedConfiguredUninstall)
         return self._execute_uninstall(command, pending)
+
+    def _execute_source_sync(
+        self,
+        command: ConsumerUiCommand,
+        pending: PreparedSourceSync,
+    ) -> ConsumerActionUpdate:
+        completed = complete_configured_source_sync(
+            self._context.effective,
+            pending,
+            reviewed_digest=pending.review_digest,
+        )
+        if isinstance(completed, Err):
+            return self._failed(command, _refusal(completed.diagnostics))
+        assert self._data_root is not None
+        refreshed = read_maintainer_views(
+            self._context.effective,
+            data_root=self._data_root,
+            observed_at_epoch_seconds=int(self._now().timestamp()),
+        )
+        if isinstance(refreshed, Err):
+            return self._failed(command, _refusal(refreshed.diagnostics))
+        self._context = replace(self._context, maintainer=refreshed.value)
+        recorded_at, _today = self._moment()
+        return self._recorded(
+            command,
+            recorded_at,
+            source_sync_result=project_source_sync_result(
+                completed.value,
+                target_registry=pending.target_registry,
+            ),
+        )
 
     def _moment(self) -> tuple[str, object]:
         now = self._now()

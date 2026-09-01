@@ -664,16 +664,21 @@ Candidate feed, and the canonical consumer seam listing it while offering nothin
 behavior, not a gap.
 
 **What is left.** Screen 21 should say why a listed native source offers nothing, and the legacy
-route's ability to install directly from one has no basis in the specification and goes when its
-Sources screens exist to hold the capability. Both need CP-14, so this stays here rather than
-expanding CP-13.
+route's ability to install directly from one has no basis in the specification. Screens 31–34 now
+hold the canonical Source capability (D-093–D-097), including a real local Source Sync that creates
+Candidates without promotion. The remaining CP-14 step is the characterized public-flow test and
+safe removal of that legacy direct-install authority; screen 21's explanation can land with the same
+removal. This stays sequenced behind the rest of the active slice rather than expanding an earlier
+slice.
 
 **Why it is noncritical now.** Nothing installable was lost: the legacy route still operates direct
 and local sources, and the canonical shell no longer offers what it cannot carry out.
 
 Invariants touched: INV-026, INV-024.
-Evidence/links: D-088; `tests/consumer_marketplace_composition_e2e_test.py::ComposedMarketplaceTest
-::test_a_source_that_is_not_a_registry_is_configured_but_offers_nothing`.
+Evidence/links: D-088, D-093–D-097;
+`tests/consumer_marketplace_composition_e2e_test.py::ComposedMarketplaceTest
+::test_a_source_that_is_not_a_registry_is_configured_but_offers_nothing` and
+`tests/maintainer_composition_e2e_test.py`.
 
 ## B-039 — The legacy wizard is unreachable from the default terminal route
 
