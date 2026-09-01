@@ -24,7 +24,11 @@ from agent_artifacts.domain.identifiers import ObjectDigest
 from agent_artifacts.domain.inputs import SecretInput
 from agent_artifacts.domain.install_description import InstallDescription
 from agent_artifacts.domain.python_runtime import ArtifactEnvironment
-from agent_artifacts.domain.receipts import ArtifactDelivery, ArtifactMerge
+from agent_artifacts.domain.receipts import (
+    ArtifactDelivery,
+    ArtifactMerge,
+    ArtifactSettingsEntry,
+)
 from agent_artifacts.domain.requirements import HarnessRequirement, Requirement, RequirementId
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.domain.selection import ResolvedArtifact
@@ -47,6 +51,7 @@ def _error(message: str) -> Err:
 def placement_requirements_for(
     deliveries: tuple[ArtifactDelivery, ...],
     merges: tuple[ArtifactMerge, ...] = (),
+    settings: tuple[ArtifactSettingsEntry, ...] = (),
 ) -> tuple[Requirement, ...]:
     """What has to be true of a machine before this artifact can be delivered to it.
 
@@ -59,7 +64,11 @@ def placement_requirements_for(
     requirement is that the harness is there, not how it reads what it is given.
     """
 
-    read_by: tuple[ArtifactDelivery | ArtifactMerge, ...] = (*deliveries, *merges)
+    read_by: tuple[ArtifactDelivery | ArtifactMerge | ArtifactSettingsEntry, ...] = (
+        *deliveries,
+        *merges,
+        *settings,
+    )
     return tuple(
         HarnessRequirement(RequirementId(f"harness-{harness}"), harness)
         for harness in sorted({item.harness for item in read_by})
@@ -75,6 +84,7 @@ def plan_artifact_placement(
     payload_digest: ObjectDigest,
     deliveries: tuple[ArtifactDelivery, ...],
     merges: tuple[ArtifactMerge, ...] = (),
+    settings: tuple[ArtifactSettingsEntry, ...] = (),
 ) -> Result[PlannedPlacement]:
     """Everything decided about placing `artifact` here, before anything is touched."""
 
@@ -114,8 +124,9 @@ def plan_artifact_placement(
                 payload_digest,
                 tuple(deliveries),
                 payload_source,
-                placement_requirements_for(tuple(deliveries), tuple(merges)),
+                placement_requirements_for(tuple(deliveries), tuple(merges), tuple(settings)),
                 tuple(merges),
+                tuple(settings),
             )
         )
     except ValueError as error:

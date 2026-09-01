@@ -881,13 +881,23 @@ def package_payload_root(root: str) -> str:
 _DELIVERED_KINDS: dict[ArtifactKind, DeliveryKind] = {
     ArtifactKind.SKILL: DeliveryKind.TREE,
     ArtifactKind.GUIDELINE: DeliveryKind.FILE,
+    # A hook is delivered *and* merged. The script is placed in a directory named for the artifact,
+    # like a Skill; what makes the harness run it is an entry in a settings file, which
+    # `package_hook` reads separately (B-034).
+    ArtifactKind.HOOK: DeliveryKind.TREE,
 }
 
 
-#: What each merged kind writes into a file it does not own. A memory artifact is a delimited block
-#: in a shared instruction file the user also writes in; a hook is a script plus a list entry in a
-#: settings file, and is deliberately still absent (B-034).
+#: What each merged kind writes as a delimited block into a text file it does not own. A hook is
+#: absent on purpose: it also writes into a file it does not own, but into one entry of one list
+#: inside a JSON document rather than a region of text, which `package_hook` reads instead.
 _MERGED_KINDS: frozenset[ArtifactKind] = frozenset({ArtifactKind.MEMORY})
+
+#: Where a hook package declares what the harness should be told, and the one substitution an
+#: author may write in it. `${SCRIPT_DIR}` is where the script will be delivered on the installing
+#: machine, which the author has never seen and cannot name.
+HOOK_DESCRIPTOR_FILENAME = "hook.json"
+_SCRIPT_DIR = "${SCRIPT_DIR}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -947,6 +957,109 @@ def package_merge(kind: ArtifactKind, entries: tuple[SnapshotEntry, ...]) -> Res
             f"this {kind.value} package carries a managed-block marker in its body",
         )
     return Ok(PackagedMerge(str(files[0].path)[len(prefix) :], sha256_bytes(body.encode("utf-8"))))
+
+
+@dataclass(frozen=True, slots=True)
+class PackagedHook:
+    """What a hook package asks a harness to run, and when.
+
+    `command` is relative to where the script is delivered, not to the payload and not to anything
+    on the installing machine: an author declares `${SCRIPT_DIR}/run.sh` and the placement that
+    knows the destination is what turns it into an absolute path. `event` is the abstract event,
+    which each harness spells its own way.
+    """
+
+    event: str
+    matcher: str
+    command: str
+
+
+def package_hook(kind: ArtifactKind, entries: tuple[SnapshotEntry, ...]) -> Result[PackagedHook]:
+    """What installing this package would tell a harness to run, from the package itself.
+
+    Read back out of the compiled tree the way a delivery is (D-056). Everything an author may say
+    is here and nothing else: a matcher, an abstract event and a command that must point inside the
+    directory the script is delivered to. A command naming any other path is refused rather than
+    resolved -- the author has not seen the installing machine, and an entry that ran something
+    outside what this package delivered would be an installer executing code nobody reviewed.
+    """
+
+    if kind is not ArtifactKind.HOOK:
+        return _error(
+            AUTHOR_PAYLOAD_INVALID,
+            f"a {kind.value} is not installed by telling a harness to run something",
+        )
+    path = f"{PACKAGE_PAYLOAD_DIRECTORY}/{HOOK_DESCRIPTOR_FILENAME}"
+    found = next(
+        (
+            entry
+            for entry in entries
+            if str(entry.path) == path and entry.kind is SnapshotEntryKind.FILE
+        ),
+        None,
+    )
+    if found is None:
+        return _error(
+            AUTHOR_PAYLOAD_INVALID,
+            f"a hook says when to run in {path}, which this package has none of",
+            path=path,
+        )
+    parsed = parse_json(found.content)
+    if isinstance(parsed, Err):
+        return parsed
+    declared = parsed.value
+    if not isinstance(declared, JsonObject):
+        return _error(
+            AUTHOR_PAYLOAD_INVALID,
+            f"{path} holds a {type(declared).__name__} where a hook declaration is an object",
+            path=path,
+        )
+    values: list[str] = []
+    for key in ("event", "matcher", "command"):
+        value = declared.get(key)
+        if not isinstance(value, str) or not value.strip() or value.strip() != value:
+            return _error(
+                AUTHOR_PAYLOAD_INVALID,
+                f"{path} must declare {key} as one trimmed, non-empty string",
+                path=path,
+            )
+        values.append(value)
+    event, matcher, command = values
+    if not command.startswith(f"{_SCRIPT_DIR}/"):
+        return _error(
+            AUTHOR_PAYLOAD_INVALID,
+            f"a hook command runs what this package delivers, so it begins {_SCRIPT_DIR}/; "
+            f"{path} declares {command!r}",
+            path=path,
+        )
+    relative = parse_relative_path(command[len(_SCRIPT_DIR) + 1 :])
+    if isinstance(relative, Err):
+        return relative
+    script = next(
+        (
+            entry
+            for entry in entries
+            if str(entry.path) == f"{PACKAGE_PAYLOAD_DIRECTORY}/{relative.value}"
+            and entry.kind is SnapshotEntryKind.FILE
+        ),
+        None,
+    )
+    if script is None:
+        return _error(
+            AUTHOR_PAYLOAD_INVALID,
+            f"{path} runs {relative.value}, which this package does not carry",
+            path=path,
+        )
+    if not script.executable:
+        # Caught at compile time rather than at first trigger. The harness runs the command as a
+        # program, so a hook that installs cleanly and then does nothing is worse than one that
+        # refuses to be built.
+        return _error(
+            AUTHOR_PAYLOAD_INVALID,
+            f"{relative.value} is not executable, so the harness could not run it",
+            path=path,
+        )
+    return Ok(PackagedHook(event, matcher, str(relative.value)))
 
 
 @dataclass(frozen=True, slots=True)

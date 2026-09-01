@@ -15,6 +15,7 @@ failing somewhere deeper with a message about a provider.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import shutil
 import stat
@@ -32,22 +33,29 @@ from agent_artifacts.domain.effects import (
     Effect,
     InstallPythonDependencies,
     MergeManagedBlock,
+    MergeSettingsEntry,
     RemoveOwnedPath,
     ReplaceCredential,
     StoreCredential,
     UnconfigureHarness,
     UnmergeManagedBlock,
+    UnmergeSettingsEntry,
     VerifyCredential,
     WithdrawArtifact,
     WriteFile,
 )
 from agent_artifacts.domain.harness import McpRegistration
+from agent_artifacts.domain.hooks import merge_hook_entry, remove_hook_entry
 from agent_artifacts.domain.managed_blocks import (
     merge_managed_block,
     remove_managed_block,
 )
 from agent_artifacts.domain.python_runtime import ArtifactEnvironment
-from agent_artifacts.domain.receipts import ArtifactDelivery, ArtifactMerge
+from agent_artifacts.domain.receipts import (
+    ArtifactDelivery,
+    ArtifactMerge,
+    ArtifactSettingsEntry,
+)
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.io.credentials import CredentialProviderPort
 from agent_artifacts.io.fs import write_atomic
@@ -72,6 +80,7 @@ __all__ = [
     "LocalMutationLock",
     "ManagedBlockInterpreter",
     "RuntimeEffectInterpreter",
+    "SettingsEntryInterpreter",
 ]
 
 
@@ -455,6 +464,154 @@ class ManagedBlockInterpreter:
         if isinstance(written, Err):
             return written
         return Ok(f"removed {effect.region} from {effect.destination}")
+
+
+class SettingsEntryInterpreter:
+    """Owns one entry of one list inside a settings file, and nothing else in that file.
+
+    The other half of a hook. The script is an ordinary delivery; this is what makes the harness run
+    it, and it reaches into a JSON document that holds the user's own configuration and every other
+    hook they installed. So the file is read, one member of one list is written or taken out, and
+    everything else -- key order aside -- is put back as it was found.
+
+    Bound to the entries it may write (D-072), like every other interpreter that touches a path AART
+    does not own. A `(destination, path, entry)` it was not given is refused rather than written,
+    which is what stops an artifact from installing a command under another artifact's name.
+
+    A file that is not JSON, or that holds something other than an object, is refused rather than
+    replaced. That is a person's configuration; overwriting it to make an install succeed would cost
+    them more than the install was worth.
+    """
+
+    def __init__(self, artifact: str, settings: tuple[ArtifactSettingsEntry, ...]) -> None:
+        if (
+            not isinstance(artifact, str)
+            or not artifact.strip()
+            or any(character in artifact for character in "\r\n")
+        ):
+            raise ValueError("a settings-entry interpreter writes for one named artifact")
+        settings = tuple(settings)
+        if not settings or any(not isinstance(item, ArtifactSettingsEntry) for item in settings):
+            raise ValueError("a settings-entry interpreter needs the entries it may write")
+        self.artifact = artifact
+        self.settings = settings
+
+    def _matching(self, effect: Effect) -> ArtifactSettingsEntry | None:
+        if not isinstance(effect, (MergeSettingsEntry, UnmergeSettingsEntry)):
+            return None
+        if effect.artifact != self.artifact:
+            return None
+        for item in self.settings:
+            if (
+                item.harness == effect.harness
+                and item.destination == effect.destination
+                and item.path == effect.path
+                and item.entry == effect.entry
+            ):
+                return item
+        return None
+
+    def supports(self, effect: Effect) -> bool:
+        """Whether this interpreter holds the exact entry `effect` names, not merely its kind."""
+
+        return self._matching(effect) is not None
+
+    def apply(self, effect: Effect) -> Result[str]:
+        if not isinstance(effect, (MergeSettingsEntry, UnmergeSettingsEntry)):
+            return _error(
+                EXECUTION_REFUSED, f"{type(effect).__name__} is not a settings entry effect"
+            )
+        if self._matching(effect) is None:
+            return _error(
+                EXECUTION_REFUSED,
+                f"nothing here says {self.artifact} owns {effect.entry.matcher} at "
+                f"{effect.path} in {effect.destination}",
+            )
+        loaded = self._read(effect.destination)
+        if isinstance(loaded, Err):
+            return loaded
+        document = loaded.value
+        if isinstance(effect, MergeSettingsEntry):
+            # No file yet is a harness nobody has configured, which the merge answers by building
+            # the document around the entry. Only a removal cares that there was nothing there.
+            written = merge_hook_entry(
+                {} if document is None else document, effect.path, effect.entry
+            )
+            done = f"registered {effect.entry.matcher} at {effect.path} in {effect.destination}"
+        else:
+            if document is None:
+                return Ok(f"{effect.destination} is already gone, so the entry in it is too")
+            written = remove_hook_entry(document, effect.path, effect.entry)
+            done = f"removed {effect.entry.matcher} at {effect.path} from {effect.destination}"
+        if isinstance(written, Err):
+            # The list could not be written without displacing something somebody else put there,
+            # so the file is left exactly as it is and the refusal names why.
+            return written
+        if written.value == (document if document is not None else {}):
+            return Ok(f"{effect.destination} already says what it should")
+        saved = self._write(effect.destination, written.value)
+        if isinstance(saved, Err):
+            return saved
+        return Ok(done)
+
+    def _read(self, destination: str) -> Result[dict[str, object] | None]:
+        """The settings document, or `None` when there is no file there yet."""
+
+        if os.path.islink(destination):
+            return _error(
+                EXECUTION_REFUSED,
+                f"{destination} is a symlink; writing an entry would go through it into a path "
+                f"nobody reviewed, or replace the arrangement somebody made",
+            )
+        if not os.path.exists(destination):
+            return Ok(None)
+        if not os.path.isfile(destination):
+            return _error(EXECUTION_REFUSED, f"{destination} is not a regular settings file")
+        try:
+            with open(destination, "r", encoding="utf-8") as handle:
+                raw = handle.read()
+        except OSError as error:
+            return _error(EXECUTION_FAILED, f"cannot read {destination}: {error.strerror}")
+        except UnicodeDecodeError:
+            return _error(
+                EXECUTION_REFUSED, f"{destination} is not UTF-8 text to write an entry in"
+            )
+        if not raw.strip():
+            # An empty file is a file nobody has configured yet, which is the same thing as one
+            # that is not there. Refusing it would leave a harness unconfigurable because
+            # something once touched its settings path.
+            return Ok(None)
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError as error:
+            return _error(
+                EXECUTION_REFUSED,
+                f"{destination} is not valid JSON ({error}); fix or move it, and install again",
+            )
+        if not isinstance(data, dict):
+            return _error(
+                EXECUTION_REFUSED,
+                f"{destination} holds a {type(data).__name__} where the harness expects an object",
+            )
+        return Ok(data)
+
+    def _write(self, destination: str, document: dict[str, object]) -> Result[str]:
+        content = (json.dumps(document, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
+        try:
+            mode: int | None = stat.S_IMODE(os.stat(destination).st_mode)
+        except OSError:
+            mode = None
+        try:
+            parent = os.path.dirname(destination)
+            if parent:
+                os.makedirs(parent, exist_ok=True)
+            write_atomic(destination, content)
+            # `write_atomic` stages through a private temporary file, so a new file would land at
+            # 0600 and an existing one would silently lose the mode its owner chose.
+            os.chmod(destination, 0o644 if mode is None else mode)
+        except OSError as error:
+            return _error(EXECUTION_FAILED, f"cannot write {destination}: {error.strerror}")
+        return Ok(destination)
 
 
 class HarnessEffectInterpreter:

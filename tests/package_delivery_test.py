@@ -103,8 +103,15 @@ class PackageDeliveryTest(unittest.TestCase):
         self.assertIsInstance(package_delivery(ArtifactKind.MCP, _skill()), Err)
 
     def test_a_kind_that_merges_into_a_file_it_does_not_own_is_not_delivered(self) -> None:
-        for kind in (ArtifactKind.HOOK, ArtifactKind.MEMORY):
-            self.assertIsInstance(package_delivery(kind, _skill()), Err)
+        self.assertIsInstance(package_delivery(ArtifactKind.MEMORY, _skill()), Err)
+
+    def test_a_hook_is_delivered_as_well_as_merged(self) -> None:
+        """The one kind that is both. The script is placed; the entry that runs it is not."""
+
+        delivered = package_delivery(ArtifactKind.HOOK, _skill())
+
+        self.assertIsInstance(delivered, Ok)
+        self.assertEqual(DeliveryKind.TREE, delivered.value.delivery)
 
 
 if __name__ == "__main__":

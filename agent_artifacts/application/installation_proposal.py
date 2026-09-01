@@ -35,6 +35,7 @@ from agent_artifacts.domain.receipts import (
     ArtifactDelivery,
     ArtifactMerge,
     ArtifactReceipt,
+    ArtifactSettingsEntry,
     InstallationReceipt,
     PlacedArtifactReceipt,
 )
@@ -239,6 +240,9 @@ class PlannedPlacement:
     #: The regions of files this machine's user owns that this artifact writes into. A memory
     #: artifact has these and no deliveries; a Skill has deliveries and none of these.
     merges: tuple[ArtifactMerge, ...] = ()
+    #: The entries in harness settings files this artifact owns. A hook has these beside the
+    #: delivery of the script they run; nothing else has any.
+    settings: tuple[ArtifactSettingsEntry, ...] = ()
 
     def __post_init__(self) -> None:
         if (
@@ -247,11 +251,13 @@ class PlannedPlacement:
             or not isinstance(self.payload_digest, ObjectDigest)
         ):
             raise ValueError("a planned placement is invalid")
-        if any(not isinstance(item, ArtifactDelivery) for item in self.deliveries) or any(
-            not isinstance(item, ArtifactMerge) for item in self.merges
+        if (
+            any(not isinstance(item, ArtifactDelivery) for item in self.deliveries)
+            or any(not isinstance(item, ArtifactMerge) for item in self.merges)
+            or any(not isinstance(item, ArtifactSettingsEntry) for item in self.settings)
         ):
-            raise ValueError("planned placement deliveries or merges are invalid")
-        if not self.deliveries and not self.merges:
+            raise ValueError("planned placement deliveries, merges or settings are invalid")
+        if not self.deliveries and not self.merges and not self.settings:
             # Placed in its own tree and read by nobody is a download, not an installation.
             raise ValueError("a planned placement is read by at least one harness")
         if self.payload_source is not None and (
@@ -275,7 +281,11 @@ class PlannedPlacement:
                 raise ValueError(
                     f"a delivery to {item.harness} comes from outside {self.environment.artifact}"
                 )
-        for items, label in ((self.deliveries, "delivery"), (self.merges, "merge")):
+        for items, label in (
+            (self.deliveries, "delivery"),
+            (self.merges, "merge"),
+            (self.settings, "settings entry"),
+        ):
             harnesses = [item.harness for item in items]
             if len(set(harnesses)) != len(harnesses):
                 raise ValueError(f"one harness reads one {label} of an artifact")
@@ -284,6 +294,9 @@ class PlannedPlacement:
         )
         object.__setattr__(
             self, "merges", tuple(sorted(self.merges, key=lambda item: item.harness))
+        )
+        object.__setattr__(
+            self, "settings", tuple(sorted(self.settings, key=lambda item: item.harness))
         )
 
     @property
@@ -313,6 +326,7 @@ def intended_placement_receipt(planned: PlannedPlacement) -> PlacedArtifactRecei
         planned.payload_digest,
         planned.deliveries,
         merges=planned.merges,
+        settings=planned.settings,
     )
 
 

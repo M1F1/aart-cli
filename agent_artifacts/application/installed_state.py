@@ -25,14 +25,17 @@ from agent_artifacts.domain.effects import (
     DeliverArtifact,
     InstallPythonDependencies,
     MergeManagedBlock,
+    MergeSettingsEntry,
     RemoveOwnedPath,
     ReplaceCredential,
     StoreCredential,
     UnconfigureHarness,
     UnmergeManagedBlock,
+    UnmergeSettingsEntry,
     WithdrawArtifact,
     WriteFile,
 )
+from agent_artifacts.domain.hooks import hook_entry_to_json
 from agent_artifacts.domain.identifiers import ArtifactCoordinate
 from agent_artifacts.domain.python_runtime import ArtifactEnvironment
 from agent_artifacts.domain.receipts import InstallationReceipt, PlacedArtifactReceipt
@@ -50,6 +53,7 @@ from .installation_verification import (
     InstallationObservation,
     PlacementObservation,
     VerificationFinding,
+    settings_entry_digest,
 )
 
 __all__ = [
@@ -268,6 +272,21 @@ def desired_state_from_placement(
         )
         for merge in receipt.merges
     )
+    components.extend(
+        DesiredComponent(
+            ComponentId(Component.SETTINGS, entry.harness),
+            (
+                MergeSettingsEntry(
+                    entry.harness,
+                    receipt.artifact,
+                    entry.destination,
+                    entry.path,
+                    entry.entry,
+                ),
+            ),
+        )
+        for entry in receipt.settings
+    )
     return DesiredState(coordinate, tuple(components))
 
 
@@ -322,6 +341,22 @@ def removal_state_from_placement(
             target=absent,
         )
         for merge in receipt.merges
+    )
+    components.extend(
+        DesiredComponent(
+            ComponentId(Component.SETTINGS, entry.harness),
+            (
+                UnmergeSettingsEntry(
+                    entry.harness,
+                    receipt.artifact,
+                    entry.destination,
+                    entry.path,
+                    entry.entry,
+                ),
+            ),
+            target=absent,
+        )
+        for entry in receipt.settings
     )
     return DesiredState(coordinate, tuple(components))
 
@@ -393,6 +428,22 @@ def current_state_from_placement(
         else:
             state = ComponentState.DIVERGENT
         components.append(ObservedComponent(ComponentId(Component.MERGE, region.harness), state))
+    written = {
+        entry.harness: settings_entry_digest(hook_entry_to_json(entry.entry))
+        for entry in receipt.settings
+    }
+    for entry_found in observation.settings:
+        if not entry_found.present:
+            state = ComponentState.ABSENT
+        elif entry_found.digest is None:
+            state = ComponentState.UNKNOWN
+        elif entry_found.digest == written.get(entry_found.harness):
+            state = ComponentState.MATCHED
+        else:
+            state = ComponentState.DIVERGENT
+        components.append(
+            ObservedComponent(ComponentId(Component.SETTINGS, entry_found.harness), state)
+        )
     return CurrentState(desired.artifact, tuple(item for item in components if item.id in wanted))
 
 

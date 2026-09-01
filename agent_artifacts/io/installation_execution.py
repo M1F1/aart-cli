@@ -43,6 +43,7 @@ from .execution import (
     HarnessEffectInterpreter,
     ManagedBlockInterpreter,
     RuntimeEffectInterpreter,
+    SettingsEntryInterpreter,
 )
 from .harness import LocalHarnessRegistry
 from .python_runtime import LocalPythonRuntime
@@ -101,6 +102,12 @@ def interpreters_for(
             if installation.merges:
                 interpreters.append(
                     ManagedBlockInterpreter(installation.environment.artifact, installation.merges)
+                )
+            if installation.settings:
+                interpreters.append(
+                    SettingsEntryInterpreter(
+                        installation.environment.artifact, installation.settings
+                    )
                 )
             continue
         files = FileEffectInterpreter(installation.environment)

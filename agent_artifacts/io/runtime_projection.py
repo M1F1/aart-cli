@@ -19,17 +19,21 @@ from agent_artifacts.application.installation_verification import (
     InstallationObservation,
     MergeObservation,
     PlacementObservation,
+    SettingsObservation,
+    settings_entry_digest,
 )
 from agent_artifacts.application.runtime_projection import RuntimeProjection
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.effects import DeliveryKind
 from agent_artifacts.domain.harness import McpRegistration
+from agent_artifacts.domain.hooks import hook_entry_at
 from agent_artifacts.domain.identifiers import ObjectDigest
 from agent_artifacts.domain.managed_blocks import managed_block_body
 from agent_artifacts.domain.python_runtime import ArtifactEnvironment
 from agent_artifacts.domain.receipts import (
     ArtifactDelivery,
     ArtifactMerge,
+    ArtifactSettingsEntry,
     InstallationReceipt,
     PlacedArtifactReceipt,
 )
@@ -174,6 +178,10 @@ def observe_placement(receipt: PlacedArtifactReceipt) -> PlacementObservation:
         MergeObservation(merge.harness, body is not None, body)
         for merge, body in ((item, _merged_digest(item)) for item in receipt.merges)
     ]
+    entries = [
+        SettingsObservation(item.harness, found is not None, found)
+        for item, found in ((entry, _entry_digest(entry)) for entry in receipt.settings)
+    ]
     payload = ArtifactEnvironment(receipt.artifact, receipt.root).payload
     present = os.path.isdir(payload)
     return PlacementObservation(
@@ -184,7 +192,31 @@ def observe_placement(receipt: PlacedArtifactReceipt) -> PlacementObservation:
         payload_digest=tree_digest_at(payload) if present else None,
         deliveries=tuple(observed),
         merges=tuple(merged),
+        settings=tuple(entries),
     )
+
+
+def _entry_digest(entry: ArtifactSettingsEntry) -> ObjectDigest | None:
+    """How the settings file spells this artifact's entry now, or `None` when it holds none.
+
+    What the file says, not what was written. An entry somebody edited comes back as the edit and
+    reads as drift; a file that is unreadable, or not the JSON object the harness expects, comes
+    back the same as an entry that is not there. That is weaker than it could be and deliberate for
+    the same reason the merged region's measurement is: the write that follows refuses damage by
+    name rather than acting on this measurement.
+    """
+
+    try:
+        if not os.path.isfile(entry.destination) or os.path.islink(entry.destination):
+            return None
+        with open(entry.destination, "r", encoding="utf-8") as handle:
+            document = json.load(handle)
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        return None
+    found = hook_entry_at(document, entry.path, entry.entry)
+    if isinstance(found, Err) or found.value is None:
+        return None
+    return settings_entry_digest(found.value)
 
 
 def _merged_digest(merge: ArtifactMerge) -> ObjectDigest | None:

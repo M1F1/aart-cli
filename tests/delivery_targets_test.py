@@ -17,14 +17,18 @@ from agent_artifacts.domain.artifacts import ArtifactKind
 from agent_artifacts.domain.effects import DeliveryKind
 from agent_artifacts.domain.harness import (
     DELIVERY_TARGETS,
+    HOOK_TARGETS,
     MEMORY_TARGETS,
     DeliveryTarget,
     MemoryTarget,
     Scope,
     delivery_destination,
     delivery_target,
+    hook_event_path,
+    hook_target,
     memory_target,
 )
+from agent_artifacts.domain.hooks import HookEntryShape
 from agent_artifacts.domain.managed_blocks import BlockPosition
 
 
@@ -140,3 +144,51 @@ class MemoryTargetTest(unittest.TestCase):
         self.assertEqual(
             memory_target("claude", Scope.PROJECT), memory_target("claude", Scope.PROJECT)
         )
+
+
+class HookTargetTest(unittest.TestCase):
+    """Where each harness keeps a hook's script, and where it is told to run it.
+
+    A hook is the one kind that is both: the script is delivered into a directory named for the
+    artifact, and the entry that runs it is one member of a list in a settings file the harness and
+    the user share. The table therefore carries both halves, plus the abstract-to-measured event
+    mapping, because the same `PreToolUse` a package declares is spelled `BeforeTool` by one of the
+    two builds this repository has observed.
+    """
+
+    def test_claude_keeps_a_hooks_script_in_a_directory_named_for_the_artifact(self) -> None:
+        target = hook_target("claude", Scope.PROJECT)
+        self.assertEqual(".claude/hooks/lint", delivery_destination(target.scripts_target, "lint"))
+
+    def test_claude_is_told_about_the_hook_in_its_settings_file(self) -> None:
+        self.assertEqual(".claude/settings.json", hook_target("claude", Scope.PROJECT).settings)
+
+    def test_claude_nests_the_command_under_the_matcher(self) -> None:
+        self.assertEqual(HookEntryShape.NESTED_COMMAND, hook_target("claude", Scope.PROJECT).shape)
+
+    def test_tabnine_spells_the_same_event_by_its_own_name(self) -> None:
+        self.assertEqual(
+            "hooks.BeforeTool", hook_event_path(hook_target("tabnine", Scope.PROJECT), "PreToolUse")
+        )
+        self.assertEqual(
+            "hooks.PreToolUse", hook_event_path(hook_target("claude", Scope.PROJECT), "PreToolUse")
+        )
+
+    def test_tabnine_names_the_command_beside_the_matcher(self) -> None:
+        self.assertEqual(HookEntryShape.FLAT_COMMAND, hook_target("tabnine", Scope.PROJECT).shape)
+
+    def test_an_event_this_harness_documents_no_slot_for_is_refused(self) -> None:
+        with self.assertRaises(KeyError):
+            hook_event_path(hook_target("claude", Scope.PROJECT), "BeforeEverything")
+
+    def test_tabnine_documents_no_user_hook_target_so_none_is_invented(self) -> None:
+        with self.assertRaises(KeyError):
+            hook_target("tabnine", Scope.USER)
+
+    def test_a_harness_nobody_measured_is_named_rather_than_guessed(self) -> None:
+        with self.assertRaises(KeyError):
+            hook_target("opencode", Scope.PROJECT)
+
+    def test_every_measured_hook_script_directory_names_the_artifact(self) -> None:
+        for target in HOOK_TARGETS.values():
+            self.assertIn("<name>", target.scripts)

@@ -29,20 +29,28 @@ from agent_artifacts.domain.harness import (
     Scope,
     delivery_destination,
     delivery_target,
+    hook_event_path,
+    hook_target,
     mcp_target,
     memory_target,
 )
+from agent_artifacts.domain.hooks import HookEntry
 from agent_artifacts.domain.identifiers import ArtifactIdentity
 from agent_artifacts.domain.inputs import InputValueSource
 from agent_artifacts.domain.install_description import InstallDescription
 from agent_artifacts.domain.managed_blocks import is_block_name
 from agent_artifacts.domain.placement import artifact_root
 from agent_artifacts.domain.python_runtime import ArtifactEnvironment, PythonInstaller
-from agent_artifacts.domain.receipts import ArtifactDelivery, ArtifactMerge
+from agent_artifacts.domain.receipts import (
+    ArtifactDelivery,
+    ArtifactMerge,
+    ArtifactSettingsEntry,
+)
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.domain.selection import ResolvedArtifact
 from agent_artifacts.protocol.authoring import (
     package_delivery,
+    package_hook,
     package_merge,
     package_payload_root,
     read_package_description,
@@ -65,8 +73,8 @@ def _error(message: str, *remediation: str) -> Err:
 
 
 #: The kinds a harness reads out of a file somebody else owns rather than off a path of their own.
-#: A hook is deliberately absent: it is a script plus an entry merged into a settings file, which
-#: needs a list merge this build does not have yet (B-034).
+#: A hook is absent because it is not one or the other: its script is delivered like a Skill's tree
+#: and an entry in a settings file is what makes the harness run it, so it goes through both.
 _MERGED_KINDS = frozenset({ArtifactKind.MEMORY})
 
 
@@ -120,6 +128,54 @@ def _merges(
             )
         )
     return Ok(tuple(merges))
+
+
+def _settings(
+    identity: ArtifactIdentity,
+    entries: object,
+    deliveries: tuple[ArtifactDelivery, ...],
+    *,
+    scope: Scope,
+    harness_root: str,
+) -> Result[tuple[ArtifactSettingsEntry, ...]]:
+    """What each requested harness would be told to run, and where it reads that from.
+
+    The command is built from the delivery rather than from the package: an author writes
+    `${SCRIPT_DIR}/run.sh` because they have never seen this machine, and the delivery is the only
+    thing that knows where the script actually lands. Which slot the entry goes in comes from the
+    harness's own measured table, so a `PreToolUse` hook reaches Tabnine's `BeforeTool` rather than
+    being installed into an event that build never reads.
+    """
+
+    packaged = package_hook(ArtifactKind.HOOK, entries)  # type: ignore[arg-type]
+    if isinstance(packaged, Err):
+        return packaged
+
+    settings: list[ArtifactSettingsEntry] = []
+    for delivery in deliveries:
+        try:
+            target = hook_target(delivery.harness, scope)
+            path = hook_event_path(target, packaged.value.event)
+        except KeyError as error:
+            # Named rather than skipped, for the same reason a missing delivery target is: a hook
+            # whose script is placed and whose entry is not would install cleanly and never run.
+            return _error(str(error).strip("'"))
+        try:
+            settings.append(
+                ArtifactSettingsEntry(
+                    delivery.harness,
+                    os.path.join(harness_root, target.settings),
+                    path,
+                    HookEntry(
+                        target.shape,
+                        packaged.value.matcher,
+                        os.path.join(delivery.destination, packaged.value.command),
+                    ),
+                )
+            )
+        except ValueError as error:
+            return _error(f"{identity} cannot be registered with {delivery.harness}: {error}")
+    return Ok(tuple(settings))
 
 
 def _deliveries(
@@ -250,6 +306,7 @@ def placement_for(
 
     deliveries: tuple[ArtifactDelivery, ...] = ()
     merges: tuple[ArtifactMerge, ...] = ()
+    settings: tuple[ArtifactSettingsEntry, ...] = ()
     if delivered:
         if harness_root is None or not os.path.isabs(harness_root):
             return _error(
@@ -283,6 +340,19 @@ def placement_for(
             if isinstance(made, Err):
                 return made
             deliveries = made.value
+            if kind is ArtifactKind.HOOK:
+                # Both halves, from one read of one package. A hook whose script is delivered and
+                # whose entry is not is installed and inert, which is worse than not installed.
+                told = _settings(
+                    coordinate.artifact,
+                    stored.value.candidate.entries,
+                    deliveries,
+                    scope=scope,
+                    harness_root=harness_root,
+                )
+                if isinstance(told, Err):
+                    return told
+                settings = told.value
 
     try:
         return Ok(
@@ -296,6 +366,7 @@ def placement_for(
                 preferred_installer=preferred_installer,
                 deliveries=deliveries,
                 merges=merges,
+                settings=settings,
                 # The registry's attested digest of the payload, not one re-derived here. The
                 # installing machine records what the approved version says it placed.
                 payload_digest=artifact.version.payload_digest if delivered else None,

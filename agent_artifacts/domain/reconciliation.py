@@ -56,6 +56,7 @@ class Component(str, Enum):
     LAUNCHER = "launcher"
     DELIVERY = "delivery"
     MERGE = "merge"
+    SETTINGS = "settings"
     HARNESS = "harness"
 
 
@@ -66,6 +67,7 @@ _NAMED = frozenset(
         Component.CREDENTIAL,
         Component.DELIVERY,
         Component.MERGE,
+        Component.SETTINGS,
         Component.HARNESS,
     }
 )

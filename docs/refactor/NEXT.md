@@ -139,18 +139,24 @@ that flow and execution, plus composition of real Marketplace and installed-stat
    the file, and uninstalled by taking the region back and leaving the file. Proven end to end
    through the public command in `tests/merged_installation_e2e_test.py`.
 
-   The next executable work is the second half of B-034: a **hook** is a script plus an entry merged
-   into a list inside a JSON settings file, identified by `(matcher, command)` from a profile-owned
-   template. That is the last kind the canonical pipeline cannot install. After it, the default TTY
-   route (B-025) and then retiring legacy consumer authority path by path --
-   `consumer/application.py`, `lifecycle/application.py`, `installation/*`, `setup_engine/*` -- each
-   removal preceded by a public-flow test proving the canonical path already carries it.
+   **Hooks now install canonically too (D-085), and B-034 is closed.** A hook is the one kind that
+   is both halves at once: its script is delivered into a directory named for the artifact, and
+   `MergeSettingsEntry`/`UnmergeSettingsEntry` own one entry of one list inside a settings file the
+   harness and its user share, identified by `(matcher, command)` and typed rather than rendered
+   from a template. `HOOK_TARGETS` holds the script directory, settings file, event map and entry
+   shape as one measured fact per harness/scope; `package_hook` reads the declaration back out of
+   the package; a `SETTINGS` reconciliation component measures the entry as the file spells it now.
+   Proven end to end through the public command in `tests/hook_installation_e2e_test.py`, including
+   that a hook the user installed by hand survives both install and uninstall.
 
-   Hooks and shared-file memory are deliberately outside completed B-033 (B-034): a hook is a
-   script plus an entry merged into a settings file, and every measured memory target is a
-   delimited block in a file the user owns. Delivery replaces its destination, so using it for
-   either would destroy the file it merged into. That order -- MCP, skills, guidelines/rules,
-   memory, hooks -- is the Product Specification's own.
+   **Every artifact kind the Product Specification defines can now be installed, measured, repaired
+   and removed canonically** -- MCP, skills, guidelines/rules, memory and hooks, in that order,
+   which is the Product Specification's own.
+
+   The next executable work is therefore the default TTY route (B-025), and then retiring legacy
+   consumer authority path by path -- `consumer/application.py`, `lifecycle/application.py`,
+   `installation/*`, `setup_engine/*` -- each removal preceded by a public-flow test proving the
+   canonical path already carries it.
 7. Update the CP-13 coverage table as each command and screen group moves from projection to live
    public flow.
 

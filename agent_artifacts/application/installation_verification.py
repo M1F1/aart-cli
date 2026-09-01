@@ -14,16 +14,20 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
+from agent_artifacts.domain.hooks import hook_entry_fingerprint
 from agent_artifacts.domain.identifiers import ObjectDigest
 from agent_artifacts.domain.receipts import InstallationReceipt
+from agent_artifacts.protocol.hashing import sha256_bytes
 
 __all__ = [
     "DeliveryObservation",
     "InstallationObservation",
     "MergeObservation",
     "PlacementObservation",
+    "SettingsObservation",
     "VerificationFinding",
     "installation_verified",
+    "settings_entry_digest",
     "verify_installation",
 ]
 
@@ -87,6 +91,40 @@ class MergeObservation:
             raise ValueError("a region that is not there cannot have been measured")
 
 
+def settings_entry_digest(entry: object) -> ObjectDigest:
+    """How a settings entry is compared, whether it came off a disk or out of a receipt.
+
+    One construction for both sides on purpose. Two would be free to disagree about whitespace or
+    key order, and a hook that reads as drift every time it is looked at is a repair that never
+    converges.
+    """
+
+    return sha256_bytes(hook_entry_fingerprint(entry).encode("utf-8"))
+
+
+@dataclass(frozen=True, slots=True)
+class SettingsObservation:
+    """Whether this artifact's entry is in the harness's settings, and how it is spelled now.
+
+    Absent means narrower again than a merge's: the list may be full of other hooks and simply not
+    contain this one. `present` is about the entry, never about the file or the list.
+    """
+
+    harness: str
+    present: bool = False
+    digest: ObjectDigest | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.harness, str) or not self.harness.strip():
+            raise ValueError("an observed settings entry names the harness that reads it")
+        if not isinstance(self.present, bool):
+            raise ValueError("observed settings entry presence is invalid")
+        if self.digest is not None and not isinstance(self.digest, ObjectDigest):
+            raise ValueError("observed settings entry digest is invalid")
+        if self.digest is not None and not self.present:
+            raise ValueError("an entry that is not there cannot have been measured")
+
+
 @dataclass(frozen=True, slots=True)
 class PlacementObservation:
     """What an inspector found for an artifact a harness reads. Facts only."""
@@ -97,6 +135,7 @@ class PlacementObservation:
     payload_digest: ObjectDigest | None = None
     deliveries: tuple[DeliveryObservation, ...] = ()
     merges: tuple[MergeObservation, ...] = ()
+    settings: tuple[SettingsObservation, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.payload_present, bool):
@@ -113,7 +152,15 @@ class PlacementObservation:
             not isinstance(item, MergeObservation) for item in self.merges
         ):
             raise ValueError("observed merges are invalid")
-        for items, label in ((self.deliveries, "delivery"), (self.merges, "merge")):
+        if not isinstance(self.settings, tuple) or any(
+            not isinstance(item, SettingsObservation) for item in self.settings
+        ):
+            raise ValueError("observed settings entries are invalid")
+        for items, label in (
+            (self.deliveries, "delivery"),
+            (self.merges, "merge"),
+            (self.settings, "settings entry"),
+        ):
             harnesses = [item.harness for item in items]
             if len(set(harnesses)) != len(harnesses):
                 raise ValueError(f"one harness reads one {label} of an artifact")

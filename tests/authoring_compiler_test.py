@@ -154,7 +154,8 @@ class AuthorCompilerTest(unittest.TestCase):
                 "hook",
                 "guard",
                 "hook.json",
-                '{"command":"${SCRIPT_DIR}/guard.sh","name":"guard"}',
+                '{"command":"${SCRIPT_DIR}/guard.sh","event":"PreToolUse",'
+                '"matcher":"Bash","name":"guard"}',
             ),
         )
         entries: list[SnapshotEntry] = []

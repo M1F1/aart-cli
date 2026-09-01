@@ -1273,3 +1273,35 @@ the Product Specification first instead of hiding the change here.
   has no user-scope memory target on purpose: that build documents no always-loaded global
   instruction file. Hooks stay open (B-034), because a hook needs a list merge with an identity
   tuple rather than a delimited block.
+
+## D-085 — A hook is delivered and merged, and its descriptor must say when it runs
+
+- **Decision:** a hook is installed by both halves at once. Its script is an ordinary
+  `DeliverArtifact` into a directory named for the artifact, and what makes the harness run it is a
+  `MergeSettingsEntry` owning one element of one list inside a settings file the harness and its
+  user share. `HOOK_TARGETS` keeps the script directory, the settings file, the event map and the
+  entry shape as one measured fact per harness/scope, and `delivery_target` routes
+  `ArtifactKind.HOOK` through it rather than through a second `DELIVERY_TARGETS` row. Identity is
+  `(matcher, command)`, the entry is modelled as a typed `HookEntry` rather than rendered from a
+  `${...}` template, and `payload/hook.json` now requires `event` and `matcher` beside the existing
+  `name` and `command`.
+- **Status:** accepted.
+- **Reason:** the two halves are one artifact and cannot be recorded separately: a hook whose script
+  is placed and whose entry is not installs cleanly and never runs. Keeping the three hook facts in
+  one table stops a build's script directory and its settings file from drifting apart, and keeping
+  the entry typed keeps an untyped renderer out from between what somebody reviewed and what is
+  written into their configuration. The descriptor rule was strengthened rather than worked around:
+  without an event there is no slot to write the entry into and without a matcher there is nothing
+  for the harness to match, so a package missing either compiles into something nothing can place
+  -- and the author is the only person who can still fix it.
+- **Consequence:** a hook installs, reports health, detects an edited entry as drift, ignores
+  another hook added beside it, and uninstalls taking its entry and its script while leaving the
+  settings file, the user's own configuration and every other hook intact. The list itself is never
+  removed on uninstall: it is the harness's key, not this artifact's.
+  `SettingsEntryInterpreter` refuses rather than guesses -- a symlinked destination (D-078), a file
+  that is not JSON, a document that is not an object, and a list holding something other than
+  entries -- and preserves the mode of a file it did not create. `package_hook` refuses a command
+  that does not begin `${SCRIPT_DIR}/` or names a file the package does not carry, and refuses a
+  script that is not executable, because a hook that installs and then does nothing is worse than
+  one that refuses to build. Tabnine has no user-scope hook target on purpose: that build documents
+  no user-global hook discovery location. B-034 is now closed.

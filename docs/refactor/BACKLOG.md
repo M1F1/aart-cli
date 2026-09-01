@@ -493,8 +493,8 @@ for longer and `install_state` cannot be retired while it holds records nothing 
 
 ## B-034 — A hook and a shared memory file need a merge effect, not a delivery
 
-**Classification: CRITICAL PATH for `NEXT.md` item 6, after B-033. Memory is DONE (D-084); hooks
-remain open.**
+**Classification: CRITICAL PATH for `NEXT.md` item 6, after B-033. DONE — memory under D-084,
+hooks under D-085.**
 
 **Memory is closed.** `MergeManagedBlock`/`UnmergeManagedBlock` at `CONFIGURATION_MUTATION`, the
 `ManagedBlockInterpreter` bound to the (destination, region) pairs it was given, `MEMORY_TARGETS`
@@ -504,11 +504,20 @@ the region rather than the file. A memory artifact now installs, reports health,
 block as drift, ignores the user's own notes beside it, and uninstalls leaving the file standing --
 proven end to end through the public command in `tests/merged_installation_e2e_test.py`.
 
-**Hooks remain.** A hook is a script placed in `hooks/<name>/` *and* an entry merged into a list
-inside a JSON settings file, with an identity of `(matcher, command)` and a profile-owned entry
-template. That is a second merge shape -- a list merge with an identity tuple, against the shape
-`ConfigureHarness` already performs for a key -- and it is the last kind the canonical pipeline
-cannot install.
+**Hooks are closed too.** `MergeSettingsEntry`/`UnmergeSettingsEntry` at `CONFIGURATION_MUTATION`,
+a `SettingsEntryInterpreter` bound to the `(destination, path, entry)` triples it was given,
+`HOOK_TARGETS` holding the script directory, settings file, event map and entry shape as one
+measured fact, `package_hook` reading the declaration back out of the compiled package,
+`ArtifactSettingsEntry` on the placed receipt, and a `SETTINGS` reconciliation component measured
+against the entry as the file spells it now. The entry is typed rather than rendered from a
+`${...}` template, so nothing untyped sits between the review and the write. A hook now installs
+both halves together, reports health, detects an edited entry as drift, ignores another hook added
+beside it, and uninstalls taking its entry and its script while leaving the settings file and every
+other hook intact -- proven end to end in `tests/hook_installation_e2e_test.py`.
+
+`payload/hook.json` was strengthened rather than worked around: `event` and `matcher` are now
+required beside `name` and `command`, because without them a package compiles into something
+nothing can place, and the author is the only person who can still fix that.
 
 B-033 makes an artifact installable by being delivered where a harness reads it, which is the whole
 of a Skill and a guideline. Two of the five kinds are not only that:

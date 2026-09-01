@@ -53,6 +53,7 @@ from .execution import (
     HarnessEffectInterpreter,
     LocalMutationLock,
     ManagedBlockInterpreter,
+    SettingsEntryInterpreter,
 )
 from .harness import LocalHarnessRegistry
 from .installation_observation import observe_recorded_installation
@@ -141,6 +142,8 @@ def _interpreters(
                 interpreters.append(DeliveryEffectInterpreter(receipt.artifact, receipt.deliveries))
             if receipt.merges:
                 interpreters.append(ManagedBlockInterpreter(receipt.artifact, receipt.merges))
+            if receipt.settings:
+                interpreters.append(SettingsEntryInterpreter(receipt.artifact, receipt.settings))
             continue
         interpreters.append(
             HarnessEffectInterpreter(registry, receipt.registrations, artifact=receipt.artifact)

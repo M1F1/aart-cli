@@ -18,20 +18,25 @@ from enum import Enum
 
 from .artifacts import ArtifactKind
 from .effects import DeliveryKind
+from .hooks import HookEntryShape
 from .launch import Transport
 from .managed_blocks import BlockPosition
 
 __all__ = [
     "DELIVERY_TARGETS",
+    "HOOK_TARGETS",
     "MCP_TARGETS",
     "MEMORY_TARGETS",
     "DeliveryTarget",
+    "HookTarget",
     "McpRegistration",
     "McpTarget",
     "MemoryTarget",
     "Scope",
     "delivery_destination",
     "delivery_target",
+    "hook_event_path",
+    "hook_target",
     "mcp_target",
     "memory_target",
     "registration_entry",
@@ -279,6 +284,131 @@ MEMORY_TARGETS: dict[tuple[str, Scope], MemoryTarget] = {
 }
 
 
+@dataclass(frozen=True, slots=True)
+class HookTarget:
+    """Where one harness keeps a hook's script, and where it is told to run it.
+
+    The one kind that is both halves at once. The script is delivered into a directory named for the
+    artifact, which is an ordinary `DeliveryTarget` and is exposed as one; the entry that makes the
+    harness run it is a member of a list inside a settings file the harness and the user share, and
+    that is the half a delivery cannot express (B-034).
+
+    `events` maps the event a package declares to the slot this build reads it from. It is a
+    mapping rather than a fixed path because the two builds observed here spell the same event
+    differently, and installing a `PreToolUse` hook into a `BeforeTool` slot is not a translation a
+    reconciler can make later.
+    """
+
+    harness: str
+    scope: Scope
+    scripts: str
+    settings: str
+    events: tuple[tuple[str, str], ...]
+    shape: HookEntryShape
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.harness, str) or _SLUG_RE.fullmatch(self.harness) is None:
+            raise ValueError("harness must be a canonical slug")
+        if not isinstance(self.scope, Scope) or not isinstance(self.shape, HookEntryShape):
+            raise ValueError("hook target scope or entry shape is invalid")
+        for value, label in ((self.scripts, "script directory"), (self.settings, "settings file")):
+            if (
+                not isinstance(value, str)
+                or not value
+                or value.startswith("/")
+                or any(part in ("", "..") for part in value.split("/"))
+                or any(character in value for character in "\r\n")
+            ):
+                raise ValueError(f"a hook {label} must stay inside its scope root")
+        if _NAME_SLOT not in self.scripts:
+            raise ValueError(
+                "a hook script directory must name the artifact it holds, or uninstalling one "
+                "would take away where the harness reads them all"
+            )
+        if _NAME_SLOT in self.settings:
+            raise ValueError("a hook settings file is shared, so it cannot name one artifact")
+        if not self.events or any(
+            not isinstance(item, tuple) or len(item) != 2 or not all(item) for item in self.events
+        ):
+            raise ValueError("a hook target maps at least one declared event to a measured slot")
+
+    @property
+    def scripts_target(self) -> DeliveryTarget:
+        """The script half, as the ordinary delivery it is."""
+
+        return DeliveryTarget(
+            self.harness, self.scope, ArtifactKind.HOOK, self.scripts, DeliveryKind.TREE
+        )
+
+
+_CLAUDE_EVENTS = (
+    ("PreToolUse", "hooks.PreToolUse"),
+    ("PostToolUse", "hooks.PostToolUse"),
+    ("Stop", "hooks.Stop"),
+)
+
+#: Measured hook locations. Tabnine has no user-scope entry on purpose: that build documents no
+#: user-global hook discovery target, and inventing one would install a hook nothing ever runs.
+HOOK_TARGETS: dict[tuple[str, Scope], HookTarget] = {
+    ("claude", Scope.PROJECT): HookTarget(
+        "claude",
+        Scope.PROJECT,
+        ".claude/hooks/<name>",
+        ".claude/settings.json",
+        _CLAUDE_EVENTS,
+        HookEntryShape.NESTED_COMMAND,
+    ),
+    ("claude", Scope.USER): HookTarget(
+        "claude",
+        Scope.USER,
+        ".claude/hooks/<name>",
+        ".claude/settings.json",
+        _CLAUDE_EVENTS,
+        HookEntryShape.NESTED_COMMAND,
+    ),
+    # The observed Tabnine build spells the same three events its own way, and writes the command
+    # beside the matcher rather than under it.
+    ("tabnine", Scope.PROJECT): HookTarget(
+        "tabnine",
+        Scope.PROJECT,
+        ".tabnine/agent/hooks/<name>",
+        ".tabnine/agent/settings.json",
+        (
+            ("PreToolUse", "hooks.BeforeTool"),
+            ("PostToolUse", "hooks.AfterTool"),
+            ("Stop", "hooks.SessionEnd"),
+        ),
+        HookEntryShape.FLAT_COMMAND,
+    ),
+}
+
+
+def hook_target(harness: str, scope: Scope) -> HookTarget:
+    """The measured hook location for `harness`, or `KeyError` if nobody measured one."""
+
+    try:
+        return HOOK_TARGETS[(harness, scope)]
+    except KeyError:
+        raise KeyError(
+            f"no measured hook target for harness {harness!r} at {scope.value} scope"
+        ) from None
+
+
+def hook_event_path(target: HookTarget, event: str) -> str:
+    """Where `target`'s harness reads `event` from, or `KeyError` when it documents no slot.
+
+    Refused by name rather than defaulted to the first slot: a hook installed into the wrong event
+    runs at the wrong time, which is worse than one that refuses to install.
+    """
+
+    if not isinstance(target, HookTarget):
+        raise ValueError("a hook event path needs a measured hook target")
+    for declared, path in target.events:
+        if declared == event:
+            return path
+    raise KeyError(f"harness {target.harness!r} documents no slot for the {event!r} event")
+
+
 def memory_target(harness: str, scope: Scope) -> MemoryTarget:
     """The measured shared instruction file for `harness`, or `KeyError` if nobody measured one."""
 
@@ -298,6 +428,11 @@ def delivery_target(harness: str, scope: Scope, kind: ArtifactKind) -> DeliveryT
     a process and is registered rather than delivered.
     """
 
+    if kind is ArtifactKind.HOOK:
+        # A hook's script directory is measured beside the settings file and the event slots it
+        # goes with, because those three are one fact about a build and would drift apart if a
+        # second table held one of them. Delivering it is still an ordinary delivery.
+        return hook_target(harness, scope).scripts_target
     try:
         return DELIVERY_TARGETS[(harness, scope, kind)]
     except KeyError:

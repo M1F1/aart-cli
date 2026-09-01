@@ -35,7 +35,13 @@ from agent_artifacts.io.configured_installation import prepare_configured_instal
 from agent_artifacts.io.object_store import read_object
 from agent_artifacts.io.source_store import publish_source_snapshot
 from agent_artifacts.protocol.authoring import compile_author_snapshot
-from agent_artifacts.protocol.native_tree import SnapshotOrigin, SourceSnapshot
+from agent_artifacts.protocol.native_tree import (
+    SnapshotEntry,
+    SnapshotEntryKind,
+    SnapshotOrigin,
+    SourceSnapshot,
+)
+from agent_artifacts.protocol.paths import parse_relative_path
 from agent_artifacts.sources.model import (
     SourcePublishCommand,
     ValidatedSourceCandidate,
@@ -46,20 +52,36 @@ from agent_artifacts.sources.model import (
 from agent_artifacts.store.model import ObjectReadRequest, object_store_paths
 from tests.artifact_installation_e2e_test import MANIFEST, ORG, SERVER_SOURCE, TOKEN
 from tests.marketplace_fixtures import configured_source, effective_configuration
-from tests.promotion_planning_test import _entry, _evidence
+from tests.promotion_planning_test import _evidence
 
 KEYCHAIN = CredentialProviderRef("macos-keychain", "aart/mcp/github", "default")
 
 
+#: One file as its author wrote it: a path, its text, and optionally whether it is executable. The
+#: bit travels with the content because a hook's script has to arrive executable or the harness
+#: cannot run what was installed.
+def _authored(item: tuple[str, str] | tuple[str, str, bool]) -> SnapshotEntry:
+    parsed = parse_relative_path(item[0])
+    assert isinstance(parsed, Ok), parsed
+    return SnapshotEntry(
+        parsed.value,
+        SnapshotEntryKind.FILE,
+        item[1].encode(),
+        len(item) == 3 and bool(item[2]),
+    )
+
+
 #: One MCP server, as an author's repository holds it before anything compiles it.
-AUTHORED_MCP: tuple[tuple[str, str], ...] = (
+AUTHORED_MCP: tuple[tuple[str, str] | tuple[str, str, bool], ...] = (
     ("github/aart.json", json.dumps(MANIFEST)),
     ("github/server.py", SERVER_SOURCE),
     ("github/requirements.txt", "# no third-party packages\n"),
 )
 
 
-def _published_registry(authored: tuple[tuple[str, str], ...] = AUTHORED_MCP) -> SourceSnapshot:
+def _published_registry(
+    authored: tuple[tuple[str, str] | tuple[str, str, bool], ...] = AUTHORED_MCP,
+) -> SourceSnapshot:
     """Take an author's files all the way to a published registry snapshot.
 
     Every step is the real one -- compile, scan, assess, promote, publish -- because the point of
@@ -71,7 +93,7 @@ def _published_registry(authored: tuple[tuple[str, str], ...] = AUTHORED_MCP) ->
     compiled = compile_author_snapshot(
         SourceSnapshot(
             SnapshotOrigin.IMMUTABLE_GIT,
-            tuple(_entry(path, content) for path, content in authored),
+            tuple(_authored(item) for item in authored),
         ),
         source_alias=SourceAlias("authors"),
         source="https://git.example/servers.git",

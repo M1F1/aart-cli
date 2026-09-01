@@ -28,6 +28,7 @@ from .credentials import CredentialProviderRef, CredentialReference
 from .diagnostics import Diagnostic, DiagnosticCode, Severity
 from .effects import DeliveryKind
 from .harness import McpRegistration, registration_from_data, registration_to_data
+from .hooks import HookEntry, HookEntryShape
 from .identifiers import ArtifactCoordinate, InputId, ObjectDigest
 from .launch import Transport
 from .managed_blocks import is_block_name
@@ -39,6 +40,7 @@ __all__ = [
     "ArtifactDelivery",
     "ArtifactMerge",
     "ArtifactReceipt",
+    "ArtifactSettingsEntry",
     "ConfigFingerprint",
     "DeliveryKind",
     "InstallationReceipt",
@@ -230,6 +232,40 @@ class ArtifactMerge:
 
 
 @dataclass(frozen=True, slots=True)
+class ArtifactSettingsEntry:
+    """One entry this artifact owns inside a list in a settings file the harness reads.
+
+    The half of a hook a delivery cannot record. There is no digest here because there is nothing
+    to digest against: the entry itself is what was written, so drift is the file disagreeing with
+    this record rather than with a hash of it. `path` is where the harness reads the list from,
+    which differs between builds for the same event and so is recorded rather than recomputed.
+    """
+
+    harness: str
+    destination: str
+    path: str
+    entry: HookEntry
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.harness, str) or not self.harness.strip():
+            raise ValueError("a settings entry names the harness that reads it")
+        if (
+            not isinstance(self.destination, str)
+            or not self.destination.startswith("/")
+            or any(character in self.destination for character in "\r\n")
+        ):
+            raise ValueError("a settings entry destination must be one absolute path")
+        if (
+            not isinstance(self.path, str)
+            or not self.path
+            or any(not part or part.strip() != part for part in self.path.split("."))
+        ):
+            raise ValueError("a settings entry path is dotted, non-empty and untrimmed")
+        if not isinstance(self.entry, HookEntry):
+            raise ValueError("a settings entry records the hook it wrote")
+
+
+@dataclass(frozen=True, slots=True)
 class PlacedArtifactReceipt:
     """One installed artifact that a harness reads rather than starts.
 
@@ -246,6 +282,7 @@ class PlacedArtifactReceipt:
     deliveries: tuple[ArtifactDelivery, ...] = ()
     config: tuple[ConfigFingerprint, ...] = ()
     merges: tuple[ArtifactMerge, ...] = ()
+    settings: tuple[ArtifactSettingsEntry, ...] = ()
 
     def __post_init__(self) -> None:
         for value, label in ((self.artifact, "artifact"), (self.root, "root")):
@@ -259,10 +296,11 @@ class PlacedArtifactReceipt:
             (self.deliveries, ArtifactDelivery, "deliveries"),
             (self.config, ConfigFingerprint, "config"),
             (self.merges, ArtifactMerge, "merges"),
+            (self.settings, ArtifactSettingsEntry, "settings"),
         ):
             if not isinstance(items, tuple) or any(not isinstance(item, kind) for item in items):
                 raise ValueError(f"placed artifact receipt {label} are invalid")
-        if not self.deliveries and not self.merges:
+        if not self.deliveries and not self.merges and not self.settings:
             # Placed in its own tree and read by nobody is a download, not an installation, and
             # recording it as one would let `status` report an artifact nothing can reach.
             raise ValueError("a placed artifact is read by at least one harness")
@@ -272,17 +310,25 @@ class PlacedArtifactReceipt:
         regions = [(item.destination, item.region) for item in self.merges]
         if len(set(regions)) != len(regions):
             raise ValueError("two merges cannot own the same region of the same file")
-        if set(destinations) & {item.destination for item in self.merges}:
-            # One of them replaces the destination and the other preserves it. Whichever ran
+        shared: tuple[ArtifactMerge | ArtifactSettingsEntry, ...] = (*self.merges, *self.settings)
+        if set(destinations) & {item.destination for item in shared}:
+            # One of them replaces the destination and the others preserve it. Whichever ran
             # second would undo the first.
             raise ValueError("a destination is either delivered or merged into, not both")
+        entries = [(item.destination, item.path, item.entry) for item in self.settings]
+        if len(set(entries)) != len(entries):
+            raise ValueError("two settings entries cannot own the same entry of the same list")
         sources: tuple[ArtifactDelivery | ArtifactMerge, ...] = (*self.deliveries, *self.merges)
         for item in sources:
             if not _within(self.root, item.source):
                 # Re-delivery copies from the artifact's own tree. A source outside it would let
                 # a repair place content this installation never owned.
                 raise ValueError("a delivery source lies inside the artifact root")
-        for items, label in ((self.deliveries, "delivery"), (self.merges, "merge")):
+        for items, label in (
+            (self.deliveries, "delivery"),
+            (self.merges, "merge"),
+            (self.settings, "settings entry"),
+        ):
             harnesses = [item.harness for item in items]
             if len(set(harnesses)) != len(harnesses):
                 # One per harness, so the reconciler can name the component by the harness that
@@ -374,6 +420,17 @@ def placed_artifact_receipt_to_data(receipt: PlacedArtifactReceipt) -> dict[str,
         ],
         "payload_digest": str(receipt.payload_digest),
         "root": receipt.root,
+        "settings": [
+            {
+                "command": item.entry.command,
+                "destination": item.destination,
+                "harness": item.harness,
+                "matcher": item.entry.matcher,
+                "path": item.path,
+                "shape": item.entry.shape.value,
+            }
+            for item in receipt.settings
+        ],
     }
 
 
@@ -425,6 +482,25 @@ def _merge(value: object) -> ArtifactMerge:
     )
 
 
+def _settings_entry(value: object) -> ArtifactSettingsEntry:
+    if not isinstance(value, dict):
+        raise ValueError("a settings entry must be a mapping")
+    for key in ("harness", "destination", "path", "shape", "matcher", "command"):
+        if key not in value:
+            raise ValueError(f"a settings entry is missing {key}")
+    raw = str(value["shape"])
+    try:
+        shape = HookEntryShape(raw)
+    except ValueError:
+        raise ValueError(f"unknown settings entry shape {raw!r}") from None
+    return ArtifactSettingsEntry(
+        str(value["harness"]),
+        str(value["destination"]),
+        str(value["path"]),
+        HookEntry(shape, str(value["matcher"]), str(value["command"])),
+    )
+
+
 def _reference(data: object) -> CredentialReference:
     if not isinstance(data, dict):
         raise ValueError("a credential document must be a mapping")
@@ -465,7 +541,7 @@ def placed_artifact_receipt_from_data(data: object) -> Result[PlacedArtifactRece
         for key in ("artifact", "root", "payload_digest", "deliveries"):
             if key not in data:
                 raise ValueError(f"placed artifact receipt is missing {key}")
-        for key in ("deliveries", "config", "merges"):
+        for key in ("deliveries", "config", "merges", "settings"):
             if not isinstance(data.get(key, []), list):
                 raise ValueError(f"placed artifact receipt {key} must be a list")
         return Ok(
@@ -478,6 +554,7 @@ def placed_artifact_receipt_from_data(data: object) -> Result[PlacedArtifactRece
                 # Absent rather than required: a receipt written before merges existed records an
                 # artifact that merged into nothing, which is exactly what it did.
                 tuple(_merge(item) for item in data.get("merges", [])),
+                tuple(_settings_entry(item) for item in data.get("settings", [])),
             )
         )
     except ValueError as error:

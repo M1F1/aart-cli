@@ -684,6 +684,11 @@ def _payload(
                     (
                         ("name", options.name),
                         ("command", f"${{SCRIPT_DIR}}/{options.name}.sh"),
+                        # Complete enough to install, and deliberately the narrowest thing that is.
+                        # A scaffold an author has to finish before it works is better than one
+                        # that silently runs against every tool the harness has.
+                        ("event", "PreToolUse"),
+                        ("matcher", "Bash"),
                     )
                 )
             ),

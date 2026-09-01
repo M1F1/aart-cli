@@ -78,7 +78,7 @@ class _Environment:
 
         self.publish(AUTHORED_SKILL)
 
-    def publish(self, authored: tuple[tuple[str, str], ...]) -> None:
+    def publish(self, authored: tuple[tuple[str, str] | tuple[str, str, bool], ...]) -> None:
         """Make `authored` the approved snapshot this machine's configured registry offers.
 
         Publishing again is how a source that has since synchronized is modelled. It replaces what

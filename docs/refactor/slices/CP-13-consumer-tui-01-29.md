@@ -335,10 +335,27 @@ Specification itself gives (MCP, skills, guidelines/rules, memory, hooks):
 | 9 | `placement_for` and `interpreters_for` carrying placements | DONE |
 | 10 | A real authored Skill installed, recorded, re-read and uninstalled end to end | DONE |
 
-Hooks and shared-file memory are deliberately not in this list. A hook is a script plus an entry
-merged into a settings file, and every measured memory target is a delimited block inside a file the
-user owns; both need a merge effect that does not exist, recorded as B-034. Delivery replaces its
-destination, so using it for either would destroy the file it merged into.
+Hooks and shared-file memory were deliberately not in that list: both need a merge effect delivery
+cannot express, because delivery replaces its destination and using it for either would destroy the
+file it merged into. B-034 supplied both, and is now complete.
+
+### B-034 increments
+
+| # | Increment | Status |
+|---|---|---|
+| 1 | `MergeManagedBlock`/`UnmergeManagedBlock` and `MEMORY_TARGETS`, measured per harness and scope | DONE |
+| 2 | `ManagedBlockInterpreter` bound to the (destination, region) pairs it was given | DONE |
+| 3 | `package_merge`, `ArtifactMerge` on the placed receipt, and a `MERGE` component digesting the region rather than the file | DONE |
+| 4 | A real authored memory artifact merged into a file holding the user's own notes, measured, drifted and withdrawn end to end | DONE |
+| 5 | `domain/hooks.py`: a typed `HookEntry` identified by `(matcher, command)`, and the two measured entry shapes | DONE |
+| 6 | `HOOK_TARGETS`: script directory, settings file, event map and entry shape as one measured fact per harness and scope | DONE |
+| 7 | `MergeSettingsEntry`/`UnmergeSettingsEntry` and a `SettingsEntryInterpreter` bound to the entries it may write | DONE |
+| 8 | `package_hook`, `ArtifactSettingsEntry` on the placed receipt, and a `SETTINGS` component | DONE |
+| 9 | Placement routing a hook through both halves, from one read of one package | DONE |
+| 10 | A real authored hook installed, measured, drifted and uninstalled beside a hook the user installed by hand | DONE |
+
+Every artifact kind the Product Specification defines can now be installed, measured, repaired and
+removed canonically (D-084, D-085).
 
 ## Remaining
 
@@ -409,16 +426,20 @@ machine-output tests prove every accepted flow now consumes the canonical applic
   mutating lifecycle seams remain on legacy authority by design (D-062, D-063, D-073–D-080).
 - B-033 is complete: all ten increments are verified, and an authored Skill now crosses the real
   promotion/configured-action path, is recorded and re-read, reports delivery drift and uninstalls
-  without touching a neighboring Skill. Skills and guidelines are the delivered kinds; hooks and
-  shared-file memory wait on B-034.
-- Exact next action: route public `update` for canonically receipted installations through the
-  configured action boundary, preserving review identity and durable machine reload. Then route
-  `uninstall` and the canonical shell through the same boundary without duplicating composition.
+  without touching a neighboring Skill.
+- B-034 is complete: memory owns a delimited region of a file the user writes in (D-084) and a hook
+  is delivered and merged at once, owning one entry of one list in a settings file the harness and
+  its user share (D-085). All five kinds now install canonically.
+- Exact next action: route the default TTY (B-025) through the same configured action boundary,
+  then retire legacy consumer authority path by path -- `consumer/application.py`,
+  `lifecycle/application.py`, `installation/*`, `setup_engine/*` -- each removal preceded by a
+  public-flow test proving the canonical path already carries it.
 - Do not undo: existing curses layout/search/basket/back/quit characterization; one semantic plan
   for both profiles; Maintainer Mode remains opt-in; `key_event` stays the only place a key's
   meaning is decided; no clock in `application/`; the legacy roots stay required arguments of
   `read_consumer_machine`, and an unadopted installation stays in the one Installed list with no
   offered action rather than moving to a band of its own (D-069).
-- Tests last run/results: 2,739 unit tests (including E2E; 1 skipped), 83.51% coverage, all quality
-  gates green (`make quality PYTHON=python3`). CP-12 baseline was 2,196 unit + 65 E2E at 83.25%.
+- Tests last run/results: 2,920 unit tests (including E2E), lint, format and typecheck green. The
+  last full `make quality` run was at 2,739 tests and 83.51% coverage; the full suite is deferred to
+  the end of the CP-13 block by agreement. CP-12 baseline was 2,196 unit + 65 E2E at 83.25%.
 - Failure evidence: three defects found by tests are listed under Characterization / RED evidence.

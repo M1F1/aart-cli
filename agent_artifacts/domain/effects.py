@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from enum import Enum, IntEnum
 from typing import ClassVar, TypeAlias
 
+from .hooks import HookEntry
 from .managed_blocks import BlockPosition, is_block_name
 
 
@@ -54,6 +55,23 @@ _RECREATABLE = EffectCapabilities(True, True, False, True)
 _CREDENTIAL = EffectCapabilities(True, False, False, True)
 _HARNESS = EffectCapabilities(True, True, True, True)
 _REMOVAL = EffectCapabilities(True, True, False, True)
+
+
+def _settings_path(value: object) -> None:
+    """A dotted path into a settings document, refused rather than normalised.
+
+    Empty segments are refused instead of dropped: `"hooks..PreToolUse"` and `"hooks.PreToolUse"`
+    would otherwise be the same effect written two ways, and two spellings of one effect is two
+    review digests for one plan.
+    """
+
+    if (
+        not isinstance(value, str)
+        or not value
+        or any(not part or part.strip() != part for part in value.split("."))
+        or any(character in value for character in "\r\n")
+    ):
+        raise ValueError("a settings entry path is dotted, non-empty and untrimmed")
 
 
 def _delivery_kind(value: object) -> DeliveryKind:
@@ -348,6 +366,62 @@ class UnmergeManagedBlock:
             raise ValueError("a withdrawn block names the region it owns")
 
 
+@dataclass(frozen=True, slots=True)
+class MergeSettingsEntry:
+    """Own one entry of one list inside a settings file the harness and its user share.
+
+    The second half of a hook, and the shape a delivery cannot express. `ConfigureHarness` already
+    owns a *key* of a JSON document; this owns one *member of a list* under one, identified by what
+    the harness acts on rather than by where it happens to sit -- so a reinstall converges on the
+    entry already there and everything else in the file, including other hooks, is left alone.
+
+    A configuration mutation for the same reason a merged block is (D-077): the file belongs to the
+    harness and its user, and this one decides what the harness executes, which is the strongest
+    reason yet for a policy ceiling to be able to refuse it.
+    """
+
+    harness: str
+    artifact: str
+    destination: str
+    path: str
+    entry: HookEntry
+    risk: ClassVar[RiskClass] = RiskClass.CONFIGURATION_MUTATION
+    capabilities: ClassVar[EffectCapabilities] = _HARNESS
+
+    def __post_init__(self) -> None:
+        _line(self.harness, "harness")
+        _line(self.artifact, "artifact")
+        _line(self.destination, "settings destination")
+        _settings_path(self.path)
+        if not isinstance(self.entry, HookEntry):
+            raise ValueError("a merged settings entry needs the hook it writes")
+
+
+@dataclass(frozen=True, slots=True)
+class UnmergeSettingsEntry:
+    """Take back only this artifact's entry, and leave the list and the file it was in.
+
+    The list itself is never removed. It is the harness's key, not this artifact's, and an
+    uninstall that took it away would take every other hook in it along.
+    """
+
+    harness: str
+    artifact: str
+    destination: str
+    path: str
+    entry: HookEntry
+    risk: ClassVar[RiskClass] = RiskClass.CONFIGURATION_MUTATION
+    capabilities: ClassVar[EffectCapabilities] = _HARNESS
+
+    def __post_init__(self) -> None:
+        _line(self.harness, "harness")
+        _line(self.artifact, "artifact")
+        _line(self.destination, "settings destination")
+        _settings_path(self.path)
+        if not isinstance(self.entry, HookEntry):
+            raise ValueError("a withdrawn settings entry needs the hook it identifies")
+
+
 Effect: TypeAlias = (
     CopyTree
     | WriteFile
@@ -364,6 +438,8 @@ Effect: TypeAlias = (
     | WithdrawArtifact
     | MergeManagedBlock
     | UnmergeManagedBlock
+    | MergeSettingsEntry
+    | UnmergeSettingsEntry
     | VerifyRequirement
 )
 
@@ -464,6 +540,21 @@ def effect_to_data(effect: Effect) -> dict[str, object]:
             artifact=effect.artifact,
             destination=effect.destination,
             region=effect.region,
+        )
+    elif isinstance(effect, (MergeSettingsEntry, UnmergeSettingsEntry)):
+        data.update(
+            kind=(
+                "merge-settings-entry"
+                if isinstance(effect, MergeSettingsEntry)
+                else "unmerge-settings-entry"
+            ),
+            harness=effect.harness,
+            artifact=effect.artifact,
+            destination=effect.destination,
+            path=effect.path,
+            shape=effect.entry.shape.value,
+            matcher=effect.entry.matcher,
+            command=effect.entry.command,
         )
     else:
         data.update(kind="verify-requirement", requirement=effect.requirement)
