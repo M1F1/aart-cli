@@ -178,6 +178,17 @@ that flow and execution, plus composition of real Marketplace and installed-stat
    Two gaps the closure left open and did not paper over: the shell declines a selection whose
    inputs it cannot yet collect (B-032, already promoted), and a deprecated registry version is
    declined by name because the Marketplace row has nowhere to render the warning (B-036).
+
+   **B-037 was promoted and fixed (2026-09-01), not deferred.** It was filed as a fixture problem
+   and re-triaged as a correctness defect on `aart registry promote`: `plan_bulk_promotion` rewrote
+   version records only for its own transaction while the catalogs took the new content digest, so
+   the second promotion into any registry made it unreadable to every consumer. Every retained
+   approved record is now rebound to the snapshot its transaction produces, as metadata only, with
+   the published package proven byte-identical (D-089). A registry can now hold many approved
+   versions across many transactions -- which is what an identity with more than one released
+   version needs -- and that supplied D-088's last piece of evidence: a Marketplace row stands for
+   the highest approved SemVer of an identity, and an older approved version is superseded rather
+   than declined.
 7. Update the CP-13 coverage table as each command and screen group moves from projection to live
    public flow.
 

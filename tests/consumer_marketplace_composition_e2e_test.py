@@ -16,6 +16,7 @@ Reading offers is an effect, so it happens once at composition rather than insid
 from __future__ import annotations
 
 import dataclasses
+import json
 import pathlib
 import tempfile
 import unittest
@@ -46,15 +47,29 @@ from agent_artifacts.tui_consumer import (
     screens_from,
 )
 from agent_artifacts.tui_marketplace import MarketplaceTarget
-from tests.configured_installation_draft_e2e_test import _published_registry
+from tests.configured_installation_draft_e2e_test import (
+    AUTHORED_MCP,
+    _published_registries,
+    _published_registry,
+)
 from tests.consumer_session_e2e_test import TODAY
 from tests.consumer_shell_test import FakeTerminal, _at
 from tests.marketplace_fixtures import configured_source, effective_configuration
-from tests.placed_installation_e2e_test import AUTHORED_SKILL
+from tests.placed_installation_e2e_test import AUTHORED_SKILL, SKILL_MANIFEST
 from tests.registry_maintenance_fixtures import native_snapshot
 
 TARGET = MarketplaceTarget(("claude",), "darwin", "project", "copy")
 APPROVED = "company/skill/code-review@1.2.0"
+
+
+def _at_version(version: str):
+    """The same authored Skill, released again at a later version."""
+
+    manifest = {**SKILL_MANIFEST, "artifact": {**SKILL_MANIFEST["artifact"], "version": version}}
+    return tuple(
+        (path, json.dumps(manifest)) if path.endswith("aart.json") else (path, content)
+        for path, content in AUTHORED_SKILL
+    )
 
 
 def _machine():
@@ -178,6 +193,28 @@ class ComposedMarketplaceTest(unittest.TestCase):
             offers.declined,
             (f"{APPROVED}: deprecated by the registry, and this view cannot say so on the row",),
         )
+
+    def test_a_row_stands_for_the_highest_approved_version_of_its_identity(self) -> None:
+        """A row is an artifact, not a version list, and the graph keys one per identity.
+
+        The highest approved SemVer is what an unconstrained request resolves to, so offering it is
+        what makes what is browsed and what is installed the same thing. An older approved version
+        is superseded rather than declined: it is still there, under the same row.
+        """
+
+        self._publish(
+            self.registry,
+            _published_registries(AUTHORED_SKILL, AUTHORED_MCP, _at_version("1.3.0")),
+            "company-registry",
+        )
+
+        offers = self._offers()
+
+        self.assertEqual(
+            [entry.row.key for entry in offers.artifacts],
+            ["company/mcp/github@1.5.0", "company/skill/code-review@1.3.0"],
+        )
+        self.assertEqual(offers.declined, ())
 
     def test_a_source_that_is_not_a_registry_is_configured_but_offers_nothing(self) -> None:
         """INV-026: a Marketplace projects registries. A Source is where content comes from."""

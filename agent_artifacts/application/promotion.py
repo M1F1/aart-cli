@@ -8,7 +8,7 @@ operation.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 from typing import Protocol, cast
 
@@ -791,10 +791,18 @@ def plan_bulk_promotion(
             return audit_change
         metadata_changes.append(audit_change.value)
 
-    all_versions = tuple(sorted((*approved, *versions), key=lambda item: str(item.coordinate)))
+    # Every approved version names the registry's approved content snapshot, and this promotion
+    # changed that content, so every retained record is rebound to the new digest inside the same
+    # reviewed transaction.  Leaving them on the old one would make the whole registry unreadable
+    # to a consumer the moment it holds more than one promotion (`validate_promoted_registry`
+    # requires one exact snapshot), which is a registry that can never carry a second version.
+    # This rebinds registry metadata only: the package at a published coordinate does not move.
+    retained = tuple(replace(item, registry_snapshot=registry_after.value) for item in approved)
+    all_versions = tuple(sorted((*retained, *versions), key=lambda item: str(item.coordinate)))
     if len({str(item.coordinate) for item in all_versions}) != len(all_versions):
         return _error("promotion would duplicate an approved coordinate version")
-    for registry_version in versions:
+    rebound = {str(item.coordinate) for item in retained}
+    for registry_version in all_versions:
         identity = registry_version.coordinate.artifact
         version_path = _path(
             f"registry/versions/{identity.kind}/{identity.name}/"
@@ -806,6 +814,7 @@ def plan_bulk_promotion(
             package_files.value,
             version_path.value,
             _version_content(registry_version),
+            mutable=str(registry_version.coordinate) in rebound,
         )
         if isinstance(version_change, Err):
             return version_change

@@ -408,12 +408,26 @@ removed canonically (D-084, D-085).
 
 ## Blockers
 
-None. Four discoveries from the B-025 closure went to the backlog rather than expanding the slice:
-B-036 (a Marketplace row cannot render registry deprecation, so a deprecated version is declined by
-name), B-037 (incremental promotion leaves earlier version records bound to a stale content
-snapshot, which blocks a two-version registry fixture), B-038 (native source content has no
-canonical consumer path -- a product question under INV-026) and B-039 (the legacy wizard is now
-unreachable from the default route).
+None. Four discoveries from the B-025 closure were triaged. Three went to the backlog rather than
+expanding the slice: B-036 (a Marketplace row cannot render registry deprecation, so a deprecated
+version is declined by name), B-038 (native source content has no canonical consumer path -- a
+product question under INV-026) and B-039 (the legacy wizard is now unreachable from the default
+route).
+
+The fourth, **B-037, was promoted to the critical path and fixed** (2026-09-01). It was filed as a
+fixture problem and turned out to be a correctness defect on a routed public command: the second
+and every later promotion into a registry left the earlier version records naming a content digest
+that no longer existed, so `load_registry_versions` refused the whole snapshot and every consumer
+of that registry was locked out. `plan_bulk_promotion` now rebinds every retained approved record to
+the snapshot its own transaction produces, as metadata only -- the package at a published coordinate
+never moves (D-089). Evidence:
+`tests/promotion_planning_test.py::test_a_registry_stays_readable_after_a_second_promotion` and
+`::test_a_second_promotion_leaves_the_first_package_byte_identical`, plus the three-transaction
+`_published_registries` fixture in `tests/configured_installation_draft_e2e_test.py`. That unblocked
+D-088's remaining evidence, `tests/consumer_marketplace_composition_e2e_test.py::
+test_a_row_stands_for_the_highest_approved_version_of_its_identity`: a Marketplace row stands for
+the highest approved SemVer of an identity, and an older approved version is superseded rather than
+declined.
 
 ## Legacy removal criteria
 

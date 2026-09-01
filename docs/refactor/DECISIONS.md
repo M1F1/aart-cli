@@ -1367,5 +1367,27 @@ the Product Specification first instead of hiding the change here.
   resolve to -- and an older approved version is superseded rather than declined, since it is still
   reachable under the same row. Everything approved but not offerable is declined by name:
   Collections (B-031), referenced versions with no verified content in the snapshot, revoked
-  versions, and deprecated ones, whose warning the row has nowhere to render yet (B-037). A version
+  versions, and deprecated ones, whose warning the row has nowhere to render yet (B-036). A version
   whose promotion record is missing is refused rather than offered with a review nothing evidences.
+
+## D-089 — A promotion rebinds every approved version record to the snapshot it produces
+
+- **Decision:** `plan_bulk_promotion` rewrites `registry/versions/<kind>/<name>/<version>.json` for
+  the versions it retains as well as the ones it promotes, replacing each retained record's
+  `registry_snapshot` with the digest of the registry content this transaction produces. Retained
+  records are written as mutable changes; newly promoted ones stay immutable. The plan's `versions`
+  field still carries only the transaction's own versions, because `PromotionPlan.__post_init__`
+  requires one audit per version and `load_registry_versions` already returns the full validated set.
+- **Status:** accepted.
+- **Reason:** `registry_snapshot` is the digest of the whole registry's approved content, and
+  `validate_promoted_registry` requires every version record to bind one exact digest. Promoting
+  anything changes that content. Rewriting only the new records left the second and every later
+  promotion of a registry unreadable to every consumer -- reachable from `aart registry promote`, so
+  a live defect rather than a fixture problem (B-037). The alternative, narrowing `registry_snapshot`
+  to the version's own package, would drop the property that an approved version names the exact
+  registry state it was approved against, which is what makes an approval auditable after the fact.
+- **Consequence:** rebinding is metadata only -- the package at a published coordinate is never
+  rewritten, guarded by `test_a_second_promotion_leaves_the_first_package_byte_identical`. It stays
+  inside one reviewed transaction, so a promotion is still all-or-nothing and no record is ever
+  bound to a snapshot that was not itself reviewed. Registries can now hold many approved versions
+  across many transactions, which is what an identity with more than one released version requires.

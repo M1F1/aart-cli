@@ -600,34 +600,40 @@ choosing which version a row stands for.
 Evidence/links: D-088; `tests/consumer_marketplace_composition_e2e_test.py::ComposedMarketplaceTest
 ::test_a_deprecated_version_is_declined_by_name_rather_than_offered_silently`.
 
-## B-037 — Incremental promotion leaves earlier version records bound to a stale snapshot
+## B-037 — Incremental promotion left earlier version records bound to a stale snapshot
 
-**Classification: BACKLOG; blocks any fixture or registry holding two approved versions.**
+**Classification: PROMOTED TO CRITICAL PATH, then FIXED. Reclassified 2026-09-01.**
 
-`RegistryArtifactVersion.registry_snapshot` binds every approved version to one digest of the
-registry's `artifacts/` and `references/` trees. Promoting a second version rewrites that tree, so
-the record for the first version keeps the old digest and `load_registry_versions` refuses the whole
-snapshot with "registry versions do not bind one exact approved content snapshot" -- even when
-`plan_bulk_promotion` is given the earlier versions through its `approved=` parameter, which
-produces changes only for the new version.
+**Why it was reclassified.** Filed as backlog on the belief that only fixtures were affected. It is
+in fact a correctness defect on a routed public command. `RegistryArtifactVersion.registry_snapshot`
+binds every approved version to one digest of the registry's `artifacts/` and `references/` trees.
+`plan_bulk_promotion` rewrote `registry/versions/*.json` only for the versions in its own
+transaction, while `registry/index.json` and `registry/snapshot.json` received the new content
+digest. So the *second* promotion into any registry left every earlier record naming a digest that
+no longer existed, and `load_registry_versions` refused the whole snapshot with "registry versions
+do not bind one exact approved content snapshot". Every consumer of that registry was then locked
+out -- not just a test fixture. Reachable from `aart registry promote`
+(`agent_artifacts/commands/registry.py:800`). That is a mandatory-invariant break on the critical
+path, so it was promoted and fixed rather than deferred.
 
-Reproduced against the real pipeline: promote `skill/code-review@1.2.0` into an empty registry,
-then promote `1.3.0` onto that snapshot with `approved=` the first version's records. The resulting
-snapshot cannot be read back.
+**Fix.** `plan_bulk_promotion` now rebinds every retained approved record to the snapshot the same
+reviewed transaction produces, inside that transaction, and writes those records as mutable changes.
+The version record set and the catalogs therefore always agree. This is metadata only: the package
+at a published coordinate never moves. Recorded as D-089.
 
-**Why it is noncritical now.** Every canonical registry fixture and every routed public command
-works against a registry holding one approved version per identity, and the consumer refuses the
-unreadable snapshot rather than acting on it, so nothing installs from a registry in this state.
+**Evidence.** RED-first in `tests/promotion_planning_test.py`:
+`test_a_registry_stays_readable_after_a_second_promotion` (two transactions, both coordinates read
+back, one shared `registry_snapshot`) and
+`test_a_second_promotion_leaves_the_first_package_byte_identical` (the rebinding does not touch
+published content). Three-transaction fixture proven through the real pipeline in
+`tests/configured_installation_draft_e2e_test.py::_published_registries`.
 
-**Shape of the work.** Decide whether `registry_snapshot` is the content digest of the whole
-registry or of the version's own package, and if it stays whole-registry, have `plan_bulk_promotion`
-rewrite every retained version record to the new digest as part of the same reviewed mutation.
+**What it unblocked.** `tests/consumer_marketplace_composition_e2e_test.py::
+test_a_row_stands_for_the_highest_approved_version_of_its_identity` -- the end-to-end evidence for
+D-088's rule that a row is the highest approved SemVer of an identity and an older approved version
+is superseded, not declined.
 
-**What it currently blocks.** The evidence that `read_configured_marketplace` offers the *highest*
-approved SemVer of an identity, and supersedes rather than declines the older one (D-088). That rule
-is implemented and reviewed; only its end-to-end fixture is blocked.
-
-Evidence/links: D-088; `agent_artifacts/application/promotion.py::plan_bulk_promotion`,
+Evidence/links: D-088, D-089; `agent_artifacts/application/promotion.py::plan_bulk_promotion`,
 `::validate_promoted_registry`, `::load_registry_versions`.
 
 ## B-038 — Native source content has no canonical consumer path

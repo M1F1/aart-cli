@@ -12,6 +12,7 @@ from typing import cast
 from agent_artifacts.application.maintainer import reconcile_source_scan
 from agent_artifacts.application.promotion import (
     PromotionEvidence,
+    load_registry_versions,
     plan_bulk_promotion,
     plan_registry_lifecycle,
     project_lifecycle_update,
@@ -79,6 +80,72 @@ AUTHORED_MCP: tuple[tuple[str, str] | tuple[str, str, bool], ...] = (
 )
 
 
+def _promote_one(
+    authored: tuple[tuple[str, str] | tuple[str, str, bool], ...],
+    *,
+    onto: SourceSnapshot,
+    revision: str,
+) -> SourceSnapshot:
+    """One author tree through one real promote-and-publish transaction onto `onto`."""
+
+    approved = load_registry_versions(onto)
+    assert isinstance(approved, Ok), approved
+    compiled = compile_author_snapshot(
+        SourceSnapshot(
+            SnapshotOrigin.IMMUTABLE_GIT,
+            tuple(_authored(item) for item in authored),
+        ),
+        source_alias=SourceAlias("authors"),
+        source="https://git.example/servers.git",
+        revision=revision,
+    )
+    assert isinstance(compiled, Ok), compiled
+    scanned = reconcile_source_scan(
+        SourceAlias("authors"),
+        revision,
+        compiled.value,
+        previous=(),
+        approved=approved.value,
+        target_registry=SourceAlias("company"),
+    )
+    assert isinstance(scanned, Ok), scanned
+    bundle = scanned.value.active[0]
+    bundle = dataclasses.replace(bundle, candidate=assess_candidate(bundle.candidate))
+    evidence = cast(tuple[tuple[CandidateId, PromotionEvidence], ...], _evidence(bundle))
+    promoted = plan_bulk_promotion(onto, (bundle,), evidence=evidence, approved=approved.value)
+    assert isinstance(promoted, Ok), promoted
+    projected = project_promotion(onto, promoted.value)
+    assert isinstance(projected, Ok), projected
+    local = promoted.value.versions[0]
+    public = publish_registry_version(local, local.registry_snapshot)
+    reloaded = load_registry_versions(projected.value)
+    assert isinstance(reloaded, Ok), reloaded
+    after = tuple(
+        public if item.coordinate == local.coordinate else item for item in reloaded.value
+    )
+    lifecycle = plan_registry_lifecycle(projected.value, reloaded.value, after)
+    assert isinstance(lifecycle, Ok), lifecycle
+    published = project_lifecycle_update(projected.value, lifecycle.value)
+    assert isinstance(published, Ok), published
+    return SourceSnapshot(SnapshotOrigin.IMMUTABLE_GIT, published.value.entries)
+
+
+def _published_registries(
+    *authored: tuple[tuple[str, str] | tuple[str, str, bool], ...],
+) -> SourceSnapshot:
+    """Several author trees taken to a published registry, one promotion transaction each.
+
+    A registry is not written in one transaction: artifacts and versions arrive over time, and each
+    promotion rebinds every retained approval to the registry's new content snapshot. Promoting one
+    at a time is therefore the realistic shape, not a slower version of the same thing.
+    """
+
+    snapshot = SourceSnapshot(SnapshotOrigin.LOCAL, ())
+    for index, tree in enumerate(authored):
+        snapshot = _promote_one(tree, onto=snapshot, revision=f"{index:x}" * 40)
+    return snapshot
+
+
 def _published_registry(
     authored: tuple[tuple[str, str] | tuple[str, str, bool], ...] = AUTHORED_MCP,
 ) -> SourceSnapshot:
@@ -90,40 +157,7 @@ def _published_registry(
     nothing else about the pipeline changes for one.
     """
 
-    compiled = compile_author_snapshot(
-        SourceSnapshot(
-            SnapshotOrigin.IMMUTABLE_GIT,
-            tuple(_authored(item) for item in authored),
-        ),
-        source_alias=SourceAlias("authors"),
-        source="https://git.example/servers.git",
-        revision="a" * 40,
-    )
-    assert isinstance(compiled, Ok), compiled
-    scanned = reconcile_source_scan(
-        SourceAlias("authors"),
-        "a" * 40,
-        compiled.value,
-        previous=(),
-        approved=(),
-        target_registry=SourceAlias("company"),
-    )
-    assert isinstance(scanned, Ok), scanned
-    bundle = scanned.value.active[0]
-    bundle = dataclasses.replace(bundle, candidate=assess_candidate(bundle.candidate))
-    evidence = cast(tuple[tuple[CandidateId, PromotionEvidence], ...], _evidence(bundle))
-    empty = SourceSnapshot(SnapshotOrigin.LOCAL, ())
-    promoted = plan_bulk_promotion(empty, (bundle,), evidence=evidence, approved=())
-    assert isinstance(promoted, Ok), promoted
-    projected = project_promotion(empty, promoted.value)
-    assert isinstance(projected, Ok), projected
-    local = promoted.value.versions[0]
-    public = publish_registry_version(local, local.registry_snapshot)
-    lifecycle = plan_registry_lifecycle(projected.value, (local,), (public,))
-    assert isinstance(lifecycle, Ok), lifecycle
-    published = project_lifecycle_update(projected.value, lifecycle.value)
-    assert isinstance(published, Ok), published
-    return SourceSnapshot(SnapshotOrigin.IMMUTABLE_GIT, published.value.entries)
+    return _published_registries(authored)
 
 
 class ConfiguredInstallationDraftTest(unittest.TestCase):

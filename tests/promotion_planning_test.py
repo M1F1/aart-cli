@@ -167,6 +167,82 @@ class PromotionPlanningTest(unittest.TestCase):
         self.assertIsInstance(validate_promoted_registry(output.snapshot, plan.versions), Ok)
         self.assertEqual(load_registry_versions(output.snapshot), Ok(plan.versions))
 
+    def test_a_registry_stays_readable_after_a_second_promotion(self) -> None:
+        """A registry that can hold only one promotion transaction is not a registry.
+
+        Every approved version record binds the registry's current content digest, and promoting
+        anything rewrites the content those earlier records were bound to. A promotion that writes
+        only the new records therefore leaves the whole snapshot unreadable to every consumer --
+        and `update` cannot mean anything in a registry that can never hold a second version.
+        """
+
+        empty = SourceSnapshot(SnapshotOrigin.LOCAL, ())
+        first = _ready_bundle("github-mcp")
+        promoted = plan_bulk_promotion(empty, (first,), evidence=_evidence(first), approved=())
+        self.assertIsInstance(promoted, Ok, getattr(promoted, "diagnostics", ()))
+        assert isinstance(promoted, Ok)
+        one = project_promotion(empty, promoted.value)
+        self.assertIsInstance(one, Ok, getattr(one, "diagnostics", ()))
+        assert isinstance(one, Ok)
+        approved = load_registry_versions(one.value)
+        self.assertIsInstance(approved, Ok, getattr(approved, "diagnostics", ()))
+        assert isinstance(approved, Ok)
+
+        second = _ready_bundle("jira-mcp")
+        again = plan_bulk_promotion(
+            one.value, (second,), evidence=_evidence(second), approved=approved.value
+        )
+        self.assertIsInstance(again, Ok, getattr(again, "diagnostics", ()))
+        assert isinstance(again, Ok)
+        two = project_promotion(one.value, again.value)
+        self.assertIsInstance(two, Ok, getattr(two, "diagnostics", ()))
+        assert isinstance(two, Ok)
+
+        readable = load_registry_versions(two.value)
+
+        self.assertIsInstance(readable, Ok, getattr(readable, "diagnostics", ()))
+        assert isinstance(readable, Ok)
+        self.assertEqual(
+            {str(item.coordinate) for item in readable.value},
+            {"company/mcp/github-mcp@1.0.0", "company/mcp/jira-mcp@1.0.0"},
+        )
+        # One approved content snapshot, named by every record in it: that is what makes the
+        # registry's answer to "what did you approve" a single reviewable fact.
+        self.assertEqual(len({item.registry_snapshot for item in readable.value}), 1)
+
+    def test_a_second_promotion_leaves_the_first_package_byte_identical(self) -> None:
+        """Rebinding a retained record is metadata; the content at a coordinate never moves."""
+
+        empty = SourceSnapshot(SnapshotOrigin.LOCAL, ())
+        first = _ready_bundle("github-mcp")
+        promoted = plan_bulk_promotion(empty, (first,), evidence=_evidence(first), approved=())
+        assert isinstance(promoted, Ok), promoted
+        one = project_promotion(empty, promoted.value)
+        assert isinstance(one, Ok), one
+        approved = load_registry_versions(one.value)
+        assert isinstance(approved, Ok), approved
+        before = {
+            str(entry.path): entry.content
+            for entry in one.value.entries
+            if str(entry.path).startswith("artifacts/")
+        }
+
+        second = _ready_bundle("jira-mcp")
+        again = plan_bulk_promotion(
+            one.value, (second,), evidence=_evidence(second), approved=approved.value
+        )
+        assert isinstance(again, Ok), again
+        two = project_promotion(one.value, again.value)
+        assert isinstance(two, Ok), two
+
+        after = {
+            str(entry.path): entry.content
+            for entry in two.value.entries
+            if str(entry.path).startswith("artifacts/mcp/github-mcp/")
+        }
+        self.assertTrue(after)
+        self.assertEqual(after, {path: before[path] for path in after})
+
     def test_review_mismatch_cannot_reach_the_atomic_output_port(self) -> None:
         bundle = _ready_bundle()
         empty = SourceSnapshot(SnapshotOrigin.LOCAL, ())
