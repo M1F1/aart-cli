@@ -408,7 +408,12 @@ removed canonically (D-084, D-085).
 
 ## Blockers
 
-None.
+None. Four discoveries from the B-025 closure went to the backlog rather than expanding the slice:
+B-036 (a Marketplace row cannot render registry deprecation, so a deprecated version is declined by
+name), B-037 (incremental promotion leaves earlier version records bound to a stale content
+snapshot, which blocks a two-version registry fixture), B-038 (native source content has no
+canonical consumer path -- a product question under INV-026) and B-039 (the legacy wizard is now
+unreachable from the default route).
 
 ## Legacy removal criteria
 
@@ -417,29 +422,60 @@ machine-output tests prove every accepted flow now consumes the canonical applic
 
 ## Handoff
 
-- Current working state: steps 1–4 complete and verified; step 5 has a durable machine reader that
-  also sees legacy project/user manifests, a composed Marketplace, an action-capable reducer, an
-  injected/fail-closed shell boundary, object-store placement and a capability-bound transaction
-  interpreter assembler, and one configured production action from approved Selection and safe
-  screen-07 inputs through review, recording and machine reload. Step 6 has routed direct
-  approved-registry `install` and its durable, measured `status`, while the other source kinds and
-  mutating lifecycle seams remain on legacy authority by design (D-062, D-063, D-073–D-080).
+- Current working state: steps 1–5 complete and verified; step 6 has routed direct
+  approved-registry `install`, `status`, `update`, `uninstall` **and the default terminal entry**,
+  while Collections and the direct/local source kinds remain on legacy authority by design (D-062,
+  D-063, D-073–D-083).
 - B-033 is complete: all ten increments are verified, and an authored Skill now crosses the real
   promotion/configured-action path, is recorded and re-read, reports delivery drift and uninstalls
   without touching a neighboring Skill.
 - B-034 is complete: memory owns a delimited region of a file the user writes in (D-084) and a hook
   is delivered and merged at once, owning one entry of one list in a settings file the harness and
   its user share (D-085). All five kinds now install canonically.
-- Exact next action: route the default TTY (B-025) through the same configured action boundary,
-  then retire legacy consumer authority path by path -- `consumer/application.py`,
+- B-025 is complete (2026-09-01): the default terminal route is the canonical consumer
+  application. Four increments, each green before the next started.
+  1. `io/configured_repair_action.py` -- the third configured composition beside install and
+     uninstall. It takes an already-measured `InstalledInspection` and resolves nothing, so a repair
+     works when the source is unsubscribed; `interpreters_for_receipt` builds the adapter set from
+     the receipt alone, and a step the receipt cannot describe (launcher content, which a receipt
+     records only as a digest) fails closed at that step rather than writing something nobody
+     planned (D-086). `tests/configured_repair_action_e2e_test.py`, 6 tests.
+  2. `ConsumerScreens.notice` plus `_ANSWERABLE` -- a refusal is rendered under the screens an
+     action lands on and nowhere else.
+  3. `io/consumer_actions.py` -- the production `ConsumerActionHandler`. One composition per
+     machine; install/update/repair/uninstall dispatch; every refusal returned as an
+     `ACTION_PREPARED` with no review digest or an `ACTION_RECORDED` with no text, which the reducer
+     already reads as "nothing was established", so the session stays where it was (D-087).
+  4. The cutover in `tui.py::run`, which takes the canonical route *before* any wizard composition
+     so the same local state is never opened twice, and `io/configured_offers.py`, without which the
+     shell could not install what it offered: the Marketplace now projects the configured
+     registries' approved published versions, recompiled from the packages the registry published,
+     with trust taken from the promotion record that approved each one (D-088, INV-026).
+- Evidence: `tests/consumer_application_e2e_test.py` (10 tests) drives the shell the curses adapter
+  runs, over the production handler, on a temporary machine with a real configured registry, object
+  store and receipts -- install, reinstall-converges, verify/repair after a deleted delivery,
+  uninstall that leaves a neighbour standing, and two refusals drawn rather than raised.
+  `tests/consumer_marketplace_composition_e2e_test.py` (6) proves where offers come from, including
+  a real deprecation through `plan_registry_lifecycle` and the INV-026 property that a native source
+  is configured and offers nothing. `tests/tui_consumer_entry_test.py` (6) proves the wizard is not
+  even composed on a terminal; `tests/tui_fallback_boundary_test.py` (13) proves the
+  internal-failure and no-TTY boundaries on the live route rather than on the retired one.
+- Exact next action: retire legacy consumer authority path by path -- `consumer/application.py`,
   `lifecycle/application.py`, `installation/*`, `setup_engine/*` -- each removal preceded by a
-  public-flow test proving the canonical path already carries it.
+  public-flow test proving the canonical path already carries it. `_run_curses` and the wizard
+  composition are unreachable from `run()` on a terminal but still have direct test callers, so they
+  are the last thing to go, not the first (B-039). Leave `_run_text` alone: no-TTY is a supported
+  environment, not a broken one.
 - Do not undo: existing curses layout/search/basket/back/quit characterization; one semantic plan
   for both profiles; Maintainer Mode remains opt-in; `key_event` stays the only place a key's
   meaning is decided; no clock in `application/`; the legacy roots stay required arguments of
   `read_consumer_machine`, and an unadopted installation stays in the one Installed list with no
   offered action rather than moving to a band of its own (D-069).
-- Tests last run/results: 2,920 unit tests (including E2E), lint, format and typecheck green. The
-  last full `make quality` run was at 2,739 tests and 83.51% coverage; the full suite is deferred to
-  the end of the CP-13 block by agreement. CP-12 baseline was 2,196 unit + 65 E2E at 83.25%.
+- Tests last run/results: full suite 2,940 tests green in 180s, with lint, format-check, typecheck,
+  docs-check and secret-shape-check green. Typecheck caught one real weakness during this slice --
+  `LocalConsumerActions._pending` was typed `object`, so nothing checked that a confirmation was
+  compared against a prepared action's own review digest; it now carries the union of the three
+  prepared actions. The last full `make quality` run was at 2,739 tests and 83.51% coverage;
+  coverage and the remaining gates are deferred to the end of the CP-13 block by agreement.
+  CP-12 baseline was 2,196 unit + 65 E2E at 83.25%.
 - Failure evidence: three defects found by tests are listed under Characterization / RED evidence.

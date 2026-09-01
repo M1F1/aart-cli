@@ -62,10 +62,13 @@ from .curation.model import (
 )
 from .curation.runtime import CurationService, PreparedCuration
 from .domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from .domain.harness import Scope
 from .domain.identifiers import ArtifactCoordinate, SourceAlias
 from .domain.result import Err as DomainErr
 from .domain.result import Ok as DomainOk
 from .domain.result import Result as DomainResult
+from .io.configured_installation_action import InstallationHost
+from .io.consumer_actions import ConsumerActionContext, LocalConsumerActions
 from .io.consumer_machine import read_consumer_machine
 from .io.credentials import MacOsKeychainProvider
 from .marketplace.model import MarketplaceCatalog
@@ -109,11 +112,8 @@ from .setup import (
 from .sources.model import SourceIdentityTransition, SourceSyncOutcome
 from .tui_consumer import (
     CanonicalScreenSource,
-    ConsumerOffers,
-    ConsumerScreenSource,
     read_consumer_offers,
     run_consumer_shell,
-    screens_from,
 )
 from .tui_failures import (
     WizardOperation,
@@ -6182,8 +6182,14 @@ class _CursesTerminal:
         return int(self._stdscr.getch())
 
 
-def run_consumer(source: ConsumerScreenSource) -> ConsumerUiState:
-    """Run the canonical consumer application over curses, or raise if there is no terminal."""
+def run_consumer(actions: LocalConsumerActions) -> ConsumerUiState:
+    """Run the canonical consumer application over curses, or raise if there is no terminal.
+
+    The handler is the argument rather than the screens, because the screens come from it: what is
+    drawn after an action is what that action read back off the machine, and a caller holding its
+    own snapshot beside the handler would be holding one that goes stale the first time somebody
+    installs something.
+    """
 
     try:
         import curses  # stdlib; imported lazily so the text path needs no terminal at all.
@@ -6193,7 +6199,9 @@ def run_consumer(source: ConsumerScreenSource) -> ConsumerUiState:
     captured: dict = {}
 
     def _ui(stdscr) -> None:
-        captured["state"] = run_consumer_shell(source, _CursesTerminal(stdscr))
+        captured["state"] = run_consumer_shell(
+            actions.source(), _CursesTerminal(stdscr), action_handler=actions
+        )
 
     try:
         curses.wrapper(_ui)
@@ -6209,13 +6217,18 @@ def run_consumer(source: ConsumerScreenSource) -> ConsumerUiState:
     return state
 
 
-def _canonical_consumer_source(
+def _canonical_consumer_actions(
     *,
     project: str | None,
     user_home: str | None,
     today: date,
-) -> DomainResult[CanonicalScreenSource]:
-    """Compose the canonical shell from one durable read of the local machine."""
+) -> DomainResult[LocalConsumerActions]:
+    """Compose the canonical application from one durable read of the local machine.
+
+    Everything an action needs is resolved here, once: where this machine keeps its state, what
+    the configured sources offer, and which harnesses were actually measured. Composition is where
+    an effect belongs, and a draw must never reach back into any of it (D-051).
+    """
 
     from .configuration.paths import Platform, resolve_config_paths
 
@@ -6229,6 +6242,9 @@ def _canonical_consumer_source(
         xdg_cache_home=os.environ.get("XDG_CACHE_HOME"),
     )
     project_root = os.path.abspath(project or os.getcwd())
+    # One set of adapters for the whole application. Measuring a credential through a provider the
+    # actions could not act on would report an attention nothing here is able to close.
+    providers = (MacOsKeychainProvider(),) if sys.platform == "darwin" else ()
     machine = read_consumer_machine(
         state_root=os.path.join(paths.data_root, "state"),
         harness_root=project_root,
@@ -6236,29 +6252,48 @@ def _canonical_consumer_source(
         project_root=project_root,
         user_home=home,
         data_root=paths.data_root,
-        credential_providers=(MacOsKeychainProvider(),),
+        credential_providers=providers,
     )
     if isinstance(machine, DomainErr):
         return machine
-    offers = _canonical_consumer_offers(paths)
+    loaded = _canonical_consumer_configuration(paths)
+    if isinstance(loaded, DomainErr):
+        return loaded
+    target = _canonical_marketplace_target()
+    offers = read_consumer_offers(loaded.value, data_root=paths.data_root, target=target)
     if isinstance(offers, DomainErr):
         return offers
     return DomainOk(
-        CanonicalScreenSource(
-            screens_from(
+        LocalConsumerActions(
+            ConsumerActionContext(
+                InstallationHost(
+                    paths.data_root, project_root, home, Scope.PROJECT, target.profiles
+                ),
+                loaded.value,
                 machine.value,
-                marketplace=offers.value.artifacts,
-                collections=offers.value.collections,
+                offers=offers.value,
+                credential_providers=providers,
             )
         )
     )
 
 
-def _canonical_consumer_offers(paths) -> DomainResult[ConsumerOffers]:
-    """Read the configured Marketplace once, beside the one read of the machine.
+def _canonical_consumer_source(
+    *,
+    project: str | None,
+    user_home: str | None,
+    today: date,
+) -> DomainResult[CanonicalScreenSource]:
+    """The screens the canonical shell opens on, which are the composed application's own."""
 
-    Composition is where an effect belongs; a draw must never reach the source store (D-051).
-    """
+    composed = _canonical_consumer_actions(project=project, user_home=user_home, today=today)
+    if isinstance(composed, DomainErr):
+        return composed
+    return DomainOk(composed.value.source())
+
+
+def _canonical_consumer_configuration(paths) -> DomainResult:
+    """The effective configuration this machine's Marketplace and installs are composed from."""
 
     from .application.configuration import (
         ConfigurationPorts,
@@ -6280,11 +6315,7 @@ def _canonical_consumer_offers(paths) -> DomainResult[ConsumerOffers]:
     )
     if isinstance(loaded, DomainErr):
         return loaded
-    return read_consumer_offers(
-        loaded.value.effective,
-        data_root=paths.data_root,
-        target=_canonical_marketplace_target(),
-    )
+    return DomainOk(loaded.value.effective)
 
 
 def _canonical_marketplace_target() -> MarketplaceTarget:
@@ -6337,11 +6368,16 @@ def run(
     project: Optional[str] = None,
     user_home: Optional[str] = None,
 ) -> int:
-    """Launch the interactive selector; return a process exit code.
+    """Launch the interactive application; return a process exit code.
 
-    Called by ``cli._run_bare`` on a bare TTY invocation. Tries the ``curses`` selector and
-    **degrades to the ``input()`` flow** if curses cannot be imported or initialised. A clean
-    quit (no selection) returns 0. Sources are loaded only from canonical user configuration.
+    Called by ``cli._run_bare`` on a bare TTY invocation. A terminal that can run curses gets the
+    canonical consumer application (B-025); everything else **degrades to the ``input()`` flow**,
+    which is still the characterized wizard. A clean quit returns 0. Sources are loaded only from
+    canonical user configuration.
+
+    The canonical route is taken before any of the wizard's own composition runs. Composing both
+    and choosing afterwards would read the same machine twice, and the reading is where the local
+    state is opened -- so a failure would be reported by whichever half happened to open it first.
     """
     if source_dir is not None or repo is not None:
         print(
@@ -6349,6 +6385,30 @@ def run(
             "add a canonical registry in Sources instead."
         )
         return 2
+    canonical_failures = InternalFailureContext()
+    try:
+        canonical_terminal = _curses_supported()
+    except Exception as error:
+        return _render_internal_failure(error, canonical_failures)
+    if canonical_terminal:
+        composed = _canonical_consumer_actions(
+            project=project, user_home=user_home, today=date.today()
+        )
+        if isinstance(composed, DomainErr):
+            return _render_consumer_startup_failure(composed)
+        try:
+            run_consumer(composed.value)
+        except CursesUnavailable:
+            # The terminal claimed it could and could not. That is the documented degradation,
+            # and it lands on the text flow below rather than on a second curses attempt.
+            pass
+        except Exception as error:
+            # The outermost crash boundary for the canonical application. ``curses.wrapper`` has
+            # already restored the terminal; broad catching is for rendering, never for starting
+            # a second application over the same machine.
+            return _render_internal_failure(error, canonical_failures)
+        else:
+            return 0
     source_context = _runtime_source_stage_context(
         source_dir=source_dir,
         repo=repo,
@@ -6406,68 +6466,23 @@ def run(
             )
 
         reporting_service_factory = runtime_reporting_service
-    failure_context = InternalFailureContext()
-    try:
-        curses_supported = _curses_supported()
-    except Exception as error:
-        return _render_internal_failure(error, failure_context)
-    if not curses_supported:
-        return _run_text(
-            source_dir=source_dir,
-            repo=repo,
-            project=project,
-            user_home=user_home,
-            source_stage_view=source_stage_view,
-            source_finalizer=source_finalizer,
-            source_addition_finalizer=source_addition_finalizer,
-            source_removal_finalizer=source_removal_finalizer,
-            source_sync_runner=source_sync_runner,
-            source_resubscribe_runner=source_resubscribe_runner,
-            source_stage_loader=reload_source_stage,
-            consumer_service=consumer_service,
-            consumer_service_factory=consumer_service_factory,
-            reporting_service=reporting_service,
-            reporting_service_factory=reporting_service_factory,
-        )
-
-    try:
-        return _run_curses(
-            source_dir=source_dir,
-            repo=repo,
-            project=project,
-            user_home=user_home,
-            source_stage_view=source_stage_view,
-            source_finalizer=source_finalizer,
-            source_addition_finalizer=source_addition_finalizer,
-            source_removal_finalizer=source_removal_finalizer,
-            source_sync_runner=source_sync_runner,
-            source_resubscribe_runner=source_resubscribe_runner,
-            source_stage_loader=reload_source_stage,
-            consumer_service=consumer_service,
-            consumer_service_factory=consumer_service_factory,
-            reporting_service=reporting_service,
-            reporting_service_factory=reporting_service_factory,
-            failure_context=failure_context,
-        )
-    except CursesUnavailable:
-        return _run_text(
-            source_dir=source_dir,
-            repo=repo,
-            project=project,
-            user_home=user_home,
-            source_stage_view=source_stage_view,
-            source_finalizer=source_finalizer,
-            source_addition_finalizer=source_addition_finalizer,
-            source_removal_finalizer=source_removal_finalizer,
-            source_sync_runner=source_sync_runner,
-            source_resubscribe_runner=source_resubscribe_runner,
-            source_stage_loader=reload_source_stage,
-            consumer_service=consumer_service,
-            consumer_service_factory=consumer_service_factory,
-            reporting_service=reporting_service,
-            reporting_service_factory=reporting_service_factory,
-        )
-    except Exception as error:
-        # The outermost crash boundary. ``curses.wrapper`` has already restored the terminal.
-        # Broad catching is permitted here for rendering only, never to start a second wizard.
-        return _render_internal_failure(error, failure_context)
+    # The legacy curses wizard is no longer reachable from a terminal: `run` routed there above.
+    # What remains here is the text degradation, which the canonical application has no answer for
+    # yet -- it needs a terminal it can draw on.
+    return _run_text(
+        source_dir=source_dir,
+        repo=repo,
+        project=project,
+        user_home=user_home,
+        source_stage_view=source_stage_view,
+        source_finalizer=source_finalizer,
+        source_addition_finalizer=source_addition_finalizer,
+        source_removal_finalizer=source_removal_finalizer,
+        source_sync_runner=source_sync_runner,
+        source_resubscribe_runner=source_resubscribe_runner,
+        source_stage_loader=reload_source_stage,
+        consumer_service=consumer_service,
+        consumer_service_factory=consumer_service_factory,
+        reporting_service=reporting_service,
+        reporting_service_factory=reporting_service_factory,
+    )

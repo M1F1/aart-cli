@@ -1090,6 +1090,11 @@ class ConsumerScreens:
     #: transaction; 17 and 19 stay on `outcome`, because an update or an uninstall is about one
     #: artifact.
     transaction: ReceiptDetailView | None = None
+    #: Why the last action could not be prepared or carried out, in the words it was refused in.
+    #: It is carried rather than raised because the screens an action lands on are the ones
+    #: somebody is looking at, and a review that cannot say what went wrong is a Fast projection
+    #: hiding material risk.
+    notice: tuple[str, ...] = ()
 
     def offered(self, key: str) -> MarketplaceEntry | None:
         return next((item for item in self.marketplace if item.key == key), None)
@@ -1136,37 +1141,30 @@ def read_consumer_offers(
     *,
     data_root: str,
     target: MarketplaceTarget,
-    observe_freshness: bool = False,
 ) -> Result[ConsumerOffers]:
     """Read the configured Marketplace once, so a draw never reaches the source store (D-051).
 
-    The catalog is still assembled by the characterized read-only loader. That is the strangler
-    seam: the shell now composes real offers, and where those offers come from can move to
-    `aggregate_approved_marketplace` without the shell noticing.
+    The offers are the approved published versions of the configured registries -- the same
+    identities the configured install seam resolves against (INV-026). What is browsed here is
+    therefore installable from here; a shell that offered anything wider would be advertising an
+    action it has to refuse afterwards.
 
-    Collections do not cross it. A protocol-v1 Collection is identified by source and name alone,
-    and a canonical Collection is versioned and bound to the registry snapshot it was read from, so
-    offering one here would mean inventing the version that tells two of them apart. Each is
-    declined by name instead, until a versioned Collection reaches this seam.
+    Collections do not cross this seam. A canonical Collection is versioned and bound to the
+    registry snapshot it was read from, and nothing downstream carries that version yet, so each is
+    declined by name rather than offered without the version that tells two of them apart (B-031).
     """
 
-    from agent_artifacts.consumer.runtime import load_read_only_marketplace
+    from agent_artifacts.io.configured_offers import read_configured_marketplace
 
-    catalog = load_read_only_marketplace(
-        effective, data_root=data_root, observe_freshness=observe_freshness
-    )
-    if isinstance(catalog, Err):
-        return catalog
-    rows = project_marketplace_rows(catalog.value, target)
+    read = read_configured_marketplace(effective, data_root=data_root)
+    if isinstance(read, Err):
+        return read
+    rows = project_marketplace_rows(read.value.catalog, target)
     return Ok(
         ConsumerOffers(
             tuple(MarketplaceEntry(row) for row in rows),
             (),
-            tuple(
-                f"{collection.coordinate}: a Collection is offered by version, and this source "
-                "published it without one"
-                for collection in catalog.value.collections
-            ),
+            read.value.declined,
         )
     )
 
@@ -1181,6 +1179,7 @@ def screens_from(
     lifecycle: LifecyclePlanView | None = None,
     outcome: LifecycleOutcomeView | None = None,
     transaction: ReceiptDetailView | None = None,
+    notice: tuple[str, ...] = (),
 ) -> ConsumerScreens:
     """The screens for one assembled machine, plus whatever the current flow is holding.
 
@@ -1207,6 +1206,7 @@ def screens_from(
         lifecycle,
         outcome,
         transaction,
+        notice,
     )
 
 
@@ -1240,6 +1240,11 @@ _OUTCOME_SCREENS = frozenset(
         ConsumerScreen.UNINSTALLING,
     }
 )
+
+
+#: Where an action's refusal is worth drawing: the screens `_request_action` and `_confirm_action`
+#: move to. Everywhere else the notice would be an answer to a question nobody asked here.
+_ANSWERABLE = _PLAN_SCREENS | _LIFECYCLE_SCREENS | _OUTCOME_SCREENS
 
 
 def _matches(query: str, *fields: str) -> bool:
@@ -1378,6 +1383,19 @@ class CanonicalScreenSource:
         return target
 
     def lines(self, state: ConsumerUiState) -> tuple[str, ...]:
+        """The screen's body, and on the screens an action lands on, why it could not run.
+
+        The notice is confined to those screens deliberately. It answers a question somebody just
+        asked, so it belongs where they asked it; carrying it onto the dashboard would leave a
+        stale explanation standing over a screen that never ran anything.
+        """
+
+        body = self._body(state)
+        if not self._screens.notice or state.session.screen not in _ANSWERABLE:
+            return body
+        return (*body, "", *self._screens.notice)
+
+    def _body(self, state: ConsumerUiState) -> tuple[str, ...]:
         screen, profile = state.session.screen, state.session.profile
         screens = self._screens
         if screen is ConsumerScreen.DASHBOARD:

@@ -1221,6 +1221,67 @@ def _parse_version_record(content: bytes, path: str) -> Result[RegistryArtifactV
     return Ok(version)
 
 
+def _parse_audit_record(content: bytes, path: str) -> Result[PromotionAudit]:
+    parsed = parse_json(content)
+    if isinstance(parsed, Err) or not isinstance(parsed.value, JsonObject):
+        return _error(f"registry promotion record is invalid JSON: {path}")
+    value = parsed.value
+    try:
+        warnings = value.get("warnings")
+        if not isinstance(warnings, JsonArray) or any(
+            not isinstance(item, str) for item in warnings.items
+        ):
+            raise ValueError("promotion warnings must be a list of text")
+        audit = PromotionAudit(
+            CandidateId(_required_text(value, "candidate_id")),
+            _required_digest(value, "candidate_digest"),
+            _required_text(value, "source_revision"),
+            _required_digest(value, "validation_report_digest"),
+            _required_digest(value, "effective_policy_result"),
+            PromotionMode(_required_text(value, "promotion_mode")),
+            _required_digest(value, "registry_snapshot_before"),
+            _required_digest(value, "registry_snapshot_after"),
+            cast(tuple[str, ...], warnings.items),
+            _optional_text(value, "external_audit_reference"),
+        )
+    except ValueError as error:
+        return _error(f"registry promotion record is invalid at {path}: {error}")
+    if path != f"registry/promotions/{audit.candidate_id.value}.json":
+        return _error(f"registry promotion identity does not match its path: {path}")
+    return Ok(audit)
+
+
+def load_registry_promotions(snapshot: SourceSnapshot) -> Result[tuple[PromotionAudit, ...]]:
+    """Read the durable approval evidence a registry wrote when it promoted each version.
+
+    This is the counterpart of the writer above, and the only supported way to read it back: a
+    consumer asking why a version is trusted is asking about the promotion that approved it, not
+    about a flag somebody could restate elsewhere.
+    """
+
+    files = _files(snapshot)
+    if isinstance(files, Err):
+        return files
+    audits: list[PromotionAudit] = []
+    for path, entry in sorted(files.value.items()):
+        if not path.startswith("registry/promotions/"):
+            continue
+        if entry.kind is SnapshotEntryKind.DIRECTORY:
+            continue
+        if entry.kind is not SnapshotEntryKind.FILE or not path.endswith(".json"):
+            return _error(f"registry promotion path must be a JSON file: {path}")
+        parsed = _parse_audit_record(entry.content, path)
+        if isinstance(parsed, Err):
+            return parsed
+        if entry.content != _audit_content(parsed.value):
+            return _error(f"registry promotion record is not canonical: {path}")
+        audits.append(parsed.value)
+    ordered = tuple(sorted(audits))
+    if len({item.candidate_id for item in ordered}) != len(ordered):
+        return _error("registry contains duplicate promotion records")
+    return Ok(ordered)
+
+
 def load_registry_versions(
     snapshot: SourceSnapshot,
 ) -> Result[tuple[RegistryArtifactVersion, ...]]:

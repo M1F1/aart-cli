@@ -1,23 +1,37 @@
-"""The canonical shell's Marketplace is the configured one, read from disk.
+"""The canonical shell's Marketplace is the configured registries, read from disk.
 
 Screens 02 to 04a were reachable but empty in the composed application: `_canonical_consumer_source`
 read the machine and handed `screens_from` no offers at all, so a person opening the canonical shell
-saw a Marketplace with nothing in it while their configured sources sat on disk beside it.
+saw a Marketplace with nothing in it while their configured registries sat on disk beside it.
+
+Where the offers come from is INV-026: a Marketplace is a projection over configured *registries*,
+and it does not redefine what a registry approved.  So an offer here is an approved published
+version -- the same identity the configured install seam resolves against -- and a source that is
+not a registry contributes its health and nothing else.  Offering more than that would advertise an
+action the shell has to refuse afterwards.
 
 Reading offers is an effect, so it happens once at composition rather than inside a draw (D-051).
 """
 
 from __future__ import annotations
 
+import dataclasses
 import pathlib
 import tempfile
 import unittest
 
 from agent_artifacts.application.consumer_views import ConsumerScreen
+from agent_artifacts.application.promotion import (
+    load_registry_versions,
+    plan_registry_lifecycle,
+    project_lifecycle_update,
+)
 from agent_artifacts.configuration.model import SourceKind
 from agent_artifacts.domain.identifiers import SourceId
+from agent_artifacts.domain.registry import RegistryLifecycle
 from agent_artifacts.domain.result import Ok
 from agent_artifacts.io.source_store import publish_source_snapshot
+from agent_artifacts.protocol.native_tree import SnapshotOrigin, SourceSnapshot
 from agent_artifacts.sources.model import (
     SourcePublishCommand,
     ValidatedSourceCandidate,
@@ -32,12 +46,15 @@ from agent_artifacts.tui_consumer import (
     screens_from,
 )
 from agent_artifacts.tui_marketplace import MarketplaceTarget
+from tests.configured_installation_draft_e2e_test import _published_registry
 from tests.consumer_session_e2e_test import TODAY
 from tests.consumer_shell_test import FakeTerminal, _at
 from tests.marketplace_fixtures import configured_source, effective_configuration
+from tests.placed_installation_e2e_test import AUTHORED_SKILL
 from tests.registry_maintenance_fixtures import native_snapshot
 
 TARGET = MarketplaceTarget(("claude",), "darwin", "project", "copy")
+APPROVED = "company/skill/code-review@1.2.0"
 
 
 def _machine():
@@ -46,43 +63,80 @@ def _machine():
     return assemble_consumer_machine((), today=TODAY)
 
 
+def _deprecated(snapshot: SourceSnapshot) -> SourceSnapshot:
+    """The same registry, having since deprecated everything it approved.
+
+    Deprecation goes through the real lifecycle path rather than an edited file, because what the
+    consumer reads is a version record the registry rewrote, not a flag a test invented.
+    """
+
+    before = load_registry_versions(snapshot)
+    assert isinstance(before, Ok), before
+    after = tuple(
+        dataclasses.replace(
+            version,
+            lifecycle=RegistryLifecycle.DEPRECATED,
+            lifecycle_reason="superseded by the platform Skill",
+        )
+        for version in before.value
+    )
+    planned = plan_registry_lifecycle(snapshot, before.value, after)
+    assert isinstance(planned, Ok), planned
+    updated = project_lifecycle_update(snapshot, planned.value)
+    assert isinstance(updated, Ok), updated
+    return SourceSnapshot(SnapshotOrigin.IMMUTABLE_GIT, updated.value.entries)
+
+
 class ComposedMarketplaceTest(unittest.TestCase):
-    """One configured source, published the way sync publishes it, then browsed."""
+    """One configured registry, published the way sync publishes it, then browsed."""
 
     def setUp(self) -> None:
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.data_root = str(pathlib.Path(temporary.name) / "data")
-        self.source = configured_source("team", SourceKind.SOURCE_GIT)
+        self.registry = configured_source("company", SourceKind.REGISTRY_GIT)
+        self._publish(self.registry, _published_registry(AUTHORED_SKILL), "company-registry")
+        self.effective = effective_configuration((self.registry,), default_registry="company")
+
+    def _publish(self, source, snapshot: SourceSnapshot, declared: str) -> None:
         candidate = make_source_candidate(
-            source_instance_id(self.source),
-            self.source.alias,
-            "a" * 40,
-            native_snapshot(),
+            source_instance_id(source), source.alias, "a" * 40, snapshot
         )
         self.assertIsInstance(candidate, Ok, getattr(candidate, "diagnostics", ()))
         published = publish_source_snapshot(
             SourcePublishCommand(
-                source_store_paths(self.data_root, source_instance_id(self.source)),
-                ValidatedSourceCandidate(candidate.value, SourceId("reference-native-source")),
+                source_store_paths(self.data_root, source_instance_id(source)),
+                ValidatedSourceCandidate(candidate.value, SourceId(declared)),
                 90,
             )
         )
         self.assertIsInstance(published, Ok, getattr(published, "diagnostics", ()))
-        self.effective = effective_configuration((self.source,))
 
-    def _offers(self):
-        read = read_consumer_offers(self.effective, data_root=self.data_root, target=TARGET)
+    def _offers(self, effective=None):
+        read = read_consumer_offers(
+            effective or self.effective, data_root=self.data_root, target=TARGET
+        )
         self.assertIsInstance(read, Ok, getattr(read, "diagnostics", ()))
         return read.value
 
-    def test_the_composed_marketplace_offers_what_the_configured_source_published(self) -> None:
+    def test_the_composed_marketplace_offers_what_the_configured_registry_approved(self) -> None:
         offers = self._offers()
 
-        self.assertTrue(offers.artifacts, "a configured source published artifacts")
-        self.assertTrue(
-            all(entry.row.source_alias == self.source.alias for entry in offers.artifacts)
-        )
+        self.assertEqual([entry.row.key for entry in offers.artifacts], [APPROVED])
+        self.assertEqual(offers.declined, ())
+
+    def test_an_offer_carries_the_digests_the_registry_approved_it_under(self) -> None:
+        """Not a row a test built: the identity is the one the install seam resolves against."""
+
+        offers = self._offers()
+        version = load_registry_versions(_published_registry(AUTHORED_SKILL))
+        self.assertIsInstance(version, Ok, getattr(version, "diagnostics", ()))
+        approved = version.value[0]
+        row = offers.artifacts[0].row
+
+        self.assertEqual(row.object_digest, str(approved.object_digest))
+        self.assertEqual(row.payload_digest, str(approved.payload_digest))
+        self.assertEqual(row.trust, "registry-reviewed")
 
     def test_a_person_browsing_the_composed_shell_sees_those_offers(self) -> None:
         """Not a projection a test built: the rows come from the source store on disk."""
@@ -104,28 +158,43 @@ class ComposedMarketplaceTest(unittest.TestCase):
             ),
         )
 
-    def test_an_unversioned_collection_is_declined_by_name_rather_than_dropped(self) -> None:
-        """A Collection is told apart from another by its version, and this source published none.
+    def test_a_deprecated_version_is_declined_by_name_rather_than_offered_silently(self) -> None:
+        """The registry is steering people away from it and the row has nowhere to say so.
 
-        Offering it would mean inventing that version; omitting it silently would read as a source
-        that published no Collections at all.
+        Offering it anyway would be the Fast projection hiding material risk; dropping it without a
+        word would read as a registry that approved nothing (B-037).
         """
+
+        self._publish(
+            self.registry,
+            _deprecated(_published_registry(AUTHORED_SKILL)),
+            "company-registry",
+        )
 
         offers = self._offers()
 
-        self.assertEqual(offers.collections, ())
-        self.assertTrue(offers.declined)
-        self.assertTrue(all("without one" in reason for reason in offers.declined))
+        self.assertEqual(offers.artifacts, ())
+        self.assertEqual(
+            offers.declined,
+            (f"{APPROVED}: deprecated by the registry, and this view cannot say so on the row",),
+        )
+
+    def test_a_source_that_is_not_a_registry_is_configured_but_offers_nothing(self) -> None:
+        """INV-026: a Marketplace projects registries. A Source is where content comes from."""
+
+        native = configured_source("team", SourceKind.SOURCE_GIT)
+        self._publish(native, native_snapshot(), "reference-native-source")
+
+        offers = self._offers(
+            effective_configuration((self.registry, native), default_registry="company")
+        )
+
+        self.assertEqual([str(entry.row.source_alias) for entry in offers.artifacts], ["company"])
 
     def test_no_source_configured_is_an_empty_marketplace_rather_than_a_failure(self) -> None:
-        read = read_consumer_offers(
-            effective_configuration(()), data_root=self.data_root, target=TARGET
-        )
+        offers = self._offers(effective_configuration(()))
 
-        self.assertIsInstance(read, Ok, getattr(read, "diagnostics", ()))
-        self.assertEqual(
-            (read.value.artifacts, read.value.collections, read.value.declined), ((), (), ())
-        )
+        self.assertEqual((offers.artifacts, offers.collections, offers.declined), ((), (), ()))
 
 
 if __name__ == "__main__":

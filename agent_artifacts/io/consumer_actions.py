@@ -1,0 +1,564 @@
+"""The imperative boundary the persistent consumer application acts through.
+
+`run_consumer_shell` reduces a keystroke into a typed command and refuses to act on one without an
+injected handler (D-069). This is that handler on a real machine: it prepares, executes, records
+and re-reads, and hands back a new immutable screen snapshot beside the event saying what the
+action established. Nothing here decides product policy. What may be installed is still the
+approved registry snapshot, what is removed is still what the receipts record, and what is carried
+out is still the review digest somebody confirmed on screen.
+
+Three things are load-bearing.
+
+Preparation mutates nothing. Every action's first half only reads -- the machine, the receipts, the
+configured snapshot -- so somebody can open a review, look at it and walk away having changed
+nothing.
+
+The machine it hands back was read afterwards, never assembled from what the action believed it
+did. A half-applied install has to appear as what it left behind.
+
+And a refusal is drawn rather than raised. The shell has already moved to the screen the action
+was requested from, so a handler that threw would take the terminal down over an artifact that
+failed to resolve. The refusal comes back as a notice on that screen, under an event the reducer
+reads as "nothing was established", which leaves the session exactly where it was.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, replace
+from datetime import datetime, timezone
+
+from agent_artifacts.application.consumer_session import ConsumerMachine, InstalledInspection
+from agent_artifacts.application.consumer_ui import (
+    ConsumerActionKind,
+    ConsumerUiCommand,
+    ConsumerUiCommandKind,
+    ConsumerUiEvent,
+    ConsumerUiEventKind,
+)
+from agent_artifacts.application.consumer_views import (
+    ConsumerSettings,
+    LifecyclePlanView,
+    project_lifecycle_plan,
+)
+from agent_artifacts.configuration.policy import EffectiveConfiguration
+from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from agent_artifacts.domain.identifiers import ArtifactCoordinate
+from agent_artifacts.domain.policies import EffectivePolicy
+from agent_artifacts.domain.receipts import ArtifactReceipt
+from agent_artifacts.domain.reconciliation import DesiredState
+from agent_artifacts.domain.result import Err, Ok, Result
+from agent_artifacts.domain.selection import ArtifactRequest, ArtifactSelection, VersionConstraint
+from agent_artifacts.tui_consumer import (
+    CanonicalScreenSource,
+    ConsumerActionUpdate,
+    ConsumerOffers,
+    MarketplaceEntry,
+    screens_from,
+)
+
+from .configured_installation_action import (
+    InstallationHost,
+    PreparedConfiguredInstallation,
+    complete_configured_installation,
+    prepare_configured_installation,
+)
+from .configured_repair_action import (
+    PreparedConfiguredRepair,
+    complete_configured_repair,
+    prepare_configured_repair,
+)
+from .configured_uninstall_action import (
+    PreparedConfiguredUninstall,
+    complete_configured_uninstall,
+    prepare_configured_uninstall,
+)
+from .consumer_machine import read_installed_inspections
+from .credentials import CredentialProviderPort
+
+__all__ = [
+    "CONSUMER_ACTION_NOT_INSTALLED",
+    "CONSUMER_ACTION_NOT_OFFERED",
+    "ConsumerActionContext",
+    "LocalConsumerActions",
+]
+
+#: What a command names is not among the artifacts the configured sources currently offer.
+CONSUMER_ACTION_NOT_OFFERED = DiagnosticCode("consumer-action-not-offered")
+
+#: What a command names has no canonical record on this machine, so nothing here can act on it.
+CONSUMER_ACTION_NOT_INSTALLED = DiagnosticCode("consumer-action-not-installed")
+
+
+def _lines(*messages: str) -> tuple[str, ...]:
+    """One drawable line per message, because a terminal row cannot hold a newline."""
+
+    return tuple(
+        part.strip()
+        for message in messages
+        for part in str(message).replace("\r", "\n").split("\n")
+        if part.strip()
+    )
+
+
+def _refusal(diagnostics: tuple[Diagnostic, ...]) -> tuple[str, ...]:
+    return _lines(
+        *(item.message for item in diagnostics),
+        *(remediation for item in diagnostics for remediation in item.remediation),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class ConsumerActionContext:
+    """Everything one machine's actions are composed from, read once before the shell starts."""
+
+    host: InstallationHost
+    effective: EffectiveConfiguration
+    machine: ConsumerMachine
+    offers: ConsumerOffers = ConsumerOffers()
+    settings: ConsumerSettings = ConsumerSettings()
+    policy: EffectivePolicy = EffectivePolicy()
+    credential_providers: tuple[CredentialProviderPort, ...] = ()
+    offline: bool = False
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.host, InstallationHost)
+            or not isinstance(self.machine, ConsumerMachine)
+            or not isinstance(self.offers, ConsumerOffers)
+            or not isinstance(self.settings, ConsumerSettings)
+            or not isinstance(self.policy, EffectivePolicy)
+        ):
+            raise ValueError("a consumer action context is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class _PendingInstall:
+    prepared: PreparedConfiguredInstallation
+    previous_receipts: tuple[tuple[ArtifactCoordinate, ArtifactReceipt], ...] = ()
+
+
+#: What one reviewed-but-unconfirmed action is holding. Each carries the review digest the
+#: confirmation has to name, so nothing runs against a plan nobody read.
+_Pending = _PendingInstall | PreparedConfiguredRepair | PreparedConfiguredUninstall
+
+
+class LocalConsumerActions:
+    """One machine's install, update, verify-and-repair and uninstall, behind `handle`.
+
+    The prepared action is held between the two commands rather than recomputed, because what is
+    executed has to be the plan somebody reviewed. The digest is checked on the way in regardless:
+    holding it is a convenience, and the confirmation is the authority.
+    """
+
+    def __init__(self, context: ConsumerActionContext, *, now=None) -> None:
+        if not isinstance(context, ConsumerActionContext):
+            raise ValueError("consumer actions need a composed action context")
+        self._context = context
+        self._machine = context.machine
+        self._now = now if now is not None else (lambda: datetime.now(timezone.utc))
+        self._pending: _Pending | None = None
+        self._pending_action: ConsumerActionKind | None = None
+
+    # -- what the shell draws ------------------------------------------------ #
+
+    def source(
+        self,
+        *,
+        plan=None,
+        lifecycle: LifecyclePlanView | None = None,
+        outcome=None,
+        transaction=None,
+        notice: tuple[str, ...] = (),
+    ) -> CanonicalScreenSource:
+        """The screens for the machine as it currently stands, plus whatever a flow is holding."""
+
+        return CanonicalScreenSource(
+            screens_from(
+                self._machine,
+                marketplace=self._context.offers.artifacts,
+                collections=self._context.offers.collections,
+                settings=self._context.settings,
+                plan=plan,
+                lifecycle=lifecycle,
+                outcome=outcome,
+                transaction=transaction,
+                notice=notice,
+            )
+        )
+
+    # -- the injected boundary ----------------------------------------------- #
+
+    def handle(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        if not isinstance(command, ConsumerUiCommand) or command.action is None:
+            raise ValueError("a consumer action handler needs a typed action command")
+        if command.kind is ConsumerUiCommandKind.PREPARE_ACTION:
+            return self._prepare(command)
+        if command.kind is ConsumerUiCommandKind.EXECUTE_ACTION:
+            return self._execute(command)
+        raise ValueError(f"{command.kind.value} is not a consumer action")
+
+    # -- preparation --------------------------------------------------------- #
+
+    def _declined(
+        self, command: ConsumerUiCommand, notice: tuple[str, ...]
+    ) -> ConsumerActionUpdate:
+        """A refusal the reducer reads as "nothing was established", drawn where it was asked.
+
+        The event carries no review digest, which is exactly what `_action_prepared` requires
+        before it will move a session onto a plan -- so the screen keeps its previous content and
+        gains the reason underneath it.
+        """
+
+        self._pending, self._pending_action = None, None
+        return ConsumerActionUpdate(
+            self.source(notice=notice),
+            ConsumerUiEvent(ConsumerUiEventKind.ACTION_PREPARED, action=command.action),
+        )
+
+    def _prepare(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        self._pending, self._pending_action = None, None
+        action = command.action
+        if action is ConsumerActionKind.INSTALL:
+            return self._prepare_install(command)
+        if action is ConsumerActionKind.UPDATE:
+            return self._prepare_update(command)
+        if action is ConsumerActionKind.VERIFY_REPAIR:
+            return self._prepare_repair(command)
+        return self._prepare_uninstall(command)
+
+    def _targets(self, command: ConsumerUiCommand) -> tuple[str, ...]:
+        """What this command is about: what was ticked, or the row it was requested from."""
+
+        return command.selection or ((command.focus,) if command.focus else ())
+
+    def _offered(self, keys: tuple[str, ...]) -> Result[tuple[MarketplaceEntry, ...]]:
+        entries = []
+        for key in keys:
+            entry = next((item for item in self._context.offers.artifacts if item.key == key), None)
+            if entry is None:
+                return Err(
+                    (
+                        Diagnostic(
+                            CONSUMER_ACTION_NOT_OFFERED,
+                            Severity.ERROR,
+                            f"nothing offered here is {key}",
+                            remediation=("re-open the Marketplace and choose an offered version",),
+                        ),
+                    )
+                )
+            entries.append(entry)
+        return Ok(tuple(entries))
+
+    def _prepare_install(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        keys = self._targets(command)
+        if not keys:
+            return self._declined(command, _lines("nothing is selected to install"))
+        offered = self._offered(keys)
+        if isinstance(offered, Err):
+            return self._declined(command, _refusal(offered.diagnostics))
+        try:
+            selection = ArtifactSelection(
+                tuple(
+                    ArtifactRequest(
+                        entry.row.identity,
+                        VersionConstraint(entry.row.version),
+                        entry.row.source_alias,
+                    )
+                    for entry in offered.value
+                )
+            )
+        except ValueError as error:
+            return self._declined(command, _lines(f"this selection cannot be installed: {error}"))
+        return self._offer_installation(command, selection)
+
+    def _prepare_update(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        coordinates = self._targets(command)
+        if not coordinates:
+            return self._declined(command, _lines("nothing is selected to update"))
+        inspected = self._inspections(coordinates)
+        if isinstance(inspected, Err):
+            return self._declined(command, _refusal(inspected.diagnostics))
+        installed = inspected.value
+        try:
+            selection = ArtifactSelection(
+                tuple(
+                    ArtifactRequest(
+                        item.record.coordinate.artifact,
+                        VersionConstraint("*"),
+                        item.record.coordinate.source,
+                    )
+                    for item in installed
+                )
+            )
+        except ValueError as error:
+            return self._declined(command, _lines(f"this selection cannot be updated: {error}"))
+        # What an update replaces is what is installed, measured against the receipt that version
+        # wrote. The version is dropped from the previous coordinate for the same reason the
+        # public command drops it: the state being left is this artifact's, whatever it was on.
+        previous = tuple(
+            (replace(item.record.coordinate, version=None), item.desired) for item in installed
+        )
+        return self._offer_installation(
+            command,
+            selection,
+            previous=previous,
+            previous_receipts=tuple(
+                (item.record.coordinate, item.record.receipt) for item in installed
+            ),
+        )
+
+    def _offer_installation(
+        self,
+        command: ConsumerUiCommand,
+        selection: ArtifactSelection,
+        *,
+        previous: tuple[tuple[ArtifactCoordinate, DesiredState], ...] = (),
+        previous_receipts: tuple[tuple[ArtifactCoordinate, ArtifactReceipt], ...] = (),
+    ) -> ConsumerActionUpdate:
+        context = self._context
+        prepared = prepare_configured_installation(
+            context.effective,
+            selection,
+            host=context.host,
+            sources=(),
+            policy=context.policy,
+            selected_remediations=None,
+            credential_providers=context.credential_providers,
+            resolvers=context.credential_providers,
+            previous=previous,
+        )
+        if isinstance(prepared, Err):
+            return self._declined(command, _refusal(prepared.diagnostics))
+        if not prepared.value.ready:
+            # Unanswered inputs are not a refusal -- screen 07 exists because the answer is "not
+            # yet" -- but this shell has no way to collect one, so it says what it is waiting for
+            # rather than offering a plan that cannot be confirmed (B-036).
+            waiting = ", ".join(
+                item.input.id.value for item in prepared.value.draft.inputs.unanswered
+            )
+            return self._declined(
+                command,
+                _lines(
+                    "this installation is waiting for answers this screen cannot collect yet: "
+                    + waiting
+                ),
+            )
+        action = prepared.value.action
+        assert action is not None
+        plan = action.flow.plan
+        self._pending = _PendingInstall(prepared.value, previous_receipts)
+        self._pending_action = command.action
+        return ConsumerActionUpdate(
+            self.source(plan=plan),
+            ConsumerUiEvent(
+                ConsumerUiEventKind.ACTION_PREPARED,
+                action=command.action,
+                semantic_identity=plan.semantic_identity,
+                selection_identity=plan.selection.semantic_identity,
+                review_digest=plan.review_digest,
+            ),
+        )
+
+    def _prepare_repair(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        inspected = self._inspections(self._targets(command))
+        if isinstance(inspected, Err):
+            return self._declined(command, _refusal(inspected.diagnostics))
+        if len(inspected.value) != 1:
+            return self._declined(command, _lines("a repair acts on one installation at a time"))
+        prepared = prepare_configured_repair(inspected.value[0], policy=self._context.policy)
+        if isinstance(prepared, Err):
+            return self._declined(command, _refusal(prepared.diagnostics))
+        self._pending = prepared.value
+        self._pending_action = command.action
+        return ConsumerActionUpdate(
+            self.source(lifecycle=project_lifecycle_plan(prepared.value.plan)),
+            ConsumerUiEvent(
+                ConsumerUiEventKind.ACTION_PREPARED,
+                action=command.action,
+                review_digest=str(prepared.value.review_digest),
+            ),
+        )
+
+    def _prepare_uninstall(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        inspected = self._inspections(self._targets(command))
+        if isinstance(inspected, Err):
+            return self._declined(command, _refusal(inspected.diagnostics))
+        prepared = prepare_configured_uninstall(
+            tuple(item.record for item in inspected.value),
+            host=self._context.host,
+            policy=self._context.policy,
+            credential_providers=self._context.credential_providers,
+        )
+        if isinstance(prepared, Err):
+            return self._declined(command, _refusal(prepared.diagnostics))
+        self._pending = prepared.value
+        self._pending_action = command.action
+        # One artifact per removal review, because screen 18 renders one lifecycle plan. A
+        # Collection removal is a transaction and reaches this seam when Collections do (B-031).
+        return ConsumerActionUpdate(
+            self.source(lifecycle=project_lifecycle_plan(prepared.value.proposal.lifecycle[0])),
+            ConsumerUiEvent(
+                ConsumerUiEventKind.ACTION_PREPARED,
+                action=command.action,
+                review_digest=str(prepared.value.review_digest),
+            ),
+        )
+
+    def _inspections(self, coordinates: tuple[str, ...]) -> Result[tuple[InstalledInspection, ...]]:
+        """Measure the named installations now, rather than trusting a projection from before.
+
+        A lifecycle action is judged against the machine, and the screens were assembled when the
+        shell started. Re-reading here is what keeps a repair from planning against drift that has
+        since been fixed by hand.
+        """
+
+        if not coordinates:
+            return Err(
+                (
+                    Diagnostic(
+                        CONSUMER_ACTION_NOT_INSTALLED,
+                        Severity.ERROR,
+                        "nothing is selected to act on",
+                    ),
+                )
+            )
+        host = self._context.host
+        inspected = read_installed_inspections(
+            state_root=host.state_root,
+            harness_root=host.harness_root,
+            credential_providers=self._context.credential_providers,
+            scope=host.scope,
+            profiles=host.profiles,
+        )
+        if isinstance(inspected, Err):
+            return inspected
+        by_coordinate = {item.coordinate: item for item in inspected.value.inspections}
+        missing = [item for item in coordinates if item not in by_coordinate]
+        if missing:
+            return Err(
+                (
+                    Diagnostic(
+                        CONSUMER_ACTION_NOT_INSTALLED,
+                        Severity.ERROR,
+                        "nothing canonical is installed here as " + ", ".join(sorted(missing)),
+                        remediation=("open Installed and choose a recorded installation",),
+                    ),
+                )
+            )
+        return Ok(tuple(by_coordinate[item] for item in coordinates))
+
+    # -- execution ------------------------------------------------------------ #
+
+    def _recorded(
+        self, command: ConsumerUiCommand, recorded_at: str, **views
+    ) -> ConsumerActionUpdate:
+        self._pending, self._pending_action = None, None
+        return ConsumerActionUpdate(
+            self.source(**views),
+            ConsumerUiEvent(
+                ConsumerUiEventKind.ACTION_RECORDED,
+                action=command.action,
+                text=recorded_at,
+            ),
+        )
+
+    def _failed(self, command: ConsumerUiCommand, notice: tuple[str, ...]) -> ConsumerActionUpdate:
+        """An execution that did not record anything, drawn on the screen it was run from.
+
+        `text` is empty, which `_action_recorded` reads as nothing having been recorded, so the
+        session stays on the running screen instead of opening a result that does not exist.
+        """
+
+        self._pending, self._pending_action = None, None
+        return ConsumerActionUpdate(
+            self.source(notice=notice),
+            ConsumerUiEvent(ConsumerUiEventKind.ACTION_RECORDED, action=command.action),
+        )
+
+    def _execute(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        pending = self._pending
+        if pending is None or self._pending_action is not command.action:
+            return self._failed(
+                command, _lines("nothing was prepared for this action; review it again")
+            )
+        if isinstance(pending, _PendingInstall):
+            expected = pending.prepared.review_digest
+        else:
+            expected = pending.review_digest
+        if command.review_digest != str(expected):
+            return self._failed(
+                command,
+                _lines(
+                    "this confirmation names a different plan than the one prepared; "
+                    "review it again"
+                ),
+            )
+        if isinstance(pending, _PendingInstall):
+            return self._execute_installation(command, pending)
+        if isinstance(pending, PreparedConfiguredRepair):
+            return self._execute_repair(command, pending)
+        assert isinstance(pending, PreparedConfiguredUninstall)
+        return self._execute_uninstall(command, pending)
+
+    def _moment(self) -> tuple[str, object]:
+        now = self._now()
+        return now.isoformat(), now.date()
+
+    def _execute_installation(
+        self, command: ConsumerUiCommand, pending: _PendingInstall
+    ) -> ConsumerActionUpdate:
+        recorded_at, today = self._moment()
+        completed = complete_configured_installation(
+            pending.prepared,
+            expected_review_digest=pending.prepared.review_digest,
+            host=self._context.host,
+            policy=self._context.policy,
+            credential_providers=self._context.credential_providers,
+            previous_receipts=pending.previous_receipts,
+            recorded_at=recorded_at,
+            today=today,  # type: ignore[arg-type]
+            offline=self._context.offline,
+        )
+        if isinstance(completed, Err):
+            return self._failed(command, _refusal(completed.diagnostics))
+        self._machine = completed.value.machine
+        receipt = completed.value.action.flow.outcome
+        assert receipt is not None
+        return self._recorded(command, receipt.recorded_at, transaction=receipt)
+
+    def _execute_repair(
+        self, command: ConsumerUiCommand, pending: PreparedConfiguredRepair
+    ) -> ConsumerActionUpdate:
+        recorded_at, today = self._moment()
+        completed = complete_configured_repair(
+            pending,
+            expected_review_digest=pending.review_digest,
+            host=self._context.host,
+            policy=self._context.policy,
+            credential_providers=self._context.credential_providers,
+            recorded_at=recorded_at,
+            today=today,  # type: ignore[arg-type]
+            offline=self._context.offline,
+        )
+        if isinstance(completed, Err):
+            return self._failed(command, _refusal(completed.diagnostics))
+        self._machine = completed.value.machine
+        return self._recorded(command, completed.value.recorded.receipt.recorded_at)
+
+    def _execute_uninstall(
+        self, command: ConsumerUiCommand, pending: PreparedConfiguredUninstall
+    ) -> ConsumerActionUpdate:
+        recorded_at, today = self._moment()
+        completed = complete_configured_uninstall(
+            pending,
+            expected_review_digest=pending.review_digest,
+            host=self._context.host,
+            policy=self._context.policy,
+            credential_providers=self._context.credential_providers,
+            recorded_at=recorded_at,
+            today=today,  # type: ignore[arg-type]
+        )
+        if isinstance(completed, Err):
+            return self._failed(command, _refusal(completed.diagnostics))
+        self._machine = completed.value.machine
+        return self._recorded(command, completed.value.recorded.receipt.recorded_at)

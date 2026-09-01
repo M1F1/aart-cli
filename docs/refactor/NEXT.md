@@ -2,13 +2,14 @@
 
 ## Current objective
 
-Finish **CP-13 Consumer TUI 01–29**. Steps 1–4 and the durable canonical machine reader are
-verified, but public-entry characterization found that the canonical shell only navigates and
-renders: it cannot start or apply lifecycle actions. Its composed source now carries the configured
-Marketplace (D-068) and existing project/user install records (D-069), but the premature default-TTY
-route was removed under D-062 and B-025 stays open until a real action handler exists.
+Finish **CP-13 Consumer TUI 01–29**. Steps 1–5 are verified, and step 6's two named blockers are
+now both closed: B-033 (every artifact kind installs canonically) and **B-025 (2026-09-01) -- the
+default terminal route is the canonical consumer application**. A person opening `aart` on a TTY
+now reaches the canonical shell, over a production action handler, against their real configured
+registries, object store and receipts.
 
-What remains is the wiring that makes the canonical application the one a person actually reaches.
+What remains in CP-13 is retiring legacy consumer semantic authority path by path, each removal
+preceded by a public-flow test proving the canonical path already carries it.
 
 ## Immediate next actions
 
@@ -153,10 +154,30 @@ that flow and execution, plus composition of real Marketplace and installed-stat
    and removed canonically** -- MCP, skills, guidelines/rules, memory and hooks, in that order,
    which is the Product Specification's own.
 
-   The next executable work is therefore the default TTY route (B-025), and then retiring legacy
-   consumer authority path by path -- `consumer/application.py`, `lifecycle/application.py`,
-   `installation/*`, `setup_engine/*` -- each removal preceded by a public-flow test proving the
-   canonical path already carries it.
+   **The default TTY route is live (B-025 closed, 2026-09-01).** `run()` composes
+   `_canonical_consumer_actions` -- machine, offers, configuration and credential adapters read once,
+   together, so the same local state is never opened twice -- and calls `run_consumer` before any
+   wizard composition. The legacy `try: _run_curses(...)` block is gone; `_run_text` remains the
+   documented degradation when curses is unavailable, because no-TTY is a supported environment
+   rather than a broken one.
+
+   Three things made the route safe to take. A repair is bounded by what its receipt records, so it
+   works when the source is unsubscribed and fails closed on anything the receipt cannot describe
+   (D-086). A refusal is drawn under the screen it was asked from rather than raised, so a failed
+   resolution cannot take the session down (D-087). And the Marketplace is now the configured
+   *registries'* approved published versions (D-088, INV-026), so what is browsed is installable --
+   previously the shell offered artifacts from native sources the install seam could not resolve,
+   and refused outright on a canonical published registry.
+
+   **The next executable work is retiring legacy consumer authority path by path** --
+   `consumer/application.py`, `lifecycle/application.py`, `installation/*`, `setup_engine/*` -- each
+   removal preceded by a public-flow test proving the canonical path already carries it. `_run_curses`
+   and the wizard composition are now unreachable from `run()` on a terminal but still have direct
+   test callers (B-039); they are the last thing to go, not the first.
+
+   Two gaps the closure left open and did not paper over: the shell declines a selection whose
+   inputs it cannot yet collect (B-032, already promoted), and a deprecated registry version is
+   declined by name because the Marketplace row has nowhere to render the warning (B-036).
 7. Update the CP-13 coverage table as each command and screen group moves from projection to live
    public flow.
 
@@ -228,3 +249,11 @@ that flow and execution, plus composition of real Marketplace and installed-stat
 - Reading offers is an effect and happens once at composition, never inside a draw (D-068). What a
   source published but this seam cannot offer is declined by name, because an offer missing with no
   explanation reads as a source that published nothing.
+- The Marketplace projects configured registries and does not restate their trust decisions
+  (D-088, INV-026). An offer is an approved published version, its compatibility is recompiled from
+  the package the registry published, and its trust class comes from the promotion record that
+  approved it -- never from `review=None`, which understates it to `unverified`.
+- A repair is bounded by its receipt (D-086): it re-measures nothing, resolves nothing, and refuses
+  by name what the receipt cannot describe rather than approximating it.
+- A refusal is drawn where it was asked, never raised (D-087). The reducer already reads an empty
+  review digest as "nothing was established"; an action that threw would lose the session.

@@ -1305,3 +1305,67 @@ the Product Specification first instead of hiding the change here.
   script that is not executable, because a hook that installs and then does nothing is worse than
   one that refuses to build. Tabnine has no user-scope hook target on purpose: that build documents
   no user-global hook discovery location. B-034 is now closed.
+
+## D-086 — A repair may only put back what the receipt describes
+
+- **Decision:** `prepare_configured_repair` takes an already-measured `InstalledInspection` rather
+  than measuring again, resolves nothing, and `interpreters_for_receipt` builds the adapter set from
+  the receipt alone. An `InstallationReceipt` records `launcher_digest` and never launcher content,
+  so no launcher bytes are offered; a repair step that would rewrite the launcher fails closed at
+  that one step rather than writing something nobody planned.
+- **Status:** accepted.
+- **Reason:** a repair is the lifecycle that has to work when nothing else does -- the source
+  unsubscribed, the registry unreachable, the object store pruned. Re-measuring would answer a
+  different question from the one on the screen, and re-resolving would make repair depend on the
+  very thing that is usually broken. The receipt is the only thing guaranteed to still be there.
+- **Consequence:** everything a receipt can describe is repairable -- deliveries, merges, settings
+  entries, harness registrations, environments, dependencies -- and the tests prove a deleted
+  delivery is restored after the source has been disabled. What a receipt cannot describe is refused
+  by name ("nothing here holds the content ... names") instead of approximated. A wrong confirmed
+  digest is refused before any write, and a machine that moved between the review and the
+  confirmation is refused under the lease.
+
+## D-087 — A refusal is drawn where it was asked, never raised
+
+- **Decision:** the production `ConsumerActionHandler` never raises on a refused action. It returns
+  `ACTION_PREPARED` with an empty `review_digest`, or `ACTION_RECORDED` with empty `text`, which the
+  reducer already reads as "nothing was established", and carries the diagnostics as a
+  `ConsumerScreens.notice`. The notice is rendered only on the screens an action lands on
+  (`_ANSWERABLE`); everywhere else it would be an answer to a question nobody asked there.
+- **Status:** accepted.
+- **Reason:** a persistent terminal application that threw on an artifact that failed to resolve
+  would take the session down with it, losing the selection and everything else in flight. The
+  reducer already had a representation for "nothing was established"; inventing an error path beside
+  it would have given the same fact two spellings.
+- **Consequence:** an action on something that is not installed, an offer the registry has since
+  withdrawn, a confirmation naming a different plan, and a selection with unanswered inputs are all
+  drawn under the screen they were asked from, with the session left exactly where it was. This is
+  also how Fast keeps from hiding material risk: the reason is on the screen, not swallowed.
+
+## D-088 — The Marketplace projects configured registries, and trust is the promotion record
+
+- **Decision:** `read_consumer_offers` now reads `io/configured_offers.read_configured_marketplace`
+  instead of the characterized protocol-v1 loader. An offer is an approved *published, vendored,
+  non-deprecated* version of a configured `RegistryGit` source, read from `registry/versions/*` --
+  the same approval identity `resolve_configured_selection` resolves against. Each offered version's
+  published package is re-rooted and recompiled with `compile_native_package`, so the row's
+  compatibility, digests and setup capabilities come from the package the registry published rather
+  than from a second copy of the rules. An enabled source that is not a registry still contributes
+  its health and offers nothing. Trust comes from the promotion that approved the version:
+  `load_registry_promotions` reads `registry/promotions/<candidate_id>.json` back with the writer's
+  own canonical form, and its `effective_policy_result` becomes the offer's `ReviewRecord` policy.
+- **Status:** accepted.
+- **Reason:** INV-026 -- "a marketplace is a human-facing projection over configured registries; it
+  does not silently redefine registry trust decisions." The two layouts had drifted apart: the shell
+  offered artifacts from native sources that `prepare_configured_installation` could not resolve,
+  and refused outright on a canonical published registry, so the composed application could not
+  install what it offered. Deriving trust from anything other than the promotion record would be
+  restating an approval the registry alone can make -- and leaving `review=None` understated it to
+  `unverified`, which is redefining the registry's decision downward.
+- **Consequence:** what is browsed in the canonical shell is installable from it. One version is
+  offered per identity -- the highest approved SemVer, which is what an unconstrained request would
+  resolve to -- and an older approved version is superseded rather than declined, since it is still
+  reachable under the same row. Everything approved but not offerable is declined by name:
+  Collections (B-031), referenced versions with no verified content in the snapshot, revoked
+  versions, and deprecated ones, whose warning the row has nowhere to render yet (B-037). A version
+  whose promotion record is missing is refused rather than offered with a review nothing evidences.

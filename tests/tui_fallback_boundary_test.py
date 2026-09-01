@@ -164,11 +164,15 @@ class CursesFallbackBoundaryTests(unittest.TestCase):
         self.assertNotIn("/Users/secret/path leaked", rendered)
 
     def test_run_starts_the_text_wizard_once_when_curses_is_unavailable(self):
+        """A terminal that claims curses and cannot deliver it degrades, exactly once."""
+
         with (
             mock.patch.object(tui, "_runtime_source_stage_context", return_value=Ok(_runtime())),
-            mock.patch.object(tui.sys.stdin, "isatty", return_value=True),
-            mock.patch.object(tui.sys.stdout, "isatty", return_value=True),
-            mock.patch.object(tui, "_run_curses", side_effect=tui.CursesUnavailable("no terminal")),
+            mock.patch.object(tui, "_curses_supported", return_value=True),
+            mock.patch.object(tui, "_canonical_consumer_actions", return_value=Ok(mock.Mock())),
+            mock.patch.object(
+                tui, "run_consumer", side_effect=tui.CursesUnavailable("no terminal")
+            ),
             mock.patch.object(tui, "_run_text", return_value=0) as fallback,
         ):
             code = tui.run(user_home="/tmp/aart-home")
@@ -202,13 +206,14 @@ class CursesFallbackBoundaryTests(unittest.TestCase):
         self.assertIn("error [source-invalid]", output.getvalue())
         self.assertIn("Quit = q", output.getvalue())
 
-    def test_run_never_restarts_the_wizard_after_an_internal_defect(self):
+    def test_run_never_restarts_the_application_after_an_internal_defect(self):
         output = _TtyCapture()
         with (
             mock.patch.object(tui, "_runtime_source_stage_context", return_value=Ok(_runtime())),
-            mock.patch.object(tui.sys.stdin, "isatty", return_value=True),
+            mock.patch.object(tui, "_curses_supported", return_value=True),
+            mock.patch.object(tui, "_canonical_consumer_actions", return_value=Ok(mock.Mock())),
             mock.patch.object(
-                tui, "_run_curses", side_effect=ValueError("duplicate claude:current")
+                tui, "run_consumer", side_effect=ValueError("duplicate claude:current")
             ),
             mock.patch.object(tui, "_run_text", return_value=0) as fallback,
             redirect_stdout(output),
@@ -228,9 +233,10 @@ class CursesFallbackBoundaryTests(unittest.TestCase):
         output = _TtyCapture()
         with (
             mock.patch.object(tui, "_runtime_source_stage_context", return_value=Ok(_runtime())),
-            mock.patch.object(tui.sys.stdin, "isatty", return_value=True),
+            mock.patch.object(tui, "_curses_supported", return_value=True),
+            mock.patch.object(tui, "_canonical_consumer_actions", return_value=Ok(mock.Mock())),
             mock.patch.object(
-                tui, "_run_curses", side_effect=ValueError("/Users/secret/path leaked")
+                tui, "run_consumer", side_effect=ValueError("/Users/secret/path leaked")
             ),
             mock.patch.object(tui, "_run_text", return_value=0),
             redirect_stdout(output),
@@ -247,9 +253,10 @@ class CursesFallbackBoundaryTests(unittest.TestCase):
         debug = io.StringIO()
         with (
             mock.patch.object(tui, "_runtime_source_stage_context", return_value=Ok(_runtime())),
-            mock.patch.object(tui.sys.stdin, "isatty", return_value=True),
+            mock.patch.object(tui, "_curses_supported", return_value=True),
+            mock.patch.object(tui, "_canonical_consumer_actions", return_value=Ok(mock.Mock())),
             mock.patch.object(
-                tui, "_run_curses", side_effect=ValueError("/Users/secret/path leaked")
+                tui, "run_consumer", side_effect=ValueError("/Users/secret/path leaked")
             ),
             mock.patch.object(tui, "_run_text", return_value=0) as fallback,
             mock.patch.dict(tui.os.environ, {"AART_DEBUG": "1"}, clear=False),
@@ -282,7 +289,7 @@ class CursesFallbackBoundaryTests(unittest.TestCase):
         with (
             mock.patch.object(tui, "_runtime_source_stage_context", return_value=Ok(_runtime())),
             mock.patch.object(tui.sys.stdin, "isatty", return_value=False),
-            mock.patch.object(tui, "_run_curses") as never,
+            mock.patch.object(tui, "run_consumer") as never,
             mock.patch.object(tui, "_run_text", return_value=0) as fallback,
         ):
             code = tui.run(user_home="/tmp/aart-home")

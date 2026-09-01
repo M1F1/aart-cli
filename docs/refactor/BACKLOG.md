@@ -281,7 +281,7 @@ Remaining: the flow that produces a live `ConsumerPlanView` when somebody starts
 public-command wiring, tracked as CP-13 step 5 rather than here.
 
 ### B-025 — Routing the default TTY entry to the canonical consumer application
-Status: OPEN — attempted and reverted on 2026-08-31 (D-062)
+Status: CLOSED (2026-09-01) — promotion condition met and verified
 Discovered in: CP-13 / `agent_artifacts/tui.py` / `run`
 Why useful: `run_consumer` exists, is typed, and drives the canonical application over curses, but
 nothing calls it — `run()` still opens the legacy wizard. Until it is routed, the canonical shell is
@@ -298,6 +298,20 @@ Evidence/links: B-024; D-060, D-061, D-062; `tests/consumer_machine_read_test.py
 Promotion condition: the canonical shell has typed commands and injected handlers for install,
 update, repair and uninstall; configured Marketplace offers are composed into its source; and
 existing project/user installation records are adapted or migrated without disappearing.
+Closed by: `io/consumer_actions.py` (the production `ConsumerActionHandler`, one composition per
+machine), `io/configured_repair_action.py` (the third configured composition beside install and
+uninstall, D-086), `io/configured_offers.py` (the Marketplace read, D-088), the `notice` field on
+`ConsumerScreens` that draws a refusal instead of raising it (D-087), and the cutover in
+`tui.py::run`, which takes the canonical route before any wizard composition so the same local
+state is never opened twice. Evidence is `tests/consumer_application_e2e_test.py`: the shell the
+curses adapter runs, over the production handler, on a temporary machine with a real configured
+registry, object store and receipts -- install, reinstall-converges, verify/repair after a deleted
+delivery, uninstall that leaves a neighbour standing, and two refusals drawn rather than raised.
+`tests/tui_consumer_entry_test.py` proves the wizard is not even composed on a terminal, and
+`tests/tui_fallback_boundary_test.py` proves the internal-failure and no-TTY boundaries on the live
+route rather than on the retired one.
+Left open by the closure: the shell declines a selection whose inputs it cannot collect (B-032),
+`_run_curses` and the legacy wizard composition are now unreachable from `run()` on a TTY (B-039).
 
 ### B-026 — Canonical installation-receipt persistence
 Status: CLOSED (2026-08-31) — promoted to the critical path and completed
@@ -418,8 +432,8 @@ Potential approach: carry the Collection version and registry snapshot through t
 or read Collections from `aggregate_approved_marketplace` directly and let the artifact rows keep
 coming from the characterized loader until both move together.
 Invariants touched: INV-130, INV-138.
-Evidence/links: D-044, D-045, D-068; `tests/consumer_marketplace_composition_e2e_test.py::
-ComposedMarketplaceTest::test_an_unversioned_collection_is_declined_by_name_rather_than_dropped`.
+Evidence/links: D-044, D-045, D-068, D-088; `agent_artifacts/io/configured_offers.py::_declined`,
+which now declines a canonical Collection by coordinate rather than dropping it.
 Promotion condition: an accepted screen or acceptance test requires installing a Collection through
 the canonical consumer shell from a configured source.
 
@@ -562,3 +576,96 @@ observation, receipt and safe withdrawal path, or explicitly remove the option t
 decision. Do not approximate it with `DeliverArtifact`: the Product Specification distinguishes the
 copy/symlink relationship, and CP-04's package boundary forbids importing source symlinks for a
 different reason.
+
+## B-036 — Registry lifecycle has nowhere to appear on a Marketplace row
+
+**Classification: BACKLOG; required before a registry can deprecate a version and still have it
+installable through the canonical shell.**
+
+`MarketplaceArtifactRow` carries trust, compatibility, digests and installed status, but nothing
+that says the registry has deprecated a version or named a replacement. `RegistryLifecycle` is
+`published | deprecated | revoked`, and the compiled graph's `ArtifactLifecycle` only distinguishes
+available from removed, so the two facts cannot be rendered as one.
+
+Until the row can say so, `read_configured_marketplace` declines a deprecated version by name rather
+than offering it silently (D-088). Offering it without the warning would be the Fast projection
+hiding material risk; dropping it without a word would read as a registry that approved nothing.
+A revoked version stays declined regardless.
+
+**Shape of the work.** Carry `RegistryLifecycle` and `lifecycle_reason`/`replacement` through
+`IndexArtifact` into `MarketplaceArtifact`, add them to the row, and render the reason on screens
+03/04a beside compatibility. Then offer deprecated versions again, ranked below published ones when
+choosing which version a row stands for.
+
+Evidence/links: D-088; `tests/consumer_marketplace_composition_e2e_test.py::ComposedMarketplaceTest
+::test_a_deprecated_version_is_declined_by_name_rather_than_offered_silently`.
+
+## B-037 — Incremental promotion leaves earlier version records bound to a stale snapshot
+
+**Classification: BACKLOG; blocks any fixture or registry holding two approved versions.**
+
+`RegistryArtifactVersion.registry_snapshot` binds every approved version to one digest of the
+registry's `artifacts/` and `references/` trees. Promoting a second version rewrites that tree, so
+the record for the first version keeps the old digest and `load_registry_versions` refuses the whole
+snapshot with "registry versions do not bind one exact approved content snapshot" -- even when
+`plan_bulk_promotion` is given the earlier versions through its `approved=` parameter, which
+produces changes only for the new version.
+
+Reproduced against the real pipeline: promote `skill/code-review@1.2.0` into an empty registry,
+then promote `1.3.0` onto that snapshot with `approved=` the first version's records. The resulting
+snapshot cannot be read back.
+
+**Why it is noncritical now.** Every canonical registry fixture and every routed public command
+works against a registry holding one approved version per identity, and the consumer refuses the
+unreadable snapshot rather than acting on it, so nothing installs from a registry in this state.
+
+**Shape of the work.** Decide whether `registry_snapshot` is the content digest of the whole
+registry or of the version's own package, and if it stays whole-registry, have `plan_bulk_promotion`
+rewrite every retained version record to the new digest as part of the same reviewed mutation.
+
+**What it currently blocks.** The evidence that `read_configured_marketplace` offers the *highest*
+approved SemVer of an identity, and supersedes rather than declines the older one (D-088). That rule
+is implemented and reviewed; only its end-to-end fixture is blocked.
+
+Evidence/links: D-088; `agent_artifacts/application/promotion.py::plan_bulk_promotion`,
+`::validate_promoted_registry`, `::load_registry_versions`.
+
+## B-038 — Native source content has no canonical consumer path
+
+**Classification: BACKLOG; a product question before it is an implementation one.**
+
+Under INV-026 the canonical Marketplace projects configured *registries*, so an enabled
+`SourceKind.SOURCE_GIT` or `SOURCE_LOCAL` source now contributes its health to the source list and
+offers nothing (D-088). The legacy read-only loader did offer its artifacts, but nothing downstream
+could install them: `resolve_configured_selection` acts only on approved `registry/versions/*`
+records, so those offers were advertising an action the shell had to refuse afterwards.
+
+The open question is what a direct source is *for* on a consumer machine. Either it is a Candidate
+feed for a maintainer promoting into a registry -- in which case the consumer shell listing it and
+offering nothing is correct and should say so on screen 21 -- or a person may install directly from
+one, in which case a canonical unreviewed-install path with its own trust class is needed.
+
+**Why it is noncritical now.** Nothing installable was lost: the legacy route still operates direct
+and local sources, and the canonical shell no longer offers what it cannot carry out.
+
+Invariants touched: INV-026, INV-024.
+Evidence/links: D-088; `tests/consumer_marketplace_composition_e2e_test.py::ComposedMarketplaceTest
+::test_a_source_that_is_not_a_registry_is_configured_but_offers_nothing`.
+
+## B-039 — The legacy wizard is unreachable from the default terminal route
+
+**Classification: BACKLOG; the first removal in CP-13 item 6, once its remaining callers are gone.**
+
+With B-025 closed, `run()` composes `_canonical_consumer_actions` and calls `run_consumer` before
+any wizard composition, and the legacy `try: _run_curses(...)` block was deleted. `_run_curses`
+itself is still defined and still exercised directly by `tests/tui_curation_test.py`,
+`tests/tui_wizard_curses_test.py` and `tests/tui_fallback_boundary_test.py`, and `_run_text` is
+still the documented degradation when curses is unavailable.
+
+**Shape of the work.** Retire the wizard's semantic authority path by path -- `consumer/
+application.py`, `lifecycle/application.py`, `installation/*`, `setup_engine/*` -- each removal
+preceded by a public-flow test proving the canonical path already carries it, and only then remove
+`_run_curses` and the characterization tests that exist solely to pin it. Do not remove the text
+route: no-TTY is a supported environment, not a fallback for a broken one.
+
+Evidence/links: D-062, D-087; B-025; `agent_artifacts/tui.py::run`.
