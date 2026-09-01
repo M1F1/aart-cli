@@ -434,8 +434,16 @@ coming from the characterized loader until both move together.
 Invariants touched: INV-130, INV-138.
 Evidence/links: D-044, D-045, D-068, D-088; `agent_artifacts/io/configured_offers.py::_declined`,
 which now declines a canonical Collection by coordinate rather than dropping it.
-Promotion condition: an accepted screen or acceptance test requires installing a Collection through
-the canonical consumer shell from a configured source.
+Re-triaged 2026-09-01 (D-091): the missing version is not fabricated identity, it is an unbuilt
+authoring field. Product Specification 145.1 says "A Collection is a versioned set of artifact
+selectors/constraints" and its example declares `version: 2.1.0`, but `CollectionManifest` has no
+version, `discover_author_manifests` never looks at a collection root, and no Collection has ever
+been compiled, promoted or published as a versioned registry artifact. EXECUTION_PLAN CP-14 owns
+"collection candidates", so this is CP-14 work rather than an open product question. CP-13 declining
+a Collection by coordinate stays correct until a registry publishes one.
+Promotion condition: CP-14 reaches collection candidates, at which point the decline in
+`io/configured_offers.py::_declined` is removed and screens 04/04a draw from a real published
+Collection.
 
 ### B-032 — Live input-source and provider-entry boundary for screen 07
 Status: PROMOTED TO CP-13 (2026-08-31)
@@ -638,7 +646,8 @@ Evidence/links: D-088, D-089; `agent_artifacts/application/promotion.py::plan_bu
 
 ## B-038 — Native source content has no canonical consumer path
 
-**Classification: BACKLOG; a product question before it is an implementation one.**
+**Classification: BACKLOG, and re-triaged 2026-09-01 as a CP-14 dependency rather than an open
+product question. See D-091.**
 
 Under INV-026 the canonical Marketplace projects configured *registries*, so an enabled
 `SourceKind.SOURCE_GIT` or `SOURCE_LOCAL` source now contributes its health to the source list and
@@ -646,10 +655,18 @@ offers nothing (D-088). The legacy read-only loader did offer its artifacts, but
 could install them: `resolve_configured_selection` acts only on approved `registry/versions/*`
 records, so those offers were advertising an action the shell had to refuse afterwards.
 
-The open question is what a direct source is *for* on a consumer machine. Either it is a Candidate
-feed for a maintainer promoting into a registry -- in which case the consumer shell listing it and
-offering nothing is correct and should say so on screen 21 -- or a person may install directly from
-one, in which case a canonical unreviewed-install path with its own trust class is needed.
+**What the Product Specification already answers.** Section 1737 lists Source as the set of
+origins a *registry* pulls from (GitHub, GitLab, internal Git, HTTP, OCI, PyPI, npm, local), and
+INV-019 through INV-026 describe consumer installation entirely over approved registry content:
+"Installing an approved vendored registry artifact uses the registry snapshot, not the author
+repository" (INV-021). CP-14 owns the Sources screens 31-34. So a direct source is a maintainer's
+Candidate feed, and the canonical consumer seam listing it while offering nothing is the specified
+behavior, not a gap.
+
+**What is left.** Screen 21 should say why a listed native source offers nothing, and the legacy
+route's ability to install directly from one has no basis in the specification and goes when its
+Sources screens exist to hold the capability. Both need CP-14, so this stays here rather than
+expanding CP-13.
 
 **Why it is noncritical now.** Nothing installable was lost: the legacy route still operates direct
 and local sources, and the canonical shell no longer offers what it cannot carry out.

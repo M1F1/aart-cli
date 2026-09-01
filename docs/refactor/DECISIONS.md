@@ -1417,3 +1417,28 @@ the Product Specification first instead of hiding the change here.
   frontend without durable storage is a test double by construction. The file holds preferences
   only -- no coordinate, registry, credential or path -- so it says nothing about what is installed.
 
+## D-091 — The last of CP-13's legacy authority is a CP-14 dependency, not a product question
+
+- **Decision:** CP-13's remaining legacy retirement -- `commands/marketplace.py` routing Collections
+  and direct/local sources through `consumer/application.py` and the `setup_engine`/`installation`/
+  `lifecycle` stack -- is sequenced behind CP-14 rather than treated as blocked on two open product
+  questions. B-031 and B-038 are reclassified accordingly. CP-13 is otherwise complete: every
+  accepted screen 01-29 now draws from canonical views over a real machine, and the coverage table
+  records what closed each row.
+- **Status:** accepted.
+- **Reason:** both questions are already answered by the Product Specification, and both answers
+  land in CP-14. Section 145.1 states a Collection is *versioned* and its example declares
+  `version: 2.1.0`; the gap is that `CollectionManifest` carries no version and
+  `discover_author_manifests` never looks at a collection root, so nothing has ever compiled,
+  promoted or published a Collection as a registry artifact. EXECUTION_PLAN CP-14 owns "collection
+  candidates". Section 1737 lists Source as the origins a *registry* pulls from, and INV-019-INV-026
+  describe consumer installation entirely over approved registry content -- INV-021: installing an
+  approved vendored registry artifact uses the registry snapshot, not the author repository. CP-14
+  owns Sources screens 31-34. So the canonical consumer seam offering nothing from a native source
+  is the specified behavior; it is the legacy route's direct native install that has no basis.
+- **Consequence:** no legacy module is removed in CP-13, and none is removed on a guess: the two
+  routes that still reach legacy authority are exactly the two CP-14 gives a canonical home. Nothing
+  installable is lost in the meantime, because the legacy route still operates both. CP-13's own
+  acceptance does not wait on that removal, and the removal criteria in the slice file stand as
+  written -- public machine-output tests first, deletion after.
+

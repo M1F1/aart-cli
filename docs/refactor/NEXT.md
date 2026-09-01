@@ -2,14 +2,31 @@
 
 ## Current objective
 
-Finish **CP-13 Consumer TUI 01–29**. Steps 1–5 are verified, and step 6's two named blockers are
-now both closed: B-033 (every artifact kind installs canonically) and **B-025 (2026-09-01) -- the
-default terminal route is the canonical consumer application**. A person opening `aart` on a TTY
-now reaches the canonical shell, over a production action handler, against their real configured
-registries, object store and receipts.
+Start **CP-14 Maintainer TUI 30–53**.
 
-What remains in CP-13 is retiring legacy consumer semantic authority path by path, each removal
-preceded by a public-flow test proving the canonical path already carries it.
+**CP-13 Consumer TUI 01–29 is done except for a removal that CP-14 has to come first for.** Steps
+1–5 are verified; B-033, B-034 and B-025 are all closed; every accepted screen 01–29 now draws from
+canonical views over a real machine, and screen 28 keeps what it is told (D-090). The coverage table
+in the slice file records what closed each row.
+
+What is left of CP-13 is retiring legacy consumer authority, and the two routes that still reach it
+-- Collections, and direct/local sources -- are exactly the two CP-14 gives a canonical home
+(D-091). Both were filed as open product questions; both are already answered by the Product
+Specification, and both answers land in CP-14:
+
+- **Collections (B-031).** Section 145.1: "A Collection is a versioned set of artifact
+  selectors/constraints", with `version: 2.1.0` in its example. `CollectionManifest` has no version
+  field and `discover_author_manifests` never looks at a collection root, so no Collection has ever
+  been compiled, promoted or published as a registry artifact. CP-14 owns "collection candidates".
+- **Native sources (B-038).** Section 1737 lists Source as the origins a *registry* pulls from, and
+  INV-019–INV-026 put consumer installation entirely over approved registry content (INV-021:
+  installing an approved vendored registry artifact uses the registry snapshot, not the author
+  repository). CP-14 owns Sources screens 31–34. The canonical consumer seam offering nothing from
+  a native source is specified behavior; the legacy route's direct native install is what has no
+  basis.
+
+So the legacy stack stays until CP-14 exists, each removal then preceded by a public-flow test
+proving the canonical path already carries it. Nothing installable is lost meanwhile.
 
 ## Immediate next actions
 
@@ -189,8 +206,11 @@ that flow and execution, plus composition of real Marketplace and installed-stat
    version needs -- and that supplied D-088's last piece of evidence: a Marketplace row stands for
    the highest approved SemVer of an identity, and an older approved version is superseded rather
    than declined.
-7. Update the CP-13 coverage table as each command and screen group moves from projection to live
-   public flow.
+7. **DONE (2026-09-01).** The CP-13 coverage table records what closed each screen row. The last
+   one was screen 28: four accepted controls with a cursor, Enter moving the one under it, `v` and
+   Detail level as a single preference, and a durable `<data_root>/state/consumer-settings.json`
+   read strictly rather than repaired (D-090). Maintainer Mode is the boundary CP-14's whole surface
+   sits behind, so an opt-in that had to be re-chosen every session was a CP-14 prerequisite too.
 
 ## Do not do yet
 
