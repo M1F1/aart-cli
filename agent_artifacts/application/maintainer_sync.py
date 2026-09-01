@@ -123,8 +123,7 @@ class SourceSyncBaseline:
             not (all(item is None for item in current) or all(item is not None for item in current))
             or (self.revision is not None and source_revision_kind(self.revision) is None)
             or not (
-                self.declared_source_id is None
-                or isinstance(self.declared_source_id, SourceId)
+                self.declared_source_id is None or isinstance(self.declared_source_id, SourceId)
             )
             or not (self.snapshot_digest is None or _valid_digest(self.snapshot_digest))
             or not (self.history_digest is None or _valid_digest(self.history_digest))

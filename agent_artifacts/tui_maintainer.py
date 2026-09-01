@@ -288,17 +288,17 @@ def render_maintainer_candidate_diff(
     lines.extend(("", "File changes (secondary):"))
     if not view.file_changes:
         lines.append("  none")
-    for change in view.file_changes:
-        marker = {"added": "+", "removed": "-", "modified": "~"}[change.status]
-        lines.append(f"{marker} {change.path} — {change.status}")
+    for changed_file in view.file_changes:
+        marker = {"added": "+", "removed": "-", "modified": "~"}[changed_file.status]
+        lines.append(f"{marker} {changed_file.path} — {changed_file.status}")
     if not show_files:
         lines.append("Press f to view bounded redacted file diffs; d returns to summary.")
         return tuple(lines)
     lines.extend(("", "Bounded redacted file diffs:"))
-    for change in view.file_changes:
-        lines.append(f"[{change.path}]")
-        lines.extend(f"  {line}" for line in change.diff)
-        if not change.diff:
+    for changed_file in view.file_changes:
+        lines.append(f"[{changed_file.path}]")
+        lines.extend(f"  {line}" for line in changed_file.diff)
+        if not changed_file.diff:
             lines.append("  content omitted by the global diff bound")
     lines.append("Press f to hide file diffs.")
     return tuple(lines)

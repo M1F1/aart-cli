@@ -121,10 +121,13 @@ class MaintainerCandidateProjectionTest(unittest.TestCase):
         self.assertEqual(view.runtime, "python >=3.11")
         self.assertEqual(view.transport, "stdio")
         self.assertEqual(view.dependency_descriptor, "requirements: requirements.txt")
-        self.assertEqual([(item.kind, item.id) for item in view.inputs], [
-            ("SECRET", "github-token"),
-            ("CONFIG", "user-id"),
-        ])
+        self.assertEqual(
+            [(item.kind, item.id) for item in view.inputs],
+            [
+                ("SECRET", "github-token"),
+                ("CONFIG", "user-id"),
+            ],
+        )
         self.assertEqual(view.inputs[0].obtain_from, "GitHub Settings")
         self.assertIsNone(view.inputs[0].example)
         self.assertFalse(hasattr(view.inputs[0], "value"))

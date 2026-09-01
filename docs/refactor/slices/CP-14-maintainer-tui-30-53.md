@@ -74,7 +74,7 @@ durable preference as of D-090, without which the opt-in boundary could not hold
 1. **DONE:** Maintainer screen catalog, navigation and the Maintainer Mode boundary in the one
    reducer (D-092).
 2. **DONE:** Screen 30 and screens 31–34 over the canonical source scan.
-3. Screens 35–37: candidate list, detail and semantic diff.
+3. **DONE:** Screens 35–37: Candidate list, detail and semantic-first diff (D-098).
 4. Screens 38–40: validation pipeline and policy review.
 5. Screens 41–47: promotion review, registry diff, explicit commit, registry view, bulk promotion.
 6. Screens 48–53: lifecycle, provenance, conflicts, Collection candidates (closes B-031), filters.
@@ -193,3 +193,39 @@ permissions.
 - Later CP-14 promotion work must widen the currently Git-only registry-index provenance projection
   deliberately for D-096 local origins before claiming local Candidate promotion; it may not rewrite
   a local snapshot identity as Git provenance.
+
+## Step 3 evidence — screens 35–37 (2026-09-01)
+
+Screens 35, 36 and 37 are live in the production shared shell.
+
+- Screen 35 lists the active Candidates every composed authoring Source's exact durable
+  `SourceScan` produced, keyed by stable Candidate ID so two Sources publishing the same artifact
+  name cannot collide. Retained lifecycle history stays out of the active list and remains
+  available as the baseline the diff is taken against (INV-229).
+- What the list is narrowed to is `MaintainerCandidateFilter`: typed application state on
+  `ConsumerUiState`, applied by `filter_maintainer_candidates`. `_candidate_filter` is the single
+  point where the shared search box meets it, so rows and body cannot disagree. Screen 53 will edit
+  this value rather than introduce a second filter model.
+- Screen 36 renders identity, kind/version, Source alias and revision, manifest path, the input,
+  payload and canonical digests, runtime, transport, dependency descriptor, declared inputs with
+  their acquisition guidance, and validation findings. Secret inputs carry no value and no example.
+- Screen 37 is semantic diff first: the semantic change list is the body, the raw canonical file
+  diff is a bounded, redacted secondary view behind the `f` toggle, off on entry and cleared by any
+  navigation (INV-202, 164.5). `d` opens the diff from screen 36; both keys stay inside `key_event`.
+- Production composition carries the scans `read_maintainer_views` already read once. Drawing the
+  three screens opens no file, rescans nothing and infers no Candidate state; corrupt history still
+  refuses the whole observation rather than presenting an empty Candidate list.
+
+Evidence: `tests/maintainer_candidate_shell_test.py` (typed filter, ID-keyed rows and navigation,
+duplicate artifact names across Sources, the `d`/`f` keymap, the secondary-diff boundary, and a
+no-IO assertion over drawing all three screens) and
+`tests/maintainer_composition_e2e_test.py::...::test_candidate_list_detail_and_diff_draw_the_scan_composition_already_read`,
+which walks a real temporary installation from the consumer dashboard to screen 37.
+
+Codex's step-3 checkpoint left `format-check`, `lint` and `typecheck` red; all three were repaired
+in this segment (a `tuple[()]`-inferred diff accumulator, a loop name reused across two change view
+types, and import ordering) rather than by relaxing any gate.
+
+Gates on 2026-09-01 after step 3: `make quality` green end to end (format-check, lint, typecheck,
+unit, validate, coverage, packaging-check, docs-check, secret-shape-check) and `make integration`
+green. 3,017 unit tests and 208 E2E tests pass; branch coverage is 83.31%.

@@ -138,12 +138,8 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             pathlib.Path(env.paths.user_config_file).write_bytes(
                 user_configuration_bytes(configuration)
             )
-            author_paths = source_store_paths(
-                env.paths.data_root, source_instance_id(authors)
-            )
-            registry_paths = source_store_paths(
-                env.paths.data_root, source_instance_id(env.source)
-            )
+            author_paths = source_store_paths(env.paths.data_root, source_instance_id(authors))
+            registry_paths = source_store_paths(env.paths.data_root, source_instance_id(env.source))
             registry_before = read_current_source(
                 CurrentSourceRequest(registry_paths, env.source.alias)
             )
@@ -260,6 +256,97 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
                 CurrentSourceRequest(registry_paths, env.source.alias)
             )
             self.assertEqual(registry_after, registry_before)
+
+    def test_candidate_list_detail_and_diff_draw_the_scan_composition_already_read(self) -> None:
+        """Screens 35-37 reached in one real session, from the scan composition read once.
+
+        Nothing here re-scans: the shell is handed the durable Candidate history at composition
+        time, and walking the three screens only projects what it was already holding.
+        """
+
+        with _environment() as env:
+            authors = configured_source("authors", SourceKind.SOURCE_GIT)
+            pathlib.Path(env.paths.user_config_file).write_bytes(
+                user_configuration_bytes(
+                    UserConfiguration(
+                        1,
+                        (env.source, authors),
+                        env.source.alias,
+                        SyncSettings(),
+                        ReportingSettings(),
+                    )
+                )
+            )
+            source_paths = source_store_paths(env.paths.data_root, source_instance_id(authors))
+            candidate = make_source_candidate(
+                source_instance_id(authors),
+                authors.alias,
+                "a" * 40,
+                _snapshot(),
+            )
+            assert isinstance(candidate, Ok)
+            self.assertIsInstance(
+                publish_source_snapshot(
+                    SourcePublishCommand(
+                        source_paths,
+                        ValidatedSourceCandidate(candidate.value, SourceId("author-source")),
+                        int(time.time()),
+                    )
+                ),
+                Ok,
+            )
+            scan = _ready_scan()
+            self.assertIsInstance(
+                write_candidate_history(candidate_history_paths(source_paths), scan),
+                Ok,
+            )
+            self.assertIsInstance(
+                write_consumer_settings(
+                    ConsumerSettings().with_maintainer_mode(True),
+                    data_root=env.paths.data_root,
+                ),
+                Ok,
+            )
+
+            handler = _actions(env)
+            terminal = FakeTerminal(
+                *(DOWN for _ in range(8)),
+                ENTER,
+                DOWN,
+                ENTER,
+                ENTER,
+                ord("d"),
+                ord("f"),
+            )
+            finished = run_consumer_shell(
+                handler.source(),
+                terminal,
+                state=opening_state(handler.settings),
+                action_handler=handler,
+                settings_writer=handler.save_settings,
+            )
+
+            expected = scan.active[0].candidate
+            self.assertIs(finished.session.screen, MaintainerScreen.CANDIDATE_DIFF)
+            self.assertEqual(finished.focus, expected.id.value)
+
+            listed = terminal.screen_containing("AART / Candidates")
+            self.assertIn("STATUS", listed)
+            self.assertIn("authors", listed)
+            self.assertNotIn(expected.id.value, listed)
+
+            detail = terminal.screen_containing("AART / Candidate Details")
+            self.assertIn("Manifest:", detail)
+            self.assertIn("Target registry: company", detail)
+            self.assertIn("Press d for semantic diff.", detail)
+
+            summary = terminal.screen_containing("Semantic changes:")
+            self.assertIn("File changes (secondary):", summary)
+            self.assertNotIn("Bounded redacted file diffs:", summary)
+            self.assertIn(
+                "Bounded redacted file diffs:",
+                terminal.screen_containing("Bounded redacted file diffs:"),
+            )
 
 
 if __name__ == "__main__":

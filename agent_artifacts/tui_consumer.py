@@ -48,14 +48,20 @@ from agent_artifacts.application.consumer_views import (
     project_collection,
 )
 from agent_artifacts.application.maintainer_views import (
+    MaintainerCandidateFilter,
+    MaintainerCandidateView,
     MaintainerScreen,
     MaintainerSourceSyncResultView,
     MaintainerSourceSyncReviewView,
     MaintainerViews,
+    filter_maintainer_candidates,
 )
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.domain.selection import Collection
 from agent_artifacts.tui_maintainer import (
+    render_maintainer_candidate,
+    render_maintainer_candidate_diff,
+    render_maintainer_candidates,
     render_maintainer_dashboard,
     render_maintainer_source,
     render_maintainer_sources,
@@ -1168,6 +1174,23 @@ class ConsumerScreens:
     def credential(self, reference: str) -> CredentialRecordView | None:
         return next((item for item in self.credentials if item.reference == reference), None)
 
+    def candidate(self, candidate_id: str) -> MaintainerCandidateView | None:
+        """One Candidate by its stable ID, because two Sources may name an artifact the same."""
+
+        return None if self.maintainer is None else self.maintainer.candidate(candidate_id)
+
+    def candidates(
+        self, candidate_filter: MaintainerCandidateFilter | None = None
+    ) -> tuple[MaintainerCandidateView, ...]:
+        """The active Candidates this filter selects, composed once and never recomputed here."""
+
+        composed = None if self.maintainer is None else self.maintainer.candidates
+        if not composed:
+            return ()
+        if candidate_filter is None:
+            return composed
+        return filter_maintainer_candidates(composed, candidate_filter)
+
     @property
     def updatable(self) -> tuple[InstalledArtifactView, ...]:
         return tuple(item for item in self.installed if item.health == "update")
@@ -1312,6 +1335,21 @@ _ANSWERABLE = (
 )
 
 
+def _candidate_filter(state: ConsumerUiState) -> MaintainerCandidateFilter:
+    """What screen 35 is narrowed to: the typed filter, with the search box as its query.
+
+    Rows and body have to agree, so neither reads the search text for itself. An open search box
+    narrows the typed filter rather than replacing it, and closing it restores whatever screen 53
+    had already selected.
+    """
+
+    return (
+        state.candidate_filter
+        if not state.search
+        else state.candidate_filter.with_query(state.search)
+    )
+
+
 def _matches(query: str, *fields: str) -> bool:
     lowered = query.strip().lower()
     return not lowered or any(lowered in field.lower() for field in fields)
@@ -1356,6 +1394,10 @@ class CanonicalScreenSource:
                 if self._screens.maintainer is None
                 else tuple(source.alias for source in self._screens.maintainer.sources)
             )
+        if screen is MaintainerScreen.CANDIDATES:
+            # The row identity is the Candidate ID rather than the artifact name: two Sources may
+            # both publish `github-mcp`, and a list keyed by name would open the wrong one.
+            return tuple(item.id for item in self._screens.candidates(_candidate_filter(state)))
         if screen is ConsumerScreen.MARKETPLACE:
             return tuple(
                 item.key
@@ -1457,6 +1499,18 @@ class CanonicalScreenSource:
             return (
                 MaintainerScreen.SOURCE_DETAILS
                 if maintainer is not None and maintainer.source(row) is not None
+                else None
+            )
+        if screen is MaintainerScreen.CANDIDATES:
+            return (
+                MaintainerScreen.CANDIDATE_DETAILS
+                if self._screens.candidate(row) is not None
+                else None
+            )
+        if screen is MaintainerScreen.CANDIDATE_DETAILS:
+            return (
+                MaintainerScreen.CANDIDATE_DIFF
+                if self._screens.candidate(state.focus) is not None
                 else None
             )
         if screen is ConsumerScreen.MARKETPLACE:
@@ -1571,6 +1625,34 @@ class CanonicalScreenSource:
                 ("No Source Sync result has been persisted.",)
                 if screens.source_sync_result is None
                 else render_source_sync_result(screens.source_sync_result, profile)
+            )
+        if screen is MaintainerScreen.CANDIDATES:
+            # An unavailable Maintainer composition and a Source that genuinely produced nothing
+            # are different answers, and a list that says "none" to both hides the first one.
+            return (
+                ("Maintainer state is not available yet.",)
+                if screens.maintainer is None
+                else render_maintainer_candidates(
+                    screens.candidates(_candidate_filter(state)),
+                    cursor=state.current_row,
+                    profile=profile,
+                )
+            )
+        if screen is MaintainerScreen.CANDIDATE_DETAILS:
+            candidate = screens.candidate(state.focus)
+            return (
+                ("That Candidate is not available.",)
+                if candidate is None
+                else render_maintainer_candidate(candidate, profile)
+            )
+        if screen is MaintainerScreen.CANDIDATE_DIFF:
+            candidate = screens.candidate(state.focus)
+            return (
+                ("That Candidate is not available.",)
+                if candidate is None
+                else render_maintainer_candidate_diff(
+                    candidate, profile, show_files=state.file_diff
+                )
             )
         if screen is ConsumerScreen.MARKETPLACE:
             offered = {item.key: item for item in self._offers()}

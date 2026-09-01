@@ -2,44 +2,44 @@
 
 ## Current objective
 
-Continue **CP-14 Maintainer TUI 30–53**, step 3: implement Candidate list, detail and semantic diff
-screens 35–37 over the durable Source Scan history now established by screens 33–34.
+Continue **CP-14 Maintainer TUI 30–53**, step 4: implement the Validation and Policy Review screens
+38–40 over the Candidates screens 35–37 now expose.
 
-Screens 30–34 are live in the production shared shell:
+Screens 30–37 are live in the production shared shell:
 
 - screen 30 and screens 31–32 compose configured authoring Sources, durable health and only an exact
   matching Candidate-history observation (D-093–D-095);
 - `s` on a focused Source enters typed screen-33 review, and Enter executes only its digest;
-- preparation is read-only and binds the Source/history baseline plus the configured default
-  registry's approved snapshot;
-- execution rechecks registry and Source baselines, uses `SourceSyncPorts`, compiles exact
-  `aart.yaml`/`aart.json` manifests, reconciles and atomically writes/rereads Candidate history while
-  the Source instance lease remains held;
-- local Sources carry `local:<snapshot-sha256>` rather than invented Git commits (D-096);
-- screen 34 renders the persisted readback and explicitly reports no registry mutation (D-097,
-  INV-200).
+  execution rechecks registry and Source baselines, compiles exact `aart.yaml`/`aart.json`
+  manifests, and atomically writes/rereads Candidate history under the Source instance lease;
+- local Sources carry `local:<snapshot-sha256>` rather than invented Git commits (D-096), and
+  screen 34 renders the persisted readback and reports no registry mutation (D-097, INV-200);
+- screen 35 lists active Candidates keyed by stable Candidate ID and narrowed by the typed
+  `MaintainerCandidateFilter`; screen 36 is the full authoring detail; screen 37 is semantic diff
+  first with the bounded raw file diff behind the `f` toggle (D-098, INV-202).
 
-Evidence: RED-first reducer/application/local-provenance tests and a real temporary production
-installation in `tests/maintainer_composition_e2e_test.py`. The complete E2E gate is 207 tests green;
-focused unit, format, lint and typecheck gates are green. Broad discovery's six environment-only
-keychain/uv failures were rerun with their required permissions and are green.
+Evidence: `tests/maintainer_candidate_shell_test.py`, `tests/maintainer_candidate_views_test.py`,
+`tests/maintainer_composition_test.py` and a real temporary production installation in
+`tests/maintainer_composition_e2e_test.py`, which now walks from the consumer dashboard to screen 37.
 
 ## Exact next action
 
-Start RED tests for screens 35–37:
+Start RED tests for screens 38–40:
 
-1. Project immutable Candidate rows from every composed authoring Source's exact durable
-   `SourceScan`: status, artifact, version and Source. Keep active records distinct from retained
-   lifecycle history and make filters typed application state, not renderer string logic.
-2. Add Candidate Detail with identity, kind/version, Source alias and revision, manifest path,
-   input/payload/canonical digests, runtime/transport/inputs/dependency description and findings.
-   Navigate by stable Candidate ID so duplicate artifact names across Sources cannot collide.
-3. Add semantic Candidate Diff against the locator's prior Candidate and/or approved registry
-   version. Semantic changes are primary; raw canonical file diff is an explicit secondary view and
-   bounded for terminal rendering (INV-202).
-4. Extend production Maintainer composition to carry the exact scans it already reads once; do not
-   rescan, recompile, reread or infer Candidate state during drawing. Corrupt history still refuses
-   the whole observation.
+1. Project a validation run as an ordered pipeline of **named** checks over one Candidate, each
+   carrying its own outcome, rather than a flat findings list. Screen 38 lists the checks a
+   Candidate ran and how it stands; screen 39 is the detail of one named check.
+2. Keep warnings and errors distinct all the way to the screen (164.6). An error is not a severe
+   warning: `assess_candidate` already refuses to call a Candidate READY when any finding is an
+   error, and the projections must not collapse the two into one severity column.
+3. Make policy the thing that decides whether a warning blocks promotion, and make
+   policy-required manual approval the explicit `CandidateState.APPROVAL_REQUIRED` state rather
+   than an ordinary warning that a renderer treats specially. `domain/policies.py` and
+   `assess_candidate(..., manual_approval_required=...)` are the existing seams; screen 40 shows
+   which policy decided what.
+4. Reach screens 38–40 from screen 36 through the shared reducer, from the composition already
+   read once. Validation state is projected, never recomputed during drawing, and never inferred
+   from a Candidate's state enum alone.
 
 ## Critical boundaries for this slice
 
@@ -54,6 +54,8 @@ Start RED tests for screens 35–37:
 - Secret values never enter views, state, plans, receipts, logs, fixtures or committed files.
 - `key_event` remains the only key interpreter; there is one reducer and one persistent stdlib TUI.
 - Machine state is assembled once outside draw functions; application projections have no IO/clock.
+- Candidate list narrowing stays typed application state; screen 53 edits `MaintainerCandidateFilter`
+  when it lands rather than introducing a second filter model (D-098).
 - When screens 41–47 land, local Candidate promotion must preserve D-096 local provenance instead of
   passing through the currently Git-only registry-index projection by disguise.
 - Do not retire legacy direct/local or Collection authority until the corresponding CP-14 public

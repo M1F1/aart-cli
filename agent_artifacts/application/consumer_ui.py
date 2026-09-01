@@ -24,7 +24,7 @@ from .consumer_views import (
     keeps_focus,
     navigation_targets,
 )
-from .maintainer_views import MaintainerScreen
+from .maintainer_views import MaintainerCandidateFilter, MaintainerScreen
 
 __all__ = [
     "ConsumerActionKind",
@@ -58,6 +58,7 @@ class ConsumerUiEventKind(str, Enum):
     TOGGLE_PROFILE = "toggle-profile"
     TOGGLE_SELECTION = "toggle-selection"
     TOGGLE_SETTING = "toggle-setting"
+    TOGGLE_FILE_DIFF = "toggle-file-diff"
     SEARCH = "search"
     SEARCH_OPEN = "search-open"
     SEARCH_CLOSE = "search-close"
@@ -161,6 +162,7 @@ _SEARCHABLE = frozenset(
         ConsumerScreen.UPDATES,
         ConsumerScreen.CREDENTIALS,
         ConsumerScreen.ACTIVITY,
+        MaintainerScreen.CANDIDATES,
     }
 )
 _SELECTABLE = frozenset(
@@ -202,6 +204,10 @@ class ConsumerUiState:
     quit_pending: bool = False
     exited: bool = False
     action: ConsumerActionKind | None = None
+    #: What the Candidate list is narrowed to. Screen 53 edits it; screen 35 obeys it.
+    candidate_filter: MaintainerCandidateFilter = MaintainerCandidateFilter()
+    #: Whether the Candidate diff is also showing raw canonical file changes (INV-202).
+    file_diff: bool = False
 
     def __post_init__(self) -> None:
         if (
@@ -227,6 +233,8 @@ class ConsumerUiState:
             or not isinstance(self.quit_pending, bool)
             or not isinstance(self.exited, bool)
             or (self.action is not None and not isinstance(self.action, ConsumerActionKind))
+            or not isinstance(self.candidate_filter, MaintainerCandidateFilter)
+            or not isinstance(self.file_diff, bool)
         ):
             raise ValueError("consumer UI state is invalid")
         if self.session.profile is not self.settings.profile:
@@ -281,6 +289,7 @@ def _navigate(
         search="",
         help_visible=False,
         quit_pending=False,
+        file_diff=False,
     )
     return updated, (ConsumerUiCommand(ConsumerUiCommandKind.LOAD_SCREEN, screen),)
 
@@ -296,6 +305,7 @@ def _back(state: ConsumerUiState) -> tuple[ConsumerUiState, tuple[ConsumerUiComm
         search="",
         help_visible=False,
         quit_pending=False,
+        file_diff=False,
     )
     return updated, (ConsumerUiCommand(ConsumerUiCommandKind.LOAD_SCREEN, session.screen),)
 
@@ -563,6 +573,10 @@ def reduce_consumer_ui(
         if state.session.screen is not ConsumerScreen.SETTINGS or event.key not in SETTING_ROWS:
             return state, ()
         return _apply_setting(state, state.settings.toggled(event.key))
+    if event.kind is ConsumerUiEventKind.TOGGLE_FILE_DIFF:
+        if state.session.screen is not MaintainerScreen.CANDIDATE_DIFF:
+            return state, ()
+        return replace(state, file_diff=not state.file_diff, quit_pending=False), ()
     if event.kind is ConsumerUiEventKind.SEARCH:
         if state.session.screen not in _SEARCHABLE:
             return state, ()
@@ -686,6 +700,12 @@ def key_event(
             ConsumerUiEventKind.REQUEST_ACTION,
             action=ConsumerActionKind.UNINSTALL,
         )
+    if key == "d" and state.session.screen is MaintainerScreen.CANDIDATE_DETAILS:
+        return ConsumerUiEvent(ConsumerUiEventKind.NAVIGATE, screen=MaintainerScreen.CANDIDATE_DIFF)
+    # INV-202: the raw canonical file diff is secondary evidence somebody asks for, never the
+    # review itself, so it has its own key rather than riding along with the semantic diff.
+    if key == "f" and state.session.screen is MaintainerScreen.CANDIDATE_DIFF:
+        return ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_FILE_DIFF)
     if key == "s" and state.session.screen in (
         MaintainerScreen.SOURCES,
         MaintainerScreen.SOURCE_DETAILS,

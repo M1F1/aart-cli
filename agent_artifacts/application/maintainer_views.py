@@ -8,7 +8,7 @@ same application session and reducer; this module introduces no second UI state 
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from difflib import unified_diff
 from enum import Enum
 
@@ -36,6 +36,7 @@ __all__ = [
     "MAINTAINER_SCREENS",
     "MaintainerDashboardView",
     "MaintainerCandidateFileChangeView",
+    "MaintainerCandidateFilter",
     "MaintainerCandidateInputView",
     "MaintainerCandidateSemanticChangeView",
     "MaintainerCandidateView",
@@ -45,6 +46,7 @@ __all__ = [
     "MaintainerSourceSyncReviewView",
     "MaintainerSourceView",
     "MaintainerViews",
+    "filter_maintainer_candidates",
     "maintainer_navigation_targets",
     "project_maintainer_dashboard",
     "project_maintainer_candidates",
@@ -352,10 +354,7 @@ class MaintainerCandidateSemanticChangeView:
             or any(character in self.field for character in "\r\n")
             or any(
                 item is not None
-                and (
-                    not isinstance(item, str)
-                    or any(character in item for character in "\r\n")
-                )
+                and (not isinstance(item, str) or any(character in item for character in "\r\n"))
                 for item in (self.before, self.after)
             )
         ):
@@ -480,9 +479,7 @@ def _input_view(item: RuntimeInput) -> MaintainerCandidateInputView:
         "SECRET" if isinstance(item, SecretInput) else "CONFIG",
         item.id.value if guidance is None else guidance.label,
         item.required,
-        None
-        if guidance is None or isinstance(item, SecretInput)
-        else guidance.example,
+        None if guidance is None or isinstance(item, SecretInput) else guidance.example,
         None if guidance is None else guidance.format_hint,
         None if obtain is None else obtain.label,
         None if obtain is None else obtain.url,
@@ -499,7 +496,9 @@ def _dependency_label(bundle: CandidateBundle) -> str | None:
     if isinstance(dependency, RequirementsFile):
         return f"requirements: {dependency.path}"
     assert isinstance(dependency, PyProjectSpec)
-    suffix = "" if dependency.lock is None else f"; {dependency.lock_format} lock: {dependency.lock}"
+    suffix = (
+        "" if dependency.lock is None else f"; {dependency.lock_format} lock: {dependency.lock}"
+    )
     return f"pyproject: {dependency.pyproject}{suffix}"
 
 
@@ -538,13 +537,16 @@ def _file_changes(
     for path in sorted(set(left) | set(right)):
         old = left.get(path)
         new = right.get(path)
-        if old is not None and new is not None and (
-            old.content == new.content and old.executable == new.executable
+        if (
+            old is not None
+            and new is not None
+            and (old.content == new.content and old.executable == new.executable)
         ):
             continue
         status = "added" if old is None else "removed" if new is None else "modified"
         old_lines = [] if old is None else _safe_file_text(old.content)
         new_lines = [] if new is None else _safe_file_text(new.content)
+        diff: tuple[str, ...]
         if remaining <= 0:
             diff = ()
         elif old_lines is None or new_lines is None:
@@ -558,9 +560,7 @@ def _file_changes(
                 lineterm="",
             )
             diff = tuple(
-                redact_text(line[:_MAX_FILE_DIFF_LINE])
-                for line in raw
-                if "\r" not in line
+                redact_text(line[:_MAX_FILE_DIFF_LINE]) for line in raw if "\r" not in line
             )[:remaining]
         remaining -= len(diff)
         changes.append(MaintainerCandidateFileChangeView(path, status, diff))
@@ -609,7 +609,10 @@ def _semantic_changes(
         MaintainerCandidateSemanticChangeView(item.field.replace("_", " "), item.before, item.after)
         for item in semantic_candidate_diff(before.candidate, after.candidate)
     ]
-    if before.candidate.artifact.provenance.revision != after.candidate.artifact.provenance.revision:
+    if (
+        before.candidate.artifact.provenance.revision
+        != after.candidate.artifact.provenance.revision
+    ):
         changes.append(
             MaintainerCandidateSemanticChangeView(
                 "source revision",
@@ -635,9 +638,7 @@ def _semantic_changes(
     right_dependency = _descriptor_content(after)
     if left_dependency != right_dependency:
         path = (
-            right_dependency[0]
-            if right_dependency is not None
-            else left_dependency[0]  # type: ignore[index]
+            right_dependency[0] if right_dependency is not None else left_dependency[0]  # type: ignore[index]
         )
         changes.append(
             MaintainerCandidateSemanticChangeView(
@@ -657,7 +658,11 @@ def _candidate_view(bundle: CandidateBundle, history: dict) -> MaintainerCandida
     if runtime is not None and description.runtime_version is not None:
         runtime = f"{runtime} {description.runtime_version}"
     transport = None if description.contract is None else description.contract.transport.value
-    baseline = "None" if previous is None else f"Candidate {previous.candidate.artifact.coordinate.version}"
+    baseline = (
+        "None"
+        if previous is None
+        else f"Candidate {previous.candidate.artifact.coordinate.version}"
+    )
     return MaintainerCandidateView(
         candidate.id.value,
         candidate.state,
@@ -677,7 +682,10 @@ def _candidate_view(bundle: CandidateBundle, history: dict) -> MaintainerCandida
         transport,
         tuple(_input_view(item) for item in description.inputs),
         _dependency_label(bundle),
-        tuple(redact_text(f"{item.severity.value}: {item.code} — {item.message}") for item in candidate.findings),
+        tuple(
+            redact_text(f"{item.severity.value}: {item.code} — {item.message}")
+            for item in candidate.findings
+        ),
         None if candidate.previous is None else candidate.previous.value,
         None if candidate.successor is None else candidate.successor.value,
         None if candidate.rejection_reason is None else redact_text(candidate.rejection_reason),
@@ -692,24 +700,121 @@ def project_maintainer_candidates(
 ) -> tuple[MaintainerCandidateView, ...]:
     if not isinstance(scans, tuple) or any(not isinstance(scan, SourceScan) for scan in scans):
         raise ValueError("Maintainer Candidate projection needs Source Scans")
-    all_history = {
-        bundle.candidate.id: bundle
-        for scan in scans
-        for bundle in scan.history
-    }
+    all_history = {bundle.candidate.id: bundle for scan in scans for bundle in scan.history}
     if sum(len(scan.history) for scan in scans) != len(all_history):
         raise ValueError("Maintainer Candidate history contains duplicate Candidate IDs")
     projected = tuple(
-        _candidate_view(bundle, all_history)
-        for scan in scans
-        for bundle in scan.active
+        _candidate_view(bundle, all_history) for scan in scans for bundle in scan.active
     )
     return tuple(
         sorted(
             projected,
-            key=lambda item: (item.state.value, item.source_alias, item.artifact, item.version, item.id),
+            key=lambda item: (
+                item.state.value,
+                item.source_alias,
+                item.artifact,
+                item.version,
+                item.id,
+            ),
         )
     )
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerCandidateFilter:
+    """What the Candidate list is currently narrowed to, held as state rather than as text.
+
+    Screen 53 edits this value and screen 35 obeys it.  The predicate lives here rather than in a
+    renderer because a filtered review has to be reproducible: the same filter over the same
+    composed Candidates selects the same rows on any terminal and at either presentation profile.
+    """
+
+    states: tuple[CandidateState, ...] = ()
+    sources: tuple[str, ...] = ()
+    query: str = ""
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.states, tuple)
+            or any(not isinstance(item, CandidateState) for item in self.states)
+            or len(set(self.states)) != len(self.states)
+            or not isinstance(self.sources, tuple)
+            or any(
+                not isinstance(item, str)
+                or not item
+                or any(character in item for character in "\r\n")
+                for item in self.sources
+            )
+            or len(set(self.sources)) != len(self.sources)
+            or not isinstance(self.query, str)
+            or any(character in self.query for character in "\r\n")
+        ):
+            raise ValueError("Maintainer Candidate filter is invalid")
+        object.__setattr__(self, "states", tuple(sorted(self.states, key=lambda item: item.value)))
+        object.__setattr__(self, "sources", tuple(sorted(self.sources)))
+
+    @property
+    def is_empty(self) -> bool:
+        return not (self.states or self.sources or self.query)
+
+    def matches(self, candidate: MaintainerCandidateView) -> bool:
+        """Whether one projected Candidate survives this filter."""
+
+        if not isinstance(candidate, MaintainerCandidateView):
+            raise ValueError("a Maintainer Candidate filter matches projected Candidate views")
+        if self.states and candidate.state not in self.states:
+            return False
+        if self.sources and candidate.source_alias not in self.sources:
+            return False
+        if not self.query:
+            return True
+        needle = self.query.casefold()
+        return any(
+            needle in field.casefold()
+            for field in (
+                candidate.artifact,
+                candidate.version,
+                candidate.source_alias,
+                candidate.state.value,
+                candidate.target_registry,
+            )
+        )
+
+    def with_query(self, text: str) -> MaintainerCandidateFilter:
+        return replace(self, query=text)
+
+    def toggled_state(self, state: CandidateState) -> MaintainerCandidateFilter:
+        if not isinstance(state, CandidateState):
+            raise ValueError("toggling a Candidate filter needs a Candidate state")
+        remaining = tuple(item for item in self.states if item is not state)
+        return replace(
+            self,
+            states=remaining if len(remaining) != len(self.states) else (*self.states, state),
+        )
+
+    def toggled_source(self, alias: str) -> MaintainerCandidateFilter:
+        if not isinstance(alias, str) or not alias:
+            raise ValueError("toggling a Candidate filter needs a Source alias")
+        remaining = tuple(item for item in self.sources if item != alias)
+        return replace(
+            self,
+            sources=remaining if len(remaining) != len(self.sources) else (*self.sources, alias),
+        )
+
+
+def filter_maintainer_candidates(
+    candidates: tuple[MaintainerCandidateView, ...],
+    candidate_filter: MaintainerCandidateFilter,
+) -> tuple[MaintainerCandidateView, ...]:
+    """The Candidate rows one filter selects, in the order they were composed in."""
+
+    if not isinstance(candidates, tuple) or any(
+        not isinstance(item, MaintainerCandidateView) for item in candidates
+    ):
+        raise ValueError("filtering Maintainer Candidates needs projected Candidate views")
+    if not isinstance(candidate_filter, MaintainerCandidateFilter):
+        raise ValueError("filtering Maintainer Candidates needs typed filter state")
+    return tuple(item for item in candidates if candidate_filter.matches(item))
 
 
 @dataclass(frozen=True, slots=True)
@@ -739,15 +844,14 @@ class MaintainerViews:
                         not isinstance(candidate, MaintainerCandidateView)
                         for candidate in self.candidates
                     )
-                    or len({candidate.id for candidate in self.candidates})
-                    != len(self.candidates)
+                    or len({candidate.id for candidate in self.candidates}) != len(self.candidates)
                     or self.dashboard.candidate_count != len(self.candidates)
                 )
             )
         ):
             raise ValueError("composed Maintainer views disagree")
         object.__setattr__(
-        self, "sources", tuple(sorted(self.sources, key=lambda item: item.alias))
+            self, "sources", tuple(sorted(self.sources, key=lambda item: item.alias))
         )
         if self.candidates is not None:
             object.__setattr__(
@@ -773,7 +877,9 @@ class MaintainerViews:
     def candidate(self, candidate_id: str) -> MaintainerCandidateView | None:
         if self.candidates is None:
             return None
-        return next((candidate for candidate in self.candidates if candidate.id == candidate_id), None)
+        return next(
+            (candidate for candidate in self.candidates if candidate.id == candidate_id), None
+        )
 
 
 def project_source_sync_review(prepared: PreparedSourceSync) -> MaintainerSourceSyncReviewView:

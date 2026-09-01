@@ -1570,3 +1570,25 @@ the Product Specification first instead of hiding the change here.
   none. Compilation failure after a valid Source publication remains an explicit partial failure:
   no Candidate index is published, and the next production composition refuses the revision mismatch
   rather than presenting zero or stale Candidates.
+
+## D-098 — Candidates are addressed by Candidate ID and narrowed by typed filter state
+
+- **Decision:** screens 35–37 join the shared screen source. Screen 35's row identity is the stable
+  Candidate ID rather than the artifact name or coordinate; screens 36 and 37 resolve their subject
+  from that ID. What the list is narrowed to is `MaintainerCandidateFilter` — typed application
+  state carrying selected Candidate states, Source aliases and a query — rather than string matching
+  performed by a renderer; an open search box narrows that filter instead of replacing it. The raw
+  canonical file diff on screen 37 is a separate `f` toggle over the same projection, off on entry
+  and cleared by any navigation.
+- **Status:** accepted.
+- **Reason:** 164.5 makes Maintainer review semantic diff first and raw file diff second (INV-202),
+  which is a statement about what is offered by default and not only about ordering inside one
+  frame. Two authoring Sources may both publish an artifact called `github-mcp`, so a list keyed by
+  artifact name would open the wrong Candidate, while `candidate_id_for` already binds identity to
+  the package and its target registry. Filter logic living in a renderer would make a filtered
+  review irreproducible across presentation profiles and terminals.
+- **Consequence:** `filter_maintainer_candidates` is the one predicate and `_candidate_filter` is
+  the one place the search box meets it, so screen 35's rows and body cannot disagree. Screen 53
+  has a typed value to edit when it lands and needs no second filter model. Drawing 35–37 reads
+  nothing from the machine: the shell is handed the composed scans `read_maintainer_views` already
+  read once, and the `d`/`f` keys stay inside `key_event` as the only key interpreter (D-041).

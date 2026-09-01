@@ -697,3 +697,22 @@ preceded by a public-flow test proving the canonical path already carries it, an
 route: no-TTY is a supported environment, not a fallback for a broken one.
 
 Evidence/links: D-062, D-087; B-025; `agent_artifacts/tui.py::run`.
+
+## B-040 — The secondary file-diff bound is spent in path order, not shared between files
+
+**Classification: NONCRITICAL.** INV-202 requires the raw canonical file diff to be bounded for
+terminal rendering, and it is: `_file_changes` spends one global budget of `_MAX_FILE_DIFF_LINES`
+(200) across the whole Candidate, per-line truncation at 512 characters, and a 256 KiB per-file
+content ceiling above which the file reports "binary or oversized content differs".
+
+The budget is consumed in manifest path order, so one large early file can exhaust it and leave
+every later changed file rendering "content omitted by the global diff bound" — including a small,
+security-relevant change that a maintainer specifically opened the diff to read. The status line for
+each file is still correct and the semantic diff, which is the primary review surface, is unaffected.
+
+A fairer spend would be per-file rather than global, or a bound the maintainer can move on demand
+for one focused file. Neither is required to satisfy INV-202 or to complete any CP-14 screen, so
+this stays off the critical path.
+
+Discovered while wiring screens 35–37 (D-098).
+Evidence/links: `agent_artifacts/application/maintainer_views.py::_file_changes`; INV-202; 164.5.

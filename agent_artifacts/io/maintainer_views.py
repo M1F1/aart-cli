@@ -11,8 +11,8 @@ import time
 
 from agent_artifacts.application.maintainer_views import (
     MaintainerViews,
-    project_maintainer_dashboard,
     project_maintainer_candidates,
+    project_maintainer_dashboard,
     project_maintainer_source,
 )
 from agent_artifacts.application.sources import SourceStatusRequest, source_status
