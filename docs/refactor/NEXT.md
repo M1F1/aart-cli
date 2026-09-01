@@ -2,8 +2,8 @@
 
 ## Current objective
 
-Continue **CP-14 Maintainer TUI 30–53**, step 2: make the now-green screen 30–32 projections live
-over durable Source Scan / Candidate history, then implement Source Sync screens 33–34.
+Continue **CP-14 Maintainer TUI 30–53**, step 2: compose the now-durable screen 30–32 Source Scan /
+Candidate history into the production application, then implement Source Sync screens 33–34.
 
 CP-14 step 1 is complete (D-092):
 
@@ -28,22 +28,29 @@ Source detail from matching typed `ConfiguredSource` + `SourceHealth` + `SourceS
 They are integrated with `CanonicalScreenSource` but intentionally not yet composed in production.
 Affected evidence: 1,255 tests and all changed-file gates green.
 
+The durability prerequisite is now implemented (D-094): a strict canonical Candidate-history index
+references retained content-addressed compiled artifact envelopes beneath each managed Source
+instance. Private atomic writes publish objects before replacing the index; reads distinguish absent
+history from corrupt, missing-object or symlinked state. RED-first evidence lives in
+`candidate_history_test.py` and `candidate_store_test.py`.
+
+Latest full repository evidence: 2,982 unit tests, 204 E2E tests, 83.37% branch coverage and every
+quality, validation, packaging, documentation and secret-shape gate green on 2026-09-01.
+
 ## Exact next action
 
-Start RED tests for a canonical Candidate-history store and one Maintainer composition reader:
+Start RED tests for one Maintainer composition reader and its production application journey:
 
-1. Define strict serialization for `SourceScan` / `CandidateBundle` history using the canonical
-   package formats that already round-trip Candidates and compiled artifacts; reject unreadable,
-   duplicate, mismatched-alias or mismatched-revision state rather than returning an empty scan.
-2. Persist a successful Source Sync + compile + reconcile result atomically beneath the configured
-   source instance. A scan with `registry_mutations != ()` remains unrepresentable (INV-200).
-3. Read configured authoring Source health and the matching persisted scan once, project D-093's
+1. Read configured authoring Source health and the matching persisted scan once, project D-093's
    views, and carry them in `ConsumerActionContext` so every redraw/action refresh retains the
    Maintainer snapshot.
-4. Compose this reader in `_canonical_consumer_actions`; add a real-filesystem application test that
+2. Compose this reader in `_canonical_consumer_actions`; add a real-filesystem application test that
    enables Maintainer Mode and reaches screen 30 → Sources → Source detail without hand-injected
    views.
-5. Then implement screens 33–34 as reviewed Source Sync/result commands. Sync may fetch/discover,
+3. Implement screens 33–34 as reviewed Source Sync/result commands. Persist every successful
+   compile + reconcile result with `write_candidate_history` while the configured Source instance
+   lease remains held. A scan with `registry_mutations != ()` remains unrepresentable (INV-200).
+4. Sync may fetch/discover,
    compile and update Candidate history, but must produce no registry mutation and no promotion
    (INV-200); discovery remains exact `aart.yaml`/`aart.json` only (INV-201).
 

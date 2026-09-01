@@ -1484,3 +1484,27 @@ the Product Specification first instead of hiding the change here.
   shared screen source can draw and navigate screen 30, Source list and Source detail from injected
   immutable views. Production composition must now provide the matching durable scan; it may not
   silently reconstruct a previously reviewed Candidate state as New on every application start.
+
+## D-094 — Candidate history is an atomic index over retained immutable compiled objects
+
+- **Decision:** one configured authoring Source keeps its current `SourceScan` beneath its managed
+  Source instance at `candidates/current.json`. The strict canonical index records complete
+  Candidate lifecycle metadata and references compiled artifact envelopes by their SHA-256 object
+  digest; those immutable envelopes live below `candidates/objects/sha256/`. A writer publishes and
+  verifies every object before atomically replacing the private-mode index. Objects no longer named
+  by the current index are retained as audit evidence. The reader loads only exact digests named by
+  the bounded canonical index and refuses missing, corrupt, mismatched or symlinked state.
+- **Status:** accepted.
+- **Reason:** INV-229 and INV-239 make superseded and digest-aware rejected Candidates durable
+  product history. Recompiling an author repository on application startup would reconstruct every
+  Candidate as New, while embedding compiled payloads in an ever-growing mutable index would erase
+  the already-established content-addressed object boundary. Publishing objects before the one
+  pointer-like index also gives interruption an honest outcome: at worst an unreferenced retained
+  object, never a current scan that references bytes which were not established.
+- **Consequence:** screen composition can recover reviewed, rejected, promoted, removed and
+  superseded state without scanning a repository or guessing. Missing history remains distinct from
+  corrupt history; a corrupt store is not presented as zero Candidates. Serialization additionally
+  refuses an active Candidate that is not the exact history record, another Source alias, another
+  pinned revision or non-canonical ordering. Source Sync must perform the write while holding the
+  existing per-instance mutation lease; this adapter supplies atomic publication, not a second lock
+  or lifecycle authority.

@@ -124,11 +124,30 @@ packaging, docs and secret-shape gates green.
 Evidence: RED-first `tests/maintainer_views_test.py`; affected gate 1,255 tests green plus format,
 lint, typecheck, validation, packaging, docs and secret-shape gates.
 
+### Step 2b — durable Candidate lifecycle history
+
+- `application/candidate_history.py` serializes one non-mutating pinned `SourceScan` as strict
+  canonical lifecycle metadata referencing canonical compiled artifact object envelopes. It
+  reconstructs the typed package, compiled artifact and Candidate graph and rechecks coordinate,
+  provenance, payload/input/canonical/object digests, active/history identity and canonical order.
+- `io/candidate_store.py` keeps that index and the retained immutable objects beneath one configured
+  Source instance (D-094). Objects publish first; `current.json` is a private atomic replace. A
+  missing index means no scan, while malformed, missing-object, corrupt-object and symlinked state
+  refuse rather than becoming an empty Candidate list.
+- An interrupted index replace preserves the last complete scan. Existing content-addressed bytes
+  are verified and never overwritten, and superseded/rejected compiled evidence remains available
+  after later scans (INV-229/239).
+
+Evidence: RED-first `tests/candidate_history_test.py` and `tests/candidate_store_test.py`. Full
+repository result on 2026-09-01: 2,982 unit tests and 204 E2E tests green, 83.37% branch coverage,
+and all ten quality gates green.
+
 ## Handoff
 
-- Current working state: step 1 is committed at `a48b0b0`; pure screen 30–32 views/renderers and
-  injected shared-source navigation are green and commit-ready.
-- Exact next action: persist/read the CP-05 Source Scan and Candidate history at an IO boundary,
-  then compose matching Source health + scan views once in `_canonical_consumer_actions`. Do not
-  reconstruct every Candidate as New on application startup; reviewed/rejected/superseded state is
-  durable product history (INV-229, INV-239).
+- Current working state: step 1 is committed at `a48b0b0`; pure screen 30–32 views/renderers are
+  committed at `791d530`; strict Candidate history serialization and atomic per-Source persistence
+  are implemented as D-094.
+- Exact next action: compose matching Source health + persisted scans once in
+  `_canonical_consumer_actions`, carry the immutable `MaintainerViews` in `ConsumerActionContext`,
+  and prove Dashboard → Sources → Source detail using a real filesystem with no hand-injected view.
+  Then route screens 33–34 Source Sync through the same store while its instance lease is held.
