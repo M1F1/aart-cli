@@ -34,7 +34,7 @@ from datetime import date
 from typing import Callable, List, Literal, Mapping, Optional, Sequence, Tuple
 
 from . import __version__
-from .application.consumer_ui import ConsumerUiState
+from .application.consumer_ui import ConsumerUiState, opening_state
 from .application.sources import SourceAdoptionOutcome
 from .configuration.model import (
     OrganizationPolicy,
@@ -70,6 +70,7 @@ from .domain.result import Result as DomainResult
 from .io.configured_installation_action import InstallationHost
 from .io.consumer_actions import ConsumerActionContext, LocalConsumerActions
 from .io.consumer_machine import read_consumer_machine
+from .io.consumer_settings import read_consumer_settings
 from .io.credentials import MacOsKeychainProvider
 from .marketplace.model import MarketplaceCatalog
 from .marketplace.search import Document, search, summary_line
@@ -6200,7 +6201,11 @@ def run_consumer(actions: LocalConsumerActions) -> ConsumerUiState:
 
     def _ui(stdscr) -> None:
         captured["state"] = run_consumer_shell(
-            actions.source(), _CursesTerminal(stdscr), action_handler=actions
+            actions.source(),
+            _CursesTerminal(stdscr),
+            state=opening_state(actions.settings),
+            action_handler=actions,
+            settings_writer=actions.save_settings,
         )
 
     try:
@@ -6263,6 +6268,12 @@ def _canonical_consumer_actions(
     offers = read_consumer_offers(loaded.value, data_root=paths.data_root, target=target)
     if isinstance(offers, DomainErr):
         return offers
+    # Preferences somebody already chose, not the ones this build happens to default to. An
+    # unreadable file refuses here rather than opening on a Fast/consumer view that quietly
+    # contradicts what screen 28 was last told.
+    settings = read_consumer_settings(paths.data_root)
+    if isinstance(settings, DomainErr):
+        return settings
     return DomainOk(
         LocalConsumerActions(
             ConsumerActionContext(
@@ -6272,8 +6283,10 @@ def _canonical_consumer_actions(
                 loaded.value,
                 machine.value,
                 offers=offers.value,
+                settings=settings.value,
                 credential_providers=providers,
-            )
+            ),
+            data_root=paths.data_root,
         )
     )
 

@@ -1,5 +1,6 @@
 # CP-13 — Consumer TUI 01–29
-Status: IN PROGRESS (steps 1–4 VERIFIED; step 5 TTY migrated/public commands pending; step 6 open)
+Status: IN PROGRESS (steps 1–5 VERIFIED and every accepted screen 01–29 live; step 6's remaining
+legacy removal depends on CP-14, step 7 DONE)
 
 ## Goal
 
@@ -36,14 +37,14 @@ navigation map in sections 161–162.
 
 CP-06 through CP-12 are verified; legacy TUI navigation/search/layout characterization is green.
 
-## Screen coverage at slice start
+## Screen coverage (updated 2026-09-01; the gap column now records what closed it)
 
 | Accepted screen(s) | Existing evidence | Gap to canonical acceptance |
 |---|---|---|
-| 01 Dashboard | no dashboard; wizard opens with role/action stages | Add persistent consumer home, counts, attention and recent activity |
-| 02 Marketplace | aggregated rows, search, filters and multi-select exist | Use canonical Selection/Collections; add Fast/Verbose toggle without intent mutation |
-| 03 Artifact Details | technical marketplace pane/detail record exists | Add Fast outcome/input guidance and canonical Verbose provenance/requirements |
-| 04/04A Collection | Collection row expands to members before legacy review | Add summary, contents selection and visible exact→custom semantic transition |
+| 01 Dashboard | no dashboard; wizard opens with role/action stages | **DONE** `project_dashboard` counts installed, attention, registries and recent activity from the assembled machine |
+| 02 Marketplace | aggregated rows, search, filters and multi-select exist | **DONE** rows are the configured registries' approved published versions (D-088); ticking builds a Selection and `v` changes only detail |
+| 03 Artifact Details | technical marketplace pane/detail record exists | **DONE** `render_marketplace_artifact` over the offered row, with digests and provenance held back to Verbose |
+| 04/04A Collection | Collection row expands to members before legacy review | **DONE** 04 opens with every member ticked and 04a marks the exact→custom transition; no live source supplies one yet (B-031, CP-14) |
 | 05 Review Selection | basket/review boundary exists | **DONE** `render_review_selection` names direct/Collection/derived selection and the unique resolved artifacts |
 | 06 Automatic inspection | current wizard has manual source/profile/scope stages | **DONE** `render_inspection` reports requirement states and never asks; Verbose adds the measurement |
 | 07 Required Inputs | legacy setup queue prompts per step | **DONE** `render_required_inputs` over the plan's inputs; an existing secret reads `Configured securely` |
@@ -51,17 +52,17 @@ CP-06 through CP-12 are verified; legacy TUI navigation/search/layout characteri
 | 09 Ready | legacy review exists | **DONE** `render_ready` compresses to outcomes, names every risk and remediation, and discloses the same plan in Verbose (D-049) |
 | 10 Installing | quiet vs step-by-step setup queue exists | **DONE** `render_progress` marks each component; the raw effect kind appears only in Verbose |
 | 11 Success | command/setup outcomes exist | **DONE** `render_success` adds View installed / View receipt / Done |
-| 12 Installed | status action filters installed rows | Add persistent health/ownership list for artifacts and Collections |
-| 13 Artifact Details | legacy lifecycle/receipt details are separate | Combine canonical health, safe configuration/reference state and intents |
+| 12 Installed | status action filters installed rows | **DONE** Collections above artifacts, each with measured health, from durable receipts re-read across processes |
+| 13 Artifact Details | legacy lifecycle/receipt details are separate | **DONE** `render_installed_artifact` combines measured health, components and the offered actions |
 | 14 Collection Details | missing | **DONE** Installed lists Collections above artifacts; Enter opens whichever the cursor names |
 | 15–17 Updates | legacy update action exists | **DONE** Updates lists only artifacts whose health is `update`; 16 reuses `render_required_inputs`, 17 `render_progress` |
 | 18–19 Uninstall | legacy ownership-aware uninstall exists | **DONE** 18 draws `render_lifecycle_plan` (retention and why), 19 `render_progress` |
 | 20 Verify/Repair | receipt verification exists; canonical repair core is uncalled | **DONE** draws the minimal `LifecyclePlanView` and its review identity |
-| 21 Registries | Sources UI is mature but maintainer-oriented | Consumer availability/count/last-sync projection; sync never updates installs |
+| 21 Registries | Sources UI is mature but maintainer-oriented | **DONE** `project_registries` draws availability, artifact count and sync age, and says sync does not update installs (INV-023) |
 | 22–24 Credentials | missing | **DONE** reference rows with accepted health words (D-048), provider/consumers/actions detail, and an action screen that names what a removal would affect |
-| 25–27 Activity | individual receipt view/undo exists | Add user-action timeline; keep technical receipt detail and capability-honest undo |
-| 28 Settings | missing | Fast/Verbose preference, scope, update visibility, Maintainer Mode toggle |
-| 29 Doctor | missing | Add navigation/summary entry; CP-16 owns full global implementation |
+| 25–27 Activity | individual receipt view/undo exists | **DONE** the timeline is `project_activity`; Enter opens the receipt behind an entry and undo is offered only where the transaction reverses |
+| 28 Settings | missing | **DONE** four accepted controls with a cursor and a durable file; `v` and Detail level are one preference (D-090) |
+| 29 Doctor | missing | **DONE** navigation and summary entry over `project_doctor`; `r` repairs from it. CP-16 still owns the full global implementation |
 
 ## Characterization / RED evidence
 

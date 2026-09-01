@@ -16,7 +16,7 @@ from itertools import groupby
 from typing import cast
 
 from agent_artifacts.domain.credentials import CredentialObservation, CredentialReference
-from agent_artifacts.domain.diagnostics import Diagnostic, Severity
+from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.effects import RiskClass, effect_to_data
 from agent_artifacts.domain.inputs import (
     BoundInputs,
@@ -71,7 +71,9 @@ __all__ = [
     "ConsumerPlanView",
     "ConsumerScreen",
     "ConsumerSession",
+    "CONSUMER_SETTINGS_INVALID",
     "ConsumerSettings",
+    "SETTING_ROWS",
     "CredentialInputView",
     "CredentialRecordView",
     "EffectView",
@@ -99,6 +101,8 @@ __all__ = [
     "activity_from_receipts",
     "activity_view_to_data",
     "consumer_plan_to_data",
+    "settings_from_data",
+    "settings_to_data",
     "install_flow_screens",
     "keeps_focus",
     "navigation_targets",
@@ -1549,6 +1553,10 @@ def navigation_targets(screen: ConsumerScreen) -> tuple[ConsumerScreen, ...]:
     return _NAVIGATION[screen]
 
 
+#: Refusal for a stored preference file this frontend cannot mean.
+CONSUMER_SETTINGS_INVALID = DiagnosticCode("consumer-settings-invalid")
+
+
 @dataclass(frozen=True, slots=True)
 class ConsumerSettings:
     profile: PresentationProfile = PresentationProfile.FAST
@@ -1572,6 +1580,94 @@ class ConsumerSettings:
         if not isinstance(enabled, bool):
             raise ValueError("Maintainer Mode setting must be a boolean")
         return replace(self, maintainer_mode=enabled)
+
+    def toggled(self, row: str) -> ConsumerSettings:
+        """This preference, moved to its other value. Every control on screen 28 is binary."""
+
+        if row == "detail-level":
+            return self.with_profile(
+                PresentationProfile.VERBOSE
+                if self.profile is PresentationProfile.FAST
+                else PresentationProfile.FAST
+            )
+        if row == "default-scope":
+            return replace(
+                self, default_scope="user" if self.default_scope == "project" else "project"
+            )
+        if row == "show-updates":
+            return replace(self, show_updates=not self.show_updates)
+        if row == "maintainer-mode":
+            return self.with_maintainer_mode(not self.maintainer_mode)
+        raise ValueError(f"no consumer setting is named {row}")
+
+
+#: The controls of accepted screen 28, in the order the Product Specification lists them. They are
+#: row identities rather than labels so a rename of what is drawn never rewrites what was stored.
+SETTING_ROWS: tuple[str, ...] = (
+    "detail-level",
+    "default-scope",
+    "show-updates",
+    "maintainer-mode",
+)
+
+
+def settings_to_data(view: ConsumerSettings) -> dict[str, object]:
+    """One consumer's preferences as plain data. No machine state, and nothing secret."""
+
+    if not isinstance(view, ConsumerSettings):
+        raise ValueError("settings serialization needs consumer settings")
+    return {
+        "detail_level": view.profile.value,
+        "default_scope": view.default_scope,
+        "show_updates": view.show_updates,
+        "maintainer_mode": view.maintainer_mode,
+    }
+
+
+def settings_from_data(data: object) -> Result[ConsumerSettings]:
+    """Read back preferences somebody chose, refusing anything this cannot mean.
+
+    A stored preference is read strictly rather than repaired: silently falling back to Fast after
+    somebody chose Verbose would be the frontend deciding a detail level for them, and silently
+    falling back on Maintainer Mode is a mode boundary answering itself.
+    """
+
+    if not isinstance(data, dict):
+        return Err((_settings_invalid("stored consumer settings must be a JSON object"),))
+    known = {"detail_level", "default_scope", "show_updates", "maintainer_mode"}
+    unknown = sorted(set(data) - known)
+    if unknown:
+        return Err(
+            (_settings_invalid(f"stored consumer settings name {unknown[0]}, which AART does not"),)
+        )
+    detail = data.get("detail_level", PresentationProfile.FAST.value)
+    if detail not in {item.value for item in PresentationProfile}:
+        return Err((_settings_invalid("stored detail level must be fast or verbose"),))
+    scope = data.get("default_scope", "project")
+    if scope not in {"project", "user"}:
+        return Err((_settings_invalid("stored default scope must be project or user"),))
+    updates = data.get("show_updates", True)
+    maintainer = data.get("maintainer_mode", False)
+    if not isinstance(updates, bool) or not isinstance(maintainer, bool):
+        return Err(
+            (
+                _settings_invalid(
+                    "stored update visibility and Maintainer Mode must be true or false"
+                ),
+            )
+        )
+    return Ok(
+        ConsumerSettings(
+            PresentationProfile(detail),
+            cast(str, scope),
+            updates,
+            maintainer,
+        )
+    )
+
+
+def _settings_invalid(message: str) -> Diagnostic:
+    return Diagnostic(CONSUMER_SETTINGS_INVALID, Severity.ERROR, message)
 
 
 @dataclass(frozen=True, slots=True)

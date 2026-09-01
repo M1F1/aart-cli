@@ -23,6 +23,7 @@ from agent_artifacts.application.consumer_ui import (
     reduce_consumer_ui,
 )
 from agent_artifacts.application.consumer_views import (
+    SETTING_ROWS,
     ActivityView,
     ConfigInputView,
     ConsumerPlanView,
@@ -58,6 +59,7 @@ __all__ = [
     "ConsumerActionHandler",
     "ConsumerActionUpdate",
     "ConsumerScreenSource",
+    "ConsumerSettingsWriter",
     "ConsumerScreens",
     "ConsumerTerminal",
     "MarketplaceCollectionEntry",
@@ -678,19 +680,37 @@ def render_registry(view: RegistryView, profile: PresentationProfile) -> tuple[s
     return tuple(lines)
 
 
-def render_settings(view: ConsumerSettings) -> tuple[str, ...]:
-    if not isinstance(view, ConsumerSettings):
+def render_settings(view: ConsumerSettings, focus: str = "") -> tuple[str, ...]:
+    """Screen 28, with the control Enter would move marked.
+
+    Every control is binary, so the row says what it is currently set to rather than listing the
+    option that was not chosen. `focus` is a row identity, not a label: what is drawn can be
+    reworded without changing what a keystroke means.
+    """
+
+    if not isinstance(view, ConsumerSettings) or not isinstance(focus, str):
         raise ValueError("settings rendering needs consumer settings")
-    return (
-        "Experience",
-        f"Detail level: {view.profile.value.title()}",
-        "Installation",
-        f"Default scope: {view.default_scope.title()}",
-        "Updates",
-        f"Show available updates: {'on' if view.show_updates else 'off'}",
-        "Advanced",
-        f"Maintainer Mode: {'on' if view.maintainer_mode else 'off'}",
-    )
+    values = {
+        "detail-level": f"Detail level: {view.profile.value.title()}",
+        "default-scope": f"Default scope: {view.default_scope.title()}",
+        "show-updates": f"Show available updates: {'on' if view.show_updates else 'off'}",
+        "maintainer-mode": f"Maintainer Mode: {'on' if view.maintainer_mode else 'off'}",
+    }
+    headings = {
+        "detail-level": "Experience",
+        "default-scope": "Installation",
+        "show-updates": "Updates",
+        "maintainer-mode": "Advanced",
+    }
+    lines: list[str] = []
+    for row in SETTING_ROWS:
+        lines.append(headings[row])
+        lines.append(f"{'> ' if row == focus else '  '}{values[row]}")
+    if view.maintainer_mode:
+        lines.append("Maintainer screens are reachable from the Dashboard.")
+    else:
+        lines.append("Maintainer Mode off hides Sources, Candidates, Promotion and Publish.")
+    return tuple(lines)
 
 
 def render_doctor(view: DoctorView, profile: PresentationProfile) -> tuple[str, ...]:
@@ -939,12 +959,19 @@ def frame(source: ConsumerScreenSource, state: ConsumerUiState) -> tuple[str, ..
     return tuple(lines)
 
 
+class ConsumerSettingsWriter(Protocol):
+    """Imperative boundary for keeping one consumer's preferences past this session."""
+
+    def __call__(self, settings: ConsumerSettings) -> None: ...
+
+
 def run_consumer_shell(
     source: ConsumerScreenSource,
     terminal: ConsumerTerminal,
     *,
     state: ConsumerUiState | None = None,
     action_handler: ConsumerActionHandler | None = None,
+    settings_writer: ConsumerSettingsWriter | None = None,
 ) -> ConsumerUiState:
     """Run the persistent consumer application until somebody leaves it.
 
@@ -975,6 +1002,14 @@ def run_consumer_shell(
         current, commands = reduce_consumer_ui(current, event)
         entering = any(command.kind is ConsumerUiCommandKind.LOAD_SCREEN for command in commands)
         for command in commands:
+            if command.kind is ConsumerUiCommandKind.PERSIST_SETTINGS:
+                # A shell with nowhere to keep a preference would forget it the moment somebody
+                # left, and screen 28 would be showing a choice that was never made. Refusing here
+                # is what keeps that from being silent.
+                if settings_writer is None:
+                    raise ValueError("changing a setting needs an injected settings writer")
+                settings_writer(current.settings)
+                continue
             if command.kind not in (
                 ConsumerUiCommandKind.PREPARE_ACTION,
                 ConsumerUiCommandKind.EXECUTE_ACTION,
@@ -1312,6 +1347,8 @@ class CanonicalScreenSource:
             return tuple(
                 item.alias for item in self._screens.registries if _matches(query, item.alias)
             )
+        if screen is ConsumerScreen.SETTINGS:
+            return SETTING_ROWS
         return ()
 
     def _offers(self) -> tuple[MarketplaceEntry | MarketplaceCollectionEntry, ...]:
@@ -1488,7 +1525,10 @@ class CanonicalScreenSource:
                 return render_success(screens.outcome, profile)
             return render_progress(screens.outcome, profile)
         if screen is ConsumerScreen.SETTINGS:
-            return render_settings(screens.settings)
+            # A preference belongs to the session, not to the machine snapshot: drawing the
+            # composed source's copy would keep showing the old value until something else
+            # happened to re-read the machine.
+            return render_settings(state.settings, state.current_row)
         if screen is ConsumerScreen.DOCTOR:
             return (
                 ("Nothing has been checked yet.",)

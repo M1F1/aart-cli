@@ -21,6 +21,7 @@ was asked from and the session stays where it was.
 
 from __future__ import annotations
 
+import dataclasses
 import datetime as dt
 import os
 import pathlib
@@ -30,8 +31,13 @@ import unittest
 from unittest import mock
 
 from agent_artifacts import tui
-from agent_artifacts.application.consumer_ui import ConsumerUiState
-from agent_artifacts.application.consumer_views import ConsumerScreen, ConsumerSession
+from agent_artifacts.application.consumer_ui import ConsumerUiState, opening_state
+from agent_artifacts.application.consumer_views import (
+    SETTING_ROWS,
+    ConsumerScreen,
+    ConsumerSession,
+    PresentationProfile,
+)
 from agent_artifacts.domain.result import Ok
 from agent_artifacts.tui_consumer import run_consumer_shell
 from tests.configured_install_command_e2e_test import _environment
@@ -86,7 +92,11 @@ def _drive(env, state: ConsumerUiState, *codes: int, actions=None):
     terminal = _Terminal(*codes)
     with mock.patch.dict(os.environ, env.xdg, clear=False):
         finished = run_consumer_shell(
-            handler.source(), terminal, state=state, action_handler=handler
+            handler.source(),
+            terminal,
+            state=state,
+            action_handler=handler,
+            settings_writer=handler.save_settings,
         )
     return finished, terminal, handler
 
@@ -213,6 +223,42 @@ class ConsumerApplicationLifecycleTest(unittest.TestCase):
 
             self.assertEqual(finished.session.screen, ConsumerScreen.UNINSTALL_REVIEW)
             self.assertTrue(_delivered(env).exists(), "reviewing a removal carried it out")
+
+
+class ConsumerApplicationSettingsTest(unittest.TestCase):
+    """Screen 28 keeps what it was told, or it is not a Settings screen (spec 161.10)."""
+
+    def test_a_preference_survives_the_session_it_was_chosen_in(self) -> None:
+        with _environment() as env:
+            _, _, _ = _drive(
+                env,
+                _at(ConsumerScreen.SETTINGS, rows=SETTING_ROWS, cursor=3),
+                ENTER,
+            )
+
+            # A second composition, reading the same machine from scratch, the way a later
+            # `aart` on a terminal would.
+            reopened = _actions(env)
+
+            self.assertTrue(reopened.settings.maintainer_mode)
+            self.assertIs(reopened.settings.profile, PresentationProfile.FAST)
+            opened = dataclasses.replace(
+                opening_state(reopened.settings),
+                session=ConsumerSession(ConsumerScreen.SETTINGS),
+            )
+            _, terminal, _ = _drive(env, opened, actions=reopened)
+            self.assertTrue(terminal.screen_containing("Maintainer Mode: on"), terminal.last)
+
+    def test_a_detail_level_chosen_with_v_reopens_at_that_level(self) -> None:
+        with _environment() as env:
+            _drive(env, _at(ConsumerScreen.ACTIVITY), ord("v"))
+
+            reopened = _actions(env)
+            opened = opening_state(reopened.settings)
+
+            self.assertIs(reopened.settings.profile, PresentationProfile.VERBOSE)
+            # The session opens at the stored level rather than rewriting it back to Fast.
+            self.assertIs(opened.session.profile, PresentationProfile.VERBOSE)
 
 
 class ConsumerApplicationRefusalTest(unittest.TestCase):

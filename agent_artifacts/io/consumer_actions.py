@@ -73,6 +73,7 @@ from .configured_uninstall_action import (
     prepare_configured_uninstall,
 )
 from .consumer_machine import read_installed_inspections
+from .consumer_settings import write_consumer_settings
 from .credentials import CredentialProviderPort
 
 __all__ = [
@@ -150,7 +151,9 @@ class LocalConsumerActions:
     holding it is a convenience, and the confirmation is the authority.
     """
 
-    def __init__(self, context: ConsumerActionContext, *, now=None) -> None:
+    def __init__(
+        self, context: ConsumerActionContext, *, now=None, data_root: str | None = None
+    ) -> None:
         if not isinstance(context, ConsumerActionContext):
             raise ValueError("consumer actions need a composed action context")
         self._context = context
@@ -158,6 +161,29 @@ class LocalConsumerActions:
         self._now = now if now is not None else (lambda: datetime.now(timezone.utc))
         self._pending: _Pending | None = None
         self._pending_action: ConsumerActionKind | None = None
+        self._data_root = data_root
+
+    # -- preferences --------------------------------------------------------- #
+
+    @property
+    def settings(self) -> ConsumerSettings:
+        """What screen 28 was last told, which is what a session opens on."""
+
+        return self._context.settings
+
+    def save_settings(self, settings: ConsumerSettings) -> None:
+        """Keep a changed preference, and keep drawing it, for the rest of this session too.
+
+        A composition with no data root can still change a preference; it just cannot outlive the
+        session, which is what a caller that supplied no place to write asked for.
+        """
+
+        self._context = replace(self._context, settings=settings)
+        if self._data_root is None:
+            return
+        written = write_consumer_settings(settings, data_root=self._data_root)
+        if isinstance(written, Err):
+            raise ValueError(written.diagnostics[0].message)
 
     # -- what the shell draws ------------------------------------------------ #
 

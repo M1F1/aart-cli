@@ -1391,3 +1391,29 @@ the Product Specification first instead of hiding the change here.
   inside one reviewed transaction, so a promotion is still all-or-nothing and no record is ever
   bound to a snapshot that was not itself reviewed. Registries can now hold many approved versions
   across many transactions, which is what an identity with more than one released version requires.
+
+## D-090 — Screen 28 is a durable preference, and the reducer asks for it to be kept
+
+- **Decision:** the four controls of accepted screen 28 are row identities (`SETTING_ROWS`), the
+  screen has rows and a cursor like every other list, and Enter or Space on the focused row emits
+  `TOGGLE_SETTING`. `v` and screen 28's Detail level are one preference, so `TOGGLE_PROFILE` now
+  goes through the same `_apply_setting` path. Both emit a `PERSIST_SETTINGS` command; the reducer
+  stays pure and the shell's injected `settings_writer` is what makes the preference outlive the
+  session. `io/consumer_settings.py` keeps it at `<data_root>/state/consumer-settings.json`, mode
+  `0600`, written atomically. `opening_state` seeds the session's profile and stored settings
+  together, and screen 28 draws `state.settings` rather than the composed source's copy.
+- **Status:** accepted.
+- **Reason:** Product Specification 161.10 accepts Settings with four controls and makes Maintainer
+  Mode the boundary that hides Sources, Candidates, Promotion, Registry Diff, Validation and
+  Publish. A preference that dies with the terminal is not a setting, and an opt-in that has to be
+  re-chosen every session is not an opt-in -- which also makes this a prerequisite for CP-14, whose
+  whole surface is behind that toggle. Only `v` could change anything before, and nothing was ever
+  written down.
+- **Consequence:** a stored value AART cannot mean is refused rather than repaired, because
+  falling back to Fast after somebody chose Verbose, or to Maintainer Mode off after they turned it
+  on, is the frontend deciding for them; `_canonical_consumer_actions` therefore refuses instead of
+  opening on a view that contradicts what screen 28 was last told. A shell composed with no
+  `settings_writer` raises when a preference changes rather than silently forgetting it, so a
+  frontend without durable storage is a test double by construction. The file holds preferences
+  only -- no coordinate, registry, credential or path -- so it says nothing about what is installed.
+

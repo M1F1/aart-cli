@@ -16,10 +16,10 @@ from dataclasses import dataclass, replace
 from enum import Enum
 
 from .consumer_views import (
+    SETTING_ROWS,
     ConsumerScreen,
     ConsumerSession,
     ConsumerSettings,
-    PresentationProfile,
     keeps_focus,
     navigation_targets,
 )
@@ -32,6 +32,7 @@ __all__ = [
     "ConsumerUiEventKind",
     "ConsumerUiState",
     "key_event",
+    "opening_state",
     "reduce_consumer_ui",
 ]
 
@@ -53,6 +54,7 @@ class ConsumerUiEventKind(str, Enum):
     SET_SELECTION = "set-selection"
     TOGGLE_PROFILE = "toggle-profile"
     TOGGLE_SELECTION = "toggle-selection"
+    TOGGLE_SETTING = "toggle-setting"
     SEARCH = "search"
     SEARCH_OPEN = "search-open"
     SEARCH_CLOSE = "search-close"
@@ -71,6 +73,7 @@ class ConsumerUiCommandKind(str, Enum):
     EXIT = "exit"
     PREPARE_ACTION = "prepare-action"
     EXECUTE_ACTION = "execute-action"
+    PERSIST_SETTINGS = "persist-settings"
 
 
 @dataclass(frozen=True, slots=True)
@@ -225,6 +228,21 @@ class ConsumerUiState:
         """The row identity the cursor is on, or empty where the screen has no rows."""
 
         return self.rows[self.cursor] if self.rows else ""
+
+
+def opening_state(settings: ConsumerSettings) -> ConsumerUiState:
+    """The state a session opens in, at the preferences somebody last chose.
+
+    The session's profile and the stored detail level have to be set together: state validation
+    lets the session win, so seeding only the settings would open Fast for somebody who chose
+    Verbose and then silently rewrite their preference back.
+    """
+
+    if not isinstance(settings, ConsumerSettings):
+        raise ValueError("opening the consumer application needs consumer settings")
+    return ConsumerUiState(
+        session=replace(_INITIAL_SESSION, profile=settings.profile), settings=settings
+    )
 
 
 def _navigate(
@@ -460,6 +478,28 @@ def _action_recorded(
     ), commands
 
 
+def _apply_setting(
+    state: ConsumerUiState, settings: ConsumerSettings
+) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
+    """Move one preference and ask for it to be kept.
+
+    The session's profile and the stored detail level are the same choice, so switching with `v`
+    and switching on screen 28 go through here together rather than through two rules that could
+    disagree. Persistence is a command because the reducer is pure: it says the preference should
+    outlive the session, and the shell is what can make that true.
+    """
+
+    return (
+        replace(
+            state,
+            session=state.session.switch_profile(settings.profile),
+            settings=settings,
+            quit_pending=False,
+        ),
+        (ConsumerUiCommand(ConsumerUiCommandKind.PERSIST_SETTINGS),),
+    )
+
+
 def reduce_consumer_ui(
     state: ConsumerUiState,
     event: ConsumerUiEvent,
@@ -491,20 +531,11 @@ def reduce_consumer_ui(
     if event.kind is ConsumerUiEventKind.ACTION_RECORDED:
         return _action_recorded(state, event)
     if event.kind is ConsumerUiEventKind.TOGGLE_PROFILE:
-        profile = (
-            PresentationProfile.VERBOSE
-            if state.session.profile is PresentationProfile.FAST
-            else PresentationProfile.FAST
-        )
-        return (
-            replace(
-                state,
-                session=state.session.switch_profile(profile),
-                settings=state.settings.with_profile(profile),
-                quit_pending=False,
-            ),
-            (),
-        )
+        return _apply_setting(state, state.settings.toggled("detail-level"))
+    if event.kind is ConsumerUiEventKind.TOGGLE_SETTING:
+        if state.session.screen is not ConsumerScreen.SETTINGS or event.key not in SETTING_ROWS:
+            return state, ()
+        return _apply_setting(state, state.settings.toggled(event.key))
     if event.kind is ConsumerUiEventKind.SEARCH:
         if state.session.screen not in _SEARCHABLE:
             return state, ()
@@ -592,6 +623,11 @@ def key_event(
         return ConsumerUiEvent(ConsumerUiEventKind.HELP)
     if key == "v":
         return ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_PROFILE)
+    # Screen 28 is the one screen whose rows are settings rather than artifacts, so space and
+    # Enter move a preference here instead of ticking or opening something.
+    if key in (" ", "enter") and state.session.screen is ConsumerScreen.SETTINGS:
+        row = cursor or state.current_row
+        return None if not row else ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_SETTING, key=row)
     if key == " ":
         return ConsumerUiEvent(
             ConsumerUiEventKind.TOGGLE_SELECTION, key=cursor or state.current_row

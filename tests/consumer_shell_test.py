@@ -14,6 +14,7 @@ from agent_artifacts.application.consumer_ui import ConsumerUiState
 from agent_artifacts.application.consumer_views import (
     ActivityRecord,
     ConsumerScreen,
+    ConsumerSettings,
     InstalledArtifactView,
     LifecycleDriftView,
     OwnershipView,
@@ -88,10 +89,26 @@ class FakeTerminal:
         return next(("\n".join(frame) for frame in self.frames if needle in "\n".join(frame)), "")
 
 
-def drive(*codes: int, state: ConsumerUiState | None = None):
+class _Preferences:
+    """Where this shell keeps a changed preference, so the test can read what it was told."""
+
+    def __init__(self) -> None:
+        self.kept: list[ConsumerSettings] = []
+
+    def __call__(self, settings: ConsumerSettings) -> None:
+        self.kept.append(settings)
+
+
+def drive(*codes: int, state: ConsumerUiState | None = None, preferences=None):
     source = CanonicalScreenSource(screens())
     terminal = FakeTerminal(*codes)
-    return run_consumer_shell(source, terminal, state=state), terminal
+    finished = run_consumer_shell(
+        source,
+        terminal,
+        state=state,
+        settings_writer=_Preferences() if preferences is None else preferences,
+    )
+    return finished, terminal
 
 
 class ConsumerShellTest(unittest.TestCase):
@@ -149,6 +166,43 @@ class ConsumerShellTest(unittest.TestCase):
         self.assertIs(verbose.session.profile, PresentationProfile.VERBOSE)
         self.assertNotIn("sha256:", terminal.last)
         self.assertIn("sha256:", verbose_terminal.last)
+
+    def test_switching_detail_level_is_kept_rather_than_only_redrawn(self):
+        """`v` and screen 28's Detail level are one preference, so `v` has to outlive the session."""
+
+        preferences = _Preferences()
+
+        verbose, _ = drive(ord("v"), state=_at(ConsumerScreen.ACTIVITY), preferences=preferences)
+
+        self.assertIs(verbose.settings.profile, PresentationProfile.VERBOSE)
+        self.assertEqual([item.profile for item in preferences.kept], [PresentationProfile.VERBOSE])
+
+    def test_screen_28_moves_the_setting_under_the_cursor_and_keeps_it(self):
+        preferences = _Preferences()
+
+        state, terminal = drive(
+            DOWN,
+            DOWN,
+            DOWN,
+            ENTER,
+            state=_at(ConsumerScreen.SETTINGS),
+            preferences=preferences,
+        )
+
+        self.assertEqual(state.current_row, "maintainer-mode")
+        self.assertTrue(state.settings.maintainer_mode)
+        self.assertEqual([item.maintainer_mode for item in preferences.kept], [True])
+        self.assertIn("> Maintainer Mode: on", terminal.last)
+        # The other three controls are untouched: one keystroke moves one preference.
+        self.assertIs(state.settings.profile, PresentationProfile.FAST)
+        self.assertEqual(state.settings.default_scope, "project")
+        self.assertTrue(state.settings.show_updates)
+
+    def test_a_shell_with_nowhere_to_keep_a_preference_refuses_rather_than_forgetting_it(self):
+        source = CanonicalScreenSource(screens())
+
+        with self.assertRaises(ValueError):
+            run_consumer_shell(source, FakeTerminal(ord("v")), state=_at(ConsumerScreen.SETTINGS))
 
     def test_help_is_drawn_over_the_screen_it_was_asked_for(self):
         state, terminal = drive(ord("?"), state=_at(ConsumerScreen.INSTALLED))
