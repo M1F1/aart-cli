@@ -581,6 +581,11 @@ def _prepare_setup_plan(
                 ("coordinate", str(request.coordinate)),
                 ("profile", request.profile),
                 ("scope", request.scope),
+                # Deliberately still named `install_state_path`, and deliberately not renamed
+                # with the field. This is a digest input: the value it produces is the durable
+                # `setup_state_ref` an already-configured installation's record is filed under, so
+                # renaming the key would rename every existing setup record and make each one
+                # invisible to the run that looks for it.
                 ("install_state_path", state_paths.destination_path),
             )
         )

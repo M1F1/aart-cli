@@ -2314,3 +2314,23 @@ the Product Specification first instead of hiding the change here.
   where they failed before, now by passing a changed subject rather than a changed catalogue. The
   canonical route's remaining work is a second implementation of this one port plus a durable setup
   record it can own; nothing else in the engine needs to know which route installed the artifact.
+
+## D-126 — The setup plan names the record that says an artifact is installed, not the store that holds it
+
+- **Decision:** `CanonicalSetupPlan.install_state_path` / `install_state_lock_path` are renamed to
+  `installation_record_path` / `installation_record_lock_path`. The digest input that derives
+  `setup_state_ref` deliberately keeps its old JSON key, `install_state_path`, and carries a comment
+  saying why.
+- **Status:** accepted.
+- **Reason:** those two fields are the last place in the engine that assumes which route installed
+  the artifact. What `persist_setup` actually needs of them is narrower than their old names claim:
+  the durable file that says this artifact is installed here, and the lock that guards it while
+  setup is recorded. For a legacy install that is the install-state manifest; for one the configured
+  seam made it will be the canonical receipt. Renaming them is the prerequisite for D-125's second
+  port implementation, because `persist_setup` was hard-bound to install state by these names alone.
+- **Consequence:** no behaviour changed — `setup_review_value` does not serialize either field, and
+  the identity JSON keeps its key, so every `setup_state_ref` and every stored review digest is
+  byte-identical to what it was. The key is *not* renamed with the field on purpose: it is a digest
+  input, and the value it produces is the durable ref an already-configured installation's record is
+  filed under, so renaming it would rename every existing setup record and make each one invisible
+  to the run that looks for it.
