@@ -177,48 +177,50 @@ managed block. It is `skipUnless(darwin)` because `setup.py:562` accepts only `[
 Applying the preserved draft's hardcoded `TrustClass.COMPANY_REVIEWED` fails two of the four — the
 defect that passed 3,216 tests now has a test.
 
-**The exact next step is the installed-record question**, which is what still blocks the green.
-`setup_engine/application.py::_prepare_setup_object` resolves what to configure from the
-install-state manifest (`.agent-artifacts/manifest.json`), which only `installation/application.py`
-and `lifecycle/application.py` write, and which `io/consumer_machine.py` calls the *legacy* store —
-a record it finds there with no canonical receipt becomes an `UnadoptedInstallation` (D-069). The
-configured seam writes receipts. Two candidate answers, and the choice between them is an evidence
-question, not a taste one:
+**The installed-record question is settled, and half of the answer has landed.** The question was
+which durable record the setup engine should resolve an installed artifact from.
+`setup_engine/application.py::_prepare_setup_object` resolves it from the install-state manifest
+(`.agent-artifacts/manifest.json`), which only `installation/application.py` and
+`lifecycle/application.py` write and which `io/consumer_machine.py` calls the *legacy* store; the
+configured seam writes receipts instead. The deciding measurement was that **a canonical receipt
+could not name the object that was installed**: after `aart marketplace install` of the fixture
+Skill, `<data_root>/state/installations/*.json` held the coordinate, `payload_digest`, `root` and
+the deliveries, and no object digest — while `install_state`'s `ArtifactEvidence` carries one. The
+engine needs the object digest to `read_object` at all, so pointing it at the receipt store was not
+a matter of reading the same facts from another file; the facts were not there.
 
-**A canonical receipt cannot name the object that was installed.** This was measured, not
-inferred: after `aart marketplace install` of the fixture Skill, `<data_root>/state/installations/*.json`
-holds the coordinate (with version), `payload_digest`, `root` and the deliveries — and no object
-digest and no manifest digest. `install_state`'s `ArtifactEvidence` carries all three. The engine
-needs the object digest to `read_object` at all and the manifest digest to cross-check what it
-compiled, so pointing it at the receipt store is not a matter of reading the same facts from a
-different file: the facts are not there.
+The alternative — having the configured installation also write the install-state record — was
+rejected on the ground that it writes new records into exactly the store the strangler is retiring.
+(It would *not* have made canonical installs surface as unadopted: `read_consumer_machine` drops a
+manifest record whose coordinate a canonical receipt already answers for,
+`io/consumer_machine.py:362`, so the objection previously recorded here was wrong.)
 
-A second thing that measurement showed: the canonical seam registers **no CAS reference of any
-kind** — there is no references file in the data root after a successful install — while the legacy
-path registers `ReferenceKind.INSTALLED`. So the object a canonical install materialized from is
-unrooted in the store. That is worth a look on its own account, independent of setup.
+**Landed (D-122):** `object_digest` on `PlacedArtifactReceipt` and `InstallationReceipt`, populated
+by `intended_placement_receipt` / `intended_receipt` from the `RegistryArtifactVersion` the
+Selection resolved — writing down what the installation already knew, deriving nothing. It is
+optional, so receipts written before the field still read, and read back as *unknown* rather than
+defaulted: an installation whose object nobody wrote down is honestly unknown, and a default would
+put a dangling identity on a real installation. `tests/installed_object_identity_test.py` asserts
+the recorded digest resolves to a real object in the store whose manifest is the installed
+package's; each receipt shape has a round-trip, an older-document read and a malformed-digest
+refusal.
 
-So the two candidate answers are:
+**Still open, and what step (3) has to answer.** The engine takes a legacy `MarketplaceCatalog`
+(`resolve_artifact` plus `_marketplace_evidence`), which cannot read a promoted registry snapshot;
+`RegistryArtifactVersion` carries `object_digest` and `payload_digest` but **no `manifest_digest`**,
+so the canonical evidence is not a field-for-field substitution for `ArtifactEvidence`. And
+`persist_setup` (`setup_engine/io.py:89`) records that setup ran by taking the install-state lock,
+replacing the record's `setup_state_ref` and moving a CAS reference as one compensated unit, which
+`setup_receipt.locate_setup_record` reads for `aart marketplace receipt show|verify|undo` — the
+canonical route has no such pointer and needs its own durable setup record.
 
-- **Give the canonical receipt the object identity it is missing**, then widen the engine's object
-  preparation to name an installed record from the receipt store. This is the honest fix for the
-  finding above — a receipt that records what the effects left behind but not which immutable object
-  they came from cannot support setup, and arguably cannot support a faithful repair either. It is a
-  schema addition to a durable store, so it needs a compatible read of existing receipts. Note the
-  other half of the cost: `persist_setup` (`setup_engine/io.py:89`) records that setup ran by taking
-  the install-state lock, replacing the record's `setup_state_ref` and moving a CAS reference as one
-  compensated unit, and `setup_receipt.locate_setup_record` reads that same pointer for
-  `aart marketplace receipt show|verify|undo`. That half is anchored on the manifest too.
-- **Have the configured installation also write the install-state record.** This does *not* make
-  canonical installs surface as unadopted — `read_consumer_machine` drops a manifest record whose
-  coordinate a canonical receipt already answers for (`io/consumer_machine.py:362`), so the
-  objection previously recorded here was wrong — and the seam does hold every field truthfully at
-  completion, including the `EffectProof` destinations and digests it planned and executed. It is
-  the smaller change and the one that makes the whole existing setup subsystem work at once. It is
-  also the one that writes new records into the store the strangler is trying to retire.
+A second measurement stands on its own account: the canonical seam registers **no CAS reference of
+any kind** — no references file exists in the data root after a successful install — while the
+legacy path registers `ReferenceKind.INSTALLED`. The object a canonical install materialized from is
+unrooted in the store. That is **B-045**, independent of setup.
 
-Every trust, evidence and policy check stays inside the engine either way; a third implementation of
-the planning is what produced the hardcoded trust constant in the preserved draft.
+Every trust, evidence and policy check stays inside the engine; a third implementation of the
+planning is what produced the hardcoded trust constant in the preserved draft.
 
 Behind that, 571 lines of `tui.py` are still production-orphaned and held only by widget tests —
 `_curses_multiselect` and its 29 tests, the receipt screens, `_load_user_wizard_read_model`,

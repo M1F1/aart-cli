@@ -122,6 +122,47 @@ class PlacedArtifactReceiptRoundTripTest(unittest.TestCase):
         self.assertIsInstance(parsed, Err, parsed)
 
 
+class InstalledObjectTest(unittest.TestCase):
+    """Which immutable object the placed bytes came from.
+
+    `root` says where the payload was put and `payload_digest` says what was put there; neither says
+    which package in the object store this installation resolved to. Post-install setup needs that
+    identity to find the declared recipe, and repair needs it to tell one package from another that
+    delivers identical bytes, so the receipt records it.
+    """
+
+    def test_the_object_survives_being_written_down_and_read_back(self) -> None:
+        receipt = _receipt(object_digest=_digest("c"))
+
+        parsed = placed_artifact_receipt_from_data(placed_artifact_receipt_to_data(receipt))
+
+        self.assertIsInstance(parsed, Ok, getattr(parsed, "diagnostics", ()))
+        self.assertEqual(parsed.value.object_digest, _digest("c"))
+
+    def test_a_record_written_before_the_object_was_named_still_reads(self) -> None:
+        """Unknown, not invented.
+
+        This store already holds receipts, and a schema addition that refused them would strand
+        every installation made before it. An older record does not know which object it came from;
+        reading it back as unknown says so, and reading it back as some default would put a
+        dangling identity on a real installation.
+        """
+
+        data = placed_artifact_receipt_to_data(_receipt())
+
+        self.assertNotIn("object_digest", data)
+        parsed = placed_artifact_receipt_from_data(data)
+
+        self.assertIsInstance(parsed, Ok, getattr(parsed, "diagnostics", ()))
+        self.assertIsNone(parsed.value.object_digest)
+
+    def test_a_record_whose_object_is_not_a_digest_is_refused(self) -> None:
+        data = placed_artifact_receipt_to_data(_receipt(object_digest=_digest("c")))
+        data["object_digest"] = "sha256"
+
+        self.assertIsInstance(placed_artifact_receipt_from_data(data), Err)
+
+
 class DeliverySourceTest(unittest.TestCase):
     def test_a_delivery_is_made_from_inside_the_artifact_that_owns_it(self) -> None:
         outside = ArtifactDelivery(

@@ -230,6 +230,26 @@ the delimited managed block. It is `skipUnless(darwin)` because `setup.py:562` a
 `['darwin']` recipes. Applying the preserved B-044 draft's hardcoded `TrustClass.COMPANY_REVIEWED`
 now fails two of those four, where before it passed all 3,216 tests.
 
+**The canonical receipt now names its object (D-122).** This was B-044's blocking question and it
+was decided by measurement, not preference: after a canonical `aart marketplace install`, the
+receipt store held the coordinate, `payload_digest`, `root` and the deliveries and no object digest,
+while the legacy install-state record's `ArtifactEvidence` carries one — and
+`setup_engine/application.py::_prepare_setup_object` needs that digest to read the package at all,
+because setup is declared on the package manifest. So the receipt was not missing a convenience; it
+could not answer "which package is this", which repair needs as much as setup does. `object_digest`
+is now on `PlacedArtifactReceipt` and `InstallationReceipt`, populated by the installation proposal
+from the `RegistryArtifactVersion` the Selection already resolved. It is optional and older receipts
+read back as unknown rather than defaulted, because an installation whose object nobody wrote down
+is honestly unknown and a default would be a dangling identity on a real installation.
+`tests/installed_object_identity_test.py` proves the recorded digest resolves to a real object in
+the store whose manifest is the installed package's; each receipt shape carries a round-trip, an
+older-document read and a malformed-digest refusal. The alternative — having the configured seam
+also write the legacy install-state record — was rejected because it writes new records into the
+store the strangler is retiring. Two things step (3) still has to answer: the engine's
+`MarketplaceCatalog` cannot read a promoted registry snapshot and `RegistryArtifactVersion` carries
+no `manifest_digest`, and `persist_setup` records that setup ran inside the legacy install-state
+record, which the canonical route has no equivalent of.
+
 ## Update rule
 
 Never mark a slice beyond the strongest evidence actually present.

@@ -93,6 +93,10 @@ class InstallationReceipt:
     credentials: tuple[CredentialReference, ...] = ()
     config: tuple[ConfigFingerprint, ...] = ()
     base_interpreter: str | None = None
+    #: The immutable package this installation was resolved to and materialized from. See the same
+    #: field on :class:`PlacedArtifactReceipt`; both shapes answer the same question, because both
+    #: come from one object and neither could name it before.
+    object_digest: ObjectDigest | None = None
 
     def __post_init__(self) -> None:
         for value, label in (
@@ -106,6 +110,8 @@ class InstallationReceipt:
         for path, label in ((self.root, "root"), (self.launcher, "launcher")):
             if not path.startswith("/"):
                 raise ValueError(f"installation receipt {label} must be absolute")
+        if self.object_digest is not None and not isinstance(self.object_digest, ObjectDigest):
+            raise ValueError("installation receipt object digest is invalid")
         if self.base_interpreter is not None and (
             not isinstance(self.base_interpreter, str)
             or not self.base_interpreter.startswith("/")
@@ -137,7 +143,11 @@ class InstallationReceipt:
 
 
 def installation_receipt_to_data(receipt: InstallationReceipt) -> dict[str, object]:
+    identity: dict[str, object] = (
+        {} if receipt.object_digest is None else {"object_digest": str(receipt.object_digest)}
+    )
     return {
+        **identity,
         "artifact": receipt.artifact,
         "base_interpreter": receipt.base_interpreter,
         "config": [
@@ -283,6 +293,12 @@ class PlacedArtifactReceipt:
     config: tuple[ConfigFingerprint, ...] = ()
     merges: tuple[ArtifactMerge, ...] = ()
     settings: tuple[ArtifactSettingsEntry, ...] = ()
+    #: The immutable package this installation was resolved to and materialized from. `root` says
+    #: where those bytes were put; this says which object they are, which is the only way back to
+    #: the whole package -- its manifest, its declared setup -- rather than to the payload alone.
+    #: Optional because a receipt written before this was recorded cannot acquire it after the
+    #: fact: an installation whose object nobody wrote down is honestly unknown, not guessable.
+    object_digest: ObjectDigest | None = None
 
     def __post_init__(self) -> None:
         for value, label in ((self.artifact, "artifact"), (self.root, "root")):
@@ -292,6 +308,8 @@ class PlacedArtifactReceipt:
             raise ValueError("placed artifact receipt root must be absolute")
         if not isinstance(self.payload_digest, ObjectDigest):
             raise ValueError("placed artifact receipt payload digest is invalid")
+        if self.object_digest is not None and not isinstance(self.object_digest, ObjectDigest):
+            raise ValueError("placed artifact receipt object digest is invalid")
         for items, kind, label in (
             (self.deliveries, ArtifactDelivery, "deliveries"),
             (self.config, ConfigFingerprint, "config"),
@@ -393,7 +411,11 @@ class InstalledRecord:
 
 
 def placed_artifact_receipt_to_data(receipt: PlacedArtifactReceipt) -> dict[str, object]:
+    identity: dict[str, object] = (
+        {} if receipt.object_digest is None else {"object_digest": str(receipt.object_digest)}
+    )
     return {
+        **identity,
         "artifact": receipt.artifact,
         "config": [
             {"digest": str(item.digest), "input": item.input.value} for item in receipt.config
@@ -555,6 +577,14 @@ def placed_artifact_receipt_from_data(data: object) -> Result[PlacedArtifactRece
                 # artifact that merged into nothing, which is exactly what it did.
                 tuple(_merge(item) for item in data.get("merges", [])),
                 tuple(_settings_entry(item) for item in data.get("settings", [])),
+                # Absent rather than required, for the same reason the field is optional: a record
+                # written before the object was written down does not know which object it is, and
+                # inventing one here would put a dangling identity on a real installation.
+                (
+                    _digest(data["object_digest"], "object digest")
+                    if data.get("object_digest") is not None
+                    else None
+                ),
             )
         )
     except ValueError as error:
@@ -591,6 +621,12 @@ def installation_receipt_from_data(data: object) -> Result[InstallationReceipt]:
                 tuple(_reference(item) for item in data.get("credentials", [])),
                 tuple(_fingerprint(item) for item in data.get("config", [])),
                 None if data.get("base_interpreter") is None else str(data["base_interpreter"]),
+                # Absent rather than required: see the placed receipt's inverse.
+                (
+                    _digest(data["object_digest"], "object digest")
+                    if data.get("object_digest") is not None
+                    else None
+                ),
             )
         )
     except ValueError as error:

@@ -118,6 +118,39 @@ class ReceiptParsingTest(unittest.TestCase):
                 self.assertTrue(parsed.diagnostics)
 
 
+class InstalledObjectTest(unittest.TestCase):
+    """The same object identity the placed receipt records, on the running kind.
+
+    A server is installed from a package too, and the launcher digest identifies what was written,
+    not what it was written from. Setup and repair both need the package back.
+    """
+
+    def test_the_object_survives_being_written_down_and_read_back(self):
+        original = receipt(object_digest=ObjectDigest("sha256", "c" * 64))
+
+        parsed = installation_receipt_from_data(
+            json.loads(json.dumps(installation_receipt_to_data(original)))
+        )
+
+        self.assertIsInstance(parsed, Ok, getattr(parsed, "diagnostics", ()))
+        self.assertEqual(parsed.value, original)
+
+    def test_a_record_written_before_the_object_was_named_still_reads(self):
+        data = installation_receipt_to_data(receipt())
+
+        self.assertNotIn("object_digest", data)
+        parsed = installation_receipt_from_data(data)
+
+        self.assertIsInstance(parsed, Ok, getattr(parsed, "diagnostics", ()))
+        self.assertIsNone(parsed.value.object_digest)
+
+    def test_a_record_whose_object_is_not_a_digest_is_refused(self):
+        data = installation_receipt_to_data(receipt(object_digest=ObjectDigest("sha256", "c" * 64)))
+        data["object_digest"] = "sha256"
+
+        self.assertIsInstance(installation_receipt_from_data(data), Err)
+
+
 class ReceiptStoreTest(unittest.TestCase):
     def setUp(self) -> None:
         temporary = tempfile.TemporaryDirectory()

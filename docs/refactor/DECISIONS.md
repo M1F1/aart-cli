@@ -2205,3 +2205,28 @@ the Product Specification first instead of hiding the change here.
   authorized plan applies nothing until its effects are separately approved, and only both answers
   together write the managed block. The first of those is the sharpest statement of B-044: the same
   install through the configured seam emits no `setup` key at all.
+
+## D-122 — The canonical receipt names the immutable object the installation came from
+
+- **Decision:** `PlacedArtifactReceipt` and `InstallationReceipt` carry an optional
+  `object_digest`, populated by `intended_placement_receipt` / `intended_receipt` from the
+  `RegistryArtifactVersion` the Selection resolved. A record written before the field existed reads
+  back with `object_digest is None` rather than being refused or defaulted.
+- **Status:** accepted.
+- **Reason:** the receipt recorded what the effects left behind — the delivered tree, its digest,
+  the harness that reads it, the root the payload was copied out of — but not which package in the
+  object store those bytes came from. That gap is the first thing B-044 hits: setup is declared on
+  the package manifest, and `setup_engine/application.py::_prepare_setup_object` finds it by
+  loading the object by digest, which is why the legacy route can run setup off `ArtifactEvidence`
+  and the canonical route cannot. It is not only setup — reconciling a repair against the payload
+  digest alone cannot tell one package from another that happens to deliver identical bytes.
+  Nothing had to be derived: the digest is already in hand where the receipt is written.
+- **Consequence:** the durable store gains a field, so back-compatibility is a correctness
+  requirement, pinned by a test on each shape that an older document still reads and reads as
+  unknown. Optional is the honest shape for the same reason: an installation whose object nobody
+  wrote down is unknown, and inventing a default would put a dangling identity on a real
+  installation. `tests/installed_object_identity_test.py` asserts the recorded digest resolves to a
+  real object in the store whose manifest is the installed package's — a digest nothing answers to
+  would read as an identity and behave as a dangling pointer. This is step (2) of B-044's recorded
+  ordering; it does not yet run setup, and B-045 (the canonical seam registers no CAS reference at
+  all) remains separately open.

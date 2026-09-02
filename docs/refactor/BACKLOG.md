@@ -1029,9 +1029,22 @@ So the two answers, with their real costs:
 
 Ordering that now follows: (1) done -- the fixture and the characterization are in
 `tests/configured_setup_gap_test.py`, which asserts the absent configuration file on both routes and
-guards itself with a test that the approved registry really does declare setup; (2) settle the
-installed-record question above; (3) reach the setup engine from the configured-installation action
-so both front ends close together, and invert the characterization.
+guards itself with a test that the approved registry really does declare setup; (2) done -- the
+canonical receipt now names its object (D-122): `object_digest` on both receipt shapes, populated
+from the `RegistryArtifactVersion` the Selection resolved, optional so records written before it
+still read, and pinned end to end by `tests/installed_object_identity_test.py`, which asserts the
+recorded digest resolves to a real object whose manifest is the installed package's; (3) reach the
+setup engine from the configured-installation action so both front ends close together, and invert
+the characterization.
+
+Two things step (2) deliberately did not do, and step (3) still has to answer. The engine takes a
+legacy `MarketplaceCatalog` (`resolve_artifact` plus `_marketplace_evidence`), which cannot read a
+promoted registry snapshot; `RegistryArtifactVersion` carries `object_digest` and `payload_digest`
+but no `manifest_digest`, so the canonical evidence is not a field-for-field substitution. And
+`setup_engine/io.py:89 persist_setup` records that setup ran by replacing `setup_state_ref` inside
+the legacy install-state record under its lock, which `setup_receipt.locate_setup_record` reads for
+`aart marketplace receipt show|verify|undo` -- the canonical route has no such pointer and needs its
+own durable setup record.
 
 What remains: give the canonical action handler its own setup and reporting completion.
 `_canonical_setup_run` and `_complete_canonical_consumer_action` are deliberately retained in

@@ -523,17 +523,50 @@ nothing until its effects are separately approved, and both together write the d
 block. `skipUnless(darwin)`, because `setup.py:562` accepts only `['darwin']` recipes. Applying the
 preserved draft's hardcoded `TrustClass.COMPANY_REVIEWED` fails two of the four.
 
-What remains before the green is the installed-record question. `_prepare_setup_object` resolves
-what to configure from the install-state manifest, which `io/consumer_machine.py` treats as the
-*legacy* store — a record found there with no canonical receipt becomes an `UnadoptedInstallation`
-(D-069) — while the configured seam writes receipts. The alternative -- having the configured seam write
-install state too -- does *not* make canonical installs surface as unadopted, because
-`read_consumer_machine` drops a manifest record a receipt already answers for
-(`io/consumer_machine.py:362`); what decides it is whether that seam can fill
-`InstallationRecord.effects` truthfully rather than inventing evidence. Widening the engine is not
-free either: `persist_setup` records that setup ran by moving `setup_state_ref` inside the manifest
-under its lock, and `aart marketplace receipt show|verify|undo` reads that same pointer. Every
-trust, evidence and policy check stays inside the engine either way.
+What remained before the green was the installed-record question, settled in step 7g below.
+
+## Step 7g — the receipt names the object it was installed from (2026-09-02)
+
+`_prepare_setup_object` resolves what to configure from the install-state manifest, which
+`io/consumer_machine.py` treats as the *legacy* store — a record found there with no canonical
+receipt becomes an `UnadoptedInstallation` (D-069) — while the configured seam writes receipts. The
+choice between widening the engine to read receipts and having the seam also write install state
+looked like a taste question and turned out to be a measurement: **the canonical receipt could not
+name the object that was installed.** After `aart marketplace install` of the fixture Skill,
+`<data_root>/state/installations/*.json` held the coordinate, `payload_digest`, `root` and the
+deliveries, and no object digest; `install_state`'s `ArtifactEvidence` carries one. Setup is
+declared on the *package manifest*, and `_prepare_setup_object` finds it by loading the object by
+digest, so pointing the engine at the receipt store was never a matter of reading the same facts
+from a different file — the facts were not there. The other option was rejected on its own terms: it
+writes new records into exactly the store the strangler is retiring. (It would not have made
+canonical installs surface as unadopted, because `read_consumer_machine` drops a manifest record a
+receipt already answers for, `io/consumer_machine.py:362`.)
+
+So the receipt now records it (D-122). `object_digest` on `PlacedArtifactReceipt` and
+`InstallationReceipt`, populated by `intended_placement_receipt` and `intended_receipt` from
+`planned.artifact.version.object_digest` — the `RegistryArtifactVersion` the Selection already
+resolved, so this writes down what the installation knew rather than deriving anything. This is not
+only setup's problem: reconciling a repair against the payload digest alone cannot tell one package
+apart from another that happens to deliver identical bytes.
+
+It is a schema addition to a durable store, so the field is optional and absence reads as *unknown*
+rather than being refused or defaulted — an installation whose object nobody wrote down is honestly
+unknown, and a default would put a dangling identity on a real installation.
+`tests/installed_object_identity_test.py` was written red (`AttributeError: 'PlacedArtifactReceipt'
+object has no attribute 'object_digest'`) and asserts more than presence: the recorded digest must
+resolve to an object that is actually in the store and whose `artifact.json` is the installed
+package's, declaring the setup the fixture Skill needs. Each receipt shape additionally carries a
+round-trip, an older-document read and a malformed-digest refusal.
+
+Two things this deliberately did not do, and step (3) of B-044 must answer. The engine takes a
+legacy `MarketplaceCatalog` (`resolve_artifact` plus `_marketplace_evidence`) which cannot read a
+promoted registry snapshot, and `RegistryArtifactVersion` carries `object_digest` and
+`payload_digest` but no `manifest_digest`, so canonical evidence is not a field-for-field
+substitution for `ArtifactEvidence`. And `persist_setup` (`setup_engine/io.py:89`) records that
+setup ran by replacing `setup_state_ref` inside the install-state record under its lock, which
+`setup_receipt.locate_setup_record` reads for `aart marketplace receipt show|verify|undo` — the
+canonical route has no such pointer and needs its own durable setup record. Every trust, evidence
+and policy check stays inside the engine either way.
 
 ## Step 5e — one transaction carrying a set of promotions
 

@@ -200,6 +200,9 @@ def intended_receipt(planned: PlannedInstallation) -> InstallationReceipt:
         planned.registrations,
         planned.bound.credential_references,
         base_interpreter=planned.base_interpreter,
+        # See `intended_placement_receipt`: which package this is, written down where the plan
+        # already knows it.
+        object_digest=planned.artifact.version.object_digest,
     )
 
 
@@ -327,6 +330,11 @@ def intended_placement_receipt(planned: PlannedPlacement) -> PlacedArtifactRecei
         planned.deliveries,
         merges=planned.merges,
         settings=planned.settings,
+        # Which package this is, not just what it delivered. The Selection already resolved it to
+        # one approved version, so recording the object is writing down what the plan knew rather
+        # than deriving anything; without it the receipt cannot get back to the manifest, and a
+        # declared setup is invisible to everything downstream of the install (B-044).
+        object_digest=planned.artifact.version.object_digest,
     )
 
 
