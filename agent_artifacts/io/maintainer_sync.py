@@ -19,7 +19,7 @@ from agent_artifacts.configuration.policy import EffectiveConfiguration, redact_
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.identifiers import ObjectDigest, SourceAlias
 from agent_artifacts.domain.result import Err, Ok, Result
-from agent_artifacts.protocol.authoring import compile_author_snapshot
+from agent_artifacts.protocol.authoring import compile_author_source
 from agent_artifacts.runtime_contract import EXECUTABLE_CAPABILITIES, EXECUTABLE_VERSION
 from agent_artifacts.sources.model import (
     CurrentSourceRequest,
@@ -191,7 +191,7 @@ def complete_configured_source_sync(
         )
 
     def compile_snapshot(snapshot, source_alias, source, revision):
-        return compile_author_snapshot(
+        return compile_author_source(
             snapshot,
             source_alias=source_alias,
             source=source,

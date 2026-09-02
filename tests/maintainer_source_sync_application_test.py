@@ -17,7 +17,7 @@ from agent_artifacts.configuration.model import ConfiguredSource, SourceKind
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.identifiers import ObjectDigest, SourceAlias, SourceId
 from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.authoring import compile_author_snapshot
+from agent_artifacts.protocol.authoring import compile_author_source
 from agent_artifacts.protocol.capabilities import parse_capability
 from agent_artifacts.protocol.native_tree import (
     SnapshotEntry,
@@ -69,6 +69,20 @@ def _snapshot() -> SourceSnapshot:
     )
 
 
+def _collection_snapshot() -> SourceSnapshot:
+    manifest = {
+        "schema": "aart.dev/collection/v1",
+        "name": "data-engineer",
+        "version": "2.1.0",
+        "summary": "Approved data engineering tools.",
+        "artifacts": ["company/mcp/github@^1"],
+    }
+    return SourceSnapshot(
+        SnapshotOrigin.LOCAL,
+        (_entry("collections/data-engineer/aart.json", json.dumps(manifest, sort_keys=True)),),
+    )
+
+
 def _digest(character: str) -> ObjectDigest:
     return ObjectDigest("sha256", character * 64)
 
@@ -87,6 +101,22 @@ def _candidate():
             source.alias,
             "local:" + "0" * 64,
             _snapshot(),
+        )
+    )
+    return replace(
+        provisional,
+        resolved_revision="local:" + provisional.snapshot_digest.value,
+    )
+
+
+def _candidate_for(snapshot: SourceSnapshot):
+    source = _source()
+    provisional = _unwrap(
+        make_source_candidate(
+            source_instance_id(source),
+            source.alias,
+            "local:" + "0" * 64,
+            snapshot,
         )
     )
     return replace(
@@ -192,7 +222,7 @@ class _Ports:
         self.events.append("compile")
         if self.fail_compile:
             return _failure("compile failed")
-        return compile_author_snapshot(
+        return compile_author_source(
             snapshot,
             source_alias=source_alias,
             source=source,
@@ -264,6 +294,20 @@ class MaintainerSourceSyncApplicationTest(unittest.TestCase):
                 "release",
             ],
         )
+
+    def test_confirmed_sync_compiles_and_persists_a_collection_candidate(self) -> None:
+        ports = _Ports()
+        ports.candidate = _candidate_for(_collection_snapshot())
+        prepared = _unwrap(prepare_source_sync(_request(), None, None, ports.approved))
+
+        result = execute_source_sync(prepared, prepared.review_digest, ports.ports())
+
+        self.assertIsInstance(result, Ok)
+        assert isinstance(result, Ok)
+        self.assertEqual(result.value.scan.active, ())
+        self.assertEqual(len(result.value.scan.collection_active), 1)
+        self.assertEqual(result.value.scan.collection_active[0].version, "2.1.0")
+        self.assertEqual(result.value.scan.registry_mutations, ())
 
     def test_wrong_review_or_changed_registry_refuses_before_source_mutation(self) -> None:
         for changed_review in (True, False):

@@ -1808,3 +1808,75 @@ the Product Specification first instead of hiding the change here.
   subject names the artifact for one Candidate and the count for several. The composition E2E
   proves the whole route end to end over a real Git checkout: two ticked Candidates reach the
   registry as one commit, one registry snapshot and one working tree with nothing left uncommitted.
+
+## D-107 — Promotion audit provenance discriminates Git revisions from local snapshot digests
+
+- **Decision:** `PromotionAudit.source_provenance` is a frozen discriminated value. A
+  `git-revision` carries only a 40-hex `git_revision`; a `local-snapshot` carries only a canonical
+  SHA-256 `snapshot_digest`. New canonical audit JSON writes a `source_provenance` object with
+  exactly the fields for its kind. The reader also accepts the canonical legacy `source_revision`
+  shape when and only when its value is a Git revision; a `local:<sha256>` value in that legacy
+  field is rejected. Single and bulk planning construct this value from the Candidate's already
+  validated immutable Source pin before entering the existing one-transaction planner.
+- **Status:** accepted; closes B-041 and completes CP-14 step 5.
+- **Reason:** a Git revision and a filesystem snapshot digest identify different things. Allowing
+  both through one text field would make local provenance look like a commit and would leave future
+  readers guessing which validation rules apply. Keeping separate fields behind an explicit kind
+  makes the impossible combinations unrepresentable. Existing Git audit history is durable under
+  INV-229, so changing the writer cannot make the old canonical record shape unreadable.
+- **Consequence:** the by-name local promotion refusal is removed from both the single wrapper and
+  the transaction planner; neither path loops, and mixed Git/local members still produce one bulk
+  plan and one registry snapshot. A filesystem-backed Source fixture now uses a filesystem source
+  location, and direct tests prove screen 43 is plannable and the audit holds a typed local digest.
+  A live temporary installation proves local Source sync, validation, promotion, persisted registry
+  validation and one clean local Git commit. Rebinding retained versions remains unchanged, so the
+  pre-existing approved version and the local promotion remain readable together (D-089/B-037).
+
+## D-108 — Candidate lifecycle joins durable history to exact registry evidence
+
+- **Decision:** screen 48 walks the active Candidate's exact predecessor chain from durable
+  Candidate history and treats promotion as proven only when one registry version and one promotion
+  audit both match the Candidate ID, target coordinate, input/payload/canonical digests, typed Source
+  provenance and promotion mode. Candidate state alone never proves promotion. For the one-registry
+  configuration D-103 supports, the locally committed checkout is the evidence source so a promotion
+  is visible before external publication; otherwise the synchronized registry observation is used.
+- **Status:** accepted.
+- **Reason:** Candidate review state and approved registry state are deliberately different values
+  (INV-199). A stored `PROMOTED` state with no matching registry record is an assertion, while D-089
+  legitimately rebinds old version records to the newest registry snapshot and therefore prevents
+  historical audit matching from depending on the version record's current snapshot field.
+- **Consequence:** the lifecycle reports unavailable, unverified and not-promoted separately; it
+  retains an earlier exact promotion when a later Source revision creates a Changed Candidate. The
+  projection has no IO or clock, and screen drawing opens no file.
+
+## D-109 — Provenance is projected from compiler output and cross-checked at the domain boundary
+
+- **Decision:** screen 49 reads the canonical package provenance produced by the author compiler,
+  cross-checks its Source URL, Source kind, immutable pin, manifest path, input digest and importer
+  identity/version against the Candidate's domain provenance, and refuses disagreement. Git and
+  local provenance retain the distinct D-107 fields. Payload paths are every canonical regular file
+  below `payload/`; warnings remain ordered compiler output.
+- **Status:** accepted.
+- **Reason:** showing only the Candidate's summary metadata would omit the importer and exact shipped
+  paths, while trusting two independently carried provenance records without comparing them could
+  present a hybrid record that never existed. The canonical compiler result already contains every
+  accepted field for this screen.
+- **Consequence:** screen 49 is a pure projection composed once with the rest of Maintainer state.
+  It never labels a local snapshot digest as a Git revision and never reads a Source while drawing.
+
+## D-110 — Version conflict is a refusal view, never an in-place repair path
+
+- **Decision:** screen 50 exists only for an immutable coordinate/version collision. When the exact
+  approved registry version is available it shows the published and Candidate input, payload and
+  canonical digests side by side; when it is unavailable, the durable
+  `registry-version-immutable` Candidate finding keeps the refusal visible but explicitly says the
+  exact published evidence is unavailable. Both outcomes prescribe a new version and expose no
+  mutation action for the published coordinate.
+- **Status:** accepted.
+- **Reason:** INV-203 and INV-239 forbid different content under a published coordinate/version.
+  Hiding the conflict when the current registry read is unavailable would erase a durable finding;
+  inventing the published digests would be worse. A matching exact Candidate is not a content
+  conflict and receives no screen-50 view.
+- **Consequence:** production composition compares against `ApprovedRegistryState.versions`, while
+  rendering is read-only. A contradictory durable conflict finding plus an exact matching approved
+  version is rejected as inconsistent state instead of choosing whichever record is convenient.

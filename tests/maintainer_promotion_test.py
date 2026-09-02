@@ -81,6 +81,7 @@ _UNGUIDED_SECRET = {
     "kind": "secret",
     "inject": {"type": "environment", "variable": "GITHUB_TOKEN"},
 }
+_LOCAL_REVISION = "local:" + "1" * 64
 
 
 def _entry(path: str, content: str) -> SnapshotEntry:
@@ -115,7 +116,11 @@ def _scan(*, inputs: list[dict[str, object]] | None = None, revision: str = "a" 
             ),
         ),
         source_alias=SourceAlias("authors"),
-        source="https://git.example/authors.git",
+        source=(
+            "https://git.example/authors.git"
+            if source_revision_kind(revision) == "git"
+            else "/work/authors"
+        ),
         revision=revision,
     )
     assert isinstance(compiled, Ok), compiled
@@ -509,6 +514,21 @@ class PromotionPlanTest(unittest.TestCase):
             audit.effective_policy_digest, prepared.value.evidence.effective_policy_digest
         )
 
+    def test_a_local_source_plans_with_typed_snapshot_provenance(self) -> None:
+        """A local snapshot is supported without passing it off as a Git commit."""
+
+        prepared = _prepared(revision=_LOCAL_REVISION)
+        assert isinstance(prepared, Ok), prepared
+
+        planned = plan_candidate_promotion(prepared.value, _registry())
+
+        assert isinstance(planned, Ok), planned
+        provenance = planned.value.audits[0].source_provenance
+        self.assertEqual(provenance.kind.value, "local-snapshot")
+        self.assertIsNone(provenance.git_revision)
+        assert provenance.local_snapshot_digest is not None
+        self.assertEqual(provenance.local_snapshot_digest.value, "1" * 64)
+
     def test_a_different_mode_plans_a_different_transaction(self) -> None:
         vendored = _prepared(mode=PromotionMode.VENDORED)
         referenced = _prepared(mode=PromotionMode.REFERENCED)
@@ -555,6 +575,22 @@ class RegistryDiffProjectionTest(unittest.TestCase):
 
         self.assertFalse(view.plannable)
         self.assertTrue(view.refusals)
+
+    def test_a_local_source_has_a_reviewable_registry_transaction(self) -> None:
+        bundle = _bundle(revision=_LOCAL_REVISION)
+
+        view = project_maintainer_registry_diff(
+            bundle,
+            validate_candidate(bundle, policy=EffectivePolicy()),
+            EffectivePolicy(),
+            _approved(),
+            _registry(),
+            mode=PromotionMode.VENDORED,
+        )
+
+        self.assertTrue(view.plannable)
+        self.assertTrue(view.plan_digest)
+        self.assertFalse(view.refusals)
 
     def test_an_unreadable_registry_workspace_is_a_refusal(self) -> None:
         bundle = _bundle()

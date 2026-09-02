@@ -50,8 +50,12 @@ from agent_artifacts.application.consumer_views import (
 from agent_artifacts.application.maintainer_views import (
     MaintainerBulkPromotionView,
     MaintainerCandidateFilter,
+    MaintainerCandidateLifecycleView,
     MaintainerCandidateView,
+    MaintainerCollectionCandidateView,
+    MaintainerCollectionValidationView,
     MaintainerPromotionReviewView,
+    MaintainerProvenanceView,
     MaintainerRegistryCommitView,
     MaintainerRegistryDiffView,
     MaintainerRegistryValidationView,
@@ -60,6 +64,7 @@ from agent_artifacts.application.maintainer_views import (
     MaintainerSourceSyncResultView,
     MaintainerSourceSyncReviewView,
     MaintainerValidationView,
+    MaintainerVersionConflictView,
     MaintainerViews,
     filter_maintainer_candidates,
     parse_validation_row,
@@ -71,10 +76,14 @@ from agent_artifacts.tui_maintainer import (
     render_maintainer_bulk_promotion,
     render_maintainer_candidate,
     render_maintainer_candidate_diff,
+    render_maintainer_candidate_lifecycle,
     render_maintainer_candidates,
+    render_maintainer_collection_candidates,
+    render_maintainer_collection_validation,
     render_maintainer_dashboard,
     render_maintainer_policy_review,
     render_maintainer_promotion_review,
+    render_maintainer_provenance,
     render_maintainer_registries,
     render_maintainer_registry_commit,
     render_maintainer_registry_diff,
@@ -83,6 +92,7 @@ from agent_artifacts.tui_maintainer import (
     render_maintainer_sources,
     render_maintainer_validation,
     render_maintainer_validation_check,
+    render_maintainer_version_conflict,
     render_source_sync_result,
     render_source_sync_review,
 )
@@ -1211,6 +1221,35 @@ class ConsumerScreens:
         row = parse_validation_row(focus)
         return self.maintainer.validation(focus if row is None else row.candidate_id)
 
+    def candidate_lifecycle(self, candidate_id: str) -> MaintainerCandidateLifecycleView | None:
+        """The already-composed lifecycle for one stable Candidate identity."""
+
+        return None if self.maintainer is None else self.maintainer.lifecycle(candidate_id)
+
+    def candidate_provenance(self, candidate_id: str) -> MaintainerProvenanceView | None:
+        """The already-composed compiler provenance for one stable Candidate identity."""
+
+        return None if self.maintainer is None else self.maintainer.provenance(candidate_id)
+
+    def version_conflict(self, candidate_id: str) -> MaintainerVersionConflictView | None:
+        """The already-composed immutable-version refusal for one Candidate, when present."""
+
+        return None if self.maintainer is None else self.maintainer.version_conflict(candidate_id)
+
+    def collection_candidates(self) -> tuple[MaintainerCollectionCandidateView, ...]:
+        """The already-composed active Collection Candidate rows."""
+
+        if self.maintainer is None or self.maintainer.collection_candidates is None:
+            return ()
+        return self.maintainer.collection_candidates
+
+    def collection_validation(self, candidate_id: str) -> MaintainerCollectionValidationView | None:
+        """The approved-registry resolution for one Collection Candidate."""
+
+        return (
+            None if self.maintainer is None else self.maintainer.collection_validation(candidate_id)
+        )
+
     def promotion(
         self,
         focus: str,
@@ -1484,6 +1523,8 @@ class CanonicalScreenSource:
             # The row identity is the Candidate ID rather than the artifact name: two Sources may
             # both publish `github-mcp`, and a list keyed by name would open the wrong one.
             return tuple(item.id for item in self._screens.candidates(_candidate_filter(state)))
+        if screen is MaintainerScreen.COLLECTION_CANDIDATES:
+            return tuple(item.candidate_id for item in self._screens.collection_candidates())
         if screen is MaintainerScreen.VALIDATION:
             # A check name alone would be ambiguous across Candidates, so a row carries both.
             validation = self._screens.validation(state.focus)
@@ -1611,6 +1652,26 @@ class CanonicalScreenSource:
             return (
                 MaintainerScreen.VALIDATION
                 if self._screens.validation(state.focus) is not None
+                else None
+            )
+        if screen is MaintainerScreen.CANDIDATE_LIFECYCLE:
+            return (
+                MaintainerScreen.PROVENANCE
+                if self._screens.candidate_provenance(state.focus) is not None
+                else None
+            )
+        if screen is MaintainerScreen.PROVENANCE:
+            return (
+                MaintainerScreen.VERSION_CONFLICT
+                if self._screens.version_conflict(state.focus) is not None
+                else None
+            )
+        if screen is MaintainerScreen.COLLECTION_CANDIDATES:
+            return (
+                MaintainerScreen.COLLECTION_VALIDATION
+                if self._screens.maintainer is not None
+                and self._screens.maintainer.collection_candidate(row) is not None
+                and self._screens.collection_validation(row) is not None
                 else None
             )
         if screen is MaintainerScreen.VALIDATION:
@@ -1785,6 +1846,40 @@ class CanonicalScreenSource:
                 else render_maintainer_candidate_diff(
                     candidate, profile, show_files=state.file_diff
                 )
+            )
+        if screen is MaintainerScreen.CANDIDATE_LIFECYCLE:
+            lifecycle = screens.candidate_lifecycle(state.focus)
+            return (
+                ("That Candidate's lifecycle is not available.",)
+                if lifecycle is None
+                else render_maintainer_candidate_lifecycle(lifecycle, profile)
+            )
+        if screen is MaintainerScreen.PROVENANCE:
+            provenance = screens.candidate_provenance(state.focus)
+            return (
+                ("That Candidate's provenance is not available.",)
+                if provenance is None
+                else render_maintainer_provenance(provenance, profile)
+            )
+        if screen is MaintainerScreen.VERSION_CONFLICT:
+            conflict = screens.version_conflict(state.focus)
+            return (
+                ("That Candidate has no immutable version conflict.",)
+                if conflict is None
+                else render_maintainer_version_conflict(conflict, profile)
+            )
+        if screen is MaintainerScreen.COLLECTION_CANDIDATES:
+            return render_maintainer_collection_candidates(
+                screens.collection_candidates(),
+                cursor=state.current_row,
+                profile=profile,
+            )
+        if screen is MaintainerScreen.COLLECTION_VALIDATION:
+            collection_validation = screens.collection_validation(state.focus)
+            return (
+                ("That Collection Candidate's validation is not available.",)
+                if collection_validation is None
+                else render_maintainer_collection_validation(collection_validation, profile)
             )
         if screen is MaintainerScreen.VALIDATION:
             validation = screens.validation(state.focus)

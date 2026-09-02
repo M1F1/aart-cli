@@ -10,7 +10,10 @@ from agent_artifacts.application.maintainer import CandidateBundle, reconcile_so
 from agent_artifacts.application.promotion import (
     PromotionApplyReceipt,
     PromotionEvidence,
+    PromotionSourceKind,
+    PromotionSourceProvenance,
     finalize_promotion,
+    load_registry_promotions,
     load_registry_versions,
     plan_bulk_promotion,
     plan_registry_lifecycle,
@@ -53,6 +56,7 @@ def _ready_bundle(
     *,
     server: str = "print('ready')\n",
     version: str = "1.0.0",
+    revision: str = "a" * 40,
 ) -> CandidateBundle:
     manifest = {
         "schema": "aart.dev/mcp/v1",
@@ -64,20 +68,22 @@ def _ready_bundle(
     }
     compiled = compile_author_snapshot(
         SourceSnapshot(
-            SnapshotOrigin.IMMUTABLE_GIT,
+            SnapshotOrigin.LOCAL if revision.startswith("local:") else SnapshotOrigin.IMMUTABLE_GIT,
             (
                 _entry(f"{name}/aart.json", json.dumps(manifest)),
                 _entry(f"{name}/server.py", server),
             ),
         ),
         source_alias=SourceAlias("authors"),
-        source="https://git.example/servers.git",
-        revision="a" * 40,
+        source=(
+            "/work/authors" if revision.startswith("local:") else "https://git.example/servers.git"
+        ),
+        revision=revision,
     )
     assert isinstance(compiled, Ok)
     scanned = reconcile_source_scan(
         SourceAlias("authors"),
-        "a" * 40,
+        revision,
         compiled.value,
         previous=(),
         approved=(),
@@ -121,6 +127,135 @@ class _RecordingPromotionPort:
 
 
 class PromotionPlanningTest(unittest.TestCase):
+    def test_promotion_provenance_kinds_cannot_exchange_fields(self) -> None:
+        with self.assertRaises(ValueError):
+            PromotionSourceProvenance(
+                PromotionSourceKind.GIT_REVISION,
+                git_revision="a" * 40,
+                local_snapshot_digest=_digest("1"),
+            )
+        with self.assertRaises(ValueError):
+            PromotionSourceProvenance(
+                PromotionSourceKind.LOCAL_SNAPSHOT,
+                git_revision="a" * 40,
+            )
+
+    def test_one_bulk_transaction_keeps_each_sources_provenance_kind(self) -> None:
+        git = _ready_bundle("git-mcp")
+        local = _ready_bundle("local-mcp", revision="local:" + "2" * 64)
+        empty = SourceSnapshot(SnapshotOrigin.LOCAL, ())
+
+        planned = plan_bulk_promotion(
+            empty,
+            (local, git),
+            evidence=_evidence(local) + _evidence(git),
+            approved=(),
+        )
+
+        assert isinstance(planned, Ok), planned
+        self.assertEqual(len(planned.value.audits), 2)
+        self.assertEqual(
+            {item.source_provenance.kind for item in planned.value.audits},
+            {PromotionSourceKind.GIT_REVISION, PromotionSourceKind.LOCAL_SNAPSHOT},
+        )
+        self.assertEqual(
+            {item.registry_snapshot_after for item in planned.value.audits},
+            {planned.value.next_registry_snapshot},
+        )
+
+    def test_local_provenance_round_trips_as_a_discriminated_audit_record(self) -> None:
+        revision = "local:" + "1" * 64
+        bundle = _ready_bundle(revision=revision)
+        empty = SourceSnapshot(SnapshotOrigin.LOCAL, ())
+        planned = plan_bulk_promotion(empty, (bundle,), evidence=_evidence(bundle), approved=())
+        assert isinstance(planned, Ok), planned
+
+        projected = project_promotion(empty, planned.value)
+        assert isinstance(projected, Ok), projected
+        loaded = load_registry_promotions(projected.value)
+
+        assert isinstance(loaded, Ok), loaded
+        provenance = loaded.value[0].source_provenance
+        self.assertIs(provenance.kind, PromotionSourceKind.LOCAL_SNAPSHOT)
+        self.assertIsNone(provenance.git_revision)
+        self.assertEqual(provenance.local_snapshot_digest, _digest("1"))
+        audit_entry = next(
+            item
+            for item in projected.value.entries
+            if str(item.path).startswith("registry/promotions/")
+        )
+        encoded = json.loads(audit_entry.content)
+        self.assertNotIn("source_revision", encoded)
+        self.assertEqual(
+            encoded["source_provenance"],
+            {
+                "kind": "local-snapshot",
+                "snapshot_digest": str(_digest("1")),
+            },
+        )
+
+    def test_legacy_git_revision_audits_remain_readable(self) -> None:
+        bundle = _ready_bundle()
+        empty = SourceSnapshot(SnapshotOrigin.LOCAL, ())
+        planned = plan_bulk_promotion(empty, (bundle,), evidence=_evidence(bundle), approved=())
+        assert isinstance(planned, Ok), planned
+        projected = project_promotion(empty, planned.value)
+        assert isinstance(projected, Ok), projected
+        entries: list[SnapshotEntry] = []
+        for entry in projected.value.entries:
+            if not str(entry.path).startswith("registry/promotions/"):
+                entries.append(entry)
+                continue
+            encoded = json.loads(entry.content)
+            encoded.pop("source_provenance")
+            encoded["source_revision"] = "a" * 40
+            entries.append(
+                dataclasses.replace(
+                    entry,
+                    content=(
+                        json.dumps(encoded, sort_keys=True, separators=(",", ":")) + "\n"
+                    ).encode(),
+                )
+            )
+
+        loaded = load_registry_promotions(SourceSnapshot(projected.value.origin, tuple(entries)))
+
+        assert isinstance(loaded, Ok), loaded
+        self.assertIs(loaded.value[0].source_provenance.kind, PromotionSourceKind.GIT_REVISION)
+        self.assertEqual(loaded.value[0].source_provenance.git_revision, "a" * 40)
+
+    def test_a_local_snapshot_cannot_be_disguised_in_the_legacy_git_field(self) -> None:
+        revision = "local:" + "1" * 64
+        bundle = _ready_bundle(revision=revision)
+        empty = SourceSnapshot(SnapshotOrigin.LOCAL, ())
+        planned = plan_bulk_promotion(empty, (bundle,), evidence=_evidence(bundle), approved=())
+        assert isinstance(planned, Ok), planned
+        projected = project_promotion(empty, planned.value)
+        assert isinstance(projected, Ok), projected
+        entries: list[SnapshotEntry] = []
+        for entry in projected.value.entries:
+            if not str(entry.path).startswith("registry/promotions/"):
+                entries.append(entry)
+                continue
+            encoded = json.loads(entry.content)
+            encoded.pop("source_provenance")
+            encoded["source_revision"] = revision
+            entries.append(
+                dataclasses.replace(
+                    entry,
+                    content=(
+                        json.dumps(encoded, sort_keys=True, separators=(",", ":")) + "\n"
+                    ).encode(),
+                )
+            )
+
+        loaded = load_registry_promotions(SourceSnapshot(projected.value.origin, tuple(entries)))
+
+        assert isinstance(loaded, Err), loaded
+        self.assertIn(
+            "legacy promotion provenance requires a Git revision", loaded.diagnostics[0].message
+        )
+
     def test_bulk_vendoring_is_default_order_independent_and_one_transaction(self) -> None:
         first = _ready_bundle()
         second = _ready_bundle("jira-mcp", server="print('jira')\n")

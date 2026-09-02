@@ -337,16 +337,6 @@ def plan_candidate_promotion(
         registry_snapshot, SourceSnapshot
     ):
         return _error("planning a promotion needs a reviewed promotion and a registry workspace")
-    # A promotion audit records a Git revision, and a local Source carries `local:<snapshot>`
-    # (D-096). Promoting one through the Git-only record would either fail deep inside the planner
-    # or, worse, disguise a local origin as a commit, so it is refused here by name.
-    revision = prepared.candidate.candidate.artifact.provenance.revision
-    if source_revision_kind(revision) != "git":
-        return _error(
-            "a Candidate from a local Source cannot be promoted yet: the promotion audit record "
-            "has no place for local provenance",
-            "Promote from a Git-backed authoring Source, or wait for local promotion to land.",
-        )
     return plan_promotion_transaction((prepared,), registry_snapshot)
 
 
@@ -379,17 +369,6 @@ def plan_promotion_transaction(
             "a promotion transaction must share one mode, policy and approved baseline",
             "review the selection again against one registry",
         )
-    # A promotion audit records a Git revision, and a local Source carries `local:<snapshot>`
-    # (D-096). Promoting one through the Git-only record would either fail deep inside the planner
-    # or, worse, disguise a local origin as a commit, so it is refused here by name.
-    for item in promotions:
-        revision = item.candidate.candidate.artifact.provenance.revision
-        if source_revision_kind(revision) != "git":
-            return _error(
-                "a Candidate from a local Source cannot be promoted yet: the promotion audit "
-                "record has no place for local provenance",
-                "Promote from a Git-backed authoring Source, or wait for local promotion to land.",
-            )
     return plan_bulk_promotion(
         registry_snapshot,
         tuple(item.candidate for item in promotions),

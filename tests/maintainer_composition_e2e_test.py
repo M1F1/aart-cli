@@ -20,7 +20,12 @@ from agent_artifacts.application.consumer_ui import (
 from agent_artifacts.application.consumer_views import ConsumerSettings
 from agent_artifacts.application.maintainer import CandidateBundle, reconcile_source_scan
 from agent_artifacts.application.maintainer_views import MaintainerScreen, parse_validation_row
-from agent_artifacts.application.promotion import load_registry_versions, validate_promoted_registry
+from agent_artifacts.application.promotion import (
+    PromotionSourceKind,
+    load_registry_promotions,
+    load_registry_versions,
+    validate_promoted_registry,
+)
 from agent_artifacts.configuration.model import (
     ConfiguredSource,
     ReportingSettings,
@@ -315,7 +320,19 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             registry_before = read_current_source(
                 CurrentSourceRequest(registry_paths, env.source.alias)
             )
-            self.assertIsInstance(registry_before, Ok)
+            assert isinstance(registry_before, Ok) and registry_before.value is not None
+            registry_root = env.project
+            _materialize(registry_root, registry_before.value.candidate.snapshot)
+            subprocess.run(
+                ("git", "init", "-b", "main", str(registry_root)),
+                check=True,
+                capture_output=True,
+            )
+            _git(registry_root, "config", "user.name", "AART Test")
+            _git(registry_root, "config", "user.email", "aart@example.invalid")
+            _git(registry_root, "add", "-A")
+            _git(registry_root, "commit", "-m", "Initial approved registry")
+            before_revision = _git(registry_root, "rev-parse", "HEAD")
 
             handler = _actions(env)
             terminal = FakeTerminal(
@@ -353,6 +370,64 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
                 CurrentSourceRequest(registry_paths, env.source.alias)
             )
             self.assertEqual(registry_after, registry_before)
+
+            promotion_terminal = FakeTerminal(
+                *(DOWN for _ in range(8)),
+                ENTER,
+                DOWN,
+                ENTER,
+                ENTER,
+                ord("d"),
+                ENTER,
+                ord("p"),
+                ENTER,
+                ENTER,
+                ENTER,
+                ENTER,
+                ENTER,
+                ENTER,
+                ENTER,
+            )
+            promoted = run_consumer_shell(
+                handler.source(),
+                promotion_terminal,
+                state=opening_state(handler.settings),
+                action_handler=handler,
+                settings_writer=handler.save_settings,
+            )
+
+            self.assertIs(promoted.session.screen, MaintainerScreen.REGISTRY)
+            self.assertNotIn(
+                "cannot be promoted",
+                promotion_terminal.screen_containing("AART / Registry Diff"),
+            )
+            self.assertIn(
+                "Approved registry state written locally",
+                promotion_terminal.screen_containing("Approved registry state written locally"),
+            )
+            self.assertNotEqual(_git(registry_root, "rev-parse", "HEAD"), before_revision)
+            self.assertEqual(_git(registry_root, "status", "--porcelain=v1"), "")
+            persisted = FilesystemPromotionOutput(str(registry_root)).current()
+            assert isinstance(persisted, Ok), persisted
+            versions = load_registry_versions(persisted.value)
+            assert isinstance(versions, Ok), versions
+            self.assertIsInstance(validate_promoted_registry(persisted.value, versions.value), Ok)
+            audits = load_registry_promotions(persisted.value)
+            assert isinstance(audits, Ok), audits
+            local_audits = tuple(
+                item
+                for item in audits.value
+                if item.source_provenance.kind is PromotionSourceKind.LOCAL_SNAPSHOT
+            )
+            self.assertEqual(len(local_audits), 1)
+            provenance = local_audits[0].source_provenance
+            self.assertIs(provenance.kind, PromotionSourceKind.LOCAL_SNAPSHOT)
+            self.assertIsNone(provenance.git_revision)
+            assert provenance.local_snapshot_digest is not None
+            self.assertEqual(
+                provenance.local_snapshot_digest.value,
+                history.value.revision.removeprefix("local:"),
+            )
 
     def test_candidate_list_detail_and_diff_draw_the_scan_composition_already_read(self) -> None:
         """Screens 35-37 reached in one real session, from the scan composition read once.
@@ -696,6 +771,19 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             self.assertIsInstance(
                 validate_promoted_registry(persisted.value, versions.value),
                 Ok,
+            )
+            # Screen 48 reads the just-committed checkout rather than mistaking the older
+            # synchronized registry snapshot for the complete Maintainer lifecycle. Promotion is
+            # still proven by the persisted version and audit pair, never by Candidate state.
+            refreshed = handler.source().screens.maintainer
+            assert refreshed is not None
+            lifecycle = refreshed.lifecycle(scan.active[0].candidate.id.value)
+            assert lifecycle is not None
+            self.assertTrue(
+                any(
+                    stage.phase.value == "promotion" and stage.outcome == "promoted"
+                    for stage in lifecycle.stages
+                )
             )
 
     def test_bulk_promotion_writes_both_candidates_in_one_commit(self) -> None:

@@ -2,13 +2,16 @@
 
 ## Current objective
 
-Continue **CP-14 Maintainer TUI 30–53**, step 5: bulk promotion. Screens 41–47 are live. Screens
-41–44 review, choose, plan and validate without writing; explicit confirmation on screen 45 is the
-first Maintainer action that writes approved registry state, screen 46 is where a Maintainer reads
-the registry back afterwards, and screen 47 assembles a whole selection into one such transaction.
-Only B-041 (local provenance through promotion) still stands between this and a complete step 5.
+Continue **CP-14 Maintainer TUI 30–53**, step 6: Collection Candidates and filters. Screens 48–50
+are now live: lifecycle uses exact history plus registry evidence, provenance retains typed
+Git/local pins and compiler output, and immutable version conflicts require a new version
+(D-108–D-110). Step 5 is complete: screens 41–47 are live, including a coherent bulk
+transaction and truthful local Source provenance (D-107, closes B-041). Screens 41–44 review,
+choose, plan and validate without writing; explicit confirmation on screen 45 is the first
+Maintainer action that writes approved registry state, screen 46 reads the registry back, and screen
+47 assembles a whole selection into one such transaction.
 
-Screens 30–46 are live in the production shared shell:
+Screens 30–47 are live in the production shared shell:
 
 - screen 30 and screens 31–32 compose configured authoring Sources, durable health and only an exact
   matching Candidate-history observation (D-093–D-095);
@@ -34,8 +37,8 @@ Screens 30–46 are live in the production shared shell:
   the review digest that would be confirmed (D-102);
 - screen 43 shows the registry transaction a confirmed promotion would apply: the paths it would
   write and their change kinds (bounded at 200 rows, with the full count stated), the registry
-  snapshot before and after, and the transaction digest. A Candidate from a local Source is refused
-  by name here rather than deep inside the planner (B-041).
+  snapshot before and after, and the transaction digest. Git and local-source Candidates both reach
+  this plan; their audit provenance uses distinct typed fields (D-107).
 - screen 44 shows the already-composed validation of the projected registry, including the exact
   Candidate-validation and policy evidence that authorizes the promotion. Drawing it performs no
   reads, planning or writes;
@@ -59,6 +62,9 @@ Screens 30–46 are live in the production shared shell:
   not screen 43, because a bulk selection has no single-Candidate diff to open. Confirmation
   re-checks that the selection is still a subset of what screen 47 composed, and a promotion
   recomposes the Maintainer views afterwards because the commit moved the checkout.
+- a local filesystem Source now syncs, validates, promotes and commits through the live shell. Its
+  audit is `local-snapshot` plus a typed SHA-256 snapshot digest, never a value squeezed into the
+  legacy Git-revision field. Existing Git-only audit records remain readable (D-107, closes B-041).
 
 Evidence: `tests/maintainer_candidate_shell_test.py`, `tests/maintainer_candidate_views_test.py`,
 `tests/candidate_validation_test.py`, `tests/maintainer_validation_views_test.py`,
@@ -67,28 +73,21 @@ Evidence: `tests/maintainer_candidate_shell_test.py`, `tests/maintainer_candidat
 `tests/maintainer_registry_view_test.py`,
 `tests/maintainer_bulk_promotion_test.py`, `tests/maintainer_bulk_transaction_test.py` and a
 real temporary production installation in `tests/maintainer_composition_e2e_test.py`, which now
-walks from the consumer dashboard through screen 45 and commits the promoted registry locally, and
-separately walks screen 47 to commit two Candidates as one transaction.
+walks from the consumer dashboard through screen 45 and commits the promoted registry locally,
+separately walks screen 47 to commit two Candidates as one transaction, and takes a real local
+Source from sync through a typed-provenance promotion commit.
 
 ## Exact next action
 
-The bulk transaction is live and proven end to end: two ticked Candidates reach a real Git checkout
-as one commit and one registry snapshot (`test_bulk_promotion_writes_both_candidates_in_one_commit`).
-What remains before step 5 may be called complete:
+Start RED tests for screens 51–52, then finish screen 53:
 
-1. **Resolve B-041.** Local-origin Candidates must keep their `local:<snapshot-sha256>` provenance
-   through promotion rather than being disguised as Git commits. Give the promotion audit record a
-   place for local provenance, then replace the by-name refusal in planning with supported
-   provenance and restore the two direct refusal tests that were dropped with it. This is the last
-   blocker on step 5.
-2. Retained approved records must remain readable after a bulk transaction: rebind every retained
-   record to the transaction's snapshot as metadata only, with published package bytes unchanged
-   (D-089/B-037). Do not reintroduce a per-transaction rebind that leaves older versions
-   unreadable.
-3. Keep published coordinate/version content immutable: digest conflict is a refusal, never an
-   in-place repair (INV-203/239), and superseded records remain durable audit history (INV-229).
-4. Then step 6: screens 48–53, followed by step 7, retiring legacy authority only behind the
-   acceptance evidence D-091 requires.
+1. Screens 51–52 make Collections first-class versioned Candidates, resolve their membership only
+   against approved registry state and verify every member is approved and compatible. This closes
+   B-031 before legacy Collection authority can be retired.
+2. Screen 53 edits the existing typed `MaintainerCandidateFilter` for status, kind, Source and
+   target registry; do not introduce a second filter model.
+3. Preserve D-089/B-037 whenever promotion planning is touched: retained approved records rebind to
+   the transaction snapshot as metadata only, and published package bytes do not change.
 
 Noticed while proving the walk, not fixed here: screen 47 draws its "N selected" footer once of its
 own and once from the shell chrome, so the count appears twice. Recorded in `BACKLOG.md`.
@@ -108,8 +107,8 @@ own and once from the shell chrome, so the count appears twice. Recorded in `BAC
 - Machine state is assembled once outside draw functions; application projections have no IO/clock.
 - Candidate list narrowing stays typed application state; screen 53 edits `MaintainerCandidateFilter`
   when it lands rather than introducing a second filter model (D-098).
-- When screens 41–47 land, local Candidate promotion must preserve D-096 local provenance instead of
-  passing through the currently Git-only registry-index projection by disguise.
+- Local Candidate promotion preserves D-096 through the discriminated audit provenance in D-107;
+  the legacy Git field accepts Git revisions only.
 - Do not retire legacy direct/local or Collection authority until the corresponding CP-14 public
   flow is proven. B-031, B-038 and B-039 remain ordered behind that evidence (D-091).
 - Do not modify older AART repositories.

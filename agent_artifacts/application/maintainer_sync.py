@@ -31,7 +31,7 @@ from agent_artifacts.domain.identifiers import (
 from agent_artifacts.domain.registry import RegistryArtifactVersion
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.domain.serialization import canonical_json_bytes
-from agent_artifacts.protocol.authoring import CompiledAuthorArtifact
+from agent_artifacts.protocol.authoring import CompiledAuthorSource
 from agent_artifacts.protocol.hashing import sha256_bytes
 from agent_artifacts.protocol.native_tree import SourceSnapshot
 from agent_artifacts.sources.model import (
@@ -48,7 +48,7 @@ ReadCandidateHistoryPort = Callable[[SourceStorePaths], Result[SourceScan | None
 WriteCandidateHistoryPort = Callable[[SourceStorePaths, SourceScan], Result[None]]
 ReadApprovedRegistryPort = Callable[[SourceAlias], Result["ApprovedRegistryState"]]
 CompileAuthorSnapshotPort = Callable[
-    [SourceSnapshot, SourceAlias, str, str], Result[tuple[CompiledAuthorArtifact, ...]]
+    [SourceSnapshot, SourceAlias, str, str], Result[CompiledAuthorSource]
 ]
 
 SOURCE_SYNC_INVALID = DiagnosticCode("maintainer-source-sync-invalid")
@@ -156,7 +156,7 @@ def _baseline(
             None if current is None else current.candidate.snapshot_digest,
             None if current is None else current.declared_source_id,
             history_digest,
-            0 if history is None else len(history.active),
+            (0 if history is None else len(history.active) + len(history.collection_active)),
         )
     )
 
@@ -398,10 +398,12 @@ def execute_source_sync(
     reconciled = reconcile_source_scan(
         request.source.alias,
         pinned.resolved_revision,
-        compiled.value,
+        compiled.value.artifacts,
         previous=() if history.value is None else history.value.history,
         approved=prepared.approved.versions,
         target_registry=prepared.target_registry,
+        collections=compiled.value.collections,
+        previous_collections=(() if history.value is None else history.value.collection_history),
     )
     if isinstance(reconciled, Err):
         return _release(reconciled, ports, lease.value)

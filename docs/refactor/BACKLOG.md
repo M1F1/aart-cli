@@ -719,26 +719,30 @@ Evidence/links: `agent_artifacts/application/maintainer_views.py::_file_changes`
 
 ## B-041 — A local-Source Candidate has no promotion audit record
 
-NONCRITICAL for the current slice, CRITICAL before screens 41–47 are called complete.
+**COMPLETE 2026-09-02 (D-107).** This was critical before screens 41–47 could be called complete.
 
-A promotion audit records a 40-hex Git revision, and a local Source carries `local:<snapshot-sha256>`
-(D-096). `plan_candidate_promotion` therefore refuses a local-origin Candidate by name, and screen 43
-states that refusal. This was found by regression, not by review: the planner *raised* on such a
+A promotion audit recorded only a 40-hex Git revision, while a local Source carries
+`local:<snapshot-sha256>` (D-096). `plan_candidate_promotion` therefore refused a local-origin
+Candidate by name, and screen 43 stated that refusal. This was found by regression, not by review:
+the planner *raised* on such a
 Candidate rather than returning an error, and `read_maintainer_views` caught the `ValueError` and
 failed the whole Maintainer composition — which stalled the Source Sync walk at screen 33 with no
 message. The E2E that syncs a real local Source is what caught it.
 
-What remains: give the audit record a place for local provenance so local Candidates can be promoted
-without disguising a local snapshot as a commit, then replace the refusal. Two unit tests pinning the
-refusal directly were dropped because the fixture for a local authoring Source needs a filesystem
-`source` rather than a Git URL and the budget window closed; the behaviour is covered by
-`tests/maintainer_composition_e2e_test.py`'s local-sync walk. Restore them when the fixture lands.
+The original unblock condition was to give the audit record a place for local provenance so local
+Candidates could be promoted without disguising a local snapshot as a commit, then replace the
+refusal. Two direct unit cases were dropped because the fixture for a local authoring Source needed
+a filesystem `source` rather than a Git URL; the behaviour was covered only by
+`tests/maintainer_composition_e2e_test.py`'s local-sync walk.
 
-Rechecked while landing screens 44–45 (D-103): the remote-origin path now completes a real
-projection/validation/write/readback/local-commit transaction, while the local-origin refusal is
-unchanged. This is still outside the screens-44/45 increment but remains critical before screen 47
-and CP-14 step 5 are declared complete; neither the executor nor the commit adapter treats a local
-snapshot digest as a Git revision.
+Resolution: `PromotionAudit` now carries a discriminated `source_provenance`. Git provenance has a
+40-hex `git_revision`; local provenance has a typed SHA-256 `snapshot_digest`. New audit JSON uses
+that structured shape, canonical legacy Git-only records remain readable, and the reader explicitly
+rejects a local pin in the legacy Git field. The single and bulk by-name refusals are gone without
+adding a second planner or transaction path. Direct planning/projection tests use a filesystem
+source location, and the production E2E now takes a real local Source through sync, promotion,
+registry validation and one clean local commit while matching the audit digest back to the durable
+Candidate-history pin.
 
 ## B-042 — A multi-registry installation cannot attribute its checkout to a registry
 

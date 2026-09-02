@@ -29,6 +29,10 @@ from agent_artifacts.domain.candidates import (
     CandidateState,
     FindingSeverity,
 )
+from agent_artifacts.domain.collection_candidates import (
+    CollectionCandidate,
+    collection_candidate_id_for,
+)
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.identifiers import (
     ArtifactCoordinate,
@@ -38,6 +42,7 @@ from agent_artifacts.domain.identifiers import (
 )
 from agent_artifacts.domain.identifiers import ArtifactKind as IdentityKind
 from agent_artifacts.domain.result import Err, Ok, Result
+from agent_artifacts.domain.selection import ArtifactRequest, VersionConstraint
 from agent_artifacts.domain.serialization import CanonicalValue, canonical_json_bytes
 from agent_artifacts.protocol.authoring import CompiledAuthorArtifact, ComplianceLevel
 from agent_artifacts.protocol.hashing import file_entry, tree_digest
@@ -229,6 +234,27 @@ def _bundle_to_data(bundle: CandidateBundle, object_digest: ObjectDigest) -> dic
     }
 
 
+def _collection_to_data(candidate: CollectionCandidate) -> dict[str, object]:
+    return {
+        "candidate_id": candidate.id.value,
+        "canonical_digest": str(candidate.canonical_digest),
+        "findings": [_finding_to_data(item) for item in candidate.findings],
+        "input_digest": str(candidate.input_digest),
+        "manifest_path": candidate.manifest_path,
+        "members": [str(item) for item in candidate.members],
+        "name": candidate.name,
+        "previous": None if candidate.previous is None else candidate.previous.value,
+        "source_alias": candidate.source_alias.value,
+        "source_location": candidate.source_location,
+        "source_revision": candidate.source_revision,
+        "state": candidate.state.value,
+        "successor": None if candidate.successor is None else candidate.successor.value,
+        "summary": candidate.summary,
+        "target_registry": candidate.target_registry.value,
+        "version": candidate.version,
+    }
+
+
 def _validate_scan(scan: SourceScan) -> str | None:
     history_by_id = {bundle.candidate.id: bundle for bundle in scan.history}
     active_ids = tuple(bundle.candidate.id for bundle in scan.active)
@@ -250,6 +276,31 @@ def _validate_scan(scan: SourceScan) -> str | None:
         bundle.candidate.artifact.provenance.revision != scan.revision for bundle in scan.active
     ):
         return "active Candidate history does not bind the Source Scan revision"
+    collection_history_by_id = {item.id: item for item in scan.collection_history}
+    collection_active_ids = tuple(item.id for item in scan.collection_active)
+    if len(collection_history_by_id) != len(scan.collection_history):
+        return "Collection Candidate history contains duplicate Candidate IDs"
+    if len(set(collection_active_ids)) != len(collection_active_ids) or any(
+        collection_history_by_id.get(item.id) != item for item in scan.collection_active
+    ):
+        return "active Collection Candidates must be exact records retained in history"
+    if (
+        tuple(sorted(scan.collection_history, key=lambda item: item.id.value))
+        != scan.collection_history
+    ):
+        return "Collection Candidate history records must be in canonical Candidate-ID order"
+    if (
+        tuple(sorted(scan.collection_active, key=lambda item: item.manifest_path))
+        != scan.collection_active
+    ):
+        return "active Collection Candidates must be in canonical manifest-path order"
+    if any(item.source_alias != scan.source_alias for item in scan.collection_history):
+        return "Collection Candidate history contains another Source alias"
+    if any(item.source_revision != scan.revision for item in scan.collection_active):
+        return "active Collection Candidate history does not bind the Source Scan revision"
+    all_ids = {bundle.candidate.id for bundle in scan.history} | set(collection_history_by_id)
+    if len(all_ids) != len(scan.history) + len(scan.collection_history):
+        return "artifact and Collection Candidate IDs must be globally unique"
     return None
 
 
@@ -274,9 +325,16 @@ def serialize_source_scan(scan: SourceScan) -> Result[SerializedSourceScan]:
         "history": records,
         "manifest_count": scan.manifest_count,
         "revision": scan.revision,
-        "schema": "aart.dev/candidate-history/v1",
+        "schema": (
+            "aart.dev/candidate-history/v2"
+            if scan.collection_active or scan.collection_history
+            else "aart.dev/candidate-history/v1"
+        ),
         "source_alias": scan.source_alias.value,
     }
+    if scan.collection_active or scan.collection_history:
+        data["collection_active"] = [item.id.value for item in scan.collection_active]
+        data["collection_history"] = [_collection_to_data(item) for item in scan.collection_history]
     content = canonical_json_bytes(cast(CanonicalValue, data))
     try:
         return Ok(
@@ -308,6 +366,27 @@ _BUNDLE_FIELDS = frozenset(
     }
 )
 
+_COLLECTION_FIELDS = frozenset(
+    {
+        "candidate_id",
+        "canonical_digest",
+        "findings",
+        "input_digest",
+        "manifest_path",
+        "members",
+        "name",
+        "previous",
+        "source_alias",
+        "source_location",
+        "source_revision",
+        "state",
+        "successor",
+        "summary",
+        "target_registry",
+        "version",
+    }
+)
+
 
 def _candidate_id(value: object, label: str) -> CandidateId:
     return CandidateId(_text(value, label))
@@ -335,6 +414,73 @@ def _findings(value: object) -> tuple[CandidateFinding, ...]:
             )
         )
     return tuple(findings)
+
+
+def _request(value: object) -> ArtifactRequest:
+    raw = _text(value, "Collection member")
+    coordinate, marker, constraint = raw.partition("@")
+    parts = coordinate.split("/")
+    if len(parts) == 3:
+        source_raw, kind, name = parts
+        source = SourceAlias(_text(source_raw, "Collection member Source"))
+    elif len(parts) == 2:
+        kind, name = parts
+        source = None
+    else:
+        raise ValueError("Collection member coordinate is invalid")
+    if kind not in {item.value for item in ArtifactKind}:
+        raise ValueError("Collection member kind is invalid")
+    request = ArtifactRequest(
+        ArtifactIdentity(cast(IdentityKind, kind), _text(name, "Collection member name")),
+        VersionConstraint(_text(constraint, "Collection member constraint") if marker else "*"),
+        source,
+    )
+    if str(request) != raw:
+        raise ValueError("Collection member is not canonical")
+    return request
+
+
+def _collection(value: object) -> CollectionCandidate:
+    data = _mapping(value, _COLLECTION_FIELDS, "Collection Candidate history record")
+    members_raw = data["members"]
+    if not isinstance(members_raw, list):
+        raise ValueError("Collection Candidate members must be a list")
+    source_alias = SourceAlias(_text(data["source_alias"], "Collection Candidate Source alias"))
+    manifest_path = _text(data["manifest_path"], "Collection Candidate manifest path")
+    input_digest = _digest(data["input_digest"], "Collection Candidate input digest")
+    target_registry = SourceAlias(
+        _text(data["target_registry"], "Collection Candidate target registry")
+    )
+    candidate = CollectionCandidate(
+        _candidate_id(data["candidate_id"], "Collection Candidate ID"),
+        source_alias,
+        _text(data["source_location"], "Collection Candidate Source location"),
+        _text(data["source_revision"], "Collection Candidate Source revision"),
+        manifest_path,
+        input_digest,
+        _digest(data["canonical_digest"], "Collection Candidate canonical digest"),
+        target_registry,
+        _text(data["name"], "Collection Candidate name"),
+        _text(data["version"], "Collection Candidate version"),
+        _text(data["summary"], "Collection Candidate summary"),
+        tuple(_request(item) for item in members_raw),
+        CandidateState(_text(data["state"], "Collection Candidate state")),
+        _optional_candidate_id(data["previous"], "previous Collection Candidate ID"),
+        _optional_candidate_id(data["successor"], "successor Collection Candidate ID"),
+        _findings(data["findings"]),
+    )
+    if (
+        candidate.id
+        != collection_candidate_id_for(
+            source_alias,
+            manifest_path,
+            input_digest,
+            target_registry,
+        )
+        or _collection_to_data(candidate) != data
+    ):
+        raise ValueError("Collection Candidate history record is not canonical")
+    return candidate
 
 
 def _bundle(
@@ -413,14 +559,19 @@ def source_scan_object_digests(index: bytes) -> Result[tuple[ObjectDigest, ...]]
         decoded = json.loads(index.decode("utf-8"))
         if canonical_json_bytes(cast(CanonicalValue, decoded)) != index:
             raise ValueError("Candidate history index is not canonical JSON")
-        data = _mapping(
-            decoded,
-            frozenset(
-                {"active", "history", "manifest_count", "revision", "schema", "source_alias"}
-            ),
-            "Candidate history index",
+        if not isinstance(decoded, dict):
+            raise ValueError("Candidate history index must be an object")
+        schema = decoded.get("schema")
+        fields = frozenset(
+            {"active", "history", "manifest_count", "revision", "schema", "source_alias"}
         )
-        if data["schema"] != "aart.dev/candidate-history/v1":
+        if schema == "aart.dev/candidate-history/v2":
+            fields |= frozenset({"collection_active", "collection_history"})
+        data = _mapping(decoded, fields, "Candidate history index")
+        if schema not in {
+            "aart.dev/candidate-history/v1",
+            "aart.dev/candidate-history/v2",
+        }:
             raise ValueError("Candidate history schema is unsupported")
         history = data["history"]
         if not isinstance(history, list):
@@ -452,14 +603,19 @@ def parse_source_scan(
         decoded = json.loads(index.decode("utf-8"))
         if canonical_json_bytes(cast(CanonicalValue, decoded)) != index:
             raise ValueError("Candidate history index is not canonical JSON")
-        data = _mapping(
-            decoded,
-            frozenset(
-                {"active", "history", "manifest_count", "revision", "schema", "source_alias"}
-            ),
-            "Candidate history index",
+        if not isinstance(decoded, dict):
+            raise ValueError("Candidate history index must be an object")
+        schema = decoded.get("schema")
+        fields = frozenset(
+            {"active", "history", "manifest_count", "revision", "schema", "source_alias"}
         )
-        if data["schema"] != "aart.dev/candidate-history/v1":
+        if schema == "aart.dev/candidate-history/v2":
+            fields |= frozenset({"collection_active", "collection_history"})
+        data = _mapping(decoded, fields, "Candidate history index")
+        if schema not in {
+            "aart.dev/candidate-history/v1",
+            "aart.dev/candidate-history/v2",
+        }:
             raise ValueError("Candidate history schema is unsupported")
         history_data = data["history"]
         active_data = data["active"]
@@ -482,6 +638,28 @@ def parse_source_scan(
             raise ValueError("Candidate history contains another Source alias")
         if any(bundle.candidate.artifact.provenance.revision != revision for bundle in active):
             raise ValueError("active Candidate history does not bind the Source Scan revision")
+        collection_history: tuple[CollectionCandidate, ...] = ()
+        collection_active: tuple[CollectionCandidate, ...] = ()
+        if schema == "aart.dev/candidate-history/v2":
+            collection_history_data = data["collection_history"]
+            collection_active_data = data["collection_active"]
+            if not isinstance(collection_history_data, list) or not isinstance(
+                collection_active_data, list
+            ):
+                raise ValueError("Collection Candidate history and active IDs must be lists")
+            collection_history = tuple(_collection(item) for item in collection_history_data)
+            collections_by_id = {item.id: item for item in collection_history}
+            if len(collections_by_id) != len(collection_history):
+                raise ValueError("Collection Candidate history contains duplicate Candidate IDs")
+            collection_active_ids = tuple(
+                _candidate_id(item, "active Collection Candidate ID")
+                for item in collection_active_data
+            )
+            if len(set(collection_active_ids)) != len(collection_active_ids) or any(
+                item not in collections_by_id for item in collection_active_ids
+            ):
+                raise ValueError("Collection Candidate active IDs are duplicated or missing")
+            collection_active = tuple(collections_by_id[item] for item in collection_active_ids)
         scan = SourceScan(
             source_alias,
             revision,
@@ -489,6 +667,8 @@ def parse_source_scan(
             active,
             history,
             (),
+            collection_active,
+            collection_history,
         )
         canonical = serialize_source_scan(scan)
         if isinstance(canonical, Err) or canonical.value.index != index:

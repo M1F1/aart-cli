@@ -100,12 +100,12 @@
         {
           "id": "5",
           "title": "Screens 41-47: promotion review, registry diff, explicit commit, registry view, bulk promotion",
-          "status": "in_progress"
+          "status": "done"
         },
         {
           "id": "6",
           "title": "Screens 48-53: lifecycle, provenance, conflicts, Collection candidates, filters",
-          "status": "todo"
+          "status": "in_progress"
         },
         {
           "id": "7",

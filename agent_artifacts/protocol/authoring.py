@@ -60,6 +60,7 @@ from agent_artifacts.domain.python_runtime import (
     spec_descriptor_path,
 )
 from agent_artifacts.domain.result import Err, Ok, Result
+from agent_artifacts.domain.selection import ArtifactRequest, VersionConstraint
 
 from .codes import AUTHOR_MANIFEST_INVALID, AUTHOR_PAYLOAD_INVALID, AUTHOR_TREE_INVALID
 from .hashing import directory_entry, file_entry, sha256_bytes, tree_digest
@@ -95,6 +96,7 @@ from .yaml import parse_yaml
 AuthorKind = Literal["skill", "guideline", "mcp", "hook", "memory"]
 
 _MANIFEST_NAMES = frozenset({"aart.json", "aart.yaml"})
+_COLLECTION_SCHEMA = "aart.dev/collection/v1"
 _SLUG_RE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 _KIND_BY_VALUE: dict[AuthorKind, ArtifactKind] = {
     "skill": ArtifactKind.SKILL,
@@ -175,6 +177,53 @@ class CompiledAuthorArtifact:
     native_package: NativeArtifactPackage
     canonical_entries: tuple[SnapshotEntry, ...]
     compliance: ComplianceLevel
+
+
+@dataclass(frozen=True, slots=True)
+class CompiledAuthorCollection:
+    """One explicit versioned Collection declaration compiled from an authoring Source."""
+
+    manifest_path: SafeRelativePath
+    input_digest: ObjectDigest
+    canonical_digest: ObjectDigest
+    source_alias: SourceAlias
+    source: str
+    revision: str
+    name: str
+    version: str
+    summary: str
+    members: tuple[ArtifactRequest, ...]
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.manifest_path, SafeRelativePath)
+            or not isinstance(self.input_digest, ObjectDigest)
+            or not isinstance(self.canonical_digest, ObjectDigest)
+            or not isinstance(self.source_alias, SourceAlias)
+            or not self.source_alias.value
+            or not self.source
+            or source_revision_kind(self.revision) is None
+            or not self.name
+            or not self.version
+            or not self.summary
+            or not self.members
+            or any(not isinstance(item, ArtifactRequest) for item in self.members)
+        ):
+            raise ValueError("compiled author Collection is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class CompiledAuthorSource:
+    """The two Candidate kinds one explicit authoring snapshot compiled."""
+
+    artifacts: tuple[CompiledAuthorArtifact, ...] = ()
+    collections: tuple[CompiledAuthorCollection, ...] = ()
+
+    def __post_init__(self) -> None:
+        if any(not isinstance(item, CompiledAuthorArtifact) for item in self.artifacts) or any(
+            not isinstance(item, CompiledAuthorCollection) for item in self.collections
+        ):
+            raise ValueError("compiled author Source is invalid")
 
 
 def _error(
@@ -1213,6 +1262,159 @@ def _parse_document(manifest: DiscoveredAuthorManifest) -> Result[JsonObject]:
     return _object(parsed.value, "author manifest", path=raw_path)
 
 
+def _document_schema(manifest: DiscoveredAuthorManifest) -> Result[str]:
+    document = _parse_document(manifest)
+    if isinstance(document, Err):
+        return document
+    schema = document.value.get("schema")
+    return _string(schema, "schema", path=str(manifest.path))
+
+
+def _collection_request(raw: str, *, path: str) -> Result[ArtifactRequest]:
+    coordinate, marker, constraint = raw.partition("@")
+    parts = coordinate.split("/")
+    if len(parts) == 3:
+        source_raw, kind, name = parts
+        source = SourceAlias(source_raw)
+        if _SLUG_RE.fullmatch(source_raw) is None:
+            return _error(
+                AUTHOR_MANIFEST_INVALID,
+                f"Collection member Source is invalid: {raw!r}",
+                path=path,
+            )
+    elif len(parts) == 2:
+        kind, name = parts
+        source = None
+    else:
+        return _error(
+            AUTHOR_MANIFEST_INVALID,
+            f"Collection member must be [source/]kind/name[@constraint]: {raw!r}",
+            path=path,
+        )
+    if kind not in _KIND_BY_VALUE or _SLUG_RE.fullmatch(name) is None:
+        return _error(
+            AUTHOR_MANIFEST_INVALID,
+            f"Collection member artifact identity is invalid: {raw!r}",
+            path=path,
+        )
+    if marker and (not constraint or "@" in constraint):
+        return _error(
+            AUTHOR_MANIFEST_INVALID,
+            f"Collection member version constraint is invalid: {raw!r}",
+            path=path,
+        )
+    try:
+        return Ok(
+            ArtifactRequest(
+                ArtifactIdentity(cast(IdentityKind, kind), name),
+                VersionConstraint(constraint if marker else "*"),
+                source,
+            )
+        )
+    except ValueError as error:
+        return _error(AUTHOR_MANIFEST_INVALID, str(error), path=path)
+
+
+def parse_author_collection_manifest(
+    manifest: DiscoveredAuthorManifest,
+    *,
+    source_alias: SourceAlias,
+    source: str,
+    revision: str,
+) -> Result[CompiledAuthorCollection]:
+    """Compile the accepted versioned Collection authoring shape into declarative constraints."""
+
+    raw_path = str(manifest.path)
+    document = _parse_document(manifest)
+    if isinstance(document, Err):
+        return document
+    root = _fields(
+        document.value,
+        required=frozenset({"schema", "name", "version", "artifacts"}),
+        optional=frozenset({"summary"}),
+        path=raw_path,
+        label="Collection author manifest",
+    )
+    if isinstance(root, Err):
+        return root
+    schema = _string(root.value["schema"], "schema", path=raw_path)
+    name = _string(root.value["name"], "name", path=raw_path)
+    version = _string(root.value["version"], "version", path=raw_path)
+    for parsed in (schema, name, version):
+        if isinstance(parsed, Err):
+            return parsed
+    assert isinstance(schema, Ok) and isinstance(name, Ok) and isinstance(version, Ok)
+    if schema.value != _COLLECTION_SCHEMA:
+        return _error(
+            AUTHOR_MANIFEST_INVALID,
+            f"schema must be {_COLLECTION_SCHEMA!r} for a Collection",
+            path=raw_path,
+        )
+    if _SLUG_RE.fullmatch(name.value) is None:
+        return _error(
+            AUTHOR_MANIFEST_INVALID, "Collection name must be a lowercase slug", path=raw_path
+        )
+    parsed_version = parse_semver(
+        version.value,
+        location=SourceLocation(path=raw_path, pointer="/version"),
+    )
+    if isinstance(parsed_version, Err):
+        return _error(AUTHOR_MANIFEST_INVALID, "Collection version must be SemVer", path=raw_path)
+    summary = name.value.replace("-", " ").capitalize()
+    if "summary" in root.value:
+        parsed_summary = _string(root.value["summary"], "summary", path=raw_path)
+        if isinstance(parsed_summary, Err):
+            return parsed_summary
+        summary = parsed_summary.value
+    raw_members = _strings(
+        root.value["artifacts"],
+        "artifacts",
+        path=raw_path,
+        allow_empty=False,
+    )
+    if isinstance(raw_members, Err):
+        return raw_members
+    members: list[ArtifactRequest] = []
+    for raw in raw_members.value:
+        request_result = _collection_request(raw, path=raw_path)
+        if isinstance(request_result, Err):
+            return request_result
+        members.append(request_result.value)
+    input_digest = _input_digest(manifest, ())
+    if isinstance(input_digest, Err):
+        return input_digest
+    canonical_digest = sha256_bytes(
+        canonical_json_bytes(
+            JsonObject(
+                (
+                    ("artifacts", JsonArray(tuple(str(item) for item in members))),
+                    ("name", name.value),
+                    ("schema", _COLLECTION_SCHEMA),
+                    ("summary", summary),
+                    ("version", version.value),
+                )
+            )
+        )
+    )
+    try:
+        return Ok(
+            CompiledAuthorCollection(
+                manifest.path,
+                input_digest.value,
+                canonical_digest,
+                source_alias,
+                source,
+                revision,
+                name.value,
+                version.value,
+                summary,
+                tuple(members),
+            )
+        )
+    except ValueError as error:
+        return _error(AUTHOR_MANIFEST_INVALID, str(error), path=raw_path)
+
+
 def _validate_pattern(raw: str, *, path: str) -> Result[str]:
     if (
         raw.startswith("/")
@@ -1844,6 +2046,12 @@ def compile_author_snapshot(
     compiled: list[CompiledAuthorArtifact] = []
     diagnostics: list[Diagnostic] = []
     for item in discovered.value:
+        schema = _document_schema(item)
+        if isinstance(schema, Err):
+            diagnostics.extend(schema.diagnostics)
+            continue
+        if schema.value == _COLLECTION_SCHEMA:
+            continue
         manifest = parse_author_manifest(item)
         if isinstance(manifest, Err):
             diagnostics.extend(manifest.diagnostics)
@@ -1867,3 +2075,80 @@ def compile_author_snapshot(
     if diagnostics:
         return Err(tuple(diagnostics))
     return Ok(tuple(sorted(compiled, key=lambda item: str(item.manifest_path))))
+
+
+def compile_author_collections(
+    snapshot: SourceSnapshot,
+    *,
+    source_alias: SourceAlias,
+    source: str,
+    revision: str,
+) -> Result[tuple[CompiledAuthorCollection, ...]]:
+    """Compile only explicit Collection manifests from one already-acquired Source snapshot."""
+
+    if (
+        not isinstance(source_alias, SourceAlias)
+        or not source_alias.value
+        or not source
+        or source_revision_kind(revision) is None
+    ):
+        return _error(
+            AUTHOR_TREE_INVALID,
+            "Collection compilation requires a source alias, location and immutable pin",
+        )
+    discovered = discover_author_manifests(snapshot)
+    if isinstance(discovered, Err):
+        return discovered
+    compiled = []
+    diagnostics: list[Diagnostic] = []
+    for item in discovered.value:
+        schema = _document_schema(item)
+        if isinstance(schema, Err):
+            diagnostics.extend(schema.diagnostics)
+            continue
+        if schema.value != _COLLECTION_SCHEMA:
+            continue
+        collection = parse_author_collection_manifest(
+            item,
+            source_alias=source_alias,
+            source=source,
+            revision=revision,
+        )
+        if isinstance(collection, Err):
+            diagnostics.extend(collection.diagnostics)
+        else:
+            compiled.append(collection.value)
+    if diagnostics:
+        return Err(tuple(diagnostics))
+    return Ok(tuple(sorted(compiled, key=lambda item: str(item.manifest_path))))
+
+
+def compile_author_source(
+    snapshot: SourceSnapshot,
+    *,
+    source_alias: SourceAlias,
+    source: str,
+    revision: str,
+) -> Result[CompiledAuthorSource]:
+    """Compile artifact and Collection Candidate inputs through one Source boundary."""
+
+    artifacts = compile_author_snapshot(
+        snapshot,
+        source_alias=source_alias,
+        source=source,
+        revision=revision,
+    )
+    if isinstance(artifacts, Err):
+        return artifacts
+    collections = compile_author_collections(
+        snapshot,
+        source_alias=source_alias,
+        source=source,
+        revision=revision,
+    )
+    if isinstance(collections, Err):
+        return collections
+    try:
+        return Ok(CompiledAuthorSource(artifacts.value, collections.value))
+    except ValueError as error:
+        return _error(AUTHOR_MANIFEST_INVALID, str(error))

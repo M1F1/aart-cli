@@ -5,10 +5,14 @@ from __future__ import annotations
 from agent_artifacts.application.consumer_views import PresentationProfile
 from agent_artifacts.application.maintainer_views import (
     MaintainerBulkPromotionView,
+    MaintainerCandidateLifecycleView,
     MaintainerCandidateView,
+    MaintainerCollectionCandidateView,
+    MaintainerCollectionValidationView,
     MaintainerDashboardView,
     MaintainerPolicyReviewView,
     MaintainerPromotionReviewView,
+    MaintainerProvenanceView,
     MaintainerRegistryCommitView,
     MaintainerRegistryDiffView,
     MaintainerRegistryValidationView,
@@ -19,20 +23,26 @@ from agent_artifacts.application.maintainer_views import (
     MaintainerTransactionCandidateView,
     MaintainerValidationCheckView,
     MaintainerValidationView,
+    MaintainerVersionConflictView,
     MaintainerWorkingTreeState,
 )
 
 __all__ = [
     "render_maintainer_dashboard",
     "render_maintainer_candidate",
+    "render_maintainer_candidate_lifecycle",
     "render_maintainer_candidate_diff",
     "render_maintainer_candidates",
+    "render_maintainer_collection_candidates",
+    "render_maintainer_collection_validation",
     "render_maintainer_source",
     "render_source_sync_result",
     "render_source_sync_review",
     "render_maintainer_sources",
     "render_maintainer_policy_review",
     "render_maintainer_promotion_review",
+    "render_maintainer_provenance",
+    "render_maintainer_version_conflict",
     "render_maintainer_bulk_promotion",
     "render_maintainer_registries",
     "render_maintainer_registry",
@@ -276,6 +286,167 @@ def render_maintainer_candidate(
     if view.rejection_reason is not None:
         lines.append(f"Rejection: {view.rejection_reason}")
     lines.append("Press d for semantic diff.")
+    return tuple(lines)
+
+
+def render_maintainer_candidate_lifecycle(
+    view: MaintainerCandidateLifecycleView,
+    profile: PresentationProfile,
+) -> tuple[str, ...]:
+    """Screen 48: Source/Candidate history joined to exact registry approval evidence."""
+
+    if not isinstance(view, MaintainerCandidateLifecycleView) or not isinstance(
+        profile, PresentationProfile
+    ):
+        raise ValueError("Maintainer Candidate lifecycle rendering needs a typed view and profile")
+    lines = [f"{view.artifact}@{view.version} — Candidate lifecycle"]
+    for stage in view.stages:
+        lines.append(f"{_human(stage.phase.value)} — {_human(stage.outcome)}")
+        lines.append(f"  {stage.detail}")
+        if stage.evidence is not None:
+            lines.append(f"  {_short(stage.evidence, profile)}")
+        if profile is PresentationProfile.VERBOSE:
+            lines.append(f"  Candidate {stage.candidate_id}")
+    lines.append("Promotion is shown only when both registry version and audit evidence match.")
+    return tuple(lines)
+
+
+def render_maintainer_provenance(
+    view: MaintainerProvenanceView,
+    profile: PresentationProfile,
+) -> tuple[str, ...]:
+    """Screen 49: exact Source, importer and payload provenance."""
+
+    if not isinstance(view, MaintainerProvenanceView) or not isinstance(
+        profile, PresentationProfile
+    ):
+        raise ValueError("Maintainer provenance rendering needs a typed view and profile")
+    if view.git_revision is not None:
+        pin = f"Pinned Git revision: {_short(view.git_revision, profile)}"
+    else:
+        pin = f"Pinned local snapshot: {_short(view.local_snapshot_digest or '', profile)}"
+    lines = [
+        f"{view.coordinate} — Provenance",
+        f"Source: {view.source_url}",
+        f"Source kind: {_human(view.source_kind.value)}",
+        pin,
+        f"Manifest: {view.manifest_path}",
+        f"Artifact input digest: {_short(view.input_digest, profile)}",
+        f"Importer: {view.importer_id} {view.importer_version}",
+        "Payload paths:",
+    ]
+    lines.extend(f"  - {item}" for item in view.payload_paths)
+    if not view.payload_paths:
+        lines.append("  - none")
+    lines.append("Warnings:")
+    lines.extend(f"  - {item}" for item in view.warnings)
+    if not view.warnings:
+        lines.append("  - none")
+    if profile is PresentationProfile.VERBOSE:
+        lines.append(f"Candidate: {view.candidate_id}")
+    return tuple(lines)
+
+
+def render_maintainer_version_conflict(
+    view: MaintainerVersionConflictView,
+    profile: PresentationProfile,
+) -> tuple[str, ...]:
+    """Screen 50: the immutable published value and the refused Candidate side by side."""
+
+    if not isinstance(view, MaintainerVersionConflictView) or not isinstance(
+        profile, PresentationProfile
+    ):
+        raise ValueError("Maintainer version conflict rendering needs a typed view and profile")
+    lines = [
+        f"{view.coordinate} — Version conflict",
+        "Blocked: this coordinate/version is already published and immutable.",
+        "Candidate content:",
+        f"  input: {_short(view.candidate_input_digest, profile)}",
+        f"  payload: {_short(view.candidate_payload_digest, profile)}",
+        f"  canonical: {_short(view.candidate_canonical_digest, profile)}",
+        "Published content:",
+    ]
+    if view.exact_evidence:
+        lines.extend(
+            (
+                f"  input: {_short(view.published_input_digest or '', profile)}",
+                f"  payload: {_short(view.published_payload_digest or '', profile)}",
+                f"  canonical: {_short(view.published_canonical_digest or '', profile)}",
+            )
+        )
+    else:
+        lines.append("  exact digest evidence unavailable")
+    lines.extend((view.evidence_detail, f"Required action: {view.required_action}"))
+    if profile is PresentationProfile.VERBOSE:
+        lines.append(f"Candidate: {view.candidate_id}")
+        if view.published_candidate_id is not None:
+            lines.append(f"Published Candidate: {view.published_candidate_id}")
+    return tuple(lines)
+
+
+def render_maintainer_collection_candidates(
+    candidates: tuple[MaintainerCollectionCandidateView, ...],
+    *,
+    cursor: str = "",
+    profile: PresentationProfile,
+) -> tuple[str, ...]:
+    """Screen 51: versioned Collection Candidates, never flattened to imperative steps."""
+
+    if (
+        any(not isinstance(item, MaintainerCollectionCandidateView) for item in candidates)
+        or not isinstance(cursor, str)
+        or any(character in cursor for character in "\r\n")
+        or not isinstance(profile, PresentationProfile)
+    ):
+        raise ValueError("Maintainer Collection rendering needs Candidate views and a profile")
+    if not candidates:
+        return ("No Collection Candidates are available.",)
+    lines = []
+    for candidate in candidates:
+        lines.append(
+            f"{'>' if candidate.candidate_id == cursor else ' '} {candidate.coordinate} — "
+            f"{_human(candidate.state.value)} · {_noun(len(candidate.members), 'member')}"
+        )
+        if profile is PresentationProfile.VERBOSE:
+            lines.extend(
+                (
+                    f"    Source: {candidate.source_alias} · {candidate.source_location}",
+                    f"    Manifest: {candidate.manifest_path}",
+                    f"    Candidate: {candidate.candidate_id}",
+                )
+            )
+            lines.extend(f"    - {item}" for item in candidate.members)
+    return tuple(lines)
+
+
+def render_maintainer_collection_validation(
+    view: MaintainerCollectionValidationView,
+    profile: PresentationProfile,
+) -> tuple[str, ...]:
+    """Screen 52: every declaration beside the approved exact version satisfying it."""
+
+    if not isinstance(view, MaintainerCollectionValidationView) or not isinstance(
+        profile, PresentationProfile
+    ):
+        raise ValueError("Maintainer Collection validation rendering needs a typed view")
+    lines = [
+        f"{view.coordinate} — Collection validation: {_human(view.outcome)}",
+        "Approved target registry snapshot: "
+        + (
+            "unavailable"
+            if view.registry_snapshot is None
+            else _short(view.registry_snapshot, profile)
+        ),
+        "Members:",
+    ]
+    for member in view.members:
+        resolved = member.resolved_coordinate or "not resolved"
+        lines.append(f"  {_human(member.outcome)}  {member.request} → {resolved}")
+        if profile is PresentationProfile.VERBOSE or member.outcome != "approved":
+            lines.append(f"    {member.detail}")
+    lines.extend(f"Attention: {item}" for item in view.diagnostics)
+    if profile is PresentationProfile.VERBOSE:
+        lines.append(f"Candidate: {view.candidate_id}")
     return tuple(lines)
 
 

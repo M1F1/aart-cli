@@ -76,8 +76,10 @@ durable preference as of D-090, without which the opt-in boundary could not hold
 2. **DONE:** Screen 30 and screens 31–34 over the canonical source scan.
 3. **DONE:** Screens 35–37: Candidate list, detail and semantic-first diff (D-098).
 4. Screens 38–40: validation pipeline and policy review. **DONE** (D-099, D-100).
-5. Screens 41–47: promotion review, registry diff, explicit commit, registry view, bulk promotion.
-6. Screens 48–53: lifecycle, provenance, conflicts, Collection candidates (closes B-031), filters.
+5. **DONE:** Screens 41–47: promotion review, registry diff, explicit commit, registry view, bulk
+   promotion and truthful Git/local Source provenance (D-101–D-107; closes B-041).
+6. **IN PROGRESS:** Screens 48–53: lifecycle, provenance and conflicts are done (D-108–D-110);
+   Collection candidates (closes B-031) and filters remain.
 7. Retire the legacy consumer/maintainer authority CP-13 left standing, each removal preceded by a
    public-flow test (closes B-031, B-038, B-039).
 
@@ -407,9 +409,9 @@ Checkpoint gates on 2026-09-02: `make quality` is green with 3,098 tests and 83.
 format-check, lint, typecheck, repository validation, packaging, docs and secret-shape checks all
 pass. `make integration` is separately green with 210 E2E tests.
 
-B-041 remains intentionally open: this increment proves remote-Git Candidate promotion and does not
-pass a `local:<snapshot-sha256>` origin off as a commit. Screen 46, screen 47 and the compliant local
-provenance representation are the remaining work in step 5.
+At this checkpoint B-041 remained intentionally open: the increment proved remote-Git Candidate
+promotion and did not pass a `local:<snapshot-sha256>` origin off as a commit. Screen 46, screen 47
+and the compliant local provenance representation were the remaining work in step 5.
 
 ## Step 5c — screen 46, the Registry Maintainer View
 
@@ -446,7 +448,8 @@ a bulk transaction listing every Candidate it promoted, the shell body and its r
 Checkpoint gates on 2026-09-02: `make quality` and `make integration` are both green; full suite
 3,167 tests.
 
-Step 5 remainder: screen 47 bulk promotion, and B-041's compliant local provenance representation.
+At this checkpoint step 5 still required screen 47 bulk promotion and B-041's compliant local
+provenance representation.
 
 ## Step 5d — screen 47's selection surface
 
@@ -518,5 +521,51 @@ persisted version, and a clean working tree.
 
 Checkpoint gates on 2026-09-02: `make quality` and `make integration` are both green.
 
-Step 5 remainder: B-041's compliant local provenance representation, which is now the only thing
-between this and a complete step 5.
+## Step 5f — local Source provenance through promotion
+
+Step 5 is complete. Promotion audit provenance is now a typed discriminated value rather than a
+Git-only text field: `git-revision` carries exactly one 40-hex revision, while `local-snapshot`
+carries exactly one canonical SHA-256 snapshot digest. Their JSON fields are separate, and a local
+pin placed in the legacy `source_revision` field is explicitly refused. Canonical legacy Git audit
+records remain readable so durable audit history is not invalidated by the schema evolution
+(D-107, closes B-041).
+
+The by-name local refusal is removed from both `plan_candidate_promotion` and
+`plan_promotion_transaction`; both still drive the same `plan_bulk_promotion`, and a mixed Git/local
+selection is proven to retain per-Candidate provenance while producing one registry snapshot. No
+rebind or immutable-package logic changed, and the local E2E promotes into a registry that already
+contains an approved version, then validates both together (D-089/B-037, INV-203/229/239).
+
+The two direct cases that were missing now use a local revision with a filesystem source location:
+one proves the plan's audit contains `local-snapshot` plus the exact digest and no Git field; the
+other proves screen 43 is a reviewable transaction rather than a refusal. Lower-level round-trip,
+legacy-compatibility, invalid-legacy-field and mixed bulk tests cover the protocol boundary. The
+production composition E2E now continues its real local Source Sync through screens 35–45, creates
+one local commit, reloads and validates the registry, and matches the persisted audit digest to the
+exact durable Candidate-history `local:<sha256>` pin.
+
+Focused evidence before the full checkpoint: 87 promotion, transaction, registry and composition
+tests green; format-check, lint and typecheck green. Full checkpoint results follow after the slice
+gates run.
+
+## Step 6a — screens 48–50: lifecycle, provenance and immutable conflicts
+
+Screen 48 walks the exact retained predecessor chain, so a Source change does not overwrite the
+promotion that preceded it. Promotion is never inferred from Candidate state: a registry version
+and audit must agree on Candidate identity, coordinate, content digests, typed Source provenance and
+mode. The local checkout supplies this evidence in the one-registry D-103 topology, which means the
+locally committed promotion is visible before a later Source Sync or publication (D-108).
+
+Screen 49 exposes the compiler's Source URL, typed immutable pin, manifest, input digest, importer
+identity/version, complete canonical payload path set and warnings. Native and domain provenance are
+cross-checked before the view exists, including the Git/local discriminator (D-109).
+
+Screen 50 is present only for an immutable coordinate/version collision. With approved evidence it
+shows published and Candidate digests side by side; without that read it retains the durable
+Candidate refusal and says evidence is unavailable. It always requires a new version and offers no
+path that could mutate the published version (D-110, INV-203/239).
+
+Evidence: `tests/maintainer_candidate_lifecycle_test.py`, `tests/maintainer_provenance_test.py`,
+`tests/maintainer_version_conflict_test.py`, and the refreshed production path in
+`tests/maintainer_composition_e2e_test.py`. Focused lifecycle/provenance/conflict/composition gates
+are green; lint and typecheck are green. Screens 51–53 remain before the step checkpoint.

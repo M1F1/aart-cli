@@ -26,6 +26,7 @@ from agent_artifacts.domain.identifiers import (
     ArtifactKind,
     ObjectDigest,
     SourceAlias,
+    source_revision_kind,
 )
 from agent_artifacts.domain.registry import (
     PromotionMode,
@@ -101,11 +102,55 @@ class PromotionEvidence:
             raise ValueError("external audit reference must be one safe line")
 
 
-@dataclass(frozen=True, slots=True, order=True)
+class PromotionSourceKind(str, Enum):
+    """The two immutable Source identities a promotion audit may truthfully record."""
+
+    GIT_REVISION = "git-revision"
+    LOCAL_SNAPSHOT = "local-snapshot"
+
+
+@dataclass(frozen=True, slots=True)
+class PromotionSourceProvenance:
+    """Discriminated Source provenance; revisions and snapshot digests never share a field."""
+
+    kind: PromotionSourceKind
+    git_revision: str | None = None
+    local_snapshot_digest: ObjectDigest | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.kind, PromotionSourceKind):
+            raise ValueError("promotion Source provenance kind is invalid")
+        if self.kind is PromotionSourceKind.GIT_REVISION:
+            if (
+                self.git_revision is None
+                or source_revision_kind(self.git_revision) != "git"
+                or self.local_snapshot_digest is not None
+            ):
+                raise ValueError("Git promotion provenance needs one 40-hex revision")
+            return
+        if self.git_revision is not None or not _valid_digest(self.local_snapshot_digest):
+            raise ValueError("local promotion provenance needs one canonical snapshot digest")
+
+
+def promotion_source_provenance(revision: str) -> PromotionSourceProvenance:
+    """Parse one canonical Source pin into the audit's discriminated representation."""
+
+    kind = source_revision_kind(revision)
+    if kind == "git":
+        return PromotionSourceProvenance(PromotionSourceKind.GIT_REVISION, revision)
+    if kind == "local":
+        return PromotionSourceProvenance(
+            PromotionSourceKind.LOCAL_SNAPSHOT,
+            local_snapshot_digest=ObjectDigest("sha256", revision.removeprefix("local:")),
+        )
+    raise ValueError("promotion Source provenance needs a canonical immutable revision")
+
+
+@dataclass(frozen=True, slots=True)
 class PromotionAudit:
     candidate_id: CandidateId
     candidate_digest: ObjectDigest
-    source_revision: str
+    source_provenance: PromotionSourceProvenance
     validation_report_digest: ObjectDigest
     effective_policy_digest: ObjectDigest
     mode: PromotionMode
@@ -127,7 +172,7 @@ class PromotionAudit:
                     self.registry_snapshot_after,
                 )
             )
-            or re.fullmatch(r"[0-9a-f]{40}", self.source_revision) is None
+            or not isinstance(self.source_provenance, PromotionSourceProvenance)
             or not isinstance(self.mode, PromotionMode)
         ):
             raise ValueError("promotion audit is invalid")
@@ -543,6 +588,22 @@ def _reference_content(bundle: CandidateBundle, object_digest: ObjectDigest) -> 
 
 
 def _audit_content(audit: PromotionAudit) -> bytes:
+    if audit.source_provenance.kind is PromotionSourceKind.GIT_REVISION:
+        assert audit.source_provenance.git_revision is not None
+        source_provenance = JsonObject(
+            (
+                ("git_revision", audit.source_provenance.git_revision),
+                ("kind", audit.source_provenance.kind.value),
+            )
+        )
+    else:
+        assert audit.source_provenance.local_snapshot_digest is not None
+        source_provenance = JsonObject(
+            (
+                ("kind", audit.source_provenance.kind.value),
+                ("snapshot_digest", str(audit.source_provenance.local_snapshot_digest)),
+            )
+        )
     return canonical_json_bytes(
         JsonObject(
             (
@@ -553,7 +614,31 @@ def _audit_content(audit: PromotionAudit) -> bytes:
                 ("promotion_mode", audit.mode.value),
                 ("registry_snapshot_after", str(audit.registry_snapshot_after)),
                 ("registry_snapshot_before", str(audit.registry_snapshot_before)),
-                ("source_revision", audit.source_revision),
+                ("source_provenance", source_provenance),
+                ("validation_report_digest", str(audit.validation_report_digest)),
+                ("warnings", JsonArray(audit.warnings)),
+            )
+        )
+    )
+
+
+def _legacy_audit_content(audit: PromotionAudit) -> bytes | None:
+    """Canonical bytes for the Git-only record shape written before typed provenance."""
+
+    if audit.source_provenance.kind is not PromotionSourceKind.GIT_REVISION:
+        return None
+    assert audit.source_provenance.git_revision is not None
+    return canonical_json_bytes(
+        JsonObject(
+            (
+                ("candidate_digest", str(audit.candidate_digest)),
+                ("candidate_id", audit.candidate_id.value),
+                ("effective_policy_result", str(audit.effective_policy_digest)),
+                ("external_audit_reference", audit.external_audit_reference),
+                ("promotion_mode", audit.mode.value),
+                ("registry_snapshot_after", str(audit.registry_snapshot_after)),
+                ("registry_snapshot_before", str(audit.registry_snapshot_before)),
+                ("source_revision", audit.source_provenance.git_revision),
                 ("validation_report_digest", str(audit.validation_report_digest)),
                 ("warnings", JsonArray(audit.warnings)),
             )
@@ -768,7 +853,7 @@ def plan_bulk_promotion(
         audit = PromotionAudit(
             candidate.id,
             candidate.canonical_digest,
-            candidate.artifact.provenance.revision,
+            promotion_source_provenance(candidate.artifact.provenance.revision),
             item_evidence.validation_report_digest,
             item_evidence.effective_policy_digest,
             mode,
@@ -1248,10 +1333,39 @@ def _parse_audit_record(content: bytes, path: str) -> Result[PromotionAudit]:
             not isinstance(item, str) for item in warnings.items
         ):
             raise ValueError("promotion warnings must be a list of text")
+        raw_provenance = value.get("source_provenance")
+        legacy_revision = value.get("source_revision")
+        if raw_provenance is not None and legacy_revision is not None:
+            raise ValueError("promotion Source provenance is ambiguous")
+        if raw_provenance is None:
+            if (
+                not isinstance(legacy_revision, str)
+                or source_revision_kind(legacy_revision) != "git"
+            ):
+                raise ValueError("legacy promotion provenance requires a Git revision")
+            source_provenance = promotion_source_provenance(legacy_revision)
+        else:
+            if not isinstance(raw_provenance, JsonObject):
+                raise ValueError("promotion Source provenance must be an object")
+            kind = PromotionSourceKind(_required_text(raw_provenance, "kind"))
+            if kind is PromotionSourceKind.GIT_REVISION:
+                if set(raw_provenance.keys()) != {"git_revision", "kind"}:
+                    raise ValueError("Git promotion provenance has invalid fields")
+                revision = _required_text(raw_provenance, "git_revision")
+                if source_revision_kind(revision) != "git":
+                    raise ValueError("Git promotion provenance requires a 40-hex revision")
+                source_provenance = promotion_source_provenance(revision)
+            else:
+                if set(raw_provenance.keys()) != {"kind", "snapshot_digest"}:
+                    raise ValueError("local promotion provenance has invalid fields")
+                source_provenance = PromotionSourceProvenance(
+                    PromotionSourceKind.LOCAL_SNAPSHOT,
+                    local_snapshot_digest=_required_digest(raw_provenance, "snapshot_digest"),
+                )
         audit = PromotionAudit(
             CandidateId(_required_text(value, "candidate_id")),
             _required_digest(value, "candidate_digest"),
-            _required_text(value, "source_revision"),
+            source_provenance,
             _required_digest(value, "validation_report_digest"),
             _required_digest(value, "effective_policy_result"),
             PromotionMode(_required_text(value, "promotion_mode")),
@@ -1289,10 +1403,11 @@ def load_registry_promotions(snapshot: SourceSnapshot) -> Result[tuple[Promotion
         parsed = _parse_audit_record(entry.content, path)
         if isinstance(parsed, Err):
             return parsed
-        if entry.content != _audit_content(parsed.value):
+        legacy = _legacy_audit_content(parsed.value)
+        if entry.content != _audit_content(parsed.value) and entry.content != legacy:
             return _error(f"registry promotion record is not canonical: {path}")
         audits.append(parsed.value)
-    ordered = tuple(sorted(audits))
+    ordered = tuple(sorted(audits, key=lambda item: item.candidate_id.value))
     if len({item.candidate_id for item in ordered}) != len(ordered):
         return _error("registry contains duplicate promotion records")
     return Ok(ordered)

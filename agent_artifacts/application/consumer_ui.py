@@ -753,6 +753,11 @@ def key_event(
             ConsumerUiEventKind.REQUEST_ACTION,
             action=ConsumerActionKind.VERIFY_REPAIR,
         )
+    if key == "r" and state.session.screen is MaintainerScreen.CANDIDATE_DETAILS:
+        return ConsumerUiEvent(
+            ConsumerUiEventKind.NAVIGATE,
+            screen=MaintainerScreen.CANDIDATE_LIFECYCLE,
+        )
     if key == "u" and state.session.screen in (
         ConsumerScreen.INSTALLED_ARTIFACT_DETAILS,
         ConsumerScreen.INSTALLED_COLLECTION_DETAILS,
