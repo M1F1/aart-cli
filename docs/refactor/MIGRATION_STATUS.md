@@ -267,6 +267,16 @@ configure". Half of `tests/configured_setup_gap_test.py` inverted;
 `tests/configured_setup_report_test.py` owns the assertions that moved, and what stays
 characterized is that the work is still not performed.
 
+**The engine's subject is now separate from its object (D-124).** B-044 read as "the engine cannot
+be reached" rather than "the engine needs a second subject" because `_prepare_setup_object` did
+both jobs in one function: every canonical fact was blocked behind a legacy install-state read and
+a legacy catalogue resolution. It now takes a typed `_InstalledSubject` and validates the object
+that subject names, with `_install_state_subject` building the legacy one. Nothing behaves
+differently -- the 27 engine tests and the darwin end-to-end route are the characterization -- and
+the canonical route has one seam to fill rather than a function to fork. Step 7i of the CP-14 slice
+records what filling it needs: canonical marketplace evidence, a precondition that does not
+re-resolve through the legacy catalogue, and a durable setup record the canonical route owns.
+
 ## Update rule
 
 Never mark a slice beyond the strongest evidence actually present.

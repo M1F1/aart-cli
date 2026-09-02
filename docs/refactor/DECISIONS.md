@@ -2256,3 +2256,36 @@ the Product Specification first instead of hiding the change here.
   configure" there would turn a broken store into a clean bill of health. Half of
   `tests/configured_setup_gap_test.py` inverts: what it still characterizes is that the work is not
   done, and `tests/configured_setup_report_test.py` owns the assertions that moved.
+
+## D-124 — Which store says an artifact is installed is separated from what the object contains
+
+- **Decision:** `setup_engine/application.py::_prepare_setup_object` no longer reads the
+  install-state manifest or resolves the legacy catalogue. Those became
+  `_install_state_subject`, which returns a typed `_InstalledSubject` (the install-state paths, the
+  `InstallationRecord` and its `MarketplaceItem`); `_prepare_setup_object` takes that subject and
+  validates the object it names. `prepare_setup_attempt` composes the two. No behaviour changed;
+  the existing 27 engine tests and the darwin end-to-end route are the characterization.
+- **Status:** accepted.
+- **Reason:** the two answer different questions and are answered by different stores. *That this
+  artifact is installed here* is a durable record, and which store holds it is a property of the
+  route that installed it — the legacy install-state manifest today, the canonical receipt store
+  for whatever the configured seam installs. *What the installed object contains* is the same
+  question either way, asked of the same content-addressed store. Until this split they were one
+  function, which is why B-044 reads as "the engine cannot be reached" rather than "the engine
+  needs a second subject": every canonical fact was blocked behind a legacy read.
+- **Consequence:** the canonical route now has exactly one seam to fill rather than a function to
+  fork. What remains for it is recorded as B-044 step (3b), and three things are known to be
+  needed: the engine's marketplace evidence has no canonical equivalent (`resolve_artifact` cannot
+  read a promoted registry snapshot, which is the same reason `aart marketplace setup` refuses with
+  `registry company has invalid root manifests`); `_preconditions_current` re-resolves through that
+  same catalogue at finalize time; and `persist_setup` records that setup ran by replacing
+  `setup_state_ref` inside the install-state record under its lock, which
+  `setup_receipt.locate_setup_record` reads for `aart marketplace receipt show|verify|undo`.
+  A canonical `InstallationRecord` is constructible from the receipt — `ArtifactEvidence` from the
+  coordinate and the recorded `object_digest`, `SourceEvidence` from the configured registry source
+  and its synchronized revision, and the required non-empty `effects` from the receipt's deliveries,
+  which carry destination, kind and digest per harness. What is *not* constructible is a faithful
+  `manifest_digest` cross-check: computing it from the same object the engine just loaded compares a
+  value to itself. The canonical equivalent is an independent one — the object the approved registry
+  publishes for this coordinate must be the object the receipt recorded — which `object_digest`
+  binds the whole package by, manifest and recipe included.

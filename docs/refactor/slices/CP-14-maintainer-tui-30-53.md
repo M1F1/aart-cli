@@ -605,10 +605,49 @@ that both routes said nothing moved to `tests/configured_setup_report_test.py` a
 they now say it. What that file still characterizes is the part that remains — the configured file
 the recipe writes is absent after every one of these installs, because reporting is not performing.
 
-Step (3b) is the rest: reach the setup engine so the work is actually done. Its two open questions
-are unchanged (the engine's `MarketplaceCatalog` cannot read a promoted registry snapshot and
-`RegistryArtifactVersion` carries no `manifest_digest`; `persist_setup` records that setup ran
-inside the legacy install-state record).
+Step (3b) is the rest: reach the setup engine so the work is actually done.
+
+## Step 7i — the engine's subject is separated from its object (2026-09-02)
+
+The first move of step (3b), and the reason B-044 read as "the engine cannot be reached" rather
+than "the engine needs a second subject": `_prepare_setup_object` did both jobs in one function, so
+every canonical fact was blocked behind a legacy read. It now takes a typed `_InstalledSubject` --
+the install-state paths, the `InstallationRecord` and its `MarketplaceItem` -- and
+`_install_state_subject` builds that from the manifest and the legacy catalogue.
+`prepare_setup_attempt` composes the two. Nothing behaves differently; the 27 engine tests and the
+darwin end-to-end route are the characterization (D-124).
+
+What the canonical seam now has to fill is one seam rather than a fork, and three things are known
+about it.
+
+*Marketplace evidence.* `_resolve_installed_item` re-resolves the coordinate through
+`resolve_artifact` and requires the item's evidence to equal the record's -- and the legacy
+catalogue cannot read a promoted registry snapshot, which is the same reason `aart marketplace
+setup` refuses today with `registry company has invalid root manifests`. Two things are actually
+taken from the resolved item: the trust decision, and the indexed `setup` declaration that is
+cross-checked against the compiled one. Canonical trust is answerable honestly --
+`io/configured_selection.py` establishes `RegistryTrust.REGISTRY_REVIEWED` for an approved
+snapshot, which is what `marketplace/catalog.py::_trust` also calls an approved registry entry, and
+the company-reviewed upgrade is the same organization-policy test applied to the configured source.
+The indexed declaration is the harder half: a promoted snapshot *is* the package, so reading the
+declaration from it and comparing it to the compiled one compares a value to itself.
+
+*The precondition.* `_preconditions_current` re-resolves through that same catalogue at finalize
+time, and compares the installed record read back out of install state.
+
+*Persistence.* `persist_setup` records that setup ran by replacing `setup_state_ref` inside the
+install-state record under its lock, and `setup_receipt.locate_setup_record` reads that pointer for
+`aart marketplace receipt show|verify|undo`.
+
+A canonical `InstallationRecord` is constructible: `ArtifactEvidence` from the coordinate and the
+`object_digest` the receipt now records, `SourceEvidence` from the configured registry source and
+its synchronized revision, and the required non-empty `effects` from the receipt's deliveries,
+which already carry destination, kind and digest per harness (a project-scope destination has to be
+made relative). What is *not* constructible is a faithful `manifest_digest` cross-check: computing
+it from the object the engine just loaded compares a value to itself. The canonical equivalent is
+an independent check -- the object the approved registry publishes for this coordinate must be the
+object the receipt recorded -- and `object_digest` binds the whole package, manifest and recipe
+included, so it subsumes both the manifest cross-check and the indexed-declaration one.
 
 ## Step 5e — one transaction carrying a set of promotions
 

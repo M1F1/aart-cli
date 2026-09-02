@@ -346,15 +346,31 @@ class _SetupObject:
     queue_item: SetupQueueItem
 
 
-def _prepare_setup_object(
+@dataclass(frozen=True, slots=True)
+class _InstalledSubject:
+    """Which installation setup is being run for, and the evidence that says it may be.
+
+    Separated from validating the object because the two answer different questions and are
+    answered by different stores. *That this artifact is installed here* is a durable record, and
+    which store holds it is a property of the route that installed it -- the legacy install-state
+    manifest today, the canonical receipt store for what the configured seam installs (B-044).
+    *What the installed object contains* is the same question either way, asked of the same
+    content-addressed store, so it is asked once below rather than once per route.
+    """
+
+    state_paths: InstallStatePaths
+    record: InstallationRecord
+    item: MarketplaceItem
+
+
+def _install_state_subject(
     request: SetupRequest,
     catalog: MarketplaceCatalog,
     effective: EffectiveConfiguration,
     location: InstallLocation,
-    store_paths: ObjectStorePaths,
     ports: SetupReadPorts,
-) -> Result[_SetupObject]:
-    """Resolve and validate the installed object, including any required manual document."""
+) -> Result[_InstalledSubject]:
+    """The installed record the legacy install-state manifest holds, and its marketplace evidence."""
 
     state_paths = install_state_paths(
         request.scope,
@@ -373,7 +389,19 @@ def _prepare_setup_object(
     resolved = _resolve_installed_item(record, catalog, effective)
     if isinstance(resolved, Err):
         return resolved
-    item = resolved.value
+    return Ok(_InstalledSubject(state_paths, record, resolved.value))
+
+
+def _prepare_setup_object(
+    subject: _InstalledSubject,
+    store_paths: ObjectStorePaths,
+    ports: SetupReadPorts,
+) -> Result[_SetupObject]:
+    """Validate the installed object this subject names, including its manual document."""
+
+    state_paths = subject.state_paths
+    record = subject.record
+    item = subject.item
     loaded = ports.read_object(ObjectReadRequest(store_paths, record.artifact.object_digest))
     if isinstance(loaded, Err):
         return loaded
@@ -424,7 +452,10 @@ def prepare_setup_attempt(
 ) -> CanonicalSetupAttempt:
     """Plan setup and keep the verified manual route even when trust or policy denies the plan."""
 
-    prepared = _prepare_setup_object(request, catalog, effective, location, store_paths, ports)
+    subject = _install_state_subject(request, catalog, effective, location, ports)
+    if isinstance(subject, Err):
+        return CanonicalSetupAttempt(subject)
+    prepared = _prepare_setup_object(subject.value, store_paths, ports)
     if isinstance(prepared, Err):
         return CanonicalSetupAttempt(prepared)
     return CanonicalSetupAttempt(

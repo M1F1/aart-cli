@@ -216,7 +216,18 @@ completion from the durable record rather than from the plan. Half of
 `tests/configured_setup_gap_test.py` inverted; `tests/configured_setup_report_test.py` owns the
 assertions that moved, and what remains characterized is that the work itself is still not done.
 
-**The exact next step is (3b): actually perform it.**
+**The exact next step is (3b): actually perform it.** The first move has landed (D-124): the
+engine's `_prepare_setup_object` no longer reads the install-state manifest or resolves the legacy
+catalogue itself. Those are `_install_state_subject`, which returns a typed `_InstalledSubject`,
+and the object validation now takes that subject -- so the canonical route has one seam to fill
+rather than a function to fork. Three things are known to be needed, and the CP-14 slice's step 7i
+carries the detail: canonical marketplace evidence (trust is answerable from the approved
+snapshot's `RegistryTrust.REGISTRY_REVIEWED`; the indexed-declaration cross-check is not, because a
+promoted snapshot *is* the package), a precondition that does not re-resolve through the legacy
+catalogue at finalize time, and a durable setup record the canonical route can own. A canonical
+`InstallationRecord` is constructible from the receipt; a faithful `manifest_digest` cross-check is
+not, and its honest replacement is that the object the approved registry publishes must be the
+object the receipt recorded.
 
 **Still open, and what (3b) has to answer.** The engine takes a legacy `MarketplaceCatalog`
 (`resolve_artifact` plus `_marketplace_evidence`), which cannot read a promoted registry snapshot;
