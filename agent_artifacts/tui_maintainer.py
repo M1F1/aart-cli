@@ -6,9 +6,12 @@ from agent_artifacts.application.consumer_views import PresentationProfile
 from agent_artifacts.application.maintainer_views import (
     MaintainerCandidateView,
     MaintainerDashboardView,
+    MaintainerPolicyReviewView,
     MaintainerSourceSyncResultView,
     MaintainerSourceSyncReviewView,
     MaintainerSourceView,
+    MaintainerValidationCheckView,
+    MaintainerValidationView,
 )
 
 __all__ = [
@@ -20,6 +23,9 @@ __all__ = [
     "render_source_sync_result",
     "render_source_sync_review",
     "render_maintainer_sources",
+    "render_maintainer_policy_review",
+    "render_maintainer_validation",
+    "render_maintainer_validation_check",
 ]
 
 
@@ -301,4 +307,95 @@ def render_maintainer_candidate_diff(
         if not changed_file.diff:
             lines.append("  content omitted by the global diff bound")
     lines.append("Press f to hide file diffs.")
+    return tuple(lines)
+
+
+def _allowlist(values: tuple[str, ...] | None) -> str:
+    """What a policy permits, keeping "unconstrained" distinct from "nothing is permitted"."""
+
+    if values is None:
+        return "unconstrained"
+    return ", ".join(values) if values else "none permitted"
+
+
+def render_maintainer_validation(
+    view: MaintainerValidationView,
+    profile: PresentationProfile,
+) -> tuple[str, ...]:
+    if not isinstance(view, MaintainerValidationView) or not isinstance(
+        profile, PresentationProfile
+    ):
+        raise ValueError("Maintainer validation rendering needs a typed view and profile")
+    lines = [
+        f"{view.artifact}@{view.version} — {_human(view.state.value)}",
+        f"{view.error_count} {_noun(view.error_count, 'error')}, "
+        f"{view.warning_count} {_noun(view.warning_count, 'warning')}",
+        "Checks:",
+    ]
+    for item in view.checks:
+        marker = " · required" if item.required else ""
+        lines.append(f"  {item.label} — {_human(item.outcome)}{marker}")
+        if profile is PresentationProfile.VERBOSE:
+            lines.extend(f"    - {detail.message}" for detail in item.details)
+    if view.unmet_requirements:
+        lines.append(f"Unmet requirements: {', '.join(view.unmet_requirements)}")
+    return tuple(lines)
+
+
+def render_maintainer_validation_check(
+    view: MaintainerValidationCheckView,
+    profile: PresentationProfile,
+) -> tuple[str, ...]:
+    if not isinstance(view, MaintainerValidationCheckView) or not isinstance(
+        profile, PresentationProfile
+    ):
+        raise ValueError("Maintainer validation check rendering needs a typed view and profile")
+    lines = [
+        f"{view.label} — {_human(view.outcome)}",
+        f"Check: {view.check}",
+        f"Required by policy: {'yes' if view.required else 'no'}",
+        "Findings:",
+    ]
+    if not view.details:
+        lines.append("  - nothing to report")
+    for detail in view.details:
+        lines.append(f"  - {detail.message}")
+        if detail.path is not None:
+            lines.append(f"    path: {detail.path}")
+        if detail.declared is not None:
+            lines.append(f"    declared: {detail.declared}")
+        if detail.expected is not None:
+            lines.append(f"    expected: {detail.expected}")
+    return tuple(lines)
+
+
+def render_maintainer_policy_review(
+    view: MaintainerPolicyReviewView,
+    profile: PresentationProfile,
+) -> tuple[str, ...]:
+    if not isinstance(view, MaintainerPolicyReviewView) or not isinstance(
+        profile, PresentationProfile
+    ):
+        raise ValueError("Maintainer policy review rendering needs a typed view and profile")
+    lines = [
+        f"{view.artifact}@{view.version} — {_human(view.decision.value)}",
+        "Policy allows:",
+        f"  Runtimes: {_allowlist(view.allowed_runtimes)}",
+        f"  Transports: {_allowlist(view.allowed_transports)}",
+        f"  Network hosts: {_allowlist(view.allowed_network_hosts)}",
+        f"  Secret bindings: {_allowlist(view.allowed_secret_bindings)}",
+        f"  Risk ceiling: {view.risk_ceiling}",
+        "Policy requires:",
+    ]
+    lines.extend(f"  - {item}" for item in view.required_checks)
+    if not view.required_checks:
+        lines.append("  - nothing beyond the pipeline itself")
+    if view.forbidden_effects:
+        lines.append(f"Forbidden effects: {', '.join(view.forbidden_effects)}")
+    if view.unmet_requirements:
+        lines.append(f"Unmet requirements: {', '.join(view.unmet_requirements)}")
+    lines.append("Blocking findings:")
+    lines.extend(f"  - {item}" for item in view.blocking_findings)
+    if not view.blocking_findings:
+        lines.append("  - none; nothing here refuses promotion")
     return tuple(lines)

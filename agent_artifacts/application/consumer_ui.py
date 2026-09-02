@@ -700,6 +700,8 @@ def key_event(
             ConsumerUiEventKind.REQUEST_ACTION,
             action=ConsumerActionKind.UNINSTALL,
         )
+    if key == "p" and state.session.screen is MaintainerScreen.VALIDATION:
+        return ConsumerUiEvent(ConsumerUiEventKind.NAVIGATE, screen=MaintainerScreen.POLICY_REVIEW)
     if key == "d" and state.session.screen is MaintainerScreen.CANDIDATE_DETAILS:
         return ConsumerUiEvent(ConsumerUiEventKind.NAVIGATE, screen=MaintainerScreen.CANDIDATE_DIFF)
     # INV-202: the raw canonical file diff is secondary evidence somebody asks for, never the

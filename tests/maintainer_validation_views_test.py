@@ -7,6 +7,7 @@ string split is what lets screens 39 and 40 be opened directly and still know wh
 
 from __future__ import annotations
 
+import builtins
 import dataclasses
 import json
 import unittest
@@ -124,9 +125,7 @@ def _views(policy: EffectivePolicy, *, inputs: list[dict[str, object]] | None = 
         project_maintainer_dashboard(sources),
         sources,
         project_maintainer_candidates((scan,)),
-        tuple(
-            project_maintainer_validation(bundle, policy=policy) for bundle in scan.active
-        ),
+        tuple(project_maintainer_validation(bundle, policy=policy) for bundle in scan.active),
     )
 
 
@@ -302,9 +301,7 @@ class ValidationShellTest(unittest.TestCase):
         listed = _reload(
             self.source, _on(MaintainerScreen.VALIDATION, focus=self.candidate), entering=True
         )
-        row = next(
-            item for item in listed.rows if item.endswith(":secret-metadata")
-        )
+        row = next(item for item in listed.rows if item.endswith(":secret-metadata"))
         cursored = dataclasses.replace(listed, cursor=listed.rows.index(row))
 
         self.assertIs(self.source.detail(cursored), MaintainerScreen.VALIDATION_DETAILS)
@@ -326,9 +323,7 @@ class ValidationShellTest(unittest.TestCase):
 
         self.assertEqual(
             key_event("p", validation),
-            ConsumerUiEvent(
-                ConsumerUiEventKind.NAVIGATE, screen=MaintainerScreen.POLICY_REVIEW
-            ),
+            ConsumerUiEvent(ConsumerUiEventKind.NAVIGATE, screen=MaintainerScreen.POLICY_REVIEW),
         )
         self.assertIsNone(key_event("p", _on(MaintainerScreen.SOURCES)))
 
@@ -360,11 +355,40 @@ class ValidationShellTest(unittest.TestCase):
         self.assertIn("Approval required", by_candidate)
         self.assertEqual(by_candidate, by_row)
 
+    def test_drawing_the_three_screens_opens_no_file(self) -> None:
+        """A validation run is composed once, before the shell starts.
+
+        If drawing could reach the filesystem, screen 38 could report a different verdict from the
+        one screen 40 justifies, on the same Candidate, in the same session.
+        """
+
+        opened: list[object] = []
+        real_open = builtins.open
+
+        def _watched(*args: object, **kwargs: object):
+            opened.append(args[0] if args else None)
+            return real_open(*args, **kwargs)  # type: ignore[arg-type]
+
+        row = f"{self.candidate}:secret-metadata"
+        builtins.open = _watched  # type: ignore[assignment]
+        try:
+            for screen, focus in (
+                (MaintainerScreen.VALIDATION, self.candidate),
+                (MaintainerScreen.VALIDATION_DETAILS, row),
+                (MaintainerScreen.POLICY_REVIEW, self.candidate),
+            ):
+                frame(
+                    self.source,
+                    _reload(self.source, _on(screen, focus=focus), entering=True),
+                )
+        finally:
+            builtins.open = real_open  # type: ignore[assignment]
+
+        self.assertEqual(opened, [])
+
     def test_a_candidate_with_no_composed_validation_refuses_instead_of_raising(self) -> None:
         without = _shell(
-            MaintainerViews(
-                self.views.dashboard, self.views.sources, self.views.candidates, None
-            )
+            MaintainerViews(self.views.dashboard, self.views.sources, self.views.candidates, None)
         )
 
         drawn = "\n".join(

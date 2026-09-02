@@ -75,7 +75,7 @@ durable preference as of D-090, without which the opt-in boundary could not hold
    reducer (D-092).
 2. **DONE:** Screen 30 and screens 31–34 over the canonical source scan.
 3. **DONE:** Screens 35–37: Candidate list, detail and semantic-first diff (D-098).
-4. Screens 38–40: validation pipeline and policy review. **ENGINE DONE, SCREENS PENDING.**
+4. Screens 38–40: validation pipeline and policy review. **DONE** (D-099, D-100).
 5. Screens 41–47: promotion review, registry diff, explicit commit, registry view, bulk promotion.
 6. Screens 48–53: lifecycle, provenance, conflicts, Collection candidates (closes B-031), filters.
 7. Retire the legacy consumer/maintainer authority CP-13 left standing, each removal preceded by a
@@ -264,7 +264,29 @@ table, and an executable payload file is a warning the Security check names by p
 Evidence: `tests/candidate_validation_test.py`, 17 tests across pipeline shape, per-check content and
 the outcome-to-`CandidateState` mapping, with `make lint` and `make typecheck` green.
 
-`tests/maintainer_validation_views_test.py.pending` is the RED specification for the screens
-themselves, parked under a non-discovered filename so the suite stays green across the handoff. The
-next agent renames it to `*_test.py` and drives it green; `docs/refactor/NEXT.md` lists the six
-pieces it pins.
+### Step 4 evidence — screens 38–40 (2026-09-02)
+
+The screens are live in the production shared shell. `read_maintainer_views` takes the
+`EffectivePolicy` as a parameter and composes one validation run per active Candidate, alongside the
+Source and Candidate projections it already built.
+
+- Screen 38 lists every named check with its own outcome and marks what policy requires; errors and
+  warnings are counted separately rather than totalled, because an error refuses promotion outright
+  while a warning is something policy may or may not treat as blocking.
+- Enter opens screen 39 for one check, with each finding's path, declared value and expected value.
+- `p` opens screen 40, which separates what policy *allows* from what it *requires*. An allowlist
+  that is `None` reads "unconstrained" and an empty one "none permitted": a policy that does not
+  constrain runtimes permits every runtime and one that constrains them to nothing permits none.
+- Enter on screen 37 now moves forward into screen 38: having read the diff, the next question is
+  whether it passed.
+
+The row identity is the `"<candidate-id>:<check>"` pair, parsed back through `parse_validation_row`,
+which returns nothing rather than raising for anything that is not a row. This is not decoration:
+the E2E walk enters screen 40 from a *check row* rather than from a bare Candidate ID, because `p`
+navigates with the cursor's row as the focus, and screen 40 resolves both shapes to the same
+Candidate. The policy judgement is composed into the run rather than derived again while drawing, so
+screen 38 and screen 40 cannot report different verdicts on one Candidate in one session; a test
+monkeypatches `builtins.open` across all three screens and asserts drawing opens no file.
+
+Gates on 2026-09-02 after step 4: `make quality` green end to end and `make integration` green.
+3,052 unit tests and 209 E2E tests pass; branch coverage is 83.35%.

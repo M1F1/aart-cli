@@ -16,7 +16,7 @@ from agent_artifacts.application.consumer_ui import (
     opening_state,
 )
 from agent_artifacts.application.consumer_views import ConsumerSettings
-from agent_artifacts.application.maintainer_views import MaintainerScreen
+from agent_artifacts.application.maintainer_views import MaintainerScreen, parse_validation_row
 from agent_artifacts.configuration.model import (
     ConfiguredSource,
     ReportingSettings,
@@ -347,6 +347,96 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
                 "Bounded redacted file diffs:",
                 terminal.screen_containing("Bounded redacted file diffs:"),
             )
+
+    def test_validation_and_policy_review_are_reachable_from_the_diff(self) -> None:
+        """Screens 38-40 in the same real session, judged once at composition time.
+
+        The run a Maintainer reads on screen 38 and the policy judgement on screen 40 are the same
+        run: nothing re-validates while drawing, so the two screens cannot disagree.
+        """
+
+        with _environment() as env:
+            authors = configured_source("authors", SourceKind.SOURCE_GIT)
+            pathlib.Path(env.paths.user_config_file).write_bytes(
+                user_configuration_bytes(
+                    UserConfiguration(
+                        1,
+                        (env.source, authors),
+                        env.source.alias,
+                        SyncSettings(),
+                        ReportingSettings(),
+                    )
+                )
+            )
+            source_paths = source_store_paths(env.paths.data_root, source_instance_id(authors))
+            candidate = make_source_candidate(
+                source_instance_id(authors),
+                authors.alias,
+                "a" * 40,
+                _snapshot(),
+            )
+            assert isinstance(candidate, Ok)
+            self.assertIsInstance(
+                publish_source_snapshot(
+                    SourcePublishCommand(
+                        source_paths,
+                        ValidatedSourceCandidate(candidate.value, SourceId("author-source")),
+                        int(time.time()),
+                    )
+                ),
+                Ok,
+            )
+            scan = _ready_scan()
+            self.assertIsInstance(
+                write_candidate_history(candidate_history_paths(source_paths), scan),
+                Ok,
+            )
+            self.assertIsInstance(
+                write_consumer_settings(
+                    ConsumerSettings().with_maintainer_mode(True),
+                    data_root=env.paths.data_root,
+                ),
+                Ok,
+            )
+
+            handler = _actions(env)
+            terminal = FakeTerminal(
+                *(DOWN for _ in range(8)),
+                ENTER,
+                DOWN,
+                ENTER,
+                ENTER,
+                ord("d"),
+                ENTER,
+                ord("p"),
+            )
+            finished = run_consumer_shell(
+                handler.source(),
+                terminal,
+                state=opening_state(handler.settings),
+                action_handler=handler,
+                settings_writer=handler.save_settings,
+            )
+
+            expected = scan.active[0].candidate
+            self.assertIs(finished.session.screen, MaintainerScreen.POLICY_REVIEW)
+            # Screen 40 was entered from a check row rather than from a bare Candidate ID, which is
+            # the whole reason the row identity is a parsed pair and not a split string.
+            entered = parse_validation_row(finished.focus)
+            assert entered is not None
+            self.assertEqual(entered.candidate_id, expected.id.value)
+
+            checks = terminal.screen_containing("AART / Validation")
+            self.assertIn("Manifest schema", checks)
+            self.assertIn("Live acceptance", checks)
+            # Live acceptance has not run, and no undemanding policy may report it as passed.
+            self.assertIn("Not run", checks)
+
+            review = terminal.screen_containing("AART / Policy Review")
+            self.assertIn("Policy allows:", review)
+            self.assertIn("Runtimes: unconstrained", review)
+            self.assertIn("nothing beyond the pipeline itself", review)
+            self.assertIn("none; nothing here refuses promotion", review)
 
 
 if __name__ == "__main__":

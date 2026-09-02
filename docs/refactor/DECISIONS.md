@@ -1620,3 +1620,32 @@ the Product Specification first instead of hiding the change here.
   table, and an executable payload file is a warning the Security check names by path.
   Wiring organization configuration into `EffectivePolicy` is not done here: the canonical path
   still composes a default `EffectivePolicy()`, exactly as `io/consumer_actions.py` already does.
+
+## D-100 — A validation row is a Candidate and a check together, and the policy judgement travels with the run
+
+- **Decision:** screen 38's rows are `MaintainerValidationRowId` values rendered as
+  `"<candidate-id>:<check>"`, parsed back by `parse_validation_row`, which returns nothing rather
+  than raising for anything that is not one. Screen 40 accepts either shape — a bare Candidate ID or
+  one of its check rows — and resolves both to the same Candidate. The policy judgement is composed
+  into `MaintainerValidationView.review` by `project_maintainer_validation`, not derived again when
+  screen 40 draws. `read_maintainer_views` takes the `EffectivePolicy` as a parameter and composes
+  every active Candidate's run once.
+- **Status:** accepted.
+- **Reason:** the subject of screen 39 is neither a Candidate nor a check but both at once: a check
+  name alone is ambiguous across Candidates, and a Candidate ID alone cannot open one check. Making
+  that pair a parsed typed value rather than a string a renderer splits is what lets screens 39 and
+  40 be entered directly and still know what they are about — which the shell does in practice, as
+  the E2E walk enters screen 40 from a check row rather than from a Candidate ID. Returning `None`
+  from the parser rather than raising follows D-087: the focus is whatever the previous screen put
+  there, and a screen that cannot recognise it refuses inside the frame instead of crashing the
+  session.
+- **Consequence:** screen 38 and screen 40 cannot disagree about the same Candidate, because they
+  read one run rather than two. Validation now happens once per active Candidate at composition
+  time, which is the same place the Candidate projections are already built; drawing opens no file,
+  and a test asserts it across all three screens. `EffectivePolicy` still arrives as the default at
+  the canonical call sites, so wiring organization policy into configuration remains open work
+  rather than something this slice guessed at. An allowlist that is `None` renders as
+  "unconstrained" and an empty one as "none permitted": a policy that does not constrain runtimes
+  permits every runtime, one that constrains them to nothing permits none, and a Maintainer has to
+  be able to tell those apart. `RiskClass` is an `IntEnum` whose lowest member is `0`, so the review
+  carries its name rather than its falsy value.

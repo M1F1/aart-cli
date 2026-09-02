@@ -12,6 +12,12 @@ from dataclasses import dataclass, replace
 from difflib import unified_diff
 from enum import Enum
 
+from agent_artifacts.application.candidate_validation import (
+    CandidateValidation,
+    ValidationCheck,
+    ValidationOutcome,
+    validate_candidate,
+)
 from agent_artifacts.application.maintainer import CandidateBundle, SourceScan
 from agent_artifacts.application.maintainer_sync import (
     PreparedSourceSync,
@@ -22,6 +28,7 @@ from agent_artifacts.configuration.policy import redact_text
 from agent_artifacts.domain.candidates import CandidateState, semantic_candidate_diff
 from agent_artifacts.domain.identifiers import SourceAlias
 from agent_artifacts.domain.inputs import ConfigInput, RuntimeInput, SecretInput
+from agent_artifacts.domain.policies import EffectivePolicy
 from agent_artifacts.domain.python_runtime import (
     PyProjectSpec,
     RequirementsFile,
@@ -45,12 +52,20 @@ __all__ = [
     "MaintainerSourceSyncResultView",
     "MaintainerSourceSyncReviewView",
     "MaintainerSourceView",
+    "MaintainerPolicyReviewView",
+    "MaintainerValidationCheckView",
+    "MaintainerValidationDetailView",
+    "MaintainerValidationRowId",
+    "MaintainerValidationView",
     "MaintainerViews",
     "filter_maintainer_candidates",
     "maintainer_navigation_targets",
+    "parse_validation_row",
     "project_maintainer_dashboard",
     "project_maintainer_candidates",
+    "project_maintainer_policy_review",
     "project_maintainer_source",
+    "project_maintainer_validation",
     "project_source_sync_result",
     "project_source_sync_review",
 ]
@@ -824,6 +839,7 @@ class MaintainerViews:
     dashboard: MaintainerDashboardView
     sources: tuple[MaintainerSourceView, ...]
     candidates: tuple[MaintainerCandidateView, ...] | None = None
+    validations: tuple[MaintainerValidationView, ...] | None = None
 
     def __post_init__(self) -> None:
         aliases = tuple(source.alias for source in self.sources)
@@ -837,6 +853,17 @@ class MaintainerViews:
             or self.dashboard.validation_failure_count
             != sum(source.invalid_count for source in self.sources)
             or self.dashboard.ready_count != sum(source.ready_count for source in self.sources)
+            or (
+                self.validations is not None
+                and (
+                    any(
+                        not isinstance(validation, MaintainerValidationView)
+                        for validation in self.validations
+                    )
+                    or len({item.candidate_id for item in self.validations})
+                    != len(self.validations)
+                )
+            )
             or (
                 self.candidates is not None
                 and (
@@ -880,6 +907,17 @@ class MaintainerViews:
         return next(
             (candidate for candidate in self.candidates if candidate.id == candidate_id), None
         )
+
+    def validation(self, candidate_id: str) -> MaintainerValidationView | None:
+        """The validation run composed for one Candidate, or nothing if none was composed.
+
+        Screens 38 to 40 refuse rather than validate on the spot: a run assembled while drawing
+        would be a second, unrecorded judgement of the same Candidate.
+        """
+
+        if self.validations is None:
+            return None
+        return next((item for item in self.validations if item.candidate_id == candidate_id), None)
 
 
 def project_source_sync_review(prepared: PreparedSourceSync) -> MaintainerSourceSyncReviewView:
@@ -1056,3 +1094,235 @@ def maintainer_navigation_targets(screen: MaintainerScreen) -> tuple[MaintainerS
     if not isinstance(screen, MaintainerScreen):
         raise ValueError("maintainer navigation needs a maintainer screen")
     return _NAVIGATION[screen]
+
+
+#: What each named check is called on screen.  The check's own value stays the stable identity.
+_VALIDATION_LABELS: dict[ValidationCheck, str] = {
+    ValidationCheck.MANIFEST_SCHEMA: "Manifest schema",
+    ValidationCheck.PAYLOAD_BOUNDARIES: "Payload boundaries",
+    ValidationCheck.SPECIAL_FILES: "No symlinks / special files",
+    ValidationCheck.RUNTIME_DESCRIPTOR: "Runtime descriptor",
+    ValidationCheck.DEPENDENCY_DESCRIPTOR: "Dependency descriptor",
+    ValidationCheck.INPUT_DEFINITIONS: "Input definitions",
+    ValidationCheck.SECRET_METADATA: "Secret metadata",
+    ValidationCheck.POLICY: "Policy",
+    ValidationCheck.SECURITY: "Security checks",
+    ValidationCheck.LIVE_ACCEPTANCE: "Live acceptance",
+}
+
+_CANDIDATE_ID_DIGITS = frozenset("0123456789abcdef")
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerValidationRowId:
+    """What screen 39 is about: one named check of one Candidate, not either alone.
+
+    A check name alone is ambiguous across Candidates and a Candidate ID alone cannot open one
+    check, so the row identity is the pair.  Keeping it parsed and typed rather than splitting a
+    string inside a renderer is what lets screens 39 and 40 be entered directly and still know what
+    they are showing.
+    """
+
+    candidate_id: str
+    check: ValidationCheck
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.candidate_id, str)
+            or len(self.candidate_id) != 64
+            or set(self.candidate_id) - _CANDIDATE_ID_DIGITS
+            or not isinstance(self.check, ValidationCheck)
+        ):
+            raise ValueError("a validation row is a Candidate ID and a named check")
+
+    def __str__(self) -> str:
+        return f"{self.candidate_id}:{self.check.value}"
+
+
+def parse_validation_row(value: str) -> MaintainerValidationRowId | None:
+    """One row identity read back from the focus string, or nothing if it is not one.
+
+    Returning nothing rather than raising is deliberate: the focus is whatever the previous screen
+    put there, and a screen that cannot recognise it must refuse in the frame rather than crash.
+    """
+
+    if not isinstance(value, str):
+        return None
+    candidate_id, separator, check = value.partition(":")
+    if not separator:
+        return None
+    try:
+        return MaintainerValidationRowId(candidate_id, ValidationCheck(check))
+    except ValueError:
+        return None
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerValidationDetailView:
+    """One actionable thing a check found, with what was declared against what was expected."""
+
+    message: str
+    path: str | None
+    declared: str | None
+    expected: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerValidationCheckView:
+    """One named check as screen 38 lists it and screen 39 details it."""
+
+    candidate_id: str
+    check: str
+    label: str
+    outcome: str
+    required: bool
+    details: tuple[MaintainerValidationDetailView, ...]
+
+    @property
+    def row(self) -> str:
+        return f"{self.candidate_id}:{self.check}"
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerValidationView:
+    """One complete validation run, projected for screens 38 and 39.
+
+    Warnings and errors are counted separately rather than totalled, because an error refuses
+    promotion outright while a warning is something policy may or may not treat as blocking.
+    """
+
+    candidate_id: str
+    artifact: str
+    version: str
+    state: CandidateState
+    checks: tuple[MaintainerValidationCheckView, ...]
+    unmet_requirements: tuple[str, ...]
+    #: The policy judgement of this same run.  Screen 40 reads it rather than re-deciding, because
+    #: a second judgement composed while drawing could disagree with the one screen 38 showed.
+    review: MaintainerPolicyReviewView
+
+    def check(self, name: str) -> MaintainerValidationCheckView:
+        matched = next((item for item in self.checks if item.check == name), None)
+        if matched is None:
+            raise ValueError(f"no validation check named {name!r}")
+        return matched
+
+    def _counted(self, outcome: ValidationOutcome) -> int:
+        return sum(1 for item in self.checks if item.outcome == outcome.value)
+
+    @property
+    def error_count(self) -> int:
+        return self._counted(ValidationOutcome.ERROR)
+
+    @property
+    def warning_count(self) -> int:
+        return self._counted(ValidationOutcome.WARNING)
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerPolicyReviewView:
+    """Screen 40: which policy decided what, separated from what the artifact declared.
+
+    An allowlist that is `None` is not an empty allowlist.  A policy that does not constrain
+    runtimes at all permits every runtime; one that constrains them to nothing permits none, and a
+    Maintainer reading the screen has to be able to tell those two apart.
+    """
+
+    candidate_id: str
+    artifact: str
+    version: str
+    decision: CandidateState
+    required_checks: tuple[str, ...]
+    unmet_requirements: tuple[str, ...]
+    allowed_runtimes: tuple[str, ...] | None
+    allowed_transports: tuple[str, ...] | None
+    allowed_network_hosts: tuple[str, ...] | None
+    allowed_secret_bindings: tuple[str, ...] | None
+    forbidden_effects: tuple[str, ...]
+    risk_ceiling: str
+    blocking_findings: tuple[str, ...]
+
+
+def _allowed(values: frozenset[str] | None) -> tuple[str, ...] | None:
+    return None if values is None else tuple(sorted(values))
+
+
+def project_maintainer_validation(
+    bundle: CandidateBundle,
+    *,
+    policy: EffectivePolicy,
+) -> MaintainerValidationView:
+    """Run the named pipeline over one Candidate and project it for screens 38 and 39."""
+
+    if not isinstance(bundle, CandidateBundle) or not isinstance(policy, EffectivePolicy):
+        raise ValueError("Maintainer validation projection needs a Candidate and a policy")
+    validation = validate_candidate(bundle, policy=policy)
+    candidate = bundle.candidate
+    candidate_id = candidate.id.value
+    checks = tuple(
+        MaintainerValidationCheckView(
+            candidate_id,
+            result.check.value,
+            _VALIDATION_LABELS[result.check],
+            result.outcome.value,
+            result.check.value in policy.required_checks,
+            tuple(
+                MaintainerValidationDetailView(
+                    detail.message, detail.path, detail.declared, detail.expected
+                )
+                for detail in result.details
+            ),
+        )
+        for result in validation.results
+    )
+    return MaintainerValidationView(
+        candidate_id,
+        str(candidate.artifact.coordinate.artifact),
+        str(candidate.artifact.coordinate.version),
+        validation.state,
+        checks,
+        tuple(item.value for item in validation.unmet_requirements),
+        project_maintainer_policy_review(validation, bundle, policy=policy),
+    )
+
+
+def project_maintainer_policy_review(
+    validation: CandidateValidation,
+    bundle: CandidateBundle,
+    *,
+    policy: EffectivePolicy,
+) -> MaintainerPolicyReviewView:
+    """Project screen 40 from a run that already happened, never by judging the Candidate again."""
+
+    if (
+        not isinstance(validation, CandidateValidation)
+        or not isinstance(bundle, CandidateBundle)
+        or not isinstance(policy, EffectivePolicy)
+    ):
+        raise ValueError(
+            "Maintainer policy review needs a validation run, a Candidate and a policy"
+        )
+    candidate = bundle.candidate
+    if validation.candidate_id != candidate.id:
+        raise ValueError("Maintainer policy review needs the run of the Candidate it reviews")
+    blocking = tuple(
+        redact_text(f"{result.check.value}: {detail.message}")
+        for result in validation.results
+        if result.outcome is ValidationOutcome.ERROR
+        for detail in result.details
+    )
+    return MaintainerPolicyReviewView(
+        candidate.id.value,
+        str(candidate.artifact.coordinate.artifact),
+        str(candidate.artifact.coordinate.version),
+        validation.state,
+        tuple(sorted(policy.required_checks)),
+        tuple(item.value for item in validation.unmet_requirements),
+        _allowed(policy.allowed_runtimes),
+        _allowed(policy.allowed_transports),
+        _allowed(policy.allowed_network_hosts),
+        _allowed(policy.allowed_secret_bindings),
+        tuple(sorted(policy.forbidden_effects)),
+        policy.risk_ceiling.name.lower().replace("_", "-"),
+        blocking,
+    )

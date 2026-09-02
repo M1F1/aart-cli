@@ -2,11 +2,10 @@
 
 ## Current objective
 
-Continue **CP-14 Maintainer TUI 30–53**, step 4: implement the Validation and Policy Review screens
-38–40 over the Candidates screens 35–37 now expose. The validation engine those screens project is
-already landed and green; what remains is the projection, the renderers and the shell wiring.
+Continue **CP-14 Maintainer TUI 30–53**, step 5: promotion and the registry write path, screens
+41–47, over the reviewed Candidates screens 35–40 now expose.
 
-Screens 30–37 are live in the production shared shell:
+Screens 30–40 are live in the production shared shell:
 
 - screen 30 and screens 31–32 compose configured authoring Sources, durable health and only an exact
   matching Candidate-history observation (D-093–D-095);
@@ -17,62 +16,38 @@ Screens 30–37 are live in the production shared shell:
   screen 34 renders the persisted readback and reports no registry mutation (D-097, INV-200);
 - screen 35 lists active Candidates keyed by stable Candidate ID and narrowed by the typed
   `MaintainerCandidateFilter`; screen 36 is the full authoring detail; screen 37 is semantic diff
-  first with the bounded raw file diff behind the `f` toggle (D-098, INV-202).
+  first with the bounded raw file diff behind the `f` toggle (D-098, INV-202);
+- screens 38–40 project one validation run per active Candidate: screen 38 lists every named check
+  with its own outcome, Enter opens screen 39 for one check with its declared and expected values,
+  and `p` opens screen 40, which says which policy decided what. Rows are
+  `"<candidate-id>:<check>"` pairs and the policy judgement travels with the run rather than being
+  re-derived while drawing (D-099, D-100).
 
 Evidence: `tests/maintainer_candidate_shell_test.py`, `tests/maintainer_candidate_views_test.py`,
+`tests/candidate_validation_test.py`, `tests/maintainer_validation_views_test.py`,
 `tests/maintainer_composition_test.py` and a real temporary production installation in
-`tests/maintainer_composition_e2e_test.py`, which now walks from the consumer dashboard to screen 37.
-
-## Already done in step 4
-
-`agent_artifacts/application/candidate_validation.py` runs the ordered, named pipeline 164.6
-describes over one compiled Candidate, with `tests/candidate_validation_test.py` (17 tests) green
-and `make lint`/`make typecheck` clean:
-
-- `ValidationCheck` names the ten pipeline stages and `VALIDATION_PIPELINE` fixes their order;
-  every `CandidateValidation` carries a result for every check, in that order, so a screen can
-  never silently omit a stage.
-- `ValidationOutcome` keeps `passed`, `warning`, `error` and `not-run` distinct; `not-run` is not a
-  pass, and live acceptance stays `not-run` until CP-17 produces real evidence.
-- `ValidationCheckResult.findings` maps outcomes to `FindingSeverity`, and a warning or error with
-  no actionable detail is refused at construction.
-- `CandidateValidation.unmet_requirements` / `.manual_approval_required` read
-  `EffectivePolicy.required_checks`, and `.state` feeds `assess_candidate`, so a required check that
-  did not pass yields `APPROVAL_REQUIRED` rather than `WARNING` or `READY` (D-099).
-- `validate_candidate(bundle, policy=...)` and `validated_candidate(bundle, policy=...)` are the
-  entry points; both are pure and take the already-compiled bundle.
+`tests/maintainer_composition_e2e_test.py`, which now walks from the consumer dashboard through the
+diff into validation and out to the policy review.
 
 ## Exact next action
 
-Finish step 4 by making the screens 38–40 surface exist.
-`tests/maintainer_validation_views_test.py.pending` is the RED specification already written for it:
-rename it back to `*_test.py` and drive it to green. It pins, and the work is:
+Start RED tests for the promotion path, screens 41–47:
 
-1. `MaintainerValidationRowId(candidate_id, check)` and `parse_validation_row` in
-   `application/maintainer_views.py`. Screen 38's rows address a *pair*, because a check name alone
-   is ambiguous across Candidates and a Candidate ID alone cannot open one check; `str(row)` is
-   `"<candidate-id>:<check>"` and parsing refuses an unknown check or a non-hex ID (D-100 still to
-   be written up).
-2. `project_maintainer_validation(bundle, policy=...) -> MaintainerValidationView` — one row per
-   `ValidationCheck` with a human label, the outcome, whether policy requires it, and its details
-   carrying declared vs expected. Plus `.error_count`, `.warning_count`, `.unmet_requirements`.
-3. `project_maintainer_policy_review(validation, bundle, policy=...) -> MaintainerPolicyReviewView`
-   for screen 40: the decision, the required checks, what is unmet, the allowed runtimes,
-   transports and network hosts (`None` when a policy does not constrain them, which is not the
-   same as an empty allowlist), the risk ceiling, and the blocking findings.
-4. `MaintainerViews` gains a fourth `validations` field and `.validation(candidate_id)`;
-   `read_maintainer_views` composes them once, taking the `EffectivePolicy` as a parameter rather
-   than reaching for configuration inside a projection.
-5. `render_maintainer_validation`, `render_maintainer_validation_check` and
-   `render_maintainer_policy_review` in `tui_maintainer.py`, then rows/detail/body in
-   `tui_consumer.py` and a `p` binding in `key_event` opening POLICY_REVIEW from VALIDATION.
-   Screen 40 must open from either a bare Candidate ID or a check row.
-6. An E2E walk in `tests/maintainer_composition_e2e_test.py` reaching 38, 39 and 40 against a real
-   temporary installation, and a drawing test that opens no file.
-
-Keep warnings and errors distinct all the way to the screen: the projections must not collapse the
-two into one severity column, and validation state is never inferred from a Candidate's state enum
-alone.
+1. Promotion is a typed reviewed action like Source Sync (D-096/D-097), not a renderer calling a
+   command. Screen 41 reviews what would be promoted and binds a digest; execution rechecks that
+   digest, the Candidate state and the approved registry baseline before it writes anything.
+2. A Candidate that is `INVALID` or `APPROVAL_REQUIRED` cannot be promoted by pressing a key on a
+   list. Screens 38–40 already say why; the promotion path must refuse on the same evidence rather
+   than re-deciding it, and the refusal is drawn under the screen it was asked from (D-087).
+3. Published coordinate/version content is immutable: a digest conflict is reported, never repaired
+   in place (INV-203/239), and superseded records stay durable audit history (INV-229).
+4. Local-origin Candidates must keep their `local:<snapshot-sha256>` provenance through promotion
+   rather than passing through the Git-only registry-index projection by disguise (D-096). This is
+   the piece most likely to be got wrong quietly.
+5. Bulk promotion (screen 42) rebinds every retained approved record to the snapshot its own
+   transaction produces, as metadata only, with the published package proven byte-identical — the
+   defect B-037 fixed. Do not reintroduce a per-transaction rebind that leaves older versions
+   unreadable.
 
 ## Critical boundaries for this slice
 

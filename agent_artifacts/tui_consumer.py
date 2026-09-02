@@ -53,8 +53,10 @@ from agent_artifacts.application.maintainer_views import (
     MaintainerScreen,
     MaintainerSourceSyncResultView,
     MaintainerSourceSyncReviewView,
+    MaintainerValidationView,
     MaintainerViews,
     filter_maintainer_candidates,
+    parse_validation_row,
 )
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.domain.selection import Collection
@@ -63,8 +65,11 @@ from agent_artifacts.tui_maintainer import (
     render_maintainer_candidate_diff,
     render_maintainer_candidates,
     render_maintainer_dashboard,
+    render_maintainer_policy_review,
     render_maintainer_source,
     render_maintainer_sources,
+    render_maintainer_validation,
+    render_maintainer_validation_check,
     render_source_sync_result,
     render_source_sync_review,
 )
@@ -1179,6 +1184,18 @@ class ConsumerScreens:
 
         return None if self.maintainer is None else self.maintainer.candidate(candidate_id)
 
+    def validation(self, focus: str) -> MaintainerValidationView | None:
+        """The validation run for a focus that is either a Candidate ID or one of its check rows.
+
+        Screen 40 is reachable from both screen 38 and screen 39, so it has to accept either shape
+        and still be about the same Candidate.
+        """
+
+        if self.maintainer is None:
+            return None
+        row = parse_validation_row(focus)
+        return self.maintainer.validation(focus if row is None else row.candidate_id)
+
     def candidates(
         self, candidate_filter: MaintainerCandidateFilter | None = None
     ) -> tuple[MaintainerCandidateView, ...]:
@@ -1398,6 +1415,10 @@ class CanonicalScreenSource:
             # The row identity is the Candidate ID rather than the artifact name: two Sources may
             # both publish `github-mcp`, and a list keyed by name would open the wrong one.
             return tuple(item.id for item in self._screens.candidates(_candidate_filter(state)))
+        if screen is MaintainerScreen.VALIDATION:
+            # A check name alone would be ambiguous across Candidates, so a row carries both.
+            validation = self._screens.validation(state.focus)
+            return () if validation is None else tuple(item.row for item in validation.checks)
         if screen is ConsumerScreen.MARKETPLACE:
             return tuple(
                 item.key
@@ -1511,6 +1532,19 @@ class CanonicalScreenSource:
             return (
                 MaintainerScreen.CANDIDATE_DIFF
                 if self._screens.candidate(state.focus) is not None
+                else None
+            )
+        if screen is MaintainerScreen.CANDIDATE_DIFF:
+            # Review runs forward: having read the diff, the next question is whether it passed.
+            return (
+                MaintainerScreen.VALIDATION
+                if self._screens.validation(state.focus) is not None
+                else None
+            )
+        if screen is MaintainerScreen.VALIDATION:
+            return (
+                MaintainerScreen.VALIDATION_DETAILS
+                if parse_validation_row(row) is not None
                 else None
             )
         if screen is ConsumerScreen.MARKETPLACE:
@@ -1653,6 +1687,28 @@ class CanonicalScreenSource:
                 else render_maintainer_candidate_diff(
                     candidate, profile, show_files=state.file_diff
                 )
+            )
+        if screen is MaintainerScreen.VALIDATION:
+            validation = screens.validation(state.focus)
+            return (
+                ("That Candidate's validation is not available.",)
+                if validation is None
+                else render_maintainer_validation(validation, profile)
+            )
+        if screen is MaintainerScreen.VALIDATION_DETAILS:
+            validation = screens.validation(state.focus)
+            row = parse_validation_row(state.focus)
+            return (
+                ("That validation check is not available.",)
+                if validation is None or row is None
+                else render_maintainer_validation_check(validation.check(row.check.value), profile)
+            )
+        if screen is MaintainerScreen.POLICY_REVIEW:
+            validation = screens.validation(state.focus)
+            return (
+                ("Policy Review is not available yet.",)
+                if validation is None
+                else render_maintainer_policy_review(validation.review, profile)
             )
         if screen is ConsumerScreen.MARKETPLACE:
             offered = {item.key: item for item in self._offers()}
