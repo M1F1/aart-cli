@@ -236,6 +236,7 @@ class LocalConsumerActions:
                 self._machine,
                 marketplace=self._context.offers.artifacts,
                 collections=self._context.offers.collections,
+                registries=self._context.offers.registries,
                 settings=self._context.settings,
                 maintainer=self._context.maintainer,
                 plan=plan,

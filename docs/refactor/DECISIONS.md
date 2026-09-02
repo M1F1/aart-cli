@@ -1957,3 +1957,35 @@ the Product Specification first instead of hiding the change here.
   production caller here, but `tests/tui_consumer_text_test.py` still patches it to prove the
   canonical text route does *not* dispatch legacy commands, so it is retired with the command
   dispatch path rather than with the wizard shell (B-039's remaining half).
+
+## D-114 — Screen 21 lists the configured sources, and a native Source says why it offers nothing
+
+- **Decision:** `read_consumer_offers` now projects the catalog it already read through
+  `project_registries` and carries the result on `ConsumerOffers.registries`; `screens_from` takes
+  them and `LocalConsumerActions.source()` passes them, so screen 21 draws the configured sources of
+  the machine the shell was composed over. `RegistryView` gains a typed `is_registry`, set in the
+  projection from `SourceKind.REGISTRY_GIT`. A row that is not a registry says "An authoring Source,
+  not a registry." and "Its content is offered here once a maintainer promotes it into a registry.",
+  and its `actions` are `("details",)` rather than `("details", "sync")`. The dashboard's
+  `registry_count` counts the registries among the configured sources rather than all of them.
+- **Status:** accepted; closes B-038's screen-21 half, which was its remaining CP-14 dependency.
+- **Reason:** screen 21 was reachable and empty in the composed application for the same reason
+  screens 02–04a once were: nothing on the composition path projected the configured sources, so
+  `machine.registries` stayed the empty default `assemble_consumer_machine` assembles it with. A
+  machine with two configured registries drew an empty screen 21 and a dashboard reading
+  "0 registries". Which sources are configured is *configuration* rather than durable machine
+  evidence, which is why it arrives through the offers seam — already read once at composition —
+  instead of being read a second time by the machine.
+  The B-038 half is INV-026: a Marketplace projects configured registries, so an enabled
+  `SOURCE_GIT` or `SOURCE_LOCAL` contributes health and offers nothing. Drawing that as a bare
+  "0 artifacts" describes a correct state as a fault, and advertising a sync that "refreshes
+  Marketplace availability" names an effect that source cannot have. `is_registry` is decided in the
+  projection rather than by a renderer splitting `kind`, for the reason D-100 and D-111 give: a
+  screen resolves typed values, it does not take strings apart.
+- **Consequence:** the count on screen 01 and the list on screen 21 now agree with the configuration
+  on disk, over the production composition rather than a `screens_from` call a test made. The
+  characterization test that pinned `("details", "sync")` on *every* row was corrected to state what
+  each kind of row now offers rather than relaxed. `machine.registries` remains the fallback when no
+  registries are passed, so nothing that composed screens without them changes. B-038's other half —
+  removing the legacy route's ability to install directly from a native Source — is unchanged and
+  still sequenced behind its own public-flow evidence.

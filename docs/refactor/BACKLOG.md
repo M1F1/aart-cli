@@ -646,8 +646,9 @@ Evidence/links: D-088, D-089; `agent_artifacts/application/promotion.py::plan_bu
 
 ## B-038 — Native source content has no canonical consumer path
 
-**Classification: BACKLOG, and re-triaged 2026-09-01 as a CP-14 dependency rather than an open
-product question. See D-091.**
+**Classification: PARTLY CLOSED (2026-09-02) — screen 21 now lists the configured sources and says
+why a native one offers nothing (D-114). Removing the legacy direct-install authority remains. Was
+re-triaged 2026-09-01 as a CP-14 dependency rather than an open product question; see D-091.**
 
 Under INV-026 the canonical Marketplace projects configured *registries*, so an enabled
 `SourceKind.SOURCE_GIT` or `SOURCE_LOCAL` source now contributes its health to the source list and
@@ -663,19 +664,24 @@ repository" (INV-021). CP-14 owns the Sources screens 31-34. So a direct source 
 Candidate feed, and the canonical consumer seam listing it while offering nothing is the specified
 behavior, not a gap.
 
-**What is left.** Screen 21 should say why a listed native source offers nothing, and the legacy
-route's ability to install directly from one has no basis in the specification. Screens 31–34 now
-hold the canonical Source capability (D-093–D-097), including a real local Source Sync that creates
-Candidates without promotion. The remaining CP-14 step is the characterized public-flow test and
-safe removal of that legacy direct-install authority; screen 21's explanation can land with the same
-removal. This stays sequenced behind the rest of the active slice rather than expanding an earlier
-slice.
+**Done (D-114).** Screen 21 says it. Fixing the wording first exposed that the screen was drawing
+nothing at all: nothing on the composition path ever projected the configured sources, so a machine
+with two configured registries opened on an empty screen 21 and a dashboard reading "0 registries".
+`read_consumer_offers` now carries `project_registries` output on `ConsumerOffers`, `screens_from`
+takes it, and a row that is not a registry says so and offers `details` only rather than a sync
+whose advertised effect it cannot have.
+
+**What is left.** The legacy route's ability to install directly from a native Source has no basis
+in the specification. Screens 31–34 hold the canonical Source capability (D-093–D-097), including a
+real local Source Sync that creates Candidates without promotion, so the remaining CP-14 step is the
+characterized public-flow test and safe removal of that legacy direct-install authority. This stays
+sequenced behind the rest of the active slice rather than expanding an earlier slice.
 
 **Why it is noncritical now.** Nothing installable was lost: the legacy route still operates direct
 and local sources, and the canonical shell no longer offers what it cannot carry out.
 
 Invariants touched: INV-026, INV-024.
-Evidence/links: D-088, D-093–D-097;
+Evidence/links: D-088, D-093–D-097, D-114; `tests/consumer_registries_screen_test.py`;
 `tests/consumer_marketplace_composition_e2e_test.py::ComposedMarketplaceTest
 ::test_a_source_that_is_not_a_registry_is_configured_but_offers_nothing` and
 `tests/maintainer_composition_e2e_test.py`.

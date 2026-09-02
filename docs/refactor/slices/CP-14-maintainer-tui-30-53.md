@@ -690,3 +690,45 @@ Recorded as D-113; B-039 is now partly closed — the shell is gone, the semanti
 (`consumer/application.py`, `lifecycle/application.py`, `installation/*`, `setup_engine/*`) are not.
 
 Checkpoint gates on 2026-09-02: `make quality` and `make integration` are both green.
+
+## Step 7b — screen 21 lists the configured sources, and says why a native one offers nothing
+
+B-038's remaining CP-14 dependency was one sentence of wording: screen 21 should say why a listed
+native Source offers nothing. Writing the test for that sentence exposed that screen 21 had nothing
+to say it about. Nothing on the composition path ever projected the configured sources, so
+`machine.registries` stayed the empty default `assemble_consumer_machine` assembles it with, and a
+machine with a configured registry on disk opened on an empty screen 21 and a dashboard reading
+"0 registries" — the same gap screens 02–04a had before the Marketplace was composed, on the screen
+next to it.
+
+So the increment is both halves. `read_consumer_offers` already reads the configured catalog once;
+it now also projects it through `project_registries` and carries the rows on `ConsumerOffers`.
+`screens_from` takes them and `LocalConsumerActions.source()` passes them, which keeps the read at
+composition where an effect belongs. Which sources are configured is configuration rather than
+durable machine evidence, which is why it comes through the offers seam instead of being read a
+second time by the machine; `machine.registries` stays as the fallback, so nothing that composed
+screens without registries changes.
+
+The B-038 half is INV-026. A Marketplace projects configured registries, so an enabled `SOURCE_GIT`
+or `SOURCE_LOCAL` contributes its health and offers nothing — and drawing that as a bare "0
+artifacts" describes a correct state as a fault, while advertising a sync that "refreshes
+Marketplace availability" names an effect that source cannot have. `RegistryView` gains a typed
+`is_registry` decided in the projection rather than by a renderer splitting `kind`, for the reason
+D-100 and D-111 give. A non-registry row now reads "An authoring Source, not a registry." and "Its
+content is offered here once a maintainer promotes it into a registry.", with `actions` of
+`("details",)`. The dashboard counts the registries among the configured sources, because "2
+registries" over one registry and one authoring Source is a false count (D-114).
+
+Evidence is `tests/consumer_registries_screen_test.py`: the projection deciding which rows are
+registries for both native kinds, what each kind of row says and offers, screen 21 listing both
+sources in the composed shell, the dashboard counting one, a `builtins.open` monkeypatch proving the
+draw opens no file, and — the one that matters for the gap — the production composition
+(`tui._canonical_consumer_actions` over a real temporary installation) putting the configured
+registry on screen 21 rather than a `screens_from` call a test made. The characterization test that
+pinned `("details", "sync")` on every row was corrected to state what each kind of row now offers
+rather than relaxed.
+
+B-038 is partly closed: what remains is removing the legacy route's ability to install directly from
+a native Source, behind its own public-flow evidence.
+
+Checkpoint gates on 2026-09-02: `make quality` and `make integration` are both green.

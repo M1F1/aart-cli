@@ -9,7 +9,7 @@ and the curses adapter stays as thin as a `getch`.
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Protocol
 
 from agent_artifacts.application.consumer_session import ConsumerMachine
@@ -46,6 +46,7 @@ from agent_artifacts.application.consumer_views import (
     RegistryView,
     navigation_targets,
     project_collection,
+    project_registries,
 )
 from agent_artifacts.application.maintainer_views import (
     MaintainerBulkPromotionView,
@@ -711,9 +712,24 @@ def render_registry(view: RegistryView, profile: PresentationProfile) -> tuple[s
     lines = [
         f"{view.alias} — {_human(view.availability)}",
         f"{view.artifact_count} {noun}",
-        "Actions: details, sync.",
-        "Sync refreshes Marketplace availability; it does not update installed artifacts.",
     ]
+    if view.is_registry:
+        lines.extend(
+            (
+                "Actions: details, sync.",
+                "Sync refreshes Marketplace availability; it does not update installed artifacts.",
+            )
+        )
+    else:
+        # An empty row with no explanation reads as a registry that approved nothing, which is a
+        # fault; this one is configured, healthy and simply not a registry (INV-026, B-038).
+        lines.extend(
+            (
+                "An authoring Source, not a registry.",
+                "Its content is offered here once a maintainer promotes it into a registry.",
+                "Actions: details.",
+            )
+        )
     if profile is PresentationProfile.VERBOSE:
         age = (
             "never" if view.last_sync_age_seconds is None else f"{view.last_sync_age_seconds}s ago"
@@ -1320,6 +1336,9 @@ class ConsumerOffers:
     artifacts: tuple[MarketplaceEntry, ...] = ()
     collections: tuple[MarketplaceCollectionEntry, ...] = ()
     declined: tuple[str, ...] = ()
+    #: Every enabled configured source, registry or not. Screen 21 lists what is configured, which
+    #: is a wider set than what is offered: a source silently missing from it reads as unconfigured.
+    registries: tuple[RegistryView, ...] = ()
 
 
 def read_consumer_offers(
@@ -1351,6 +1370,7 @@ def read_consumer_offers(
             tuple(MarketplaceEntry(row) for row in rows),
             (),
             read.value.declined,
+            project_registries(read.value.catalog),
         )
     )
 
@@ -1360,6 +1380,7 @@ def screens_from(
     *,
     marketplace: tuple[MarketplaceEntry, ...] = (),
     collections: tuple[MarketplaceCollectionEntry, ...] = (),
+    registries: tuple[RegistryView, ...] = (),
     settings: ConsumerSettings | None = None,
     maintainer: MaintainerViews | None = None,
     source_sync_review: MaintainerSourceSyncReviewView | None = None,
@@ -1381,11 +1402,22 @@ def screens_from(
 
     if not isinstance(machine, ConsumerMachine):
         raise ValueError("consumer screens need an assembled machine")
+    if any(not isinstance(item, RegistryView) for item in registries):
+        raise ValueError("consumer screens need projected registry views")
+    # Which sources are configured is configuration, not durable machine evidence, so it arrives
+    # here rather than in the machine -- and the dashboard counts the registries among them, since
+    # an authoring Source is not one and saying "2 registries" over one would be a false count.
+    composed = registries or machine.registries
+    dashboard = machine.dashboard
+    if registries:
+        dashboard = replace(
+            dashboard, registry_count=sum(1 for item in registries if item.is_registry)
+        )
     return ConsumerScreens(
-        machine.dashboard,
+        dashboard,
         machine.installed,
         machine.activity,
-        machine.registries,
+        composed,
         _DEFAULT_SETTINGS if settings is None else settings,
         machine.doctor,
         machine.receipts,

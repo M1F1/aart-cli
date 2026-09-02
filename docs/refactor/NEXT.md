@@ -87,10 +87,16 @@ is partly closed. The acceptance evidence pre-existed — `run()` never reached 
 ERR05 is pinned on the canonical `run()` by `tests/tui_fallback_boundary_test.py` — so no new test
 was needed for the removal.
 
+B-038's screen-21 half is closed too (D-114). Screen 21 was reachable and drawing nothing: nothing
+on the composition path projected the configured sources, so a machine with a configured registry
+opened on an empty list and a dashboard reading "0 registries". `read_consumer_offers` now carries
+the projected rows, `screens_from` takes them, and a row that is not a registry says so and offers
+`details` only instead of a sync whose advertised effect it cannot have.
+
 The next removal is the semantic authority behind the shell, one route at a time and each preceded
 by the public-flow evidence D-091 requires: `consumer/application.py`, `lifecycle/application.py`,
-`installation/*`, `setup_engine/*`, and `_dispatch_result` with them. B-038 is the other ordered
-item. Do not remove the text route.
+`installation/*`, `setup_engine/*`, and `_dispatch_result` with them, plus B-038's remaining half —
+the legacy route's ability to install directly from a native Source. Do not remove the text route.
 
 Behind it, step 6 left the surfaces complete: screen 53 is live (D-111) — the typed filter carries
 all four facets the Product Specification names, `f` opens it from screen 35, `Space` toggles a
@@ -101,7 +107,8 @@ registry state (D-112). What remains in CP-14:
 1. **Step 7: retire the legacy consumer/maintainer authority CP-13 left standing** — but only
    behind the public-flow evidence D-091 requires, one route at a time. B-031's screens now exist
    and are reachable (D-112), so the Collection half of that evidence is in place. B-039's shell
-   half is done (D-113); its semantic half and B-038 are what remain.
+   half is done (D-113) and B-038's screen-21 half is done (D-114); the semantic half of each is
+   what remains.
 2. Preserve D-089/B-037 whenever promotion planning is touched: retained approved records rebind to
    the transaction snapshot as metadata only, and published package bytes do not change.
 

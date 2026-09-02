@@ -33,7 +33,32 @@
 
 ### CP-14 current increment (2026-09-02)
 
-**Step 7 has begun with its first removal: the legacy curses wizard shell is gone.** `_run_curses`
+**Screen 21 now lists the configured sources, and a native one says why it offers nothing.**
+B-038's remaining CP-14 dependency was one sentence of wording, and writing the test for it exposed
+that screen 21 had nothing to say it about: nothing on the composition path ever projected the
+configured sources, so `machine.registries` stayed the empty default and a machine with a configured
+registry on disk opened on an empty screen 21 and a dashboard reading "0 registries" -- the same gap
+screens 02-04a had before the Marketplace was composed, on the screen next to it.
+`read_consumer_offers` already reads the configured catalog once and now also projects it through
+`project_registries`, carrying the rows on `ConsumerOffers`; `screens_from` takes them and
+`LocalConsumerActions.source()` passes them, keeping the read at composition where an effect
+belongs. Which sources are configured is configuration rather than durable machine evidence, which
+is why it arrives through the offers seam instead of being read a second time by the machine.
+The B-038 half is INV-026: a Marketplace projects configured registries, so an enabled `SOURCE_GIT`
+or `SOURCE_LOCAL` contributes health and offers nothing -- and a bare "0 artifacts" describes that
+correct state as a fault while an advertised sync names an effect that source cannot have.
+`RegistryView` gains a typed `is_registry` decided in the projection rather than by a renderer
+splitting `kind` (D-100, D-111); a non-registry row reads "An authoring Source, not a registry" with
+`actions` of `("details",)`, and the dashboard counts the registries among the configured sources
+because "2 registries" over one registry and one authoring Source is a false count (D-114). Evidence
+is `tests/consumer_registries_screen_test.py`, including the production composition
+(`tui._canonical_consumer_actions` over a real temporary installation) putting the configured
+registry on screen 21 rather than a `screens_from` call a test made. The characterization test that
+pinned `("details", "sync")` on every row was corrected to state what each kind of row now offers
+rather than relaxed. `make quality` and `make integration` are both green. B-038 is partly closed:
+removing the legacy route's ability to install directly from a native Source remains.
+
+**Step 7 began with its first removal: the legacy curses wizard shell is gone.** `_run_curses`
 (754 lines), the two setup shims it alone called (`_legacy_setup_stage_failure`,
 `_run_post_install_setup`) and the seven tests that existed only to drive it are removed. No new
 test was written for the removal because B-039's evidence pre-existed on both halves: `run()` has
