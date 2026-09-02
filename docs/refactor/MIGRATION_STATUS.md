@@ -288,6 +288,26 @@ engine's trust-downgrade, source-removed, capability-mismatch and missing-record
 characterization. What remains for the canonical route is one implementation of that port and a
 durable setup record it can own.
 
+**The engine no longer names the store that recorded the installation (D-126, D-127).** The plan's
+last two install-state-shaped fields are now `installation_record_path` /
+`installation_record_lock_path` -- the durable file that says this artifact is installed here and
+the lock guarding it, whichever store holds it -- and `InstalledSubject` holds those two paths
+instead of an `InstallStatePaths`. The identity JSON that derives `setup_state_ref` deliberately
+keeps its old `install_state_path` key, because it is a digest input and renaming it would rename
+every existing setup record. The last check only a separate index could satisfy is now a union:
+`IndexedSetupDeclaration` keeps the legacy cross-check unchanged, and `ApprovedObjectIdentity`
+checks the loaded object against the digest the approved registry publishes for the coordinate --
+two values from two documents, where the alternative would compare a value read out of the package
+against a value compiled out of the same package. No behaviour changed; the engine tests are the
+characterization and three new ones cover the new arm.
+
+What (3b) still needs is a canonical `SetupSubjectPort` and a canonical `persist_setup`. Every
+field the port must produce is now traced to a real source, including `manifest_digest`, which this
+file previously recorded as not constructible: `native_tree.py:512` defines it as
+`json_digest(artifact_manifest_to_json(manifest))` over the package's own `artifact.json`, which
+the object carries. Recording it is not the same as cross-checking against it, and the independent
+check is the approved object identity above. Step 7j of the CP-14 slice carries the rest.
+
 ## Update rule
 
 Never mark a slice beyond the strongest evidence actually present.

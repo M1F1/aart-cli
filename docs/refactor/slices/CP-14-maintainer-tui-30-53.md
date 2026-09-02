@@ -664,6 +664,49 @@ What is left for the canonical route is a second implementation of that one port
 setup record it can own. Nothing else in the engine needs to know which route installed the
 artifact.
 
+## Step 7j — the plan stops naming the store, and the object identity can vouch (2026-09-02)
+
+Two refactors that between them leave the engine route-neutral, with no behaviour change and the
+existing engine tests plus the darwin end-to-end route as the characterization.
+
+*The plan names the record, not the store* (D-126). `CanonicalSetupPlan.install_state_path` /
+`install_state_lock_path` become `installation_record_path` / `installation_record_lock_path`, and
+`InstalledSubject` (no longer private) holds those two strings instead of an `InstallStatePaths`.
+What `persist_setup` needs of them is narrower than the old names claimed: the durable file that
+says this artifact is installed here, and the lock that guards it while setup is recorded. The
+identity JSON that derives `setup_state_ref` deliberately keeps its `install_state_path` key, with
+a comment saying why -- it is a digest input, and renaming it would rename every existing setup
+record and make each one invisible to the run that looks for it. `setup_review_value` serializes
+neither field, so every stored review digest is unchanged too.
+
+*Two shapes of setup-declaration evidence* (D-127). The plan required an index declaration to
+cross-check the compiled recipe against, which is the one check a promoted snapshot cannot satisfy
+honestly. `InstalledSubject.declaration` is now
+`IndexedSetupDeclaration | ApprovedObjectIdentity`. The first keeps the legacy cross-check exactly,
+`None` included -- an index that declares no setup is still refused with the same message, now
+explicitly a declaration rather than an absence. The second checks the loaded object's digest
+against the digest the approved registry publishes for the coordinate: two values from two
+documents, where cross-checking a declaration read out of the package against a recipe compiled out
+of the same package would compare a value to itself. Making it a union rather than a second
+optional field means neither route can fall through the other's arm.
+`tests/canonical_setup_application_test.py::ApprovedObjectIdentityTest` covers all three arms.
+
+**What (3b) still needs, with every field traced to a source.** A canonical `SetupSubjectPort`:
+the receipt store gives the record and its `object_digest`;
+`io/configured_selection.py::load_configured_approved_marketplace` gives the approved
+`RegistryArtifactVersion` and `RegistryTrust.REGISTRY_REVIEWED`, mapping to
+`TrustClass.REGISTRY_REVIEWED` as `marketplace/catalog.py::_trust` already does; `SourceEvidence`
+comes from the configured source plus `CurrentSource.candidate.resolved_revision` and
+`declared_source_id`; and `manifest_digest`, previously recorded as not constructible, **is** --
+`native_tree.py:512` defines it as `json_digest(artifact_manifest_to_json(manifest))` over the
+package's own `artifact.json`, which the object carries, and recording it is not the same as
+cross-checking against it. `EffectProof`s come from the receipt's deliveries; note that
+`InstallationRecord.__post_init__` requires a project-scope destination to be a safe *relative*
+path, so the receipt's absolute destinations must be relativized against the project root. Then a
+canonical `persist_setup`, whose durable pointer belongs on the receipt rather than in an
+install-state manifest, and a canonical equivalent of `setup_receipt.locate_setup_record` for
+`aart marketplace receipt show|verify|undo` (follow-up, not blocking the wiring).
+
 ## Step 5e — one transaction carrying a set of promotions
 
 A loop over single promotions is exactly what bulk promotion is not: each iteration would take its

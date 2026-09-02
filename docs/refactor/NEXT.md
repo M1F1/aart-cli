@@ -230,17 +230,40 @@ not, and its honest replacement is that the object the approved registry publish
 object the receipt recorded. Two of those three are now closed as a shape (D-125): the engine
 takes a `SetupSubjectPort` where it took a `MarketplaceCatalog`, `install_state_subject` is the
 legacy implementation, and `_preconditions_current` re-asks that port instead of re-resolving the
-catalogue and separately re-reading install state. **What remains is one canonical implementation
-of that port, plus a durable setup record the canonical route can own.**
+catalogue and separately re-reading install state.
 
-**Still open, and what (3b) has to answer.** The engine takes a legacy `MarketplaceCatalog`
-(`resolve_artifact` plus `_marketplace_evidence`), which cannot read a promoted registry snapshot;
-`RegistryArtifactVersion` carries `object_digest` and `payload_digest` but **no `manifest_digest`**,
-so the canonical evidence is not a field-for-field substitution for `ArtifactEvidence`. And
-`persist_setup` (`setup_engine/io.py:89`) records that setup ran by taking the install-state lock,
-replacing the record's `setup_state_ref` and moving a CAS reference as one compensated unit, which
-`setup_receipt.locate_setup_record` reads for `aart marketplace receipt show|verify|undo` — the
-canonical route has no such pointer and needs its own durable setup record.
+**The engine no longer names the store that recorded the installation** (D-126, D-127). The plan's
+two remaining install-state-shaped fields are `installation_record_path` /
+`installation_record_lock_path` — the durable file that says this artifact is installed here and
+the lock that guards it, whichever store holds it — and the subject holds those two paths instead
+of an `InstallStatePaths`. The identity JSON that derives `setup_state_ref` deliberately keeps its
+old `install_state_path` key, because it is a digest input and renaming it would rename every
+existing setup record. And the last check that only a separate index could satisfy is now a union:
+`IndexedSetupDeclaration` keeps the legacy cross-check unchanged, `ApprovedObjectIdentity` checks
+the loaded object against the digest the approved registry publishes for the coordinate — two
+values from two documents, which is the honest check where the index *is* the package.
+
+**What remains for (3b) is exactly two things**, and both are now unblocked:
+
+1. **A canonical `SetupSubjectPort`.** Every field it must produce has been traced to a real source:
+   the receipt store gives the record and `object_digest` (D-122); `load_configured_approved_marketplace`
+   gives the approved `RegistryArtifactVersion` and `RegistryTrust.REGISTRY_REVIEWED`, which maps to
+   `TrustClass.REGISTRY_REVIEWED` exactly as the legacy `marketplace/catalog.py::_trust` does;
+   `SourceEvidence` is constructible from the configured source plus
+   `CurrentSource.candidate.resolved_revision` and `declared_source_id`; and `manifest_digest` —
+   previously recorded here as missing — **is** derivable, because
+   `native_tree.py:512` defines it as `json_digest(artifact_manifest_to_json(manifest))` over the
+   package's own `artifact.json`, which the object carries. `EffectProof`s come from the receipt's
+   deliveries, and note `InstallationRecord.__post_init__` requires a project-scope destination to
+   be a *safe relative path*, so the receipt's absolute destinations must be made relative to the
+   project root. `declaration` is `ApprovedObjectIdentity(version.object_digest)`.
+2. **A canonical `persist_setup`.** `setup_engine/io.py::LocalSetupAdapter.persist_setup` records
+   that setup ran by taking the install-state lock, replacing the record's `setup_state_ref` and
+   moving a CAS reference as one compensated unit. The canonical adapter writes the same setup
+   record and moves the same reference, but its durable pointer belongs on the receipt rather than
+   in an install-state manifest. `setup_receipt.locate_setup_record` reads that pointer for
+   `aart marketplace receipt show|verify|undo` and needs a canonical equivalent (follow-up, not
+   blocking the wiring).
 
 A second measurement stands on its own account: the canonical seam registers **no CAS reference of
 any kind** — no references file exists in the data root after a successful install — while the
