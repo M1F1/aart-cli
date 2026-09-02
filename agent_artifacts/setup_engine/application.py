@@ -27,7 +27,6 @@ from agent_artifacts.marketplace.catalog import resolve_artifact
 from agent_artifacts.marketplace.model import (
     ArtifactQuery,
     MarketplaceCatalog,
-    MarketplaceItem,
     TrustClass,
 )
 from agent_artifacts.model import (
@@ -50,6 +49,7 @@ from agent_artifacts.protocol.native_tree import (
     compile_native_package,
 )
 from agent_artifacts.protocol.paths import SafeRelativePath, parse_relative_path
+from agent_artifacts.protocol.registry_models import IndexSetup
 from agent_artifacts.redaction import redact_text
 from agent_artifacts.setup import (
     manual_reference,
@@ -335,9 +335,7 @@ def _previous_record(snapshot: PathSnapshot) -> Result[SetupStateRecord | None]:
 class _SetupObject:
     """One installed record and the exact object facts proven before trust and policy apply."""
 
-    state_paths: InstallStatePaths
-    record: InstallationRecord
-    item: MarketplaceItem
+    subject: _InstalledSubject
     stored: StoredObject
     manifest: ArtifactManifest
     recipe_entry: SnapshotEntry
@@ -360,7 +358,16 @@ class _InstalledSubject:
 
     state_paths: InstallStatePaths
     record: InstallationRecord
-    item: MarketplaceItem
+    #: How trusted the source this artifact came from is, and the digest of the evidence that
+    #: decided it. The plan carries both, and the precondition check re-derives them, so a source
+    #: that stopped being reviewed between the review and the run cannot be run against.
+    trust: TrustClass
+    trust_evidence_digest: ObjectDigest
+    #: The setup declaration the *index* records for this artifact, which is cross-checked against
+    #: the one compiled out of the object. It is independent evidence only where the index is
+    #: independent of the package; where the two are the same bytes it is not, and the honest check
+    #: there is on the object identity instead -- so this is optional rather than required.
+    indexed_setup: IndexSetup | None
 
 
 def _install_state_subject(
@@ -389,7 +396,42 @@ def _install_state_subject(
     resolved = _resolve_installed_item(record, catalog, effective)
     if isinstance(resolved, Err):
         return resolved
-    return Ok(_InstalledSubject(state_paths, record, resolved.value))
+    item = resolved.value
+    return Ok(
+        _InstalledSubject(
+            state_paths,
+            record,
+            item.trust.kind,
+            item.trust.evidence_digest,
+            item.artifact.artifact.setup,
+        )
+    )
+
+
+class SetupSubjectPort(Protocol):
+    """Where it is recorded that this artifact is installed here, and what vouches for it.
+
+    A port rather than a catalogue because the answer comes from a different store depending on
+    which route installed the artifact, and the engine has no business knowing which. It is asked
+    twice -- once to plan, once at finalize to prove nothing moved -- so it must be re-askable and
+    must return the same subject for an unchanged machine.
+    """
+
+    def __call__(self, request: SetupRequest) -> Result[_InstalledSubject]: ...
+
+
+def install_state_subject(
+    catalog: MarketplaceCatalog,
+    effective: EffectiveConfiguration,
+    location: InstallLocation,
+    ports: SetupReadPorts,
+) -> SetupSubjectPort:
+    """The subject the legacy install-state manifest and marketplace catalogue answer for."""
+
+    def resolve(request: SetupRequest) -> Result[_InstalledSubject]:
+        return _install_state_subject(request, catalog, effective, location, ports)
+
+    return resolve
 
 
 def _prepare_setup_object(
@@ -399,9 +441,7 @@ def _prepare_setup_object(
 ) -> Result[_SetupObject]:
     """Validate the installed object this subject names, including its manual document."""
 
-    state_paths = subject.state_paths
     record = subject.record
-    item = subject.item
     loaded = ports.read_object(ObjectReadRequest(store_paths, record.artifact.object_digest))
     if isinstance(loaded, Err):
         return loaded
@@ -419,9 +459,7 @@ def _prepare_setup_object(
     manifest, recipe_entry, installer, custom_path, custom_entry = recipe
     return Ok(
         _SetupObject(
-            state_paths,
-            record,
-            item,
+            subject,
             stored,
             manifest,
             recipe_entry,
@@ -444,7 +482,7 @@ def _prepare_setup_object(
 
 def prepare_setup_attempt(
     request: SetupRequest,
-    catalog: MarketplaceCatalog,
+    subject_port: SetupSubjectPort,
     effective: EffectiveConfiguration,
     location: InstallLocation,
     store_paths: ObjectStorePaths,
@@ -452,7 +490,7 @@ def prepare_setup_attempt(
 ) -> CanonicalSetupAttempt:
     """Plan setup and keep the verified manual route even when trust or policy denies the plan."""
 
-    subject = _install_state_subject(request, catalog, effective, location, ports)
+    subject = subject_port(request)
     if isinstance(subject, Err):
         return CanonicalSetupAttempt(subject)
     prepared = _prepare_setup_object(subject.value, store_paths, ports)
@@ -466,7 +504,7 @@ def prepare_setup_attempt(
 
 def prepare_setup(
     request: SetupRequest,
-    catalog: MarketplaceCatalog,
+    subject_port: SetupSubjectPort,
     effective: EffectiveConfiguration,
     location: InstallLocation,
     store_paths: ObjectStorePaths,
@@ -474,7 +512,9 @@ def prepare_setup(
 ) -> Result[CanonicalSetupPlan]:
     """Build a non-secret plan from one installed record and its exact CAS object."""
 
-    return prepare_setup_attempt(request, catalog, effective, location, store_paths, ports).result
+    return prepare_setup_attempt(
+        request, subject_port, effective, location, store_paths, ports
+    ).result
 
 
 def _prepare_setup_plan(
@@ -487,9 +527,9 @@ def _prepare_setup_plan(
 ) -> Result[CanonicalSetupPlan]:
     """Bind trust, policy, effect plan, and durable preconditions to one validated object."""
 
-    state_paths = prepared.state_paths
-    record = prepared.record
-    item = prepared.item
+    subject = prepared.subject
+    state_paths = subject.state_paths
+    record = subject.record
     stored = prepared.stored
     manifest = prepared.manifest
     recipe_entry = prepared.recipe_entry
@@ -507,7 +547,7 @@ def _prepare_setup_plan(
         platform=request.platform,
     )
     capabilities = _planned_capabilities(installer)
-    indexed_setup = item.artifact.artifact.setup
+    indexed_setup = subject.indexed_setup
     if (
         indexed_setup is None
         or indexed_setup.recipe != manifest.setup.recipe
@@ -520,7 +560,7 @@ def _prepare_setup_plan(
         )
     allowed = _policy_allows(
         request,
-        item.trust.kind,
+        subject.trust,
         capabilities,
         custom_path is not None,
         effective,
@@ -579,8 +619,8 @@ def _prepare_setup_plan(
             record,
             state_paths.destination_path,
             state_paths.lock_path,
-            item.trust.kind.value,
-            item.trust.evidence_digest,
+            subject.trust.value,
+            subject.trust_evidence_digest,
             sha256_bytes(organization_policy_bytes(effective.policy)),
             store_paths,
             stored.candidate,
@@ -606,29 +646,29 @@ def _prepare_setup_plan(
         return _error(SETUP_INVALID, f"canonical setup plan is invalid: {error}")
 
 
-def _selected_state_matches(plan: CanonicalSetupPlan, ports: SetupReadPorts) -> bool:
-    state = ports.read_state(plan.install_state_path)
-    return (
-        isinstance(state, Ok)
-        and state.value is not None
-        and _selected_record(state.value, plan.request) == plan.installation
-    )
-
-
 def _preconditions_current(
     plan: CanonicalSetupPlan,
-    catalog: MarketplaceCatalog,
+    subject_port: SetupSubjectPort,
     effective: EffectiveConfiguration,
     ports: SetupReadPorts,
 ) -> bool:
+    """Nothing the review was bound to has moved since it was reviewed.
+
+    The subject is re-asked rather than re-read, which is what makes this one check instead of two:
+    the same port that said this artifact is installed here says it again, and its answer carries
+    both the record and the trust that was reviewed. A subject that can no longer be resolved --
+    the record gone, the source no longer offering it -- is a change like any other.
+    """
+
     if sha256_bytes(organization_policy_bytes(effective.policy)) != plan.policy_digest:
         return False
-    current = _resolve_installed_item(plan.installation, catalog, effective)
+    current = subject_port(plan.request)
     if not isinstance(current, Ok):
         return False
     if (
-        current.value.trust.kind.value != plan.trust
-        or current.value.trust.evidence_digest != plan.trust_evidence_digest
+        current.value.trust.value != plan.trust
+        or current.value.trust_evidence_digest != plan.trust_evidence_digest
+        or current.value.record != plan.installation
     ):
         return False
     loaded = ports.read_object(ObjectReadRequest(plan.object_store_paths, plan.object_digest))
@@ -638,8 +678,6 @@ def _preconditions_current(
         or loaded.value.candidate != plan.object_candidate
         or loaded.value.root != plan.object_root
     ):
-        return False
-    if not _selected_state_matches(plan, ports):
         return False
     state = ports.inspect_path(plan.setup_state_path)
     if not isinstance(state, Ok) or state.value != plan.setup_state_precondition:
@@ -713,7 +751,7 @@ def _bound_record(plan: CanonicalSetupPlan, record: SetupStateRecord) -> SetupSt
 def finalize_setup(
     plan: CanonicalSetupPlan,
     reviewed_digest: ObjectDigest,
-    catalog: MarketplaceCatalog,
+    subject_port: SetupSubjectPort,
     effective: EffectiveConfiguration,
     ports: SetupApplyPorts,
     runtime: SetupRuntime,
@@ -725,7 +763,7 @@ def finalize_setup(
     if reviewed_digest != plan.review_digest:
         return _error(SETUP_REVIEW_MISMATCH, "finalize digest does not match the reviewed setup")
     if runtime.platform != plan.request.platform or not _preconditions_current(
-        plan, catalog, effective, ports
+        plan, subject_port, effective, ports
     ):
         return Ok(
             _outcome(
@@ -816,7 +854,7 @@ def _failed(plan: CanonicalSetupPlan, error: Err) -> SetupOutcome:
 def execute_setup_queue(
     plans: Sequence[CanonicalSetupPlan],
     reviewed_digests: Sequence[ObjectDigest],
-    catalog: MarketplaceCatalog,
+    subject_port: SetupSubjectPort,
     effective: EffectiveConfiguration,
     ports: SetupApplyPorts,
     runtime: SetupRuntime,
@@ -854,7 +892,7 @@ def execute_setup_queue(
         result = finalize_setup(
             plan,
             reviewed,
-            catalog,
+            subject_port,
             effective,
             ports,
             runtime,

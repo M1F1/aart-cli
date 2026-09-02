@@ -227,7 +227,11 @@ promoted snapshot *is* the package), a precondition that does not re-resolve thr
 catalogue at finalize time, and a durable setup record the canonical route can own. A canonical
 `InstallationRecord` is constructible from the receipt; a faithful `manifest_digest` cross-check is
 not, and its honest replacement is that the object the approved registry publishes must be the
-object the receipt recorded.
+object the receipt recorded. Two of those three are now closed as a shape (D-125): the engine
+takes a `SetupSubjectPort` where it took a `MarketplaceCatalog`, `install_state_subject` is the
+legacy implementation, and `_preconditions_current` re-asks that port instead of re-resolving the
+catalogue and separately re-reading install state. **What remains is one canonical implementation
+of that port, plus a durable setup record the canonical route can own.**
 
 **Still open, and what (3b) has to answer.** The engine takes a legacy `MarketplaceCatalog`
 (`resolve_artifact` plus `_marketplace_evidence`), which cannot read a promoted registry snapshot;

@@ -59,6 +59,7 @@ from agent_artifacts.setup_engine import (
     SetupRequest,
     execute_setup_queue,
     finalize_setup,
+    install_state_subject,
     prepare_setup,
     prepare_setup_attempt,
     retryable_plans,
@@ -295,10 +296,26 @@ class Fixture:
             platform="linux" if changes.get("linux", False) else "darwin",
         )
 
+    def subject(self, catalog=None, effective=None):
+        """The port the engine takes: which store says this is installed, and what vouches for it.
+
+        Built from whatever catalogue and configuration the fixture currently holds, so a test that
+        downgrades a source, or removes it from the configuration, between the review and the run
+        passes the changed one here. Both are the subject's business rather than the plan's: they
+        decide whether this artifact may still be set up at all.
+        """
+
+        return install_state_subject(
+            self.catalog if catalog is None else catalog,
+            self.effective if effective is None else effective,
+            self.location,
+            self.adapter,
+        )
+
     def plan(self, profile: str = "claude", **changes: bool):
         return prepare_setup(
             self.request(profile, **changes),
-            self.catalog,
+            self.subject(),
             self.effective,
             self.location,
             self.paths,
@@ -308,7 +325,7 @@ class Fixture:
     def attempt(self, profile: str = "claude", **changes: bool):
         return prepare_setup_attempt(
             self.request(profile, **changes),
-            self.catalog,
+            self.subject(),
             self.effective,
             self.location,
             self.paths,
@@ -523,7 +540,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
             fixture = Fixture(Path(raw))
             missing_object = prepare_setup(
                 fixture.request(authorize_untrusted_source=True),
-                fixture.catalog,
+                fixture.subject(),
                 fixture.effective,
                 fixture.location,
                 fixture.paths,
@@ -542,7 +559,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
             )
             mismatched = prepare_setup(
                 fixture.request(authorize_untrusted_source=True),
-                fixture._catalog(mismatched_index),
+                fixture.subject(fixture._catalog(mismatched_index)),
                 fixture.effective,
                 fixture.location,
                 fixture.paths,
@@ -578,7 +595,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
 
             result = prepare_setup(
                 fixture.request(authorize_untrusted_source=True),
-                fixture.catalog,
+                fixture.subject(effective=without_source),
                 without_source,
                 fixture.location,
                 fixture.paths,
@@ -608,7 +625,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
             outcome = finalize_setup(
                 planned.value,
                 planned.value.review_digest,
-                downgraded,
+                fixture.subject(downgraded),
                 fixture.effective,
                 fixture.adapter,
                 _runtime(process),
@@ -635,7 +652,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
             outcome = finalize_setup(
                 planned.value,
                 planned.value.review_digest,
-                fixture.catalog,
+                fixture.subject(),
                 fixture.effective,
                 fixture.adapter,
                 replace(_runtime(), platform="linux"),
@@ -656,7 +673,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
             outcome = finalize_setup(
                 planned.value,
                 planned.value.review_digest,
-                fixture.catalog,
+                fixture.subject(),
                 fixture.effective,
                 fixture.adapter,
                 _runtime(),
@@ -703,7 +720,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
             first = finalize_setup(
                 first_plan.value,
                 first_plan.value.review_digest,
-                fixture.catalog,
+                fixture.subject(),
                 fixture.effective,
                 fixture.adapter,
                 _runtime(),
@@ -763,7 +780,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
             second = finalize_setup(
                 second_plan.value,
                 second_plan.value.review_digest,
-                fixture.catalog,
+                fixture.subject(),
                 fixture.effective,
                 fixture.adapter,
                 _runtime(),
@@ -780,7 +797,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
             third = finalize_setup(
                 third_plan.value,
                 third_plan.value.review_digest,
-                fixture.catalog,
+                fixture.subject(),
                 fixture.effective,
                 fixture.adapter,
                 _runtime(),
@@ -810,7 +827,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
             wrong_review = finalize_setup(
                 planned.value,
                 sha256_bytes(b"wrong review"),
-                fixture.catalog,
+                fixture.subject(),
                 fixture.effective,
                 fixture.adapter,
                 _runtime(),
@@ -835,7 +852,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
                 outcome = finalize_setup(
                     planned.value,
                     planned.value.review_digest,
-                    fixture.catalog,
+                    fixture.subject(),
                     fixture.effective,
                     fixture.adapter,
                     _runtime(),
@@ -861,7 +878,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
             outcome = finalize_setup(
                 planned.value,
                 planned.value.review_digest,
-                fixture.catalog,
+                fixture.subject(),
                 fixture.effective,
                 fixture.adapter,
                 _runtime(),
@@ -906,7 +923,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
             outcome = finalize_setup(
                 planned.value,
                 planned.value.review_digest,
-                fixture.catalog,
+                fixture.subject(),
                 fixture.effective,
                 fixture.adapter,
                 _runtime(process),
@@ -937,7 +954,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
             stopped = execute_setup_queue(
                 (first.value, second.value),
                 (first.value.review_digest, second.value.review_digest),
-                fixture.catalog,
+                fixture.subject(),
                 fixture.effective,
                 fixture.adapter,
                 _runtime(),
@@ -959,7 +976,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
             retried = execute_setup_queue(
                 (retried_first.value,),
                 (retried_first.value.review_digest,),
-                fixture.catalog,
+                fixture.subject(),
                 fixture.effective,
                 fixture.adapter,
                 _runtime(),
@@ -997,7 +1014,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
             configured = finalize_setup(
                 planned.value,
                 planned.value.review_digest,
-                fixture.catalog,
+                fixture.subject(),
                 fixture.effective,
                 fixture.adapter,
                 _runtime(),
@@ -1044,7 +1061,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
             outcome = execute_setup_queue(
                 (first.value, second.value),
                 (first.value.review_digest, second.value.review_digest),
-                fixture.catalog,
+                fixture.subject(),
                 fixture.effective,
                 fixture.adapter,
                 _runtime(),
@@ -1072,7 +1089,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
                 execute_setup_queue(
                     (planned.value,),
                     (),
-                    fixture.catalog,
+                    fixture.subject(),
                     fixture.effective,
                     fixture.adapter,
                     _runtime(),
@@ -1081,7 +1098,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
             failed = execute_setup_queue(
                 (planned.value,),
                 (sha256_bytes(b"wrong review"),),
-                fixture.catalog,
+                fixture.subject(),
                 fixture.effective,
                 fixture.adapter,
                 _runtime(),
@@ -1099,7 +1116,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
             outcome = finalize_setup(
                 planned.value,
                 planned.value.review_digest,
-                fixture.catalog,
+                fixture.subject(),
                 fixture.effective,
                 fixture.adapter,
                 _runtime(RecordingProcess(failure=True)),

@@ -3,6 +3,7 @@
 from .application import (
     execute_setup_queue,
     finalize_setup,
+    install_state_subject,
     prepare_setup,
     prepare_setup_attempt,
     retryable_plans,
@@ -32,6 +33,7 @@ __all__ = [
     "execute_setup_queue",
     "finalize_setup",
     "prepare_setup",
+    "install_state_subject",
     "prepare_setup_attempt",
     "retryable_plans",
     "rollback_setup",

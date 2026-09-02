@@ -2289,3 +2289,28 @@ the Product Specification first instead of hiding the change here.
   value to itself. The canonical equivalent is an independent one — the object the approved registry
   publishes for this coordinate must be the object the receipt recorded — which `object_digest`
   binds the whole package by, manifest and recipe included.
+
+## D-125 — The setup engine takes a subject port, not a marketplace catalogue
+
+- **Decision:** `prepare_setup`, `prepare_setup_attempt`, `finalize_setup` and
+  `execute_setup_queue` take a `SetupSubjectPort` — `(SetupRequest) -> Result[_InstalledSubject]` —
+  in place of the `MarketplaceCatalog`. `install_state_subject(catalog, effective, location, ports)`
+  builds the legacy one, and `consumer/application.py` passes it. `_preconditions_current` re-asks
+  the port instead of re-resolving the catalogue and separately re-reading install state, so
+  `_selected_state_matches` is gone. The subject carries the trust decision and the indexed setup
+  declaration rather than a `MarketplaceItem`, which is all the plan ever read from it.
+- **Status:** accepted.
+- **Reason:** the engine had a hard dependency on the store that recorded the installation and on
+  the catalogue that indexed it, and neither can answer for a canonical install: `resolve_artifact`
+  cannot read a promoted registry snapshot, which is why `aart marketplace setup` refuses with
+  `registry company has invalid root manifests`. A port is the honest shape because the answer
+  genuinely comes from different places for different routes, and because the question is asked
+  twice — once to plan, once at finalize to prove nothing moved — so it has to be re-askable.
+  Folding the finalize-time record re-read into the same re-ask makes it one check where it was
+  two, which is also why it cannot drift: the record the plan was bound to and the trust it was
+  bound to are now proven current by the same call that established them.
+- **Consequence:** no behaviour changed and the engine's tests are the characterization —
+  the trust-downgrade, source-removed, capability-mismatch and missing-record cases all still fail
+  where they failed before, now by passing a changed subject rather than a changed catalogue. The
+  canonical route's remaining work is a second implementation of this one port plus a durable setup
+  record it can own; nothing else in the engine needs to know which route installed the artifact.

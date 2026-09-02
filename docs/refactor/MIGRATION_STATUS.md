@@ -277,6 +277,17 @@ the canonical route has one seam to fill rather than a function to fork. Step 7i
 records what filling it needs: canonical marketplace evidence, a precondition that does not
 re-resolve through the legacy catalogue, and a durable setup record the canonical route owns.
 
+**The engine now takes a subject port rather than a marketplace catalogue (D-125).** Two of those
+three are closed as a shape: `prepare_setup`, `prepare_setup_attempt`, `finalize_setup` and
+`execute_setup_queue` take `(SetupRequest) -> Result[_InstalledSubject]`, `install_state_subject`
+is the legacy implementation, and `_preconditions_current` re-asks that port instead of
+re-resolving the catalogue and separately re-reading install state -- so what was two checks that
+could drift is one. The subject carries the trust decision and the indexed setup declaration rather
+than a `MarketplaceItem`, which is all the plan ever read from it. No behaviour changed; the
+engine's trust-downgrade, source-removed, capability-mismatch and missing-record tests are the
+characterization. What remains for the canonical route is one implementation of that port and a
+durable setup record it can own.
+
 ## Update rule
 
 Never mark a slice beyond the strongest evidence actually present.

@@ -49,6 +49,7 @@ from agent_artifacts.setup_engine.application import (
     SetupApplyPorts,
     SetupReadPorts,
     execute_setup_queue,
+    install_state_subject,
     prepare_setup_attempt,
 )
 from agent_artifacts.setup_engine.model import (
@@ -744,7 +745,7 @@ def prepare_consumer_setup_queue(
         )
         attempt = prepare_setup_attempt(
             request,
-            context.catalog,
+            install_state_subject(context.catalog, context.effective, context.location, ports),
             context.effective,
             context.location,
             context.store_paths,
@@ -841,7 +842,12 @@ class ConsumerApplicationService:
         return execute_setup_queue(
             queue.plans,
             tuple(plan.review_digest for plan in queue.plans),
-            self.context.catalog,
+            install_state_subject(
+                self.context.catalog,
+                self.context.effective,
+                self.context.location,
+                self.ports,
+            ),
             self.context.effective,
             self.ports,
             production_runtime() if runtime is None else runtime,

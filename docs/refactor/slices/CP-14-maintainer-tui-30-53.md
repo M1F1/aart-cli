@@ -649,6 +649,21 @@ an independent check -- the object the approved registry publishes for this coor
 object the receipt recorded -- and `object_digest` binds the whole package, manifest and recipe
 included, so it subsumes both the manifest cross-check and the indexed-declaration one.
 
+The first two of those three are now closed as a shape (D-125). The engine takes a
+`SetupSubjectPort` -- `(SetupRequest) -> Result[_InstalledSubject]` -- where it took a
+`MarketplaceCatalog`, and `install_state_subject` is the legacy implementation of it. The subject
+carries the trust decision and the indexed declaration rather than a whole `MarketplaceItem`, which
+is all the plan ever read. `_preconditions_current` re-asks the port instead of re-resolving the
+catalogue and separately re-reading install state, so `_selected_state_matches` is gone and what
+was two checks that could drift is one: the record the plan was bound to and the trust it was bound
+to are proven current by the same call that established them. Nothing behaves differently; the
+engine's own trust-downgrade, source-removed, capability-mismatch and missing-record tests are the
+characterization, now passing a changed subject where they passed a changed catalogue.
+
+What is left for the canonical route is a second implementation of that one port, and a durable
+setup record it can own. Nothing else in the engine needs to know which route installed the
+artifact.
+
 ## Step 5e — one transaction carrying a set of promotions
 
 A loop over single promotions is exactly what bulk promotion is not: each iteration would take its
