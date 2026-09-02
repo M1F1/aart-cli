@@ -682,21 +682,26 @@ Evidence/links: D-088, D-093–D-097;
 
 ## B-039 — The legacy wizard is unreachable from the default terminal route
 
-**Classification: BACKLOG; the first removal in CP-13 item 6, once its remaining callers are gone.**
+**Classification: PARTLY CLOSED (2026-09-02) — the shell is removed (D-113); the semantic paths
+behind it remain. The first removal of CP-14 step 7.**
 
 With B-025 closed, `run()` composes `_canonical_consumer_actions` and calls `run_consumer` before
 any wizard composition, and the legacy `try: _run_curses(...)` block was deleted. `_run_curses`
-itself is still defined and still exercised directly by `tests/tui_curation_test.py`,
-`tests/tui_wizard_curses_test.py` and `tests/tui_fallback_boundary_test.py`, and `_run_text` is
-still the documented degradation when curses is unavailable.
+itself remained defined and exercised by `tests/tui_curation_test.py`,
+`tests/tui_wizard_curses_test.py` and `tests/tui_fallback_boundary_test.py`.
 
-**Shape of the work.** Retire the wizard's semantic authority path by path -- `consumer/
-application.py`, `lifecycle/application.py`, `installation/*`, `setup_engine/*` -- each removal
-preceded by a public-flow test proving the canonical path already carries it, and only then remove
-`_run_curses` and the characterization tests that exist solely to pin it. Do not remove the text
-route: no-TTY is a supported environment, not a fallback for a broken one.
+**Done (D-113).** `_run_curses` is deleted, with `_legacy_setup_stage_failure` and
+`_run_post_install_setup` (it was their only caller) and the five tests that existed solely to drive
+it. The acceptance evidence pre-existed and needed no new test: `run()` never reached it, and ERR05
+is pinned on the canonical `run()` by `tests/tui_fallback_boundary_test.py`. The wizard's curses
+*primitives* stay — they are still composed by the surviving stages and still covered.
 
-Evidence/links: D-062, D-087; B-025; `agent_artifacts/tui.py::run`.
+**Remaining.** Retire the wizard's semantic authority path by path -- `consumer/application.py`,
+`lifecycle/application.py`, `installation/*`, `setup_engine/*`, and `_dispatch_result` with them --
+each removal preceded by a public-flow test proving the canonical path already carries it. Do not
+remove the text route: no-TTY is a supported environment, not a fallback for a broken one.
+
+Evidence/links: D-062, D-087, D-113; B-025; `agent_artifacts/tui.py::run`.
 
 ## B-040 — The secondary file-diff bound is spent in path order, not shared between files
 

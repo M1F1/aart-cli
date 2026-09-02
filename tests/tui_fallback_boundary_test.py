@@ -41,58 +41,12 @@ def _runtime() -> tui._RuntimeSourceStage:
 
 
 class CursesFallbackBoundaryTests(unittest.TestCase):
-    """``_run_curses`` distinguishes "no terminal" from "the wizard broke"."""
+    """``run`` distinguishes "no terminal" from "the application broke".
 
-    def test_setup_failure_before_interaction_reports_curses_unavailable(self):
-        def wrapper(_callback):
-            raise curses.error("setupterm: could not find terminal")
-
-        with mock.patch.object(curses, "wrapper", side_effect=wrapper):
-            with self.assertRaises(tui.CursesUnavailable):
-                tui._run_curses(source_dir=None, repo=None, project=None)
-
-    def test_failure_after_interaction_propagates_unchanged(self):
-        """A defect inside the wizard must not be reported as a terminal problem."""
-
-        def wrapper(callback):
-            callback(object())
-
-        with (
-            mock.patch.object(curses, "wrapper", side_effect=wrapper),
-            mock.patch.object(curses, "curs_set", return_value=None),
-            mock.patch.object(
-                tui,
-                "_curses_onboarding",
-                side_effect=ValueError("TUI marketplace artifact row is invalid"),
-            ),
-        ):
-            with self.assertRaises(ValueError):
-                tui._run_curses(source_dir=None, repo=None, project=None)
-
-    def test_failure_context_keeps_the_last_safe_stage_without_touching_the_session(self):
-        context = tui.InternalFailureContext()
-
-        def wrapper(callback):
-            callback(object())
-
-        with (
-            mock.patch.object(curses, "wrapper", side_effect=wrapper),
-            mock.patch.object(curses, "curs_set", return_value=None),
-            mock.patch.object(
-                tui,
-                "_curses_onboarding",
-                side_effect=ValueError("TUI marketplace artifact row is invalid"),
-            ),
-        ):
-            with self.assertRaises(ValueError):
-                tui._run_curses(
-                    source_dir=None,
-                    repo=None,
-                    project=None,
-                    failure_context=context,
-                )
-
-        self.assertEqual((context.stage, context.operation), ("onboarding", "load"))
+    The distinction used to be pinned on the wizard's own ``_run_curses``, which is gone: the
+    canonical application is the only thing a terminal reaches now, and these tests hold ERR05
+    against it (D-113).
+    """
 
     def test_failure_context_tracks_the_artifacts_loader_boundary(self):
         context = tui.InternalFailureContext()

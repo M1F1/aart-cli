@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-import curses
-import io
 import tempfile
 import unittest
-from contextlib import redirect_stdout
 from pathlib import Path
 from unittest import mock
 
@@ -16,9 +13,8 @@ from agent_artifacts.curation.model import (
     CurationReview,
 )
 from agent_artifacts.curation.runtime import PreparedCuration
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.identifiers import ObjectDigest
-from agent_artifacts.domain.result import Err, Ok
+from agent_artifacts.domain.result import Ok
 from agent_artifacts.protocol.native_tree import SnapshotOrigin, SourceSnapshot
 
 
@@ -66,64 +62,6 @@ class _Service:
 
 
 class TuiCurationTest(unittest.TestCase):
-    def test_curses_finalizes_with_canonical_consumer_loaded_after_maintainer_switch(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary) / "registry"
-            root.mkdir()
-            (root / ".git").mkdir()
-            (root / "aart-registry.json").write_text("{}", encoding="utf-8")
-            consumer = mock.Mock()
-            consumer.finalize.return_value = Err(
-                (
-                    Diagnostic(
-                        DiagnosticCode("expected-test-stop"),
-                        Severity.ERROR,
-                        "stop after proving the selected service finalized",
-                    ),
-                )
-            )
-            review = mock.Mock(review_digest=ObjectDigest("sha256", "a" * 64))
-
-            def wrapper(callback):
-                callback(object())
-
-            def run_user(_curses, _screen, session, selection, **kwargs):
-                self.assertIs(kwargs["consumer_service"], consumer)
-                selection["request"] = mock.Mock()
-                selection["consumer_review"] = review
-                selection["wizard_session"] = session
-                return session
-
-            # Derived, not counted: the action list grows, and a stale index selects a different
-            # action while still passing for the wrong reason.
-            singles = iter((1, _action_index("user")))  # Maintainer role, then "user"
-            output = io.StringIO()
-            with (
-                redirect_stdout(output),
-                mock.patch.object(curses, "wrapper", side_effect=wrapper),
-                mock.patch.object(curses, "curs_set", return_value=None),
-                mock.patch.object(
-                    tui,
-                    "_curses_singleselect",
-                    side_effect=lambda *_args, **_kwargs: next(singles),
-                ),
-                mock.patch.object(tui, "_run_user_curses_wizard", side_effect=run_user),
-                mock.patch(
-                    "agent_artifacts.consumer.runtime.load_local_consumer_service",
-                    return_value=Ok(consumer),
-                ),
-            ):
-                code = tui._run_curses(
-                    source_dir=str(root),
-                    project=str(root),
-                    user_home=temporary,
-                )
-
-            self.assertEqual(code, 2)
-            consumer.finalize.assert_called_once_with(review, review.review_digest)
-            self.assertIn("error [expected-test-stop]", output.getvalue())
-            self.assertIn("Quit = q", output.getvalue())
-
     def test_canonical_maintainer_user_action_loads_canonical_consumer_runtime(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary) / "registry"
@@ -204,49 +142,6 @@ class TuiCurationTest(unittest.TestCase):
         self.assertIn("diff", labels.lower())
         self.assertIn("commit", labels.lower())
         self.assertIn("push", labels.lower())
-
-    def test_curses_selects_canonical_action_then_finalizes_after_teardown(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary) / "registry"
-            root.mkdir()
-            (root / ".git").mkdir()
-            (root / "aart-registry.json").write_text("{}", encoding="utf-8")
-            service = _Service()
-            inside = {"value": False}
-
-            def wrapper(callback):
-                inside["value"] = True
-                callback(object())
-                inside["value"] = False
-
-            original_finalize = service.finalize
-
-            def finalize(prepared, digest):
-                self.assertFalse(inside["value"])
-                return original_finalize(prepared, digest)
-
-            service.finalize = finalize
-            singles = iter((1, 0))  # Maintainer, Validate
-            with (
-                redirect_stdout(io.StringIO()),
-                mock.patch.object(curses, "wrapper", side_effect=wrapper),
-                mock.patch.object(curses, "curs_set", return_value=None),
-                mock.patch("builtins.input", side_effect=["finalize"]),
-                mock.patch.object(
-                    tui,
-                    "_curses_singleselect",
-                    side_effect=lambda *_args, **_kwargs: next(singles),
-                ),
-            ):
-                code = tui._run_curses(
-                    source_dir=str(root),
-                    curation_service_factory=lambda _root: Ok(service),
-                )
-
-            self.assertEqual(code, 0)
-            self.assertEqual(len(service.prepared), 1)
-            self.assertEqual(len(service.finalized), 1)
-            self.assertEqual(service.prepared[0].action, CurationAction.VALIDATE)
 
 
 class WorkspaceClassificationTest(unittest.TestCase):

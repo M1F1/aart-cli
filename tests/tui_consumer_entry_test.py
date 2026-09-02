@@ -43,7 +43,6 @@ class CanonicalConsumerEntryTest(unittest.TestCase):
             mock.patch.object(tui, "_curses_supported", return_value=True),
             mock.patch.object(tui, "_canonical_consumer_actions", return_value=Ok(actions)),
             mock.patch.object(tui, "run_consumer", return_value=None) as canonical,
-            mock.patch.object(tui, "_run_curses", return_value=0) as legacy_curses,
             mock.patch.object(tui, "_run_text", return_value=0) as legacy_text,
             mock.patch.object(tui, "_runtime_source_stage_context") as legacy_composition,
         ):
@@ -51,7 +50,6 @@ class CanonicalConsumerEntryTest(unittest.TestCase):
 
         self.assertEqual(code, 0)
         canonical.assert_called_once_with(actions)
-        legacy_curses.assert_not_called()
         legacy_text.assert_not_called()
         # Nothing of the wizard is even composed: composing it would open the same local state a
         # second time, and a failure would then be reported by whichever half opened it first.

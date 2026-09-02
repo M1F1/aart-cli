@@ -650,3 +650,43 @@ Checkpoint gates on 2026-09-02: `make quality` and `make integration` are both g
 
 CP-14 step 6 is complete. What remains is step 7: retiring the legacy consumer/maintainer authority
 CP-13 left standing, one route at a time and only behind the public-flow evidence D-091 requires.
+
+## Step 7a — the legacy curses wizard shell is removed
+
+The first removal of step 7, taken under B-039's rule: nothing goes before a public-flow test proves
+the canonical path already carries it. Both halves of that evidence pre-existed, so no new test was
+needed and none was written.
+
+`run()` has composed `_canonical_consumer_actions` and called `run_consumer` before any wizard
+composition since B-025/D-087, so no terminal reached `_run_curses`. ERR05 — the single condition
+under which falling back to text is legitimate, namely that the terminal cannot host curses,
+detected before interaction — is pinned on the canonical `run()` by
+`tests/tui_fallback_boundary_test.py`: text starts exactly once when curses is unavailable, an
+internal defect never restarts the application at onboarding, and an unexpected terminal-probe error
+is not silently downgraded to text. Three duplicates of those were written against
+`tests/tui_consumer_entry_test.py` and then reverted rather than left as a second copy of one
+behaviour in a second file.
+
+Removed: `_run_curses` (754 lines) from `agent_artifacts/tui.py`; `_legacy_setup_stage_failure` and
+`_run_post_install_setup`, which it was the sole caller of; and the seven tests that existed only to
+drive it — three in `tests/tui_fallback_boundary_test.py`, two in `tests/tui_curation_test.py`, two
+in `tests/tui_wizard_curses_test.py` — plus the now-dangling `_run_curses` patch in the entry test.
+
+Kept: `run()`, `_run_text` and the whole text route, because no-TTY is a supported environment
+rather than a broken one; and the wizard's curses *primitives* (`_curses_onboarding`,
+`_curses_singleselect`, `_curses_multiselect`, `_curses_install_scope_event`,
+`_curses_install_mode`, `_curses_review`), which the surviving wizard stages still compose and the
+36 remaining tests in `tests/tui_wizard_curses_test.py` still cover. `_dispatch_result` also stays:
+it lost its last production caller here, but `tests/tui_consumer_text_test.py` still patches it to
+prove the canonical text route does not dispatch legacy commands, so it retires with the command
+dispatch path rather than with the wizard shell.
+
+One thing the removal exposed: `tests/tui_consumer_text_test.py` reached the legacy `model.Err`
+through `tui.Err`, an alias that existed only because `tui` happened to import it. The test now
+imports it from `agent_artifacts.model` directly, which is where it lives; the assertion is
+unchanged.
+
+Recorded as D-113; B-039 is now partly closed — the shell is gone, the semantic paths behind it
+(`consumer/application.py`, `lifecycle/application.py`, `installation/*`, `setup_engine/*`) are not.
+
+Checkpoint gates on 2026-09-02: `make quality` and `make integration` are both green.

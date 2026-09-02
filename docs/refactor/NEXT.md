@@ -80,16 +80,28 @@ Source from sync through a typed-provenance promotion commit.
 
 ## Exact next action
 
-CP-14 step 6 is complete. Screen 53 is live (D-111): the typed filter now carries all four facets
-the Product Specification names, `f` opens it from screen 35, `Space` toggles a facet row, and
-screen 35 narrows accordingly. Screens 51–52 are reachable and proven end to end: `c` on screen 35
-opens Collection Candidates and Enter resolves one against approved registry state (D-112). What
-remains in CP-14:
+CP-14 step 6 is complete, and step 7 has started: the legacy curses wizard shell is removed
+(D-113). `_run_curses` and the two setup shims it alone called are gone, along with the seven tests
+that existed only to drive it; `run()`, `_run_text` and the wizard's curses primitives stay. B-039
+is partly closed. The acceptance evidence pre-existed — `run()` never reached `_run_curses`, and
+ERR05 is pinned on the canonical `run()` by `tests/tui_fallback_boundary_test.py` — so no new test
+was needed for the removal.
+
+The next removal is the semantic authority behind the shell, one route at a time and each preceded
+by the public-flow evidence D-091 requires: `consumer/application.py`, `lifecycle/application.py`,
+`installation/*`, `setup_engine/*`, and `_dispatch_result` with them. B-038 is the other ordered
+item. Do not remove the text route.
+
+Behind it, step 6 left the surfaces complete: screen 53 is live (D-111) — the typed filter carries
+all four facets the Product Specification names, `f` opens it from screen 35, `Space` toggles a
+facet row, and screen 35 narrows accordingly — and screens 51–52 are reachable and proven end to
+end, with `c` on screen 35 opening Collection Candidates and Enter resolving one against approved
+registry state (D-112). What remains in CP-14:
 
 1. **Step 7: retire the legacy consumer/maintainer authority CP-13 left standing** — but only
    behind the public-flow evidence D-091 requires, one route at a time. B-031's screens now exist
-   and are reachable (D-112), so the Collection half of that evidence is in place; B-038 and B-039
-   are the remaining ordered items.
+   and are reachable (D-112), so the Collection half of that evidence is in place. B-039's shell
+   half is done (D-113); its semantic half and B-038 are what remain.
 2. Preserve D-089/B-037 whenever promotion planning is touched: retained approved records rebind to
    the transaction snapshot as metadata only, and published package bytes do not change.
 

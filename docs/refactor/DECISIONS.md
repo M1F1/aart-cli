@@ -1928,3 +1928,32 @@ the Product Specification first instead of hiding the change here.
   `compile_author_source` rather than `compile_author_snapshot`, which is the boundary that carries
   Collections and the one production Source Sync already uses; a fixture built on the artifacts-only
   boundary would have proven nothing about Collections.
+
+## D-113 — The legacy curses wizard entry point is removed; the text route is not
+
+- **Decision:** `_run_curses` (754 lines) is deleted from `agent_artifacts/tui.py`, together with
+  the two setup shims it was the sole caller of (`_legacy_setup_stage_failure`,
+  `_run_post_install_setup`) and the five tests that existed only to drive it
+  (`tests/tui_fallback_boundary_test.py` ×3, `tests/tui_curation_test.py` ×2, plus the two flow
+  tests in `tests/tui_wizard_curses_test.py`). `run()` and `_run_text` are untouched, and the
+  wizard's curses *primitives* (`_curses_onboarding`, `_curses_singleselect`, `_curses_multiselect`,
+  `_curses_install_mode`, `_curses_review`, …) stay: they are still composed by the surviving
+  wizard stages and still covered by the 36 remaining tests in `tests/tui_wizard_curses_test.py`.
+- **Status:** accepted; the first removal of CP-14 step 7, and closes B-039's `_run_curses` half.
+- **Reason:** B-039's rule is that nothing is removed before a public-flow test proves the canonical
+  path already carries it. Both halves were already true and neither needed a new test.
+  `run()` composes `_canonical_consumer_actions` and calls `run_consumer` before any wizard
+  composition (B-025/D-087), so no terminal reached `_run_curses`. ERR05 — the one condition under
+  which a text fallback is legitimate — is pinned on the canonical `run()` by
+  `test_run_starts_the_text_wizard_once_when_curses_is_unavailable`,
+  `test_run_never_restarts_the_application_after_an_internal_defect` and
+  `test_unexpected_terminal_probe_error_is_not_silently_downgraded_to_text`. Three duplicates of
+  those were written against the entry test and then reverted rather than left as second coverage of
+  one behaviour.
+- **Consequence:** the wizard can no longer be entered as a whole; only its widgets remain, as
+  widgets. `tests/tui_fallback_boundary_test.py` now holds ERR05 against the canonical application
+  alone, which is what its class docstring says. The text route stays: no-TTY is a supported
+  environment, not a broken one. `_dispatch_result` survives this removal — it lost its last
+  production caller here, but `tests/tui_consumer_text_test.py` still patches it to prove the
+  canonical text route does *not* dispatch legacy commands, so it is retired with the command
+  dispatch path rather than with the wizard shell (B-039's remaining half).

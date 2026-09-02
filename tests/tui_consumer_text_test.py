@@ -17,6 +17,7 @@ from agent_artifacts.consumer import (
 )
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.result import Err, Ok
+from agent_artifacts.model import Err as LegacyErr
 from agent_artifacts.profiles.builtin import builtin
 from agent_artifacts.protocol.capabilities import Capability
 from agent_artifacts.reporting.application import ReportingApplicationService
@@ -249,7 +250,7 @@ class TuiConsumerTextTest(unittest.TestCase):
         canonical service is an error to report, not a reason to read a legacy catalog.
         """
 
-        source_factory = mock.Mock(return_value=tui.Err("legacy catalog could not open", code=7))
+        source_factory = mock.Mock(return_value=LegacyErr("legacy catalog could not open", code=7))
         session = WizardSession(
             current="artifacts",
             action="install",
