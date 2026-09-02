@@ -1,0 +1,459 @@
+"""CP-14 step 5: what a Maintainer confirms when promoting one reviewed Candidate.
+
+Promotion is the first Maintainer action that writes approved registry state, so what it records
+has to be the review that actually happened.  The evidence a promotion carries is a digest of the
+validation run and of the policy that judged it, which is what makes an audit record answer "who
+approved this, against which rules" rather than merely "this was promoted".
+"""
+
+from __future__ import annotations
+
+import json
+import unittest
+
+from agent_artifacts.application.candidate_validation import validate_candidate
+from agent_artifacts.application.consumer_ui import ConsumerUiState
+from agent_artifacts.application.consumer_views import (
+    ConsumerSession,
+    ConsumerSettings,
+    PresentationProfile,
+    project_dashboard,
+)
+from agent_artifacts.application.maintainer import CandidateBundle, reconcile_source_scan
+from agent_artifacts.application.maintainer_promotion import (
+    PreparedCandidatePromotion,
+    effective_policy_digest,
+    prepare_candidate_promotion,
+    promotion_evidence,
+    validation_report_digest,
+)
+from agent_artifacts.application.maintainer_sync import ApprovedRegistryState
+from agent_artifacts.application.maintainer_views import (
+    MaintainerScreen,
+    MaintainerViews,
+    project_maintainer_candidates,
+    project_maintainer_dashboard,
+    project_maintainer_promotion_review,
+    project_maintainer_source,
+    project_maintainer_validation,
+)
+from agent_artifacts.configuration.model import SourceKind
+from agent_artifacts.domain.candidates import CandidateState
+from agent_artifacts.domain.identifiers import ObjectDigest, SourceAlias
+from agent_artifacts.domain.policies import EffectivePolicy
+from agent_artifacts.domain.registry import PromotionMode
+from agent_artifacts.domain.result import Err, Ok
+from agent_artifacts.protocol.authoring import compile_author_snapshot
+from agent_artifacts.protocol.native_tree import (
+    SnapshotEntry,
+    SnapshotEntryKind,
+    SnapshotOrigin,
+    SourceSnapshot,
+)
+from agent_artifacts.protocol.paths import parse_relative_path
+from agent_artifacts.tui_consumer import CanonicalScreenSource, ConsumerScreens, _reload, frame
+from agent_artifacts.tui_maintainer import render_maintainer_promotion_review
+from tests.marketplace_fixtures import configured_source, source_state
+
+_ARGV_SECRET = {
+    "id": "github-token",
+    "kind": "secret",
+    "inject": {"type": "cli-argument", "argument": "--github-token"},
+    "help": {
+        "label": "GitHub token",
+        "format_hint": "provider-issued token",
+        "obtain_from": {"label": "GitHub Settings", "url": "https://github.example/settings"},
+    },
+}
+_UNGUIDED_SECRET = {
+    "id": "github-token",
+    "kind": "secret",
+    "inject": {"type": "environment", "variable": "GITHUB_TOKEN"},
+}
+
+
+def _entry(path: str, content: str) -> SnapshotEntry:
+    parsed = parse_relative_path(path)
+    assert isinstance(parsed, Ok)
+    return SnapshotEntry(parsed.value, SnapshotEntryKind.FILE, content.encode())
+
+
+def _digest(character: str) -> ObjectDigest:
+    return ObjectDigest("sha256", character * 64)
+
+
+def _scan(*, inputs: list[dict[str, object]] | None = None):
+    manifest: dict[str, object] = {
+        "schema": "aart.dev/mcp/v1",
+        "artifact": {"name": "github-mcp", "kind": "mcp", "version": "1.0.0"},
+        "payload": {"include": ["server.py"]},
+        "transport": {"type": "stdio"},
+        "runtime": {"type": "python", "version": ">=3.11"},
+        "launch": {"type": "python", "entrypoint": "server.py"},
+    }
+    if inputs is not None:
+        manifest["inputs"] = inputs
+    compiled = compile_author_snapshot(
+        SourceSnapshot(
+            SnapshotOrigin.IMMUTABLE_GIT,
+            (
+                _entry("github/aart.json", json.dumps(manifest, sort_keys=True)),
+                _entry("github/server.py", "print('x')\n"),
+            ),
+        ),
+        source_alias=SourceAlias("authors"),
+        source="https://git.example/authors.git",
+        revision="a" * 40,
+    )
+    assert isinstance(compiled, Ok), compiled
+    scanned = reconcile_source_scan(
+        SourceAlias("authors"),
+        "a" * 40,
+        compiled.value,
+        previous=(),
+        approved=(),
+        target_registry=SourceAlias("company"),
+    )
+    assert isinstance(scanned, Ok), scanned
+    return scanned.value
+
+
+def _bundle(*, inputs: list[dict[str, object]] | None = None) -> CandidateBundle:
+    return _scan(inputs=inputs).active[0]
+
+
+def _approved(alias: str = "company") -> ApprovedRegistryState:
+    return ApprovedRegistryState(SourceAlias(alias), "f" * 40, _digest("e"), ())
+
+
+def _prepared(
+    *,
+    inputs: list[dict[str, object]] | None = None,
+    policy: EffectivePolicy | None = None,
+    mode: PromotionMode = PromotionMode.VENDORED,
+    approved: ApprovedRegistryState | None = None,
+):
+    judged = EffectivePolicy() if policy is None else policy
+    bundle = _bundle(inputs=inputs)
+    return prepare_candidate_promotion(
+        bundle,
+        validate_candidate(bundle, policy=judged),
+        judged,
+        _approved() if approved is None else approved,
+        mode=mode,
+    )
+
+
+class PromotionEvidenceTest(unittest.TestCase):
+    def test_the_same_run_and_policy_always_digest_the_same(self) -> None:
+        bundle = _bundle()
+        policy = EffectivePolicy(allowed_transports=frozenset({"stdio"}))
+        first = validate_candidate(bundle, policy=policy)
+        second = validate_candidate(bundle, policy=policy)
+
+        self.assertEqual(validation_report_digest(first), validation_report_digest(second))
+        self.assertEqual(effective_policy_digest(policy), effective_policy_digest(policy))
+
+    def test_a_different_policy_is_a_different_digest(self) -> None:
+        """An audit that could not tell two policies apart could not prove which one approved."""
+
+        loose = EffectivePolicy()
+        strict = EffectivePolicy(required_checks=frozenset({"live-acceptance"}))
+
+        self.assertNotEqual(effective_policy_digest(loose), effective_policy_digest(strict))
+
+    def test_a_different_outcome_is_a_different_report(self) -> None:
+        clean = _bundle()
+        warned = _bundle(inputs=[_UNGUIDED_SECRET])
+
+        self.assertNotEqual(
+            validation_report_digest(validate_candidate(clean, policy=EffectivePolicy())),
+            validation_report_digest(validate_candidate(warned, policy=EffectivePolicy())),
+        )
+
+    def test_evidence_carries_the_warnings_the_maintainer_was_shown(self) -> None:
+        bundle = _bundle(inputs=[_UNGUIDED_SECRET])
+        validation = validate_candidate(bundle, policy=EffectivePolicy())
+
+        evidence = promotion_evidence(validation, EffectivePolicy())
+
+        assert isinstance(evidence, Ok), evidence
+        self.assertEqual(
+            evidence.value.validation_report_digest, validation_report_digest(validation)
+        )
+        self.assertTrue(evidence.value.warnings)
+        # A warning in an audit that does not say which check raised it is not evidence of
+        # anything a reader could go back and check.
+        self.assertTrue(
+            all(
+                item.split(":")[0] in {result.check.value for result in validation.results}
+                for item in evidence.value.warnings
+            )
+        )
+
+
+class PreparePromotionTest(unittest.TestCase):
+    def test_a_reviewable_promotion_binds_candidate_policy_and_registry(self) -> None:
+        prepared = _prepared()
+
+        assert isinstance(prepared, Ok), prepared
+        self.assertIsInstance(prepared.value, PreparedCandidatePromotion)
+        self.assertEqual(prepared.value.target_registry, SourceAlias("company"))
+        self.assertIs(prepared.value.state, CandidateState.READY)
+        self.assertTrue(str(prepared.value.review_digest).startswith("sha256:"))
+
+    def test_a_candidate_an_error_refused_cannot_be_promoted(self) -> None:
+        """Screens 38 to 40 already said why; promotion refuses on that evidence, not a new one."""
+
+        prepared = _prepared(policy=EffectivePolicy(allowed_runtimes=frozenset({"node"})))
+
+        assert isinstance(prepared, Err), prepared
+        self.assertIn("invalid", " ".join(item.message for item in prepared.diagnostics).lower())
+
+    def test_a_secret_the_process_table_would_expose_blocks_promotion(self) -> None:
+        """The pipeline's teeth reach the write path: argv is readable by any other process."""
+
+        prepared = _prepared(inputs=[_ARGV_SECRET])
+
+        assert isinstance(prepared, Err), prepared
+        self.assertIn("invalid", " ".join(item.message for item in prepared.diagnostics).lower())
+
+    def test_a_candidate_policy_holds_for_approval_cannot_be_promoted(self) -> None:
+        prepared = _prepared(policy=EffectivePolicy(required_checks=frozenset({"live-acceptance"})))
+
+        assert isinstance(prepared, Err), prepared
+        self.assertIn("approval", " ".join(item.message for item in prepared.diagnostics).lower())
+
+    def test_a_warning_does_not_block_a_promotion_by_itself(self) -> None:
+        """A warning is only blocking when a policy says so, which is what `required_checks` says."""
+
+        prepared = _prepared(inputs=[_UNGUIDED_SECRET])
+
+        assert isinstance(prepared, Ok), prepared
+        self.assertIs(prepared.value.state, CandidateState.WARNING)
+        self.assertTrue(prepared.value.evidence.warnings)
+
+    def test_a_candidate_bound_for_another_registry_is_refused(self) -> None:
+        prepared = _prepared(approved=_approved("other"))
+
+        assert isinstance(prepared, Err), prepared
+        self.assertIn("registry", " ".join(item.message for item in prepared.diagnostics).lower())
+
+    def test_the_review_digest_covers_the_mode_and_the_registry_baseline(self) -> None:
+        """Confirming a review must not apply a different transaction than the one reviewed."""
+
+        vendored = _prepared(mode=PromotionMode.VENDORED)
+        referenced = _prepared(mode=PromotionMode.REFERENCED)
+        moved = _prepared(
+            approved=ApprovedRegistryState(SourceAlias("company"), "b" * 40, _digest("c"), ())
+        )
+
+        assert isinstance(vendored, Ok) and isinstance(referenced, Ok) and isinstance(moved, Ok)
+        self.assertNotEqual(vendored.value.review_digest, referenced.value.review_digest)
+        self.assertNotEqual(vendored.value.review_digest, moved.value.review_digest)
+
+    def test_a_validation_of_a_different_candidate_is_refused(self) -> None:
+        other = _bundle(inputs=[_UNGUIDED_SECRET])
+
+        prepared = prepare_candidate_promotion(
+            _bundle(),
+            validate_candidate(other, policy=EffectivePolicy()),
+            EffectivePolicy(),
+            _approved(),
+            mode=PromotionMode.VENDORED,
+        )
+
+        assert isinstance(prepared, Err), prepared
+
+
+class PromotionReviewProjectionTest(unittest.TestCase):
+    def test_a_promotable_candidate_reviews_with_the_digest_it_would_confirm(self) -> None:
+        bundle = _bundle()
+        policy = EffectivePolicy()
+        prepared = _prepared()
+        assert isinstance(prepared, Ok)
+
+        view = project_maintainer_promotion_review(
+            bundle,
+            validate_candidate(bundle, policy=policy),
+            policy,
+            _approved(),
+            mode=PromotionMode.VENDORED,
+        )
+
+        self.assertTrue(view.confirmable)
+        self.assertEqual(view.review_digest, str(prepared.value.review_digest))
+        self.assertEqual(view.target_registry, "company")
+        self.assertEqual(view.refusals, ())
+
+    def test_a_refused_candidate_reviews_as_the_reason_it_was_refused(self) -> None:
+        """Screen 41 answers "can this be promoted"; "no, and here is why" is an answer."""
+
+        bundle = _bundle()
+        policy = EffectivePolicy(required_checks=frozenset({"live-acceptance"}))
+
+        view = project_maintainer_promotion_review(
+            bundle,
+            validate_candidate(bundle, policy=policy),
+            policy,
+            _approved(),
+            mode=PromotionMode.VENDORED,
+        )
+
+        self.assertFalse(view.confirmable)
+        self.assertIsNone(view.review_digest)
+        self.assertTrue(any("approval" in item.lower() for item in view.refusals))
+
+    def test_an_unsynchronized_registry_is_a_refusal_not_a_crash(self) -> None:
+        bundle = _bundle()
+
+        view = project_maintainer_promotion_review(
+            bundle,
+            validate_candidate(bundle, policy=EffectivePolicy()),
+            EffectivePolicy(),
+            None,
+            mode=PromotionMode.VENDORED,
+        )
+
+        self.assertFalse(view.confirmable)
+        self.assertTrue(any("registry" in item.lower() for item in view.refusals))
+
+
+class PromotionReviewRenderingTest(unittest.TestCase):
+    def test_the_review_shows_what_would_be_written_and_against_which_baseline(self) -> None:
+        bundle = _bundle()
+        view = project_maintainer_promotion_review(
+            bundle,
+            validate_candidate(bundle, policy=EffectivePolicy()),
+            EffectivePolicy(),
+            _approved(),
+            mode=PromotionMode.VENDORED,
+        )
+
+        drawn = "\n".join(render_maintainer_promotion_review(view, PresentationProfile.VERBOSE))
+
+        self.assertIn("company", drawn)
+        self.assertIn("vendored", drawn)
+        self.assertIn("Review digest:", drawn)
+
+    def test_a_refusal_is_drawn_instead_of_a_confirmable_review(self) -> None:
+        bundle = _bundle()
+        policy = EffectivePolicy(allowed_runtimes=frozenset({"node"}))
+        view = project_maintainer_promotion_review(
+            bundle,
+            validate_candidate(bundle, policy=policy),
+            policy,
+            _approved(),
+            mode=PromotionMode.VENDORED,
+        )
+
+        drawn = "\n".join(render_maintainer_promotion_review(view, PresentationProfile.FAST))
+
+        self.assertIn("cannot be promoted", drawn)
+        self.assertNotIn("Review digest:", drawn)
+
+
+class PromotionShellTest(unittest.TestCase):
+    def setUp(self) -> None:
+        policy = EffectivePolicy()
+        scan = _scan()
+        configured = configured_source("authors", SourceKind.SOURCE_GIT)
+        health = source_state(
+            configured, "author-source", display_order=0, resolved_revision=scan.revision
+        ).health
+        sources = (project_maintainer_source(configured, health, scan),)
+        self.views = MaintainerViews(
+            project_maintainer_dashboard(sources),
+            sources,
+            project_maintainer_candidates((scan,)),
+            tuple(project_maintainer_validation(item, policy=policy) for item in scan.active),
+            tuple(
+                project_maintainer_promotion_review(
+                    item,
+                    validate_candidate(item, policy=policy),
+                    policy,
+                    _approved(),
+                    mode=PromotionMode.VENDORED,
+                )
+                for item in scan.active
+            ),
+        )
+        self.source = CanonicalScreenSource(
+            ConsumerScreens(project_dashboard((), registry_count=0), maintainer=self.views)
+        )
+        assert self.views.candidates is not None
+        self.candidate = self.views.candidates[0].id
+
+    def _on(self, screen: MaintainerScreen, focus: str) -> ConsumerUiState:
+        return ConsumerUiState(
+            ConsumerSession(screen),
+            settings=ConsumerSettings().with_maintainer_mode(True),
+            focus=focus,
+        )
+
+    def test_enter_on_the_policy_review_opens_the_promotion_review(self) -> None:
+        state = self._on(MaintainerScreen.POLICY_REVIEW, self.candidate)
+
+        self.assertIs(
+            self.source.detail(_reload(self.source, state, entering=True)),
+            MaintainerScreen.PROMOTION_REVIEW,
+        )
+
+    def test_the_promotion_review_opens_from_a_candidate_or_a_check_row(self) -> None:
+        by_candidate = "\n".join(
+            frame(
+                self.source,
+                _reload(
+                    self.source,
+                    self._on(MaintainerScreen.PROMOTION_REVIEW, self.candidate),
+                    entering=True,
+                ),
+            )
+        )
+        by_row = "\n".join(
+            frame(
+                self.source,
+                _reload(
+                    self.source,
+                    self._on(
+                        MaintainerScreen.PROMOTION_REVIEW,
+                        f"{self.candidate}:policy",
+                    ),
+                    entering=True,
+                ),
+            )
+        )
+
+        self.assertIn("Review digest:", by_candidate)
+        self.assertEqual(by_candidate, by_row)
+
+    def test_a_candidate_with_no_composed_promotion_refuses_instead_of_raising(self) -> None:
+        without = CanonicalScreenSource(
+            ConsumerScreens(
+                project_dashboard((), registry_count=0),
+                maintainer=MaintainerViews(
+                    self.views.dashboard,
+                    self.views.sources,
+                    self.views.candidates,
+                    self.views.validations,
+                    None,
+                ),
+            )
+        )
+
+        drawn = "\n".join(
+            frame(
+                without,
+                _reload(
+                    without,
+                    self._on(MaintainerScreen.PROMOTION_REVIEW, self.candidate),
+                    entering=True,
+                ),
+            )
+        )
+
+        self.assertIn("not available", drawn)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1649,3 +1649,30 @@ the Product Specification first instead of hiding the change here.
   permits every runtime, one that constrains them to nothing permits none, and a Maintainer has to
   be able to tell those apart. `RiskClass` is an `IntEnum` whose lowest member is `0`, so the review
   carries its name rather than its falsy value.
+
+## D-101 — A promotion carries the run that approved it, and the run decides whether it may proceed
+
+- **Decision:** `application/maintainer_promotion.py` binds one Candidate, the validation run that
+  judged it, the policy behind that run and the approved registry baseline into one
+  `PreparedCandidatePromotion` with a review digest. The `PromotionEvidence` it produces digests the
+  validation report and the effective policy, and carries the warnings a Maintainer was shown, each
+  prefixed by the check that raised it. The run's state decides promotability — `INVALID` and
+  `APPROVAL_REQUIRED` are refused with the reason — rather than the state the scan recorded
+  earlier. Screen 41 projects the refusal instead of raising it, and never shows a review digest
+  for a review that cannot be confirmed.
+- **Status:** accepted.
+- **Reason:** promotion is the first Maintainer action that writes approved registry state, so what
+  it records has to be the review that actually happened. Digesting the report and the policy is
+  what lets an audit record answer "who approved this, against which rules" rather than only "this
+  was promoted"; two policies that a digest could not tell apart could not prove which one approved.
+  The run governs rather than the stored state because policy may have changed since the scan, and
+  the run is what screens 38–40 actually showed. A refusal is a legitimate answer to "can this be
+  promoted", and D-087 already settles that a refusal is drawn under the screen it was asked from.
+- **Consequence:** `read_maintainer_views` now reads the approved state of each registry its active
+  Candidates target and composes a promotion review per Candidate; a registry with no synchronized
+  snapshot becomes a stated refusal rather than an error that hides the rest of the composition.
+  The review digest covers the mode and the registry baseline as well as the Candidate, so
+  confirming a review cannot apply a transaction other than the one reviewed. An unconfirmable
+  review renders its reasons *in place of* the digest, because a digest on screen is an invitation
+  to confirm. The digest is not yet checked at execution time — screens 42–45 are the next
+  increment, and this slice deliberately writes nothing.

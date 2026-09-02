@@ -50,6 +50,7 @@ from agent_artifacts.application.consumer_views import (
 from agent_artifacts.application.maintainer_views import (
     MaintainerCandidateFilter,
     MaintainerCandidateView,
+    MaintainerPromotionReviewView,
     MaintainerScreen,
     MaintainerSourceSyncResultView,
     MaintainerSourceSyncReviewView,
@@ -66,6 +67,7 @@ from agent_artifacts.tui_maintainer import (
     render_maintainer_candidates,
     render_maintainer_dashboard,
     render_maintainer_policy_review,
+    render_maintainer_promotion_review,
     render_maintainer_source,
     render_maintainer_sources,
     render_maintainer_validation,
@@ -1196,6 +1198,14 @@ class ConsumerScreens:
         row = parse_validation_row(focus)
         return self.maintainer.validation(focus if row is None else row.candidate_id)
 
+    def promotion(self, focus: str) -> MaintainerPromotionReviewView | None:
+        """The promotion review for a focus that is a Candidate ID or one of its check rows."""
+
+        if self.maintainer is None:
+            return None
+        row = parse_validation_row(focus)
+        return self.maintainer.promotion(focus if row is None else row.candidate_id)
+
     def candidates(
         self, candidate_filter: MaintainerCandidateFilter | None = None
     ) -> tuple[MaintainerCandidateView, ...]:
@@ -1547,6 +1557,14 @@ class CanonicalScreenSource:
                 if parse_validation_row(row) is not None
                 else None
             )
+        if screen is MaintainerScreen.POLICY_REVIEW:
+            # Review ends by asking what promoting would write, including when the answer is that
+            # it would write nothing.
+            return (
+                MaintainerScreen.PROMOTION_REVIEW
+                if self._screens.promotion(state.focus) is not None
+                else None
+            )
         if screen is ConsumerScreen.MARKETPLACE:
             if self._screens.offered_collection(state.current_row) is not None:
                 return ConsumerScreen.COLLECTION_PREVIEW
@@ -1709,6 +1727,13 @@ class CanonicalScreenSource:
                 ("Policy Review is not available yet.",)
                 if validation is None
                 else render_maintainer_policy_review(validation.review, profile)
+            )
+        if screen is MaintainerScreen.PROMOTION_REVIEW:
+            promotion = screens.promotion(state.focus)
+            return (
+                ("That Candidate's promotion review is not available.",)
+                if promotion is None
+                else render_maintainer_promotion_review(promotion, profile)
             )
         if screen is ConsumerScreen.MARKETPLACE:
             offered = {item.key: item for item in self._offers()}

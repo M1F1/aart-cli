@@ -290,3 +290,38 @@ monkeypatches `builtins.open` across all three screens and asserts drawing opens
 
 Gates on 2026-09-02 after step 4: `make quality` green end to end and `make integration` green.
 3,052 unit tests and 209 E2E tests pass; branch coverage is 83.35%.
+
+
+### Step 5 progress — screen 41, the promotion review (2026-09-02)
+
+Promotion is the first Maintainer action that writes approved registry state, so this increment
+deliberately writes nothing: it establishes what a Maintainer confirms, and what confirming is
+bound to.
+
+`application/maintainer_promotion.py` binds one Candidate, the run that judged it, the policy behind
+that run and the approved registry baseline into one `PreparedCandidatePromotion`. Its
+`PromotionEvidence` digests the validation report and the effective policy, which is what lets an
+audit record answer "who approved this, against which rules" rather than only "this was promoted" --
+two policies a digest could not tell apart could not prove which one approved. The policy digest
+distinguishes an unset allowlist from an empty one, because those are different policies.
+
+The run decides whether a promotion may proceed, not the state the scan recorded: policy may have
+changed since the scan, and the run is what screens 38-40 actually showed. `INVALID` and
+`APPROVAL_REQUIRED` are refused, each with the reason and the screen that explains it.
+
+Screen 41 projects a refusal rather than raising it, and renders the reasons *in place of* the
+review digest -- a digest on screen is an invitation to confirm, and there is nothing to confirm.
+`read_maintainer_views` reads the approved state of every registry its active Candidates target; a
+registry with no synchronized snapshot becomes a stated refusal rather than an error that hides the
+rest of the composition. The E2E walk now runs dashboard -> Candidate -> diff -> validation -> policy
+review -> promotion review against a real temporary installation and reaches a *confirmable* review,
+asserted as such rather than as text that a refusal would also satisfy.
+
+Two fixture findings worth keeping: a secret bound to a CLI argument does compile, so the pipeline's
+process-table error is reachable on a real artifact and does block promotion (an earlier note to the
+contrary came from a malformed `help` field, not from the binding); and the `.replace`-based edits
+used here failed silently twice against text the formatter had reflowed, which is why the
+composition patch is now asserted before it is written.
+
+Gates on 2026-09-02 after this increment: `make quality` and `make integration` both green; the full
+suite is 3,126 tests with 1,298 subtests.

@@ -19,7 +19,9 @@ from agent_artifacts.application.candidate_validation import (
     validate_candidate,
 )
 from agent_artifacts.application.maintainer import CandidateBundle, SourceScan
+from agent_artifacts.application.maintainer_promotion import prepare_candidate_promotion
 from agent_artifacts.application.maintainer_sync import (
+    ApprovedRegistryState,
     PreparedSourceSync,
     SourceSyncExecutionResult,
 )
@@ -34,6 +36,7 @@ from agent_artifacts.domain.python_runtime import (
     RequirementsFile,
     spec_descriptor_path,
 )
+from agent_artifacts.domain.registry import PromotionMode
 from agent_artifacts.domain.result import Err
 from agent_artifacts.protocol.authoring import read_package_description
 from agent_artifacts.protocol.native_tree import SnapshotEntry, SnapshotEntryKind
@@ -53,6 +56,7 @@ __all__ = [
     "MaintainerSourceSyncReviewView",
     "MaintainerSourceView",
     "MaintainerPolicyReviewView",
+    "MaintainerPromotionReviewView",
     "MaintainerValidationCheckView",
     "MaintainerValidationDetailView",
     "MaintainerValidationRowId",
@@ -64,6 +68,7 @@ __all__ = [
     "project_maintainer_dashboard",
     "project_maintainer_candidates",
     "project_maintainer_policy_review",
+    "project_maintainer_promotion_review",
     "project_maintainer_source",
     "project_maintainer_validation",
     "project_source_sync_result",
@@ -840,6 +845,7 @@ class MaintainerViews:
     sources: tuple[MaintainerSourceView, ...]
     candidates: tuple[MaintainerCandidateView, ...] | None = None
     validations: tuple[MaintainerValidationView, ...] | None = None
+    promotions: tuple[MaintainerPromotionReviewView, ...] | None = None
 
     def __post_init__(self) -> None:
         aliases = tuple(source.alias for source in self.sources)
@@ -853,6 +859,16 @@ class MaintainerViews:
             or self.dashboard.validation_failure_count
             != sum(source.invalid_count for source in self.sources)
             or self.dashboard.ready_count != sum(source.ready_count for source in self.sources)
+            or (
+                self.promotions is not None
+                and (
+                    any(
+                        not isinstance(promotion, MaintainerPromotionReviewView)
+                        for promotion in self.promotions
+                    )
+                    or len({item.candidate_id for item in self.promotions}) != len(self.promotions)
+                )
+            )
             or (
                 self.validations is not None
                 and (
@@ -918,6 +934,13 @@ class MaintainerViews:
         if self.validations is None:
             return None
         return next((item for item in self.validations if item.candidate_id == candidate_id), None)
+
+    def promotion(self, candidate_id: str) -> MaintainerPromotionReviewView | None:
+        """The promotion review composed for one Candidate, refusals included."""
+
+        if self.promotions is None:
+            return None
+        return next((item for item in self.promotions if item.candidate_id == candidate_id), None)
 
 
 def project_source_sync_review(prepared: PreparedSourceSync) -> MaintainerSourceSyncReviewView:
@@ -1325,4 +1348,102 @@ def project_maintainer_policy_review(
         tuple(sorted(policy.forbidden_effects)),
         policy.risk_ceiling.name.lower().replace("_", "-"),
         blocking,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerPromotionReviewView:
+    """Screen 41: what confirming a promotion would write, or why it cannot be confirmed.
+
+    A refusal is a legitimate answer to "can this be promoted", so it is projected rather than
+    raised.  The review digest is present only when there is something to confirm; a screen that
+    showed a digest for an unconfirmable review would invite confirming it.
+    """
+
+    candidate_id: str
+    artifact: str
+    version: str
+    target_registry: str
+    state: CandidateState
+    mode: str
+    canonical_digest: str
+    source_revision: str
+    review_digest: str | None
+    registry_revision: str | None
+    registry_snapshot_digest: str | None
+    validation_report_digest: str | None
+    effective_policy_digest: str | None
+    warnings: tuple[str, ...]
+    refusals: tuple[str, ...]
+
+    @property
+    def confirmable(self) -> bool:
+        return self.review_digest is not None
+
+
+def project_maintainer_promotion_review(
+    bundle: CandidateBundle,
+    validation: CandidateValidation,
+    policy: EffectivePolicy,
+    approved: ApprovedRegistryState | None,
+    *,
+    mode: PromotionMode,
+) -> MaintainerPromotionReviewView:
+    """Project one Candidate's promotion review, including the reasons it may have none."""
+
+    if (
+        not isinstance(bundle, CandidateBundle)
+        or not isinstance(validation, CandidateValidation)
+        or not isinstance(policy, EffectivePolicy)
+        or not isinstance(mode, PromotionMode)
+        or not (approved is None or isinstance(approved, ApprovedRegistryState))
+    ):
+        raise ValueError("Maintainer promotion review projection needs a Candidate and a policy")
+    candidate = bundle.candidate
+    common = {
+        "candidate_id": candidate.id.value,
+        "artifact": str(candidate.artifact.coordinate.artifact),
+        "version": str(candidate.artifact.coordinate.version),
+        "target_registry": candidate.target_registry.value,
+        "state": validation.state,
+        "mode": mode.value,
+        "canonical_digest": str(candidate.canonical_digest),
+        "source_revision": candidate.artifact.provenance.revision,
+    }
+    if approved is None:
+        return MaintainerPromotionReviewView(
+            **common,  # type: ignore[arg-type]
+            review_digest=None,
+            registry_revision=None,
+            registry_snapshot_digest=None,
+            validation_report_digest=None,
+            effective_policy_digest=None,
+            warnings=(),
+            refusals=(
+                f"target registry {candidate.target_registry.value} has no synchronized "
+                "approved snapshot to promote into",
+            ),
+        )
+    prepared = prepare_candidate_promotion(bundle, validation, policy, approved, mode=mode)
+    if isinstance(prepared, Err):
+        return MaintainerPromotionReviewView(
+            **common,  # type: ignore[arg-type]
+            review_digest=None,
+            registry_revision=approved.revision,
+            registry_snapshot_digest=str(approved.snapshot_digest),
+            validation_report_digest=None,
+            effective_policy_digest=None,
+            warnings=(),
+            refusals=tuple(redact_text(item.message) for item in prepared.diagnostics),
+        )
+    evidence = prepared.value.evidence
+    return MaintainerPromotionReviewView(
+        **common,  # type: ignore[arg-type]
+        review_digest=str(prepared.value.review_digest),
+        registry_revision=approved.revision,
+        registry_snapshot_digest=str(approved.snapshot_digest),
+        validation_report_digest=str(evidence.validation_report_digest),
+        effective_policy_digest=str(evidence.effective_policy_digest),
+        warnings=tuple(redact_text(item) for item in evidence.warnings),
+        refusals=(),
     )

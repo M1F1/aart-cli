@@ -9,10 +9,13 @@ from __future__ import annotations
 
 import time
 
+from agent_artifacts.application.candidate_validation import validate_candidate
+from agent_artifacts.application.maintainer_sync import ApprovedRegistryState
 from agent_artifacts.application.maintainer_views import (
     MaintainerViews,
     project_maintainer_candidates,
     project_maintainer_dashboard,
+    project_maintainer_promotion_review,
     project_maintainer_source,
     project_maintainer_validation,
 )
@@ -21,6 +24,7 @@ from agent_artifacts.configuration.model import SourceKind
 from agent_artifacts.configuration.policy import EffectiveConfiguration, redact_text
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.policies import EffectivePolicy
+from agent_artifacts.domain.registry import PromotionMode
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.sources.model import (
     CurrentSourceRequest,
@@ -29,6 +33,7 @@ from agent_artifacts.sources.model import (
 )
 
 from .candidate_store import candidate_history_paths, read_candidate_history
+from .maintainer_sync import read_approved_registry_state
 from .source_store import read_current_source
 
 __all__ = ["MAINTAINER_COMPOSITION_INVALID", "read_maintainer_views"]
@@ -93,13 +98,41 @@ def read_maintainer_views(
     sources = tuple(projected)
     try:
         candidates = project_maintainer_candidates(tuple(scans))
-        validations = tuple(
-            project_maintainer_validation(bundle, policy=judged)
+        runs = tuple(
+            (bundle, validate_candidate(bundle, policy=judged))
             for scan in scans
             for bundle in scan.active
         )
+        validations = tuple(
+            project_maintainer_validation(bundle, policy=judged) for bundle, _ in runs
+        )
+        # Each Candidate names the registry it was scanned for. A registry with no synchronized
+        # snapshot is a refusal screen 41 can state, not an error that hides the rest of what was
+        # composed, so the failed read becomes `None` rather than aborting the composition.
+        approved: dict[str, ApprovedRegistryState | None] = {}
+        for bundle, _ in runs:
+            alias = bundle.candidate.target_registry
+            if alias.value not in approved:
+                observed = read_approved_registry_state(effective, alias, data_root=data_root)
+                approved[alias.value] = None if isinstance(observed, Err) else observed.value
+        promotions = tuple(
+            project_maintainer_promotion_review(
+                bundle,
+                validation,
+                judged,
+                approved[bundle.candidate.target_registry.value],
+                mode=PromotionMode.VENDORED,
+            )
+            for bundle, validation in runs
+        )
         return Ok(
-            MaintainerViews(project_maintainer_dashboard(sources), sources, candidates, validations)
+            MaintainerViews(
+                project_maintainer_dashboard(sources),
+                sources,
+                candidates,
+                validations,
+                promotions,
+            )
         )
     except ValueError as error:
         return _error(f"cannot project durable Candidates: {error}")

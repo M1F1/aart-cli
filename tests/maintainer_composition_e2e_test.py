@@ -348,8 +348,8 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
                 terminal.screen_containing("Bounded redacted file diffs:"),
             )
 
-    def test_validation_and_policy_review_are_reachable_from_the_diff(self) -> None:
-        """Screens 38-40 in the same real session, judged once at composition time.
+    def test_the_review_walk_runs_from_the_diff_through_to_the_promotion_review(self) -> None:
+        """Screens 38-41 in the same real session, judged once at composition time.
 
         The run a Maintainer reads on screen 38 and the policy judgement on screen 40 are the same
         run: nothing re-validates while drawing, so the two screens cannot disagree.
@@ -409,6 +409,7 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
                 ord("d"),
                 ENTER,
                 ord("p"),
+                ENTER,
             )
             finished = run_consumer_shell(
                 handler.source(),
@@ -419,7 +420,7 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             )
 
             expected = scan.active[0].candidate
-            self.assertIs(finished.session.screen, MaintainerScreen.POLICY_REVIEW)
+            self.assertIs(finished.session.screen, MaintainerScreen.PROMOTION_REVIEW)
             # Screen 40 was entered from a check row rather than from a bare Candidate ID, which is
             # the whole reason the row identity is a parsed pair and not a split string.
             entered = parse_validation_row(finished.focus)
@@ -437,6 +438,15 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             self.assertIn("Runtimes: unconstrained", review)
             self.assertIn("nothing beyond the pipeline itself", review)
             self.assertIn("none; nothing here refuses promotion", review)
+
+            promotion = terminal.screen_containing("AART / Promotion Review")
+            self.assertIn("Target registry: company", promotion)
+            self.assertIn("Promotion mode: vendored", promotion)
+            # This walk reaches a confirmable review against the registry this machine actually
+            # synchronized, rather than the refusal an unsynchronized one would show.
+            self.assertIn("Review digest:", promotion)
+            self.assertNotIn("cannot be promoted", promotion)
+            self.assertIn("Validation report:", promotion)
 
 
 if __name__ == "__main__":

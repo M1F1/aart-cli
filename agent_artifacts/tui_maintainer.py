@@ -7,6 +7,7 @@ from agent_artifacts.application.maintainer_views import (
     MaintainerCandidateView,
     MaintainerDashboardView,
     MaintainerPolicyReviewView,
+    MaintainerPromotionReviewView,
     MaintainerSourceSyncResultView,
     MaintainerSourceSyncReviewView,
     MaintainerSourceView,
@@ -24,6 +25,7 @@ __all__ = [
     "render_source_sync_review",
     "render_maintainer_sources",
     "render_maintainer_policy_review",
+    "render_maintainer_promotion_review",
     "render_maintainer_validation",
     "render_maintainer_validation_check",
 ]
@@ -398,4 +400,36 @@ def render_maintainer_policy_review(
     lines.extend(f"  - {item}" for item in view.blocking_findings)
     if not view.blocking_findings:
         lines.append("  - none; nothing here refuses promotion")
+    return tuple(lines)
+
+
+def render_maintainer_promotion_review(
+    view: MaintainerPromotionReviewView,
+    profile: PresentationProfile,
+) -> tuple[str, ...]:
+    if not isinstance(view, MaintainerPromotionReviewView) or not isinstance(
+        profile, PresentationProfile
+    ):
+        raise ValueError("Maintainer promotion review rendering needs a typed view and profile")
+    lines = [
+        f"{view.artifact}@{view.version} — {_human(view.state.value)}",
+        f"Target registry: {view.target_registry}",
+        f"Promotion mode: {view.mode}",
+        f"Source revision: {_short(view.source_revision, profile)}",
+        f"Canonical digest: {_short(view.canonical_digest, profile)}",
+    ]
+    if view.registry_revision is not None:
+        lines.append(f"Registry baseline: {_short(view.registry_revision, profile)}")
+    if not view.confirmable:
+        # The refusal replaces the review rather than sitting beside it: a digest on screen is an
+        # invitation to confirm, and there is nothing here to confirm.
+        lines.append("This Candidate cannot be promoted:")
+        lines.extend(f"  - {item}" for item in view.refusals)
+        return tuple(lines)
+    lines.append(f"Validation report: {_short(view.validation_report_digest or '', profile)}")
+    lines.append(f"Effective policy: {_short(view.effective_policy_digest or '', profile)}")
+    if view.warnings:
+        lines.append("Warnings carried into the audit record:")
+        lines.extend(f"  - {item}" for item in view.warnings)
+    lines.append(f"Review digest: {_short(view.review_digest or '', profile)}")
     return tuple(lines)
