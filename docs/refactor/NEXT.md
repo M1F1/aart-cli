@@ -2,10 +2,11 @@
 
 ## Current objective
 
-Continue **CP-14 Maintainer TUI 30–53**, step 5: bulk promotion. Screens 41–46 are live. Screens
+Continue **CP-14 Maintainer TUI 30–53**, step 5: bulk promotion. Screens 41–47 are live. Screens
 41–44 review, choose, plan and validate without writing; explicit confirmation on screen 45 is the
-first Maintainer action that writes approved registry state, and screen 46 is where a Maintainer
-reads the registry back afterwards. Screen 47 lists and selects; its transaction remains.
+first Maintainer action that writes approved registry state, screen 46 is where a Maintainer reads
+the registry back afterwards, and screen 47 assembles a whole selection into one such transaction.
+Only B-041 (local provenance through promotion) still stands between this and a complete step 5.
 
 Screens 30–46 are live in the production shared shell:
 
@@ -52,38 +53,45 @@ Screens 30–46 are live in the production shared shell:
   one target registry and Candidates scanned for another are not offered rather than refused after
   selection. Promotability is read off the run screens 38–40 showed, and a Candidate the run refused
   is named with its reason (D-105). `Space` selects, through the reducer's existing typed selection.
+  `Enter` turns that selection into **one** transaction — one `plan_bulk_promotion`, one registry
+  snapshot, one local commit — and hands it to screens 44 and 45, the same validation and commit
+  screens a single promotion is reviewed on (D-106). Screen 47's one forward route is screen 44,
+  not screen 43, because a bulk selection has no single-Candidate diff to open. Confirmation
+  re-checks that the selection is still a subset of what screen 47 composed, and a promotion
+  recomposes the Maintainer views afterwards because the commit moved the checkout.
 
 Evidence: `tests/maintainer_candidate_shell_test.py`, `tests/maintainer_candidate_views_test.py`,
 `tests/candidate_validation_test.py`, `tests/maintainer_validation_views_test.py`,
 `tests/maintainer_composition_test.py`, `tests/maintainer_promotion_execution_test.py`,
 `tests/maintainer_promotion_io_test.py`, `tests/maintainer_promotion_shell_execution_test.py`,
 `tests/maintainer_registry_view_test.py`,
-`tests/maintainer_bulk_promotion_test.py` and a
+`tests/maintainer_bulk_promotion_test.py`, `tests/maintainer_bulk_transaction_test.py` and a
 real temporary production installation in `tests/maintainer_composition_e2e_test.py`, which now
-walks from the consumer dashboard through screen 45 and commits the promoted registry locally.
+walks from the consumer dashboard through screen 45 and commits the promoted registry locally, and
+separately walks screen 47 to commit two Candidates as one transaction.
 
 ## Exact next action
 
-Screen 47's selection surface is live: it lists what one registry's transaction may carry, `Space`
-selects, and a Candidate the run refused is named with its reason rather than being silently absent
-(D-105). What remains is the transaction itself:
+The bulk transaction is live and proven end to end: two ticked Candidates reach a real Git checkout
+as one commit and one registry snapshot (`test_bulk_promotion_writes_both_candidates_in_one_commit`).
+What remains before step 5 may be called complete:
 
-1. Enter on screen 47 requests a bulk promotion action that prepares **one** transaction from the
-   selection through the existing `plan_bulk_promotion`, then reuses screens 43, 44 and 45 for its
-   diff, validation and commit. It must not loop over `prepare_configured_candidate_promotion`:
-   one transaction, one registry snapshot, one local commit.
-2. The plan is composed at action time, not while drawing, because it depends on a selection the
-   session makes; screen 47 itself stays a projection of what is selectable.
-3. Retained approved records must remain readable after the bulk transaction: rebind every retained
+1. **Resolve B-041.** Local-origin Candidates must keep their `local:<snapshot-sha256>` provenance
+   through promotion rather than being disguised as Git commits. Give the promotion audit record a
+   place for local provenance, then replace the by-name refusal in planning with supported
+   provenance and restore the two direct refusal tests that were dropped with it. This is the last
+   blocker on step 5.
+2. Retained approved records must remain readable after a bulk transaction: rebind every retained
    record to the transaction's snapshot as metadata only, with published package bytes unchanged
    (D-089/B-037). Do not reintroduce a per-transaction rebind that leaves older versions
    unreadable.
-4. Resolve B-041 before step 5 is called complete. Local-origin Candidates must keep their
-   `local:<snapshot-sha256>` provenance through promotion rather than being disguised as Git
-   commits; restore the two direct refusal tests before replacing the refusal with supported audit
-   provenance.
-5. Keep published coordinate/version content immutable: digest conflict is a refusal, never an
+3. Keep published coordinate/version content immutable: digest conflict is a refusal, never an
    in-place repair (INV-203/239), and superseded records remain durable audit history (INV-229).
+4. Then step 6: screens 48–53, followed by step 7, retiring legacy authority only behind the
+   acceptance evidence D-091 requires.
+
+Noticed while proving the walk, not fixed here: screen 47 draws its "N selected" footer once of its
+own and once from the shell chrome, so the count appears twice. Recorded in `BACKLOG.md`.
 
 ## Critical boundaries for this slice
 

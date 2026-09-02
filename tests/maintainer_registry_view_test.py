@@ -53,6 +53,7 @@ from agent_artifacts.protocol.native_tree import (
     SourceSnapshot,
 )
 from agent_artifacts.protocol.paths import parse_relative_path
+from agent_artifacts.sources.model import source_snapshot_digest
 from agent_artifacts.tui_consumer import CanonicalScreenSource, ConsumerScreens, _reload, frame
 from tests.marketplace_fixtures import configured_source, source_state
 
@@ -127,10 +128,14 @@ def _promote(bundle, registry: SourceSnapshot, approved: ApprovedRegistryState):
             for item in plan.value.changes
         ),
     )
+    # The approved snapshot digest is the whole synchronized tree, which is also what D-103
+    # requires a checkout to match before anything may be promoted from it.
+    snapshot_digest = source_snapshot_digest(promoted)
+    assert isinstance(snapshot_digest, Ok), snapshot_digest
     state = ApprovedRegistryState(
         SourceAlias("company"),
         "f" * 40,
-        plan.value.next_registry_snapshot,
+        snapshot_digest.value,
         plan.value.versions,
     )
     return promoted, state, plan.value
@@ -206,7 +211,7 @@ class MaintainerRegistryViewTest(unittest.TestCase):
         )
 
         self.assertIs(view.working_tree.state, MaintainerWorkingTreeState.DIVERGED)
-        observed = registry_state_digest(edited)
+        observed = source_snapshot_digest(edited)
         assert isinstance(observed, Ok)
         self.assertEqual(view.working_tree.digest, str(observed.value))
 
@@ -224,11 +229,16 @@ class MaintainerRegistryViewTest(unittest.TestCase):
 
         view = project_maintainer_registry(SourceAlias("company"), state, second, second)
 
+        # An audit names the *registry state* digest its transaction produced, which covers
+        # published content only, while the approved snapshot digest covers the whole tree.
+        first_state = registry_state_digest(self.registry)
+        second_state = registry_state_digest(second)
+        assert isinstance(first_state, Ok) and isinstance(second_state, Ok)
         self.assertEqual(len(view.transactions), 2)
-        self.assertEqual(view.transactions[0].snapshot_after, str(state.snapshot_digest))
-        self.assertEqual(view.transactions[0].snapshot_before, str(self.state.snapshot_digest))
+        self.assertEqual(view.transactions[0].snapshot_after, str(second_state.value))
+        self.assertEqual(view.transactions[0].snapshot_before, str(first_state.value))
         self.assertEqual(view.transactions[0].candidate_ids, (later.candidate.id.value,))
-        self.assertEqual(view.transactions[1].snapshot_after, str(self.state.snapshot_digest))
+        self.assertEqual(view.transactions[1].snapshot_after, str(first_state.value))
 
     def test_one_bulk_transaction_lists_every_candidate_it_promoted(self) -> None:
         view = project_maintainer_registry(

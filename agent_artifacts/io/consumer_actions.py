@@ -88,6 +88,7 @@ from .credentials import CredentialProviderPort
 from .maintainer_promotion import (
     PreparedConfiguredCandidatePromotion,
     complete_configured_candidate_promotion,
+    prepare_configured_bulk_promotion,
     prepare_configured_candidate_promotion,
 )
 from .maintainer_sync import (
@@ -291,6 +292,8 @@ class LocalConsumerActions:
             return self._prepare_source_sync(command)
         if action is ConsumerActionKind.CANDIDATE_PROMOTION:
             return self._prepare_candidate_promotion(command)
+        if action is ConsumerActionKind.BULK_PROMOTION:
+            return self._prepare_bulk_promotion(command)
         return self._prepare_uninstall(command)
 
     def _prepare_candidate_promotion(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
@@ -335,6 +338,62 @@ class LocalConsumerActions:
                 _lines(
                     "registry transaction changed after screen 43 was composed; review it again"
                 ),
+            )
+        self._pending = prepared.value
+        self._pending_action = command.action
+        transaction = prepared.value.transaction
+        return ConsumerActionUpdate(
+            self.source(
+                promotion_validation=project_maintainer_registry_validation(transaction),
+                promotion_commit=project_maintainer_registry_commit(transaction),
+            ),
+            ConsumerUiEvent(
+                ConsumerUiEventKind.ACTION_PREPARED,
+                action=command.action,
+                review_digest=str(prepared.value.review_digest),
+            ),
+        )
+
+    def _prepare_bulk_promotion(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        if self._data_root is None:
+            return self._declined(
+                command,
+                _lines("bulk promotion needs the configured durable data root"),
+            )
+        if not command.selection or command.promotion_mode is None:
+            return self._declined(
+                command,
+                _lines("bulk promotion needs a selection and a promotion mode"),
+            )
+        try:
+            selected = tuple(CandidateId(item) for item in command.selection)
+        except ValueError as error:
+            return self._declined(command, _lines(str(error)))
+        prepared = prepare_configured_bulk_promotion(
+            self._context.effective,
+            selected,
+            data_root=self._data_root,
+            registry_root=self._context.host.harness_root,
+            policy=self._context.policy,
+            mode=command.promotion_mode,
+        )
+        if isinstance(prepared, Err):
+            return self._declined(command, _refusal(prepared.diagnostics))
+        # Screen 47 offered the selection; what is promoted must still be exactly what it offered,
+        # so the prepared set is checked against the composed selectable set rather than assumed.
+        offered = (
+            None
+            if self._context.maintainer is None
+            else self._context.maintainer.bulk_promotion(
+                prepared.value.transaction.target_registry.value
+            )
+        )
+        if offered is None or not set(command.selection) <= {
+            item.candidate_id for item in offered.candidates
+        }:
+            return self._declined(
+                command,
+                _lines("the selection changed after screen 47 was composed; review it again"),
             )
         self._pending = prepared.value
         self._pending_action = command.action
@@ -703,6 +762,17 @@ class LocalConsumerActions:
         )
         if isinstance(completed, Err):
             return self._failed(command, _refusal(completed.diagnostics))
+        assert self._data_root is not None
+        # The write just moved the registry checkout, so screen 46's working-tree observation and
+        # every Candidate view planned against that tree are stale the moment the commit lands.
+        refreshed = read_maintainer_views(
+            self._context.effective,
+            data_root=self._data_root,
+            observed_at_epoch_seconds=int(self._now().timestamp()),
+            registry_root=self._context.host.harness_root,
+        )
+        if isinstance(refreshed, Ok):
+            self._context = replace(self._context, maintainer=refreshed.value)
         recorded_at, _today = self._moment()
         return self._recorded(
             command,

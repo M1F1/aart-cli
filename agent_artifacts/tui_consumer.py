@@ -1584,6 +1584,9 @@ class CanonicalScreenSource:
                 ),
                 None,
             )
+        if screen is MaintainerScreen.REGISTRY:
+            # Screen 46's rows are registries; opening one is where its transaction is assembled.
+            return MaintainerScreen.BULK_PROMOTION if self._screens.bulk_promotions() else None
         if screen is MaintainerScreen.SOURCES:
             maintainer = self._screens.maintainer
             return (

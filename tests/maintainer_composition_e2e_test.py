@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import pathlib
 import shutil
@@ -17,6 +18,7 @@ from agent_artifacts.application.consumer_ui import (
     opening_state,
 )
 from agent_artifacts.application.consumer_views import ConsumerSettings
+from agent_artifacts.application.maintainer import CandidateBundle, reconcile_source_scan
 from agent_artifacts.application.maintainer_views import MaintainerScreen, parse_validation_row
 from agent_artifacts.application.promotion import load_registry_versions, validate_promoted_registry
 from agent_artifacts.configuration.model import (
@@ -27,6 +29,7 @@ from agent_artifacts.configuration.model import (
     UserConfiguration,
 )
 from agent_artifacts.configuration.schema import user_configuration_bytes
+from agent_artifacts.domain.candidates import assess_candidate
 from agent_artifacts.domain.identifiers import SourceAlias, SourceId
 from agent_artifacts.domain.registry import PromotionMode
 from agent_artifacts.domain.result import Ok
@@ -38,7 +41,14 @@ from agent_artifacts.io.candidate_store import (
 from agent_artifacts.io.consumer_settings import write_consumer_settings
 from agent_artifacts.io.registry_promotion import FilesystemPromotionOutput
 from agent_artifacts.io.source_store import publish_source_snapshot, read_current_source
-from agent_artifacts.protocol.native_tree import SnapshotEntryKind, SourceSnapshot
+from agent_artifacts.protocol.authoring import compile_author_snapshot
+from agent_artifacts.protocol.native_tree import (
+    SnapshotEntry,
+    SnapshotEntryKind,
+    SnapshotOrigin,
+    SourceSnapshot,
+)
+from agent_artifacts.protocol.paths import parse_relative_path
 from agent_artifacts.sources.model import (
     CurrentSourceRequest,
     SourcePublishCommand,
@@ -80,6 +90,62 @@ def _materialize(root: pathlib.Path, snapshot: SourceSnapshot) -> None:
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(entry.content)
         target.chmod(0o700 if entry.executable else 0o600)
+
+
+def _two_ready_candidates():
+    """One Source Scan holding two Ready Candidates for the same registry.
+
+    Bulk promotion only means anything with more than one, and both have to come from one scan so
+    the durable history the shell reads is the one thing that says they exist.
+    """
+
+    entries: list[SnapshotEntry] = []
+    for name in ("github-mcp", "jira-mcp"):
+        manifest = {
+            "schema": "aart.dev/mcp/v1",
+            "artifact": {"name": name, "kind": "mcp", "version": "1.0.0"},
+            "payload": {"include": ["server.py"]},
+            "transport": {"type": "stdio"},
+            "runtime": {"type": "python", "version": ">=3.11"},
+            "launch": {"type": "python", "entrypoint": "server.py"},
+        }
+        parsed_manifest = parse_relative_path(f"{name}/aart.json")
+        parsed_payload = parse_relative_path(f"{name}/server.py")
+        assert isinstance(parsed_manifest, Ok) and isinstance(parsed_payload, Ok)
+        entries.append(
+            SnapshotEntry(
+                parsed_manifest.value,
+                SnapshotEntryKind.FILE,
+                json.dumps(manifest, sort_keys=True).encode(),
+            )
+        )
+        entries.append(SnapshotEntry(parsed_payload.value, SnapshotEntryKind.FILE, b"print('x')\n"))
+    compiled = compile_author_snapshot(
+        SourceSnapshot(SnapshotOrigin.IMMUTABLE_GIT, tuple(entries)),
+        source_alias=SourceAlias("authors"),
+        source="https://git.example/authors.git",
+        revision="a" * 40,
+    )
+    assert isinstance(compiled, Ok), compiled
+    scanned = reconcile_source_scan(
+        SourceAlias("authors"),
+        "a" * 40,
+        compiled.value,
+        previous=(),
+        approved=(),
+        target_registry=SourceAlias("company"),
+    )
+    assert isinstance(scanned, Ok), scanned
+    ready = tuple(
+        CandidateBundle(assess_candidate(item.candidate), item.artifact)
+        for item in scanned.value.active
+    )
+    # Active Candidates stay in canonical manifest-path order; history is keyed by Candidate ID.
+    return dataclasses.replace(
+        scanned.value,
+        active=ready,
+        history=tuple(sorted(ready, key=lambda item: item.candidate.id.value)),
+    )
 
 
 class MaintainerProductionCompositionTest(unittest.TestCase):
@@ -627,6 +693,140 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             versions = load_registry_versions(persisted.value)
             assert isinstance(versions, Ok), versions
             self.assertGreaterEqual(len(versions.value), 2)
+            self.assertIsInstance(
+                validate_promoted_registry(persisted.value, versions.value),
+                Ok,
+            )
+
+    def test_bulk_promotion_writes_both_candidates_in_one_commit(self) -> None:
+        """Screen 47 selects two Candidates and they reach the registry as one transaction."""
+
+        with _environment() as env:
+            original_paths = source_store_paths(
+                env.paths.data_root,
+                source_instance_id(env.source),
+            )
+            original = read_current_source(CurrentSourceRequest(original_paths, env.source.alias))
+            assert isinstance(original, Ok) and original.value is not None
+
+            registry_root = env.project
+            _materialize(registry_root, original.value.candidate.snapshot)
+            subprocess.run(
+                ("git", "init", "-b", "main", str(registry_root)),
+                check=True,
+                capture_output=True,
+            )
+            _git(registry_root, "config", "user.name", "AART Test")
+            _git(registry_root, "config", "user.email", "aart@example.invalid")
+            _git(registry_root, "add", "-A")
+            _git(registry_root, "commit", "-m", "Initial approved registry")
+            before_revision = _git(registry_root, "rev-parse", "HEAD")
+
+            authors = configured_source("authors", SourceKind.SOURCE_GIT)
+            pathlib.Path(env.paths.user_config_file).write_bytes(
+                user_configuration_bytes(
+                    UserConfiguration(
+                        1,
+                        (env.source, authors),
+                        env.source.alias,
+                        SyncSettings(),
+                        ReportingSettings(),
+                    )
+                )
+            )
+            author_paths = source_store_paths(
+                env.paths.data_root,
+                source_instance_id(authors),
+            )
+            source_candidate = make_source_candidate(
+                source_instance_id(authors),
+                authors.alias,
+                "a" * 40,
+                _snapshot(),
+            )
+            assert isinstance(source_candidate, Ok)
+            self.assertIsInstance(
+                publish_source_snapshot(
+                    SourcePublishCommand(
+                        author_paths,
+                        ValidatedSourceCandidate(
+                            source_candidate.value,
+                            SourceId("author-source"),
+                        ),
+                        int(time.time()),
+                    )
+                ),
+                Ok,
+            )
+            scan = _two_ready_candidates()
+            self.assertIsInstance(
+                write_candidate_history(candidate_history_paths(author_paths), scan),
+                Ok,
+            )
+            self.assertIsInstance(
+                write_consumer_settings(
+                    ConsumerSettings().with_maintainer_mode(True),
+                    data_root=env.paths.data_root,
+                ),
+                Ok,
+            )
+
+            handler = _actions(env)
+            composed = handler.source().screens.maintainer
+            assert composed is not None
+            offered = composed.bulk_promotion(env.source.alias.value)
+            assert offered is not None
+            self.assertEqual(len(offered.candidates), 2)
+
+            # Dashboard → maintainer dashboard → registry (46) → bulk promotion (47); tick both
+            # rows, then Enter to assemble the transaction, and Enter again to commit it.
+            terminal = FakeTerminal(
+                *(DOWN for _ in range(8)),
+                ENTER,
+                DOWN,
+                DOWN,
+                ENTER,
+                ENTER,
+                ord(" "),
+                DOWN,
+                ord(" "),
+                ENTER,
+                ENTER,
+                ENTER,
+            )
+            finished = run_consumer_shell(
+                handler.source(),
+                terminal,
+                state=opening_state(handler.settings),
+                action_handler=handler,
+                settings_writer=handler.save_settings,
+            )
+
+            self.assertIs(
+                finished.session.screen,
+                MaintainerScreen.REGISTRY_COMMIT,
+                terminal.last,
+            )
+            committed = terminal.screen_containing("Approved registry state written locally")
+            self.assertIn("Promote 2 candidates", committed)
+            self.assertIn("Git push: no", committed)
+
+            # One transaction, not two: a loop over single promotions would have made two commits
+            # and two registry snapshots.
+            revisions = _git(registry_root, "rev-list", "--count", "HEAD")
+            self.assertEqual(int(revisions), 2, terminal.last)
+            self.assertNotEqual(_git(registry_root, "rev-parse", "HEAD"), before_revision)
+            self.assertEqual(_git(registry_root, "status", "--porcelain=v1"), "")
+
+            persisted = FilesystemPromotionOutput(str(registry_root)).current()
+            assert isinstance(persisted, Ok), persisted
+            versions = load_registry_versions(persisted.value)
+            assert isinstance(versions, Ok), versions
+            self.assertEqual(
+                len({str(item.registry_snapshot) for item in versions.value}),
+                1,
+                "both promoted versions must name the one snapshot their transaction produced",
+            )
             self.assertIsInstance(
                 validate_promoted_registry(persisted.value, versions.value),
                 Ok,

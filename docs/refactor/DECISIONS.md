@@ -1736,9 +1736,15 @@ the Product Specification first instead of hiding the change here.
   bounded at 50 transactions and stops on any cycle or gap. Registry validity is the named check
   that every approved version carries a promotion approval record. Working-tree state is a separate
   observation of the D-103 project-root checkout, compared against the approved snapshot through
-  the now-public `registry_state_digest`, which covers `artifacts/` and `references/` only. That
-  checkout is observed only when exactly one registry is configured; otherwise it is reported as
-  unobserved rather than attributed to a registry it may not belong to.
+  `source_snapshot_digest` — the whole synchronized tree, which is exactly the digest D-103
+  requires a checkout to match before it may be promoted from. The audit chain head is read
+  separately, through the now-public `registry_state_digest` (published `artifacts/` and
+  `references/` content only), because that is the digest space promotion audits name; comparing a
+  working tree in that space made a correct checkout read as diverged, which the composition E2E
+  caught. That checkout is observed only when exactly one registry is configured; otherwise it is
+  reported as unobserved rather than attributed to a registry it may not belong to. A promotion
+  moves the checkout, so the configured action handler recomposes the Maintainer views after a
+  successful commit exactly as it does after a Source Sync.
 - **Status:** accepted.
 - **Reason:** no promotion record carries a clock, and stamping one at read time would make the
   order a property of when a Maintainer looked rather than of what happened; the chain is already
@@ -1770,9 +1776,13 @@ the Product Specification first instead of hiding the change here.
   another registry would create a selection that can only ever be refused. "Not in the list" and
   "does not exist" look identical on screen, which is why an excluded Candidate is named.
 - **Consequence:** screen 47 draws without opening a file and without judging anything itself, and
-  `MaintainerViews.bulk_promotions` carries one selectable set per configured registry. The action
-  that turns a selection into one `plan_bulk_promotion` transaction, and the reuse of screens 43–45
-  for its diff, validation and commit, is the remaining work in step 5.
+  `MaintainerViews.bulk_promotions` carries one selectable set per configured registry. `Enter` on
+  screen 47 requests `BULK_PROMOTION`, which is refused outright while the selection is empty. Its
+  one forward route is screen 44, not screen 43: a bulk selection has no single-Candidate diff to
+  open, so the transaction goes straight to the validation screen a single promotion is also
+  reviewed on, and screen 45 commits it. The configured handler re-checks at action time that the
+  confirmed selection is still a subset of what screen 47 composed, and declines with "the
+  selection changed after screen 47 was composed" rather than promoting something nobody ticked.
 
 ## D-106 — One reviewed transaction carries a set of promotions, not one
 
@@ -1795,6 +1805,6 @@ the Product Specification first instead of hiding the change here.
 - **Consequence:** the single-promotion flow is unchanged in behaviour and its execution now reads
   `approved` before `candidate`, which its port-order tests state explicitly. A transaction whose
   plan carries a Candidate the review never saw is rejected by construction. Screen 45's commit
-  subject names the artifact for one Candidate and the count for several. What remains is the
-  screen-47 action that turns a selection into one of these transactions and routes it through
-  screens 43–45.
+  subject names the artifact for one Candidate and the count for several. The composition E2E
+  proves the whole route end to end over a real Git checkout: two ticked Candidates reach the
+  registry as one commit, one registry snapshot and one working tree with nothing left uncommitted.

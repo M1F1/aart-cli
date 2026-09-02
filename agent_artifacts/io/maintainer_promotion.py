@@ -15,6 +15,7 @@ from agent_artifacts.application.maintainer_promotion import (
     PreparedCandidatePromotionTransaction,
     execute_candidate_promotion,
     prepare_candidate_promotion_transaction,
+    prepare_promotion_transaction,
 )
 from agent_artifacts.configuration.model import ConfiguredSource, SourceKind
 from agent_artifacts.configuration.policy import EffectiveConfiguration, redact_text
@@ -279,6 +280,75 @@ def prepare_configured_candidate_promotion(
         return _error(str(error))
 
 
+def prepare_configured_bulk_promotion(
+    effective: EffectiveConfiguration,
+    candidate_ids: tuple[CandidateId, ...],
+    *,
+    data_root: str,
+    registry_root: str,
+    policy: EffectivePolicy,
+    mode: PromotionMode,
+) -> Result[PreparedConfiguredCandidatePromotion]:
+    """Re-observe and pre-validate one local registry transaction for a whole selection.
+
+    The selection is turned into a single transaction rather than a sequence of them, so the
+    registry is either left as the review described or not written at all.
+    """
+
+    if (
+        not isinstance(effective, EffectiveConfiguration)
+        or not isinstance(candidate_ids, tuple)
+        or not candidate_ids
+        or any(not isinstance(item, CandidateId) for item in candidate_ids)
+        or not isinstance(policy, EffectivePolicy)
+        or not isinstance(mode, PromotionMode)
+        or not os.path.isabs(data_root)
+        or os.path.normpath(data_root) != data_root
+    ):
+        return _error("preparing a bulk promotion needs typed configuration and a selection")
+    if len(set(candidate_ids)) != len(candidate_ids):
+        return _error("a bulk promotion selection cannot name the same Candidate twice")
+    bundles: list[CandidateBundle] = []
+    for candidate_id in candidate_ids:
+        candidate = read_configured_candidate(effective, candidate_id, data_root=data_root)
+        if isinstance(candidate, Err):
+            return candidate
+        bundles.append(candidate.value)
+    targets = {item.candidate.target_registry for item in bundles}
+    if len(targets) != 1:
+        return _error(
+            "a bulk promotion writes one registry, and this selection spans several",
+            "select Candidates of one target registry and review promotion again",
+        )
+    target = next(iter(targets))
+    registry = _configured_registry(effective, target)
+    if registry is None:
+        return _error(f"target registry {target} is not configured and enabled")
+    root = _registry_root(registry_root, registry)
+    if isinstance(root, Err):
+        return root
+    approved = read_approved_registry_state(effective, target, data_root=data_root)
+    if isinstance(approved, Err):
+        return approved
+    workspace = FilesystemPromotionOutput(root.value).current()
+    if isinstance(workspace, Err):
+        return workspace
+    transaction = prepare_promotion_transaction(
+        tuple(bundles),
+        tuple(validate_candidate(item, policy=policy) for item in bundles),
+        policy,
+        approved.value,
+        workspace.value,
+        mode=mode,
+    )
+    if isinstance(transaction, Err):
+        return transaction
+    try:
+        return Ok(PreparedConfiguredCandidatePromotion(transaction.value, root.value, data_root))
+    except ValueError as error:
+        return _error(str(error))
+
+
 def complete_configured_candidate_promotion(
     effective: EffectiveConfiguration,
     prepared: PreparedConfiguredCandidatePromotion,
@@ -336,6 +406,7 @@ __all__ = [
     "PreparedConfiguredCandidatePromotion",
     "complete_configured_candidate_promotion",
     "commit_candidate_promotion",
+    "prepare_configured_bulk_promotion",
     "prepare_configured_candidate_promotion",
     "read_configured_candidate",
 ]

@@ -753,3 +753,13 @@ What remains: give a configured registry an explicit checkout path, or identify 
 registry it declares itself to be, so working-tree state is answerable for every registry. Not
 required for CP-14: promotion itself already targets one Candidate's registry through the project
 root, and the single-registry case is what the accepted flow supports.
+
+## B-043 — Screen 47 draws its selection count twice
+
+Discovered while proving the bulk transaction end to end. `render_maintainer_bulk_promotion` ends
+with its own `"N selected"` line and the shell chrome appends the same count, so the frame reads
+"2 selected" twice. It is cosmetic and no test depended on the duplicate, so it was left alone
+rather than widened into the transaction increment.
+
+What remains: decide which of the two owns the count -- the chrome states it for every selectable
+screen, so screen 47's own line is the likely one to drop -- and pin it with a rendering test.

@@ -56,7 +56,7 @@ from agent_artifacts.protocol.native_tree import (
     SnapshotEntryKind,
     SourceSnapshot,
 )
-from agent_artifacts.sources.model import HealthStatus, SourceHealth
+from agent_artifacts.sources.model import HealthStatus, SourceHealth, source_snapshot_digest
 
 __all__ = [
     "MAINTAINER_SCREENS",
@@ -1215,7 +1215,9 @@ _NAVIGATION: dict[MaintainerScreen, tuple[MaintainerScreen, ...]] = {
     MaintainerScreen.REGISTRY_VALIDATION: (MaintainerScreen.REGISTRY_COMMIT,),
     MaintainerScreen.REGISTRY_COMMIT: (MaintainerScreen.REGISTRY,),
     MaintainerScreen.REGISTRY: (MaintainerScreen.BULK_PROMOTION,),
-    MaintainerScreen.BULK_PROMOTION: (MaintainerScreen.REGISTRY_DIFF,),
+    # A bulk selection has no single-Candidate diff to open, so screen 47 assembles its
+    # transaction and hands it to the same validation screen a single promotion is reviewed on.
+    MaintainerScreen.BULK_PROMOTION: (MaintainerScreen.REGISTRY_VALIDATION,),
     MaintainerScreen.CANDIDATE_LIFECYCLE: (MaintainerScreen.PROVENANCE,),
     MaintainerScreen.PROVENANCE: (),
     MaintainerScreen.VERSION_CONFLICT: (),
@@ -2030,6 +2032,11 @@ def project_maintainer_registry(
     counts = Counter(ArtifactKind(str(item.coordinate.artifact.kind)) for item in approved.versions)
     artifact_counts = tuple(sorted(counts.items(), key=lambda item: item[0].value))
     audits: tuple[PromotionAudit, ...] = ()
+    # A promotion audit names the *registry state* digest its transaction produced, which covers
+    # published content only, while the approved snapshot digest covers the whole synchronized
+    # tree. The chain head has to be read in the audits' own digest space or it matches nothing.
+    head = "" if registry_snapshot is None else registry_state_digest(registry_snapshot)
+    chain = "" if isinstance(head, str) or isinstance(head, Err) else str(head.value)
     if registry_snapshot is None:
         diagnostics.append(f"registry {alias.value} snapshot content was not read")
     else:
@@ -2047,7 +2054,9 @@ def project_maintainer_registry(
                     f"{len(missing)} approved version(s) carry no promotion approval record: "
                     + ", ".join(missing[:5])
                 )
-    observed = None if checkout is None else registry_state_digest(checkout)
+    # The same digest D-103 requires promotion to match: a checkout that is not exactly the
+    # approved baseline cannot be promoted from, so that is the question this line answers.
+    observed = None if checkout is None else source_snapshot_digest(checkout)
     if observed is None:
         working = MaintainerWorkingTreeView(MaintainerWorkingTreeState.UNOBSERVED, None)
     elif isinstance(observed, Err):
@@ -2072,7 +2081,7 @@ def project_maintainer_registry(
         len(approved.versions),
         artifact_counts,
         working,
-        _registry_transactions(audits, snapshot),
+        _registry_transactions(audits, chain),
         tuple(diagnostics),
     )
 

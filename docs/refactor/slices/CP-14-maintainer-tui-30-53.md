@@ -473,5 +473,50 @@ reason, the no-approved-state refusal, cross-registry isolation, the shell's row
 
 Checkpoint gates on 2026-09-02: `make quality` and `make integration` are both green.
 
-Step 5 remainder: the bulk transaction itself — Enter on screen 47 preparing one
-`plan_bulk_promotion` and reusing screens 43–45 — and B-041's compliant local provenance.
+## Step 5e — one transaction carrying a set of promotions
+
+A loop over single promotions is exactly what bulk promotion is not: each iteration would take its
+own registry snapshot, write its own commit and be able to half-succeed, leaving the registry in a
+state no review ever described. So rather than adding a second prepared type beside the
+single-Candidate one, the existing one was generalized: `PreparedCandidatePromotionTransaction`
+carries `promotions: tuple[...]`, `plan_promotion_transaction` plans the whole set through the
+already-tested `plan_bulk_promotion`, and `prepare_candidate_promotion_transaction` is the
+one-element case of `prepare_promotion_transaction`. One review path, one chance for it to be right
+(D-106).
+
+Confirmation reads the approved baseline once, before any Candidate, and then rechecks every member
+against that one baseline — reading it per Candidate would let a single transaction assemble members
+against two different registries. The port-order tests state that ordering explicitly rather than
+leaving it to be re-derived. A transaction whose plan carries a Candidate the review never saw is
+rejected in `__post_init__`, by construction rather than by check.
+
+Screens 44 and 45 now carry a tuple of Candidates, each with the validation-report and
+effective-policy digests that authorized it: evidence stays per Candidate because each is approved
+by its own run and policy result, and one summarized pair could not be traced back through the
+transaction. Screen 45's commit subject names the artifact for one Candidate and the count for
+several.
+
+Screen 47's one forward route is screen 44, not screen 43 — a bulk selection has no
+single-Candidate diff to open — and the configured handler re-checks at action time that the
+confirmed selection is still a subset of what screen 47 composed, declining rather than promoting
+something nobody ticked. A promotion now recomposes the Maintainer views the way a Source Sync
+already did, because the commit it just made moved the checkout that screen 46 reports on.
+
+Two defects were caught by writing the E2E rather than by reasoning about the code:
+
+- screen 46 compared the working tree in the audits' published-content digest space, so a correct
+  checkout always read as diverged. The working-tree question is the one D-103 asks — does this
+  checkout match the approved baseline it would promote from — so it is answered with
+  `source_snapshot_digest`, and the audit chain head is read separately with `registry_state_digest`.
+- a promotion left screen 46 drawing a pre-commit observation, because only Source Sync recomposed
+  the views afterwards.
+
+Evidence is `tests/maintainer_bulk_transaction_test.py` and the walk in
+`tests/maintainer_composition_e2e_test.py`, which ticks two Candidates on screen 47 and asserts what
+only one transaction can produce: exactly one new commit, one registry snapshot across every
+persisted version, and a clean working tree.
+
+Checkpoint gates on 2026-09-02: `make quality` and `make integration` are both green.
+
+Step 5 remainder: B-041's compliant local provenance representation, which is now the only thing
+between this and a complete step 5.

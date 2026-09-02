@@ -50,6 +50,7 @@ class ConsumerActionKind(str, Enum):
     UNINSTALL = "uninstall"
     SOURCE_SYNC = "source-sync"
     CANDIDATE_PROMOTION = "candidate-promotion"
+    BULK_PROMOTION = "bulk-promotion"
 
 
 class ConsumerUiEventKind(str, Enum):
@@ -407,6 +408,12 @@ _ACTION_REVIEW: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
         ConsumerActionKind.CANDIDATE_PROMOTION,
         MaintainerScreen.REGISTRY_DIFF,
     ): MaintainerScreen.REGISTRY_VALIDATION,
+    # Screen 47 selects; the transaction it assembles is reviewed and committed on the same two
+    # screens a single promotion uses, because it is the same kind of transaction.
+    (
+        ConsumerActionKind.BULK_PROMOTION,
+        MaintainerScreen.BULK_PROMOTION,
+    ): MaintainerScreen.REGISTRY_VALIDATION,
 }
 
 
@@ -419,7 +426,11 @@ def _request_action(
     focus = state.focus or state.current_row
     if target is None:
         return state, ()
-    if action in (ConsumerActionKind.INSTALL, ConsumerActionKind.UPDATE):
+    # A bulk promotion is defined by what was selected, so an empty selection is not a request.
+    if action is ConsumerActionKind.BULK_PROMOTION:
+        if not state.selection:
+            return state, ()
+    elif action in (ConsumerActionKind.INSTALL, ConsumerActionKind.UPDATE):
         if not state.selection and not (
             action is ConsumerActionKind.INSTALL
             and state.session.screen is not ConsumerScreen.MARKETPLACE
@@ -441,7 +452,9 @@ def _request_action(
         selection=state.selection,
         focus=focus,
         promotion_mode=(
-            state.promotion_mode if action is ConsumerActionKind.CANDIDATE_PROMOTION else None
+            state.promotion_mode
+            if action in (ConsumerActionKind.CANDIDATE_PROMOTION, ConsumerActionKind.BULK_PROMOTION)
+            else None
         ),
     )
     return prepared, (command, *navigation)
@@ -477,6 +490,10 @@ _ACTION_RUNNING: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationS
     (ConsumerActionKind.SOURCE_SYNC, MaintainerScreen.SOURCE_SYNC): None,
     (
         ConsumerActionKind.CANDIDATE_PROMOTION,
+        MaintainerScreen.REGISTRY_COMMIT,
+    ): None,
+    (
+        ConsumerActionKind.BULK_PROMOTION,
         MaintainerScreen.REGISTRY_COMMIT,
     ): None,
 }
@@ -527,7 +544,7 @@ def _action_recorded(
     if action is None or action is not state.action or not event.text:
         return state, ()
     if (
-        action is ConsumerActionKind.CANDIDATE_PROMOTION
+        action in (ConsumerActionKind.CANDIDATE_PROMOTION, ConsumerActionKind.BULK_PROMOTION)
         and state.session.screen is MaintainerScreen.REGISTRY_COMMIT
     ):
         return replace(
@@ -763,6 +780,11 @@ def key_event(
         return ConsumerUiEvent(
             ConsumerUiEventKind.REQUEST_ACTION,
             action=ConsumerActionKind.SOURCE_SYNC,
+        )
+    if key == "enter" and state.session.screen is MaintainerScreen.BULK_PROMOTION:
+        return ConsumerUiEvent(
+            ConsumerUiEventKind.REQUEST_ACTION,
+            action=ConsumerActionKind.BULK_PROMOTION,
         )
     if key == "enter" and state.session.screen is MaintainerScreen.REGISTRY_DIFF:
         return ConsumerUiEvent(
