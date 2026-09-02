@@ -11,11 +11,13 @@ from agent_artifacts.application.maintainer_views import (
     MaintainerRegistryCommitView,
     MaintainerRegistryDiffView,
     MaintainerRegistryValidationView,
+    MaintainerRegistryView,
     MaintainerSourceSyncResultView,
     MaintainerSourceSyncReviewView,
     MaintainerSourceView,
     MaintainerValidationCheckView,
     MaintainerValidationView,
+    MaintainerWorkingTreeState,
 )
 
 __all__ = [
@@ -29,6 +31,8 @@ __all__ = [
     "render_maintainer_sources",
     "render_maintainer_policy_review",
     "render_maintainer_promotion_review",
+    "render_maintainer_registries",
+    "render_maintainer_registry",
     "render_maintainer_registry_diff",
     "render_maintainer_registry_commit",
     "render_maintainer_registry_validation",
@@ -520,4 +524,67 @@ def render_maintainer_registry_commit(
         lines.append("Canonical-branch publication remains external.")
     else:
         lines.append("Enter commits this exact local transaction.")
+    return tuple(lines)
+
+
+_WORKING_TREE_LABELS = {
+    MaintainerWorkingTreeState.MATCHES_SNAPSHOT: "matches the approved snapshot",
+    MaintainerWorkingTreeState.DIVERGED: "differs from the approved snapshot",
+    MaintainerWorkingTreeState.UNOBSERVED: "not observed",
+}
+
+
+def render_maintainer_registry(
+    view: MaintainerRegistryView,
+    profile: PresentationProfile,
+) -> tuple[str, ...]:
+    if not isinstance(view, MaintainerRegistryView) or not isinstance(profile, PresentationProfile):
+        raise ValueError("Maintainer registry rendering needs a typed view and profile")
+    lines = [
+        f"{view.alias}  {'✓ Valid' if view.valid else '⚠ Attention'}",
+    ]
+    lines.extend(f"  - {item}" for item in view.diagnostics)
+    if view.snapshot is None:
+        return tuple(lines)
+    lines.append(f"Revision: {_short(view.revision or '', profile)}")
+    lines.append(f"Snapshot: {_short(view.snapshot, profile)}")
+    lines.append(f"Approved versions: {view.version_count}")
+    if view.artifact_counts:
+        lines.append(
+            "  " + "  ".join(f"{kind.value} {count}" for kind, count in view.artifact_counts)
+        )
+    tree = view.working_tree
+    lines.append(f"Working tree: {_WORKING_TREE_LABELS[tree.state]}")
+    if tree.digest is not None:
+        lines.append(f"  observed {_short(tree.digest, profile)}")
+    if tree.detail is not None:
+        lines.append(f"  {tree.detail}")
+    if not view.transactions:
+        lines.append("No promotion has been recorded in this registry yet.")
+        return tuple(lines)
+    lines.append("Recent promotions (newest first):")
+    for item in view.transactions:
+        lines.append(
+            f"  {_short(item.snapshot_after, profile)} ({item.mode}) "
+            f"{len(item.candidate_ids)} {_noun(len(item.candidate_ids), 'candidate')}"
+        )
+        lines.extend(f"    {_short(candidate, profile)}" for candidate in item.candidate_ids)
+    return tuple(lines)
+
+
+def render_maintainer_registries(
+    views: tuple[MaintainerRegistryView, ...],
+    profile: PresentationProfile,
+) -> tuple[str, ...]:
+    """Screen 46 covers every configured registry: an installation may maintain more than one."""
+
+    if not isinstance(views, tuple) or not isinstance(profile, PresentationProfile):
+        raise ValueError("Maintainer registries rendering needs typed views and a profile")
+    if not views:
+        return ("No registry is configured.",)
+    lines: list[str] = []
+    for index, view in enumerate(views):
+        if index:
+            lines.append("")
+        lines.extend(render_maintainer_registry(view, profile))
     return tuple(lines)

@@ -586,6 +586,7 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
                 ENTER,
                 ENTER,
                 ENTER,
+                ENTER,
             )
             finished = run_consumer_shell(
                 handler.source(),
@@ -597,7 +598,7 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
 
             self.assertIs(
                 finished.session.screen,
-                MaintainerScreen.REGISTRY_COMMIT,
+                MaintainerScreen.REGISTRY,
                 terminal.last,
             )
             validation = terminal.screen_containing("AART / Registry Validation")
@@ -607,6 +608,15 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             self.assertIn("Local Git revision:", committed)
             self.assertIn("Git push: no", committed)
             self.assertIn("Canonical-branch publication remains external", committed)
+
+            # Screen 46 draws the registry the walk just wrote into.  The local commit is
+            # deliberately not a sync, so the checkout is ahead of the synchronized approved
+            # snapshot here -- and saying so is the point of the working-tree line.
+            registry = terminal.screen_containing("AART / Registry Maintainer")
+            self.assertIn(env.source.alias.value, registry)
+            self.assertIn("Approved versions:", registry)
+            self.assertIn("Working tree:", registry)
+            self.assertIn("differs from the approved snapshot", registry)
 
             after_revision = _git(registry_root, "rev-parse", "HEAD")
             self.assertNotEqual(after_revision, before_revision)

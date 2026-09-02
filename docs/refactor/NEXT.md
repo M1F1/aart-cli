@@ -2,14 +2,12 @@
 
 ## Current objective
 
-Continue **CP-14 Maintainer TUI 30–53**, step 5: registry maintenance and bulk promotion. Screens
-41–45 are live. Screens 41–44 review, choose, plan and validate without writing; explicit
-confirmation on screen 45 is the first Maintainer action that writes approved registry state. It
-re-observes every reviewed baseline, replans and validates before the atomic write, validates the
-persisted readback, then creates one local Git commit containing only the reviewed paths and never
-pushes (D-103).
+Continue **CP-14 Maintainer TUI 30–53**, step 5: bulk promotion. Screens 41–46 are live. Screens
+41–44 review, choose, plan and validate without writing; explicit confirmation on screen 45 is the
+first Maintainer action that writes approved registry state, and screen 46 is where a Maintainer
+reads the registry back afterwards. Screen 47 remains.
 
-Screens 30–43 are live in the production shared shell:
+Screens 30–46 are live in the production shared shell:
 
 - screen 30 and screens 31–32 compose configured authoring Sources, durable health and only an exact
   matching Candidate-history observation (D-093–D-095);
@@ -43,28 +41,36 @@ Screens 30–43 are live in the production shared shell:
 - screen 45 shows the exact local write and deterministic commit subject. Confirmation refuses if
   the Candidate, synchronized approved baseline, checkout or screen-43 plan moved, and a real
   temporary checkout proves the write, readback validation and local Git commit while having no
-  remote to push to (D-103).
+  remote to push to (D-103);
+- screen 46 reads the registry back: validity as the named check that every approved version carries
+  a promotion approval record, artifact counts by kind, the approved snapshot and revision, the
+  local checkout compared against it, and recent promotions ordered by walking the audit snapshot
+  chain rather than by any clock (D-104). After a local commit the checkout is legitimately ahead of
+  the synchronized approved snapshot and the working-tree line says so. Enter on screen 45 confirms
+  only while an action is pending and otherwise continues to screen 46.
 
 Evidence: `tests/maintainer_candidate_shell_test.py`, `tests/maintainer_candidate_views_test.py`,
 `tests/candidate_validation_test.py`, `tests/maintainer_validation_views_test.py`,
 `tests/maintainer_composition_test.py`, `tests/maintainer_promotion_execution_test.py`,
-`tests/maintainer_promotion_io_test.py`, `tests/maintainer_promotion_shell_execution_test.py` and a
+`tests/maintainer_promotion_io_test.py`, `tests/maintainer_promotion_shell_execution_test.py`,
+`tests/maintainer_registry_view_test.py` and a
 real temporary production installation in `tests/maintainer_composition_e2e_test.py`, which now
 walks from the consumer dashboard through screen 45 and commits the promoted registry locally.
 
 ## Exact next action
 
-Start RED tests for screen 46, the Registry Maintainer View, then screen 47 bulk promotion:
+Start RED tests for screen 47, bulk promotion:
 
-1. Screen 46 composes registry validity, artifact counts by kind, the synchronized snapshot, local
-   working-tree state and recent promotion records once outside drawing. The working tree is the
-   explicit project-root checkout D-103 established; do not infer its state from synchronized
-   source-store content.
-2. Screen 47 selects multiple Ready Candidates and drives the existing `plan_bulk_promotion` as one
-   coherent diff/validation/commit boundary. It must not loop over the single-Candidate executor.
+1. Screen 47 selects multiple Ready Candidates and drives the existing `plan_bulk_promotion` as one
+   coherent diff/validation/commit boundary. It must not loop over the single-Candidate executor:
+   one transaction, one registry snapshot, one local commit.
+2. Selection is typed application state, the way `MaintainerCandidateFilter` and `promotion_mode`
+   are. `Space` selects, per the accepted Maintainer shortcuts; `key_event` stays the only key
+   interpreter.
 3. Retained approved records must remain readable after the bulk transaction: rebind every retained
    record to the transaction's snapshot as metadata only, with published package bytes unchanged
-   (D-089/B-037).
+   (D-089/B-037). Do not reintroduce a per-transaction rebind that leaves older versions
+   unreadable.
 4. Resolve B-041 before step 5 is called complete. Local-origin Candidates must keep their
    `local:<snapshot-sha256>` provenance through promotion rather than being disguised as Git
    commits; restore the two direct refusal tests before replacing the refusal with supported audit

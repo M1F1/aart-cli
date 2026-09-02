@@ -675,6 +675,7 @@ class LocalConsumerActions:
             self._context.effective,
             data_root=self._data_root,
             observed_at_epoch_seconds=int(self._now().timestamp()),
+            registry_root=self._context.host.harness_root,
         )
         if isinstance(refreshed, Err):
             return self._failed(command, _refusal(refreshed.diagnostics))

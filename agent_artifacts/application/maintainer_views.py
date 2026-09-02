@@ -31,8 +31,14 @@ from agent_artifacts.application.maintainer_sync import (
     PreparedSourceSync,
     SourceSyncExecutionResult,
 )
+from agent_artifacts.application.promotion import (
+    PromotionAudit,
+    load_registry_promotions,
+    registry_state_digest,
+)
 from agent_artifacts.configuration.model import ConfiguredSource, SourceKind
 from agent_artifacts.configuration.policy import redact_text
+from agent_artifacts.domain.artifacts import ArtifactKind
 from agent_artifacts.domain.candidates import CandidateState, semantic_candidate_diff
 from agent_artifacts.domain.identifiers import SourceAlias
 from agent_artifacts.domain.inputs import ConfigInput, RuntimeInput, SecretInput
@@ -70,6 +76,11 @@ __all__ = [
     "MaintainerRegistryChangeView",
     "MaintainerRegistryCommitView",
     "MaintainerRegistryDiffView",
+    "project_maintainer_registry",
+    "MaintainerWorkingTreeView",
+    "MaintainerWorkingTreeState",
+    "MaintainerRegistryTransactionView",
+    "MaintainerRegistryView",
     "MaintainerRegistryValidationView",
     "MaintainerValidationCheckView",
     "MaintainerValidationDetailView",
@@ -864,6 +875,7 @@ class MaintainerViews:
     validations: tuple[MaintainerValidationView, ...] | None = None
     promotions: tuple[MaintainerPromotionReviewView, ...] | None = None
     registry_diffs: tuple[MaintainerRegistryDiffView, ...] | None = None
+    registries: tuple[MaintainerRegistryView, ...] | None = None
 
     def __post_init__(self) -> None:
         aliases = tuple(source.alias for source in self.sources)
@@ -877,6 +889,16 @@ class MaintainerViews:
             or self.dashboard.validation_failure_count
             != sum(source.invalid_count for source in self.sources)
             or self.dashboard.ready_count != sum(source.ready_count for source in self.sources)
+            or (
+                self.registries is not None
+                and (
+                    any(
+                        not isinstance(registry, MaintainerRegistryView)
+                        for registry in self.registries
+                    )
+                    or len({item.alias for item in self.registries}) != len(self.registries)
+                )
+            )
             or (
                 self.registry_diffs is not None
                 and (
@@ -966,6 +988,13 @@ class MaintainerViews:
         if self.validations is None:
             return None
         return next((item for item in self.validations if item.candidate_id == candidate_id), None)
+
+    def registry(self, alias: str) -> MaintainerRegistryView | None:
+        """The registry composed for one alias, refusals included."""
+
+        if self.registries is None:
+            return None
+        return next((item for item in self.registries if item.alias == alias), None)
 
     def registry_diff(
         self,
@@ -1793,4 +1822,203 @@ def project_maintainer_registry_commit(
         result is not None,
         promotion_commit_subject(prepared),
         None if result is None else result.commit_revision,
+    )
+
+
+class MaintainerWorkingTreeState(str, Enum):
+    """What a local registry checkout is, relative to the approved snapshot it should hold."""
+
+    MATCHES_SNAPSHOT = "matches-snapshot"
+    DIVERGED = "diverged"
+    UNOBSERVED = "unobserved"
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerWorkingTreeView:
+    """Screen 46: the local checkout, observed rather than inferred."""
+
+    state: MaintainerWorkingTreeState
+    digest: str | None
+    detail: str | None = None
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.state, MaintainerWorkingTreeState)
+            or not (self.digest is None or isinstance(self.digest, str))
+            or (self.state is MaintainerWorkingTreeState.UNOBSERVED and self.digest is not None)
+            or not (self.detail is None or isinstance(self.detail, str))
+        ):
+            raise ValueError("Maintainer working tree view is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerRegistryTransactionView:
+    """One promotion transaction as the registry recorded it, newest first in the chain."""
+
+    snapshot_before: str
+    snapshot_after: str
+    mode: str
+    candidate_ids: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if (
+            not self.snapshot_before
+            or not self.snapshot_after
+            or not self.mode
+            or not self.candidate_ids
+            or any(not isinstance(item, str) or not item for item in self.candidate_ids)
+        ):
+            raise ValueError("Maintainer registry transaction view is invalid")
+        object.__setattr__(self, "candidate_ids", tuple(sorted(self.candidate_ids)))
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerRegistryView:
+    """Screen 46: registry validity, contents, checkout state and recent promotions."""
+
+    alias: str
+    valid: bool
+    revision: str | None
+    snapshot: str | None
+    version_count: int
+    artifact_counts: tuple[tuple[ArtifactKind, int], ...]
+    working_tree: MaintainerWorkingTreeView
+    transactions: tuple[MaintainerRegistryTransactionView, ...]
+    diagnostics: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if (
+            not self.alias
+            or not isinstance(self.valid, bool)
+            or self.version_count < 0
+            or not isinstance(self.working_tree, MaintainerWorkingTreeView)
+            or any(
+                not isinstance(item, MaintainerRegistryTransactionView)
+                for item in self.transactions
+            )
+            or (self.valid and self.diagnostics)
+        ):
+            raise ValueError("Maintainer registry view is invalid")
+
+
+_MAX_REGISTRY_TRANSACTIONS = 50
+
+
+def _registry_transactions(
+    audits: tuple[PromotionAudit, ...],
+    head: str,
+) -> tuple[MaintainerRegistryTransactionView, ...]:
+    """Order transactions newest first by walking the snapshot chain back from the head.
+
+    No promotion record carries a clock, and inventing one at read time would make the order a
+    property of when a Maintainer looked rather than of what happened.  Each audit names the
+    snapshot its own transaction started from and produced, so the records group into transactions
+    and the transactions chain -- which is derivable, reproducible evidence.
+    """
+
+    grouped: dict[tuple[str, str, str], list[str]] = {}
+    for audit in audits:
+        key = (
+            str(audit.registry_snapshot_after),
+            str(audit.registry_snapshot_before),
+            audit.mode.value,
+        )
+        grouped.setdefault(key, []).append(audit.candidate_id.value)
+    ordered: list[MaintainerRegistryTransactionView] = []
+    seen: set[str] = set()
+    cursor = head
+    while len(ordered) < _MAX_REGISTRY_TRANSACTIONS and cursor not in seen:
+        seen.add(cursor)
+        step = next((key for key in grouped if key[0] == cursor), None)
+        if step is None:
+            break
+        ordered.append(
+            MaintainerRegistryTransactionView(step[1], step[0], step[2], tuple(grouped[step]))
+        )
+        cursor = step[1]
+    return tuple(ordered)
+
+
+def project_maintainer_registry(
+    alias: SourceAlias,
+    approved: ApprovedRegistryState | None,
+    registry_snapshot: SourceSnapshot | None,
+    checkout: SourceSnapshot | None,
+) -> MaintainerRegistryView:
+    """Project screen 46 from durable registry evidence and one observed local checkout.
+
+    The checkout is a separate observation on purpose: synchronized source-store content is an
+    immutable record of what the registry published, and answering "does my working tree still
+    match" from it would answer a question nobody asked.
+    """
+
+    if (
+        not isinstance(alias, SourceAlias)
+        or not (approved is None or isinstance(approved, ApprovedRegistryState))
+        or not (registry_snapshot is None or isinstance(registry_snapshot, SourceSnapshot))
+        or not (checkout is None or isinstance(checkout, SourceSnapshot))
+    ):
+        raise ValueError("Maintainer registry projection needs an alias and typed observations")
+    diagnostics: list[str] = []
+    if approved is None:
+        return MaintainerRegistryView(
+            alias.value,
+            False,
+            None,
+            None,
+            0,
+            (),
+            MaintainerWorkingTreeView(MaintainerWorkingTreeState.UNOBSERVED, None),
+            (),
+            (f"registry {alias.value} has no synchronized approved state yet",),
+        )
+    snapshot = str(approved.snapshot_digest)
+    # A durable record may hold the kind as its wire string; the view states the typed kind.
+    counts = Counter(ArtifactKind(str(item.coordinate.artifact.kind)) for item in approved.versions)
+    artifact_counts = tuple(sorted(counts.items(), key=lambda item: item[0].value))
+    audits: tuple[PromotionAudit, ...] = ()
+    if registry_snapshot is None:
+        diagnostics.append(f"registry {alias.value} snapshot content was not read")
+    else:
+        loaded = load_registry_promotions(registry_snapshot)
+        if isinstance(loaded, Err):
+            diagnostics.append(f"registry {alias.value} promotion records are unreadable")
+        else:
+            audits = loaded.value
+            approved_ids = {item.candidate_id for item in approved.versions}
+            recorded = {item.candidate_id for item in audits}
+            missing = sorted(item.value for item in approved_ids - recorded)
+            if missing:
+                # A published version nobody approved is the failure registry validity exists for.
+                diagnostics.append(
+                    f"{len(missing)} approved version(s) carry no promotion approval record: "
+                    + ", ".join(missing[:5])
+                )
+    observed = None if checkout is None else registry_state_digest(checkout)
+    if observed is None:
+        working = MaintainerWorkingTreeView(MaintainerWorkingTreeState.UNOBSERVED, None)
+    elif isinstance(observed, Err):
+        working = MaintainerWorkingTreeView(
+            MaintainerWorkingTreeState.UNOBSERVED, None, "the local checkout could not be digested"
+        )
+    elif str(observed.value) == snapshot:
+        working = MaintainerWorkingTreeView(
+            MaintainerWorkingTreeState.MATCHES_SNAPSHOT, str(observed.value)
+        )
+    else:
+        working = MaintainerWorkingTreeView(
+            MaintainerWorkingTreeState.DIVERGED,
+            str(observed.value),
+            "the local checkout holds different published content than the approved snapshot",
+        )
+    return MaintainerRegistryView(
+        alias.value,
+        not diagnostics,
+        approved.revision,
+        snapshot,
+        len(approved.versions),
+        artifact_counts,
+        working,
+        _registry_transactions(audits, snapshot),
+        tuple(diagnostics),
     )

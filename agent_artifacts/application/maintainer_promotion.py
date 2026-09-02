@@ -682,8 +682,7 @@ def execute_candidate_promotion(
     if (
         persisted_workspace.value != receipt.workspace_digest
         or persisted_workspace.value != prepared.plan.next_workspace_digest
-        or
-        validated.value != receipt.registry_snapshot
+        or validated.value != receipt.registry_snapshot
         or len(versions.value) != prepared.approved_version_count
     ):
         return _error("persisted registry does not match the validated promotion result")

@@ -407,7 +407,14 @@ def _files(snapshot: SourceSnapshot) -> Result[dict[str, SnapshotEntry]]:
     return Ok({str(entry.path): entry for entry in snapshot.entries})
 
 
-def _registry_state_digest(snapshot: SourceSnapshot) -> Result[ObjectDigest]:
+def registry_state_digest(snapshot: SourceSnapshot) -> Result[ObjectDigest]:
+    """Digest the published content of a registry snapshot, ignoring its metadata records.
+
+    Published payload is what a registry *is* to a consumer; version and audit records describe it.
+    Keeping the digest to `artifacts/` and `references/` is what lets a Maintainer be told that a
+    local checkout still holds the approved content even while metadata is being rewritten.
+    """
+
     entries = []
     for item in snapshot.entries:
         raw = str(item.path)
@@ -667,7 +674,7 @@ def plan_bulk_promotion(
     if isinstance(files, Err):
         return files
     workspace_before = source_snapshot_digest(snapshot)
-    registry_before = _registry_state_digest(snapshot)
+    registry_before = registry_state_digest(snapshot)
     if isinstance(workspace_before, Err) or isinstance(registry_before, Err):
         return _error("registry snapshot is invalid")
 
@@ -746,7 +753,7 @@ def plan_bulk_promotion(
     package_projection = _project(snapshot, tuple(package_changes))
     if isinstance(package_projection, Err):
         return package_projection
-    registry_after = _registry_state_digest(package_projection.value)
+    registry_after = registry_state_digest(package_projection.value)
     if isinstance(registry_after, Err):
         return registry_after
 
@@ -876,7 +883,7 @@ def project_promotion(snapshot: SourceSnapshot, plan: PromotionPlan) -> Result[S
     if isinstance(projected, Err):
         return projected
     workspace = source_snapshot_digest(projected.value)
-    registry = _registry_state_digest(projected.value)
+    registry = registry_state_digest(projected.value)
     if (
         isinstance(workspace, Err)
         or isinstance(registry, Err)
@@ -961,7 +968,7 @@ def plan_registry_lifecycle(
             "registry lifecycle updates may change metadata only; immutable versions must match"
         )
     workspace_before = source_snapshot_digest(snapshot)
-    registry_snapshot = _registry_state_digest(snapshot)
+    registry_snapshot = registry_state_digest(snapshot)
     if isinstance(workspace_before, Err) or isinstance(registry_snapshot, Err):
         return _error("registry lifecycle input snapshot is invalid")
     if any(item.registry_snapshot != registry_snapshot.value for item in ordered_before):
@@ -1007,7 +1014,7 @@ def plan_registry_lifecycle(
     if isinstance(projected, Err):
         return projected
     workspace_after = source_snapshot_digest(projected.value)
-    projected_registry = _registry_state_digest(projected.value)
+    projected_registry = registry_state_digest(projected.value)
     if (
         isinstance(workspace_after, Err)
         or isinstance(projected_registry, Err)
@@ -1038,7 +1045,7 @@ def project_lifecycle_update(
     plan: RegistryLifecyclePlan,
 ) -> Result[SourceSnapshot]:
     current_workspace = source_snapshot_digest(snapshot)
-    current_registry = _registry_state_digest(snapshot)
+    current_registry = registry_state_digest(snapshot)
     if (
         isinstance(current_workspace, Err)
         or isinstance(current_registry, Err)
@@ -1050,7 +1057,7 @@ def project_lifecycle_update(
     if isinstance(projected, Err):
         return projected
     next_workspace = source_snapshot_digest(projected.value)
-    next_registry = _registry_state_digest(projected.value)
+    next_registry = registry_state_digest(projected.value)
     if (
         isinstance(next_workspace, Err)
         or isinstance(next_registry, Err)
@@ -1068,7 +1075,7 @@ def validate_promoted_registry(
     """Validate durable version records, catalogs and vendored canonical package digests."""
 
     files = _files(snapshot)
-    registry_snapshot = _registry_state_digest(snapshot)
+    registry_snapshot = registry_state_digest(snapshot)
     if isinstance(files, Err) or isinstance(registry_snapshot, Err):
         return _error("approved registry snapshot is invalid")
     ordered = tuple(sorted(versions, key=lambda item: str(item.coordinate)))

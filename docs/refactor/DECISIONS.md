@@ -1727,3 +1727,30 @@ the Product Specification first instead of hiding the change here.
   shell path with no configured remote. Launching AART outside the exact registry checkout produces
   a refusal rather than writing elsewhere. B-041 remains: local-origin Candidate provenance still
   needs an audit representation and is not disguised as a Git revision.
+
+## D-104 — Registry recency is the audit snapshot chain, and the checkout is a separate observation
+
+- **Decision:** screen 46 orders promotions newest-first by walking the registry snapshot chain
+  backwards from the approved snapshot: every `PromotionAudit` names the snapshot its transaction
+  started from and produced, audits sharing an after-snapshot are one transaction, and the walk is
+  bounded at 50 transactions and stops on any cycle or gap. Registry validity is the named check
+  that every approved version carries a promotion approval record. Working-tree state is a separate
+  observation of the D-103 project-root checkout, compared against the approved snapshot through
+  the now-public `registry_state_digest`, which covers `artifacts/` and `references/` only. That
+  checkout is observed only when exactly one registry is configured; otherwise it is reported as
+  unobserved rather than attributed to a registry it may not belong to.
+- **Status:** accepted.
+- **Reason:** no promotion record carries a clock, and stamping one at read time would make the
+  order a property of when a Maintainer looked rather than of what happened; the chain is already
+  durable, reproducible evidence. A published version nobody approved is precisely the failure
+  registry validity exists to catch, and the audit records are the only supported way to read
+  approval back. Synchronized source-store content is an immutable record of what the registry
+  published, so answering "does my working tree still match" from it would answer a different
+  question. Digesting published content rather than the whole tree lets a Maintainer be told the
+  checkout still holds the approved artifacts while metadata is being rewritten.
+- **Consequence:** screen 46 composes once outside drawing from evidence already read, and drawing
+  it opens no file. After a D-103 local commit the checkout is legitimately ahead of the
+  synchronized approved snapshot, and the working-tree line says so rather than calling it an
+  error. Screen 45 keeps its receipt on screen, so Enter there means "confirm" only while an action
+  is pending and "go on to the registry" once the write happened. Attributing a checkout per
+  registry in a multi-registry installation is B-042.

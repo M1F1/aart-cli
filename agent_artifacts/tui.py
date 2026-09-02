@@ -6275,7 +6275,9 @@ def _canonical_consumer_actions(
     settings = read_consumer_settings(paths.data_root)
     if isinstance(settings, DomainErr):
         return settings
-    maintainer = read_maintainer_views(loaded.value, data_root=paths.data_root)
+    maintainer = read_maintainer_views(
+        loaded.value, data_root=paths.data_root, registry_root=project_root
+    )
     if isinstance(maintainer, DomainErr):
         return maintainer
     return DomainOk(

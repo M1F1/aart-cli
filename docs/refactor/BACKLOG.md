@@ -739,3 +739,17 @@ projection/validation/write/readback/local-commit transaction, while the local-o
 unchanged. This is still outside the screens-44/45 increment but remains critical before screen 47
 and CP-14 step 5 are declared complete; neither the executor nor the commit adapter treats a local
 snapshot digest as a Git revision.
+
+## B-042 — A multi-registry installation cannot attribute its checkout to a registry
+
+Discovered while landing screen 46. D-103 binds promotion to the configured installation's project
+root as the one writable registry checkout, and the accepted configuration schema carries a registry
+source URL but no per-registry checkout path. With two or more registries configured there is
+nothing that says which one the project root is, and guessing would report a divergence that is
+really a mismatch of registries. Screen 46 therefore observes the checkout only when exactly one
+registry is configured and reports it unobserved otherwise.
+
+What remains: give a configured registry an explicit checkout path, or identify a checkout from the
+registry it declares itself to be, so working-tree state is answerable for every registry. Not
+required for CP-14: promotion itself already targets one Candidate's registry through the project
+root, and the single-registry case is what the accepted flow supports.

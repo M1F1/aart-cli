@@ -767,6 +767,14 @@ def key_event(
             ConsumerUiEventKind.REQUEST_ACTION,
             action=ConsumerActionKind.CANDIDATE_PROMOTION,
         )
+    # Screen 45 keeps its receipt on screen after the commit, so Enter means "confirm" only while
+    # there is something to confirm; once the write happened it means "go on to the registry".
+    if (
+        key == "enter"
+        and state.action is None
+        and state.session.screen is MaintainerScreen.REGISTRY_COMMIT
+    ):
+        return ConsumerUiEvent(ConsumerUiEventKind.NAVIGATE, screen=MaintainerScreen.REGISTRY)
     if key == "enter" and state.session.screen in (
         ConsumerScreen.READY,
         ConsumerScreen.UPDATE_INPUTS,

@@ -410,3 +410,40 @@ pass. `make integration` is separately green with 210 E2E tests.
 B-041 remains intentionally open: this increment proves remote-Git Candidate promotion and does not
 pass a `local:<snapshot-sha256>` origin off as a commit. Screen 46, screen 47 and the compliant local
 provenance representation are the remaining work in step 5.
+
+## Step 5c — screen 46, the Registry Maintainer View
+
+Screen 46 answers the four questions a Maintainer asks about a registry at once, all from durable
+evidence the registry itself wrote. Validity is a named check rather than a flag: every approved
+version must carry a promotion approval record, because a published version nobody approved is
+exactly the failure registry validity exists to catch, and `load_registry_promotions` is the only
+supported way to read approval back.
+
+Recency needed no clock. Every `PromotionAudit` names the registry snapshot its own transaction
+started from and produced, so audits sharing an after-snapshot are one transaction and the
+transactions chain. Screen 46 walks that chain backwards from the approved snapshot, bounded at 50
+transactions and stopping on any cycle or gap. Stamping a read-time clock instead would have made
+the order a property of when somebody looked rather than of what happened (D-104).
+
+Working-tree state is a separate observation on purpose. Synchronized source-store content is an
+immutable record of what the registry published, so answering "does my checkout still match" from it
+would answer a different question; the checkout is the D-103 project root, digested through the
+now-public `registry_state_digest` over `artifacts/` and `references/` only. A multi-registry
+installation cannot say which registry the project root is, so the checkout is observed only when
+exactly one registry is configured and reported unobserved otherwise (B-042).
+
+Screen 45 keeps its receipt on screen after the commit, so Enter there had no forward route at all.
+It now means "confirm" only while an action is pending and "go on to the registry" once the write
+happened, which is how the E2E walk reaches screen 46 — where the checkout is legitimately ahead of
+the synchronized approved snapshot, because a local commit is deliberately not a sync.
+
+Evidence is `tests/maintainer_registry_view_test.py`: the projection, both working-tree outcomes and
+the unobserved case, the missing-approval-record invalidity, chain ordering across two transactions,
+a bulk transaction listing every Candidate it promoted, the shell body and its refusal, and a
+`builtins.open` monkeypatch proving drawing screen 46 opens no file. The E2E walk in
+`tests/maintainer_composition_e2e_test.py` now runs through to screen 46 and asserts the divergence.
+
+Checkpoint gates on 2026-09-02: `make quality` and `make integration` are both green; full suite
+3,167 tests.
+
+Step 5 remainder: screen 47 bulk promotion, and B-041's compliant local provenance representation.

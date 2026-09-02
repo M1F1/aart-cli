@@ -16,6 +16,7 @@ from agent_artifacts.application.maintainer_views import (
     project_maintainer_candidates,
     project_maintainer_dashboard,
     project_maintainer_promotion_review,
+    project_maintainer_registry,
     project_maintainer_registry_diff,
     project_maintainer_source,
     project_maintainer_validation,
@@ -36,6 +37,7 @@ from agent_artifacts.sources.model import (
 
 from .candidate_store import candidate_history_paths, read_candidate_history
 from .maintainer_sync import read_approved_registry_state
+from .registry_promotion import FilesystemPromotionOutput
 from .source_store import read_current_source
 
 __all__ = ["MAINTAINER_COMPOSITION_INVALID", "read_maintainer_views"]
@@ -61,6 +63,7 @@ def read_maintainer_views(
     data_root: str,
     observed_at_epoch_seconds: int | None = None,
     policy: EffectivePolicy | None = None,
+    registry_root: str | None = None,
 ) -> Result[MaintainerViews]:
     """Read each configured authoring Source once and bind only matching Candidate history."""
 
@@ -161,6 +164,44 @@ def read_maintainer_views(
             for bundle, validation in runs
             for mode in PromotionMode
         )
+        # Screen 46 is about the registries themselves, so it covers every configured one rather
+        # than only those some active Candidate happens to target.
+        configured_registries = tuple(
+            item
+            for item in effective.configuration.sources
+            if item.enabled and item.kind is SourceKind.REGISTRY_GIT
+        )
+        # The project root can only be one registry's checkout (D-103), and guessing which one it
+        # is would report a divergence that is really a mismatch of registries.  With exactly one
+        # configured registry there is nothing to guess; otherwise the checkout stays unobserved.
+        checkout: SourceSnapshot | None = None
+        if registry_root is not None and len(configured_registries) == 1:
+            local = FilesystemPromotionOutput(registry_root).current()
+            if isinstance(local, Ok):
+                checkout = local.value
+        registries = []
+        for registry in configured_registries:
+            alias_value = registry.alias.value
+            if alias_value not in approved:
+                published = read_approved_registry_state(
+                    effective, registry.alias, data_root=data_root
+                )
+                approved[alias_value] = None if isinstance(published, Err) else published.value
+                registry_paths = source_store_paths(data_root, source_instance_id(registry))
+                current = read_current_source(CurrentSourceRequest(registry_paths, registry.alias))
+                workspaces[alias_value] = (
+                    current.value.candidate.snapshot
+                    if isinstance(current, Ok) and current.value is not None
+                    else None
+                )
+            registries.append(
+                project_maintainer_registry(
+                    registry.alias,
+                    approved[alias_value],
+                    workspaces[alias_value],
+                    checkout,
+                )
+            )
         return Ok(
             MaintainerViews(
                 project_maintainer_dashboard(sources),
@@ -169,6 +210,7 @@ def read_maintainer_views(
                 validations,
                 promotions,
                 registry_diffs,
+                tuple(registries),
             )
         )
     except ValueError as error:

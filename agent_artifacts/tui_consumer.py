@@ -54,6 +54,7 @@ from agent_artifacts.application.maintainer_views import (
     MaintainerRegistryCommitView,
     MaintainerRegistryDiffView,
     MaintainerRegistryValidationView,
+    MaintainerRegistryView,
     MaintainerScreen,
     MaintainerSourceSyncResultView,
     MaintainerSourceSyncReviewView,
@@ -72,6 +73,7 @@ from agent_artifacts.tui_maintainer import (
     render_maintainer_dashboard,
     render_maintainer_policy_review,
     render_maintainer_promotion_review,
+    render_maintainer_registries,
     render_maintainer_registry_commit,
     render_maintainer_registry_diff,
     render_maintainer_registry_validation,
@@ -1231,6 +1233,12 @@ class ConsumerScreens:
         row = parse_validation_row(focus)
         return self.maintainer.registry_diff(focus if row is None else row.candidate_id, mode)
 
+    def maintainer_registries(self) -> tuple[MaintainerRegistryView, ...]:
+        """Every configured registry, composed once: an installation may maintain more than one."""
+
+        composed = None if self.maintainer is None else self.maintainer.registries
+        return () if composed is None else composed
+
     def candidates(
         self, candidate_filter: MaintainerCandidateFilter | None = None
     ) -> tuple[MaintainerCandidateView, ...]:
@@ -1456,6 +1464,8 @@ class CanonicalScreenSource:
                 if self._screens.maintainer is None
                 else tuple(source.alias for source in self._screens.maintainer.sources)
             )
+        if screen is MaintainerScreen.REGISTRY:
+            return tuple(item.alias for item in self._screens.maintainer_registries())
         if screen is MaintainerScreen.CANDIDATES:
             # The row identity is the Candidate ID rather than the artifact name: two Sources may
             # both publish `github-mcp`, and a list keyed by name would open the wrong one.
@@ -1788,6 +1798,8 @@ class CanonicalScreenSource:
                 if registry_diff is None
                 else render_maintainer_registry_diff(registry_diff, profile)
             )
+        if screen is MaintainerScreen.REGISTRY:
+            return render_maintainer_registries(screens.maintainer_registries(), profile)
         if screen is MaintainerScreen.REGISTRY_VALIDATION:
             return (
                 ("That promoted registry validation is not available.",)
