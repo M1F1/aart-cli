@@ -447,3 +447,31 @@ Checkpoint gates on 2026-09-02: `make quality` and `make integration` are both g
 3,167 tests.
 
 Step 5 remainder: screen 47 bulk promotion, and B-041's compliant local provenance representation.
+
+## Step 5d — screen 47's selection surface
+
+Bulk promotion is one transaction, so its plan depends on which subset a session selected. That
+cannot be precomposed without enumerating subsets, and composing it while drawing would break the
+boundary every other CP-14 screen holds. Screen 47 is therefore split: the projection says what is
+selectable, and the transaction is prepared at action time (D-105).
+
+What is selectable is bounded by the registry. A transaction has exactly one target, so Candidates
+scanned for another registry are not offered here at all rather than refused after selection.
+Promotability is read off the validation run screens 38–40 showed rather than re-derived, so a
+Candidate cannot be offered for bulk promotion on a judgement no screen ever displayed. A Candidate
+the run refused is listed by name with its reason, because "not in the list" and "does not exist"
+look identical on screen.
+
+Selection reuses the reducer's existing typed `selection` with `Space`, the accepted Maintainer
+shortcut; `MaintainerScreen.BULK_PROMOTION` simply joins `_SELECTABLE`. No second selection model
+was introduced.
+
+Evidence is `tests/maintainer_bulk_promotion_test.py`: the per-registry offer, exclusion by name and
+reason, the no-approved-state refusal, cross-registry isolation, the shell's rows, `Space` through
+`key_event`, the drawn selection mark and count, an excluded Candidate named on screen, and a
+`builtins.open` monkeypatch proving drawing screen 47 opens no file.
+
+Checkpoint gates on 2026-09-02: `make quality` and `make integration` are both green.
+
+Step 5 remainder: the bulk transaction itself — Enter on screen 47 preparing one
+`plan_bulk_promotion` and reusing screens 43–45 — and B-041's compliant local provenance.

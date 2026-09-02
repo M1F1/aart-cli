@@ -1754,3 +1754,22 @@ the Product Specification first instead of hiding the change here.
   error. Screen 45 keeps its receipt on screen, so Enter there means "confirm" only while an action
   is pending and "go on to the registry" once the write happened. Attributing a checkout per
   registry in a multi-registry installation is B-042.
+
+## D-105 — Screen 47 projects what is selectable; the transaction is planned at action time
+
+- **Decision:** screen 47 is a projection of the selectable set per registry, composed once outside
+  drawing: promotability is read off the validation run screens 38–40 showed rather than re-derived,
+  Candidates scanned for another registry are not offered at all, and a Candidate the run refused is
+  listed by name with its reason rather than omitted. Selection uses the reducer's existing typed
+  `selection`, with `Space` as the accepted Maintainer shortcut. The bulk transaction itself is
+  prepared at action time from that selection, not while drawing.
+- **Status:** accepted.
+- **Reason:** a bulk plan depends on which subset is selected, so precomposing one is impossible
+  without enumerating subsets and composing one while drawing would break the boundary every other
+  CP-14 screen holds. A transaction has exactly one target registry, so offering Candidates of
+  another registry would create a selection that can only ever be refused. "Not in the list" and
+  "does not exist" look identical on screen, which is why an excluded Candidate is named.
+- **Consequence:** screen 47 draws without opening a file and without judging anything itself, and
+  `MaintainerViews.bulk_promotions` carries one selectable set per configured registry. The action
+  that turns a selection into one `plan_bulk_promotion` transaction, and the reuse of screens 43–45
+  for its diff, validation and commit, is the remaining work in step 5.

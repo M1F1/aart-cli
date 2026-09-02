@@ -76,6 +76,10 @@ __all__ = [
     "MaintainerRegistryChangeView",
     "MaintainerRegistryCommitView",
     "MaintainerRegistryDiffView",
+    "project_maintainer_bulk_promotion",
+    "MaintainerBulkPromotionView",
+    "MaintainerBulkExclusionView",
+    "MaintainerBulkCandidateView",
     "project_maintainer_registry",
     "MaintainerWorkingTreeView",
     "MaintainerWorkingTreeState",
@@ -876,6 +880,7 @@ class MaintainerViews:
     promotions: tuple[MaintainerPromotionReviewView, ...] | None = None
     registry_diffs: tuple[MaintainerRegistryDiffView, ...] | None = None
     registries: tuple[MaintainerRegistryView, ...] | None = None
+    bulk_promotions: tuple[MaintainerBulkPromotionView, ...] | None = None
 
     def __post_init__(self) -> None:
         aliases = tuple(source.alias for source in self.sources)
@@ -889,6 +894,17 @@ class MaintainerViews:
             or self.dashboard.validation_failure_count
             != sum(source.invalid_count for source in self.sources)
             or self.dashboard.ready_count != sum(source.ready_count for source in self.sources)
+            or (
+                self.bulk_promotions is not None
+                and (
+                    any(
+                        not isinstance(item, MaintainerBulkPromotionView)
+                        for item in self.bulk_promotions
+                    )
+                    or len({item.target_registry for item in self.bulk_promotions})
+                    != len(self.bulk_promotions)
+                )
+            )
             or (
                 self.registries is not None
                 and (
@@ -988,6 +1004,13 @@ class MaintainerViews:
         if self.validations is None:
             return None
         return next((item for item in self.validations if item.candidate_id == candidate_id), None)
+
+    def bulk_promotion(self, alias: str) -> MaintainerBulkPromotionView | None:
+        """The selectable set composed for one registry, refusals included."""
+
+        if self.bulk_promotions is None:
+            return None
+        return next((item for item in self.bulk_promotions if item.target_registry == alias), None)
 
     def registry(self, alias: str) -> MaintainerRegistryView | None:
         """The registry composed for one alias, refusals included."""
@@ -1190,7 +1213,7 @@ _NAVIGATION: dict[MaintainerScreen, tuple[MaintainerScreen, ...]] = {
     MaintainerScreen.REGISTRY_DIFF: (MaintainerScreen.REGISTRY_VALIDATION,),
     MaintainerScreen.REGISTRY_VALIDATION: (MaintainerScreen.REGISTRY_COMMIT,),
     MaintainerScreen.REGISTRY_COMMIT: (MaintainerScreen.REGISTRY,),
-    MaintainerScreen.REGISTRY: (),
+    MaintainerScreen.REGISTRY: (MaintainerScreen.BULK_PROMOTION,),
     MaintainerScreen.BULK_PROMOTION: (MaintainerScreen.REGISTRY_DIFF,),
     MaintainerScreen.CANDIDATE_LIFECYCLE: (MaintainerScreen.PROVENANCE,),
     MaintainerScreen.PROVENANCE: (),
@@ -2021,4 +2044,131 @@ def project_maintainer_registry(
         working,
         _registry_transactions(audits, snapshot),
         tuple(diagnostics),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerBulkCandidateView:
+    """One selectable row on screen 47: a Candidate this registry's transaction could carry."""
+
+    candidate_id: str
+    artifact: str
+    version: str
+    state: CandidateState
+
+    def __post_init__(self) -> None:
+        if (
+            not self.candidate_id
+            or not self.artifact
+            or not self.version
+            or not isinstance(self.state, CandidateState)
+        ):
+            raise ValueError("Maintainer bulk Candidate view is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerBulkExclusionView:
+    """A Candidate of this registry that cannot join the transaction, and why."""
+
+    candidate_id: str
+    artifact: str
+    reason: str
+
+    def __post_init__(self) -> None:
+        if not self.candidate_id or not self.artifact or not self.reason:
+            raise ValueError("Maintainer bulk exclusion view is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerBulkPromotionView:
+    """Screen 47: what one registry's bulk transaction may be assembled from.
+
+    A bulk promotion is one transaction, so it has exactly one target registry.  Candidates scanned
+    for another registry are not offered here at all rather than refused after selection.
+    """
+
+    target_registry: str
+    candidates: tuple[MaintainerBulkCandidateView, ...]
+    excluded: tuple[MaintainerBulkExclusionView, ...] = ()
+    refusals: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        identifiers = tuple(item.candidate_id for item in self.candidates)
+        if (
+            not self.target_registry
+            or any(not isinstance(item, MaintainerBulkCandidateView) for item in self.candidates)
+            or any(not isinstance(item, MaintainerBulkExclusionView) for item in self.excluded)
+            or len(set(identifiers)) != len(identifiers)
+            or set(identifiers) & {item.candidate_id for item in self.excluded}
+        ):
+            raise ValueError("Maintainer bulk promotion view is invalid")
+
+
+def project_maintainer_bulk_promotion(
+    alias: SourceAlias,
+    runs: tuple[tuple[CandidateBundle, CandidateValidation], ...],
+    approved: ApprovedRegistryState | None,
+) -> MaintainerBulkPromotionView:
+    """Project the selectable set for one registry from runs that already happened.
+
+    Promotability is read off the run screens 38 to 40 showed rather than re-derived here, so a
+    Candidate cannot be offered for bulk promotion on a judgement no screen ever displayed.
+    """
+
+    if (
+        not isinstance(alias, SourceAlias)
+        or not isinstance(runs, tuple)
+        or not (approved is None or isinstance(approved, ApprovedRegistryState))
+    ):
+        raise ValueError("Maintainer bulk promotion projection needs an alias and typed runs")
+    mine = tuple(
+        (bundle, validation)
+        for bundle, validation in runs
+        if bundle.candidate.target_registry == alias
+    )
+    if approved is None:
+        return MaintainerBulkPromotionView(
+            alias.value,
+            (),
+            (),
+            (f"registry {alias.value} has no synchronized approved state to promote into",),
+        )
+    selectable: list[MaintainerBulkCandidateView] = []
+    excluded: list[MaintainerBulkExclusionView] = []
+    for bundle, validation in mine:
+        candidate = bundle.candidate
+        artifact = str(candidate.artifact.coordinate.artifact)
+        if validation.state is CandidateState.INVALID:
+            excluded.append(
+                MaintainerBulkExclusionView(
+                    candidate.id.value, artifact, "the validation run reported an error"
+                )
+            )
+            continue
+        if validation.state is CandidateState.APPROVAL_REQUIRED:
+            excluded.append(
+                MaintainerBulkExclusionView(
+                    candidate.id.value, artifact, "policy requires manual approval first"
+                )
+            )
+            continue
+        if validation.state not in (CandidateState.READY, CandidateState.WARNING):
+            excluded.append(
+                MaintainerBulkExclusionView(
+                    candidate.id.value, artifact, "the Candidate is not in a promotable state"
+                )
+            )
+            continue
+        selectable.append(
+            MaintainerBulkCandidateView(
+                candidate.id.value,
+                artifact,
+                str(candidate.artifact.coordinate.version),
+                validation.state,
+            )
+        )
+    return MaintainerBulkPromotionView(
+        alias.value,
+        tuple(sorted(selectable, key=lambda item: item.artifact)),
+        tuple(sorted(excluded, key=lambda item: item.artifact)),
     )

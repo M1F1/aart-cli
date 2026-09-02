@@ -180,6 +180,8 @@ _SELECTABLE = frozenset(
         ConsumerScreen.COLLECTION_PREVIEW,
         ConsumerScreen.COLLECTION_CUSTOMIZE,
         ConsumerScreen.UPDATES,
+        # Screen 47 assembles one registry transaction, so selecting rows is what it is for.
+        MaintainerScreen.BULK_PROMOTION,
     }
 )
 

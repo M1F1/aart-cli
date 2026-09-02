@@ -48,6 +48,7 @@ from agent_artifacts.application.consumer_views import (
     project_collection,
 )
 from agent_artifacts.application.maintainer_views import (
+    MaintainerBulkPromotionView,
     MaintainerCandidateFilter,
     MaintainerCandidateView,
     MaintainerPromotionReviewView,
@@ -67,6 +68,7 @@ from agent_artifacts.domain.registry import PromotionMode
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.domain.selection import Collection
 from agent_artifacts.tui_maintainer import (
+    render_maintainer_bulk_promotion,
     render_maintainer_candidate,
     render_maintainer_candidate_diff,
     render_maintainer_candidates,
@@ -1233,6 +1235,12 @@ class ConsumerScreens:
         row = parse_validation_row(focus)
         return self.maintainer.registry_diff(focus if row is None else row.candidate_id, mode)
 
+    def bulk_promotions(self) -> tuple[MaintainerBulkPromotionView, ...]:
+        """Every registry's selectable set, composed once outside drawing."""
+
+        composed = None if self.maintainer is None else self.maintainer.bulk_promotions
+        return () if composed is None else composed
+
     def maintainer_registries(self) -> tuple[MaintainerRegistryView, ...]:
         """Every configured registry, composed once: an installation may maintain more than one."""
 
@@ -1466,6 +1474,12 @@ class CanonicalScreenSource:
             )
         if screen is MaintainerScreen.REGISTRY:
             return tuple(item.alias for item in self._screens.maintainer_registries())
+        if screen is MaintainerScreen.BULK_PROMOTION:
+            return tuple(
+                candidate.candidate_id
+                for view in self._screens.bulk_promotions()
+                for candidate in view.candidates
+            )
         if screen is MaintainerScreen.CANDIDATES:
             # The row identity is the Candidate ID rather than the artifact name: two Sources may
             # both publish `github-mcp`, and a list keyed by name would open the wrong one.
@@ -1800,6 +1814,10 @@ class CanonicalScreenSource:
             )
         if screen is MaintainerScreen.REGISTRY:
             return render_maintainer_registries(screens.maintainer_registries(), profile)
+        if screen is MaintainerScreen.BULK_PROMOTION:
+            return render_maintainer_bulk_promotion(
+                screens.bulk_promotions(), state.selection, profile
+            )
         if screen is MaintainerScreen.REGISTRY_VALIDATION:
             return (
                 ("That promoted registry validation is not available.",)

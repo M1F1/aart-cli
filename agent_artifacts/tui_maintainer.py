@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from agent_artifacts.application.consumer_views import PresentationProfile
 from agent_artifacts.application.maintainer_views import (
+    MaintainerBulkPromotionView,
     MaintainerCandidateView,
     MaintainerDashboardView,
     MaintainerPolicyReviewView,
@@ -31,6 +32,7 @@ __all__ = [
     "render_maintainer_sources",
     "render_maintainer_policy_review",
     "render_maintainer_promotion_review",
+    "render_maintainer_bulk_promotion",
     "render_maintainer_registries",
     "render_maintainer_registry",
     "render_maintainer_registry_diff",
@@ -587,4 +589,43 @@ def render_maintainer_registries(
         if index:
             lines.append("")
         lines.extend(render_maintainer_registry(view, profile))
+    return tuple(lines)
+
+
+def render_maintainer_bulk_promotion(
+    views: tuple[MaintainerBulkPromotionView, ...],
+    selection: tuple[str, ...],
+    profile: PresentationProfile,
+) -> tuple[str, ...]:
+    """Screen 47: what one registry transaction may carry, and what it may not.
+
+    A Candidate the run refused is named here with its reason rather than being silently absent:
+    "it is not in the list" and "it does not exist" look identical on screen otherwise.
+    """
+
+    if (
+        not isinstance(views, tuple)
+        or not isinstance(selection, tuple)
+        or not isinstance(profile, PresentationProfile)
+    ):
+        raise ValueError("Maintainer bulk promotion rendering needs typed views and a profile")
+    if not views:
+        return ("Bulk promotion has nothing composed yet.",)
+    lines: list[str] = []
+    chosen = 0
+    for index, view in enumerate(views):
+        if index:
+            lines.append("")
+        lines.append(f"{view.target_registry}")
+        lines.extend(f"  - {item}" for item in view.refusals)
+        for item in view.candidates:
+            mark = "[x]" if item.candidate_id in selection else "[ ]"
+            chosen += 1 if item.candidate_id in selection else 0
+            lines.append(f"  {mark} {item.artifact}  {item.version}  {_human(item.state.value)}")
+        if not view.candidates and not view.refusals:
+            lines.append("  No Candidate of this registry can be promoted right now.")
+        for blocked in view.excluded:
+            lines.append(f"  Not promotable: {blocked.artifact} — {blocked.reason}")
+    lines.append("")
+    lines.append(f"{chosen} selected")
     return tuple(lines)

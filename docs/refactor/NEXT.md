@@ -5,7 +5,7 @@
 Continue **CP-14 Maintainer TUI 30–53**, step 5: bulk promotion. Screens 41–46 are live. Screens
 41–44 review, choose, plan and validate without writing; explicit confirmation on screen 45 is the
 first Maintainer action that writes approved registry state, and screen 46 is where a Maintainer
-reads the registry back afterwards. Screen 47 remains.
+reads the registry back afterwards. Screen 47 lists and selects; its transaction remains.
 
 Screens 30–46 are live in the production shared shell:
 
@@ -48,25 +48,32 @@ Screens 30–46 are live in the production shared shell:
   chain rather than by any clock (D-104). After a local commit the checkout is legitimately ahead of
   the synchronized approved snapshot and the working-tree line says so. Enter on screen 45 confirms
   only while an action is pending and otherwise continues to screen 46.
+- screen 47 lists what one registry's bulk transaction may carry, because a transaction has exactly
+  one target registry and Candidates scanned for another are not offered rather than refused after
+  selection. Promotability is read off the run screens 38–40 showed, and a Candidate the run refused
+  is named with its reason (D-105). `Space` selects, through the reducer's existing typed selection.
 
 Evidence: `tests/maintainer_candidate_shell_test.py`, `tests/maintainer_candidate_views_test.py`,
 `tests/candidate_validation_test.py`, `tests/maintainer_validation_views_test.py`,
 `tests/maintainer_composition_test.py`, `tests/maintainer_promotion_execution_test.py`,
 `tests/maintainer_promotion_io_test.py`, `tests/maintainer_promotion_shell_execution_test.py`,
-`tests/maintainer_registry_view_test.py` and a
+`tests/maintainer_registry_view_test.py`,
+`tests/maintainer_bulk_promotion_test.py` and a
 real temporary production installation in `tests/maintainer_composition_e2e_test.py`, which now
 walks from the consumer dashboard through screen 45 and commits the promoted registry locally.
 
 ## Exact next action
 
-Start RED tests for screen 47, bulk promotion:
+Screen 47's selection surface is live: it lists what one registry's transaction may carry, `Space`
+selects, and a Candidate the run refused is named with its reason rather than being silently absent
+(D-105). What remains is the transaction itself:
 
-1. Screen 47 selects multiple Ready Candidates and drives the existing `plan_bulk_promotion` as one
-   coherent diff/validation/commit boundary. It must not loop over the single-Candidate executor:
+1. Enter on screen 47 requests a bulk promotion action that prepares **one** transaction from the
+   selection through the existing `plan_bulk_promotion`, then reuses screens 43, 44 and 45 for its
+   diff, validation and commit. It must not loop over `prepare_configured_candidate_promotion`:
    one transaction, one registry snapshot, one local commit.
-2. Selection is typed application state, the way `MaintainerCandidateFilter` and `promotion_mode`
-   are. `Space` selects, per the accepted Maintainer shortcuts; `key_event` stays the only key
-   interpreter.
+2. The plan is composed at action time, not while drawing, because it depends on a selection the
+   session makes; screen 47 itself stays a projection of what is selectable.
 3. Retained approved records must remain readable after the bulk transaction: rebind every retained
    record to the transaction's snapshot as metadata only, with published package bytes unchanged
    (D-089/B-037). Do not reintroduce a per-transaction rebind that leaves older versions

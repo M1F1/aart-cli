@@ -13,6 +13,7 @@ from agent_artifacts.application.candidate_validation import validate_candidate
 from agent_artifacts.application.maintainer_sync import ApprovedRegistryState
 from agent_artifacts.application.maintainer_views import (
     MaintainerViews,
+    project_maintainer_bulk_promotion,
     project_maintainer_candidates,
     project_maintainer_dashboard,
     project_maintainer_promotion_review,
@@ -180,6 +181,7 @@ def read_maintainer_views(
             if isinstance(local, Ok):
                 checkout = local.value
         registries = []
+        bulk_promotions = []
         for registry in configured_registries:
             alias_value = registry.alias.value
             if alias_value not in approved:
@@ -194,6 +196,9 @@ def read_maintainer_views(
                     if isinstance(current, Ok) and current.value is not None
                     else None
                 )
+            bulk_promotions.append(
+                project_maintainer_bulk_promotion(registry.alias, runs, approved[alias_value])
+            )
             registries.append(
                 project_maintainer_registry(
                     registry.alias,
@@ -211,6 +216,7 @@ def read_maintainer_views(
                 promotions,
                 registry_diffs,
                 tuple(registries),
+                tuple(bulk_promotions),
             )
         )
     except ValueError as error:
