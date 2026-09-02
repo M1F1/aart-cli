@@ -59,6 +59,7 @@ from agent_artifacts.application.maintainer_views import (
     filter_maintainer_candidates,
     parse_validation_row,
 )
+from agent_artifacts.domain.registry import PromotionMode
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.domain.selection import Collection
 from agent_artifacts.tui_maintainer import (
@@ -1198,13 +1199,17 @@ class ConsumerScreens:
         row = parse_validation_row(focus)
         return self.maintainer.validation(focus if row is None else row.candidate_id)
 
-    def promotion(self, focus: str) -> MaintainerPromotionReviewView | None:
+    def promotion(
+        self,
+        focus: str,
+        mode: PromotionMode = PromotionMode.VENDORED,
+    ) -> MaintainerPromotionReviewView | None:
         """The promotion review for a focus that is a Candidate ID or one of its check rows."""
 
         if self.maintainer is None:
             return None
         row = parse_validation_row(focus)
-        return self.maintainer.promotion(focus if row is None else row.candidate_id)
+        return self.maintainer.promotion(focus if row is None else row.candidate_id, mode)
 
     def candidates(
         self, candidate_filter: MaintainerCandidateFilter | None = None
@@ -1562,7 +1567,13 @@ class CanonicalScreenSource:
             # it would write nothing.
             return (
                 MaintainerScreen.PROMOTION_REVIEW
-                if self._screens.promotion(state.focus) is not None
+                if self._screens.promotion(state.focus, state.promotion_mode) is not None
+                else None
+            )
+        if screen is MaintainerScreen.PROMOTION_REVIEW:
+            return (
+                MaintainerScreen.PROMOTION_MODE
+                if self._screens.promotion(state.focus, state.promotion_mode) is not None
                 else None
             )
         if screen is ConsumerScreen.MARKETPLACE:
@@ -1728,8 +1739,10 @@ class CanonicalScreenSource:
                 if validation is None
                 else render_maintainer_policy_review(validation.review, profile)
             )
-        if screen is MaintainerScreen.PROMOTION_REVIEW:
-            promotion = screens.promotion(state.focus)
+        if screen in (MaintainerScreen.PROMOTION_REVIEW, MaintainerScreen.PROMOTION_MODE):
+            # Screen 42 asks which promotion, so it draws the review of the mode currently chosen
+            # rather than a separate summary that could drift from what 41 showed.
+            promotion = screens.promotion(state.focus, state.promotion_mode)
             return (
                 ("That Candidate's promotion review is not available.",)
                 if promotion is None

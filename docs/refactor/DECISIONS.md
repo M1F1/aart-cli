@@ -1676,3 +1676,23 @@ the Product Specification first instead of hiding the change here.
   review renders its reasons *in place of* the digest, because a digest on screen is an invitation
   to confirm. The digest is not yet checked at execution time — screens 42–45 are the next
   increment, and this slice deliberately writes nothing.
+
+## D-102 — Both promotion modes are composed, and the chosen one is typed state
+
+- **Decision:** `read_maintainer_views` composes a promotion review for every active Candidate in
+  *both* `PromotionMode` values, and `MaintainerViews.promotion(candidate_id, mode)` selects one.
+  The chosen mode is `ConsumerUiState.promotion_mode`, toggled by `m` on screen 42 only, and
+  screens 41 and 42 draw the review of the mode currently chosen.
+- **Status:** accepted.
+- **Reason:** the mode is inside the review digest (D-101), so changing it has to produce a
+  different review to confirm rather than a relabelled one. That leaves two ways to satisfy screen
+  42: recompose a review when the mode changes, or compose both up front. Recomposing would put
+  projection work behind a keypress and, worse, inside drawing — the boundary CP-14 has kept
+  everywhere else. There are exactly two modes, so composing both is bounded and cheap, and it
+  keeps the shell selecting a projection rather than making one.
+- **Consequence:** `MaintainerViews.promotions` is keyed by Candidate *and* mode, and its
+  uniqueness check is over the pair. The E2E walk asserts that toggling the mode changes the review
+  digest on screen, so the two projections cannot silently be the same transaction under two names.
+  If a third mode is ever added the composition cost stays linear in modes, which is acceptable;
+  a mode that required its own registry read would change that calculus and should be reconsidered
+  then.

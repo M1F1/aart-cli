@@ -115,15 +115,18 @@ def read_maintainer_views(
             if alias.value not in approved:
                 observed = read_approved_registry_state(effective, alias, data_root=data_root)
                 approved[alias.value] = None if isinstance(observed, Err) else observed.value
+        # Both modes, composed once: screen 42 chooses between them by selecting an already
+        # projected review rather than making one while drawing.
         promotions = tuple(
             project_maintainer_promotion_review(
                 bundle,
                 validation,
                 judged,
                 approved[bundle.candidate.target_registry.value],
-                mode=PromotionMode.VENDORED,
+                mode=mode,
             )
             for bundle, validation in runs
+            for mode in PromotionMode
         )
         return Ok(
             MaintainerViews(

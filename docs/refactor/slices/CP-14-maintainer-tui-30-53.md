@@ -325,3 +325,19 @@ composition patch is now asserted before it is written.
 
 Gates on 2026-09-02 after this increment: `make quality` and `make integration` both green; the full
 suite is 3,126 tests with 1,298 subtests.
+
+
+### Step 5 progress — screen 42, choosing the promotion (2026-09-02)
+
+The mode is inside the review digest, so changing it has to produce a different review to confirm
+rather than a relabelled one. That left two options, and composing both modes up front beat
+recomposing on a keypress: recomposition would put projection work inside drawing, which is the one
+boundary CP-14 has held everywhere. There are exactly two modes, so the cost is bounded (D-102).
+
+`MaintainerViews.promotions` is now keyed by Candidate *and* mode, `promotion(candidate_id, mode)`
+selects one, and `ConsumerUiState.promotion_mode` is the typed choice `m` toggles — on screen 42
+only, since the mode belongs to the promotion under review rather than to the session. The E2E walk
+now runs through to screen 42, toggles the mode, and asserts the review digest on screen actually
+changes, so two projections cannot quietly be the same transaction under two names.
+
+Gates: `make quality` and `make integration` both green; full suite 3,131 tests.

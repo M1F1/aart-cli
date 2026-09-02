@@ -2,12 +2,12 @@
 
 ## Current objective
 
-Continue **CP-14 Maintainer TUI 30–53**, step 5: promotion and the registry write path. Screen 41
-is live and refuses what the review refused; screens 42–47 — mode, registry diff, registry
-validation, commit and bulk promotion — are what remain, and they are the first Maintainer screens
-that write approved registry state.
+Continue **CP-14 Maintainer TUI 30–53**, step 5: promotion and the registry write path. Screens 41
+and 42 are live and write nothing; screens 43–47 — registry diff, registry validation, commit and
+bulk promotion — are what remain, and they are the first Maintainer screens that write approved
+registry state.
 
-Screens 30–41 are live in the production shared shell:
+Screens 30–42 are live in the production shared shell:
 
 - screen 30 and screens 31–32 compose configured authoring Sources, durable health and only an exact
   matching Candidate-history observation (D-093–D-095);
@@ -27,7 +27,10 @@ Screens 30–41 are live in the production shared shell:
 - screen 41 reviews what promoting one Candidate would write: the target registry and its baseline,
   the mode, the digests of the validation report and effective policy that the audit record will
   carry, and a review digest binding all of it. A Candidate the run refused shows the refusal in
-  place of the digest, and nothing here writes (D-101).
+  place of the digest, and nothing here writes (D-101);
+- screen 42 chooses the promotion mode with `m`. Both modes are composed once, so choosing one
+  selects an already-projected review rather than making one while drawing, and the choice changes
+  the review digest that would be confirmed (D-102).
 
 Evidence: `tests/maintainer_candidate_shell_test.py`, `tests/maintainer_candidate_views_test.py`,
 `tests/candidate_validation_test.py`, `tests/maintainer_validation_views_test.py`,
@@ -37,23 +40,23 @@ diff into validation and out to the policy review.
 
 ## Exact next action
 
-Start RED tests for the promotion write path, screens 42–45:
+Start RED tests for the promotion write path, screens 43–45:
 
-1. Screen 42 chooses the promotion mode. The mode is already inside the review digest (D-101), so
-   changing it must produce a different review to confirm, not silently reuse the previous one.
-2. `execute_candidate_promotion` applies exactly one reviewed promotion, the way
+1. `execute_candidate_promotion` applies exactly one reviewed promotion, the way
    `execute_source_sync` does: it rechecks the reviewed digest, the Candidate state and the approved
    registry baseline before writing, and refuses if any of them moved. `plan_bulk_promotion`,
    `project_promotion` and `finalize_promotion` in `application/promotion.py` already exist and are
    what should be driven — do not write a second planner.
-3. Screen 43 is the registry diff the plan produces, screen 44 its validation and screen 45 the
-   commit. `validate_promoted_registry` already exists for screen 44.
-4. Published coordinate/version content is immutable: a digest conflict is reported, never repaired
+2. Screen 43 is the registry diff the plan produces, screen 44 its validation and screen 45 the
+   commit. `validate_promoted_registry` already exists for screen 44. The plan needs the registry
+   *workspace* snapshot, which `read_current_source` already returns — `read_maintainer_views`
+   currently reads only the approved projection.
+3. Published coordinate/version content is immutable: a digest conflict is reported, never repaired
    in place (INV-203/239), and superseded records stay durable audit history (INV-229).
-5. Local-origin Candidates must keep their `local:<snapshot-sha256>` provenance through promotion
+4. Local-origin Candidates must keep their `local:<snapshot-sha256>` provenance through promotion
    rather than passing through the Git-only registry-index projection by disguise (D-096). This is
    the piece most likely to be got wrong quietly.
-6. Bulk promotion (screen 47) rebinds every retained approved record to the snapshot its own
+5. Bulk promotion (screen 47) rebinds every retained approved record to the snapshot its own
    transaction produces, as metadata only, with the published package proven byte-identical — the
    defect B-037 fixed. Do not reintroduce a per-transaction rebind that leaves older versions
    unreadable.

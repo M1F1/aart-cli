@@ -12,7 +12,13 @@ import json
 import unittest
 
 from agent_artifacts.application.candidate_validation import validate_candidate
-from agent_artifacts.application.consumer_ui import ConsumerUiState
+from agent_artifacts.application.consumer_ui import (
+    ConsumerUiEvent,
+    ConsumerUiEventKind,
+    ConsumerUiState,
+    key_event,
+    reduce_consumer_ui,
+)
 from agent_artifacts.application.consumer_views import (
     ConsumerSession,
     ConsumerSettings,
@@ -453,6 +459,114 @@ class PromotionShellTest(unittest.TestCase):
         )
 
         self.assertIn("not available", drawn)
+
+
+class PromotionModeStateTest(unittest.TestCase):
+    """The promotion mode is typed state the shell holds, not something a screen recomputes.
+
+    Both modes are composed once, so choosing one selects an already-projected review rather than
+    projecting a new one while drawing.
+    """
+
+    def setUp(self) -> None:
+        policy = EffectivePolicy()
+        scan = _scan()
+        configured = configured_source("authors", SourceKind.SOURCE_GIT)
+        health = source_state(
+            configured, "author-source", display_order=0, resolved_revision=scan.revision
+        ).health
+        sources = (project_maintainer_source(configured, health, scan),)
+        self.views = MaintainerViews(
+            project_maintainer_dashboard(sources),
+            sources,
+            project_maintainer_candidates((scan,)),
+            tuple(project_maintainer_validation(item, policy=policy) for item in scan.active),
+            tuple(
+                project_maintainer_promotion_review(
+                    item,
+                    validate_candidate(item, policy=policy),
+                    policy,
+                    _approved(),
+                    mode=mode,
+                )
+                for item in scan.active
+                for mode in PromotionMode
+            ),
+        )
+        self.source = CanonicalScreenSource(
+            ConsumerScreens(project_dashboard((), registry_count=0), maintainer=self.views)
+        )
+        assert self.views.candidates is not None
+        self.candidate = self.views.candidates[0].id
+
+    def _on(self, screen: MaintainerScreen, **fields) -> ConsumerUiState:
+        return ConsumerUiState(
+            ConsumerSession(screen),
+            settings=ConsumerSettings().with_maintainer_mode(True),
+            focus=self.candidate,
+            **fields,
+        )
+
+    def test_both_modes_are_composed_so_neither_is_projected_while_drawing(self) -> None:
+        for mode in PromotionMode:
+            with self.subTest(mode=mode):
+                review = self.views.promotion(self.candidate, mode)
+                assert review is not None
+                self.assertEqual(review.mode, mode.value)
+
+    def test_the_review_a_screen_draws_follows_the_chosen_mode(self) -> None:
+        vendored = "\n".join(
+            frame(
+                self.source,
+                _reload(self.source, self._on(MaintainerScreen.PROMOTION_REVIEW), entering=True),
+            )
+        )
+        referenced = "\n".join(
+            frame(
+                self.source,
+                _reload(
+                    self.source,
+                    self._on(
+                        MaintainerScreen.PROMOTION_REVIEW,
+                        promotion_mode=PromotionMode.REFERENCED,
+                    ),
+                    entering=True,
+                ),
+            )
+        )
+
+        self.assertIn("Promotion mode: vendored", vendored)
+        self.assertIn("Promotion mode: referenced", referenced)
+        self.assertNotEqual(vendored, referenced)
+
+    def test_m_toggles_the_mode_and_only_where_the_mode_is_the_question(self) -> None:
+        state = self._on(MaintainerScreen.PROMOTION_MODE)
+
+        self.assertEqual(
+            key_event("m", state),
+            ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_PROMOTION_MODE),
+        )
+        self.assertIsNone(key_event("m", self._on(MaintainerScreen.CANDIDATES)))
+
+    def test_toggling_the_mode_changes_the_digest_that_would_be_confirmed(self) -> None:
+        """A mode change must be a different review to confirm, not a relabelled one."""
+
+        state = self._on(MaintainerScreen.PROMOTION_MODE)
+
+        toggled, _ = reduce_consumer_ui(
+            state, ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_PROMOTION_MODE)
+        )
+
+        self.assertIs(toggled.promotion_mode, PromotionMode.REFERENCED)
+        before = self.views.promotion(self.candidate, state.promotion_mode)
+        after = self.views.promotion(self.candidate, toggled.promotion_mode)
+        assert before is not None and after is not None
+        self.assertNotEqual(before.review_digest, after.review_digest)
+
+    def test_enter_on_the_promotion_review_opens_the_mode_screen(self) -> None:
+        state = _reload(self.source, self._on(MaintainerScreen.PROMOTION_REVIEW), entering=True)
+
+        self.assertIs(self.source.detail(state), MaintainerScreen.PROMOTION_MODE)
 
 
 if __name__ == "__main__":

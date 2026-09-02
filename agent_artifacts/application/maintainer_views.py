@@ -866,7 +866,10 @@ class MaintainerViews:
                         not isinstance(promotion, MaintainerPromotionReviewView)
                         for promotion in self.promotions
                     )
-                    or len({item.candidate_id for item in self.promotions}) != len(self.promotions)
+                    # One review per Candidate *and mode*: both modes are composed here, so
+                    # choosing one on screen 42 selects a projection rather than making one.
+                    or len({(item.candidate_id, item.mode) for item in self.promotions})
+                    != len(self.promotions)
                 )
             )
             or (
@@ -935,12 +938,23 @@ class MaintainerViews:
             return None
         return next((item for item in self.validations if item.candidate_id == candidate_id), None)
 
-    def promotion(self, candidate_id: str) -> MaintainerPromotionReviewView | None:
-        """The promotion review composed for one Candidate, refusals included."""
+    def promotion(
+        self,
+        candidate_id: str,
+        mode: PromotionMode = PromotionMode.VENDORED,
+    ) -> MaintainerPromotionReviewView | None:
+        """The promotion review composed for one Candidate in one mode, refusals included."""
 
         if self.promotions is None:
             return None
-        return next((item for item in self.promotions if item.candidate_id == candidate_id), None)
+        return next(
+            (
+                item
+                for item in self.promotions
+                if item.candidate_id == candidate_id and item.mode == mode.value
+            ),
+            None,
+        )
 
 
 def project_source_sync_review(prepared: PreparedSourceSync) -> MaintainerSourceSyncReviewView:

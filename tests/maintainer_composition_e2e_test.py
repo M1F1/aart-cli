@@ -26,6 +26,7 @@ from agent_artifacts.configuration.model import (
 )
 from agent_artifacts.configuration.schema import user_configuration_bytes
 from agent_artifacts.domain.identifiers import SourceAlias, SourceId
+from agent_artifacts.domain.registry import PromotionMode
 from agent_artifacts.domain.result import Ok
 from agent_artifacts.io.candidate_store import (
     candidate_history_paths,
@@ -49,6 +50,10 @@ from tests.consumer_application_e2e_test import _actions
 from tests.consumer_shell_test import DOWN, ENTER, FakeTerminal
 from tests.maintainer_composition_test import _snapshot
 from tests.marketplace_fixtures import configured_source
+
+
+def _digest_line(drawn: str) -> str:
+    return next(line for line in drawn.splitlines() if line.strip().startswith("Review digest:"))
 
 
 class MaintainerProductionCompositionTest(unittest.TestCase):
@@ -410,6 +415,8 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
                 ENTER,
                 ord("p"),
                 ENTER,
+                ENTER,
+                ord("m"),
             )
             finished = run_consumer_shell(
                 handler.source(),
@@ -420,7 +427,9 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             )
 
             expected = scan.active[0].candidate
-            self.assertIs(finished.session.screen, MaintainerScreen.PROMOTION_REVIEW)
+            self.assertIs(finished.session.screen, MaintainerScreen.PROMOTION_MODE)
+            # Choosing a mode is a different promotion to confirm, not a relabelled one.
+            self.assertIs(finished.promotion_mode, PromotionMode.REFERENCED)
             # Screen 40 was entered from a check row rather than from a bare Candidate ID, which is
             # the whole reason the row identity is a parsed pair and not a split string.
             entered = parse_validation_row(finished.focus)
@@ -447,6 +456,12 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             self.assertIn("Review digest:", promotion)
             self.assertNotIn("cannot be promoted", promotion)
             self.assertIn("Validation report:", promotion)
+
+            chosen = terminal.screen_containing("Promotion mode: referenced")
+            self.assertIn("Review digest:", chosen)
+            self.assertNotEqual(
+                _digest_line(promotion), _digest_line(chosen), "mode must change the review"
+            )
 
 
 if __name__ == "__main__":

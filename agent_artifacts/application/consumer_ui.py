@@ -15,6 +15,8 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from enum import Enum
 
+from agent_artifacts.domain.registry import PromotionMode
+
 from .consumer_views import (
     SETTING_ROWS,
     ApplicationScreen,
@@ -59,6 +61,7 @@ class ConsumerUiEventKind(str, Enum):
     TOGGLE_SELECTION = "toggle-selection"
     TOGGLE_SETTING = "toggle-setting"
     TOGGLE_FILE_DIFF = "toggle-file-diff"
+    TOGGLE_PROMOTION_MODE = "toggle-promotion-mode"
     SEARCH = "search"
     SEARCH_OPEN = "search-open"
     SEARCH_CLOSE = "search-close"
@@ -208,6 +211,9 @@ class ConsumerUiState:
     candidate_filter: MaintainerCandidateFilter = MaintainerCandidateFilter()
     #: Whether the Candidate diff is also showing raw canonical file changes (INV-202).
     file_diff: bool = False
+    #: Which promotion the Maintainer is reviewing. Screen 42 chooses it; screens 41 and 43 obey
+    #: it. Both modes are composed, so this selects a projection rather than causing one.
+    promotion_mode: PromotionMode = PromotionMode.VENDORED
 
     def __post_init__(self) -> None:
         if (
@@ -573,6 +579,15 @@ def reduce_consumer_ui(
         if state.session.screen is not ConsumerScreen.SETTINGS or event.key not in SETTING_ROWS:
             return state, ()
         return _apply_setting(state, state.settings.toggled(event.key))
+    if event.kind is ConsumerUiEventKind.TOGGLE_PROMOTION_MODE:
+        if state.session.screen is not MaintainerScreen.PROMOTION_MODE:
+            return state, ()
+        chosen = (
+            PromotionMode.REFERENCED
+            if state.promotion_mode is PromotionMode.VENDORED
+            else PromotionMode.VENDORED
+        )
+        return replace(state, promotion_mode=chosen, quit_pending=False), ()
     if event.kind is ConsumerUiEventKind.TOGGLE_FILE_DIFF:
         if state.session.screen is not MaintainerScreen.CANDIDATE_DIFF:
             return state, ()
@@ -700,6 +715,10 @@ def key_event(
             ConsumerUiEventKind.REQUEST_ACTION,
             action=ConsumerActionKind.UNINSTALL,
         )
+    # The mode belongs to the promotion under review, so only the screen whose question it is
+    # may change it.
+    if key == "m" and state.session.screen is MaintainerScreen.PROMOTION_MODE:
+        return ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_PROMOTION_MODE)
     if key == "p" and state.session.screen is MaintainerScreen.VALIDATION:
         return ConsumerUiEvent(ConsumerUiEventKind.NAVIGATE, screen=MaintainerScreen.POLICY_REVIEW)
     if key == "d" and state.session.screen is MaintainerScreen.CANDIDATE_DETAILS:
