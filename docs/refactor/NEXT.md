@@ -2,12 +2,11 @@
 
 ## Current objective
 
-Continue **CP-14 Maintainer TUI 30–53**, step 5: promotion and the registry write path. Screens 41
-and 42 are live and write nothing; screens 43–47 — registry diff, registry validation, commit and
-bulk promotion — are what remain, and they are the first Maintainer screens that write approved
-registry state.
+Continue **CP-14 Maintainer TUI 30–53**, step 5: promotion and the registry write path. Screens 41,
+42 and 43 are live and write nothing — they review, choose and plan. Screens 44, 45 and 47 remain,
+and 45 is the first Maintainer screen that writes approved registry state.
 
-Screens 30–42 are live in the production shared shell:
+Screens 30–43 are live in the production shared shell:
 
 - screen 30 and screens 31–32 compose configured authoring Sources, durable health and only an exact
   matching Candidate-history observation (D-093–D-095);
@@ -30,7 +29,11 @@ Screens 30–42 are live in the production shared shell:
   place of the digest, and nothing here writes (D-101);
 - screen 42 chooses the promotion mode with `m`. Both modes are composed once, so choosing one
   selects an already-projected review rather than making one while drawing, and the choice changes
-  the review digest that would be confirmed (D-102).
+  the review digest that would be confirmed (D-102);
+- screen 43 shows the registry transaction a confirmed promotion would apply: the paths it would
+  write and their change kinds (bounded at 200 rows, with the full count stated), the registry
+  snapshot before and after, and the transaction digest. A Candidate from a local Source is refused
+  by name here rather than deep inside the planner (B-041).
 
 Evidence: `tests/maintainer_candidate_shell_test.py`, `tests/maintainer_candidate_views_test.py`,
 `tests/candidate_validation_test.py`, `tests/maintainer_validation_views_test.py`,
@@ -40,17 +43,17 @@ diff into validation and out to the policy review.
 
 ## Exact next action
 
-Start RED tests for the promotion write path, screens 43–45:
+Start RED tests for the promotion write path, screens 44–45:
 
 1. `execute_candidate_promotion` applies exactly one reviewed promotion, the way
    `execute_source_sync` does: it rechecks the reviewed digest, the Candidate state and the approved
    registry baseline before writing, and refuses if any of them moved. `plan_bulk_promotion`,
    `project_promotion` and `finalize_promotion` in `application/promotion.py` already exist and are
    what should be driven — do not write a second planner.
-2. Screen 43 is the registry diff the plan produces, screen 44 its validation and screen 45 the
-   commit. `validate_promoted_registry` already exists for screen 44. The plan needs the registry
-   *workspace* snapshot, which `read_current_source` already returns — `read_maintainer_views`
-   currently reads only the approved projection.
+2. Screen 44 validates the promoted registry and screen 45 is the commit.
+   `validate_promoted_registry`, `project_promotion` and `finalize_promotion` already exist and are
+   what should be driven. The plan screen 43 shows is composed at read time; execution must replan
+   against the workspace it is about to write and refuse if it moved.
 3. Published coordinate/version content is immutable: a digest conflict is reported, never repaired
    in place (INV-203/239), and superseded records stay durable audit history (INV-229).
 4. Local-origin Candidates must keep their `local:<snapshot-sha256>` provenance through promotion

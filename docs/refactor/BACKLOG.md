@@ -716,3 +716,20 @@ this stays off the critical path.
 
 Discovered while wiring screens 35–37 (D-098).
 Evidence/links: `agent_artifacts/application/maintainer_views.py::_file_changes`; INV-202; 164.5.
+
+## B-041 — A local-Source Candidate has no promotion audit record
+
+NONCRITICAL for the current slice, CRITICAL before screens 41–47 are called complete.
+
+A promotion audit records a 40-hex Git revision, and a local Source carries `local:<snapshot-sha256>`
+(D-096). `plan_candidate_promotion` therefore refuses a local-origin Candidate by name, and screen 43
+states that refusal. This was found by regression, not by review: the planner *raised* on such a
+Candidate rather than returning an error, and `read_maintainer_views` caught the `ValueError` and
+failed the whole Maintainer composition — which stalled the Source Sync walk at screen 33 with no
+message. The E2E that syncs a real local Source is what caught it.
+
+What remains: give the audit record a place for local provenance so local Candidates can be promoted
+without disguising a local snapshot as a commit, then replace the refusal. Two unit tests pinning the
+refusal directly were dropped because the fixture for a local authoring Source needs a filesystem
+`source` rather than a Git URL and the budget window closed; the behaviour is covered by
+`tests/maintainer_composition_e2e_test.py`'s local-sync walk. Restore them when the fixture lands.

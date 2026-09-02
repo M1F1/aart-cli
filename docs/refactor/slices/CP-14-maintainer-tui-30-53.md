@@ -341,3 +341,32 @@ now runs through to screen 42, toggles the mode, and asserts the review digest o
 changes, so two projections cannot quietly be the same transaction under two names.
 
 Gates: `make quality` and `make integration` both green; full suite 3,131 tests.
+
+
+### Step 5 progress — screen 43, the registry transaction (2026-09-02)
+
+`plan_candidate_promotion` drives the existing `plan_bulk_promotion` with the evidence the review
+bound, so the audit records that reach the registry name the run that approved the promotion rather
+than a fresh one taken at write time. Screen 43 projects that plan: the paths it would write with
+their change kinds, the registry snapshot before and after, and the transaction digest. The path
+list is bounded at 200 rows while `changed_paths` counts the whole transaction, so a truncated list
+never understates what would be written.
+
+Planning needs the registry *workspace*, not only its approved projection -- what a transaction
+writes is decided against the tree it writes into -- so `read_maintainer_views` now reads both.
+
+This is also where the D-096 trap `NEXT.md` had flagged as "most likely to be got wrong quietly"
+actually bit. A promotion audit records a 40-hex Git revision; a local Source carries
+`local:<snapshot-sha256>`. The planner **raised** on one rather than returning an error,
+`read_maintainer_views` caught the `ValueError` as a composition failure, and the Source Sync walk
+stalled at screen 33 with no message at all. It was found by regression -- the E2E that syncs a real
+local Source -- not by review. A local-origin Candidate is now refused by name in
+`plan_candidate_promotion`, and the projection also survives a raising planner rather than taking the
+rest of the composition down with it. B-041 tracks giving the audit record a place for local
+provenance so the refusal can be replaced by support.
+
+Two unit tests pinning that refusal directly were dropped when the budget window closed: the fixture
+for a local authoring Source needs a filesystem `source` rather than a Git URL. The behaviour is
+covered by the local-sync E2E; B-041 records restoring them.
+
+Gates: `make quality` and `make integration` both green.

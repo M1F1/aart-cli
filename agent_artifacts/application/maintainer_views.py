@@ -19,7 +19,10 @@ from agent_artifacts.application.candidate_validation import (
     validate_candidate,
 )
 from agent_artifacts.application.maintainer import CandidateBundle, SourceScan
-from agent_artifacts.application.maintainer_promotion import prepare_candidate_promotion
+from agent_artifacts.application.maintainer_promotion import (
+    plan_candidate_promotion,
+    prepare_candidate_promotion,
+)
 from agent_artifacts.application.maintainer_sync import (
     ApprovedRegistryState,
     PreparedSourceSync,
@@ -39,7 +42,11 @@ from agent_artifacts.domain.python_runtime import (
 from agent_artifacts.domain.registry import PromotionMode
 from agent_artifacts.domain.result import Err
 from agent_artifacts.protocol.authoring import read_package_description
-from agent_artifacts.protocol.native_tree import SnapshotEntry, SnapshotEntryKind
+from agent_artifacts.protocol.native_tree import (
+    SnapshotEntry,
+    SnapshotEntryKind,
+    SourceSnapshot,
+)
 from agent_artifacts.sources.model import HealthStatus, SourceHealth
 
 __all__ = [
@@ -57,6 +64,8 @@ __all__ = [
     "MaintainerSourceView",
     "MaintainerPolicyReviewView",
     "MaintainerPromotionReviewView",
+    "MaintainerRegistryChangeView",
+    "MaintainerRegistryDiffView",
     "MaintainerValidationCheckView",
     "MaintainerValidationDetailView",
     "MaintainerValidationRowId",
@@ -69,6 +78,7 @@ __all__ = [
     "project_maintainer_candidates",
     "project_maintainer_policy_review",
     "project_maintainer_promotion_review",
+    "project_maintainer_registry_diff",
     "project_maintainer_source",
     "project_maintainer_validation",
     "project_source_sync_result",
@@ -846,6 +856,7 @@ class MaintainerViews:
     candidates: tuple[MaintainerCandidateView, ...] | None = None
     validations: tuple[MaintainerValidationView, ...] | None = None
     promotions: tuple[MaintainerPromotionReviewView, ...] | None = None
+    registry_diffs: tuple[MaintainerRegistryDiffView, ...] | None = None
 
     def __post_init__(self) -> None:
         aliases = tuple(source.alias for source in self.sources)
@@ -859,6 +870,17 @@ class MaintainerViews:
             or self.dashboard.validation_failure_count
             != sum(source.invalid_count for source in self.sources)
             or self.dashboard.ready_count != sum(source.ready_count for source in self.sources)
+            or (
+                self.registry_diffs is not None
+                and (
+                    any(
+                        not isinstance(diff, MaintainerRegistryDiffView)
+                        for diff in self.registry_diffs
+                    )
+                    or len({(item.candidate_id, item.mode) for item in self.registry_diffs})
+                    != len(self.registry_diffs)
+                )
+            )
             or (
                 self.promotions is not None
                 and (
@@ -937,6 +959,24 @@ class MaintainerViews:
         if self.validations is None:
             return None
         return next((item for item in self.validations if item.candidate_id == candidate_id), None)
+
+    def registry_diff(
+        self,
+        candidate_id: str,
+        mode: PromotionMode = PromotionMode.VENDORED,
+    ) -> MaintainerRegistryDiffView | None:
+        """The registry transaction composed for one Candidate in one mode, refusals included."""
+
+        if self.registry_diffs is None:
+            return None
+        return next(
+            (
+                item
+                for item in self.registry_diffs
+                if item.candidate_id == candidate_id and item.mode == mode.value
+            ),
+            None,
+        )
 
     def promotion(
         self,
@@ -1459,5 +1499,119 @@ def project_maintainer_promotion_review(
         validation_report_digest=str(evidence.validation_report_digest),
         effective_policy_digest=str(evidence.effective_policy_digest),
         warnings=tuple(redact_text(item) for item in evidence.warnings),
+        refusals=(),
+    )
+
+
+#: How many changed paths screen 43 lists.  A promotion writes one file per payload entry, and a
+#: review that made somebody page through thousands of rows would not be read at all.
+_MAX_REGISTRY_CHANGES = 200
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerRegistryChangeView:
+    """One path a promotion transaction would write, and what it would do to it."""
+
+    path: str
+    kind: str
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerRegistryDiffView:
+    """Screen 43: the registry transaction a confirmed promotion would apply.
+
+    `changed_paths` counts the whole transaction while `changes` is bounded, so a truncated list
+    never understates what would be written.
+    """
+
+    candidate_id: str
+    artifact: str
+    version: str
+    mode: str
+    target_registry: str
+    changed_paths: int
+    changes: tuple[MaintainerRegistryChangeView, ...]
+    expected_registry_snapshot: str | None
+    next_registry_snapshot: str | None
+    plan_digest: str | None
+    refusals: tuple[str, ...]
+
+    @property
+    def plannable(self) -> bool:
+        return self.plan_digest is not None
+
+
+def project_maintainer_registry_diff(
+    bundle: CandidateBundle,
+    validation: CandidateValidation,
+    policy: EffectivePolicy,
+    approved: ApprovedRegistryState | None,
+    registry_snapshot: SourceSnapshot | None,
+    *,
+    mode: PromotionMode,
+) -> MaintainerRegistryDiffView:
+    """Project the transaction, or the reasons there is none to project."""
+
+    if (
+        not isinstance(bundle, CandidateBundle)
+        or not isinstance(validation, CandidateValidation)
+        or not isinstance(policy, EffectivePolicy)
+        or not isinstance(mode, PromotionMode)
+        or not (approved is None or isinstance(approved, ApprovedRegistryState))
+        or not (registry_snapshot is None or isinstance(registry_snapshot, SourceSnapshot))
+    ):
+        raise ValueError("Maintainer registry diff projection needs a Candidate and a policy")
+    candidate = bundle.candidate
+    common: dict[str, object] = {
+        "candidate_id": candidate.id.value,
+        "artifact": str(candidate.artifact.coordinate.artifact),
+        "version": str(candidate.artifact.coordinate.version),
+        "mode": mode.value,
+        "target_registry": candidate.target_registry.value,
+    }
+
+    def _refused(*reasons: str) -> MaintainerRegistryDiffView:
+        return MaintainerRegistryDiffView(
+            **common,  # type: ignore[arg-type]
+            changed_paths=0,
+            changes=(),
+            expected_registry_snapshot=None,
+            next_registry_snapshot=None,
+            plan_digest=None,
+            refusals=tuple(redact_text(item) for item in reasons),
+        )
+
+    if approved is None:
+        return _refused(
+            f"target registry {candidate.target_registry.value} has no synchronized "
+            "approved snapshot to promote into"
+        )
+    if registry_snapshot is None:
+        return _refused(
+            f"registry {candidate.target_registry.value} workspace could not be read, "
+            "so no transaction can be planned"
+        )
+    prepared = prepare_candidate_promotion(bundle, validation, policy, approved, mode=mode)
+    if isinstance(prepared, Err):
+        return _refused(*(item.message for item in prepared.diagnostics))
+    try:
+        planned = plan_candidate_promotion(prepared.value, registry_snapshot)
+    except ValueError as error:
+        # A planner that raises must still leave a readable screen: composing every other
+        # Candidate's view depends on this one not aborting the whole read.
+        return _refused(f"this transaction cannot be planned: {error}")
+    if isinstance(planned, Err):
+        return _refused(*(item.message for item in planned.diagnostics))
+    plan = planned.value
+    return MaintainerRegistryDiffView(
+        **common,  # type: ignore[arg-type]
+        changed_paths=len(plan.changes),
+        changes=tuple(
+            MaintainerRegistryChangeView(str(item.path), item.kind.value)
+            for item in plan.changes[:_MAX_REGISTRY_CHANGES]
+        ),
+        expected_registry_snapshot=str(plan.expected_registry_snapshot),
+        next_registry_snapshot=str(plan.next_registry_snapshot),
+        plan_digest=str(plan.review_digest),
         refusals=(),
     )

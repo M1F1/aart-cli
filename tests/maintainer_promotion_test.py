@@ -29,6 +29,7 @@ from agent_artifacts.application.maintainer import CandidateBundle, reconcile_so
 from agent_artifacts.application.maintainer_promotion import (
     PreparedCandidatePromotion,
     effective_policy_digest,
+    plan_candidate_promotion,
     prepare_candidate_promotion,
     promotion_evidence,
     validation_report_digest,
@@ -40,12 +41,13 @@ from agent_artifacts.application.maintainer_views import (
     project_maintainer_candidates,
     project_maintainer_dashboard,
     project_maintainer_promotion_review,
+    project_maintainer_registry_diff,
     project_maintainer_source,
     project_maintainer_validation,
 )
 from agent_artifacts.configuration.model import SourceKind
 from agent_artifacts.domain.candidates import CandidateState
-from agent_artifacts.domain.identifiers import ObjectDigest, SourceAlias
+from agent_artifacts.domain.identifiers import ObjectDigest, SourceAlias, source_revision_kind
 from agent_artifacts.domain.policies import EffectivePolicy
 from agent_artifacts.domain.registry import PromotionMode
 from agent_artifacts.domain.result import Err, Ok
@@ -58,7 +60,10 @@ from agent_artifacts.protocol.native_tree import (
 )
 from agent_artifacts.protocol.paths import parse_relative_path
 from agent_artifacts.tui_consumer import CanonicalScreenSource, ConsumerScreens, _reload, frame
-from agent_artifacts.tui_maintainer import render_maintainer_promotion_review
+from agent_artifacts.tui_maintainer import (
+    render_maintainer_promotion_review,
+    render_maintainer_registry_diff,
+)
 from tests.marketplace_fixtures import configured_source, source_state
 
 _ARGV_SECRET = {
@@ -88,7 +93,7 @@ def _digest(character: str) -> ObjectDigest:
     return ObjectDigest("sha256", character * 64)
 
 
-def _scan(*, inputs: list[dict[str, object]] | None = None):
+def _scan(*, inputs: list[dict[str, object]] | None = None, revision: str = "a" * 40):
     manifest: dict[str, object] = {
         "schema": "aart.dev/mcp/v1",
         "artifact": {"name": "github-mcp", "kind": "mcp", "version": "1.0.0"},
@@ -101,7 +106,9 @@ def _scan(*, inputs: list[dict[str, object]] | None = None):
         manifest["inputs"] = inputs
     compiled = compile_author_snapshot(
         SourceSnapshot(
-            SnapshotOrigin.IMMUTABLE_GIT,
+            SnapshotOrigin.IMMUTABLE_GIT
+            if source_revision_kind(revision) == "git"
+            else SnapshotOrigin.LOCAL,
             (
                 _entry("github/aart.json", json.dumps(manifest, sort_keys=True)),
                 _entry("github/server.py", "print('x')\n"),
@@ -109,12 +116,12 @@ def _scan(*, inputs: list[dict[str, object]] | None = None):
         ),
         source_alias=SourceAlias("authors"),
         source="https://git.example/authors.git",
-        revision="a" * 40,
+        revision=revision,
     )
     assert isinstance(compiled, Ok), compiled
     scanned = reconcile_source_scan(
         SourceAlias("authors"),
-        "a" * 40,
+        revision,
         compiled.value,
         previous=(),
         approved=(),
@@ -124,8 +131,16 @@ def _scan(*, inputs: list[dict[str, object]] | None = None):
     return scanned.value
 
 
-def _bundle(*, inputs: list[dict[str, object]] | None = None) -> CandidateBundle:
-    return _scan(inputs=inputs).active[0]
+def _bundle(
+    *, inputs: list[dict[str, object]] | None = None, revision: str = "a" * 40
+) -> CandidateBundle:
+    return _scan(inputs=inputs, revision=revision).active[0]
+
+
+def _registry() -> SourceSnapshot:
+    """A registry workspace with nothing promoted into it yet."""
+
+    return SourceSnapshot(SnapshotOrigin.LOCAL, ())
 
 
 def _approved(alias: str = "company") -> ApprovedRegistryState:
@@ -138,9 +153,10 @@ def _prepared(
     policy: EffectivePolicy | None = None,
     mode: PromotionMode = PromotionMode.VENDORED,
     approved: ApprovedRegistryState | None = None,
+    revision: str = "a" * 40,
 ):
     judged = EffectivePolicy() if policy is None else policy
-    bundle = _bundle(inputs=inputs)
+    bundle = _bundle(inputs=inputs, revision=revision)
     return prepare_candidate_promotion(
         bundle,
         validate_candidate(bundle, policy=judged),
@@ -459,6 +475,118 @@ class PromotionShellTest(unittest.TestCase):
         )
 
         self.assertIn("not available", drawn)
+
+
+class PromotionPlanTest(unittest.TestCase):
+    """The transaction a confirmed promotion would apply, planned once and never while drawing."""
+
+    def test_a_reviewed_promotion_plans_the_registry_transaction_it_described(self) -> None:
+        prepared = _prepared()
+        assert isinstance(prepared, Ok), prepared
+
+        planned = plan_candidate_promotion(prepared.value, _registry())
+
+        assert isinstance(planned, Ok), planned
+        paths = {str(change.path) for change in planned.value.changes}
+        self.assertIn("registry/index.json", paths)
+        self.assertIn("artifacts/mcp/github-mcp/1.0.0/artifact.json", paths)
+        self.assertIs(planned.value.mode, PromotionMode.VENDORED)
+
+    def test_the_plan_carries_the_evidence_the_review_bound(self) -> None:
+        """The audit record must name the run that approved it, not a fresh one."""
+
+        prepared = _prepared()
+        assert isinstance(prepared, Ok), prepared
+
+        planned = plan_candidate_promotion(prepared.value, _registry())
+
+        assert isinstance(planned, Ok), planned
+        audit = planned.value.audits[0]
+        self.assertEqual(
+            audit.validation_report_digest, prepared.value.evidence.validation_report_digest
+        )
+        self.assertEqual(
+            audit.effective_policy_digest, prepared.value.evidence.effective_policy_digest
+        )
+
+    def test_a_different_mode_plans_a_different_transaction(self) -> None:
+        vendored = _prepared(mode=PromotionMode.VENDORED)
+        referenced = _prepared(mode=PromotionMode.REFERENCED)
+        assert isinstance(vendored, Ok) and isinstance(referenced, Ok)
+
+        first = plan_candidate_promotion(vendored.value, _registry())
+        second = plan_candidate_promotion(referenced.value, _registry())
+
+        assert isinstance(first, Ok), first
+        assert isinstance(second, Ok), second
+        self.assertNotEqual(first.value.review_digest, second.value.review_digest)
+
+
+class RegistryDiffProjectionTest(unittest.TestCase):
+    def test_screen_43_lists_what_the_transaction_would_write(self) -> None:
+        bundle = _bundle()
+        view = project_maintainer_registry_diff(
+            bundle,
+            validate_candidate(bundle, policy=EffectivePolicy()),
+            EffectivePolicy(),
+            _approved(),
+            _registry(),
+            mode=PromotionMode.VENDORED,
+        )
+
+        self.assertTrue(view.plannable)
+        self.assertTrue(view.changed_paths)
+        self.assertEqual(len(view.changes), min(view.changed_paths, 200))
+        self.assertTrue(all(item.kind for item in view.changes))
+        self.assertEqual(view.refusals, ())
+
+    def test_a_refused_review_has_no_transaction_to_show(self) -> None:
+        bundle = _bundle()
+        policy = EffectivePolicy(allowed_runtimes=frozenset({"node"}))
+
+        view = project_maintainer_registry_diff(
+            bundle,
+            validate_candidate(bundle, policy=policy),
+            policy,
+            _approved(),
+            _registry(),
+            mode=PromotionMode.VENDORED,
+        )
+
+        self.assertFalse(view.plannable)
+        self.assertTrue(view.refusals)
+
+    def test_an_unreadable_registry_workspace_is_a_refusal(self) -> None:
+        bundle = _bundle()
+
+        view = project_maintainer_registry_diff(
+            bundle,
+            validate_candidate(bundle, policy=EffectivePolicy()),
+            EffectivePolicy(),
+            _approved(),
+            None,
+            mode=PromotionMode.VENDORED,
+        )
+
+        self.assertFalse(view.plannable)
+        self.assertTrue(any("workspace" in item.lower() for item in view.refusals))
+
+    def test_the_diff_renders_the_paths_and_the_transaction_digests(self) -> None:
+        bundle = _bundle()
+        view = project_maintainer_registry_diff(
+            bundle,
+            validate_candidate(bundle, policy=EffectivePolicy()),
+            EffectivePolicy(),
+            _approved(),
+            _registry(),
+            mode=PromotionMode.VENDORED,
+        )
+
+        drawn = "\n".join(render_maintainer_registry_diff(view, PresentationProfile.VERBOSE))
+
+        self.assertIn("registry/index.json", drawn)
+        self.assertIn("added", drawn)
+        self.assertIn("Registry snapshot after:", drawn)
 
 
 class PromotionModeStateTest(unittest.TestCase):

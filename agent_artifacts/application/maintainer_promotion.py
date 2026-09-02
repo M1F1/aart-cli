@@ -20,21 +20,27 @@ from agent_artifacts.application.candidate_validation import (
 )
 from agent_artifacts.application.maintainer import CandidateBundle
 from agent_artifacts.application.maintainer_sync import ApprovedRegistryState
-from agent_artifacts.application.promotion import PromotionEvidence
+from agent_artifacts.application.promotion import (
+    PromotionEvidence,
+    PromotionPlan,
+    plan_bulk_promotion,
+)
 from agent_artifacts.configuration.policy import redact_text
-from agent_artifacts.domain.candidates import CandidateState
+from agent_artifacts.domain.candidates import CandidateState, assess_candidate
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.identifiers import SourceAlias
+from agent_artifacts.domain.identifiers import SourceAlias, source_revision_kind
 from agent_artifacts.domain.policies import EffectivePolicy
 from agent_artifacts.domain.registry import PromotionMode
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.domain.serialization import canonical_json_bytes
 from agent_artifacts.protocol.hashing import sha256_bytes
+from agent_artifacts.protocol.native_tree import SourceSnapshot
 from agent_artifacts.store.model import ObjectDigest
 
 __all__ = [
     "MAINTAINER_PROMOTION_INVALID",
     "PreparedCandidatePromotion",
+    "plan_candidate_promotion",
     "effective_policy_digest",
     "prepare_candidate_promotion",
     "promotion_evidence",
@@ -265,9 +271,53 @@ def prepare_candidate_promotion(
     evidence = promotion_evidence(validation, policy)
     if isinstance(evidence, Err):
         return evidence
+    # The Candidate a promotion acts on is the one the run leaves behind, not the one the scan
+    # recorded before any policy had judged it: a scan writes `new`, and what makes a Candidate
+    # promotable is the run screens 38 to 40 showed.
+    reviewed = CandidateBundle(
+        assess_candidate(
+            candidate,
+            findings=validation.findings,
+            manual_approval_required=validation.manual_approval_required,
+        ),
+        bundle.artifact,
+    )
     try:
         return Ok(
-            PreparedCandidatePromotion(bundle, validation, policy, approved, mode, evidence.value)
+            PreparedCandidatePromotion(reviewed, validation, policy, approved, mode, evidence.value)
         )
     except ValueError as error:
         return _error(f"prepared Candidate promotion is invalid: {error}")
+
+
+def plan_candidate_promotion(
+    prepared: PreparedCandidatePromotion,
+    registry_snapshot: SourceSnapshot,
+) -> Result[PromotionPlan]:
+    """Plan the one transaction a confirmed review would apply, writing nothing.
+
+    The evidence the review bound travels into the plan's audit records, so what the registry ends
+    up recording names the run that approved it rather than a fresh one taken at write time.
+    """
+
+    if not isinstance(prepared, PreparedCandidatePromotion) or not isinstance(
+        registry_snapshot, SourceSnapshot
+    ):
+        return _error("planning a promotion needs a reviewed promotion and a registry workspace")
+    # A promotion audit records a Git revision, and a local Source carries `local:<snapshot>`
+    # (D-096). Promoting one through the Git-only record would either fail deep inside the planner
+    # or, worse, disguise a local origin as a commit, so it is refused here by name.
+    revision = prepared.candidate.candidate.artifact.provenance.revision
+    if source_revision_kind(revision) != "git":
+        return _error(
+            "a Candidate from a local Source cannot be promoted yet: the promotion audit record "
+            "has no place for local provenance",
+            "Promote from a Git-backed authoring Source, or wait for local promotion to land.",
+        )
+    return plan_bulk_promotion(
+        registry_snapshot,
+        (prepared.candidate,),
+        evidence=((prepared.candidate.candidate.id, prepared.evidence),),
+        approved=prepared.approved.versions,
+        mode=prepared.mode,
+    )

@@ -8,6 +8,7 @@ from agent_artifacts.application.maintainer_views import (
     MaintainerDashboardView,
     MaintainerPolicyReviewView,
     MaintainerPromotionReviewView,
+    MaintainerRegistryDiffView,
     MaintainerSourceSyncResultView,
     MaintainerSourceSyncReviewView,
     MaintainerSourceView,
@@ -26,6 +27,7 @@ __all__ = [
     "render_maintainer_sources",
     "render_maintainer_policy_review",
     "render_maintainer_promotion_review",
+    "render_maintainer_registry_diff",
     "render_maintainer_validation",
     "render_maintainer_validation_check",
 ]
@@ -432,4 +434,32 @@ def render_maintainer_promotion_review(
         lines.append("Warnings carried into the audit record:")
         lines.extend(f"  - {item}" for item in view.warnings)
     lines.append(f"Review digest: {_short(view.review_digest or '', profile)}")
+    return tuple(lines)
+
+
+def render_maintainer_registry_diff(
+    view: MaintainerRegistryDiffView,
+    profile: PresentationProfile,
+) -> tuple[str, ...]:
+    if not isinstance(view, MaintainerRegistryDiffView) or not isinstance(
+        profile, PresentationProfile
+    ):
+        raise ValueError("Maintainer registry diff rendering needs a typed view and profile")
+    lines = [
+        f"{view.artifact}@{view.version} → {view.target_registry} ({view.mode})",
+    ]
+    if not view.plannable:
+        lines.append("No registry transaction can be planned:")
+        lines.extend(f"  - {item}" for item in view.refusals)
+        return tuple(lines)
+    lines.append(
+        f"Registry snapshot before: {_short(view.expected_registry_snapshot or '', profile)}"
+    )
+    lines.append(f"Registry snapshot after: {_short(view.next_registry_snapshot or '', profile)}")
+    lines.append(f"{view.changed_paths} {_noun(view.changed_paths, 'path')} would be written:")
+    lines.extend(f"  {item.kind} {item.path}" for item in view.changes)
+    remaining = view.changed_paths - len(view.changes)
+    if remaining > 0:
+        lines.append(f"  … and {remaining} more not listed")
+    lines.append(f"Transaction digest: {_short(view.plan_digest or '', profile)}")
     return tuple(lines)

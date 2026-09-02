@@ -16,6 +16,7 @@ from agent_artifacts.application.maintainer_views import (
     project_maintainer_candidates,
     project_maintainer_dashboard,
     project_maintainer_promotion_review,
+    project_maintainer_registry_diff,
     project_maintainer_source,
     project_maintainer_validation,
 )
@@ -26,6 +27,7 @@ from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Sever
 from agent_artifacts.domain.policies import EffectivePolicy
 from agent_artifacts.domain.registry import PromotionMode
 from agent_artifacts.domain.result import Err, Ok, Result
+from agent_artifacts.protocol.native_tree import SourceSnapshot
 from agent_artifacts.sources.model import (
     CurrentSourceRequest,
     source_instance_id,
@@ -117,6 +119,37 @@ def read_maintainer_views(
                 approved[alias.value] = None if isinstance(observed, Err) else observed.value
         # Both modes, composed once: screen 42 chooses between them by selecting an already
         # projected review rather than making one while drawing.
+        # The plan needs the registry *workspace*, not only its approved projection: what a
+        # transaction writes is decided against the tree it would write into.
+        workspaces: dict[str, SourceSnapshot | None] = {}
+        for alias_value in approved:
+            registry = next(
+                (
+                    item
+                    for item in effective.configuration.sources
+                    if item.alias.value == alias_value and item.kind is SourceKind.REGISTRY_GIT
+                ),
+                None,
+            )
+            workspaces[alias_value] = None
+            if registry is None:
+                continue
+            registry_paths = source_store_paths(data_root, source_instance_id(registry))
+            workspace = read_current_source(CurrentSourceRequest(registry_paths, registry.alias))
+            if isinstance(workspace, Ok) and workspace.value is not None:
+                workspaces[alias_value] = workspace.value.candidate.snapshot
+        registry_diffs = tuple(
+            project_maintainer_registry_diff(
+                bundle,
+                validation,
+                judged,
+                approved[bundle.candidate.target_registry.value],
+                workspaces[bundle.candidate.target_registry.value],
+                mode=mode,
+            )
+            for bundle, validation in runs
+            for mode in PromotionMode
+        )
         promotions = tuple(
             project_maintainer_promotion_review(
                 bundle,
@@ -135,6 +168,7 @@ def read_maintainer_views(
                 candidates,
                 validations,
                 promotions,
+                registry_diffs,
             )
         )
     except ValueError as error:

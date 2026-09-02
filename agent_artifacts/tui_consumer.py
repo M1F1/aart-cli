@@ -51,6 +51,7 @@ from agent_artifacts.application.maintainer_views import (
     MaintainerCandidateFilter,
     MaintainerCandidateView,
     MaintainerPromotionReviewView,
+    MaintainerRegistryDiffView,
     MaintainerScreen,
     MaintainerSourceSyncResultView,
     MaintainerSourceSyncReviewView,
@@ -69,6 +70,7 @@ from agent_artifacts.tui_maintainer import (
     render_maintainer_dashboard,
     render_maintainer_policy_review,
     render_maintainer_promotion_review,
+    render_maintainer_registry_diff,
     render_maintainer_source,
     render_maintainer_sources,
     render_maintainer_validation,
@@ -1211,6 +1213,18 @@ class ConsumerScreens:
         row = parse_validation_row(focus)
         return self.maintainer.promotion(focus if row is None else row.candidate_id, mode)
 
+    def registry_diff(
+        self,
+        focus: str,
+        mode: PromotionMode = PromotionMode.VENDORED,
+    ) -> MaintainerRegistryDiffView | None:
+        """The registry transaction for a focus that is a Candidate ID or a check row."""
+
+        if self.maintainer is None:
+            return None
+        row = parse_validation_row(focus)
+        return self.maintainer.registry_diff(focus if row is None else row.candidate_id, mode)
+
     def candidates(
         self, candidate_filter: MaintainerCandidateFilter | None = None
     ) -> tuple[MaintainerCandidateView, ...]:
@@ -1576,6 +1590,12 @@ class CanonicalScreenSource:
                 if self._screens.promotion(state.focus, state.promotion_mode) is not None
                 else None
             )
+        if screen is MaintainerScreen.PROMOTION_MODE:
+            return (
+                MaintainerScreen.REGISTRY_DIFF
+                if self._screens.registry_diff(state.focus, state.promotion_mode) is not None
+                else None
+            )
         if screen is ConsumerScreen.MARKETPLACE:
             if self._screens.offered_collection(state.current_row) is not None:
                 return ConsumerScreen.COLLECTION_PREVIEW
@@ -1738,6 +1758,13 @@ class CanonicalScreenSource:
                 ("Policy Review is not available yet.",)
                 if validation is None
                 else render_maintainer_policy_review(validation.review, profile)
+            )
+        if screen is MaintainerScreen.REGISTRY_DIFF:
+            registry_diff = screens.registry_diff(state.focus, state.promotion_mode)
+            return (
+                ("That Candidate's registry transaction is not available.",)
+                if registry_diff is None
+                else render_maintainer_registry_diff(registry_diff, profile)
             )
         if screen in (MaintainerScreen.PROMOTION_REVIEW, MaintainerScreen.PROMOTION_MODE):
             # Screen 42 asks which promotion, so it draws the review of the mode currently chosen
