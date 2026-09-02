@@ -514,6 +514,15 @@ source. `aart marketplace setup` does not recover it: it resolves through the le
 refuses with `registry company has invalid root manifests`, since a promoted registry snapshot
 carries none. So B-044 is one fix at one shared seam (D-120).
 
+The working route now has its evidence too (D-121).
+`marketplace_lifecycle_e2e_test.py::DeclaredSetupE2ETest` runs a declared setup end to end from the
+CLI over the legacy native-local-source route — the shared native-source fixture copied writable and
+taught to declare setup — and asserts each of its four gates: `install` names the setup it did not
+run, an unreviewed source refuses without `--authorize-untrusted-source`, an authorized plan applies
+nothing until its effects are separately approved, and both together write the delimited managed
+block. `skipUnless(darwin)`, because `setup.py:562` accepts only `['darwin']` recipes. Applying the
+preserved draft's hardcoded `TrustClass.COMPANY_REVIEWED` fails two of the four.
+
 What remains before the green is the installed-record question. `_prepare_setup_object` resolves
 what to configure from the install-state manifest, which `io/consumer_machine.py` treats as the
 *legacy* store — a record found there with no canonical receipt becomes an `UnadoptedInstallation`

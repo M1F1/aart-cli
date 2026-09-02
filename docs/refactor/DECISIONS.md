@@ -2183,3 +2183,25 @@ the Product Specification first instead of hiding the change here.
   Two constraints bound any future fixture: a setup declaration's platforms must be a subset of the
   artifact's, and `setup.py:562` requires the recipe's own `platforms` to be exactly `['darwin']`,
   so an artifact declaring no `compatibility.platforms` cannot declare setup.
+
+## D-121 — The working setup route is proven where it works, on the platform it works on
+
+- **Decision:** `tests/marketplace_lifecycle_e2e_test.py::DeclaredSetupE2ETest` proves declared
+  setup end to end from the CLI over a real machine, on the legacy native-local-source route, and
+  is `skipUnless(darwin)`. The fixture is the shared native source copied writable and taught to
+  declare setup — `setup` on `artifact.json`, `setup/installer.json` beside the payload, a
+  package-root `SETUP.md` — so it is compiled, validated and synchronized as it stands.
+- **Status:** accepted.
+- **Reason:** B-044 characterizes an absence, and an absence is only legible against the presence.
+  Nothing proved the presence: the only setup coverage over a real machine was the empty case, and
+  the rest was unit-level against a hand-built install state, which is how a draft that hardcoded
+  `TrustClass.COMPANY_REVIEWED` into the policy check passed 3,216 tests. Applying that same
+  mutation now fails two of these four. The platform skip is honest rather than a gap: `setup.py:562`
+  requires a recipe's `platforms` to be exactly `['darwin']`, so on any other platform the run is
+  refused for the platform before it reaches a single one of these boundaries, and
+  `canonical_setup_application_test.py` already pins that refusal at unit level.
+- **Consequence:** the four gates on the route are now asserted rather than assumed — `install`
+  names the setup it did not run, an unreviewed source refuses without explicit authorization, an
+  authorized plan applies nothing until its effects are separately approved, and only both answers
+  together write the managed block. The first of those is the sharpest statement of B-044: the same
+  install through the configured seam emits no `setup` key at all.

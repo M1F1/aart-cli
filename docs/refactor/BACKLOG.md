@@ -912,7 +912,7 @@ through the real promotion pipeline: hand-patching a `setup` block into a publis
 the package, and the version record's canonical, payload and object digests would no longer resolve.
 
 **No end-to-end test anywhere installs a setup-declaring artifact from a registry -- on any route,
-CLI included.** The closest is
+CLI included.** (Closed on 2026-09-02 for the native-source route; see below.) The closest is
 `marketplace_lifecycle_e2e_test.py::test_setup_on_an_artifact_that_declares_none_completes_with_an_empty_queue`,
 which is the empty case, and `marketplace_lifecycle_cli_test.py`'s planning-failure assertions,
 which are unit-level against a hand-built fixture. So the setup path has never been proven from a
@@ -960,6 +960,36 @@ the shell's use of it, and both front ends report a finished install of an uncon
 refuses with `registry company has invalid root manifests`, because it resolves through the legacy
 catalogue, which reads root manifests a promoted registry snapshot does not carry. So there is no
 operator move that finishes the install by hand.
+
+### The working route is now proven, and every gate on it (2026-09-02)
+
+`tests/marketplace_lifecycle_e2e_test.py::DeclaredSetupE2ETest` takes a declared setup all the way
+through the CLI on a real machine, which nothing did before: the only existing coverage over a real
+machine was the empty case, and everything else was unit-level against a hand-built install state.
+It uses the writable copy of the shared native-source fixture that `_Environment`'s docstring
+described and no test had taken, taught to declare setup the way a native source carries one -- a
+`setup` reference on `artifact.json`, `setup/installer.json` beside the payload, a package-root
+`SETUP.md` -- so the source is compiled, validated and synchronized as it stands.
+
+Four boundaries, each asserted rather than assumed:
+
+- `install` on this route **names the setup it did not run**, under a `setup` key with the reason.
+  The same install through the configured seam emits no `setup` key at all. That contrast is the
+  clearest statement of this item.
+- Setup from a source that is not company-reviewed **refuses without `--authorize-untrusted-source`**,
+  even with the effects approved.
+- Authorizing the source produces a reviewed plan and **applies nothing**: the review names each
+  effect's target, capability and recovery, and the run reports `cancelled` with the file absent.
+  Trusting a source and approving an exact change to an exact file are two answers.
+- Both together write the delimited managed block, and `configured` is 1.
+
+The class is `skipUnless(darwin)` because `setup.py:562` accepts only `['darwin']` recipes, so a
+non-macOS run is refused for the platform before any of these boundaries is reached.
+
+**This is the test the preserved draft needed.** Applying that draft's hardcoded
+`TrustClass.COMPANY_REVIEWED` in `_prepare_setup_plan` now fails two of the four -- the trust gate
+stops refusing and the install stops reporting why setup is outstanding -- where previously all
+3,216 tests passed with it in place.
 
 ### The installed-record question, measured (2026-09-02)
 

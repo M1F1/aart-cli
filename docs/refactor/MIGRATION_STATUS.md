@@ -221,6 +221,15 @@ gap (D-120), and what still blocks the green is the installed-record question: t
 resolves what to configure from the install-state manifest that `io/consumer_machine.py` treats as
 the *legacy* store (D-069), while the configured seam writes receipts.
 
+The working route has its evidence as well (D-121):
+`marketplace_lifecycle_e2e_test.py::DeclaredSetupE2ETest` runs a declared setup end to end from the
+CLI over the legacy native-local-source route and asserts each of its four gates — `install` names
+the setup it did not run, an unreviewed source refuses without `--authorize-untrusted-source`, an
+authorized plan applies nothing until its effects are separately approved, and both together write
+the delimited managed block. It is `skipUnless(darwin)` because `setup.py:562` accepts only
+`['darwin']` recipes. Applying the preserved B-044 draft's hardcoded `TrustClass.COMPANY_REVIEWED`
+now fails two of those four, where before it passed all 3,216 tests.
+
 ## Update rule
 
 Never mark a slice beyond the strongest evidence actually present.

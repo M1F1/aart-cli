@@ -168,6 +168,15 @@ it. `_canonical_setup_run` and `_complete_canonical_consumer_action` are deliber
 `tui.py` as the material (D-118); they take `ConsumerApplicationService`, `ConsumerReview` and
 `ConsumerOutcome` and the canonical path has a receipt instead.
 
+**The working route is proven too** (D-121). `marketplace_lifecycle_e2e_test.py::DeclaredSetupE2ETest`
+takes a declared setup through the CLI on a real machine over the legacy native-local-source route,
+which nothing did before, and asserts all four gates on it: `install` names the setup it did not run,
+an unreviewed source refuses without `--authorize-untrusted-source`, an authorized plan applies
+nothing until its effects are separately approved, and both answers together write the delimited
+managed block. It is `skipUnless(darwin)` because `setup.py:562` accepts only `['darwin']` recipes.
+Applying the preserved draft's hardcoded `TrustClass.COMPANY_REVIEWED` fails two of the four — the
+defect that passed 3,216 tests now has a test.
+
 **The exact next step is the installed-record question**, which is what still blocks the green.
 `setup_engine/application.py::_prepare_setup_object` resolves what to configure from the
 install-state manifest (`.agent-artifacts/manifest.json`), which only `installation/application.py`
