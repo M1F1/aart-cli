@@ -3,7 +3,8 @@
 ## Current objective
 
 Continue **CP-14 Maintainer TUI 30–53**, step 4: implement the Validation and Policy Review screens
-38–40 over the Candidates screens 35–37 now expose.
+38–40 over the Candidates screens 35–37 now expose. The validation engine those screens project is
+already landed and green; what remains is the projection, the renderers and the shell wiring.
 
 Screens 30–37 are live in the production shared shell:
 
@@ -22,24 +23,56 @@ Evidence: `tests/maintainer_candidate_shell_test.py`, `tests/maintainer_candidat
 `tests/maintainer_composition_test.py` and a real temporary production installation in
 `tests/maintainer_composition_e2e_test.py`, which now walks from the consumer dashboard to screen 37.
 
+## Already done in step 4
+
+`agent_artifacts/application/candidate_validation.py` runs the ordered, named pipeline 164.6
+describes over one compiled Candidate, with `tests/candidate_validation_test.py` (17 tests) green
+and `make lint`/`make typecheck` clean:
+
+- `ValidationCheck` names the ten pipeline stages and `VALIDATION_PIPELINE` fixes their order;
+  every `CandidateValidation` carries a result for every check, in that order, so a screen can
+  never silently omit a stage.
+- `ValidationOutcome` keeps `passed`, `warning`, `error` and `not-run` distinct; `not-run` is not a
+  pass, and live acceptance stays `not-run` until CP-17 produces real evidence.
+- `ValidationCheckResult.findings` maps outcomes to `FindingSeverity`, and a warning or error with
+  no actionable detail is refused at construction.
+- `CandidateValidation.unmet_requirements` / `.manual_approval_required` read
+  `EffectivePolicy.required_checks`, and `.state` feeds `assess_candidate`, so a required check that
+  did not pass yields `APPROVAL_REQUIRED` rather than `WARNING` or `READY` (D-099).
+- `validate_candidate(bundle, policy=...)` and `validated_candidate(bundle, policy=...)` are the
+  entry points; both are pure and take the already-compiled bundle.
+
 ## Exact next action
 
-Start RED tests for screens 38–40:
+Finish step 4 by making the screens 38–40 surface exist.
+`tests/maintainer_validation_views_test.py.pending` is the RED specification already written for it:
+rename it back to `*_test.py` and drive it to green. It pins, and the work is:
 
-1. Project a validation run as an ordered pipeline of **named** checks over one Candidate, each
-   carrying its own outcome, rather than a flat findings list. Screen 38 lists the checks a
-   Candidate ran and how it stands; screen 39 is the detail of one named check.
-2. Keep warnings and errors distinct all the way to the screen (164.6). An error is not a severe
-   warning: `assess_candidate` already refuses to call a Candidate READY when any finding is an
-   error, and the projections must not collapse the two into one severity column.
-3. Make policy the thing that decides whether a warning blocks promotion, and make
-   policy-required manual approval the explicit `CandidateState.APPROVAL_REQUIRED` state rather
-   than an ordinary warning that a renderer treats specially. `domain/policies.py` and
-   `assess_candidate(..., manual_approval_required=...)` are the existing seams; screen 40 shows
-   which policy decided what.
-4. Reach screens 38–40 from screen 36 through the shared reducer, from the composition already
-   read once. Validation state is projected, never recomputed during drawing, and never inferred
-   from a Candidate's state enum alone.
+1. `MaintainerValidationRowId(candidate_id, check)` and `parse_validation_row` in
+   `application/maintainer_views.py`. Screen 38's rows address a *pair*, because a check name alone
+   is ambiguous across Candidates and a Candidate ID alone cannot open one check; `str(row)` is
+   `"<candidate-id>:<check>"` and parsing refuses an unknown check or a non-hex ID (D-100 still to
+   be written up).
+2. `project_maintainer_validation(bundle, policy=...) -> MaintainerValidationView` — one row per
+   `ValidationCheck` with a human label, the outcome, whether policy requires it, and its details
+   carrying declared vs expected. Plus `.error_count`, `.warning_count`, `.unmet_requirements`.
+3. `project_maintainer_policy_review(validation, bundle, policy=...) -> MaintainerPolicyReviewView`
+   for screen 40: the decision, the required checks, what is unmet, the allowed runtimes,
+   transports and network hosts (`None` when a policy does not constrain them, which is not the
+   same as an empty allowlist), the risk ceiling, and the blocking findings.
+4. `MaintainerViews` gains a fourth `validations` field and `.validation(candidate_id)`;
+   `read_maintainer_views` composes them once, taking the `EffectivePolicy` as a parameter rather
+   than reaching for configuration inside a projection.
+5. `render_maintainer_validation`, `render_maintainer_validation_check` and
+   `render_maintainer_policy_review` in `tui_maintainer.py`, then rows/detail/body in
+   `tui_consumer.py` and a `p` binding in `key_event` opening POLICY_REVIEW from VALIDATION.
+   Screen 40 must open from either a bare Candidate ID or a check row.
+6. An E2E walk in `tests/maintainer_composition_e2e_test.py` reaching 38, 39 and 40 against a real
+   temporary installation, and a drawing test that opens no file.
+
+Keep warnings and errors distinct all the way to the screen: the projections must not collapse the
+two into one severity column, and validation state is never inferred from a Candidate's state enum
+alone.
 
 ## Critical boundaries for this slice
 

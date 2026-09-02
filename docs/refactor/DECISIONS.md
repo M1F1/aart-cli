@@ -1592,3 +1592,31 @@ the Product Specification first instead of hiding the change here.
   has a typed value to edit when it lands and needs no second filter model. Drawing 35–37 reads
   nothing from the machine: the shell is handed the composed scans `read_maintainer_views` already
   read once, and the `d`/`f` keys stay inside `key_event` as the only key interpreter (D-041).
+
+## D-099 — Candidate validation is a named pipeline, and policy is what makes a warning block
+
+- **Decision:** `application/candidate_validation.py` runs the ten checks 164.6 names, in that
+  order, over the compiled artifact a Candidate already carries. Each check reports its own
+  `ValidationOutcome` — `passed`, `warning`, `error` or `not-run` — with actionable details carrying
+  path, declared and expected values. `not-run` is deliberately not a pass: a check that produced no
+  evidence has not agreed that anything is fine. Live acceptance is always `not-run` here, because a
+  real installation on a real machine is CP-17's, and ticking it would claim evidence nothing
+  produced. Policy enters through the existing `EffectivePolicy.required_checks`: any required check
+  that did not pass makes the Candidate `APPROVAL_REQUIRED` rather than `WARNING` or `READY`.
+- **Status:** accepted.
+- **Reason:** 164.6 makes three separations load-bearing — warnings distinct from errors, policy
+  deciding whether a warning blocks promotion, and policy-required manual approval being its own
+  Candidate state rather than a warning treated specially. `required_checks` already existed on
+  `EffectivePolicy` and had no reader; using it is the smallest choice that satisfies all three
+  without inventing new policy configuration. `assess_candidate` already ranks error above manual
+  approval above warning, so the pipeline feeds it rather than re-deciding.
+- **Consequence:** the same Candidate is `READY` under an undemanding policy and
+  `APPROVAL_REQUIRED` under one that requires live acceptance, and neither answer is a defect.
+  Several checks are re-verifications — `compile_author_snapshot` refuses most malformed manifests
+  long before a Candidate exists — so their value is catching a Candidate history corrupted or
+  tampered with after the fact; they are tested against deliberately doctored canonical trees.
+  Two checks are reachable on artifacts that compile cleanly and are the pipeline's real teeth: a
+  secret bound to a command-line argument is an **error**, because argv is readable from the process
+  table, and an executable payload file is a warning the Security check names by path.
+  Wiring organization configuration into `EffectivePolicy` is not done here: the canonical path
+  still composes a default `EffectivePolicy()`, exactly as `io/consumer_actions.py` already does.

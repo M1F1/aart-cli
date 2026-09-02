@@ -75,7 +75,7 @@ durable preference as of D-090, without which the opt-in boundary could not hold
    reducer (D-092).
 2. **DONE:** Screen 30 and screens 31–34 over the canonical source scan.
 3. **DONE:** Screens 35–37: Candidate list, detail and semantic-first diff (D-098).
-4. Screens 38–40: validation pipeline and policy review.
+4. Screens 38–40: validation pipeline and policy review. **ENGINE DONE, SCREENS PENDING.**
 5. Screens 41–47: promotion review, registry diff, explicit commit, registry view, bulk promotion.
 6. Screens 48–53: lifecycle, provenance, conflicts, Collection candidates (closes B-031), filters.
 7. Retire the legacy consumer/maintainer authority CP-13 left standing, each removal preceded by a
@@ -229,3 +229,42 @@ types, and import ordering) rather than by relaxing any gate.
 Gates on 2026-09-01 after step 3: `make quality` green end to end (format-check, lint, typecheck,
 unit, validate, coverage, packaging-check, docs-check, secret-shape-check) and `make integration`
 green. 3,017 unit tests and 208 E2E tests pass; branch coverage is 83.31%.
+
+## Step 4 progress — the validation engine (2026-09-01)
+
+`agent_artifacts/application/candidate_validation.py` implements 164.6's pipeline as a value, ahead
+of the screens that show it, so screens 38–40 project a validation run rather than compute one while
+drawing.
+
+What it establishes:
+
+- Validation is an *ordered pipeline of named checks*, not a flat findings list.
+  `VALIDATION_PIPELINE` fixes the order and `CandidateValidation` refuses to exist unless it carries
+  a result for every check in that order — a screen cannot silently omit a stage.
+- Warnings and errors stay distinct end to end, and a fourth outcome, `not-run`, is deliberately not
+  a pass: a check that produced no evidence has not agreed that anything is fine. Live acceptance is
+  `not-run` here because a real installation on a real machine is CP-17's evidence, and ticking it
+  would claim evidence nothing produced.
+- A warning or error with no actionable detail is refused at construction, so "something is wrong"
+  can never reach a Maintainer without a path, a declared value or an expectation attached.
+- Policy decides what blocks, through the `EffectivePolicy.required_checks` field that already
+  existed and had no reader. A required check that did not pass makes the Candidate
+  `APPROVAL_REQUIRED`, which is 164.6's "policy-required manual approval is an explicit state"
+  rather than a warning a renderer treats specially (D-099).
+
+What the checks are actually worth was established empirically against `compile_author_snapshot`
+before writing them, because a check that cannot fail is decoration. The compiler already refuses a
+missing runtime, an unpinned runtime version and a dependency descriptor absent from the payload, so
+those checks are re-verifications: their value is catching a Candidate history corrupted or tampered
+with after the fact, and they are tested against deliberately doctored canonical trees rather than
+against inputs the compiler would have rejected. Two checks bite on artifacts that compile cleanly:
+a secret bound to a command-line argument is an **error**, because argv is readable from the process
+table, and an executable payload file is a warning the Security check names by path.
+
+Evidence: `tests/candidate_validation_test.py`, 17 tests across pipeline shape, per-check content and
+the outcome-to-`CandidateState` mapping, with `make lint` and `make typecheck` green.
+
+`tests/maintainer_validation_views_test.py.pending` is the RED specification for the screens
+themselves, parked under a non-discovered filename so the suite stays green across the handoff. The
+next agent renames it to `*_test.py` and drives it green; `docs/refactor/NEXT.md` lists the six
+pieces it pins.
