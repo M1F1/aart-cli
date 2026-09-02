@@ -130,6 +130,30 @@ imports, takes `LifecycleItem` and `InstallMode` from `lifecycle/model.py` and
 `installation/model.py`. The stack is load-bearing for a public flow. Like `installation/*`, it goes
 by symbol if at all, and not by package.
 
+**B-044 was attempted and the attempt is preserved, not merged.** Codex began it and was cut off
+mid-work by its own rate limit; the draft is on branch `codex-wip/b-044-draft` (`e40a80d`) with a
+full review under B-044. The headline: **all 3,216 unit tests passed with it applied, while it
+hardcoded `TrustClass.COMPANY_REVIEWED` into the setup policy check** -- the constant that makes
+`_policy_allows`'s untrusted-source refusal unable to fire. Nothing in the suite exercises trust on
+that route, which is the same blindness B-044 is about.
+
+Two findings from trying to write the characterization test, both in B-044 in full, both changing
+what this costs:
+
+- **Nothing published through the authoring pipeline can declare setup.** `setup` appears zero times
+  in `protocol/authoring.py`. A setup-declaring artifact reaches a registry through a *native*
+  promotion only, and every consumer E2E harness publishes through the author-compile route. So the
+  first deliverable is a fixture that puts one into a published registry through the native path,
+  via the real promotion pipeline -- hand-patching a snapshot breaks the version record's digests.
+- **No E2E anywhere installs a setup-declaring artifact from a registry, on any route, CLI
+  included.** The setup path has never been proven from a published registry. That fixture is
+  therefore missing evidence for the CLI route as much as for the TUI one, and is worth more than
+  the wiring.
+
+Ordering: build the fixture and prove the **CLI** installs and sets up a setup-declaring registry
+artifact; then run the same artifact through the canonical shell and assert the setup did not run --
+that is the RED; then reconcile the installed-record question and make it green.
+
 What the removal exposed is the actual next work. **B-044 (critical):** `io/consumer_actions.py`
 performs no setup and no reporting, so since D-115 an artifact installed from the TUI that declares
 setup requirements lands unconfigured and no usage report is offered — while the Product

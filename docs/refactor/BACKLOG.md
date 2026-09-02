@@ -812,6 +812,104 @@ artifact installed from the TUI that declares setup requirements lands unconfigu
 mandatory invariant a shipped path no longer satisfies, which is the evidence the reclassification
 rule asks for. The public `aart marketplace install` carries both and is unaffected.
 
+### Review of the first attempt (2026-09-02) — preserved, not merged
+
+Codex began this and was cut off mid-work by its own rate limit, so what follows reviews a **draft**,
+not a submitted result. It is preserved on branch `codex-wip/b-044-draft` (`e40a80d`) rather than
+discarded: the diagnosis in it is right even where the implementation is not.
+
+It added a `_ConfiguredSetupService` inside `io/consumer_actions.py` that reimplements the setup
+engine's planning against the configured installation's receipt, plus a `completion` on
+`ConsumerActionUpdate` that the shell runs with the terminal. **All 3,216 unit tests passed with it
+applied**, which is the most important thing the review found: nothing in the suite exercises trust
+or authorization on the new route, so the gap this item describes is invisible to the gates.
+
+Blocking defects, worth naming so the next attempt does not repeat them:
+
+1. **The untrusted-source authorization gate is bypassed.** The draft calls
+   `_policy_allows(request, TrustClass.COMPANY_REVIEWED, ...)` with that trust as a literal, and
+   writes `trust=TrustClass.COMPANY_REVIEWED.value` into the persisted setup record.
+   `setup_engine/application.py::_policy_allows` refuses setup from `UNVERIFIED`, `LOCAL` or
+   `DIRECT_SOURCE` unless `authorize_untrusted_source` is set — a refusal that can never fire when
+   the trust is a constant. It also passes the registry snapshot digest as
+   `trust_evidence_digest`, which is a different value space, so the engine's own re-check that
+   trust has not moved since review (`application.py:599`) would compare against something that
+   never described trust.
+2. **Evidence is fabricated to satisfy a type.** `ConsumerReview` is built with
+   `sha256_bytes(b"unreviewed-consumer-action")` as its review digest and literal
+   `"company-reviewed"` / `"low"` per item. A review digest exists to bind a review; a placeholder
+   in that field is worse than an absent one.
+3. **The layering inverts.** `io/consumer_actions.py` imports `agent_artifacts.tui` (lazily, inside
+   a method, to dodge the cycle) so the IO layer depends on the terminal module.
+4. **A second key interpreter.** `key_event` grows a `prompt=True` mode that returns
+   `PROMPT_INPUT` for any printable key, bypassing the state machine, and it is called from the
+   action handler while `completion.run(terminal)` drives `terminal.key()` straight from the shell
+   loop. "`key_event` remains the only key interpreter" is a critical boundary of this slice.
+5. Private cross-module imports (`installation.io._write_atomic`,
+   `setup_engine.application._planned_capabilities` and `._policy_allows`), an unguarded
+   `next(...)` over recipe entries that raises `StopIteration` when the entry is absent, and
+   `platform = "darwin" if sys.platform == "darwin" else "linux"`, which makes Windows Linux.
+
+**What the draft got right, and what it exposes.** Its own docstring names the real obstacle: "The
+setup engine's public facade still reads the older install-state manifest. The configured
+installation is authoritative in the receipt store instead." That is exactly the problem, and it is
+why this is a slice rather than a wiring change. `setup_engine.application.prepare_setup` is already
+the correct entry — it derives real trust from `item.trust.kind`, checks that the indexed setup
+recipe, platforms and capabilities match the compiled object, and binds policy before planning — but
+`_prepare_setup_object` reaches the installed record through `ports.read_state(...)` on the
+install-state manifest, which only `installation/application.py` and `lifecycle/application.py`
+write. The canonical configured installation writes receipts instead, and nothing in
+`agent_artifacts/` writes install state on that path.
+
+So the slice is about reconciling those two records, and the choice is between: (a) having the
+configured installation also write the install-state record the engine reads, or (b) widening the
+engine's object preparation so the installed record can be named from the receipt store as well —
+keeping every trust, evidence and policy check inside the engine either way. What must not happen is
+a third implementation of the planning that re-derives those checks, because that is where the trust
+constant came from.
+
+### Why there was no test to catch this (2026-09-02)
+
+Two facts found while trying to write the characterization test. Both change what this item costs,
+and the first one has to be settled before any of it can be proven end to end.
+
+**Nothing published through the authoring pipeline can declare setup.** The string `setup` does not
+appear anywhere in `agent_artifacts/protocol/authoring.py`: the authored `aart.json` accepts
+`transport`, `runtime`, `launch`, `requirements`, `inputs`, `python`, `credentials`, `compatibility`
+and `install`, and no setup reference. `compile_author_snapshot` therefore never emits one. The
+native and registry schemas do support it -- `protocol/native_schema.py` parses a setup reference on
+an artifact manifest, `protocol/registry_schema.py` parses it on the registry index, and
+`setup_engine/application.py::_prepare_setup_plan` checks the *indexed* setup recipe, platforms and
+capabilities against the compiled object -- so a setup-declaring artifact reaches a registry through
+a native promotion (`registry promote-native`, `vendor`, `scaffold`), never through author-compile.
+
+Every consumer E2E harness publishes through `_published_registry(...)`, which is the author-compile
+route. So none of them can produce a setup-declaring artifact, and the first deliverable of this
+item is a fixture that puts one into a published registry through the native route. It must go
+through the real promotion pipeline: hand-patching a `setup` block into a published snapshot changes
+the package, and the version record's canonical, payload and object digests would no longer resolve.
+
+**No end-to-end test anywhere installs a setup-declaring artifact from a registry -- on any route,
+CLI included.** The closest is
+`marketplace_lifecycle_e2e_test.py::test_setup_on_an_artifact_that_declares_none_completes_with_an_empty_queue`,
+which is the empty case, and `marketplace_lifecycle_cli_test.py`'s planning-failure assertions,
+which are unit-level against a hand-built fixture. So the setup path has never been proven from a
+published registry at all. That is why the gap this item describes was invisible, and it is also why
+the fixture above is worth more than the wiring: it is the missing evidence for the CLI route as
+much as for the TUI one.
+
+**The route in, verified.** `aart registry scaffold` takes `--setup-recipe` (`cli.py:1052`), and
+`registry_commands/planning.py` requires the named recipe and a `SETUP.md` beside it (line 872) and
+carries `manifest.setup.recipe` and `.platforms` into the built index (line 1122). So the fixture is
+`registry scaffold --setup-recipe ... && registry build`, which
+`tests/registry_cli_integration_test.py` already does for a registry without setup and is the
+cheapest place to start from.
+
+Ordering that follows: (1) build the native-promotion fixture and prove the **CLI** installs and
+sets up a setup-declaring registry artifact, which characterizes the working route; (2) run the same
+artifact through the canonical shell and assert the setup did not run -- that is the RED for this
+item; (3) reconcile the installed-record question below and make it green.
+
 What remains: give the canonical action handler its own setup and reporting completion.
 `_canonical_setup_run` and `_complete_canonical_consumer_action` are deliberately retained in
 `agent_artifacts/tui.py` as the material for it — they are the only implementation of the
