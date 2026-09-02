@@ -5381,6 +5381,79 @@ class _CursesTerminal:
         return int(self._stdscr.getch())
 
 
+#: The keys a line editor cannot send. A line has no arrows and no bare Escape, so those get a
+#: word; everything else is the character somebody typed. An unknown word is worth nothing rather
+#: than its first letter: taking the "d" out of "delete" would act on a key nobody pressed.
+_TEXT_KEY_WORDS: dict[str, int] = {
+    "": 10,
+    "enter": 10,
+    "return": 10,
+    "up": 259,
+    "down": 258,
+    "esc": 27,
+    "escape": 27,
+    "back": 263,
+    "backspace": 263,
+    "space": 32,
+}
+
+_TEXT_KEY_HINT = "Keys: one character, or up / down / enter / esc / back. Blank line = enter."
+
+
+class _TextTerminal:
+    """The canonical consumer application in a terminal that cannot draw.
+
+    The shell's terminal is two methods, so text is not a second application: it is the same one,
+    written with ``print`` and driven by ``input()``. That is what ERR05's degradation means --
+    the terminal cannot host curses, not that the product changes.
+    """
+
+    def __init__(self, read: ReadFn, write: WriteFn) -> None:
+        self._read = read
+        self._write = write
+        self._ended = False
+
+    def draw(self, lines: Tuple[str, ...]) -> None:
+        for line in lines:
+            self._write(line)
+        self._write("")
+        self._write(_TEXT_KEY_HINT)
+
+    def key(self) -> int:
+        try:
+            raw = self._read("> ")
+        except EOFError:
+            # stdin ended. Quit, and answer the discard prompt quitting may raise -- nobody is
+            # there to answer it, and redrawing it forever is the alternative.
+            quitting = not self._ended
+            self._ended = True
+            return ord("q") if quitting else ord("y")
+        if len(raw) == 1:
+            return ord(raw)
+        return _TEXT_KEY_WORDS.get(raw.strip().lower(), 0)
+
+
+def run_consumer_text(
+    actions: LocalConsumerActions,
+    *,
+    read: ReadFn = input,
+    write: WriteFn = print,
+) -> ConsumerUiState:
+    """Run the canonical consumer application over a line-oriented terminal.
+
+    The same screens, reducer and action handler the curses route runs. Only the terminal differs,
+    which is the whole of what ERR05 permits a text fallback to change.
+    """
+
+    return run_consumer_shell(
+        actions.source(),
+        _TextTerminal(read, write),
+        state=opening_state(actions.settings),
+        action_handler=actions,
+        settings_writer=actions.save_settings,
+    )
+
+
 def run_consumer(actions: LocalConsumerActions) -> ConsumerUiState:
     """Run the canonical consumer application over curses, or raise if there is no terminal.
 
@@ -5607,17 +5680,19 @@ def run(
         canonical_terminal = _curses_supported()
     except Exception as error:
         return _render_internal_failure(error, canonical_failures)
+    # One composition for whichever terminal answers. Composing again on the degradation path
+    # would open the same local state twice, and a failure would then be reported by whichever
+    # half opened it first.
+    composed = _canonical_consumer_actions(project=project, user_home=user_home, today=date.today())
+    if isinstance(composed, DomainErr):
+        return _render_consumer_startup_failure(composed)
     if canonical_terminal:
-        composed = _canonical_consumer_actions(
-            project=project, user_home=user_home, today=date.today()
-        )
-        if isinstance(composed, DomainErr):
-            return _render_consumer_startup_failure(composed)
         try:
             run_consumer(composed.value)
         except CursesUnavailable:
-            # The terminal claimed it could and could not. That is the documented degradation,
-            # and it lands on the text flow below rather than on a second curses attempt.
+            # The terminal claimed it could and could not. That is ERR05's one legitimate
+            # degradation, and it lands on the same application in a line-oriented terminal
+            # rather than on a second curses attempt or a different product.
             pass
         except Exception as error:
             # The outermost crash boundary for the canonical application. ``curses.wrapper`` has
@@ -5626,80 +5701,8 @@ def run(
             return _render_internal_failure(error, canonical_failures)
         else:
             return 0
-    source_context = _runtime_source_stage_context(
-        source_dir=source_dir,
-        repo=repo,
-        user_home=user_home,
-    )
-    if isinstance(source_context, DomainErr):
-        failure = _terminal_stage_failure(
-            WizardSession(current="source"),
-            "load",
-            source_context,
-        )
-        for line in render_wizard_stage_failure(failure):
-            print(line)
-        return _stage_failure_exit_code(failure)
-    source_runtime = source_context.value
-    source_stage_view = source_runtime.view
-    source_finalizer = source_runtime.source_finalizer
-    source_addition_finalizer = source_runtime.source_addition_finalizer
-    source_removal_finalizer = source_runtime.source_removal_finalizer
-    source_sync_runner = source_runtime.source_sync_runner
-    source_resubscribe_runner = source_runtime.source_resubscribe_runner
-
-    def reload_source_stage() -> DomainResult[_RuntimeSourceStage]:
-        return _runtime_source_stage_context(
-            source_dir=source_dir,
-            repo=repo,
-            user_home=user_home,
-        )
-
-    consumer_service: Optional[ConsumerApplicationService] = None
-    consumer_service_factory: Optional[ConsumerServiceFactory] = None
-    reporting_service: Optional[ReportingApplicationService] = None
-    reporting_service_factory: Optional[ReportingServiceFactory] = None
-    if source_dir is None and repo is None:
-        from .consumer.runtime import load_local_consumer_service
-        from .reporting.runtime import load_local_reporting_service
-
-        def runtime_consumer_service(
-            configuration: UserConfiguration,
-        ) -> DomainResult[ConsumerApplicationService]:
-            return load_local_consumer_service(
-                project=project,
-                user_home=user_home,
-                configuration=configuration,
-            )
-
-        consumer_service_factory = runtime_consumer_service
-
-        def runtime_reporting_service(
-            configuration: UserConfiguration,
-        ) -> DomainResult[ReportingApplicationService]:
-            return load_local_reporting_service(
-                user_home=user_home,
-                configuration=configuration,
-            )
-
-        reporting_service_factory = runtime_reporting_service
-    # The legacy curses wizard is no longer reachable from a terminal: `run` routed there above.
-    # What remains here is the text degradation, which the canonical application has no answer for
-    # yet -- it needs a terminal it can draw on.
-    return _run_text(
-        source_dir=source_dir,
-        repo=repo,
-        project=project,
-        user_home=user_home,
-        source_stage_view=source_stage_view,
-        source_finalizer=source_finalizer,
-        source_addition_finalizer=source_addition_finalizer,
-        source_removal_finalizer=source_removal_finalizer,
-        source_sync_runner=source_sync_runner,
-        source_resubscribe_runner=source_resubscribe_runner,
-        source_stage_loader=reload_source_stage,
-        consumer_service=consumer_service,
-        consumer_service_factory=consumer_service_factory,
-        reporting_service=reporting_service,
-        reporting_service_factory=reporting_service_factory,
-    )
+    try:
+        run_consumer_text(composed.value)
+    except Exception as error:
+        return _render_internal_failure(error, canonical_failures)
+    return 0

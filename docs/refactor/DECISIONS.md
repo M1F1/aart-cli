@@ -1989,3 +1989,36 @@ the Product Specification first instead of hiding the change here.
   registries are passed, so nothing that composed screens without them changes. B-038's other half —
   removing the legacy route's ability to install directly from a native Source — is unchanged and
   still sequenced behind its own public-flow evidence.
+
+## D-115 — The text fallback is the canonical application, not a second product
+
+- **Decision:** `run()` now composes `_canonical_consumer_actions` **once** for whichever terminal
+  answers, and a terminal that cannot host curses runs `run_consumer_text` — the same screen source,
+  reducer, action handler and settings writer the curses route runs, over a `_TextTerminal` that
+  draws with `write` and reads with `read`. The entire legacy tail of `run()` is gone: no
+  `_runtime_source_stage_context`, no `ConsumerServiceFactory`, no `_run_text` call. A line editor
+  has no arrow keys and no bare Escape, so `_TextTerminal` names those (`up`, `down`, `enter`,
+  `esc`/`escape`, `back`/`backspace`, `space`), treats a single-character line as that character and
+  a blank line as Return, and gives an unknown word no meaning at all. On `EOFError` it answers `q`
+  once and `y` thereafter.
+- **Status:** accepted; the enabling step for the rest of CP-14 step 7.
+- **Reason:** step 7's remaining removals — `consumer/application.py`, `lifecycle/*`,
+  `setup_engine/*`, and B-038's legacy direct-install-from-a-native-Source — are all reachable
+  only through `_run_text`, which is built on `ConsumerApplicationService` and through it on that
+  whole stack. So none of them could be removed while `_run_text` was the only thing the text route
+  had; the blocker was not evidence but a missing replacement. ERR05 permits a text fallback for
+  exactly one condition, the terminal cannot host curses. It says nothing about the *product*
+  changing, and a no-TTY environment — CI, a pipe, a dumb terminal, SSH without a pty — was getting
+  a different application from the one a terminal gets. The shell already takes its terminal as a
+  port of two methods, so the replacement is an adapter rather than a second frontend.
+  An unknown word means nothing rather than its first character, because taking the "d" out of
+  "delete" would act on a key nobody pressed. EOF answers the discard prompt because a pipe that
+  ends mid-selection would otherwise redraw that prompt forever.
+- **Consequence:** `_run_text` and everything below it now have no production caller — the same
+  position `_run_curses` was in before D-113, and the removal follows with the same evidence
+  discipline. The ERR05 tests in `tests/tui_fallback_boundary_test.py` were retargeted at
+  `run_consumer_text`: "degrades exactly once", "a defect never restarts the application as text",
+  "an unexpected probe error is not silently downgraded" all now hold against the canonical route,
+  and the assertions that had become vacuous (patching a `_run_text` nothing calls) were restated
+  rather than left standing. `run()` composing once is now pinned: composing again on the
+  degradation path would open the same local state twice.

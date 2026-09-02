@@ -93,10 +93,25 @@ opened on an empty list and a dashboard reading "0 registries". `read_consumer_o
 the projected rows, `screens_from` takes them, and a row that is not a registry says so and offers
 `details` only instead of a sync whose advertised effect it cannot have.
 
-The next removal is the semantic authority behind the shell, one route at a time and each preceded
-by the public-flow evidence D-091 requires: `consumer/application.py`, `lifecycle/application.py`,
-`installation/*`, `setup_engine/*`, and `_dispatch_result` with them, plus B-038's remaining half —
-the legacy route's ability to install directly from a native Source. Do not remove the text route.
+Step 7 then found why it could remove nothing further: every remaining target —
+`consumer/application.py`, `lifecycle/*`, `setup_engine/*`, and B-038's legacy direct-install from a
+native Source — was reachable only through `_run_text`, which is built on
+`ConsumerApplicationService` and through it on that whole stack. The blocker was a missing
+replacement, not missing evidence. So the text route is now the canonical application:
+`_TextTerminal` adapts the shell's two-method terminal port to `write`/`read`, `run()` composes once
+for whichever terminal answers, and its entire legacy tail is gone (D-115). ERR05 permits a text
+fallback for one condition — the terminal cannot host curses — and says nothing about the product
+changing.
+
+**The exact next action is the removal that unblocks.** `_run_text` and the stack below it now have
+no production caller, which is the position `_run_curses` was in before D-113. Remove them under the
+same discipline, one path at a time and each preceded by the public-flow evidence D-091 requires:
+`_run_text` and the wizard stages it drives, then `consumer/application.py`,
+`lifecycle/application.py`, `setup_engine/*`, and `_dispatch_result`. Note that `installation/*` is
+*not* purely legacy — its model is imported across the canonical `application/` layer — so it goes
+by symbol rather than by package. B-038's remaining half falls out of the same removal. Do not
+remove the text *route*: no-TTY is a supported environment, and it is now the canonical
+application.
 
 Behind it, step 6 left the surfaces complete: screen 53 is live (D-111) — the typed filter carries
 all four facets the Product Specification names, `f` opens it from screen 35, `Space` toggles a

@@ -732,3 +732,42 @@ B-038 is partly closed: what remains is removing the legacy route's ability to i
 a native Source, behind its own public-flow evidence.
 
 Checkpoint gates on 2026-09-02: `make quality` and `make integration` are both green.
+
+## Step 7c — the text route becomes the canonical application
+
+Surveying what step 7 could remove next turned up the reason it could not remove anything. Every
+remaining target — `consumer/application.py`, `lifecycle/*`, `setup_engine/*`, and B-038's legacy
+direct-install from a native Source — is reachable only through `_run_text`, which is built on
+`ConsumerApplicationService` and through it on that entire stack. The blocker was never evidence; it
+was a missing replacement. A no-TTY environment (CI, a pipe, a dumb terminal, SSH without a pty) was
+being handed a different product from the one a terminal gets.
+
+ERR05 permits a text fallback for exactly one condition: the terminal cannot host curses. It says
+nothing about the application changing. And the shell already takes its terminal as a port of two
+methods — `draw(lines)` and `key() -> int` — so text is an adapter, not a second frontend.
+
+`_TextTerminal` draws with `write` and reads with `read`. A line editor has no arrow keys and no
+bare Escape, so it names them: `up`, `down`, `enter`, `esc`/`escape`, `back`/`backspace`, `space`. A
+single-character line is that character, a blank line is Return, and an unknown word means nothing
+at all — taking the "d" out of "delete" would act on a key nobody pressed. `EOFError` answers `q`
+once and `y` thereafter, because a pipe that ends mid-selection would otherwise redraw the discard
+prompt forever.
+
+`run()` now composes the application once for whichever terminal answers and hands the same
+composition to `run_consumer` or `run_consumer_text`. Its whole legacy tail is gone: no
+`_runtime_source_stage_context`, no `ConsumerServiceFactory`, no `_run_text` call (D-115).
+
+Evidence is `tests/consumer_text_terminal_test.py`: every key form and the ones that must mean
+nothing, case and surrounding space, EOF quitting and confirming, drawing every line of a frame,
+`run_consumer_text` running the shell with the composition's own source, handler and settings
+writer, and two walks over a real temporary installation — reaching the dashboard through a pipe
+(including the "1 registries" that step 7b composed) and opening the Marketplace the configured
+registry approved. The ERR05 tests in `tests/tui_fallback_boundary_test.py` were retargeted at
+`run_consumer_text` rather than duplicated in the new file; the assertions that had become vacuous —
+patching a `_run_text` nothing calls and asserting it was not called — were restated instead of left
+standing.
+
+`_run_text` and the stack below it now have no production caller: the same position `_run_curses`
+was in before D-113. Removing them is the next increment, under the same discipline.
+
+Checkpoint gates on 2026-09-02: `make quality` and `make integration` are both green.

@@ -33,6 +33,30 @@
 
 ### CP-14 current increment (2026-09-02)
 
+**The text fallback is now the canonical application rather than a second product.** Surveying what
+step 7 could remove next turned up the reason it could remove nothing: every remaining target --
+`consumer/application.py`, `lifecycle/*`, `setup_engine/*`, and B-038's legacy direct-install from a
+native Source -- is reachable only through `_run_text`, which is built on `ConsumerApplicationService`
+and through it on that entire stack. The blocker was a missing replacement, not missing evidence,
+and a no-TTY environment (CI, a pipe, a dumb terminal, SSH without a pty) was being handed a
+different product from the one a terminal gets. ERR05 permits a text fallback for exactly one
+condition -- the terminal cannot host curses -- and says nothing about the application changing; the
+shell already takes its terminal as a port of two methods, so text is an adapter rather than a second
+frontend. `_TextTerminal` draws with `write` and reads with `read`, naming the keys a line editor
+cannot send (`up`, `down`, `enter`, `esc`, `back`, `space`), treating a single-character line as that
+character and a blank line as Return, giving an unknown word no meaning at all, and answering `q`
+then `y` on EOF so a pipe that ends mid-selection does not redraw the discard prompt forever.
+`run()` now composes the application once for whichever terminal answers and hands the same
+composition to `run_consumer` or `run_consumer_text`; its whole legacy tail -- source-stage
+composition, consumer/reporting service factories, the `_run_text` call -- is gone (D-115). Evidence
+is `tests/consumer_text_terminal_test.py`, including two walks over a real temporary installation:
+reaching the dashboard through a pipe and opening the Marketplace the configured registry approved.
+The ERR05 tests in `tests/tui_fallback_boundary_test.py` were retargeted at `run_consumer_text`
+rather than duplicated, and the assertions that had become vacuous were restated rather than left
+standing. `make quality` and `make integration` are both green. `_run_text` and the stack below it
+now have no production caller -- the position `_run_curses` was in before D-113 -- so the removals
+step 7 exists for are unblocked.
+
 **Screen 21 now lists the configured sources, and a native one says why it offers nothing.**
 B-038's remaining CP-14 dependency was one sentence of wording, and writing the test for it exposed
 that screen 21 had nothing to say it about: nothing on the composition path ever projected the

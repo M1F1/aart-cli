@@ -117,24 +117,29 @@ class CursesFallbackBoundaryTests(unittest.TestCase):
         self.assertIn("operation: load", rendered)
         self.assertNotIn("/Users/secret/path leaked", rendered)
 
-    def test_run_starts_the_text_wizard_once_when_curses_is_unavailable(self):
-        """A terminal that claims curses and cannot deliver it degrades, exactly once."""
+    def test_run_starts_the_text_application_once_when_curses_is_unavailable(self):
+        """A terminal that claims curses and cannot deliver it degrades, exactly once.
+
+        And it degrades to the same application, not a different one: what ERR05 permits a text
+        fallback to change is the terminal, not the product (D-115).
+        """
 
         with (
-            mock.patch.object(tui, "_runtime_source_stage_context", return_value=Ok(_runtime())),
             mock.patch.object(tui, "_curses_supported", return_value=True),
             mock.patch.object(tui, "_canonical_consumer_actions", return_value=Ok(mock.Mock())),
             mock.patch.object(
                 tui, "run_consumer", side_effect=tui.CursesUnavailable("no terminal")
             ),
-            mock.patch.object(tui, "_run_text", return_value=0) as fallback,
+            mock.patch.object(tui, "run_consumer_text", return_value=None) as fallback,
         ):
             code = tui.run(user_home="/tmp/aart-home")
 
         self.assertEqual(code, 0)
         self.assertEqual(fallback.call_count, 1)
 
-    def test_startup_sources_failure_is_a_typed_terminal_record_without_a_wizard_restart(self):
+    def test_startup_failure_is_a_typed_terminal_record_without_starting_either_terminal(self):
+        """A machine that cannot be composed is reported, not opened in a second application."""
+
         output = io.StringIO()
         failure = Err(
             (
@@ -148,28 +153,27 @@ class CursesFallbackBoundaryTests(unittest.TestCase):
         )
 
         with (
-            mock.patch.object(tui, "_runtime_source_stage_context", return_value=failure),
-            mock.patch.object(tui, "_run_text", return_value=0) as fallback,
+            mock.patch.object(tui, "_canonical_consumer_actions", return_value=failure),
+            mock.patch.object(tui, "run_consumer") as curses_route,
+            mock.patch.object(tui, "run_consumer_text", return_value=None) as text_route,
             redirect_stdout(output),
         ):
             code = tui.run(user_home="/tmp/aart-home")
 
-        self.assertEqual(code, 2)
-        fallback.assert_not_called()
-        self.assertIn("Sources could not be loaded", output.getvalue())
-        self.assertIn("error [source-invalid]", output.getvalue())
-        self.assertIn("Quit = q", output.getvalue())
+        self.assertNotEqual(code, 0)
+        curses_route.assert_not_called()
+        text_route.assert_not_called()
+        self.assertIn("source-invalid", output.getvalue())
 
     def test_run_never_restarts_the_application_after_an_internal_defect(self):
         output = _TtyCapture()
         with (
-            mock.patch.object(tui, "_runtime_source_stage_context", return_value=Ok(_runtime())),
             mock.patch.object(tui, "_curses_supported", return_value=True),
             mock.patch.object(tui, "_canonical_consumer_actions", return_value=Ok(mock.Mock())),
             mock.patch.object(
                 tui, "run_consumer", side_effect=ValueError("duplicate claude:current")
             ),
-            mock.patch.object(tui, "_run_text", return_value=0) as fallback,
+            mock.patch.object(tui, "run_consumer_text", return_value=None) as fallback,
             redirect_stdout(output),
         ):
             code = tui.run(user_home="/tmp/aart-home")
@@ -186,13 +190,12 @@ class CursesFallbackBoundaryTests(unittest.TestCase):
 
         output = _TtyCapture()
         with (
-            mock.patch.object(tui, "_runtime_source_stage_context", return_value=Ok(_runtime())),
             mock.patch.object(tui, "_curses_supported", return_value=True),
             mock.patch.object(tui, "_canonical_consumer_actions", return_value=Ok(mock.Mock())),
             mock.patch.object(
                 tui, "run_consumer", side_effect=ValueError("/Users/secret/path leaked")
             ),
-            mock.patch.object(tui, "_run_text", return_value=0),
+            mock.patch.object(tui, "run_consumer_text", return_value=None),
             redirect_stdout(output),
         ):
             tui.run(user_home="/tmp/aart-home")
@@ -206,13 +209,12 @@ class CursesFallbackBoundaryTests(unittest.TestCase):
         output = _TtyCapture()
         debug = io.StringIO()
         with (
-            mock.patch.object(tui, "_runtime_source_stage_context", return_value=Ok(_runtime())),
             mock.patch.object(tui, "_curses_supported", return_value=True),
             mock.patch.object(tui, "_canonical_consumer_actions", return_value=Ok(mock.Mock())),
             mock.patch.object(
                 tui, "run_consumer", side_effect=ValueError("/Users/secret/path leaked")
             ),
-            mock.patch.object(tui, "_run_text", return_value=0) as fallback,
+            mock.patch.object(tui, "run_consumer_text", return_value=None) as fallback,
             mock.patch.dict(tui.os.environ, {"AART_DEBUG": "1"}, clear=False),
             redirect_stdout(output),
             redirect_stderr(debug),
@@ -227,9 +229,8 @@ class CursesFallbackBoundaryTests(unittest.TestCase):
     def test_unexpected_terminal_probe_error_is_not_silently_downgraded_to_text(self):
         output = _TtyCapture()
         with (
-            mock.patch.object(tui, "_runtime_source_stage_context", return_value=Ok(_runtime())),
             mock.patch.object(tui, "_curses_supported", side_effect=ValueError("probe secret")),
-            mock.patch.object(tui, "_run_text", return_value=0) as fallback,
+            mock.patch.object(tui, "run_consumer_text", return_value=None) as fallback,
             redirect_stdout(output),
         ):
             code = tui.run(user_home="/tmp/aart-home")
@@ -241,16 +242,35 @@ class CursesFallbackBoundaryTests(unittest.TestCase):
 
     def test_missing_tty_still_falls_back_before_any_interaction(self):
         with (
-            mock.patch.object(tui, "_runtime_source_stage_context", return_value=Ok(_runtime())),
             mock.patch.object(tui.sys.stdin, "isatty", return_value=False),
+            mock.patch.object(tui, "_canonical_consumer_actions", return_value=Ok(mock.Mock())),
             mock.patch.object(tui, "run_consumer") as never,
-            mock.patch.object(tui, "_run_text", return_value=0) as fallback,
+            mock.patch.object(tui, "run_consumer_text", return_value=None) as fallback,
         ):
             code = tui.run(user_home="/tmp/aart-home")
 
         self.assertEqual(code, 0)
         never.assert_not_called()
         self.assertEqual(fallback.call_count, 1)
+
+    def test_the_degradation_composes_the_application_once_for_either_terminal(self):
+        """Composing again on the way to text would open the same local state twice."""
+
+        with (
+            mock.patch.object(tui, "_curses_supported", return_value=True),
+            mock.patch.object(
+                tui, "_canonical_consumer_actions", return_value=Ok(mock.Mock())
+            ) as composed,
+            mock.patch.object(
+                tui, "run_consumer", side_effect=tui.CursesUnavailable("no terminal")
+            ),
+            mock.patch.object(tui, "run_consumer_text", return_value=None) as fallback,
+        ):
+            code = tui.run(user_home="/tmp/aart-home")
+
+        self.assertEqual(code, 0)
+        self.assertEqual(composed.call_count, 1)
+        self.assertIs(fallback.call_args.args[0], composed.return_value.value)
 
 
 if __name__ == "__main__":  # pragma: no cover
