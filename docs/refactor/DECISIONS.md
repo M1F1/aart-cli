@@ -2230,3 +2230,29 @@ the Product Specification first instead of hiding the change here.
   would read as an identity and behave as a dangling pointer. This is step (2) of B-044's recorded
   ordering; it does not yet run setup, and B-045 (the canonical seam registers no CAS reference at
   all) remains separately open.
+
+## D-123 — The configured seam names the setup it does not run, before it can run it
+
+- **Decision:** `complete_configured_installation` reads the objects it just recorded, and carries
+  what they declare as `CompletedConfiguredInstallation.pending_setup`. `aart marketplace install`
+  emits it as an additive `pending_setup` key and renders it; the persistent shell carries it on
+  `ConsumerScreens` and draws it under screen 11's success. `agent_artifacts/application/
+  installed_setup.py` holds the pure value and `agent_artifacts/io/installed_setup.py` the reading.
+- **Status:** accepted.
+- **Reason:** the legacy route's install already names the setup it did not perform — D-121's first
+  gate — and the configured route said nothing at all. Silence is the worse of the two failures:
+  an operator who is told an artifact is installed and unconfigured has one step left, while one
+  who is told the install finished believes a Skill is configured when it is not. It is also the
+  first thing the receipt's object identity is spent on, and not scaffolding: setup is declared on
+  the package manifest rather than on anything the plan carries, so "does this artifact declare
+  setup" is answered by going back to the object the receipt names (D-122) — which is exactly the
+  first half of `_prepare_setup_object` for the canonical route.
+- **Consequence:** the key is absent rather than empty when nothing declares setup, because an
+  install that always carried it would read as "checked and found to need nothing", which is a
+  stronger claim than this seam makes. The reading is done after completion from the durable
+  record rather than from the plan, so it is a statement about the machine and not the action
+  repeating its own intention. A receipt that names no object is passed over in silence; an object
+  a receipt names and the store cannot produce is an error, because reporting "nothing to
+  configure" there would turn a broken store into a clean bill of health. Half of
+  `tests/configured_setup_gap_test.py` inverts: what it still characterizes is that the work is not
+  done, and `tests/configured_setup_report_test.py` owns the assertions that moved.

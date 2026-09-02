@@ -205,7 +205,20 @@ the recorded digest resolves to a real object in the store whose manifest is the
 package's; each receipt shape has a round-trip, an older-document read and a malformed-digest
 refusal.
 
-**Still open, and what step (3) has to answer.** The engine takes a legacy `MarketplaceCatalog`
+**Landed (D-123): both front ends now name the setup they did not run.**
+`complete_configured_installation` reads the objects it just recorded and carries what they declare
+as `pending_setup`; `aart marketplace install` emits it as an additive `pending_setup` key and
+renders it, and the persistent shell draws it under screen 11's success. This is what D-122 is
+first spent on — setup is declared on the package manifest, not on anything the plan carries, so
+answering "does this artifact declare setup" means going back to the object the receipt names. The
+key is absent rather than empty when nothing declares setup, and the reading happens after
+completion from the durable record rather than from the plan. Half of
+`tests/configured_setup_gap_test.py` inverted; `tests/configured_setup_report_test.py` owns the
+assertions that moved, and what remains characterized is that the work itself is still not done.
+
+**The exact next step is (3b): actually perform it.**
+
+**Still open, and what (3b) has to answer.** The engine takes a legacy `MarketplaceCatalog`
 (`resolve_artifact` plus `_marketplace_evidence`), which cannot read a promoted registry snapshot;
 `RegistryArtifactVersion` carries `object_digest` and `payload_digest` but **no `manifest_digest`**,
 so the canonical evidence is not a field-for-field substitution for `ArtifactEvidence`. And

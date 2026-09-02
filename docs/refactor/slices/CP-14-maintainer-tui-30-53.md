@@ -568,6 +568,48 @@ setup ran by replacing `setup_state_ref` inside the install-state record under i
 canonical route has no such pointer and needs its own durable setup record. Every trust, evidence
 and policy check stays inside the engine either way.
 
+## Step 7h — the configured seam names the setup it does not run (2026-09-02)
+
+B-044's step (3) splits in two, and this is the first half. The legacy route's install already
+names the setup it did not perform; the configured route emitted no `setup` key and drew no line,
+so the omission was silent. That is the worse failure of the two: an operator who is told an
+artifact is installed and unconfigured has one step left, and one who is told the install finished
+believes a Skill is configured when it is not.
+
+`complete_configured_installation` now reads the objects it just recorded and carries what they
+declare as `CompletedConfiguredInstallation.pending_setup`. `aart marketplace install` emits it as
+an additive `pending_setup` key and renders it; the persistent shell carries it on
+`ConsumerScreens` and draws it under screen 11's success, through a typed field rather than the
+`notice` channel — a notice is why something was refused, and this is part of what happened. The
+pure value is `application/installed_setup.py` and the reading is `io/installed_setup.py`.
+
+This is the first thing D-122 buys, and it is not scaffolding. Setup is declared on the *package
+manifest*, not on anything the installation plan carries, so answering "does this artifact declare
+setup" means going back to the immutable object the receipt names — which is the first half of the
+engine's own `_prepare_setup_object` for the canonical route.
+
+Three judgements are worth stating because each has a plausible wrong answer. The key is absent
+rather than empty when nothing declares setup, because an install that always carried it would read
+as "checked and found to need nothing", a stronger claim than this seam makes. The reading happens
+after completion, from the durable record, rather than off the plan that just executed — an install
+reporting the declaration it read from its own plan would be repeating its intention back to itself
+and would say nothing at all about an artifact whose record did not survive; the test asserts the
+object the report names is the object the receipt on disk names. And a receipt that cannot say
+which object it came from is passed over in silence, while an object a receipt *does* name and the
+store cannot produce is an error — the first is honestly unknown, the second is the dangling
+identity D-122's optional field was shaped to avoid, and reporting "nothing to configure" for it
+would turn a broken object store into a clean bill of health.
+
+Half of `tests/configured_setup_gap_test.py` inverted rather than being weakened: the assertions
+that both routes said nothing moved to `tests/configured_setup_report_test.py` as assertions that
+they now say it. What that file still characterizes is the part that remains — the configured file
+the recipe writes is absent after every one of these installs, because reporting is not performing.
+
+Step (3b) is the rest: reach the setup engine so the work is actually done. Its two open questions
+are unchanged (the engine's `MarketplaceCatalog` cannot read a promoted registry snapshot and
+`RegistryArtifactVersion` carries no `manifest_digest`; `persist_setup` records that setup ran
+inside the legacy install-state record).
+
 ## Step 5e — one transaction carrying a set of promotions
 
 A loop over single promotions is exactly what bulk promotion is not: each iteration would take its

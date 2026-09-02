@@ -11,12 +11,17 @@ payload, writes a receipt and returns; nothing between the confirmed review and 
 consults the setup declaration. Both front ends reach installation through that one seam --
 `aart marketplace install` for an approved RegistryGit coordinate, and the persistent shell's
 action handler for every install it makes -- so both report a finished install of an artifact that
-is not configured, and neither says so.
+is not configured.
 
 These tests characterize that. Every assertion below states what the two routes do today, and each
 one is written so that closing B-044 breaks it: the recipe writes a file with a name nothing else
 on the machine writes, and the assertion is that the file is not there. When the seam runs setup,
 these invert rather than quietly keep passing.
+
+Half of the original characterization has already inverted. Both routes reported the finished
+install and said nothing at all about the setup they skipped; both now name it, which
+`tests/configured_setup_report_test.py` owns and which those assertions were moved to rather than
+weakened. What is characterized here is the part that remains: the work itself is still not done.
 
 The legacy path is where setup does run, and it is reached only when a Selection is *not* an
 approved registry coordinate (`commands/marketplace.py::_configured_registry_selection` returns
@@ -137,10 +142,10 @@ class ConfiguredInstallCommandSetupTest(unittest.TestCase):
                 (env.project / ".claude/skills/code-review/SKILL.md").is_file(),
                 "the Skill never reached the harness, so this proves nothing about setup",
             )
-            # B-044. The declared setup did not run, and the command that reported the install
-            # finished said nothing about it: there is no `setup` key to read and no diagnostic.
+            # B-044. The declared setup did not run. The command now says so -- see
+            # `configured_setup_report_test.py`, which owns that assertion -- but saying it is not
+            # doing it, and the file the recipe writes is still not there.
             self.assertFalse((env.project / CONFIGURED).exists())
-            self.assertNotIn("setup", payload)
 
     def test_the_setup_command_cannot_reach_what_the_configured_seam_installed(self) -> None:
         """And the operator's remaining move does not work either.
@@ -196,13 +201,9 @@ class ConsumerShellSetupTest(unittest.TestCase):
                 "the Skill never reached the harness, so this proves nothing about setup",
             )
             # B-044. Success is drawn, the payload is placed, and the artifact is unconfigured.
+            # The shell now names the outstanding setup on that screen (proven in
+            # `configured_setup_report_test.py`); what it still does not do is perform it.
             self.assertFalse((env.project / CONFIGURED).exists())
-            # Nor is the person told. No screen in the session names setup at all, so nothing
-            # points at the work that is still outstanding.
-            self.assertEqual(
-                [frame for frame in terminal.frames if any("etup" in line for line in frame)],
-                [],
-            )
 
 
 if __name__ == "__main__":

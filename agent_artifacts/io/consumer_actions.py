@@ -40,6 +40,7 @@ from agent_artifacts.application.consumer_views import (
     LifecyclePlanView,
     project_lifecycle_plan,
 )
+from agent_artifacts.application.installed_setup import DeclaredArtifactSetup
 from agent_artifacts.application.maintainer_sync import PreparedSourceSync
 from agent_artifacts.application.maintainer_views import (
     MaintainerViews,
@@ -228,6 +229,7 @@ class LocalConsumerActions:
         promotion_validation=None,
         promotion_commit=None,
         notice: tuple[str, ...] = (),
+        pending_setup: tuple[DeclaredArtifactSetup, ...] = (),
     ) -> CanonicalScreenSource:
         """The screens for the machine as it currently stands, plus whatever a flow is holding."""
 
@@ -248,6 +250,7 @@ class LocalConsumerActions:
                 promotion_validation=promotion_validation,
                 promotion_commit=promotion_commit,
                 notice=notice,
+                pending_setup=pending_setup,
             )
         )
 
@@ -809,7 +812,12 @@ class LocalConsumerActions:
         self._machine = completed.value.machine
         receipt = completed.value.action.flow.outcome
         assert receipt is not None
-        return self._recorded(command, receipt.recorded_at, transaction=receipt)
+        return self._recorded(
+            command,
+            receipt.recorded_at,
+            transaction=receipt,
+            pending_setup=completed.value.pending_setup,
+        )
 
     def _execute_repair(
         self, command: ConsumerUiCommand, pending: PreparedConfiguredRepair

@@ -34,6 +34,7 @@ from agent_artifacts.application.installation_action import (
     complete_installation_action,
     prepare_installation_action,
 )
+from agent_artifacts.application.installed_setup import DeclaredArtifactSetup
 from agent_artifacts.application.marketplace_resolution import ResolutionPolicy
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.harness import Scope
@@ -66,6 +67,7 @@ from .installation_observation import (
     observe_planned_installation,
     observe_recorded_installation,
 )
+from .installed_setup import read_declared_setup
 from .python_runtime import observe_python_installers
 from .receipt_store import LocalReceiptStore
 
@@ -194,10 +196,18 @@ class CompletedConfiguredInstallation:
 
     action: CompletedInstallationAction
     machine: ConsumerMachine
+    #: The setup this installation did not perform, read back off the objects it recorded. Placing
+    #: an artifact's files is not always the whole of installing it, and this seam performs none of
+    #: the rest (B-044). Reporting is not performing, but an install that finishes silently on an
+    #: artifact that is still unconfigured leaves nobody anything to act on, so what is outstanding
+    #: travels with what was done and both front ends can say it.
+    pending_setup: tuple[DeclaredArtifactSetup, ...] = ()
 
     def __post_init__(self) -> None:
-        if not isinstance(self.action, CompletedInstallationAction) or not isinstance(
-            self.machine, ConsumerMachine
+        if (
+            not isinstance(self.action, CompletedInstallationAction)
+            or not isinstance(self.machine, ConsumerMachine)
+            or any(not isinstance(item, DeclaredArtifactSetup) for item in self.pending_setup)
         ):
             raise ValueError("a completed configured installation is invalid")
 
@@ -371,7 +381,17 @@ def complete_configured_installation(
     )
     if isinstance(machine, Err):
         return machine
+    # Read afterwards, from the durable record, for the same reason the machine is: an install that
+    # reported the declaration it read off its own plan would be repeating its intention back to
+    # itself, and would say nothing at all about an artifact whose record did not survive.
+    pending = read_declared_setup(
+        tuple(coordinate for coordinate, _ in completed.value.recorded.installations),
+        state_root=host.state_root,
+        data_root=host.data_root,
+    )
+    if isinstance(pending, Err):
+        return pending
     try:
-        return Ok(CompletedConfiguredInstallation(completed.value, machine.value))
+        return Ok(CompletedConfiguredInstallation(completed.value, machine.value, pending.value))
     except ValueError as error:
         return _error(f"this configured installation cannot be completed: {error}")

@@ -31,6 +31,7 @@ from agent_artifacts.application.consumer_views import (
     consumer_plan_to_data,
     receipt_detail_to_data,
 )
+from agent_artifacts.application.installed_setup import declared_setup_to_data
 from agent_artifacts.configuration.model import SourceKind
 from agent_artifacts.configuration.policy import EffectiveConfiguration
 from agent_artifacts.consumer.application import (
@@ -140,6 +141,7 @@ from agent_artifacts.store.model import ObjectReadRequest
 from agent_artifacts.tui_consumer import (
     render_install_plan,
     render_installed_artifact,
+    render_pending_setup,
     render_transaction_success,
 )
 
@@ -1180,11 +1182,20 @@ def _configured_lifecycle(
         ],
         "receipt": receipt_data,
     }
+    lines = render_transaction_success(receipt, PresentationProfile.FAST)
+    # Additive, and absent when there is nothing to say. An install that always carried the key --
+    # empty -- would make every artifact look like one that was checked and found to need nothing,
+    # which is a stronger claim than this seam makes.
+    if completed.value.pending_setup:
+        payload["pending_setup"] = [
+            declared_setup_to_data(item) for item in completed.value.pending_setup
+        ]
+        lines += render_pending_setup(completed.value.pending_setup)
     _emit(
         request,
         operation,
         payload,
-        render_transaction_success(receipt, PresentationProfile.FAST),
+        lines,
     )
     return _common.OK if successful else _common.ERROR
 

@@ -1033,9 +1033,13 @@ guards itself with a test that the approved registry really does declare setup; 
 canonical receipt now names its object (D-122): `object_digest` on both receipt shapes, populated
 from the `RegistryArtifactVersion` the Selection resolved, optional so records written before it
 still read, and pinned end to end by `tests/installed_object_identity_test.py`, which asserts the
-recorded digest resolves to a real object whose manifest is the installed package's; (3) reach the
-setup engine from the configured-installation action so both front ends close together, and invert
-the characterization.
+recorded digest resolves to a real object whose manifest is the installed package's; (3a) done --
+both front ends now *name* the setup they did not run (D-123): `complete_configured_installation`
+reads the objects it recorded and carries `pending_setup`, `aart marketplace install` emits an
+additive `pending_setup` key and renders it, and the shell draws it under screen 11's success.
+Half of `tests/configured_setup_gap_test.py` inverted; what it still characterizes is that the work
+is not done; (3b) reach the setup engine from the configured-installation action so the work is
+actually performed, and invert the rest.
 
 Two things step (2) deliberately did not do, and step (3) still has to answer. The engine takes a
 legacy `MarketplaceCatalog` (`resolve_artifact` plus `_marketplace_evidence`), which cannot read a

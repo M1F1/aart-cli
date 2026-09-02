@@ -48,6 +48,7 @@ from agent_artifacts.application.consumer_views import (
     project_collection,
     project_registries,
 )
+from agent_artifacts.application.installed_setup import DeclaredArtifactSetup
 from agent_artifacts.application.maintainer_views import (
     MaintainerBulkPromotionView,
     MaintainerCandidateFilter,
@@ -502,6 +503,29 @@ def render_transaction_success(
         if view.undo.available
         else f"[ View installed ] [ View receipt ] [ Done ]  Undo unavailable: {view.undo.reason}"
     )
+    return tuple(lines)
+
+
+def render_pending_setup(pending: tuple[DeclaredArtifactSetup, ...]) -> tuple[str, ...]:
+    """What an installed artifact still needs, on the screen that says the install finished.
+
+    Placing an artifact's files is not always the whole of installing it, and this application
+    performs none of the rest yet (B-044). Saying so is the difference between an operator who
+    knows there is one step left and one who believes a Skill is configured when it is not, so
+    these lines name the artifact, the recipe it declares and the document that explains it by
+    hand -- and say plainly that nothing here ran it.
+    """
+
+    if not pending:
+        return ()
+    lines = [
+        f"Setup declared but not performed ({len(pending)}):",
+    ]
+    for item in pending:
+        lines.append(f"  {item.coordinate} declares {item.recipe} ({', '.join(item.platforms)})")
+        if item.manual is not None:
+            lines.append(f"    configure it by hand: {item.manual} in the installed package")
+    lines.append("  Nothing here ran it; the artifact is installed and unconfigured.")
     return tuple(lines)
 
 
@@ -1203,6 +1227,10 @@ class ConsumerScreens:
     source_sync_result: MaintainerSourceSyncResultView | None = None
     promotion_validation: MaintainerRegistryValidationView | None = None
     promotion_commit: MaintainerRegistryCommitView | None = None
+    #: Setup an artifact this action installed declares and that nothing performed. It belongs to
+    #: the outcome rather than to the notice channel: a notice is why something was refused, and
+    #: this is part of what happened.
+    pending_setup: tuple[DeclaredArtifactSetup, ...] = ()
 
     def offered(self, key: str) -> MarketplaceEntry | None:
         return next((item for item in self.marketplace if item.key == key), None)
@@ -1392,6 +1420,7 @@ def screens_from(
     outcome: LifecycleOutcomeView | None = None,
     transaction: ReceiptDetailView | None = None,
     notice: tuple[str, ...] = (),
+    pending_setup: tuple[DeclaredArtifactSetup, ...] = (),
 ) -> ConsumerScreens:
     """The screens for one assembled machine, plus whatever the current flow is holding.
 
@@ -1435,6 +1464,7 @@ def screens_from(
         source_sync_result,
         promotion_validation,
         promotion_commit,
+        pending_setup,
     )
 
 
@@ -2067,7 +2097,9 @@ class CanonicalScreenSource:
         if screen in _OUTCOME_SCREENS:
             if screen in _TRANSACTION_SCREENS and screens.transaction is not None:
                 if screen is ConsumerScreen.SUCCESS:
-                    return render_transaction_success(screens.transaction, profile)
+                    return render_transaction_success(
+                        screens.transaction, profile
+                    ) + render_pending_setup(screens.pending_setup)
                 return render_transaction_progress(screens.transaction, profile)
             if screens.outcome is None:
                 return ("Nothing has run yet.",)

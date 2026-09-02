@@ -250,6 +250,23 @@ store the strangler is retiring. Two things step (3) still has to answer: the en
 no `manifest_digest`, and `persist_setup` records that setup ran inside the legacy install-state
 record, which the canonical route has no equivalent of.
 
+**Both front ends now name the setup they do not run (D-123).** The configured seam reported a
+finished install and said nothing about the setup it skipped, which is the worse of the two
+failures the legacy route has: that route at least names it (D-121's first gate), so an operator
+knows there is a step left, while silence tells somebody a Skill is configured when it is not.
+`complete_configured_installation` now reads the objects it just recorded, carries what they
+declare as `pending_setup`, and both `aart marketplace install` (an additive `pending_setup` key,
+rendered) and the persistent shell (under screen 11's success) say it. This is the first use of the
+receipt's object identity and it is not scaffolding: setup is declared on the package manifest
+rather than on anything the plan carries, so the reading is the first half of the engine's own
+`_prepare_setup_object` for the canonical route. The key is absent rather than empty when nothing
+declares setup, and the reading is done from the durable record after completion rather than from
+the plan, so it states something about the machine instead of repeating the action's intention. An
+object a receipt names and the store cannot produce is an error rather than a quiet "nothing to
+configure". Half of `tests/configured_setup_gap_test.py` inverted;
+`tests/configured_setup_report_test.py` owns the assertions that moved, and what stays
+characterized is that the work is still not performed.
+
 ## Update rule
 
 Never mark a slice beyond the strongest evidence actually present.
