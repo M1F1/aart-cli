@@ -771,3 +771,42 @@ standing.
 was in before D-113. Removing them is the next increment, under the same discipline.
 
 Checkpoint gates on 2026-09-02: `make quality` and `make integration` are both green.
+
+## Step 7d — the legacy text wizard shell, and everything only it reached
+
+D-115 left `_run_text` where `_run_curses` was before D-113: defined, exercised by tests, reachable
+from nothing. This removes it and the tail behind it — `_runtime_source_stage_context`,
+`_dispatch_result`, and the 26 further private definitions in `tui.py` that became unreferenced once
+it was gone. 1,546 lines out of `tui.py`, and about 2,200 with the tests that existed only to drive
+it.
+
+The sweep was mechanical rather than hand-picked, and repeated to a fixpoint: removing one orphan
+orphans its callees, so a list written by eye would have left a tail behind. Each pass removed only
+definitions with no reference anywhere in `tui.py`, in any other production module, or in any test.
+
+What each removed test pinned was checked against a public flow before it went, rather than
+assumed:
+
+- scaffolding → `aart registry scaffold` (`registry_init_scaffold_test.py`,
+  `registry_cli_integration_test.py`);
+- source add / remove / sync / resubscribe → the `aart source` command surface
+  (`source_cli_command_test.py`, 23 tests pinning the same review-then-finalize semantics);
+- vendoring → the flags half of the parity `tui_vendoring_test.py` was testing; with one front end
+  left there is nothing to compare, and the assessment rendering it checked is pinned by
+  `registry_vendor_assessment_test.py`;
+- the ERR04 legacy install state → `install-state-legacy`, asserted in four other modules;
+- ERR06 refusals and the setup queue → the canonical shell's drawn notice
+  (`consumer_application_e2e_test.py`).
+
+Two entry tests that asserted "the canonical application and *not the legacy wizard*" were restated
+as "and nothing else": a comparison to something that no longer exists pins nothing. The module
+docstring, which still opened "Two front-ends, one body", was rewritten to describe what `tui.py`
+now is (D-116).
+
+`tui.py` is 4,262 lines, down from 5,705. `lifecycle/*` and `setup_engine/*` are now reachable only
+through `consumer/*`; `curation/*` only through `cli.py` and `commands/registry.py`, which are the
+public flag-mode commands. `ConsumerApplicationService` survives because the curses wizard *stages*
+still compose it and 36 tests still cover them — those stages, and then `consumer/application.py`
+with `lifecycle/*` and `setup_engine/*` behind it, are what step 7 removes next.
+
+Checkpoint gates on 2026-09-02: `make quality` and `make integration` are both green, 3,173 tests.

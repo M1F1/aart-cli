@@ -3,11 +3,9 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
-from unittest import mock
 
 from agent_artifacts import tui
 from agent_artifacts.curation.model import (
-    CurationAction,
     CurationChange,
     CurationOutcome,
     CurationReview,
@@ -62,80 +60,6 @@ class _Service:
 
 
 class TuiCurationTest(unittest.TestCase):
-    def test_canonical_maintainer_user_action_loads_canonical_consumer_runtime(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary) / "registry"
-            root.mkdir()
-            (root / ".git").mkdir()
-            (root / "aart-registry.json").write_text("{}", encoding="utf-8")
-            consumer = mock.Mock()
-            with (
-                mock.patch(
-                    "agent_artifacts.consumer.runtime.load_local_consumer_service",
-                    return_value=Ok(consumer),
-                ) as load_consumer,
-                mock.patch.object(tui, "_run_user_text_wizard", return_value=0) as run_user,
-            ):
-                code = tui._run_text(
-                    _scripted(["", "2", str(_action_index("user") + 1)]),
-                    mock.Mock(),
-                    source_dir=str(root),
-                    project=str(root),
-                    user_home=temporary,
-                )
-
-            self.assertEqual(code, 0)
-            load_consumer.assert_called_once()
-            self.assertIs(run_user.call_args.kwargs["consumer_service"], consumer)
-
-    def test_registry_scaffold_previews_once_and_only_finalize_mutates(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary) / "registry"
-            root.mkdir()
-            (root / ".git").mkdir()
-            (root / "aart-registry.json").write_text("{}", encoding="utf-8")
-            service = _Service()
-            writes = []
-            with mock.patch.object(tui, "_is_canonical_maintainer_workspace", return_value=True):
-                code = tui._run_text(
-                    _scripted(
-                        [
-                            "",
-                            "2",
-                            "2",
-                            "skill",
-                            "demo",
-                            "Explain the reviewed demo workflow.",
-                            "",
-                            "codex",
-                            "darwin,linux",
-                            "",
-                            "",
-                            "back",
-                            "",
-                            "",
-                            "",
-                            "",
-                            "",
-                            "",
-                            "",
-                            "",
-                            "finalize",
-                        ]
-                    ),
-                    writes.append,
-                    source_dir=str(root),
-                    curation_service_factory=lambda _root: Ok(service),
-                )
-
-            self.assertEqual(code, 0)
-            self.assertEqual(len(service.prepared), 1)
-            self.assertEqual(len(service.finalized), 1)
-            self.assertEqual(service.prepared[0].action, CurationAction.SCAFFOLD)
-            rendered = "\n".join(writes)
-            self.assertIn("Review digest", rendered)
-            self.assertIn("Changed 1 managed path", rendered)
-
     def test_canonical_action_menu_explains_security_and_no_commit_push_boundary(self) -> None:
         labels = "\n".join(label for _action, label in tui.CANONICAL_MAINTAINER_ACTIONS)
         self.assertIn("security", labels.lower())

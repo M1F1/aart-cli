@@ -35,25 +35,25 @@ def _row():
 
 
 class CanonicalConsumerEntryTest(unittest.TestCase):
-    def test_a_terminal_gets_the_canonical_application_and_not_the_legacy_wizard(self) -> None:
-        """B-025: the default TTY route is the canonical consumer application."""
+    def test_a_terminal_gets_the_canonical_application_and_nothing_else(self) -> None:
+        """B-025: the default TTY route is the canonical consumer application.
+
+        The legacy wizard it was once chosen over is gone (D-113, D-116); what this holds now is
+        that a terminal that can host curses runs the application and does not also degrade.
+        """
 
         actions = mock.Mock()
         with (
             mock.patch.object(tui, "_curses_supported", return_value=True),
             mock.patch.object(tui, "_canonical_consumer_actions", return_value=Ok(actions)),
             mock.patch.object(tui, "run_consumer", return_value=None) as canonical,
-            mock.patch.object(tui, "_run_text", return_value=0) as legacy_text,
-            mock.patch.object(tui, "_runtime_source_stage_context") as legacy_composition,
+            mock.patch.object(tui, "run_consumer_text", return_value=None) as degradation,
         ):
             code = tui.run(project="/work/project", user_home="/users/alice")
 
         self.assertEqual(code, 0)
         canonical.assert_called_once_with(actions)
-        legacy_text.assert_not_called()
-        # Nothing of the wizard is even composed: composing it would open the same local state a
-        # second time, and a failure would then be reported by whichever half opened it first.
-        legacy_composition.assert_not_called()
+        degradation.assert_not_called()
 
     def test_the_application_is_run_through_its_own_injected_action_handler(self) -> None:
         """A shell without a handler refuses every action, so the two are composed together."""
@@ -88,21 +88,23 @@ class CanonicalConsumerEntryTest(unittest.TestCase):
         self.assertTrue(finished.exited)
         self.assertTrue(drawn)
 
-    def test_a_machine_that_cannot_be_read_refuses_rather_than_opening_the_wizard(self) -> None:
-        """An unreadable machine is not an empty one, and the wizard would read the same state."""
+    def test_a_machine_that_cannot_be_read_refuses_rather_than_opening_anything(self) -> None:
+        """An unreadable machine is not an empty one, and degrading would read the same state."""
 
         output = io.StringIO()
         refusal = Err((Diagnostic(DiagnosticCode("state-unreadable"), Severity.ERROR, "no"),))
         with (
             mock.patch.object(tui, "_curses_supported", return_value=True),
             mock.patch.object(tui, "_canonical_consumer_actions", return_value=refusal),
-            mock.patch.object(tui, "_run_text", return_value=0) as legacy_text,
+            mock.patch.object(tui, "run_consumer") as canonical,
+            mock.patch.object(tui, "run_consumer_text", return_value=None) as degradation,
             contextlib.redirect_stdout(output),
         ):
             code = tui.run(project="/work/project", user_home="/users/alice")
 
         self.assertEqual(code, 2)
-        legacy_text.assert_not_called()
+        canonical.assert_not_called()
+        degradation.assert_not_called()
         self.assertIn("state-unreadable", output.getvalue())
 
     def test_the_machine_reader_receives_the_managed_state_and_harness_scope(self) -> None:

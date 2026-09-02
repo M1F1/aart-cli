@@ -103,15 +103,22 @@ for whichever terminal answers, and its entire legacy tail is gone (D-115). ERR0
 fallback for one condition — the terminal cannot host curses — and says nothing about the product
 changing.
 
-**The exact next action is the removal that unblocks.** `_run_text` and the stack below it now have
-no production caller, which is the position `_run_curses` was in before D-113. Remove them under the
-same discipline, one path at a time and each preceded by the public-flow evidence D-091 requires:
-`_run_text` and the wizard stages it drives, then `consumer/application.py`,
-`lifecycle/application.py`, `setup_engine/*`, and `_dispatch_result`. Note that `installation/*` is
-*not* purely legacy — its model is imported across the canonical `application/` layer — so it goes
-by symbol rather than by package. B-038's remaining half falls out of the same removal. Do not
-remove the text *route*: no-TTY is a supported environment, and it is now the canonical
-application.
+That unblocked the removal, which is done: `_run_text`, `_runtime_source_stage_context`,
+`_dispatch_result` and the 26 further definitions that became unreferenced once it was gone are
+deleted, with the tests that existed only to drive them — about 2,200 lines, and `tui.py` down from
+5,705 to 4,262. Each removed test's capability was checked against a public flow first: scaffolding
+against `aart registry scaffold`, source maintenance against the `aart source` commands, vendoring
+against its flags half, ERR04's legacy install state against four other modules, ERR06 refusals
+against the canonical shell's drawn notice (D-116).
+
+**The exact next action** is the last of step 7. `ConsumerApplicationService` survives only because
+the curses wizard *stages* still compose it (`_run_user_curses_wizard` and the widgets around it),
+covered by 36 tests in `tests/tui_wizard_curses_test.py`. Retire those stages against the same
+public-flow evidence, and `consumer/application.py` follows, and with it `lifecycle/*` and
+`setup_engine/*`, which nothing else reaches. Note that `installation/*` is *not* purely legacy —
+its model is imported across the canonical `application/` layer — so it goes by symbol rather than
+by package, if at all. B-038's remaining half falls out of the same removal. Do not remove the text
+*route*: no-TTY is a supported environment, and it is now the canonical application.
 
 Behind it, step 6 left the surfaces complete: screen 53 is live (D-111) — the typed filter carries
 all four facets the Product Specification names, `f` opens it from screen 35, `Space` toggles a

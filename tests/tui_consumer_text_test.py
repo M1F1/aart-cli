@@ -2,13 +2,11 @@ from __future__ import annotations
 
 import tempfile
 import unittest
-from dataclasses import replace
 from pathlib import Path
 from unittest import mock
 
 from agent_artifacts import tui
-from agent_artifacts.compiler import CollectionCoordinate, MarketplaceCollection
-from agent_artifacts.configuration.model import OrganizationPolicy, ReportingMode
+from agent_artifacts.configuration.model import OrganizationPolicy
 from agent_artifacts.consumer import (
     ConsumerActionRequest,
     ConsumerApplicationService,
@@ -20,14 +18,9 @@ from agent_artifacts.domain.result import Err, Ok
 from agent_artifacts.model import Err as LegacyErr
 from agent_artifacts.profiles.builtin import builtin
 from agent_artifacts.protocol.capabilities import Capability
-from agent_artifacts.reporting.application import ReportingApplicationService
-from agent_artifacts.reporting.model import ReportingDestination
 from agent_artifacts.reporting.projection import usage_report_from_consumer
-from agent_artifacts.tui_sources import build_source_stage
 from agent_artifacts.wizard import BasketItem, WizardSession
 from tests.canonical_setup_application_test import Fixture as SetupFixture
-from tests.canonical_symlink_test import _fixture
-from tests.marketplace_fixtures import source_state
 
 _INSTALL_STATE_FIXTURES = Path(__file__).resolve().parent / "fixtures" / "install-state"
 
@@ -282,106 +275,6 @@ class TuiConsumerTextTest(unittest.TestCase):
         )
         source_factory.assert_not_called()
 
-    def test_err04_retired_project_state_renders_a_record_and_back_allows_user_scope_without_writes(
-        self,
-    ) -> None:
-        """A project-only legacy state cannot block a user-scoped Artifacts view."""
-
-        with tempfile.TemporaryDirectory() as raw:
-            fixture = _fixture(Path(raw), "skill")
-            project, _checkout, paths, location, _request, catalog, effective = fixture
-            state_path = project / ".agent-artifacts" / "manifest.json"
-            state_path.parent.mkdir()
-            state_path.write_bytes(
-                (_INSTALL_STATE_FIXTURES / "legacy-v01-manifest.json").read_bytes()
-            )
-            service = ConsumerApplicationService(
-                ConsumerContext(catalog, effective, builtin(), location, paths),
-                LocalConsumerAdapter(),
-            )
-            configured = effective.configuration.sources[0]
-            stage = build_source_stage(
-                effective.configuration,
-                effective.policy,
-                {
-                    configured.alias: source_state(
-                        configured, "direct-source", display_order=0
-                    ).health
-                },
-                first_run=False,
-            )
-            assert isinstance(stage, Ok), stage
-            before = (_tree_snapshot(project), _tree_snapshot(Path(paths.root)))
-            writes: list[str] = []
-
-            with mock.patch.object(tui.sys, "platform", "darwin"):
-                code = tui._run_text(
-                    _scripted(["", "1", "1", "1", "install", "1", "", "b", "b", "2", "", "q"]),
-                    writes.append,
-                    project=str(project),
-                    source_stage_view=stage.value,
-                    consumer_service=service,
-                )
-
-            self.assertEqual(code, 0)
-            rendered = "\n".join(writes)
-            compact = "".join(rendered.split())
-            self.assertIn("Artifacts could not be loaded", rendered)
-            self.assertIn("error [install-state-legacy]", rendered)
-            self.assertIn(str(project), rendered)
-            self.assertIn(str(state_path), compact)
-            self.assertIn(
-                "aartmarketplaceinstall<coordinate>--profile<name>",
-                compact,
-            )
-            self.assertIn("Select artifact(s)/collection(s)", rendered)
-            self.assertEqual((_tree_snapshot(project), _tree_snapshot(Path(paths.root))), before)
-
-    def test_federated_collection_row_expands_to_members_before_review(self) -> None:
-        with tempfile.TemporaryDirectory() as raw:
-            fixture = _fixture(Path(raw), "skill")
-            project, _checkout, paths, location, _request, catalog, effective = fixture
-            member = catalog.items[0].coordinate
-            catalog = replace(
-                catalog,
-                collections=(
-                    MarketplaceCollection(
-                        CollectionCoordinate(member.source, "starter"),
-                        "Install the reviewed starter set.",
-                        (member,),
-                    ),
-                ),
-            )
-            service = ConsumerApplicationService(
-                ConsumerContext(catalog, effective, builtin(), location, paths),
-                LocalConsumerAdapter(),
-            )
-            configured = effective.configuration.sources[0]
-            state = source_state(configured, "direct-source", display_order=0)
-            stage = build_source_stage(
-                effective.configuration,
-                effective.policy,
-                {configured.alias: state.health},
-                first_run=False,
-            )
-            assert isinstance(stage, Ok), stage
-            writes = []
-
-            with mock.patch.object(tui.sys, "platform", "darwin"):
-                code = tui._run_text(
-                    _scripted(["", "1", "1", "1", "install", "1", "", "2", "y"]),
-                    writes.append,
-                    project=str(project),
-                    source_stage_view=stage.value,
-                    consumer_service=service,
-                )
-
-            self.assertEqual(code, 0)
-            rendered = "\n".join(writes)
-            self.assertIn("direct/collection/starter", rendered)
-            self.assertIn("Install outcome: succeeded", rendered)
-            self.assertTrue((project / ".claude/skills/review/SKILL.md").exists())
-
     def test_canonical_setup_queue_has_separate_authorize_review_apply_feedback(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             fixture = SetupFixture(Path(raw))
@@ -566,189 +459,6 @@ class TuiConsumerTextTest(unittest.TestCase):
                 interface="tui",
             )
             self.assertEqual(report.results[0].setup_outcome, "configured")
-
-    def test_reviewed_source_enablement_builds_consumer_context_before_finalize(self) -> None:
-        with tempfile.TemporaryDirectory() as raw:
-            fixture = _fixture(Path(raw), "skill")
-            project, _checkout, paths, location, _request, catalog, effective = fixture
-            service = ConsumerApplicationService(
-                ConsumerContext(catalog, effective, builtin(), location, paths),
-                LocalConsumerAdapter(),
-            )
-            configured = effective.configuration.sources[0]
-            disabled = replace(configured, enabled=False)
-            prospective_configuration = replace(
-                effective.configuration,
-                sources=(disabled,),
-                default_registry=None,
-            )
-            state = source_state(configured, "direct-source", display_order=0)
-            stage = build_source_stage(
-                prospective_configuration,
-                effective.policy,
-                {disabled.alias: state.health},
-                first_run=False,
-            )
-            assert isinstance(stage, Ok), stage
-            order = []
-
-            def factory(configuration):
-                self.assertTrue(configuration.sources[0].enabled)
-                order.append("factory")
-                return Ok(service)
-
-            def finalizer(request):
-                self.assertTrue(request.after.sources[0].enabled)
-                order.append("finalizer")
-                return Ok(object())
-
-            with mock.patch.object(tui.sys, "platform", "darwin"):
-                code = tui._run_text(
-                    _scripted(["", "1", "1", "1", "install", "1", "", "1", "y"]),
-                    lambda _line: None,
-                    project=str(project),
-                    source_stage_view=stage.value,
-                    source_finalizer=finalizer,
-                    consumer_service_factory=factory,
-                )
-
-            self.assertEqual(code, 0)
-            self.assertEqual(order, ["factory", "finalizer"])
-
-    def test_federated_user_path_reviews_and_finalizes_without_command_stdout(self) -> None:
-        with tempfile.TemporaryDirectory() as raw:
-            fixture = _fixture(Path(raw), "skill")
-            project, _checkout, paths, location, _request, catalog, effective = fixture
-            context = ConsumerContext(catalog, effective, builtin(), location, paths)
-            service = ConsumerApplicationService(context, LocalConsumerAdapter())
-            configured = effective.configuration.sources[0]
-            state = source_state(configured, "direct-source", display_order=0)
-            stage = build_source_stage(
-                effective.configuration,
-                effective.policy,
-                {configured.alias: state.health},
-                first_run=False,
-            )
-            assert isinstance(stage, Ok), stage
-            writes = []
-
-            with (
-                mock.patch.object(tui.sys, "platform", "darwin"),
-                mock.patch.object(tui, "_dispatch_result") as legacy_dispatch,
-            ):
-                code = tui._run_text(
-                    _scripted(["", "1", "1", "1", "install", "1", "", "1", "y"]),
-                    writes.append,
-                    project=str(project),
-                    source_stage_view=stage.value,
-                    consumer_service=service,
-                )
-
-            self.assertEqual(code, 0)
-            legacy_dispatch.assert_not_called()
-            rendered = "\n".join(writes)
-            self.assertIn("direct/skill/review@1.0.0", rendered)
-            self.assertIn("trust/security: direct-source; unknown (not-scanned)", rendered)
-            self.assertIn("actual modes: copy", rendered)
-            self.assertIn("Install outcome: succeeded", rendered)
-            self.assertIn("changed=1", rendered)
-
-    def test_reporting_provider_failure_after_finalize_preserves_success_exit(self) -> None:
-        with tempfile.TemporaryDirectory() as raw:
-            fixture = _fixture(Path(raw), "skill")
-            project, _checkout, paths, location, _request, catalog, effective = fixture
-            service = ConsumerApplicationService(
-                ConsumerContext(catalog, effective, builtin(), location, paths),
-                LocalConsumerAdapter(),
-            )
-            configured = effective.configuration.sources[0]
-            state = source_state(configured, "direct-source", display_order=0)
-            stage = build_source_stage(
-                effective.configuration,
-                effective.policy,
-                {configured.alias: state.health},
-                first_run=False,
-            )
-            assert isinstance(stage, Ok), stage
-            failure = Err(
-                (
-                    Diagnostic(
-                        DiagnosticCode("reporting-provider-failed"),
-                        Severity.ERROR,
-                        "provider unavailable",
-                    ),
-                )
-            )
-            reporting = ReportingApplicationService(
-                ReportingDestination(ReportingMode.AUTOMATIC, "github.com", "org/usage"),
-                lambda _plan: failure,
-                lambda _plan: failure,
-            )
-            writes = []
-
-            with mock.patch.object(tui.sys, "platform", "darwin"):
-                code = tui._run_text(
-                    _scripted(["", "1", "1", "1", "install", "1", "", "1", "y"]),
-                    writes.append,
-                    project=str(project),
-                    source_stage_view=stage.value,
-                    consumer_service=service,
-                    reporting_service=reporting,
-                )
-
-            self.assertEqual(code, 0)
-            self.assertTrue((project / ".claude/skills/review/SKILL.md").exists())
-            rendered = "\n".join(writes)
-            self.assertIn("Exact redacted usage report payload", rendered)
-            self.assertIn("warning: usage report submission failed", rendered)
-
-    def test_back_keeps_the_qualified_basket_and_finalizes_once(self) -> None:
-        with tempfile.TemporaryDirectory() as raw:
-            fixture = _fixture(Path(raw), "skill")
-            project, _checkout, paths, location, _request, catalog, effective = fixture
-            service = ConsumerApplicationService(
-                ConsumerContext(catalog, effective, builtin(), location, paths),
-                LocalConsumerAdapter(),
-            )
-            configured = effective.configuration.sources[0]
-            state = source_state(configured, "direct-source", display_order=0)
-            stage = build_source_stage(
-                effective.configuration,
-                effective.policy,
-                {configured.alias: state.health},
-                first_run=False,
-            )
-            assert isinstance(stage, Ok), stage
-            writes = []
-
-            with mock.patch.object(tui.sys, "platform", "darwin"):
-                code = tui._run_text(
-                    _scripted(
-                        [
-                            "",
-                            "1",
-                            "1",
-                            "1",
-                            "install",
-                            "1",
-                            "",
-                            "1",
-                            "back",
-                            "",
-                            "y",
-                        ]
-                    ),
-                    writes.append,
-                    project=str(project),
-                    source_stage_view=stage.value,
-                    consumer_service=service,
-                )
-
-            self.assertEqual(code, 0)
-            rendered = "\n".join(writes)
-            self.assertGreaterEqual(rendered.count("direct/skill/review@1.0.0"), 3)
-            self.assertGreaterEqual(rendered.count("Basket: 1 selected"), 1)
-            self.assertTrue((project / ".claude/skills/review/SKILL.md").exists())
 
 
 class QuietSetupQueueTest(unittest.TestCase):

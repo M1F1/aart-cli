@@ -33,6 +33,29 @@
 
 ### CP-14 current increment (2026-09-02)
 
+**The legacy text wizard shell is removed, and everything only it reached with it.** D-115 left
+`_run_text` in exactly the position `_run_curses` was in before D-113: defined, exercised by tests,
+reachable from nothing. It is gone, with `_runtime_source_stage_context`, `_dispatch_result` and the
+26 further private definitions in `tui.py` that became unreferenced once it was -- 1,546 lines out of
+`tui.py`, about 2,200 with the tests that existed only to drive it. The sweep was mechanical and
+repeated to a fixpoint rather than hand-picked, because removing one orphan orphans its callees and a
+list written by eye would have left a tail. Every removed test's capability was checked against a
+public flow before it went rather than assumed: scaffolding against `aart registry scaffold`
+(`registry_init_scaffold_test.py`, `registry_cli_integration_test.py`); source add/remove/sync/
+resubscribe against the `aart source` command surface (`source_cli_command_test.py`, 23 tests pinning
+the same review-then-finalize semantics); vendoring against the flags half of the parity it was
+testing, with the assessment rendering pinned by `registry_vendor_assessment_test.py`; ERR04's
+`install-state-legacy` against four other modules; ERR06 refusals and the setup queue against the
+canonical shell's drawn notice. Two entry tests asserting "not the legacy wizard" were restated as
+"and nothing else", since a comparison to something that no longer exists pins nothing, and the
+module docstring that still opened "Two front-ends, one body" was rewritten (D-116). `tui.py` is
+4,262 lines, down from 5,705. `lifecycle/*` and `setup_engine/*` are now reachable only through
+`consumer/*`, and `curation/*` only through the public flag-mode commands.
+`ConsumerApplicationService` survives because the curses wizard *stages* still compose it and 36
+tests still cover them; those stages, then `consumer/application.py` with `lifecycle/*` and
+`setup_engine/*` behind it, are what step 7 removes next. `make quality` and `make integration` are
+both green, 3,173 tests.
+
 **The text fallback is now the canonical application rather than a second product.** Surveying what
 step 7 could remove next turned up the reason it could remove nothing: every remaining target --
 `consumer/application.py`, `lifecycle/*`, `setup_engine/*`, and B-038's legacy direct-install from a

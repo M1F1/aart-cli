@@ -2022,3 +2022,43 @@ the Product Specification first instead of hiding the change here.
   and the assertions that had become vacuous (patching a `_run_text` nothing calls) were restated
   rather than left standing. `run()` composing once is now pinned: composing again on the
   degradation path would open the same local state twice.
+
+## D-116 — The legacy text wizard shell and everything only it reached are removed
+
+- **Decision:** `_run_text` (325 lines) is deleted, together with `_runtime_source_stage_context`,
+  `_dispatch_result` and the 26 further private definitions in `agent_artifacts/tui.py` that became
+  unreferenced once it was gone — `_run_canonical_maintainer_text`, `_run_maintainer_text`, the
+  `_prompt_*` family, the `_curses_source_*` maintenance screens, the stage-failure helpers, and the
+  rest: 1,546 lines out of `tui.py`. With them go the tests that existed only to drive it —
+  `tests/tui_curation_e2e_test.py` and `tests/tui_vendoring_test.py` whole,
+  `SourceLifecycleTextTests`, two curation tests and six wizard-flow tests in
+  `tests/tui_consumer_text_test.py` — about 2,200 lines in all. The module docstring, which still
+  described "two front-ends, one body", was rewritten to say what the module is now.
+- **Status:** accepted; the removal D-115 unblocked.
+- **Reason:** D-115 put the canonical application on the text route, which left `_run_text` in
+  exactly the position `_run_curses` was in before D-113: defined, exercised by tests, reachable
+  from nothing. Every capability the removed tests pinned is carried by a public flow with its own
+  evidence, which is what D-091 requires and what was checked before each removal rather than
+  assumed:
+  - **scaffolding** (`tests/tui_curation_e2e_test.py`) → `aart registry scaffold`, proven by
+    `tests/registry_init_scaffold_test.py` and `tests/registry_cli_integration_test.py`;
+  - **source add / remove / sync / resubscribe** (`SourceLifecycleTextTests`) → the `aart source`
+    command surface, proven by `tests/source_cli_command_test.py`'s 23 tests, which pin the same
+    review-then-finalize semantics the wizard tests did;
+  - **vendoring** (`tests/tui_vendoring_test.py`) → the flags half of the parity it was testing;
+    with one front end left, parity has nothing to compare, and the assessment rendering it checked
+    is pinned by `tests/registry_vendor_assessment_test.py`;
+  - **the ERR04 legacy install state** → `install-state-legacy` is asserted in four other test
+    modules;
+  - **ERR06 refusals and the setup queue** → the canonical shell carries a refusal as a drawn
+    notice, proven by `tests/consumer_application_e2e_test.py`.
+  The removal was driven by a reference sweep repeated to a fixpoint rather than by hand, because
+  removing one orphan orphans its callees, and a hand-picked list would have left a tail.
+- **Consequence:** `tui.py` falls from 5,705 lines to 4,262. `lifecycle/*` and `setup_engine/*` are
+  now reachable only through `consumer/*`, and `curation/*` only through `cli.py` and
+  `commands/registry.py` — the public flag-mode commands, which is where they belong.
+  `ConsumerApplicationService` survives because the curses wizard *stages* still compose it and 36
+  tests still cover them; those stages, and then `consumer/application.py` with `lifecycle/*` and
+  `setup_engine/*` behind it, are the next removal. Two entry tests that asserted "not the legacy
+  wizard" were restated as "the canonical application and nothing else", because a comparison to
+  something that no longer exists pins nothing.
