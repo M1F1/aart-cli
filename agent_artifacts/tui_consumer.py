@@ -68,6 +68,7 @@ from agent_artifacts.application.maintainer_views import (
     MaintainerViews,
     filter_maintainer_candidates,
     parse_validation_row,
+    project_maintainer_candidate_filters,
 )
 from agent_artifacts.domain.registry import PromotionMode
 from agent_artifacts.domain.result import Err, Ok, Result
@@ -76,6 +77,7 @@ from agent_artifacts.tui_maintainer import (
     render_maintainer_bulk_promotion,
     render_maintainer_candidate,
     render_maintainer_candidate_diff,
+    render_maintainer_candidate_filters,
     render_maintainer_candidate_lifecycle,
     render_maintainer_candidates,
     render_maintainer_collection_candidates,
@@ -1525,6 +1527,12 @@ class CanonicalScreenSource:
             return tuple(item.id for item in self._screens.candidates(_candidate_filter(state)))
         if screen is MaintainerScreen.COLLECTION_CANDIDATES:
             return tuple(item.candidate_id for item in self._screens.collection_candidates())
+        if screen is MaintainerScreen.CANDIDATE_FILTERS:
+            # The values on offer come from every composed Candidate rather than from the already
+            # narrowed list: a row that vanished the moment it was ticked could never be unticked.
+            return project_maintainer_candidate_filters(
+                self._screens.candidates(), _candidate_filter(state)
+            ).rows
         if screen is MaintainerScreen.VALIDATION:
             # A check name alone would be ambiguous across Candidates, so a row carries both.
             validation = self._screens.validation(state.focus)
@@ -1880,6 +1888,14 @@ class CanonicalScreenSource:
                 ("That Collection Candidate's validation is not available.",)
                 if collection_validation is None
                 else render_maintainer_collection_validation(collection_validation, profile)
+            )
+        if screen is MaintainerScreen.CANDIDATE_FILTERS:
+            return render_maintainer_candidate_filters(
+                project_maintainer_candidate_filters(
+                    screens.candidates(), _candidate_filter(state)
+                ),
+                profile,
+                cursor=state.current_row,
             )
         if screen is MaintainerScreen.VALIDATION:
             validation = screens.validation(state.focus)

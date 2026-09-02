@@ -1880,3 +1880,31 @@ the Product Specification first instead of hiding the change here.
 - **Consequence:** production composition compares against `ApprovedRegistryState.versions`, while
   rendering is read-only. A contradictory durable conflict finding plus an exact matching approved
   version is rejected as inconsistent state instead of choosing whichever record is convenient.
+
+## D-111 — Screen 53 edits the one typed filter, and its rows are addresses rather than text
+
+- **Decision:** the Product Specification names four Candidate filter facets — status, kind, Source
+  and target registry — and `MaintainerCandidateFilter` gains the two it lacked: `kinds` is typed
+  `ArtifactKind` and `registries` is a tuple of aliases. Closed sets stay typed (`states`, `kinds`)
+  and open sets stay strings (`sources`, `registries`), matching what each facet actually is. Screen
+  53's rows are `"<facet>:<value>"` pairs read back by `parse_candidate_filter_row`, and the reducer
+  toggles the parsed facet through one `toggled(facet, value)` entry point rather than four. The
+  offered values come from every composed Candidate, not from the already narrowed list. Each option
+  states what choosing it would leave, measured by applying that one value to the rest of the
+  current filter. `f` opens screen 53 from screen 35; `Space` and `Enter` toggle a row there and
+  put nothing in `selection`.
+- **Status:** accepted; completes the filter half of CP-14 step 6.
+- **Reason:** a second filter model was explicitly ruled out by D-098, so the two missing facets
+  belong on the value screen 35 already obeys. Rows parse back for the same reason screen 38's do
+  (D-100): a row is an address the reducer resolves, never a string a renderer takes apart. Offering
+  values from the narrowed list would make a row vanish the moment it was ticked, so it could never
+  be unticked. Counting what an option would leave — rather than how many carry it — is what makes a
+  narrowing that selects nothing legible before it is applied instead of discovered as a blank
+  screen 35. Ticking a filter row must not reach `selection`, because `selection` is what every
+  action reads and a filter is not a chosen artifact.
+- **Consequence:** `f` now means two things across two screens: the raw file diff on screen 37 and
+  the filters on screen 35, each meaning what its own screen is about; the characterization test
+  that pinned `f` as inert on screen 35 was corrected to state the new behaviour rather than
+  relaxed. Drawing screen 53 opens no file and composes nothing beyond the Candidates already read
+  once. A facet value the composed Candidates cannot address is skipped rather than drawn as a row
+  that would do nothing.

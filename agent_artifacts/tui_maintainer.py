@@ -5,6 +5,7 @@ from __future__ import annotations
 from agent_artifacts.application.consumer_views import PresentationProfile
 from agent_artifacts.application.maintainer_views import (
     MaintainerBulkPromotionView,
+    MaintainerCandidateFilterView,
     MaintainerCandidateLifecycleView,
     MaintainerCandidateView,
     MaintainerCollectionCandidateView,
@@ -30,6 +31,7 @@ from agent_artifacts.application.maintainer_views import (
 __all__ = [
     "render_maintainer_dashboard",
     "render_maintainer_candidate",
+    "render_maintainer_candidate_filters",
     "render_maintainer_candidate_lifecycle",
     "render_maintainer_candidate_diff",
     "render_maintainer_candidates",
@@ -381,6 +383,48 @@ def render_maintainer_version_conflict(
         lines.append(f"Candidate: {view.candidate_id}")
         if view.published_candidate_id is not None:
             lines.append(f"Published Candidate: {view.published_candidate_id}")
+    return tuple(lines)
+
+
+def render_maintainer_candidate_filters(
+    view: MaintainerCandidateFilterView,
+    profile: PresentationProfile,
+    *,
+    cursor: str = "",
+) -> tuple[str, ...]:
+    """Screen 53: the facets, what is ticked, and what the narrowing currently leaves.
+
+    The count beside each value is what choosing it would leave, not how many carry it, so a
+    narrowing that selects nothing is legible before it is applied rather than after screen 35
+    goes blank.
+    """
+
+    if (
+        not isinstance(view, MaintainerCandidateFilterView)
+        or not isinstance(profile, PresentationProfile)
+        or not isinstance(cursor, str)
+        or any(character in cursor for character in "\r\n")
+    ):
+        raise ValueError("Maintainer Candidate filter rendering needs a view and a profile")
+    if not view.groups:
+        return ("No Candidates are composed, so there is nothing to narrow.",)
+    lines: list[str] = []
+    for group in view.groups:
+        if lines:
+            lines.append("")
+        lines.append(group.label)
+        for option in group.options:
+            mark = "[x]" if option.active else "[ ]"
+            pointer = ">" if option.row == cursor else " "
+            line = f"{pointer} {mark} {option.value}"
+            if profile is PresentationProfile.VERBOSE:
+                line += f"  — {option.matching} would match"
+            lines.append(line)
+    lines.append("")
+    if view.query:
+        lines.append(f"Search: {view.query}")
+    lines.append("No filter is applied." if view.is_empty else "Filtered.")
+    lines.append(f"Showing {view.matching} of {view.total} Candidates")
     return tuple(lines)
 
 

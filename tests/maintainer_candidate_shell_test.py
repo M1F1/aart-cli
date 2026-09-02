@@ -315,7 +315,12 @@ class MaintainerCandidateShellTest(unittest.TestCase):
         self.assertIn("print('new')", expanded)
 
     def test_f_means_nothing_away_from_the_diff_and_never_survives_navigation(self) -> None:
-        self.assertIsNone(key_event("f", _on(MaintainerScreen.CANDIDATES)))
+        # `f` means what the screen it was pressed on is about: the raw file diff on screen 37,
+        # the Candidate filters on screen 35 (Product Specification 164.10), nothing anywhere else.
+        self.assertIsNone(key_event("f", _on(MaintainerScreen.SOURCES)))
+        opened_filters = key_event("f", _on(MaintainerScreen.CANDIDATES))
+        assert opened_filters is not None
+        self.assertIs(opened_filters.screen, MaintainerScreen.CANDIDATE_FILTERS)
 
         detail = _on(MaintainerScreen.CANDIDATE_DETAILS, focus=self.by_alias["authors"].id)
         diff, _ = reduce_consumer_ui(

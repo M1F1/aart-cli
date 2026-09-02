@@ -569,3 +569,50 @@ Evidence: `tests/maintainer_candidate_lifecycle_test.py`, `tests/maintainer_prov
 `tests/maintainer_version_conflict_test.py`, and the refreshed production path in
 `tests/maintainer_composition_e2e_test.py`. Focused lifecycle/provenance/conflict/composition gates
 are green; lint and typecheck are green. Screens 51–53 remain before the step checkpoint.
+
+## Step 6b — screen 53, the filter that could not be edited
+
+`MaintainerCandidateFilter` was typed state screen 35 already obeyed and nobody could change, so
+the narrowing was always empty. Two of the four facets the Product Specification names had nowhere
+to live at all: the filter carried `states`, `sources` and a free-text `query`, but not kind and not
+target registry.
+
+D-098 ruled out a second filter model, so the two missing facets went on the value that already
+exists. Which facets are typed follows from what each one is: `states` and `kinds` are closed sets
+and stay typed (`CandidateState`, `ArtifactKind`), while `sources` and `registries` are open sets of
+aliases and stay strings. A renderer string in a closed-set facet is refused.
+
+The rows are `"<facet>:<value>"` pairs read back by `parse_candidate_filter_row`, for the same
+reason screen 38's rows are `"<candidate-id>:<check>"` (D-100): a row is an address the reducer
+resolves, never a string a renderer takes apart. A row naming a facet or a closed-set value that
+does not exist parses to `None` and changes nothing. The reducer toggles through one
+`toggled(facet, value)` entry point rather than four call sites that could drift.
+
+Two choices are worth stating because the obvious alternative is wrong:
+
+- the offered values come from every composed Candidate, not from the already narrowed list. Drawing
+  the narrowed list would make a row vanish the moment it was ticked, and it could never be
+  unticked.
+- each option states what choosing it *would leave*, measured by applying that one value to the rest
+  of the current filter — not how many Candidates carry it. That is what makes a narrowing which
+  selects nothing legible on screen 53 rather than discovered as a blank screen 35.
+
+Ticking a filter row puts nothing in `selection`. `selection` is what every action reads, and a
+filter value is not a chosen artifact.
+
+`f` opens screen 53 from screen 35, which the Product Specification's keyboard table asks for.
+Screen 37 already claimed `f` for the raw file diff and keeps it: one key means what the screen it
+was pressed on is about. The characterization test that pinned `f` as inert on screen 35 stated a
+truth that no longer holds, so it was corrected to state the new behaviour — not relaxed.
+
+Evidence is `tests/maintainer_candidate_filters_test.py`: the two new facets and their
+intersection, closed-set typing, `toggled` routing all four facets, the projection's offered values
+and per-option counts, active marking, row round-tripping including three rows that must not parse,
+the `f` route in and its absence where there is nothing to filter, `Space` toggling without touching
+`selection`, toggling twice returning to the unnarrowed list, screen 35 narrowing to what 53 chose,
+the drawn body, and a `builtins.open` monkeypatch proving drawing screen 53 opens no file.
+
+Checkpoint gates on 2026-09-02: `make quality` and `make integration` are both green.
+
+Step 6 remainder: end-to-end evidence for screens 51–52 in a real installation, which is what
+closing B-031 requires before legacy Collection authority can be retired in step 7.

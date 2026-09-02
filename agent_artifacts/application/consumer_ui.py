@@ -26,7 +26,11 @@ from .consumer_views import (
     keeps_focus,
     navigation_targets,
 )
-from .maintainer_views import MaintainerCandidateFilter, MaintainerScreen
+from .maintainer_views import (
+    MaintainerCandidateFilter,
+    MaintainerScreen,
+    parse_candidate_filter_row,
+)
 
 __all__ = [
     "ConsumerActionKind",
@@ -63,6 +67,7 @@ class ConsumerUiEventKind(str, Enum):
     TOGGLE_SELECTION = "toggle-selection"
     TOGGLE_SETTING = "toggle-setting"
     TOGGLE_FILE_DIFF = "toggle-file-diff"
+    TOGGLE_CANDIDATE_FILTER = "toggle-candidate-filter"
     TOGGLE_PROMOTION_MODE = "toggle-promotion-mode"
     SEARCH = "search"
     SEARCH_OPEN = "search-open"
@@ -638,6 +643,24 @@ def reduce_consumer_ui(
         if state.session.screen is not MaintainerScreen.CANDIDATE_DIFF:
             return state, ()
         return replace(state, file_diff=not state.file_diff, quit_pending=False), ()
+    if event.kind is ConsumerUiEventKind.TOGGLE_CANDIDATE_FILTER:
+        # Screen 53's rows are facet values, so a row is parsed back into the typed facet it
+        # addresses rather than being pulled apart here. A row nothing can be made of changes
+        # nothing, which is what an unaddressable row should do.
+        if state.session.screen is not MaintainerScreen.CANDIDATE_FILTERS:
+            return state, ()
+        parsed = parse_candidate_filter_row(event.key)
+        if parsed is None:
+            return state, ()
+        facet, value = parsed
+        return (
+            replace(
+                state,
+                candidate_filter=state.candidate_filter.toggled(facet, value),
+                quit_pending=False,
+            ),
+            (),
+        )
     if event.kind is ConsumerUiEventKind.SEARCH:
         if state.session.screen not in _SEARCHABLE:
             return state, ()
@@ -730,6 +753,15 @@ def key_event(
     if key in (" ", "enter") and state.session.screen is ConsumerScreen.SETTINGS:
         row = cursor or state.current_row
         return None if not row else ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_SETTING, key=row)
+    # Screen 53's rows are facet values, not artifacts: ticking one narrows the list rather than
+    # putting anything in `selection`, which is what every action reads.
+    if key in (" ", "enter") and state.session.screen is MaintainerScreen.CANDIDATE_FILTERS:
+        row = cursor or state.current_row
+        return (
+            None
+            if not row
+            else ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_CANDIDATE_FILTER, key=row)
+        )
     if key == " ":
         return ConsumerUiEvent(
             ConsumerUiEventKind.TOGGLE_SELECTION, key=cursor or state.current_row
@@ -778,6 +810,12 @@ def key_event(
     # review itself, so it has its own key rather than riding along with the semantic diff.
     if key == "f" and state.session.screen is MaintainerScreen.CANDIDATE_DIFF:
         return ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_FILE_DIFF)
+    # The Product Specification gives `f` to filters. Screen 37 claimed it first for the raw file
+    # diff, and both keep it: one key means what the screen it was pressed on is about.
+    if key == "f" and state.session.screen is MaintainerScreen.CANDIDATES:
+        return ConsumerUiEvent(
+            ConsumerUiEventKind.NAVIGATE, screen=MaintainerScreen.CANDIDATE_FILTERS
+        )
     if key == "s" and state.session.screen in (
         MaintainerScreen.SOURCES,
         MaintainerScreen.SOURCE_DETAILS,

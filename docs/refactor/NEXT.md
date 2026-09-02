@@ -2,8 +2,9 @@
 
 ## Current objective
 
-Continue **CP-14 Maintainer TUI 30–53**, step 6: Collection Candidates and filters. Screens 48–50
-are now live: lifecycle uses exact history plus registry evidence, provenance retains typed
+Continue **CP-14 Maintainer TUI 30–53**, step 6: Collection Candidates and filters. Screen 53 is
+live — the typed Candidate filter carries status, kind, Source and target registry, and `f` opens it
+from screen 35 (D-111). Screens 48–50 are live: lifecycle uses exact history plus registry evidence, provenance retains typed
 Git/local pins and compiler output, and immutable version conflicts require a new version
 (D-108–D-110). Step 5 is complete: screens 41–47 are live, including a coherent bulk
 transaction and truthful local Source provenance (D-107, closes B-041). Screens 41–44 review,
@@ -79,13 +80,17 @@ Source from sync through a typed-provenance promotion commit.
 
 ## Exact next action
 
-Start RED tests for screens 51–52, then finish screen 53:
+Screen 53 is live (D-111): the typed filter now carries all four facets the Product Specification
+names, `f` opens it from screen 35, `Space` toggles a facet row, and screen 35 narrows accordingly.
+What remains in step 6:
 
-1. Screens 51–52 make Collections first-class versioned Candidates, resolve their membership only
-   against approved registry state and verify every member is approved and compatible. This closes
-   B-031 before legacy Collection authority can be retired.
-2. Screen 53 edits the existing typed `MaintainerCandidateFilter` for status, kind, Source and
-   target registry; do not introduce a second filter model.
+1. Confirm screens 51–52 are complete against the Product Specification and reachable end to end in
+   a real installation, the way screens 45–47 were proven. Collections must be first-class versioned
+   Candidates whose membership resolves only against approved registry state, with every member
+   verified approved and compatible. This closes B-031 before legacy Collection authority can be
+   retired.
+2. Then step 7: retire the legacy consumer/maintainer authority CP-13 left standing, but only
+   behind the public-flow evidence D-091 requires. B-031, B-038 and B-039 are ordered behind it.
 3. Preserve D-089/B-037 whenever promotion planning is touched: retained approved records rebind to
    the transaction snapshot as metadata only, and published package bytes do not change.
 

@@ -80,6 +80,10 @@ __all__ = [
     "MaintainerVersionConflictView",
     "MaintainerCandidateSemanticChangeView",
     "MaintainerCandidateView",
+    "MaintainerCandidateFilterFacet",
+    "MaintainerCandidateFilterGroupView",
+    "MaintainerCandidateFilterOptionView",
+    "MaintainerCandidateFilterView",
     "MaintainerCollectionCandidateView",
     "MaintainerCollectionMemberValidationView",
     "MaintainerCollectionValidationView",
@@ -117,6 +121,8 @@ __all__ = [
     "project_maintainer_candidate_lifecycle",
     "project_maintainer_collection_candidate",
     "project_maintainer_collection_validation",
+    "parse_candidate_filter_row",
+    "project_maintainer_candidate_filters",
     "project_maintainer_provenance",
     "project_maintainer_version_conflict",
     "project_maintainer_policy_review",
@@ -1542,6 +1548,55 @@ def project_maintainer_collection_validation(
     )
 
 
+class MaintainerCandidateFilterFacet(str, Enum):
+    """The four things a Candidate list may be narrowed by (Product Specification 164.10)."""
+
+    STATUS = "status"
+    KIND = "kind"
+    SOURCE = "source"
+    REGISTRY = "registry"
+
+
+#: What each facet is called on screen. The label is presentation; the facet is the value.
+_FILTER_FACET_LABELS: dict[MaintainerCandidateFilterFacet, str] = {
+    MaintainerCandidateFilterFacet.STATUS: "Status",
+    MaintainerCandidateFilterFacet.KIND: "Kind",
+    MaintainerCandidateFilterFacet.SOURCE: "Source",
+    MaintainerCandidateFilterFacet.REGISTRY: "Target registry",
+}
+
+
+def parse_candidate_filter_row(row: str) -> tuple[MaintainerCandidateFilterFacet, str] | None:
+    """Read one screen-53 row back into the typed facet and value it stands for.
+
+    Screen 53's rows are `"<facet>:<value>"` pairs for the same reason screen 38's are
+    `"<candidate-id>:<check>"` (D-100): a row is an address the reducer resolves, never a string a
+    renderer takes apart.  A row naming a facet or a closed-set value that does not exist parses to
+    `None` rather than to a filter nobody could have chosen.
+    """
+
+    if not isinstance(row, str) or row.count(":") != 1:
+        return None
+    name, _, value = row.partition(":")
+    if not value:
+        return None
+    try:
+        facet = MaintainerCandidateFilterFacet(name)
+    except ValueError:
+        return None
+    if facet is MaintainerCandidateFilterFacet.STATUS:
+        try:
+            CandidateState(value)
+        except ValueError:
+            return None
+    if facet is MaintainerCandidateFilterFacet.KIND:
+        try:
+            ArtifactKind(value)
+        except ValueError:
+            return None
+    return facet, value
+
+
 @dataclass(frozen=True, slots=True)
 class MaintainerCandidateFilter:
     """What the Candidate list is currently narrowed to, held as state rather than as text.
@@ -1552,7 +1607,9 @@ class MaintainerCandidateFilter:
     """
 
     states: tuple[CandidateState, ...] = ()
+    kinds: tuple[ArtifactKind, ...] = ()
     sources: tuple[str, ...] = ()
+    registries: tuple[str, ...] = ()
     query: str = ""
 
     def __post_init__(self) -> None:
@@ -1560,24 +1617,23 @@ class MaintainerCandidateFilter:
             not isinstance(self.states, tuple)
             or any(not isinstance(item, CandidateState) for item in self.states)
             or len(set(self.states)) != len(self.states)
-            or not isinstance(self.sources, tuple)
-            or any(
-                not isinstance(item, str)
-                or not item
-                or any(character in item for character in "\r\n")
-                for item in self.sources
-            )
-            or len(set(self.sources)) != len(self.sources)
+            or not isinstance(self.kinds, tuple)
+            or any(not isinstance(item, ArtifactKind) for item in self.kinds)
+            or len(set(self.kinds)) != len(self.kinds)
+            or not _filter_aliases_valid(self.sources)
+            or not _filter_aliases_valid(self.registries)
             or not isinstance(self.query, str)
             or any(character in self.query for character in "\r\n")
         ):
             raise ValueError("Maintainer Candidate filter is invalid")
         object.__setattr__(self, "states", tuple(sorted(self.states, key=lambda item: item.value)))
+        object.__setattr__(self, "kinds", tuple(sorted(self.kinds, key=lambda item: item.value)))
         object.__setattr__(self, "sources", tuple(sorted(self.sources)))
+        object.__setattr__(self, "registries", tuple(sorted(self.registries)))
 
     @property
     def is_empty(self) -> bool:
-        return not (self.states or self.sources or self.query)
+        return not (self.states or self.kinds or self.sources or self.registries or self.query)
 
     def matches(self, candidate: MaintainerCandidateView) -> bool:
         """Whether one projected Candidate survives this filter."""
@@ -1586,7 +1642,11 @@ class MaintainerCandidateFilter:
             raise ValueError("a Maintainer Candidate filter matches projected Candidate views")
         if self.states and candidate.state not in self.states:
             return False
+        if self.kinds and candidate.kind not in tuple(item.value for item in self.kinds):
+            return False
         if self.sources and candidate.source_alias not in self.sources:
+            return False
+        if self.registries and candidate.target_registry not in self.registries:
             return False
         if not self.query:
             return True
@@ -1614,6 +1674,15 @@ class MaintainerCandidateFilter:
             states=remaining if len(remaining) != len(self.states) else (*self.states, state),
         )
 
+    def toggled_kind(self, kind: ArtifactKind) -> MaintainerCandidateFilter:
+        if not isinstance(kind, ArtifactKind):
+            raise ValueError("toggling a Candidate filter needs an artifact kind")
+        remaining = tuple(item for item in self.kinds if item is not kind)
+        return replace(
+            self,
+            kinds=remaining if len(remaining) != len(self.kinds) else (*self.kinds, kind),
+        )
+
     def toggled_source(self, alias: str) -> MaintainerCandidateFilter:
         if not isinstance(alias, str) or not alias:
             raise ValueError("toggling a Candidate filter needs a Source alias")
@@ -1622,6 +1691,43 @@ class MaintainerCandidateFilter:
             self,
             sources=remaining if len(remaining) != len(self.sources) else (*self.sources, alias),
         )
+
+    def toggled_registry(self, alias: str) -> MaintainerCandidateFilter:
+        if not isinstance(alias, str) or not alias:
+            raise ValueError("toggling a Candidate filter needs a target registry alias")
+        remaining = tuple(item for item in self.registries if item != alias)
+        return replace(
+            self,
+            registries=(
+                remaining if len(remaining) != len(self.registries) else (*self.registries, alias)
+            ),
+        )
+
+    def toggled(
+        self, facet: MaintainerCandidateFilterFacet, value: str
+    ) -> MaintainerCandidateFilter:
+        """Toggle one already-parsed facet value, so no caller re-splits a row."""
+
+        if not isinstance(facet, MaintainerCandidateFilterFacet):
+            raise ValueError("toggling a Candidate filter needs a typed facet")
+        if facet is MaintainerCandidateFilterFacet.STATUS:
+            return self.toggled_state(CandidateState(value))
+        if facet is MaintainerCandidateFilterFacet.KIND:
+            return self.toggled_kind(ArtifactKind(value))
+        if facet is MaintainerCandidateFilterFacet.SOURCE:
+            return self.toggled_source(value)
+        return self.toggled_registry(value)
+
+
+def _filter_aliases_valid(values: tuple[str, ...]) -> bool:
+    return (
+        isinstance(values, tuple)
+        and len(set(values)) == len(values)
+        and all(
+            isinstance(item, str) and item and not any(character in item for character in "\r\n")
+            for item in values
+        )
+    )
 
 
 def filter_maintainer_candidates(
@@ -1637,6 +1743,167 @@ def filter_maintainer_candidates(
     if not isinstance(candidate_filter, MaintainerCandidateFilter):
         raise ValueError("filtering Maintainer Candidates needs typed filter state")
     return tuple(item for item in candidates if candidate_filter.matches(item))
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerCandidateFilterOptionView:
+    """One value a Candidate list may be narrowed to, and what narrowing to it would leave."""
+
+    row: str
+    value: str
+    matching: int
+    active: bool
+
+    def __post_init__(self) -> None:
+        if (
+            parse_candidate_filter_row(self.row) is None
+            or not isinstance(self.value, str)
+            or not self.value
+            or not isinstance(self.matching, int)
+            or isinstance(self.matching, bool)
+            or self.matching < 0
+            or not isinstance(self.active, bool)
+        ):
+            raise ValueError("a Candidate filter option is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerCandidateFilterGroupView:
+    """One facet and every value the composed Candidates actually offer for it."""
+
+    facet: MaintainerCandidateFilterFacet
+    label: str
+    options: tuple[MaintainerCandidateFilterOptionView, ...]
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.facet, MaintainerCandidateFilterFacet)
+            or not isinstance(self.label, str)
+            or not self.label
+            or not isinstance(self.options, tuple)
+            or any(
+                not isinstance(item, MaintainerCandidateFilterOptionView) for item in self.options
+            )
+            or len({item.row for item in self.options}) != len(self.options)
+        ):
+            raise ValueError("a Candidate filter group is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerCandidateFilterView:
+    """Screen 53: the whole editable narrowing, and what it currently leaves of screen 35."""
+
+    groups: tuple[MaintainerCandidateFilterGroupView, ...]
+    matching: int
+    total: int
+    query: str = ""
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.groups, tuple)
+            or any(not isinstance(item, MaintainerCandidateFilterGroupView) for item in self.groups)
+            or len({item.facet for item in self.groups}) != len(self.groups)
+            or not isinstance(self.matching, int)
+            or isinstance(self.matching, bool)
+            or not isinstance(self.total, int)
+            or isinstance(self.total, bool)
+            or not 0 <= self.matching <= self.total
+            or not isinstance(self.query, str)
+            or any(character in self.query for character in "\r\n")
+        ):
+            raise ValueError("the Candidate filter view is invalid")
+
+    @property
+    def is_empty(self) -> bool:
+        """Whether nothing is narrowing the list, which is not the same as nothing matching."""
+
+        return not self.query and not any(
+            option.active for group in self.groups for option in group.options
+        )
+
+    @property
+    def rows(self) -> tuple[str, ...]:
+        return tuple(option.row for group in self.groups for option in group.options)
+
+
+def _filter_facet_value(
+    candidate: MaintainerCandidateView, facet: MaintainerCandidateFilterFacet
+) -> str:
+    if facet is MaintainerCandidateFilterFacet.STATUS:
+        return candidate.state.value
+    if facet is MaintainerCandidateFilterFacet.KIND:
+        return candidate.kind
+    if facet is MaintainerCandidateFilterFacet.SOURCE:
+        return candidate.source_alias
+    return candidate.target_registry
+
+
+def project_maintainer_candidate_filters(
+    candidates: tuple[MaintainerCandidateView, ...],
+    candidate_filter: MaintainerCandidateFilter,
+) -> MaintainerCandidateFilterView:
+    """Project screen 53 from the composed Candidates and the filter currently held as state.
+
+    Only values the composed Candidates actually have are offered, because a facet value nothing
+    carries is a filter that can only ever empty the list.  Each option states what choosing it
+    would leave -- measured with that one value applied to the rest of the current filter -- so a
+    narrowing that selects nothing is visible here rather than discovered as an empty screen 35.
+    """
+
+    if not isinstance(candidates, tuple) or any(
+        not isinstance(item, MaintainerCandidateView) for item in candidates
+    ):
+        raise ValueError("projecting Candidate filters needs composed Candidate views")
+    if not isinstance(candidate_filter, MaintainerCandidateFilter):
+        raise ValueError("projecting Candidate filters needs the typed filter")
+    groups: list[MaintainerCandidateFilterGroupView] = []
+    for facet in MaintainerCandidateFilterFacet:
+        offered = sorted({_filter_facet_value(item, facet) for item in candidates})
+        if not offered:
+            continue
+        options: list[MaintainerCandidateFilterOptionView] = []
+        for value in offered:
+            row = f"{facet.value}:{value}"
+            if parse_candidate_filter_row(row) is None:
+                # A composed Candidate carrying a value this screen cannot address is a defect in
+                # composition, not something to draw an unusable row for.
+                continue
+            active = _filter_facet_active(candidate_filter, facet, value)
+            probed = candidate_filter if active else candidate_filter.toggled(facet, value)
+            options.append(
+                MaintainerCandidateFilterOptionView(
+                    row,
+                    value,
+                    len(filter_maintainer_candidates(candidates, probed)),
+                    active,
+                )
+            )
+        if options:
+            groups.append(
+                MaintainerCandidateFilterGroupView(
+                    facet, _FILTER_FACET_LABELS[facet], tuple(options)
+                )
+            )
+    return MaintainerCandidateFilterView(
+        tuple(groups),
+        len(filter_maintainer_candidates(candidates, candidate_filter)),
+        len(candidates),
+        candidate_filter.query,
+    )
+
+
+def _filter_facet_active(
+    candidate_filter: MaintainerCandidateFilter,
+    facet: MaintainerCandidateFilterFacet,
+    value: str,
+) -> bool:
+    if facet is MaintainerCandidateFilterFacet.STATUS:
+        return any(item.value == value for item in candidate_filter.states)
+    if facet is MaintainerCandidateFilterFacet.KIND:
+        return any(item.value == value for item in candidate_filter.kinds)
+    if facet is MaintainerCandidateFilterFacet.SOURCE:
+        return value in candidate_filter.sources
+    return value in candidate_filter.registries
 
 
 @dataclass(frozen=True, slots=True)
