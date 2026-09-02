@@ -370,3 +370,43 @@ for a local authoring Source needs a filesystem `source` rather than a Git URL. 
 covered by the local-sync E2E; B-041 records restoring them.
 
 Gates: `make quality` and `make integration` both green.
+
+
+### Step 5 progress — screens 44–45, validation and explicit local commit (2026-09-02)
+
+`execute_candidate_promotion` is the single application execution boundary for the transaction
+screen 43 showed. It first checks the confirmed transaction digest without reading, then re-observes
+the exact durable Candidate and synchronized approved baseline. It rereads the writable checkout,
+revalidates under the reviewed policy, drives the existing bulk planner again and refuses unless the
+result is byte-for-byte the prepared transaction. The projected registry is validated before the
+first write; `finalize_promotion` performs the locked atomic compare-and-apply; the persisted tree,
+version records and promotion audit are reread and validated before a commit is attempted.
+
+Screen 44 renders that pre-write validation, including the registry snapshot and the Candidate
+validation/policy evidence carried by the promotion audit. Screen 45 renders the exact before/after
+snapshot, changed-path count and deterministic commit subject. Drawing either screen opens no file.
+Enter on screen 43 is the one typed `CANDIDATE_PROMOTION` prepare action; Enter on screen 45 confirms
+the digest through the existing reducer and action shell. No second key interpreter, reducer,
+planner or shell was added.
+
+The concrete adapter treats the normalized installation project root as the explicit writable
+registry checkout and requires its entire tree to match the synchronized approved-registry
+observation before preparing the validation view (D-103). It stages only the reviewed paths into an
+empty Git index, refuses unrelated staged work, creates one local commit with hooks disabled and has
+no push capability. A failure after the validated atomic filesystem write explicitly reports that
+the changes remain for recovery rather than pretending the transaction was rolled back.
+
+Evidence includes pure stale-Candidate/stale-baseline/stale-checkout/digest/commit-failure tests; a
+real Git-index ownership test; reducer and draw-without-IO tests; and a production-composition E2E
+that walks screens 30, 35–45 against a real temporary installation, writes the promoted registry,
+validates its readback, creates a clean local commit and proves the checkout has no remote. The
+focused promotion/composition suite is 51 tests and the adjacent reducer/action boundary suite is
+36 tests, all green.
+
+Checkpoint gates on 2026-09-02: `make quality` is green with 3,098 tests and 83.28% branch coverage;
+format-check, lint, typecheck, repository validation, packaging, docs and secret-shape checks all
+pass. `make integration` is separately green with 210 E2E tests.
+
+B-041 remains intentionally open: this increment proves remote-Git Candidate promotion and does not
+pass a `local:<snapshot-sha256>` origin off as a commit. Screen 46, screen 47 and the compliant local
+provenance representation are the remaining work in step 5.

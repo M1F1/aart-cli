@@ -5,28 +5,38 @@ has to be the review that actually happened.  The evidence it carries is a diges
 run and of the policy that judged it, which is what lets an audit record answer "who approved this,
 against which rules" rather than only "this was promoted".
 
-Nothing here writes, reads or plans a registry transaction.  This module binds a Candidate, the run
-that judged it and the approved baseline into one value a Maintainer can confirm, and refuses
-anything the review already refused.
+Every transformation here remains pure until ``execute_candidate_promotion`` calls explicit read,
+atomic workspace and local Git commit ports.  That execution re-observes every reviewed baseline,
+replans, validates before writing, validates the persisted readback, commits only reviewed paths
+and has no push capability.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Callable
 
 from agent_artifacts.application.candidate_validation import (
     CandidateValidation,
     ValidationOutcome,
+    validate_candidate,
 )
 from agent_artifacts.application.maintainer import CandidateBundle
 from agent_artifacts.application.maintainer_sync import ApprovedRegistryState
 from agent_artifacts.application.promotion import (
+    PromotionApplyReceipt,
     PromotionEvidence,
+    PromotionOutputPort,
     PromotionPlan,
+    finalize_promotion,
+    load_registry_promotions,
+    load_registry_versions,
     plan_bulk_promotion,
+    project_promotion,
+    validate_promoted_registry,
 )
 from agent_artifacts.configuration.policy import redact_text
-from agent_artifacts.domain.candidates import CandidateState, assess_candidate
+from agent_artifacts.domain.candidates import CandidateId, CandidateState, assess_candidate
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.identifiers import SourceAlias, source_revision_kind
 from agent_artifacts.domain.policies import EffectivePolicy
@@ -35,14 +45,24 @@ from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.domain.serialization import canonical_json_bytes
 from agent_artifacts.protocol.hashing import sha256_bytes
 from agent_artifacts.protocol.native_tree import SourceSnapshot
+from agent_artifacts.protocol.paths import SafeRelativePath
+from agent_artifacts.sources.model import source_snapshot_digest
 from agent_artifacts.store.model import ObjectDigest
 
 __all__ = [
     "MAINTAINER_PROMOTION_INVALID",
+    "CandidatePromotionExecutionResult",
+    "CandidatePromotionCommitCommand",
+    "CandidatePromotionCommitReceipt",
+    "MaintainerCandidatePromotionPorts",
     "PreparedCandidatePromotion",
+    "PreparedCandidatePromotionTransaction",
+    "execute_candidate_promotion",
     "plan_candidate_promotion",
     "effective_policy_digest",
     "prepare_candidate_promotion",
+    "prepare_candidate_promotion_transaction",
+    "promotion_commit_subject",
     "promotion_evidence",
     "validation_report_digest",
 ]
@@ -166,6 +186,7 @@ class PreparedCandidatePromotion:
     """One Candidate, the run that judged it and the registry baseline, bound into one review."""
 
     candidate: CandidateBundle
+    observed: CandidateBundle
     validation: CandidateValidation
     policy: EffectivePolicy
     approved: ApprovedRegistryState
@@ -176,12 +197,15 @@ class PreparedCandidatePromotion:
     def __post_init__(self) -> None:
         if (
             not isinstance(self.candidate, CandidateBundle)
+            or not isinstance(self.observed, CandidateBundle)
             or not isinstance(self.validation, CandidateValidation)
             or not isinstance(self.policy, EffectivePolicy)
             or not isinstance(self.approved, ApprovedRegistryState)
             or not isinstance(self.mode, PromotionMode)
             or not isinstance(self.evidence, PromotionEvidence)
             or self.validation.candidate_id != self.candidate.candidate.id
+            or self.observed.candidate.id != self.candidate.candidate.id
+            or self.observed.artifact != self.candidate.artifact
         ):
             raise ValueError("prepared Candidate promotion is invalid")
         object.__setattr__(self, "review_digest", _review_digest(self))
@@ -215,6 +239,7 @@ def _review_digest(prepared: PreparedCandidatePromotion) -> ObjectDigest:
                     "payload_digest": str(candidate.artifact.payload_digest),
                     "source_revision": candidate.artifact.provenance.revision,
                     "state": prepared.state.value,
+                    "observed_state": prepared.observed.candidate.state.value,
                 },
                 "evidence": {
                     "effective_policy_digest": str(prepared.evidence.effective_policy_digest),
@@ -284,7 +309,15 @@ def prepare_candidate_promotion(
     )
     try:
         return Ok(
-            PreparedCandidatePromotion(reviewed, validation, policy, approved, mode, evidence.value)
+            PreparedCandidatePromotion(
+                reviewed,
+                bundle,
+                validation,
+                policy,
+                approved,
+                mode,
+                evidence.value,
+            )
         )
     except ValueError as error:
         return _error(f"prepared Candidate promotion is invalid: {error}")
@@ -321,3 +354,378 @@ def plan_candidate_promotion(
         approved=prepared.approved.versions,
         mode=prepared.mode,
     )
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedCandidatePromotionTransaction:
+    """The exact projected and validated registry transaction screens 43–45 review."""
+
+    promotion: PreparedCandidatePromotion
+    plan: PromotionPlan
+    projected: SourceSnapshot
+    registry_snapshot: ObjectDigest
+    approved_version_count: int
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.promotion, PreparedCandidatePromotion)
+            or not isinstance(self.plan, PromotionPlan)
+            or not isinstance(self.projected, SourceSnapshot)
+            or not isinstance(self.registry_snapshot, ObjectDigest)
+            or not isinstance(self.approved_version_count, int)
+            or isinstance(self.approved_version_count, bool)
+            or self.approved_version_count < 1
+            or self.plan.mode is not self.promotion.mode
+            or self.plan.next_registry_snapshot != self.registry_snapshot
+            or len(self.plan.audits) != 1
+            or self.plan.audits[0].candidate_id != self.promotion.candidate.candidate.id
+        ):
+            raise ValueError("prepared Candidate promotion transaction is invalid")
+
+    @property
+    def review_digest(self) -> ObjectDigest:
+        """The transaction digest screen 43 showed and screen 45 must confirm."""
+
+        return self.plan.review_digest
+
+
+def _project_and_validate(
+    promotion: PreparedCandidatePromotion,
+    plan: PromotionPlan,
+    workspace: SourceSnapshot,
+) -> Result[PreparedCandidatePromotionTransaction]:
+    projected = project_promotion(workspace, plan)
+    if isinstance(projected, Err):
+        return projected
+    versions = load_registry_versions(projected.value)
+    if isinstance(versions, Err):
+        return versions
+    audits = load_registry_promotions(projected.value)
+    if isinstance(audits, Err):
+        return audits
+    by_candidate = {item.candidate_id: item for item in audits.value}
+    if any(by_candidate.get(item.candidate_id) != item for item in plan.audits):
+        return _error("promoted registry provenance does not match the reviewed transaction")
+    validated = validate_promoted_registry(projected.value, versions.value)
+    if isinstance(validated, Err):
+        return validated
+    try:
+        return Ok(
+            PreparedCandidatePromotionTransaction(
+                promotion,
+                plan,
+                projected.value,
+                validated.value,
+                len(versions.value),
+            )
+        )
+    except ValueError as error:
+        return _error(f"prepared promotion transaction is invalid: {error}")
+
+
+def prepare_candidate_promotion_transaction(
+    bundle: CandidateBundle,
+    validation: CandidateValidation,
+    policy: EffectivePolicy,
+    approved: ApprovedRegistryState,
+    registry_workspace: SourceSnapshot,
+    *,
+    mode: PromotionMode = PromotionMode.VENDORED,
+) -> Result[PreparedCandidatePromotionTransaction]:
+    """Plan and validate the exact inert registry state screens 43–45 will review."""
+
+    if not isinstance(registry_workspace, SourceSnapshot):
+        return _error("preparing a promotion transaction needs a registry workspace")
+    workspace_digest = source_snapshot_digest(registry_workspace)
+    if isinstance(workspace_digest, Err):
+        return workspace_digest
+    if workspace_digest.value != approved.snapshot_digest:
+        return _error(
+            "registry workspace does not match the synchronized approved baseline",
+            "synchronize or restore the registry checkout, then review promotion again",
+        )
+    prepared = prepare_candidate_promotion(
+        bundle,
+        validation,
+        policy,
+        approved,
+        mode=mode,
+    )
+    if isinstance(prepared, Err):
+        return prepared
+    planned = plan_candidate_promotion(prepared.value, registry_workspace)
+    if isinstance(planned, Err):
+        return planned
+    return _project_and_validate(prepared.value, planned.value, registry_workspace)
+
+
+ReadCandidatePort = Callable[[CandidateId], Result[CandidateBundle]]
+ReadApprovedRegistryPort = Callable[[SourceAlias], Result[ApprovedRegistryState]]
+
+
+@dataclass(frozen=True, slots=True)
+class CandidatePromotionCommitCommand:
+    """The reviewed paths and subject an explicit local Git commit may contain."""
+
+    review_digest: ObjectDigest
+    subject: str
+    paths: tuple[SafeRelativePath, ...]
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.review_digest, ObjectDigest)
+            or not isinstance(self.subject, str)
+            or not self.subject
+            or self.subject != self.subject.strip()
+            or any(character in self.subject for character in "\r\n")
+            or not isinstance(self.paths, tuple)
+            or not self.paths
+            or any(not isinstance(item, SafeRelativePath) for item in self.paths)
+            or len(set(self.paths)) != len(self.paths)
+        ):
+            raise ValueError("Candidate promotion commit command is invalid")
+        object.__setattr__(self, "paths", tuple(sorted(self.paths)))
+
+
+@dataclass(frozen=True, slots=True)
+class CandidatePromotionCommitReceipt:
+    """The local Git revision created for an exact promotion; push is structurally absent."""
+
+    review_digest: ObjectDigest
+    revision: str
+    subject: str
+    paths: tuple[SafeRelativePath, ...]
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.review_digest, ObjectDigest)
+            or source_revision_kind(self.revision) != "git"
+            or not isinstance(self.subject, str)
+            or not self.subject
+            or self.subject != self.subject.strip()
+            or any(character in self.subject for character in "\r\n")
+            or not isinstance(self.paths, tuple)
+            or not self.paths
+            or any(not isinstance(item, SafeRelativePath) for item in self.paths)
+            or len(set(self.paths)) != len(self.paths)
+        ):
+            raise ValueError("Candidate promotion commit receipt is invalid")
+        object.__setattr__(self, "paths", tuple(sorted(self.paths)))
+
+
+CommitPromotionPort = Callable[
+    [CandidatePromotionCommitCommand], Result[CandidatePromotionCommitReceipt]
+]
+
+
+def promotion_commit_subject(prepared: PreparedCandidatePromotionTransaction) -> str:
+    """The deterministic one-line subject screen 45 reviews and the Git port must use."""
+
+    if not isinstance(prepared, PreparedCandidatePromotionTransaction):
+        raise ValueError("promotion commit subject needs a prepared transaction")
+    candidate = prepared.promotion.candidate.candidate
+    return (
+        f"Promote {candidate.artifact.coordinate.artifact}@"
+        f"{candidate.artifact.coordinate.version} to {candidate.target_registry}"
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerCandidatePromotionPorts:
+    """Every observation and the one atomic output used by confirmed promotion."""
+
+    read_candidate: ReadCandidatePort
+    read_approved: ReadApprovedRegistryPort
+    output: PromotionOutputPort
+    commit: CommitPromotionPort
+
+
+@dataclass(frozen=True, slots=True)
+class CandidatePromotionExecutionResult:
+    """Verified persisted registry evidence from one locally applied promotion."""
+
+    review_digest: ObjectDigest
+    registry_snapshot: ObjectDigest
+    workspace_digest: ObjectDigest
+    changed_paths: int
+    approved_version_count: int
+    commit_revision: str
+    commit_subject: str
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.review_digest, ObjectDigest)
+            or not isinstance(self.registry_snapshot, ObjectDigest)
+            or not isinstance(self.workspace_digest, ObjectDigest)
+            or not isinstance(self.changed_paths, int)
+            or isinstance(self.changed_paths, bool)
+            or self.changed_paths < 0
+            or not isinstance(self.approved_version_count, int)
+            or isinstance(self.approved_version_count, bool)
+            or self.approved_version_count < 1
+            or source_revision_kind(self.commit_revision) != "git"
+            or not isinstance(self.commit_subject, str)
+            or not self.commit_subject
+            or self.commit_subject != self.commit_subject.strip()
+            or any(character in self.commit_subject for character in "\r\n")
+        ):
+            raise ValueError("Candidate promotion execution result is invalid")
+
+
+def execute_candidate_promotion(
+    prepared: PreparedCandidatePromotionTransaction,
+    reviewed_digest: ObjectDigest,
+    ports: MaintainerCandidatePromotionPorts,
+) -> Result[CandidatePromotionExecutionResult]:
+    """Re-observe, replan and atomically apply exactly one reviewed promotion.
+
+    Validation happens over the projected registry before the first write. The atomic output then
+    performs its own locked current-state check, and the persisted tree is read and validated once
+    more before success is reported. Publication and Git push remain outside this operation.
+    """
+
+    if (
+        not isinstance(prepared, PreparedCandidatePromotionTransaction)
+        or not isinstance(reviewed_digest, ObjectDigest)
+        or not isinstance(ports, MaintainerCandidatePromotionPorts)
+    ):
+        return _error("executing promotion needs one prepared transaction and typed ports")
+    if reviewed_digest != prepared.review_digest:
+        return _error(
+            "confirmed promotion digest does not match the reviewed registry transaction",
+            "review the current registry transaction again",
+        )
+
+    candidate_id = prepared.promotion.observed.candidate.id
+    current_candidate = ports.read_candidate(candidate_id)
+    if isinstance(current_candidate, Err):
+        return current_candidate
+    if current_candidate.value != prepared.promotion.observed:
+        return _error(
+            "Candidate changed after promotion review",
+            "validate and review the current Candidate again",
+        )
+
+    current_approved = ports.read_approved(prepared.promotion.target_registry)
+    if isinstance(current_approved, Err):
+        return current_approved
+    if current_approved.value != prepared.promotion.approved:
+        return _error(
+            "approved registry baseline changed after promotion review",
+            "review promotion again against the current approved registry",
+        )
+
+    current_workspace = ports.output.current()
+    if isinstance(current_workspace, Err):
+        return current_workspace
+    validation = validate_candidate(
+        current_candidate.value,
+        policy=prepared.promotion.policy,
+    )
+    current_promotion = prepare_candidate_promotion(
+        current_candidate.value,
+        validation,
+        prepared.promotion.policy,
+        current_approved.value,
+        mode=prepared.promotion.mode,
+    )
+    if isinstance(current_promotion, Err):
+        return current_promotion
+    if current_promotion.value.review_digest != prepared.promotion.review_digest:
+        return _error(
+            "Candidate validation or policy result changed after promotion review",
+            "review the current Candidate and policy again",
+        )
+    replanned = plan_candidate_promotion(current_promotion.value, current_workspace.value)
+    if isinstance(replanned, Err):
+        return replanned
+    if replanned.value.review_digest != prepared.plan.review_digest:
+        return _error(
+            "registry workspace changed after the transaction was reviewed",
+            "review the current registry transaction again",
+        )
+    revalidated = _project_and_validate(
+        current_promotion.value,
+        replanned.value,
+        current_workspace.value,
+    )
+    if isinstance(revalidated, Err):
+        return revalidated
+    if revalidated.value != prepared:
+        return _error(
+            "promoted registry validation changed after review",
+            "review the current promoted registry again",
+        )
+
+    applied = finalize_promotion(replanned.value, reviewed_digest, output=ports.output)
+    if isinstance(applied, Err):
+        return applied
+    persisted = ports.output.current()
+    if isinstance(persisted, Err):
+        return persisted
+    persisted_workspace = source_snapshot_digest(persisted.value)
+    if isinstance(persisted_workspace, Err):
+        return persisted_workspace
+    versions = load_registry_versions(persisted.value)
+    if isinstance(versions, Err):
+        return versions
+    audits = load_registry_promotions(persisted.value)
+    if isinstance(audits, Err):
+        return audits
+    persisted_audits = {item.candidate_id: item for item in audits.value}
+    if any(persisted_audits.get(item.candidate_id) != item for item in replanned.value.audits):
+        return _error("persisted registry provenance does not match the reviewed promotion")
+    validated = validate_promoted_registry(persisted.value, versions.value)
+    if isinstance(validated, Err):
+        return validated
+    receipt: PromotionApplyReceipt = applied.value
+    if (
+        persisted_workspace.value != receipt.workspace_digest
+        or persisted_workspace.value != prepared.plan.next_workspace_digest
+        or
+        validated.value != receipt.registry_snapshot
+        or len(versions.value) != prepared.approved_version_count
+    ):
+        return _error("persisted registry does not match the validated promotion result")
+    commit_command = CandidatePromotionCommitCommand(
+        prepared.review_digest,
+        promotion_commit_subject(prepared),
+        tuple(item.path for item in prepared.plan.changes if item.kind.value != "unchanged"),
+    )
+    committed = ports.commit(commit_command)
+    if isinstance(committed, Err):
+        return Err(
+            (
+                Diagnostic(
+                    MAINTAINER_PROMOTION_INVALID,
+                    Severity.ERROR,
+                    "approved registry state was written and validated, but its local Git commit "
+                    "failed; the reviewed changes remain in the checkout",
+                    remediation=(
+                        "inspect Git status, repair the commit failure, and commit the reviewed "
+                        "paths without pushing",
+                    ),
+                ),
+                *committed.diagnostics,
+            )
+        )
+    if (
+        committed.value.review_digest != commit_command.review_digest
+        or committed.value.subject != commit_command.subject
+        or committed.value.paths != commit_command.paths
+    ):
+        return _error("local Git commit does not match the reviewed registry transaction")
+    try:
+        return Ok(
+            CandidatePromotionExecutionResult(
+                receipt.review_digest,
+                receipt.registry_snapshot,
+                receipt.workspace_digest,
+                receipt.changed_paths,
+                len(versions.value),
+                committed.value.revision,
+                committed.value.subject,
+            )
+        )
+    except ValueError as error:
+        return _error(f"promotion result is invalid: {error}")

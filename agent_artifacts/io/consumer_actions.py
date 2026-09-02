@@ -43,10 +43,14 @@ from agent_artifacts.application.consumer_views import (
 from agent_artifacts.application.maintainer_sync import PreparedSourceSync
 from agent_artifacts.application.maintainer_views import (
     MaintainerViews,
+    parse_validation_row,
+    project_maintainer_registry_commit,
+    project_maintainer_registry_validation,
     project_source_sync_result,
     project_source_sync_review,
 )
 from agent_artifacts.configuration.policy import EffectiveConfiguration
+from agent_artifacts.domain.candidates import CandidateId
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.identifiers import ArtifactCoordinate, SourceAlias
 from agent_artifacts.domain.policies import EffectivePolicy
@@ -81,6 +85,11 @@ from .configured_uninstall_action import (
 from .consumer_machine import read_installed_inspections
 from .consumer_settings import write_consumer_settings
 from .credentials import CredentialProviderPort
+from .maintainer_promotion import (
+    PreparedConfiguredCandidatePromotion,
+    complete_configured_candidate_promotion,
+    prepare_configured_candidate_promotion,
+)
 from .maintainer_sync import (
     complete_configured_source_sync,
     prepare_configured_source_sync,
@@ -154,7 +163,11 @@ class _PendingInstall:
 #: What one reviewed-but-unconfirmed action is holding. Each carries the review digest the
 #: confirmation has to name, so nothing runs against a plan nobody read.
 _Pending = (
-    _PendingInstall | PreparedConfiguredRepair | PreparedConfiguredUninstall | PreparedSourceSync
+    _PendingInstall
+    | PreparedConfiguredRepair
+    | PreparedConfiguredUninstall
+    | PreparedSourceSync
+    | PreparedConfiguredCandidatePromotion
 )
 
 
@@ -211,6 +224,8 @@ class LocalConsumerActions:
         transaction=None,
         source_sync_review=None,
         source_sync_result=None,
+        promotion_validation=None,
+        promotion_commit=None,
         notice: tuple[str, ...] = (),
     ) -> CanonicalScreenSource:
         """The screens for the machine as it currently stands, plus whatever a flow is holding."""
@@ -228,6 +243,8 @@ class LocalConsumerActions:
                 transaction=transaction,
                 source_sync_review=source_sync_review,
                 source_sync_result=source_sync_result,
+                promotion_validation=promotion_validation,
+                promotion_commit=promotion_commit,
                 notice=notice,
             )
         )
@@ -272,7 +289,67 @@ class LocalConsumerActions:
             return self._prepare_repair(command)
         if action is ConsumerActionKind.SOURCE_SYNC:
             return self._prepare_source_sync(command)
+        if action is ConsumerActionKind.CANDIDATE_PROMOTION:
+            return self._prepare_candidate_promotion(command)
         return self._prepare_uninstall(command)
+
+    def _prepare_candidate_promotion(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        if self._data_root is None:
+            return self._declined(
+                command,
+                _lines("Candidate promotion needs the configured durable data root"),
+            )
+        row = parse_validation_row(command.focus)
+        raw_id = command.focus if row is None else row.candidate_id
+        if not raw_id or command.promotion_mode is None:
+            return self._declined(
+                command,
+                _lines("Candidate promotion needs one focused Candidate and promotion mode"),
+            )
+        try:
+            candidate_id = CandidateId(raw_id)
+        except ValueError as error:
+            return self._declined(command, _lines(str(error)))
+        prepared = prepare_configured_candidate_promotion(
+            self._context.effective,
+            candidate_id,
+            data_root=self._data_root,
+            registry_root=self._context.host.harness_root,
+            policy=self._context.policy,
+            mode=command.promotion_mode,
+        )
+        if isinstance(prepared, Err):
+            return self._declined(command, _refusal(prepared.diagnostics))
+        shown = (
+            None
+            if self._context.maintainer is None
+            else self._context.maintainer.registry_diff(raw_id, command.promotion_mode)
+        )
+        if (
+            shown is None
+            or shown.plan_digest is None
+            or shown.plan_digest != str(prepared.value.review_digest)
+        ):
+            return self._declined(
+                command,
+                _lines(
+                    "registry transaction changed after screen 43 was composed; review it again"
+                ),
+            )
+        self._pending = prepared.value
+        self._pending_action = command.action
+        transaction = prepared.value.transaction
+        return ConsumerActionUpdate(
+            self.source(
+                promotion_validation=project_maintainer_registry_validation(transaction),
+                promotion_commit=project_maintainer_registry_commit(transaction),
+            ),
+            ConsumerUiEvent(
+                ConsumerUiEventKind.ACTION_PREPARED,
+                action=command.action,
+                review_digest=str(prepared.value.review_digest),
+            ),
+        )
 
     def _prepare_source_sync(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
         if self._data_root is None:
@@ -576,6 +653,8 @@ class LocalConsumerActions:
             return self._execute_repair(command, pending)
         if isinstance(pending, PreparedSourceSync):
             return self._execute_source_sync(command, pending)
+        if isinstance(pending, PreparedConfiguredCandidatePromotion):
+            return self._execute_candidate_promotion(command, pending)
         assert isinstance(pending, PreparedConfiguredUninstall)
         return self._execute_uninstall(command, pending)
 
@@ -607,6 +686,30 @@ class LocalConsumerActions:
             source_sync_result=project_source_sync_result(
                 completed.value,
                 target_registry=pending.target_registry,
+            ),
+        )
+
+    def _execute_candidate_promotion(
+        self,
+        command: ConsumerUiCommand,
+        pending: PreparedConfiguredCandidatePromotion,
+    ) -> ConsumerActionUpdate:
+        completed = complete_configured_candidate_promotion(
+            self._context.effective,
+            pending,
+            reviewed_digest=pending.review_digest,
+            registry_root=self._context.host.harness_root,
+        )
+        if isinstance(completed, Err):
+            return self._failed(command, _refusal(completed.diagnostics))
+        recorded_at, _today = self._moment()
+        return self._recorded(
+            command,
+            recorded_at,
+            promotion_validation=project_maintainer_registry_validation(pending.transaction),
+            promotion_commit=project_maintainer_registry_commit(
+                pending.transaction,
+                result=completed.value,
             ),
         )
 

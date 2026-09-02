@@ -49,6 +49,7 @@ class ConsumerActionKind(str, Enum):
     VERIFY_REPAIR = "verify-repair"
     UNINSTALL = "uninstall"
     SOURCE_SYNC = "source-sync"
+    CANDIDATE_PROMOTION = "candidate-promotion"
 
 
 class ConsumerUiEventKind(str, Enum):
@@ -125,6 +126,7 @@ class ConsumerUiCommand:
     selection: tuple[str, ...] = ()
     focus: str = ""
     review_digest: str = ""
+    promotion_mode: PromotionMode | None = None
 
     def __post_init__(self) -> None:
         if (
@@ -138,6 +140,10 @@ class ConsumerUiCommand:
             or not isinstance(self.focus, str)
             or any(character in self.focus for character in "\r\n")
             or not _safe_identity(self.review_digest)
+            or (
+                self.promotion_mode is not None
+                and not isinstance(self.promotion_mode, PromotionMode)
+            )
         ):
             raise ValueError("consumer UI command is invalid")
         if (
@@ -395,6 +401,10 @@ _ACTION_REVIEW: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
         ConsumerActionKind.SOURCE_SYNC,
         MaintainerScreen.SOURCE_DETAILS,
     ): MaintainerScreen.SOURCE_SYNC,
+    (
+        ConsumerActionKind.CANDIDATE_PROMOTION,
+        MaintainerScreen.REGISTRY_DIFF,
+    ): MaintainerScreen.REGISTRY_VALIDATION,
 }
 
 
@@ -428,6 +438,9 @@ def _request_action(
         action=action,
         selection=state.selection,
         focus=focus,
+        promotion_mode=(
+            state.promotion_mode if action is ConsumerActionKind.CANDIDATE_PROMOTION else None
+        ),
     )
     return prepared, (command, *navigation)
 
@@ -460,6 +473,10 @@ _ACTION_RUNNING: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationS
     ): None,
     (ConsumerActionKind.UNINSTALL, ConsumerScreen.UNINSTALL_REVIEW): ConsumerScreen.UNINSTALLING,
     (ConsumerActionKind.SOURCE_SYNC, MaintainerScreen.SOURCE_SYNC): None,
+    (
+        ConsumerActionKind.CANDIDATE_PROMOTION,
+        MaintainerScreen.REGISTRY_COMMIT,
+    ): None,
 }
 
 
@@ -507,6 +524,16 @@ def _action_recorded(
     action = event.action
     if action is None or action is not state.action or not event.text:
         return state, ()
+    if (
+        action is ConsumerActionKind.CANDIDATE_PROMOTION
+        and state.session.screen is MaintainerScreen.REGISTRY_COMMIT
+    ):
+        return replace(
+            state,
+            selection=(),
+            quit_pending=False,
+            action=None,
+        ), ()
     target = _ACTION_RESULT.get((action, state.session.screen))
     if target is None:
         return state, ()
@@ -735,12 +762,18 @@ def key_event(
             ConsumerUiEventKind.REQUEST_ACTION,
             action=ConsumerActionKind.SOURCE_SYNC,
         )
+    if key == "enter" and state.session.screen is MaintainerScreen.REGISTRY_DIFF:
+        return ConsumerUiEvent(
+            ConsumerUiEventKind.REQUEST_ACTION,
+            action=ConsumerActionKind.CANDIDATE_PROMOTION,
+        )
     if key == "enter" and state.session.screen in (
         ConsumerScreen.READY,
         ConsumerScreen.UPDATE_INPUTS,
         ConsumerScreen.UNINSTALL_REVIEW,
         ConsumerScreen.VERIFY_REPAIR,
         MaintainerScreen.SOURCE_SYNC,
+        MaintainerScreen.REGISTRY_COMMIT,
     ):
         return ConsumerUiEvent(ConsumerUiEventKind.CONFIRM_ACTION)
     if key == "enter" and detail is not None:

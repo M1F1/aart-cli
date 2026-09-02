@@ -20,8 +20,11 @@ from agent_artifacts.application.candidate_validation import (
 )
 from agent_artifacts.application.maintainer import CandidateBundle, SourceScan
 from agent_artifacts.application.maintainer_promotion import (
+    CandidatePromotionExecutionResult,
+    PreparedCandidatePromotionTransaction,
     plan_candidate_promotion,
     prepare_candidate_promotion,
+    promotion_commit_subject,
 )
 from agent_artifacts.application.maintainer_sync import (
     ApprovedRegistryState,
@@ -65,7 +68,9 @@ __all__ = [
     "MaintainerPolicyReviewView",
     "MaintainerPromotionReviewView",
     "MaintainerRegistryChangeView",
+    "MaintainerRegistryCommitView",
     "MaintainerRegistryDiffView",
+    "MaintainerRegistryValidationView",
     "MaintainerValidationCheckView",
     "MaintainerValidationDetailView",
     "MaintainerValidationRowId",
@@ -79,6 +84,8 @@ __all__ = [
     "project_maintainer_policy_review",
     "project_maintainer_promotion_review",
     "project_maintainer_registry_diff",
+    "project_maintainer_registry_commit",
+    "project_maintainer_registry_validation",
     "project_maintainer_source",
     "project_maintainer_validation",
     "project_source_sync_result",
@@ -1614,4 +1621,176 @@ def project_maintainer_registry_diff(
         next_registry_snapshot=str(plan.next_registry_snapshot),
         plan_digest=str(plan.review_digest),
         refusals=(),
+    )
+
+
+_PROMOTED_REGISTRY_CHECKS = (
+    "Registry workspace projection",
+    "Approved version identities",
+    "Canonical package digests",
+    "Registry catalogs",
+    "Promotion provenance",
+    "Snapshot reproducibility",
+)
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerRegistryValidationView:
+    """Screen 44: evidence that the projected promoted registry is internally valid."""
+
+    candidate_id: str
+    artifact: str
+    version: str
+    target_registry: str
+    mode: str
+    registry_snapshot: str
+    transaction_digest: str
+    validation_report_digest: str
+    effective_policy_digest: str
+    approved_version_count: int
+    checks: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        lines = (
+            self.candidate_id,
+            self.artifact,
+            self.version,
+            self.target_registry,
+            self.mode,
+            self.registry_snapshot,
+            self.transaction_digest,
+            self.validation_report_digest,
+            self.effective_policy_digest,
+            *self.checks,
+        )
+        if (
+            any(
+                not isinstance(item, str)
+                or not item
+                or any(character in item for character in "\r\n")
+                for item in lines
+            )
+            or not isinstance(self.approved_version_count, int)
+            or isinstance(self.approved_version_count, bool)
+            or self.approved_version_count < 1
+            or len(set(self.checks)) != len(self.checks)
+        ):
+            raise ValueError("Maintainer registry validation view is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerRegistryCommitView:
+    """Screen 45 before or after the exact local approved-registry write."""
+
+    candidate_id: str
+    artifact: str
+    version: str
+    target_registry: str
+    mode: str
+    transaction_digest: str
+    registry_snapshot_before: str
+    registry_snapshot_after: str
+    changed_paths: int
+    approved_version_count: int
+    applied: bool
+    commit_subject: str
+    commit_revision: str | None
+
+    def __post_init__(self) -> None:
+        lines = (
+            self.candidate_id,
+            self.artifact,
+            self.version,
+            self.target_registry,
+            self.mode,
+            self.transaction_digest,
+            self.registry_snapshot_before,
+            self.registry_snapshot_after,
+            self.commit_subject,
+        )
+        if (
+            any(
+                not isinstance(item, str)
+                or not item
+                or any(character in item for character in "\r\n")
+                for item in lines
+            )
+            or not isinstance(self.changed_paths, int)
+            or isinstance(self.changed_paths, bool)
+            or self.changed_paths < 0
+            or not isinstance(self.approved_version_count, int)
+            or isinstance(self.approved_version_count, bool)
+            or self.approved_version_count < 1
+            or not isinstance(self.applied, bool)
+            or (
+                self.commit_revision is not None
+                and (
+                    not self.commit_revision
+                    or any(character in self.commit_revision for character in "\r\n")
+                )
+            )
+            or (self.applied != (self.commit_revision is not None))
+        ):
+            raise ValueError("Maintainer registry commit view is invalid")
+
+
+def project_maintainer_registry_validation(
+    prepared: PreparedCandidatePromotionTransaction,
+) -> MaintainerRegistryValidationView:
+    """Project the successful pre-write validation already performed by the application."""
+
+    if not isinstance(prepared, PreparedCandidatePromotionTransaction):
+        raise ValueError("registry validation projection needs a prepared promotion transaction")
+    promotion = prepared.promotion
+    candidate = promotion.candidate.candidate
+    return MaintainerRegistryValidationView(
+        candidate.id.value,
+        str(candidate.artifact.coordinate.artifact),
+        str(candidate.artifact.coordinate.version),
+        candidate.target_registry.value,
+        promotion.mode.value,
+        str(prepared.registry_snapshot),
+        str(prepared.review_digest),
+        str(promotion.evidence.validation_report_digest),
+        str(promotion.evidence.effective_policy_digest),
+        prepared.approved_version_count,
+        _PROMOTED_REGISTRY_CHECKS,
+    )
+
+
+def project_maintainer_registry_commit(
+    prepared: PreparedCandidatePromotionTransaction,
+    *,
+    result: CandidatePromotionExecutionResult | None = None,
+) -> MaintainerRegistryCommitView:
+    """Project screen 45's exact local write before confirmation or after verified readback."""
+
+    if not isinstance(prepared, PreparedCandidatePromotionTransaction) or not (
+        result is None or isinstance(result, CandidatePromotionExecutionResult)
+    ):
+        raise ValueError("registry commit projection needs a prepared promotion transaction")
+    plan = prepared.plan
+    if result is not None and (
+        result.review_digest != plan.review_digest
+        or result.registry_snapshot != plan.next_registry_snapshot
+        or result.workspace_digest != plan.next_workspace_digest
+        or result.changed_paths != plan.changed_paths
+        or result.approved_version_count != prepared.approved_version_count
+    ):
+        raise ValueError("registry commit result does not match the reviewed transaction")
+    candidate = prepared.promotion.candidate.candidate
+    return MaintainerRegistryCommitView(
+        candidate.id.value,
+        str(candidate.artifact.coordinate.artifact),
+        str(candidate.artifact.coordinate.version),
+        candidate.target_registry.value,
+        prepared.promotion.mode.value,
+        str(plan.review_digest),
+        str(plan.expected_registry_snapshot),
+        str(plan.next_registry_snapshot),
+        plan.changed_paths,
+        prepared.approved_version_count,
+        result is not None,
+        promotion_commit_subject(prepared),
+        None if result is None else result.commit_revision,
     )

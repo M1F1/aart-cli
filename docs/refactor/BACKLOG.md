@@ -733,3 +733,9 @@ without disguising a local snapshot as a commit, then replace the refusal. Two u
 refusal directly were dropped because the fixture for a local authoring Source needs a filesystem
 `source` rather than a Git URL and the budget window closed; the behaviour is covered by
 `tests/maintainer_composition_e2e_test.py`'s local-sync walk. Restore them when the fixture lands.
+
+Rechecked while landing screens 44–45 (D-103): the remote-origin path now completes a real
+projection/validation/write/readback/local-commit transaction, while the local-origin refusal is
+unchanged. This is still outside the screens-44/45 increment but remains critical before screen 47
+and CP-14 step 5 are declared complete; neither the executor nor the commit adapter treats a local
+snapshot digest as a Git revision.

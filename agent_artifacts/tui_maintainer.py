@@ -8,7 +8,9 @@ from agent_artifacts.application.maintainer_views import (
     MaintainerDashboardView,
     MaintainerPolicyReviewView,
     MaintainerPromotionReviewView,
+    MaintainerRegistryCommitView,
     MaintainerRegistryDiffView,
+    MaintainerRegistryValidationView,
     MaintainerSourceSyncResultView,
     MaintainerSourceSyncReviewView,
     MaintainerSourceView,
@@ -28,6 +30,8 @@ __all__ = [
     "render_maintainer_policy_review",
     "render_maintainer_promotion_review",
     "render_maintainer_registry_diff",
+    "render_maintainer_registry_commit",
+    "render_maintainer_registry_validation",
     "render_maintainer_validation",
     "render_maintainer_validation_check",
 ]
@@ -462,4 +466,58 @@ def render_maintainer_registry_diff(
     if remaining > 0:
         lines.append(f"  … and {remaining} more not listed")
     lines.append(f"Transaction digest: {_short(view.plan_digest or '', profile)}")
+    return tuple(lines)
+
+
+def render_maintainer_registry_validation(
+    view: MaintainerRegistryValidationView,
+    profile: PresentationProfile,
+) -> tuple[str, ...]:
+    if not isinstance(view, MaintainerRegistryValidationView) or not isinstance(
+        profile, PresentationProfile
+    ):
+        raise ValueError("Maintainer registry validation rendering needs a typed view and profile")
+    lines = [
+        f"{view.artifact}@{view.version} → {view.target_registry} ({view.mode})",
+        "Registry validation: Passed",
+        f"Projected snapshot: {_short(view.registry_snapshot, profile)}",
+        f"Approved versions: {view.approved_version_count}",
+        "Checks:",
+        *(f"  ✓ {item}" for item in view.checks),
+        f"Candidate validation: {_short(view.validation_report_digest, profile)}",
+        f"Effective policy: {_short(view.effective_policy_digest, profile)}",
+        f"Transaction digest: {_short(view.transaction_digest, profile)}",
+        "No approved registry state has been written.",
+    ]
+    return tuple(lines)
+
+
+def render_maintainer_registry_commit(
+    view: MaintainerRegistryCommitView,
+    profile: PresentationProfile,
+) -> tuple[str, ...]:
+    if not isinstance(view, MaintainerRegistryCommitView) or not isinstance(
+        profile, PresentationProfile
+    ):
+        raise ValueError("Maintainer registry commit rendering needs a typed view and profile")
+    lines = [
+        f"{view.artifact}@{view.version} → {view.target_registry} ({view.mode})",
+        (
+            "Approved registry state written locally"
+            if view.applied
+            else "Ready to write approved registry state"
+        ),
+        f"Registry snapshot before: {_short(view.registry_snapshot_before, profile)}",
+        f"Registry snapshot after: {_short(view.registry_snapshot_after, profile)}",
+        f"Changed paths: {view.changed_paths}",
+        f"Approved versions: {view.approved_version_count}",
+        f"Transaction digest: {_short(view.transaction_digest, profile)}",
+        f"Commit subject: {view.commit_subject}",
+        "Git push: no",
+    ]
+    if view.applied:
+        lines.append(f"Local Git revision: {_short(view.commit_revision or '', profile)}")
+        lines.append("Canonical-branch publication remains external.")
+    else:
+        lines.append("Enter commits this exact local transaction.")
     return tuple(lines)

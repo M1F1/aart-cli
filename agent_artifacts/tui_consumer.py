@@ -51,7 +51,9 @@ from agent_artifacts.application.maintainer_views import (
     MaintainerCandidateFilter,
     MaintainerCandidateView,
     MaintainerPromotionReviewView,
+    MaintainerRegistryCommitView,
     MaintainerRegistryDiffView,
+    MaintainerRegistryValidationView,
     MaintainerScreen,
     MaintainerSourceSyncResultView,
     MaintainerSourceSyncReviewView,
@@ -70,7 +72,9 @@ from agent_artifacts.tui_maintainer import (
     render_maintainer_dashboard,
     render_maintainer_policy_review,
     render_maintainer_promotion_review,
+    render_maintainer_registry_commit,
     render_maintainer_registry_diff,
+    render_maintainer_registry_validation,
     render_maintainer_source,
     render_maintainer_sources,
     render_maintainer_validation,
@@ -1165,6 +1169,8 @@ class ConsumerScreens:
     maintainer: MaintainerViews | None = None
     source_sync_review: MaintainerSourceSyncReviewView | None = None
     source_sync_result: MaintainerSourceSyncResultView | None = None
+    promotion_validation: MaintainerRegistryValidationView | None = None
+    promotion_commit: MaintainerRegistryCommitView | None = None
 
     def offered(self, key: str) -> MarketplaceEntry | None:
         return next((item for item in self.marketplace if item.key == key), None)
@@ -1301,6 +1307,8 @@ def screens_from(
     maintainer: MaintainerViews | None = None,
     source_sync_review: MaintainerSourceSyncReviewView | None = None,
     source_sync_result: MaintainerSourceSyncResultView | None = None,
+    promotion_validation: MaintainerRegistryValidationView | None = None,
+    promotion_commit: MaintainerRegistryCommitView | None = None,
     plan: ConsumerPlanView | None = None,
     lifecycle: LifecyclePlanView | None = None,
     outcome: LifecycleOutcomeView | None = None,
@@ -1336,6 +1344,8 @@ def screens_from(
         maintainer,
         source_sync_review,
         source_sync_result,
+        promotion_validation,
+        promotion_commit,
     )
 
 
@@ -1377,7 +1387,13 @@ _ANSWERABLE = (
     _PLAN_SCREENS
     | _LIFECYCLE_SCREENS
     | _OUTCOME_SCREENS
-    | frozenset({MaintainerScreen.SOURCE_SYNC})
+    | frozenset(
+        {
+            MaintainerScreen.SOURCE_SYNC,
+            MaintainerScreen.REGISTRY_VALIDATION,
+            MaintainerScreen.REGISTRY_COMMIT,
+        }
+    )
 )
 
 
@@ -1596,6 +1612,12 @@ class CanonicalScreenSource:
                 if self._screens.registry_diff(state.focus, state.promotion_mode) is not None
                 else None
             )
+        if screen is MaintainerScreen.REGISTRY_VALIDATION:
+            return (
+                MaintainerScreen.REGISTRY_COMMIT
+                if self._screens.promotion_validation is not None
+                else None
+            )
         if screen is ConsumerScreen.MARKETPLACE:
             if self._screens.offered_collection(state.current_row) is not None:
                 return ConsumerScreen.COLLECTION_PREVIEW
@@ -1765,6 +1787,18 @@ class CanonicalScreenSource:
                 ("That Candidate's registry transaction is not available.",)
                 if registry_diff is None
                 else render_maintainer_registry_diff(registry_diff, profile)
+            )
+        if screen is MaintainerScreen.REGISTRY_VALIDATION:
+            return (
+                ("That promoted registry validation is not available.",)
+                if screens.promotion_validation is None
+                else render_maintainer_registry_validation(screens.promotion_validation, profile)
+            )
+        if screen is MaintainerScreen.REGISTRY_COMMIT:
+            return (
+                ("That registry commit is not available.",)
+                if screens.promotion_commit is None
+                else render_maintainer_registry_commit(screens.promotion_commit, profile)
             )
         if screen in (MaintainerScreen.PROMOTION_REVIEW, MaintainerScreen.PROMOTION_MODE):
             # Screen 42 asks which promotion, so it draws the review of the mode currently chosen

@@ -2,9 +2,12 @@
 
 ## Current objective
 
-Continue **CP-14 Maintainer TUI 30–53**, step 5: promotion and the registry write path. Screens 41,
-42 and 43 are live and write nothing — they review, choose and plan. Screens 44, 45 and 47 remain,
-and 45 is the first Maintainer screen that writes approved registry state.
+Continue **CP-14 Maintainer TUI 30–53**, step 5: registry maintenance and bulk promotion. Screens
+41–45 are live. Screens 41–44 review, choose, plan and validate without writing; explicit
+confirmation on screen 45 is the first Maintainer action that writes approved registry state. It
+re-observes every reviewed baseline, replans and validates before the atomic write, validates the
+persisted readback, then creates one local Git commit containing only the reviewed paths and never
+pushes (D-103).
 
 Screens 30–43 are live in the production shared shell:
 
@@ -34,35 +37,40 @@ Screens 30–43 are live in the production shared shell:
   write and their change kinds (bounded at 200 rows, with the full count stated), the registry
   snapshot before and after, and the transaction digest. A Candidate from a local Source is refused
   by name here rather than deep inside the planner (B-041).
+- screen 44 shows the already-composed validation of the projected registry, including the exact
+  Candidate-validation and policy evidence that authorizes the promotion. Drawing it performs no
+  reads, planning or writes;
+- screen 45 shows the exact local write and deterministic commit subject. Confirmation refuses if
+  the Candidate, synchronized approved baseline, checkout or screen-43 plan moved, and a real
+  temporary checkout proves the write, readback validation and local Git commit while having no
+  remote to push to (D-103).
 
 Evidence: `tests/maintainer_candidate_shell_test.py`, `tests/maintainer_candidate_views_test.py`,
 `tests/candidate_validation_test.py`, `tests/maintainer_validation_views_test.py`,
-`tests/maintainer_composition_test.py` and a real temporary production installation in
-`tests/maintainer_composition_e2e_test.py`, which now walks from the consumer dashboard through the
-diff into validation and out to the policy review.
+`tests/maintainer_composition_test.py`, `tests/maintainer_promotion_execution_test.py`,
+`tests/maintainer_promotion_io_test.py`, `tests/maintainer_promotion_shell_execution_test.py` and a
+real temporary production installation in `tests/maintainer_composition_e2e_test.py`, which now
+walks from the consumer dashboard through screen 45 and commits the promoted registry locally.
 
 ## Exact next action
 
-Start RED tests for the promotion write path, screens 44–45:
+Start RED tests for screen 46, the Registry Maintainer View, then screen 47 bulk promotion:
 
-1. `execute_candidate_promotion` applies exactly one reviewed promotion, the way
-   `execute_source_sync` does: it rechecks the reviewed digest, the Candidate state and the approved
-   registry baseline before writing, and refuses if any of them moved. `plan_bulk_promotion`,
-   `project_promotion` and `finalize_promotion` in `application/promotion.py` already exist and are
-   what should be driven — do not write a second planner.
-2. Screen 44 validates the promoted registry and screen 45 is the commit.
-   `validate_promoted_registry`, `project_promotion` and `finalize_promotion` already exist and are
-   what should be driven. The plan screen 43 shows is composed at read time; execution must replan
-   against the workspace it is about to write and refuse if it moved.
-3. Published coordinate/version content is immutable: a digest conflict is reported, never repaired
-   in place (INV-203/239), and superseded records stay durable audit history (INV-229).
-4. Local-origin Candidates must keep their `local:<snapshot-sha256>` provenance through promotion
-   rather than passing through the Git-only registry-index projection by disguise (D-096). This is
-   the piece most likely to be got wrong quietly.
-5. Bulk promotion (screen 47) rebinds every retained approved record to the snapshot its own
-   transaction produces, as metadata only, with the published package proven byte-identical — the
-   defect B-037 fixed. Do not reintroduce a per-transaction rebind that leaves older versions
-   unreadable.
+1. Screen 46 composes registry validity, artifact counts by kind, the synchronized snapshot, local
+   working-tree state and recent promotion records once outside drawing. The working tree is the
+   explicit project-root checkout D-103 established; do not infer its state from synchronized
+   source-store content.
+2. Screen 47 selects multiple Ready Candidates and drives the existing `plan_bulk_promotion` as one
+   coherent diff/validation/commit boundary. It must not loop over the single-Candidate executor.
+3. Retained approved records must remain readable after the bulk transaction: rebind every retained
+   record to the transaction's snapshot as metadata only, with published package bytes unchanged
+   (D-089/B-037).
+4. Resolve B-041 before step 5 is called complete. Local-origin Candidates must keep their
+   `local:<snapshot-sha256>` provenance through promotion rather than being disguised as Git
+   commits; restore the two direct refusal tests before replacing the refusal with supported audit
+   provenance.
+5. Keep published coordinate/version content immutable: digest conflict is a refusal, never an
+   in-place repair (INV-203/239), and superseded records remain durable audit history (INV-229).
 
 ## Critical boundaries for this slice
 

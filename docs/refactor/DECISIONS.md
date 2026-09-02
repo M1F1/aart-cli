@@ -1674,8 +1674,8 @@ the Product Specification first instead of hiding the change here.
   The review digest covers the mode and the registry baseline as well as the Candidate, so
   confirming a review cannot apply a transaction other than the one reviewed. An unconfirmable
   review renders its reasons *in place of* the digest, because a digest on screen is an invitation
-  to confirm. The digest is not yet checked at execution time — screens 42–45 are the next
-  increment, and this slice deliberately writes nothing.
+  to confirm. D-103 now defines how that digest and every observed baseline are rechecked at
+  execution.
 
 ## D-102 — Both promotion modes are composed, and the chosen one is typed state
 
@@ -1696,3 +1696,34 @@ the Product Specification first instead of hiding the change here.
   If a third mode is ever added the composition cost stays linear in modes, which is acceptable;
   a mode that required its own registry read would change that calculus and should be reconsidered
   then.
+
+## D-103 — Promotion writes one exact project-root checkout, validates twice and commits without push
+
+- **Decision:** the configured installation's normalized absolute project root is the explicit
+  writable checkout for screens 43–46. Preparing screen 44 requires that checkout's exact tree
+  digest to equal the synchronized approved-registry baseline. Confirming screen 45 re-reads the
+  exact durable Candidate and approved baseline, revalidates under the reviewed policy, rereads and
+  replans the checkout, and requires the new plan digest to equal screen 43's. It then drives the
+  existing `project_promotion`/`validate_promoted_registry`/`finalize_promotion` path, validates the
+  persisted readback, stages only the reviewed paths into an initially empty Git index and creates
+  one deterministic local commit. The commit port has no push operation. A commit failure after the
+  validated atomic write is reported as partial completion and says the reviewed changes remain in
+  the checkout.
+- **Status:** accepted.
+- **Reason:** source-store state is a synchronized immutable observation, not a writable registry
+  checkout, and the accepted configuration schema contains a registry source URL but no separate
+  checkout path. The existing project root is already an explicit local root supplied to the shell;
+  requiring its entire tree to match the synchronized baseline binds it safely without guessing a
+  location or widening configuration during this slice. Screen 43 is composed earlier from machine
+  state, so checking only its digest at confirmation would miss a moved Candidate, policy result,
+  approved baseline or checkout. Pre-write projection validation keeps planning inert; locked
+  compare-and-apply plus readback validation closes the final filesystem race. Refusing a nonempty
+  Git index prevents AART from accidentally committing user work.
+- **Consequence:** screen 44 is a projection of evidence already assembled outside drawing and
+  writes nothing. Screen 45 is the first Maintainer screen that writes approved registry state, and
+  its success reports both the resulting registry snapshot and local 40-hex Git revision. The local
+  commit does not update synchronized source-store state and is not publication; canonical-branch
+  integration remains external as INV-242 requires. A real temporary checkout proves the complete
+  shell path with no configured remote. Launching AART outside the exact registry checkout produces
+  a refusal rather than writing elsewhere. B-041 remains: local-origin Candidate provenance still
+  needs an audit representation and is not disguised as a Git revision.

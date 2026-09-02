@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import pathlib
 import shutil
+import subprocess
 import time
 import unittest
 
@@ -17,6 +18,7 @@ from agent_artifacts.application.consumer_ui import (
 )
 from agent_artifacts.application.consumer_views import ConsumerSettings
 from agent_artifacts.application.maintainer_views import MaintainerScreen, parse_validation_row
+from agent_artifacts.application.promotion import load_registry_versions, validate_promoted_registry
 from agent_artifacts.configuration.model import (
     ConfiguredSource,
     ReportingSettings,
@@ -34,7 +36,9 @@ from agent_artifacts.io.candidate_store import (
     write_candidate_history,
 )
 from agent_artifacts.io.consumer_settings import write_consumer_settings
+from agent_artifacts.io.registry_promotion import FilesystemPromotionOutput
 from agent_artifacts.io.source_store import publish_source_snapshot, read_current_source
+from agent_artifacts.protocol.native_tree import SnapshotEntryKind, SourceSnapshot
 from agent_artifacts.sources.model import (
     CurrentSourceRequest,
     SourcePublishCommand,
@@ -54,6 +58,28 @@ from tests.marketplace_fixtures import configured_source
 
 def _digest_line(drawn: str) -> str:
     return next(line for line in drawn.splitlines() if line.strip().startswith("Review digest:"))
+
+
+def _git(root: pathlib.Path, *arguments: str) -> str:
+    completed = subprocess.run(
+        ("git", "-C", str(root), *arguments),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return completed.stdout.strip()
+
+
+def _materialize(root: pathlib.Path, snapshot: SourceSnapshot) -> None:
+    root.mkdir(exist_ok=True)
+    for entry in snapshot.entries:
+        target = root.joinpath(*entry.path.parts)
+        if entry.kind is SnapshotEntryKind.DIRECTORY:
+            target.mkdir(parents=True, exist_ok=True)
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(entry.content)
+        target.chmod(0o700 if entry.executable else 0o600)
 
 
 class MaintainerProductionCompositionTest(unittest.TestCase):
@@ -461,6 +487,139 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             self.assertIn("Review digest:", chosen)
             self.assertNotEqual(
                 _digest_line(promotion), _digest_line(chosen), "mode must change the review"
+            )
+
+    def test_validated_promotion_is_committed_locally_and_never_pushed(self) -> None:
+        """Screens 43–45 replan, validate, write, read back and commit one real checkout."""
+
+        with _environment() as env:
+            original_paths = source_store_paths(
+                env.paths.data_root,
+                source_instance_id(env.source),
+            )
+            original = read_current_source(CurrentSourceRequest(original_paths, env.source.alias))
+            assert isinstance(original, Ok) and original.value is not None
+            approved_snapshot = original.value.candidate.snapshot
+
+            registry_root = env.project
+            _materialize(registry_root, approved_snapshot)
+            subprocess.run(
+                ("git", "init", "-b", "main", str(registry_root)),
+                check=True,
+                capture_output=True,
+            )
+            _git(registry_root, "config", "user.name", "AART Test")
+            _git(registry_root, "config", "user.email", "aart@example.invalid")
+            _git(registry_root, "add", "-A")
+            _git(registry_root, "commit", "-m", "Initial approved registry")
+            before_revision = _git(registry_root, "rev-parse", "HEAD")
+
+            authors = configured_source("authors", SourceKind.SOURCE_GIT)
+            pathlib.Path(env.paths.user_config_file).write_bytes(
+                user_configuration_bytes(
+                    UserConfiguration(
+                        1,
+                        (env.source, authors),
+                        env.source.alias,
+                        SyncSettings(),
+                        ReportingSettings(),
+                    )
+                )
+            )
+            author_paths = source_store_paths(
+                env.paths.data_root,
+                source_instance_id(authors),
+            )
+            source_candidate = make_source_candidate(
+                source_instance_id(authors),
+                authors.alias,
+                "a" * 40,
+                _snapshot(),
+            )
+            assert isinstance(source_candidate, Ok)
+            self.assertIsInstance(
+                publish_source_snapshot(
+                    SourcePublishCommand(
+                        author_paths,
+                        ValidatedSourceCandidate(
+                            source_candidate.value,
+                            SourceId("author-source"),
+                        ),
+                        int(time.time()),
+                    )
+                ),
+                Ok,
+            )
+            scan = _ready_scan()
+            self.assertIsInstance(
+                write_candidate_history(candidate_history_paths(author_paths), scan),
+                Ok,
+            )
+            self.assertIsInstance(
+                write_consumer_settings(
+                    ConsumerSettings().with_maintainer_mode(True),
+                    data_root=env.paths.data_root,
+                ),
+                Ok,
+            )
+
+            handler = _actions(env)
+            composed = handler.source().screens.maintainer
+            assert composed is not None
+            self.assertEqual(
+                tuple(item.id for item in (composed.candidates or ())),
+                tuple(item.candidate.id.value for item in scan.active),
+                composed.sources,
+            )
+            terminal = FakeTerminal(
+                *(DOWN for _ in range(8)),
+                ENTER,
+                DOWN,
+                ENTER,
+                ENTER,
+                ord("d"),
+                ENTER,
+                ord("p"),
+                ENTER,
+                ENTER,
+                ENTER,
+                ENTER,
+                ENTER,
+                ENTER,
+            )
+            finished = run_consumer_shell(
+                handler.source(),
+                terminal,
+                state=opening_state(handler.settings),
+                action_handler=handler,
+                settings_writer=handler.save_settings,
+            )
+
+            self.assertIs(
+                finished.session.screen,
+                MaintainerScreen.REGISTRY_COMMIT,
+                terminal.last,
+            )
+            validation = terminal.screen_containing("AART / Registry Validation")
+            self.assertIn("Registry validation: Passed", validation)
+            self.assertIn("No approved registry state has been written", validation)
+            committed = terminal.screen_containing("Approved registry state written locally")
+            self.assertIn("Local Git revision:", committed)
+            self.assertIn("Git push: no", committed)
+            self.assertIn("Canonical-branch publication remains external", committed)
+
+            after_revision = _git(registry_root, "rev-parse", "HEAD")
+            self.assertNotEqual(after_revision, before_revision)
+            self.assertEqual(_git(registry_root, "status", "--porcelain=v1"), "")
+            self.assertEqual(_git(registry_root, "remote", "-v"), "")
+            persisted = FilesystemPromotionOutput(str(registry_root)).current()
+            assert isinstance(persisted, Ok), persisted
+            versions = load_registry_versions(persisted.value)
+            assert isinstance(versions, Ok), versions
+            self.assertGreaterEqual(len(versions.value), 2)
+            self.assertIsInstance(
+                validate_promoted_registry(persisted.value, versions.value),
+                Ok,
             )
 
 
