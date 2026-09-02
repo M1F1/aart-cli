@@ -2334,3 +2334,28 @@ the Product Specification first instead of hiding the change here.
   input, and the value it produces is the durable ref an already-configured installation's record is
   filed under, so renaming it would rename every existing setup record and make each one invisible
   to the run that looks for it.
+
+## D-127 — Two shapes of setup-declaration evidence, not one optional field
+
+- **Decision:** `InstalledSubject` (formerly private) carries
+  `declaration: IndexedSetupDeclaration | ApprovedObjectIdentity` in place of
+  `indexed_setup: IndexSetup | None`, and it names the durable record as `record_path` /
+  `record_lock_path` rather than holding an `InstallStatePaths`. `_prepare_setup_plan` cross-checks
+  the compiled recipe against the index's declaration for the first shape, and checks the loaded
+  object's digest against the digest the approved registry publishes for the second.
+  `InstalledSubject`, `SetupSubjectPort` and both evidence shapes are exported.
+- **Status:** accepted.
+- **Reason:** the plan required an index declaration to cross-check, which no canonical route can
+  give honestly. A promoted registry snapshot *is* the package, so reading a declaration out of it
+  and comparing it to the recipe compiled out of it compares a value to itself — which is exactly
+  the shape of check that produced the hardcoded trust constant in the preserved draft. The
+  independent question a snapshot can answer is which object the registry publishes for the
+  coordinate, and that digest is compared against the one the durable installation record names, so
+  the two values come from different documents. Making it a union rather than a second optional
+  field means neither route can silently fall through the other's arm.
+- **Consequence:** legacy behaviour is unchanged, including the `None` case — an index that declares
+  no setup is still refused with the same message, which is now explicitly a declaration
+  (`IndexedSetupDeclaration(None)`) rather than an absence. Three tests cover the new arm: the
+  registry's object plans, another object is refused with "registry publishes", and the legacy arm
+  keeps its own meaning. The subject no longer references `InstallStatePaths`, so nothing left in
+  the engine names the store that recorded the installation.

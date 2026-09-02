@@ -53,10 +53,13 @@ from agent_artifacts.protocol.semver import SemVer
 from agent_artifacts.receipt_service import load_receipt
 from agent_artifacts.setup import dump_setup_state, project_setup_review
 from agent_artifacts.setup_engine import (
+    ApprovedObjectIdentity,
+    IndexedSetupDeclaration,
     LocalSetupAdapter,
     PayloadStatus,
     SetupExecutionStatus,
     SetupRequest,
+    SetupSubjectPort,
     execute_setup_queue,
     finalize_setup,
     install_state_subject,
@@ -1131,6 +1134,79 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
             self.assertNotIn("synthetic-canary", repr(event))
             self.assertNotIn(b"synthetic-canary", state_bytes)
             self.assertNotIn("receipt", event)
+
+
+class ApprovedObjectIdentityTest(unittest.TestCase):
+    """What vouches for an installation whose index and package are the same bytes.
+
+    The legacy catalogue indexes root manifests a source publishes separately from the package, so
+    the compiled recipe can be cross-checked against what the index advertised. A promoted registry
+    snapshot has no such second document: there the index *is* the package, and cross-checking the
+    object against a declaration read out of that same object compares a value to itself.
+
+    What stays independent is which object the registry publishes for the coordinate. These tests
+    prove the engine accepts that as the alternative evidence, and that it is a real check --
+    an installation whose recorded object is not the one the registry approves is refused.
+    """
+
+    def _subject(self, fixture: Fixture, approved) -> SetupSubjectPort:
+        resolved = fixture.subject()(fixture.request(authorize_untrusted_source=True))
+        assert isinstance(resolved, Ok), resolved
+        vouched = replace(resolved.value, declaration=ApprovedObjectIdentity(approved))
+        return lambda _request: Ok(vouched)
+
+    def test_the_object_the_registry_publishes_vouches_for_the_installation(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = Fixture(Path(raw))
+
+            planned = prepare_setup(
+                fixture.request(authorize_untrusted_source=True),
+                self._subject(fixture, fixture.indexed.object_digest),
+                fixture.effective,
+                fixture.location,
+                fixture.paths,
+                fixture.adapter,
+            )
+
+            assert isinstance(planned, Ok), planned
+            self.assertEqual(planned.value.object_digest, fixture.indexed.object_digest)
+
+    def test_an_installation_of_another_object_than_the_registry_publishes_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = Fixture(Path(raw))
+
+            refused = prepare_setup(
+                fixture.request(authorize_untrusted_source=True),
+                self._subject(fixture, sha256_bytes(b"another-object")),
+                fixture.effective,
+                fixture.location,
+                fixture.paths,
+                fixture.adapter,
+            )
+
+            self.assertIsInstance(refused, Err)
+            self.assertIn("registry publishes", refused.diagnostics[0].message)
+
+    def test_an_index_that_declares_no_setup_is_still_refused(self) -> None:
+        """The legacy arm keeps its own meaning: no declaration is not the same as another one."""
+
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = Fixture(Path(raw))
+            resolved = fixture.subject()(fixture.request(authorize_untrusted_source=True))
+            assert isinstance(resolved, Ok), resolved
+            undeclared = replace(resolved.value, declaration=IndexedSetupDeclaration(None))
+
+            refused = prepare_setup(
+                fixture.request(authorize_untrusted_source=True),
+                lambda _request: Ok(undeclared),
+                fixture.effective,
+                fixture.location,
+                fixture.paths,
+                fixture.adapter,
+            )
+
+            self.assertIsInstance(refused, Err)
+            self.assertIn("does not match the object", refused.diagnostics[0].message)
 
 
 if __name__ == "__main__":

@@ -17,7 +17,6 @@ from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.install_state.model import (
     ArtifactEvidence,
     InstallationRecord,
-    InstallStatePaths,
     SourceEvidence,
 )
 from agent_artifacts.install_state.paths import install_state_paths
@@ -335,7 +334,7 @@ def _previous_record(snapshot: PathSnapshot) -> Result[SetupStateRecord | None]:
 class _SetupObject:
     """One installed record and the exact object facts proven before trust and policy apply."""
 
-    subject: _InstalledSubject
+    subject: InstalledSubject
     stored: StoredObject
     manifest: ArtifactManifest
     recipe_entry: SnapshotEntry
@@ -345,7 +344,42 @@ class _SetupObject:
 
 
 @dataclass(frozen=True, slots=True)
-class _InstalledSubject:
+class IndexedSetupDeclaration:
+    """The setup the *index* declares, to be cross-checked against the one compiled from the object.
+
+    This is independent evidence only where the index is built from something other than the
+    package. The legacy catalogue is: it indexes root manifests a source publishes separately, so a
+    package whose compiled recipe, platforms or capabilities disagree with what was advertised is
+    refused. `None` is a declaration too -- an index that says this artifact has no setup, which is
+    also a disagreement with an object that compiles one.
+    """
+
+    declaration: IndexSetup | None
+
+
+@dataclass(frozen=True, slots=True)
+class ApprovedObjectIdentity:
+    """The object the approved registry publishes for this coordinate.
+
+    The evidence a promoted registry snapshot can honestly give. There the index *is* the package,
+    so cross-checking a compiled recipe against a declaration read out of that same package would
+    compare a value to itself. What stays independent is *which object* the registry publishes: this
+    digest comes from the approved snapshot, and it is checked against the object named by the
+    durable record that says the artifact is installed -- so an installation whose object is no
+    longer the one the registry approves cannot be set up.
+    """
+
+    approved_digest: ObjectDigest
+
+
+#: What vouches for the setup declaration the object compiles. Two shapes rather than one optional
+#: field, because the two routes prove different things and a missing declaration means something
+#: different in each.
+SetupDeclarationEvidence = IndexedSetupDeclaration | ApprovedObjectIdentity
+
+
+@dataclass(frozen=True, slots=True)
+class InstalledSubject:
     """Which installation setup is being run for, and the evidence that says it may be.
 
     Separated from validating the object because the two answer different questions and are
@@ -356,18 +390,21 @@ class _InstalledSubject:
     content-addressed store, so it is asked once below rather than once per route.
     """
 
-    state_paths: InstallStatePaths
+    #: Where it is durably written that this artifact is installed here, and the lock that guards
+    #: that file. Two paths rather than an `InstallStatePaths`, because the file is the legacy
+    #: install-state manifest for one route and the canonical receipt for the other, and the engine
+    #: only ever needs to bind the plan to it and take its lock while setup is recorded.
+    record_path: str
+    record_lock_path: str
     record: InstallationRecord
     #: How trusted the source this artifact came from is, and the digest of the evidence that
     #: decided it. The plan carries both, and the precondition check re-derives them, so a source
     #: that stopped being reviewed between the review and the run cannot be run against.
     trust: TrustClass
     trust_evidence_digest: ObjectDigest
-    #: The setup declaration the *index* records for this artifact, which is cross-checked against
-    #: the one compiled out of the object. It is independent evidence only where the index is
-    #: independent of the package; where the two are the same bytes it is not, and the honest check
-    #: there is on the object identity instead -- so this is optional rather than required.
-    indexed_setup: IndexSetup | None
+    #: What vouches for the setup this object declares -- the index's own declaration where the
+    #: index is a separate document, the approved object identity where it is not.
+    declaration: SetupDeclarationEvidence
 
 
 def _install_state_subject(
@@ -376,7 +413,7 @@ def _install_state_subject(
     effective: EffectiveConfiguration,
     location: InstallLocation,
     ports: SetupReadPorts,
-) -> Result[_InstalledSubject]:
+) -> Result[InstalledSubject]:
     """The installed record the legacy install-state manifest holds, and its marketplace evidence."""
 
     state_paths = install_state_paths(
@@ -398,12 +435,13 @@ def _install_state_subject(
         return resolved
     item = resolved.value
     return Ok(
-        _InstalledSubject(
-            state_paths,
+        InstalledSubject(
+            state_paths.destination_path,
+            state_paths.lock_path,
             record,
             item.trust.kind,
             item.trust.evidence_digest,
-            item.artifact.artifact.setup,
+            IndexedSetupDeclaration(item.artifact.artifact.setup),
         )
     )
 
@@ -417,7 +455,7 @@ class SetupSubjectPort(Protocol):
     must return the same subject for an unchanged machine.
     """
 
-    def __call__(self, request: SetupRequest) -> Result[_InstalledSubject]: ...
+    def __call__(self, request: SetupRequest) -> Result[InstalledSubject]: ...
 
 
 def install_state_subject(
@@ -428,14 +466,14 @@ def install_state_subject(
 ) -> SetupSubjectPort:
     """The subject the legacy install-state manifest and marketplace catalogue answer for."""
 
-    def resolve(request: SetupRequest) -> Result[_InstalledSubject]:
+    def resolve(request: SetupRequest) -> Result[InstalledSubject]:
         return _install_state_subject(request, catalog, effective, location, ports)
 
     return resolve
 
 
 def _prepare_setup_object(
-    subject: _InstalledSubject,
+    subject: InstalledSubject,
     store_paths: ObjectStorePaths,
     ports: SetupReadPorts,
 ) -> Result[_SetupObject]:
@@ -528,7 +566,6 @@ def _prepare_setup_plan(
     """Bind trust, policy, effect plan, and durable preconditions to one validated object."""
 
     subject = prepared.subject
-    state_paths = subject.state_paths
     record = subject.record
     stored = prepared.stored
     manifest = prepared.manifest
@@ -547,17 +584,25 @@ def _prepare_setup_plan(
         platform=request.platform,
     )
     capabilities = _planned_capabilities(installer)
-    indexed_setup = subject.indexed_setup
-    if (
-        indexed_setup is None
-        or indexed_setup.recipe != manifest.setup.recipe
-        or indexed_setup.platforms != manifest.setup.platforms
-        or (indexed_setup.capabilities and indexed_setup.capabilities != capabilities)
-    ):
-        return _error(
-            SETUP_INVALID,
-            "compiled setup recipe, platform, or capability evidence does not match the object",
-        )
+    evidence = subject.declaration
+    if isinstance(evidence, ApprovedObjectIdentity):
+        if evidence.approved_digest != stored.candidate.digest:
+            return _error(
+                SETUP_INVALID,
+                "the installed object is not the one the registry publishes for this artifact",
+            )
+    else:
+        indexed_setup = evidence.declaration
+        if (
+            indexed_setup is None
+            or indexed_setup.recipe != manifest.setup.recipe
+            or indexed_setup.platforms != manifest.setup.platforms
+            or (indexed_setup.capabilities and indexed_setup.capabilities != capabilities)
+        ):
+            return _error(
+                SETUP_INVALID,
+                "compiled setup recipe, platform, or capability evidence does not match the object",
+            )
     allowed = _policy_allows(
         request,
         subject.trust,
@@ -586,7 +631,7 @@ def _prepare_setup_plan(
                 # `setup_state_ref` an already-configured installation's record is filed under, so
                 # renaming the key would rename every existing setup record and make each one
                 # invisible to the run that looks for it.
-                ("install_state_path", state_paths.destination_path),
+                ("install_state_path", subject.record_path),
             )
         )
     )
@@ -622,8 +667,8 @@ def _prepare_setup_plan(
         plan = CanonicalSetupPlan(
             request,
             record,
-            state_paths.destination_path,
-            state_paths.lock_path,
+            subject.record_path,
+            subject.record_lock_path,
             subject.trust.value,
             subject.trust_evidence_digest,
             sha256_bytes(organization_policy_bytes(effective.policy)),
