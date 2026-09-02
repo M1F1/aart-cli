@@ -46,7 +46,7 @@ from agent_artifacts.io.candidate_store import (
 from agent_artifacts.io.consumer_settings import write_consumer_settings
 from agent_artifacts.io.registry_promotion import FilesystemPromotionOutput
 from agent_artifacts.io.source_store import publish_source_snapshot, read_current_source
-from agent_artifacts.protocol.authoring import compile_author_snapshot
+from agent_artifacts.protocol.authoring import compile_author_snapshot, compile_author_source
 from agent_artifacts.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
@@ -151,6 +151,63 @@ def _two_ready_candidates():
         active=ready,
         history=tuple(sorted(ready, key=lambda item: item.candidate.id.value)),
     )
+
+
+def _collection_scan():
+    """One Source Scan carrying an artifact Candidate and a versioned Collection Candidate.
+
+    Both come out of one compile of one authored tree, because "Collections are candidates too":
+    a Collection that only existed in a fixture would prove nothing about the scan the shell reads.
+    """
+
+    manifest = {
+        "schema": "aart.dev/mcp/v1",
+        "artifact": {"name": "github-mcp", "kind": "mcp", "version": "1.0.0"},
+        "payload": {"include": ["server.py"]},
+        "transport": {"type": "stdio"},
+        "runtime": {"type": "python", "version": ">=3.11"},
+        "launch": {"type": "python", "entrypoint": "server.py"},
+    }
+    collection = {
+        "schema": "aart.dev/collection/v1",
+        "name": "data-engineer",
+        "version": "2.1.0",
+        "summary": "Approved data engineering tools.",
+        # The member the approved registry in this environment actually publishes, so screen 52
+        # resolves it rather than reporting it unpublished.
+        "artifacts": ["company/skill/code-review@^1"],
+    }
+    entries = []
+    for path, payload in (
+        ("github-mcp/aart.json", json.dumps(manifest, sort_keys=True)),
+        ("collections/data-engineer/aart.json", json.dumps(collection, sort_keys=True)),
+    ):
+        parsed = parse_relative_path(path)
+        assert isinstance(parsed, Ok)
+        entries.append(SnapshotEntry(parsed.value, SnapshotEntryKind.FILE, payload.encode()))
+    parsed_payload = parse_relative_path("github-mcp/server.py")
+    assert isinstance(parsed_payload, Ok)
+    entries.append(SnapshotEntry(parsed_payload.value, SnapshotEntryKind.FILE, b"print('x')\n"))
+    # The production Source Sync compiles through `compile_author_source`, which is the boundary
+    # that carries Collections; `compile_author_snapshot` returns artifacts only.
+    compiled = compile_author_source(
+        SourceSnapshot(SnapshotOrigin.IMMUTABLE_GIT, tuple(entries)),
+        source_alias=SourceAlias("authors"),
+        source="https://git.example/authors.git",
+        revision="a" * 40,
+    )
+    assert isinstance(compiled, Ok), compiled
+    scanned = reconcile_source_scan(
+        SourceAlias("authors"),
+        "a" * 40,
+        compiled.value.artifacts,
+        previous=(),
+        approved=(),
+        target_registry=SourceAlias("company"),
+        collections=compiled.value.collections,
+    )
+    assert isinstance(scanned, Ok), scanned
+    return scanned.value
 
 
 class MaintainerProductionCompositionTest(unittest.TestCase):
@@ -785,6 +842,98 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
                     for stage in lifecycle.stages
                 )
             )
+
+    def test_a_collection_candidate_is_reached_and_resolved_through_the_real_shell(self) -> None:
+        """Screens 51-52 over one real installation: `c` from the Candidate list, then Enter."""
+
+        with _environment() as env:
+            authors = configured_source("authors", SourceKind.SOURCE_GIT)
+            pathlib.Path(env.paths.user_config_file).write_bytes(
+                user_configuration_bytes(
+                    UserConfiguration(
+                        1,
+                        (env.source, authors),
+                        env.source.alias,
+                        SyncSettings(),
+                        ReportingSettings(),
+                    )
+                )
+            )
+            author_paths = source_store_paths(
+                env.paths.data_root,
+                source_instance_id(authors),
+            )
+            source_candidate = make_source_candidate(
+                source_instance_id(authors),
+                authors.alias,
+                "a" * 40,
+                _snapshot(),
+            )
+            assert isinstance(source_candidate, Ok)
+            self.assertIsInstance(
+                publish_source_snapshot(
+                    SourcePublishCommand(
+                        author_paths,
+                        ValidatedSourceCandidate(
+                            source_candidate.value,
+                            SourceId("author-source"),
+                        ),
+                        int(time.time()),
+                    )
+                ),
+                Ok,
+            )
+            scan = _collection_scan()
+            self.assertIsInstance(
+                write_candidate_history(candidate_history_paths(author_paths), scan),
+                Ok,
+            )
+            self.assertIsInstance(
+                write_consumer_settings(
+                    ConsumerSettings().with_maintainer_mode(True),
+                    data_root=env.paths.data_root,
+                ),
+                Ok,
+            )
+
+            handler = _actions(env)
+            composed = handler.source().screens.maintainer
+            assert composed is not None
+            # The Collection reached composition from the same durable scan as the artifact
+            # Candidate, without being conflated with it.
+            self.assertEqual(len(composed.collection_candidates or ()), 1)
+            self.assertEqual(len(composed.candidates or ()), 1)
+
+            # Dashboard -> maintainer dashboard -> candidates (35) -> `c` (51) -> Enter (52).
+            terminal = FakeTerminal(
+                *(DOWN for _ in range(8)),
+                ENTER,
+                DOWN,
+                ENTER,
+                ord("c"),
+                ENTER,
+            )
+            finished = run_consumer_shell(
+                handler.source(),
+                terminal,
+                state=opening_state(handler.settings),
+                action_handler=handler,
+                settings_writer=handler.save_settings,
+            )
+
+            self.assertIs(
+                finished.session.screen,
+                MaintainerScreen.COLLECTION_VALIDATION,
+                terminal.last,
+            )
+            listed = terminal.screen_containing("AART / Collection Candidates")
+            self.assertIn("data-engineer", listed)
+            self.assertIn("2.1.0", listed)
+            validated = terminal.screen_containing("AART / Collection Validation")
+            # The member resolves to the version this registry actually approved, and screen 52
+            # says which one rather than only that it is satisfiable.
+            self.assertIn("skill/code-review", validated)
+            self.assertIn("1.2.0", validated)
 
     def test_bulk_promotion_writes_both_candidates_in_one_commit(self) -> None:
         """Screen 47 selects two Candidates and they reach the registry as one transaction."""

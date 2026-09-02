@@ -105,12 +105,12 @@
         {
           "id": "6",
           "title": "Screens 48-53: lifecycle, provenance, conflicts, Collection candidates, filters",
-          "status": "in_progress"
+          "status": "done"
         },
         {
           "id": "7",
           "title": "Retire the legacy consumer/maintainer authority CP-13 left standing",
-          "status": "todo"
+          "status": "in_progress"
         }
       ]
     },

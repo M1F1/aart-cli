@@ -816,6 +816,12 @@ def key_event(
         return ConsumerUiEvent(
             ConsumerUiEventKind.NAVIGATE, screen=MaintainerScreen.CANDIDATE_FILTERS
         )
+    # "Collections are candidates too", so the way into them is the Candidate surface rather than a
+    # separate place in the dashboard: `c` opens the Collection Candidates of the same scan.
+    if key == "c" and state.session.screen is MaintainerScreen.CANDIDATES:
+        return ConsumerUiEvent(
+            ConsumerUiEventKind.NAVIGATE, screen=MaintainerScreen.COLLECTION_CANDIDATES
+        )
     if key == "s" and state.session.screen in (
         MaintainerScreen.SOURCES,
         MaintainerScreen.SOURCE_DETAILS,

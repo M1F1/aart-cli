@@ -5,7 +5,13 @@ from __future__ import annotations
 import dataclasses
 import unittest
 
-from agent_artifacts.application.consumer_ui import ConsumerUiState
+from agent_artifacts.application.consumer_ui import (
+    ConsumerUiEvent,
+    ConsumerUiEventKind,
+    ConsumerUiState,
+    key_event,
+    reduce_consumer_ui,
+)
 from agent_artifacts.application.consumer_views import (
     ConsumerSession,
     ConsumerSettings,
@@ -188,3 +194,69 @@ class MaintainerCollectionCandidateShellTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MaintainerCollectionCandidateRouteTest(unittest.TestCase):
+    """Screen 51 had projections, a renderer and validation, but no way in.
+
+    "Collections are candidates too" (Product Specification 164.10), so the way in is on the
+    Candidate surface: `c` opens the Collection Candidates of the same scan screen 35 lists.
+    """
+
+    def setUp(self) -> None:
+        self.candidate = _candidate(_request("github", "^1"), _request("jira", "^3"))
+        views = MaintainerViews(
+            project_maintainer_dashboard(()),
+            (),
+            collection_candidates=(project_maintainer_collection_candidate(self.candidate),),
+            collection_validations=(
+                project_maintainer_collection_validation(self.candidate, _approved_marketplace()),
+            ),
+        )
+        self.source = CanonicalScreenSource(
+            ConsumerScreens(project_dashboard((), registry_count=0), maintainer=views)
+        )
+
+    def _on(self, screen: MaintainerScreen) -> ConsumerUiState:
+        return ConsumerUiState(
+            ConsumerSession(screen),
+            settings=ConsumerSettings().with_maintainer_mode(True),
+        )
+
+    def test_c_opens_collection_candidates_from_the_candidate_list(self) -> None:
+        event = key_event("c", self._on(MaintainerScreen.CANDIDATES))
+
+        assert event is not None
+        self.assertIs(event.kind, ConsumerUiEventKind.NAVIGATE)
+        self.assertIs(event.screen, MaintainerScreen.COLLECTION_CANDIDATES)
+
+    def test_c_means_nothing_on_a_screen_that_lists_no_candidates(self) -> None:
+        self.assertIsNone(key_event("c", self._on(MaintainerScreen.SOURCES)))
+
+    def test_the_route_reaches_screen_51_and_then_52_through_the_reducer(self) -> None:
+        """Every step is the reducer's, so nothing here is reachable only from a test."""
+
+        listing = self._on(MaintainerScreen.CANDIDATES)
+        opened, _ = reduce_consumer_ui(
+            listing,
+            key_event("c", listing),  # type: ignore[arg-type]
+        )
+        listed = _reload(self.source, opened, entering=True)
+
+        self.assertIs(listed.session.screen, MaintainerScreen.COLLECTION_CANDIDATES)
+        self.assertEqual(listed.rows, (self.candidate.id.value,))
+
+        forward = key_event("enter", listed, detail=self.source.detail(listed))
+        assert forward is not None
+        validated, _ = reduce_consumer_ui(listed, forward)
+
+        self.assertIs(validated.session.screen, MaintainerScreen.COLLECTION_VALIDATION)
+        drawn = "\n".join(frame(self.source, _reload(self.source, validated, entering=True)))
+        self.assertIn("data-engineer", drawn)
+
+    def test_escape_returns_to_the_candidate_list_it_was_opened_from(self) -> None:
+        listing = self._on(MaintainerScreen.CANDIDATES)
+        opened, _ = reduce_consumer_ui(listing, key_event("c", listing))  # type: ignore[arg-type]
+        back, _ = reduce_consumer_ui(opened, ConsumerUiEvent(ConsumerUiEventKind.BACK))
+
+        self.assertIs(back.session.screen, MaintainerScreen.CANDIDATES)

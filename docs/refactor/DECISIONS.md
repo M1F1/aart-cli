@@ -1908,3 +1908,23 @@ the Product Specification first instead of hiding the change here.
   relaxed. Drawing screen 53 opens no file and composes nothing beyond the Candidates already read
   once. A facet value the composed Candidates cannot address is skipped rather than drawn as a row
   that would do nothing.
+
+## D-112 — Collections are reached from the Candidate surface, not from a place of their own
+
+- **Decision:** `c` on screen 35 opens screen 51. Screens 51 and 52 already had projections, a
+  renderer, validation and durable composition, but no route: every test entered by constructing a
+  session already on screen 51. The navigation graph already accepted screen 35 → screen 51, so the
+  missing piece was the key, and `c` on the Candidate list is it.
+- **Status:** accepted; with the screen-51/52 walk this completes CP-14 step 6.
+- **Reason:** the Product Specification says "Collections are candidates too", which puts them on
+  the Candidate surface rather than in a separate branch of the dashboard — and the accepted screen
+  30 panel lists Overview, Sources, Candidates and Registry with no Collections entry, so adding one
+  there would have invented a surface the specification does not describe. The accepted contextual
+  shortcut table names no Collections key, but it also names none for screens 46, 47 or 50, which
+  are reached by navigation; it constrains what the keys it lists mean, not what may exist. `c` was
+  unclaimed on every screen.
+- **Consequence:** a Collection authored in a Source now reaches screen 52's resolution through the
+  production shell — one compile, one durable scan, one route. The E2E goes through
+  `compile_author_source` rather than `compile_author_snapshot`, which is the boundary that carries
+  Collections and the one production Source Sync already uses; a fixture built on the artifacts-only
+  boundary would have proven nothing about Collections.

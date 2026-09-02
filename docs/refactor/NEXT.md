@@ -2,7 +2,7 @@
 
 ## Current objective
 
-Continue **CP-14 Maintainer TUI 30–53**, step 6: Collection Candidates and filters. Screen 53 is
+Continue **CP-14 Maintainer TUI 30–53**, now at step 7: retiring legacy authority. Screen 53 is
 live — the typed Candidate filter carries status, kind, Source and target registry, and `f` opens it
 from screen 35 (D-111). Screens 48–50 are live: lifecycle uses exact history plus registry evidence, provenance retains typed
 Git/local pins and compiler output, and immutable version conflicts require a new version
@@ -80,18 +80,17 @@ Source from sync through a typed-provenance promotion commit.
 
 ## Exact next action
 
-Screen 53 is live (D-111): the typed filter now carries all four facets the Product Specification
-names, `f` opens it from screen 35, `Space` toggles a facet row, and screen 35 narrows accordingly.
-What remains in step 6:
+CP-14 step 6 is complete. Screen 53 is live (D-111): the typed filter now carries all four facets
+the Product Specification names, `f` opens it from screen 35, `Space` toggles a facet row, and
+screen 35 narrows accordingly. Screens 51–52 are reachable and proven end to end: `c` on screen 35
+opens Collection Candidates and Enter resolves one against approved registry state (D-112). What
+remains in CP-14:
 
-1. Confirm screens 51–52 are complete against the Product Specification and reachable end to end in
-   a real installation, the way screens 45–47 were proven. Collections must be first-class versioned
-   Candidates whose membership resolves only against approved registry state, with every member
-   verified approved and compatible. This closes B-031 before legacy Collection authority can be
-   retired.
-2. Then step 7: retire the legacy consumer/maintainer authority CP-13 left standing, but only
-   behind the public-flow evidence D-091 requires. B-031, B-038 and B-039 are ordered behind it.
-3. Preserve D-089/B-037 whenever promotion planning is touched: retained approved records rebind to
+1. **Step 7: retire the legacy consumer/maintainer authority CP-13 left standing** — but only
+   behind the public-flow evidence D-091 requires, one route at a time. B-031's screens now exist
+   and are reachable (D-112), so the Collection half of that evidence is in place; B-038 and B-039
+   are the remaining ordered items.
+2. Preserve D-089/B-037 whenever promotion planning is touched: retained approved records rebind to
    the transaction snapshot as metadata only, and published package bytes do not change.
 
 Noticed while proving the walk, not fixed here: screen 47 draws its "N selected" footer once of its

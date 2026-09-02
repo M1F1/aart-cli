@@ -616,3 +616,37 @@ Checkpoint gates on 2026-09-02: `make quality` and `make integration` are both g
 
 Step 6 remainder: end-to-end evidence for screens 51–52 in a real installation, which is what
 closing B-031 requires before legacy Collection authority can be retired in step 7.
+
+## Step 6c — the way into screens 51 and 52
+
+Screens 51 and 52 had projections, a renderer, validation against approved registry state and
+durable composition from the Source Scan. What they did not have was a route: every test entered by
+constructing a session already sitting on screen 51, which is the same gap screens 35–37 had in
+step 3 and screen 53 had in step 6b. A screen only a test can reach is not live.
+
+The navigation graph already accepted screen 35 → screen 51, so the missing piece was a key. `c` on
+the Candidate list is it. The Product Specification says "Collections are candidates too", which
+puts them on the Candidate surface rather than in a branch of their own — and the accepted screen 30
+panel lists Overview, Sources, Candidates and Registry with no Collections entry, so putting them
+there would have invented a surface the specification does not describe. The accepted contextual
+shortcut table names no Collections key, but it names none for screens 46, 47 or 50 either, which
+are reached by navigation; it constrains what the keys it lists mean, not what may exist (D-112).
+
+One thing the E2E forced into the open: the fixture first compiled through `compile_author_snapshot`
+and got no Collections at all, because that boundary returns artifacts only. Production Source Sync
+compiles through `compile_author_source`, which carries both kinds, and `reconcile_source_scan`
+takes the Collections as their own argument rather than mixed in with the artifacts. A fixture built
+on the artifacts-only boundary would have passed its own assertions while proving nothing about
+Collections.
+
+Evidence is `tests/maintainer_collection_candidate_test.py`'s route tests — `c` opening screen 51,
+`c` meaning nothing where nothing is listed, the whole route driven through the reducer rather than
+by constructing sessions, and Esc returning to the list it was opened from — and a walk in
+`tests/maintainer_composition_e2e_test.py` over one real installation: a Collection authored beside
+an artifact in one tree, compiled once, persisted once, reached with `c` and resolved on screen 52
+to the exact version the registry approved.
+
+Checkpoint gates on 2026-09-02: `make quality` and `make integration` are both green.
+
+CP-14 step 6 is complete. What remains is step 7: retiring the legacy consumer/maintainer authority
+CP-13 left standing, one route at a time and only behind the public-flow evidence D-091 requires.
