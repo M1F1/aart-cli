@@ -36,7 +36,7 @@ from agent_artifacts.sources.model import (
     source_instance_id,
     source_store_paths,
 )
-from tests.configured_installation_draft_e2e_test import _published_registry
+from tests.configured_installation_draft_e2e_test import AuthoredSetup, _published_registry
 from tests.marketplace_fixtures import configured_source
 from tests.placed_installation_e2e_test import AUTHORED_SKILL, SKILL_BODY
 
@@ -44,7 +44,14 @@ COORDINATE = "company/skill/code-review"
 
 
 class _Environment:
-    def __init__(self, root: pathlib.Path) -> None:
+    def __init__(
+        self,
+        root: pathlib.Path,
+        *,
+        authored: tuple[tuple[str, str] | tuple[str, str, bool], ...] = AUTHORED_SKILL,
+        setup: AuthoredSetup | None = None,
+    ) -> None:
+        self.setup = setup
         self.root = root
         self.home = root / "home"
         self.project = root / "project"
@@ -76,7 +83,7 @@ class _Environment:
         config_path.parent.mkdir(parents=True, exist_ok=True)
         config_path.write_bytes(user_configuration_bytes(configuration))
 
-        self.publish(AUTHORED_SKILL)
+        self.publish(authored)
 
     def publish(self, authored: tuple[tuple[str, str] | tuple[str, str, bool], ...]) -> None:
         """Make `authored` the approved snapshot this machine's configured registry offers.
@@ -90,7 +97,7 @@ class _Environment:
             source_instance_id(self.source),
             self.source.alias,
             "a" * 40,
-            _published_registry(authored),
+            _published_registry(authored, setup=self.setup),
         )
         assert isinstance(candidate, Ok), candidate
         published = publish_source_snapshot(
@@ -133,9 +140,13 @@ class _Environment:
 
 
 @contextlib.contextmanager
-def _environment():
+def _environment(
+    *,
+    authored: tuple[tuple[str, str] | tuple[str, str, bool], ...] = AUTHORED_SKILL,
+    setup: AuthoredSetup | None = None,
+):
     with tempfile.TemporaryDirectory() as raw:
-        yield _Environment(pathlib.Path(raw).resolve())
+        yield _Environment(pathlib.Path(raw).resolve(), authored=authored, setup=setup)
 
 
 class ConfiguredInstallCommandTest(unittest.TestCase):

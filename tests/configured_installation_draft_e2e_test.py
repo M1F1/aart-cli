@@ -35,12 +35,14 @@ from agent_artifacts.domain.selection import (
 from agent_artifacts.io.configured_installation import prepare_configured_installation_draft
 from agent_artifacts.io.object_store import read_object
 from agent_artifacts.io.source_store import publish_source_snapshot
-from agent_artifacts.protocol.authoring import compile_author_snapshot
+from agent_artifacts.protocol.authoring import CompiledAuthorArtifact, compile_author_snapshot
+from agent_artifacts.protocol.json import canonical_json_bytes
 from agent_artifacts.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
+    compile_native_package,
 )
 from agent_artifacts.protocol.paths import parse_relative_path
 from agent_artifacts.sources.model import (
@@ -80,11 +82,61 @@ AUTHORED_MCP: tuple[tuple[str, str] | tuple[str, str, bool], ...] = (
 )
 
 
+@dataclasses.dataclass(frozen=True, slots=True)
+class AuthoredSetup:
+    """The setup an artifact declares, as the three files a native package carries it in.
+
+    The authoring format has no setup section -- `aart.json` cannot declare one -- so an artifact
+    that needs configuring after placement acquires its declaration when it is packaged, not when
+    it is written. Modelling that here as an injection into the compiled package rather than as a
+    field on the author manifest is not a shortcut around the compiler; it is where the declaration
+    actually enters, and the recipe still goes through the same strict parse every other one does.
+    """
+
+    #: The declarative installer, exactly as `setup/installer.json` holds it.
+    recipe: dict
+    #: The package-root document a person follows when the recipe cannot be run for them.
+    manual: str = "Configure it by hand.\n"
+
+
+def _with_setup(artifact: CompiledAuthorArtifact, setup: AuthoredSetup) -> CompiledAuthorArtifact:
+    """Recompile one compiled artifact with its setup declaration added.
+
+    Only the canonical entries change: the payload is untouched, so the payload digest the package
+    was built around still describes it, and the recompile is what proves the declaration is valid
+    rather than merely well-formed JSON sitting beside a manifest.
+    """
+
+    entries = {str(entry.path): entry for entry in artifact.canonical_entries}
+    manifest = json.loads(entries["artifact.json"].content)
+    manifest["setup"] = {"recipe": "setup/installer.json", "platforms": ["darwin"]}
+    entries["artifact.json"] = _packaged("artifact.json", canonical_json_bytes(manifest))
+    entries["setup/installer.json"] = _packaged(
+        "setup/installer.json", canonical_json_bytes(setup.recipe)
+    )
+    entries["SETUP.md"] = _packaged("SETUP.md", setup.manual.encode())
+    canonical = tuple(entries[key] for key in sorted(entries))
+    native = compile_native_package(
+        canonical, expected_identity=artifact.package.coordinate.artifact
+    )
+    assert isinstance(native, Ok), getattr(native, "diagnostics", ())
+    return dataclasses.replace(artifact, canonical_entries=canonical, native_package=native.value)
+
+
+def _packaged(path: str, content: bytes) -> SnapshotEntry:
+    """One file as a packager writes it into the compiled tree."""
+
+    parsed = parse_relative_path(path)
+    assert isinstance(parsed, Ok), parsed
+    return SnapshotEntry(parsed.value, SnapshotEntryKind.FILE, content)
+
+
 def _promote_one(
     authored: tuple[tuple[str, str] | tuple[str, str, bool], ...],
     *,
     onto: SourceSnapshot,
     revision: str,
+    setup: AuthoredSetup | None = None,
 ) -> SourceSnapshot:
     """One author tree through one real promote-and-publish transaction onto `onto`."""
 
@@ -100,10 +152,13 @@ def _promote_one(
         revision=revision,
     )
     assert isinstance(compiled, Ok), compiled
+    artifacts = compiled.value
+    if setup is not None:
+        artifacts = tuple(_with_setup(artifact, setup) for artifact in artifacts)
     scanned = reconcile_source_scan(
         SourceAlias("authors"),
         revision,
-        compiled.value,
+        artifacts,
         previous=(),
         approved=approved.value,
         target_registry=SourceAlias("company"),
@@ -132,6 +187,7 @@ def _promote_one(
 
 def _published_registries(
     *authored: tuple[tuple[str, str] | tuple[str, str, bool], ...],
+    setup: AuthoredSetup | None = None,
 ) -> SourceSnapshot:
     """Several author trees taken to a published registry, one promotion transaction each.
 
@@ -142,12 +198,14 @@ def _published_registries(
 
     snapshot = SourceSnapshot(SnapshotOrigin.LOCAL, ())
     for index, tree in enumerate(authored):
-        snapshot = _promote_one(tree, onto=snapshot, revision=f"{index:x}" * 40)
+        snapshot = _promote_one(tree, onto=snapshot, revision=f"{index:x}" * 40, setup=setup)
     return snapshot
 
 
 def _published_registry(
     authored: tuple[tuple[str, str] | tuple[str, str, bool], ...] = AUTHORED_MCP,
+    *,
+    setup: AuthoredSetup | None = None,
 ) -> SourceSnapshot:
     """Take an author's files all the way to a published registry snapshot.
 
@@ -157,7 +215,7 @@ def _published_registry(
     nothing else about the pipeline changes for one.
     """
 
-    return _published_registries(authored)
+    return _published_registries(authored, setup=setup)
 
 
 class ConfiguredInstallationDraftTest(unittest.TestCase):

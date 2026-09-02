@@ -800,6 +800,25 @@ rather than widened into the transaction increment.
 What remains: decide which of the two owns the count -- the chrome states it for every selectable
 screen, so screen 47's own line is the likely one to drop -- and pin it with a rendering test.
 
+## B-045 — A canonical install roots nothing in the content store
+
+Measured while building B-044's fixture, and independent of it. After `aart marketplace install`
+of a registry Skill there is no references file anywhere in the data root: the configured seam
+registers no `ReferenceKind.INSTALLED` for the object it materialized from, while the legacy path
+does (`installation/io.py:495`). Every reference kind that exists -- `INSTALLED`, `SETUP`,
+`SOURCE_CURRENT`, `RETAINED`, `ROLLBACK`, `TRANSACTION` -- is written by legacy modules or the setup
+engine, none by `io/configured_installation_action.py`.
+
+So an object a canonical installation depends on is unrooted. Nothing observed here collects it, so
+this is not a live defect today; what it means is that the reference store's account of what is
+in use is silent about every canonical install, which is exactly the thing a future collector would
+consult.
+
+What remains: decide whether the canonical seam should register an `INSTALLED` reference, and if so
+where it is released -- uninstall and update both have to move it, which is why this is not a
+one-line addition. Related to B-044's installed-record question, but not the same question: this one
+is about the store's rooting, that one is about the receipt naming the object at all.
+
 ## B-044 — The canonical consumer shell runs no setup queue and offers no usage report — CRITICAL
 
 Discovered while retiring the wizard front-end (D-117), recorded in full as D-118. **Reclassified
@@ -810,7 +829,10 @@ terminal routes, `io/consumer_actions.py::_execute_installation` reaches
 `complete_configured_installation`, which runs no setup queue and offers no usage report — so an
 artifact installed from the TUI that declares setup requirements lands unconfigured. That is a
 mandatory invariant a shipped path no longer satisfies, which is the evidence the reclassification
-rule asks for. The public `aart marketplace install` carries both and is unaffected.
+rule asks for. ~~The public `aart marketplace install` carries both and is unaffected.~~ That
+last sentence is false and was corrected on 2026-09-02: `install` carries setup only for a
+direct or local Selection. For an approved registry coordinate it reaches the same configured
+seam the shell does and skips setup identically — see the fixture evidence below and D-120.
 
 ### Review of the first attempt (2026-09-02) — preserved, not merged
 
@@ -898,17 +920,88 @@ published registry at all. That is why the gap this item describes was invisible
 the fixture above is worth more than the wiring: it is the missing evidence for the CLI route as
 much as for the TUI one.
 
-**The route in, verified.** `aart registry scaffold` takes `--setup-recipe` (`cli.py:1052`), and
+**The route in.** `--setup-recipe` is on `aart registry vendor`, not `registry scaffold`
+(`cli.py:1035-1054`; an earlier revision of this entry named the wrong subcommand).
 `registry_commands/planning.py` requires the named recipe and a `SETUP.md` beside it (line 872) and
-carries `manifest.setup.recipe` and `.platforms` into the built index (line 1122). So the fixture is
-`registry scaffold --setup-recipe ... && registry build`, which
-`tests/registry_cli_integration_test.py` already does for a registry without setup and is the
-cheapest place to start from.
+carries `manifest.setup.recipe` and `.platforms` into the built index (line 1122).
 
-Ordering that follows: (1) build the native-promotion fixture and prove the **CLI** installs and
-sets up a setup-declaring registry artifact, which characterizes the working route; (2) run the same
-artifact through the canonical shell and assert the setup did not run -- that is the RED for this
-item; (3) reconcile the installed-record question below and make it green.
+### The fixture exists, and the gap is wider than this entry said (2026-09-02)
+
+`tests/configured_setup_gap_test.py` now installs a setup-declaring registry artifact on both
+routes, and `tests/configured_installation_draft_e2e_test.py` grew the fixture that makes one:
+`AuthoredSetup` plus `_with_setup`, threaded through `_promote_one`, `_published_registries` and
+`_published_registry`, and through `_environment(authored=..., setup=...)` in
+`tests/configured_install_command_e2e_test.py`.
+
+The fixture does not hand-patch a published snapshot. It adds the declaration between compiling and
+promoting -- `artifact.json` gains its `setup` reference, `setup/installer.json` and `SETUP.md`
+arrive beside the payload, and `compile_native_package` recompiles the package around them, so every
+digest is derived rather than asserted and the recipe goes through the same strict parse a vendored
+one does. The payload is untouched, so the payload digest still describes it. The whole real
+promotion transaction then runs: `reconcile_source_scan` -> `assess_candidate` ->
+`plan_bulk_promotion` -> `publish_registry_version` -> `plan_registry_lifecycle`, and the published
+snapshot carries `artifacts/skill/code-review/1.2.0/setup/installer.json`.
+
+Two constraints found while building it, both enforced by `compile_native_package`: a setup
+declaration's platforms must be a subset of the artifact's, and `setup.py:562` requires the recipe's
+own `platforms` to be exactly `['darwin']`. An artifact whose `aart.json` declares no
+`compatibility.platforms` therefore cannot declare setup at all, which is why the fixture Skill
+names its platforms where `AUTHORED_SKILL` does not.
+
+**What the fixture proves changes this entry's headline.** `aart marketplace install` does *not*
+carry setup for an approved registry coordinate. It reaches `_configured_lifecycle`, which calls
+`complete_configured_installation` and emits its receipt payload -- there is no `setup` key in it
+and no diagnostic -- exactly as the shell's `_execute_installation` does. Setup runs only on the
+legacy path, which `_configured_registry_selection` routes to by returning `None`, and it returns
+`None` only for a direct or local source. So the gap is the configured canonical seam itself, not
+the shell's use of it, and both front ends report a finished install of an unconfigured artifact.
+
+`aart marketplace setup` does not recover it either: run against the same machine afterwards it
+refuses with `registry company has invalid root manifests`, because it resolves through the legacy
+catalogue, which reads root manifests a promoted registry snapshot does not carry. So there is no
+operator move that finishes the install by hand.
+
+### The installed-record question, measured (2026-09-02)
+
+The entry above framed this as a choice between two equally-informed options. It is not: one of them
+has a fact against it.
+
+**A canonical receipt does not name the object that was installed.** After `aart marketplace
+install` of the fixture Skill, `<data_root>/state/installations/*.json` holds the coordinate with its
+version, `payload_digest`, `root` and the deliveries -- and no object digest, no manifest digest.
+`install_state`'s `ArtifactEvidence` carries `manifest_digest`, `payload_digest` and `object_digest`.
+`_prepare_setup_object` needs the object digest to `read_object` at all, and the manifest digest to
+cross-check what it compiled. So widening the engine to read the receipt store is not reading the
+same facts from a different file; the facts are not recorded.
+
+**And the canonical seam registers no CAS reference at all.** There is no references file in the
+data root after a successful configured install, while the legacy path registers
+`ReferenceKind.INSTALLED` (`installation/io.py:495`). The object a canonical install materialized
+from is therefore unrooted in the content store. That is worth examining on its own account,
+separately from setup.
+
+So the two answers, with their real costs:
+
+- **Give the canonical receipt the object identity it lacks**, then widen the engine's object
+  preparation. This is the honest fix for the finding above -- a receipt that records what the
+  effects left behind but not which immutable object they came from cannot support setup, and
+  arguably cannot support a faithful repair either. It is a schema addition to a durable store, so
+  existing receipts must stay readable. The other half is still anchored on the manifest: `persist_setup`
+  (`setup_engine/io.py:89`) records that setup ran by replacing `setup_state_ref` inside the
+  install-state record under its lock, and `setup_receipt.locate_setup_record` reads that pointer
+  for `aart marketplace receipt show|verify|undo`.
+- **Have the configured installation also write the install-state record.** This does *not* make
+  canonical installs surface as unadopted -- `read_consumer_machine` drops a manifest record whose
+  coordinate a canonical receipt already answers for (`io/consumer_machine.py:362`) -- and the seam
+  holds every required field truthfully at completion, `EffectProof` destinations and digests
+  included. It is the smaller change and makes the whole existing setup subsystem work at once. It
+  also writes new records into the store the strangler is retiring.
+
+Ordering that now follows: (1) done -- the fixture and the characterization are in
+`tests/configured_setup_gap_test.py`, which asserts the absent configuration file on both routes and
+guards itself with a test that the approved registry really does declare setup; (2) settle the
+installed-record question above; (3) reach the setup engine from the configured-installation action
+so both front ends close together, and invert the characterization.
 
 What remains: give the canonical action handler its own setup and reporting completion.
 `_canonical_setup_run` and `_complete_canonical_consumer_action` are deliberately retained in

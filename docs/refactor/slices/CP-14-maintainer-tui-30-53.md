@@ -476,6 +476,56 @@ reason, the no-approved-state refusal, cross-registry isolation, the shell's row
 
 Checkpoint gates on 2026-09-02: `make quality` and `make integration` are both green.
 
+## Step 7f — B-044's fixture and characterization (2026-09-02)
+
+No harness in the repository could produce a setup-declaring artifact, which is why the gap was
+invisible: the authoring format has no setup section — `setup` appears zero times in
+`protocol/authoring.py` — and every consumer E2E publishes through `compile_author_snapshot`. A
+declaration therefore enters at packaging, not at authoring, and the fixture models it where it
+happens. `AuthoredSetup` and `_with_setup` in `tests/configured_installation_draft_e2e_test.py`
+write `artifact.json`'s `setup` reference, `setup/installer.json` and `SETUP.md` into the compiled
+package and recompile it with `compile_native_package`, so the recipe goes through the same strict
+parse a vendored one does and every digest is derived rather than asserted; the payload is untouched,
+so the payload digest still describes it. The result then goes through the whole real promotion
+transaction — `reconcile_source_scan` → `assess_candidate` → `plan_bulk_promotion` →
+`publish_registry_version` → `plan_registry_lifecycle` — and the published snapshot carries
+`artifacts/skill/code-review/1.2.0/setup/installer.json`. `_promote_one`, `_published_registries`,
+`_published_registry` and `_environment(authored=..., setup=...)` all thread it through with every
+existing caller unchanged.
+
+Two constraints `compile_native_package` enforces bound any such fixture: a setup declaration's
+platforms must be a subset of the artifact's, and `setup.py:562` requires the recipe's own
+`platforms` to be exactly `['darwin']`. An artifact whose `aart.json` declares no
+`compatibility.platforms` cannot declare setup at all, which is why the fixture Skill names its
+platforms where `AUTHORED_SKILL` does not.
+
+`tests/configured_setup_gap_test.py` is the characterization, four tests. The first guards the
+other three by asserting the approved registry really does carry the declaration and its recipe —
+it was verified red by removing the injection, so a fixture that stopped declaring setup cannot
+leave the defect tests quietly passing. The other three assert the absence of the one file the
+recipe writes, on both front ends.
+
+**They correct D-118's last sentence.** `aart marketplace install` does not carry setup for an
+approved registry coordinate either: it reaches `_configured_lifecycle`, which calls
+`complete_configured_installation` — the same seam `_execute_installation` uses — and reports
+`session_status: succeeded` with no `setup` key and no diagnostic. Setup runs only on the legacy
+path, which `_configured_registry_selection` selects by returning `None` for a direct or local
+source. `aart marketplace setup` does not recover it: it resolves through the legacy catalogue and
+refuses with `registry company has invalid root manifests`, since a promoted registry snapshot
+carries none. So B-044 is one fix at one shared seam (D-120).
+
+What remains before the green is the installed-record question. `_prepare_setup_object` resolves
+what to configure from the install-state manifest, which `io/consumer_machine.py` treats as the
+*legacy* store — a record found there with no canonical receipt becomes an `UnadoptedInstallation`
+(D-069) — while the configured seam writes receipts. The alternative -- having the configured seam write
+install state too -- does *not* make canonical installs surface as unadopted, because
+`read_consumer_machine` drops a manifest record a receipt already answers for
+(`io/consumer_machine.py:362`); what decides it is whether that seam can fill
+`InstallationRecord.effects` truthfully rather than inventing evidence. Widening the engine is not
+free either: `persist_setup` records that setup ran by moving `setup_state_ref` inside the manifest
+under its lock, and `aart marketplace receipt show|verify|undo` reads that same pointer. Every
+trust, evidence and policy check stays inside the engine either way.
+
 ## Step 5e — one transaction carrying a set of promotions
 
 A loop over single promotions is exactly what bulk promotion is not: each iteration would take its
@@ -861,7 +911,8 @@ performs no setup and no reporting, so since D-115 an artifact installed from th
 setup requirements lands unconfigured and no usage report is offered. `_canonical_setup_run` and
 `_complete_canonical_consumer_action` are the only implementation of that capability, so they are
 kept — production-orphaned and test-pinned — as the material to wire it back. Recorded as D-118 and
-promoted to the critical path as **B-044**; the public `aart marketplace install` is unaffected.
+promoted to the critical path as **B-044**. ~~the public `aart marketplace install` is
+unaffected.~~ — that half is false and is corrected below.
 
 One live output was falsified by the removal and is fixed here: `InternalFailureContext.stage` was
 typed `WizardStage` and set only by the wizard, so every canonical crash would have reported

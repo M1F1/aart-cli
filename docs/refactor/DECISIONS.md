@@ -2125,7 +2125,9 @@ the Product Specification first instead of hiding the change here.
   interactive setup as work AART performs, and screen 09/11 summarize outcomes as "configured MCP
   servers, isolated environments ... securely stored credentials" — so this is a mandatory
   invariant a shipped path no longer satisfies, which is what makes it critical rather than backlog.
-  The public `aart marketplace install` carries both and is unaffected.
+  ~~The public `aart marketplace install` carries both and is unaffected.~~ Corrected by
+  **D-120**: that holds only for a direct or local Selection. An approved registry coordinate
+  reaches the same configured seam and skips setup identically.
   Deleting the two helpers as orphans would have been the mechanical reading of D-091 and the wrong
   one: they are not legacy authority to strangle, they are the only implementation of a capability
   the replacement lacks.
@@ -2150,3 +2152,34 @@ the Product Specification first instead of hiding the change here.
   exactly that, and letting the exception past `run` bypassed it.
 - **Consequence:** `tests/tui_fallback_boundary_test.py` asserts the three boundaries produce three
   different records, and the assertion that read `stage: onboarding` now reads `stage: curses`.
+
+## D-120 — A setup declaration is added at package time, and the seam that skips it is shared
+
+- **Decision:** the B-044 fixture puts a setup-declaring artifact into a published registry by
+  adding the declaration to the *compiled* package rather than to the authored manifest, and
+  recompiling: `AuthoredSetup` and `_with_setup` in
+  `tests/configured_installation_draft_e2e_test.py` write `artifact.json`'s `setup` reference,
+  `setup/installer.json` and `SETUP.md` into the canonical entries and call
+  `compile_native_package` over the result, which then goes through the whole real promotion
+  transaction. The characterization built on it,
+  `tests/configured_setup_gap_test.py`, asserts the gap on **both** front ends rather than on the
+  shell alone.
+- **Status:** accepted.
+- **Reason:** two things were established by trying to build the fixture. First, the authoring
+  format has no setup section at all, so a setup declaration genuinely does enter at packaging;
+  modelling it that way is where it actually happens, not a shortcut around the compiler, and the
+  recompile is what proves the declaration valid rather than merely well-formed. Second, and this
+  corrects D-118: `aart marketplace install` skips setup too. Both front ends reach installation
+  through `complete_configured_installation` — the command via `_configured_lifecycle`, the shell
+  via `_execute_installation` — and setup runs only on the legacy path, which
+  `_configured_registry_selection` selects by returning `None`, and it returns `None` only for a
+  direct or local source. The observed CLI install of a setup-declaring registry Skill reports
+  `session_status: succeeded` with no `setup` key and no diagnostic, and the configuration file the
+  recipe declares is not written.
+- **Consequence:** B-044 is one fix at one seam, not two wirings, and the reporting half is subject
+  to the same reading. There is also no operator recovery today: `aart marketplace setup` run
+  afterwards refuses with `registry company has invalid root manifests`, because it resolves through
+  the legacy catalogue, which reads root manifests a promoted registry snapshot does not carry.
+  Two constraints bound any future fixture: a setup declaration's platforms must be a subset of the
+  artifact's, and `setup.py:562` requires the recipe's own `platforms` to be exactly `['darwin']`,
+  so an artifact declaring no `compatibility.platforms` cannot declare setup.

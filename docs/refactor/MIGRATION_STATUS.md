@@ -194,6 +194,33 @@ typecheck are green. Screens 51–53 are live as well (D-111, D-112), so step 6 
 table's CP-14 legacy-removal boundary otherwise remains in force: each remaining legacy route goes
 only behind the public-flow evidence D-091 requires.
 
+**B-044's fixture and characterization are landed; the item is wider than it was recorded.** A
+setup-declaring artifact could not be produced by any existing harness, because the authoring format
+has no setup section -- `setup` appears zero times in `protocol/authoring.py` -- so a declaration
+genuinely enters at packaging rather than at authoring. `AuthoredSetup` and `_with_setup` in
+`tests/configured_installation_draft_e2e_test.py` model exactly that: they write `artifact.json`'s
+`setup` reference, `setup/installer.json` and `SETUP.md` into the *compiled* package, recompile it
+with `compile_native_package` -- which is what proves the declaration valid rather than merely
+well-formed -- and send the result through the whole real promotion transaction, so every digest is
+derived. The fixture threads through `_promote_one`, `_published_registries`, `_published_registry`
+and `_environment(authored=..., setup=...)`, leaving every existing caller unchanged.
+
+`tests/configured_setup_gap_test.py` characterizes what the two front ends then do with it. Its
+first test guards the other three by asserting the approved registry really does carry the
+declaration and its recipe, so a fixture that silently stopped declaring setup could not leave the
+defect tests passing. What they record corrects D-118: **`aart marketplace install` skips setup
+too.** For an approved registry coordinate it reaches `_configured_lifecycle`, which calls
+`complete_configured_installation` -- the same seam `io/consumer_actions.py::_execute_installation`
+uses -- and reports `session_status: succeeded` with no `setup` key, no diagnostic, and the
+configuration file the recipe declares unwritten. Setup runs only on the legacy path, which
+`_configured_registry_selection` selects by returning `None` for a direct or local source. There is
+no operator recovery either: `aart marketplace setup` afterwards refuses with `registry company has
+invalid root manifests`, because it resolves through the legacy catalogue and a promoted registry
+snapshot carries no root manifests. So B-044 is one fix at one shared seam rather than a TUI wiring
+gap (D-120), and what still blocks the green is the installed-record question: the setup engine
+resolves what to configure from the install-state manifest that `io/consumer_machine.py` treats as
+the *legacy* store (D-069), while the configured seam writes receipts.
+
 ## Update rule
 
 Never mark a slice beyond the strongest evidence actually present.

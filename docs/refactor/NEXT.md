@@ -137,32 +137,79 @@ hardcoded `TrustClass.COMPANY_REVIEWED` into the setup policy check** -- the con
 `_policy_allows`'s untrusted-source refusal unable to fire. Nothing in the suite exercises trust on
 that route, which is the same blindness B-044 is about.
 
-Two findings from trying to write the characterization test, both in B-044 in full, both changing
-what this costs:
+**The fixture and the characterization are now built, and they widen the item** (D-120). The
+authoring format has no setup section at all — `setup` appears zero times in
+`protocol/authoring.py` — so a declaration genuinely enters at packaging. `AuthoredSetup` and
+`_with_setup` in `tests/configured_installation_draft_e2e_test.py` add it to the *compiled* package
+(`artifact.json`'s `setup` reference, `setup/installer.json`, `SETUP.md`), recompile with
+`compile_native_package`, and send the result through the whole real promotion transaction, so every
+digest is derived rather than asserted. It is threaded through `_promote_one`,
+`_published_registries`, `_published_registry` and `_environment(authored=..., setup=...)`, and
+every existing caller is unchanged.
 
-- **Nothing published through the authoring pipeline can declare setup.** `setup` appears zero times
-  in `protocol/authoring.py`. A setup-declaring artifact reaches a registry through a *native*
-  promotion only, and every consumer E2E harness publishes through the author-compile route. So the
-  first deliverable is a fixture that puts one into a published registry through the native path,
-  via the real promotion pipeline -- hand-patching a snapshot breaks the version record's digests.
-- **No E2E anywhere installs a setup-declaring artifact from a registry, on any route, CLI
-  included.** The setup path has never been proven from a published registry. That fixture is
-  therefore missing evidence for the CLI route as much as for the TUI one, and is worth more than
-  the wiring.
+`tests/configured_setup_gap_test.py` is the characterization. Its first test guards the rest by
+asserting the approved registry really does carry the declaration and its recipe; the other three
+record the defect on **both** front ends.
 
-Ordering: build the fixture and prove the **CLI** installs and sets up a setup-declaring registry
-artifact; then run the same artifact through the canonical shell and assert the setup did not run --
-that is the RED; then reconcile the installed-record question and make it green.
+**What it proved corrects D-118 and this file's earlier ordering.** `aart marketplace install` does
+*not* carry setup for an approved registry coordinate: it reaches `_configured_lifecycle`, which
+calls `complete_configured_installation` — the same seam `io/consumer_actions.py::_execute_installation`
+uses — and reports `session_status: succeeded` with no `setup` key, no diagnostic, and the
+configuration file the recipe declares unwritten. Setup runs only on the legacy path, which
+`_configured_registry_selection` selects by returning `None` for a direct or local source. Nor is
+there an operator recovery: `aart marketplace setup` afterwards refuses with `registry company has
+invalid root manifests`, because it resolves through the legacy catalogue and a promoted registry
+snapshot carries no root manifests.
 
-What the removal exposed is the actual next work. **B-044 (critical):** `io/consumer_actions.py`
-performs no setup and no reporting, so since D-115 an artifact installed from the TUI that declares
-setup requirements lands unconfigured and no usage report is offered — while the Product
-Specification names interactive setup as work AART performs and screens 09/11 summarize an install
-as "configured MCP servers, isolated environments ... securely stored credentials". That is a
-mandatory invariant a shipped path no longer satisfies. `_canonical_setup_run` and
-`_complete_canonical_consumer_action` are deliberately retained in `tui.py` as the material for it
-(D-118); they take `ConsumerApplicationService`, `ConsumerReview` and `ConsumerOutcome` and the
-canonical path has a receipt instead, so this is a slice, not a wiring change.
+So B-044 is one fix at one shared seam, not a TUI wiring gap. The Product Specification names
+interactive setup as work AART performs and screens 09/11 summarize an install as "configured MCP
+servers, isolated environments ... securely stored credentials", and neither shipped front end does
+it. `_canonical_setup_run` and `_complete_canonical_consumer_action` are deliberately retained in
+`tui.py` as the material (D-118); they take `ConsumerApplicationService`, `ConsumerReview` and
+`ConsumerOutcome` and the canonical path has a receipt instead.
+
+**The exact next step is the installed-record question**, which is what still blocks the green.
+`setup_engine/application.py::_prepare_setup_object` resolves what to configure from the
+install-state manifest (`.agent-artifacts/manifest.json`), which only `installation/application.py`
+and `lifecycle/application.py` write, and which `io/consumer_machine.py` calls the *legacy* store —
+a record it finds there with no canonical receipt becomes an `UnadoptedInstallation` (D-069). The
+configured seam writes receipts. Two candidate answers, and the choice between them is an evidence
+question, not a taste one:
+
+**A canonical receipt cannot name the object that was installed.** This was measured, not
+inferred: after `aart marketplace install` of the fixture Skill, `<data_root>/state/installations/*.json`
+holds the coordinate (with version), `payload_digest`, `root` and the deliveries — and no object
+digest and no manifest digest. `install_state`'s `ArtifactEvidence` carries all three. The engine
+needs the object digest to `read_object` at all and the manifest digest to cross-check what it
+compiled, so pointing it at the receipt store is not a matter of reading the same facts from a
+different file: the facts are not there.
+
+A second thing that measurement showed: the canonical seam registers **no CAS reference of any
+kind** — there is no references file in the data root after a successful install — while the legacy
+path registers `ReferenceKind.INSTALLED`. So the object a canonical install materialized from is
+unrooted in the store. That is worth a look on its own account, independent of setup.
+
+So the two candidate answers are:
+
+- **Give the canonical receipt the object identity it is missing**, then widen the engine's object
+  preparation to name an installed record from the receipt store. This is the honest fix for the
+  finding above — a receipt that records what the effects left behind but not which immutable object
+  they came from cannot support setup, and arguably cannot support a faithful repair either. It is a
+  schema addition to a durable store, so it needs a compatible read of existing receipts. Note the
+  other half of the cost: `persist_setup` (`setup_engine/io.py:89`) records that setup ran by taking
+  the install-state lock, replacing the record's `setup_state_ref` and moving a CAS reference as one
+  compensated unit, and `setup_receipt.locate_setup_record` reads that same pointer for
+  `aart marketplace receipt show|verify|undo`. That half is anchored on the manifest too.
+- **Have the configured installation also write the install-state record.** This does *not* make
+  canonical installs surface as unadopted — `read_consumer_machine` drops a manifest record whose
+  coordinate a canonical receipt already answers for (`io/consumer_machine.py:362`), so the
+  objection previously recorded here was wrong — and the seam does hold every field truthfully at
+  completion, including the `EffectProof` destinations and digests it planned and executed. It is
+  the smaller change and the one that makes the whole existing setup subsystem work at once. It is
+  also the one that writes new records into the store the strangler is trying to retire.
+
+Every trust, evidence and policy check stays inside the engine either way; a third implementation of
+the planning is what produced the hardcoded trust constant in the preserved draft.
 
 Behind that, 571 lines of `tui.py` are still production-orphaned and held only by widget tests —
 `_curses_multiselect` and its 29 tests, the receipt screens, `_load_user_wizard_read_model`,
