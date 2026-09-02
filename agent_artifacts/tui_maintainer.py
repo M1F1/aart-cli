@@ -16,6 +16,7 @@ from agent_artifacts.application.maintainer_views import (
     MaintainerSourceSyncResultView,
     MaintainerSourceSyncReviewView,
     MaintainerSourceView,
+    MaintainerTransactionCandidateView,
     MaintainerValidationCheckView,
     MaintainerValidationView,
     MaintainerWorkingTreeState,
@@ -475,6 +476,17 @@ def render_maintainer_registry_diff(
     return tuple(lines)
 
 
+def _transaction_heading(
+    candidates: tuple[MaintainerTransactionCandidateView, ...],
+    target_registry: str,
+    mode: str,
+) -> str:
+    """One transaction may carry several Candidates, so the heading names all of them."""
+
+    named = ", ".join(f"{item.artifact}@{item.version}" for item in candidates)
+    return f"{named} → {target_registry} ({mode})"
+
+
 def render_maintainer_registry_validation(
     view: MaintainerRegistryValidationView,
     profile: PresentationProfile,
@@ -484,17 +496,21 @@ def render_maintainer_registry_validation(
     ):
         raise ValueError("Maintainer registry validation rendering needs a typed view and profile")
     lines = [
-        f"{view.artifact}@{view.version} → {view.target_registry} ({view.mode})",
+        _transaction_heading(view.candidates, view.target_registry, view.mode),
         "Registry validation: Passed",
         f"Projected snapshot: {_short(view.registry_snapshot, profile)}",
         f"Approved versions: {view.approved_version_count}",
         "Checks:",
         *(f"  ✓ {item}" for item in view.checks),
-        f"Candidate validation: {_short(view.validation_report_digest, profile)}",
-        f"Effective policy: {_short(view.effective_policy_digest, profile)}",
-        f"Transaction digest: {_short(view.transaction_digest, profile)}",
-        "No approved registry state has been written.",
     ]
+    # Each Candidate carries the run and policy result that approved it, so the evidence is listed
+    # per Candidate rather than summarized into one pair a transaction could not be traced through.
+    for item in view.candidates:
+        lines.append(f"{item.artifact}@{item.version}")
+        lines.append(f"  Candidate validation: {_short(item.validation_report_digest, profile)}")
+        lines.append(f"  Effective policy: {_short(item.effective_policy_digest, profile)}")
+    lines.append(f"Transaction digest: {_short(view.transaction_digest, profile)}")
+    lines.append("No approved registry state has been written.")
     return tuple(lines)
 
 
@@ -507,7 +523,7 @@ def render_maintainer_registry_commit(
     ):
         raise ValueError("Maintainer registry commit rendering needs a typed view and profile")
     lines = [
-        f"{view.artifact}@{view.version} → {view.target_registry} ({view.mode})",
+        _transaction_heading(view.candidates, view.target_registry, view.mode),
         (
             "Approved registry state written locally"
             if view.applied

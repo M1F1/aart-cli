@@ -76,6 +76,7 @@ __all__ = [
     "MaintainerRegistryChangeView",
     "MaintainerRegistryCommitView",
     "MaintainerRegistryDiffView",
+    "MaintainerTransactionCandidateView",
     "project_maintainer_bulk_promotion",
     "MaintainerBulkPromotionView",
     "MaintainerBulkExclusionView",
@@ -1687,36 +1688,60 @@ _PROMOTED_REGISTRY_CHECKS = (
 
 
 @dataclass(frozen=True, slots=True)
-class MaintainerRegistryValidationView:
-    """Screen 44: evidence that the projected promoted registry is internally valid."""
+class MaintainerTransactionCandidateView:
+    """One Candidate a reviewed transaction carries, with the evidence that approved it.
+
+    A transaction may carry several, and each is approved by its own run and policy result, so the
+    evidence travels per Candidate rather than being summarized into one pair of digests.
+    """
 
     candidate_id: str
     artifact: str
     version: str
+    validation_report_digest: str
+    effective_policy_digest: str
+
+    def __post_init__(self) -> None:
+        if any(
+            not isinstance(item, str) or not item or any(character in item for character in "\r\n")
+            for item in (
+                self.candidate_id,
+                self.artifact,
+                self.version,
+                self.validation_report_digest,
+                self.effective_policy_digest,
+            )
+        ):
+            raise ValueError("Maintainer transaction Candidate view is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerRegistryValidationView:
+    """Screen 44: evidence that the projected promoted registry is internally valid."""
+
+    candidates: tuple[MaintainerTransactionCandidateView, ...]
     target_registry: str
     mode: str
     registry_snapshot: str
     transaction_digest: str
-    validation_report_digest: str
-    effective_policy_digest: str
     approved_version_count: int
     checks: tuple[str, ...]
 
     def __post_init__(self) -> None:
         lines = (
-            self.candidate_id,
-            self.artifact,
-            self.version,
             self.target_registry,
             self.mode,
             self.registry_snapshot,
             self.transaction_digest,
-            self.validation_report_digest,
-            self.effective_policy_digest,
             *self.checks,
         )
         if (
-            any(
+            not self.candidates
+            or any(
+                not isinstance(item, MaintainerTransactionCandidateView) for item in self.candidates
+            )
+            or len({item.candidate_id for item in self.candidates}) != len(self.candidates)
+            or any(
                 not isinstance(item, str)
                 or not item
                 or any(character in item for character in "\r\n")
@@ -1734,9 +1759,7 @@ class MaintainerRegistryValidationView:
 class MaintainerRegistryCommitView:
     """Screen 45 before or after the exact local approved-registry write."""
 
-    candidate_id: str
-    artifact: str
-    version: str
+    candidates: tuple[MaintainerTransactionCandidateView, ...]
     target_registry: str
     mode: str
     transaction_digest: str
@@ -1749,10 +1772,11 @@ class MaintainerRegistryCommitView:
     commit_revision: str | None
 
     def __post_init__(self) -> None:
+        if not self.candidates or any(
+            not isinstance(item, MaintainerTransactionCandidateView) for item in self.candidates
+        ):
+            raise ValueError("Maintainer registry commit view is invalid")
         lines = (
-            self.candidate_id,
-            self.artifact,
-            self.version,
             self.target_registry,
             self.mode,
             self.transaction_digest,
@@ -1786,6 +1810,21 @@ class MaintainerRegistryCommitView:
             raise ValueError("Maintainer registry commit view is invalid")
 
 
+def _transaction_candidates(
+    prepared: PreparedCandidatePromotionTransaction,
+) -> tuple[MaintainerTransactionCandidateView, ...]:
+    return tuple(
+        MaintainerTransactionCandidateView(
+            item.candidate.candidate.id.value,
+            str(item.candidate.candidate.artifact.coordinate.artifact),
+            str(item.candidate.candidate.artifact.coordinate.version),
+            str(item.evidence.validation_report_digest),
+            str(item.evidence.effective_policy_digest),
+        )
+        for item in prepared.promotions
+    )
+
+
 def project_maintainer_registry_validation(
     prepared: PreparedCandidatePromotionTransaction,
 ) -> MaintainerRegistryValidationView:
@@ -1793,18 +1832,12 @@ def project_maintainer_registry_validation(
 
     if not isinstance(prepared, PreparedCandidatePromotionTransaction):
         raise ValueError("registry validation projection needs a prepared promotion transaction")
-    promotion = prepared.promotion
-    candidate = promotion.candidate.candidate
     return MaintainerRegistryValidationView(
-        candidate.id.value,
-        str(candidate.artifact.coordinate.artifact),
-        str(candidate.artifact.coordinate.version),
-        candidate.target_registry.value,
-        promotion.mode.value,
+        _transaction_candidates(prepared),
+        prepared.target_registry.value,
+        prepared.promotions[0].mode.value,
         str(prepared.registry_snapshot),
         str(prepared.review_digest),
-        str(promotion.evidence.validation_report_digest),
-        str(promotion.evidence.effective_policy_digest),
         prepared.approved_version_count,
         _PROMOTED_REGISTRY_CHECKS,
     )
@@ -1830,13 +1863,10 @@ def project_maintainer_registry_commit(
         or result.approved_version_count != prepared.approved_version_count
     ):
         raise ValueError("registry commit result does not match the reviewed transaction")
-    candidate = prepared.promotion.candidate.candidate
     return MaintainerRegistryCommitView(
-        candidate.id.value,
-        str(candidate.artifact.coordinate.artifact),
-        str(candidate.artifact.coordinate.version),
-        candidate.target_registry.value,
-        prepared.promotion.mode.value,
+        _transaction_candidates(prepared),
+        prepared.target_registry.value,
+        prepared.promotions[0].mode.value,
         str(plan.review_digest),
         str(plan.expected_registry_snapshot),
         str(plan.next_registry_snapshot),

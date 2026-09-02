@@ -347,12 +347,55 @@ def plan_candidate_promotion(
             "has no place for local provenance",
             "Promote from a Git-backed authoring Source, or wait for local promotion to land.",
         )
+    return plan_promotion_transaction((prepared,), registry_snapshot)
+
+
+def plan_promotion_transaction(
+    promotions: tuple[PreparedCandidatePromotion, ...],
+    registry_snapshot: SourceSnapshot,
+) -> Result[PromotionPlan]:
+    """Plan every reviewed promotion as one transaction, writing nothing.
+
+    One transaction rather than several is the whole point of bulk promotion: a loop over single
+    promotions would take a fresh registry snapshot each time, write a commit each time, and be
+    able to half-succeed.  `plan_bulk_promotion` already enforces one registry and one deterministic
+    ordering, so this drives it rather than deciding any of that again.
+    """
+
+    if not isinstance(promotions, tuple) or not isinstance(registry_snapshot, SourceSnapshot):
+        return _error("planning a promotion needs reviewed promotions and a registry workspace")
+    if not promotions or any(
+        not isinstance(item, PreparedCandidatePromotion) for item in promotions
+    ):
+        return _error("planning a promotion transaction needs at least one reviewed promotion")
+    first = promotions[0]
+    if any(
+        item.mode is not first.mode
+        or item.approved != first.approved
+        or item.policy != first.policy
+        for item in promotions
+    ):
+        return _error(
+            "a promotion transaction must share one mode, policy and approved baseline",
+            "review the selection again against one registry",
+        )
+    # A promotion audit records a Git revision, and a local Source carries `local:<snapshot>`
+    # (D-096). Promoting one through the Git-only record would either fail deep inside the planner
+    # or, worse, disguise a local origin as a commit, so it is refused here by name.
+    for item in promotions:
+        revision = item.candidate.candidate.artifact.provenance.revision
+        if source_revision_kind(revision) != "git":
+            return _error(
+                "a Candidate from a local Source cannot be promoted yet: the promotion audit "
+                "record has no place for local provenance",
+                "Promote from a Git-backed authoring Source, or wait for local promotion to land.",
+            )
     return plan_bulk_promotion(
         registry_snapshot,
-        (prepared.candidate,),
-        evidence=((prepared.candidate.candidate.id, prepared.evidence),),
-        approved=prepared.approved.versions,
-        mode=prepared.mode,
+        tuple(item.candidate for item in promotions),
+        evidence=tuple((item.candidate.candidate.id, item.evidence) for item in promotions),
+        approved=first.approved.versions,
+        mode=first.mode,
     )
 
 
@@ -360,7 +403,7 @@ def plan_candidate_promotion(
 class PreparedCandidatePromotionTransaction:
     """The exact projected and validated registry transaction screens 43–45 review."""
 
-    promotion: PreparedCandidatePromotion
+    promotions: tuple[PreparedCandidatePromotion, ...]
     plan: PromotionPlan
     projected: SourceSnapshot
     registry_snapshot: ObjectDigest
@@ -368,19 +411,29 @@ class PreparedCandidatePromotionTransaction:
 
     def __post_init__(self) -> None:
         if (
-            not isinstance(self.promotion, PreparedCandidatePromotion)
+            not isinstance(self.promotions, tuple)
+            or not self.promotions
+            or any(not isinstance(item, PreparedCandidatePromotion) for item in self.promotions)
             or not isinstance(self.plan, PromotionPlan)
             or not isinstance(self.projected, SourceSnapshot)
             or not isinstance(self.registry_snapshot, ObjectDigest)
             or not isinstance(self.approved_version_count, int)
             or isinstance(self.approved_version_count, bool)
             or self.approved_version_count < 1
-            or self.plan.mode is not self.promotion.mode
+            or any(self.plan.mode is not item.mode for item in self.promotions)
             or self.plan.next_registry_snapshot != self.registry_snapshot
-            or len(self.plan.audits) != 1
-            or self.plan.audits[0].candidate_id != self.promotion.candidate.candidate.id
+            # The plan and the review must be about the same Candidates, exactly: a plan carrying
+            # one the review never saw is a promotion nobody approved.
+            or {item.candidate_id for item in self.plan.audits}
+            != {item.candidate.candidate.id for item in self.promotions}
+            or len(self.plan.audits) != len(self.promotions)
         ):
             raise ValueError("prepared Candidate promotion transaction is invalid")
+        object.__setattr__(
+            self,
+            "promotions",
+            tuple(sorted(self.promotions, key=lambda item: item.candidate.candidate.id.value)),
+        )
 
     @property
     def review_digest(self) -> ObjectDigest:
@@ -388,9 +441,15 @@ class PreparedCandidatePromotionTransaction:
 
         return self.plan.review_digest
 
+    @property
+    def target_registry(self) -> SourceAlias:
+        """One transaction, one registry — enforced when the transaction was planned."""
+
+        return self.promotions[0].target_registry
+
 
 def _project_and_validate(
-    promotion: PreparedCandidatePromotion,
+    promotions: tuple[PreparedCandidatePromotion, ...],
     plan: PromotionPlan,
     workspace: SourceSnapshot,
 ) -> Result[PreparedCandidatePromotionTransaction]:
@@ -412,7 +471,7 @@ def _project_and_validate(
     try:
         return Ok(
             PreparedCandidatePromotionTransaction(
-                promotion,
+                promotions,
                 plan,
                 projected.value,
                 validated.value,
@@ -432,8 +491,44 @@ def prepare_candidate_promotion_transaction(
     *,
     mode: PromotionMode = PromotionMode.VENDORED,
 ) -> Result[PreparedCandidatePromotionTransaction]:
-    """Plan and validate the exact inert registry state screens 43–45 will review."""
+    """Plan and validate the exact inert registry state screens 43–45 will review.
 
+    One Candidate is the single-selection case of the same transaction, not a separate path.
+    """
+
+    return prepare_promotion_transaction(
+        (bundle,),
+        (validation,),
+        policy,
+        approved,
+        registry_workspace,
+        mode=mode,
+    )
+
+
+def prepare_promotion_transaction(
+    bundles: tuple[CandidateBundle, ...],
+    validations: tuple[CandidateValidation, ...],
+    policy: EffectivePolicy,
+    approved: ApprovedRegistryState,
+    registry_workspace: SourceSnapshot,
+    *,
+    mode: PromotionMode = PromotionMode.VENDORED,
+) -> Result[PreparedCandidatePromotionTransaction]:
+    """Plan and validate the exact inert registry state one transaction would leave behind.
+
+    A selection promotes as one transaction or not at all: any Candidate its own run refuses takes
+    the whole preparation down by name, because a partly-promoted selection is not a state the
+    registry can be left in.
+    """
+
+    if (
+        not isinstance(bundles, tuple)
+        or not isinstance(validations, tuple)
+        or len(bundles) != len(validations)
+        or not bundles
+    ):
+        return _error("preparing a promotion transaction needs one validation run per Candidate")
     if not isinstance(registry_workspace, SourceSnapshot):
         return _error("preparing a promotion transaction needs a registry workspace")
     workspace_digest = source_snapshot_digest(registry_workspace)
@@ -444,19 +539,16 @@ def prepare_candidate_promotion_transaction(
             "registry workspace does not match the synchronized approved baseline",
             "synchronize or restore the registry checkout, then review promotion again",
         )
-    prepared = prepare_candidate_promotion(
-        bundle,
-        validation,
-        policy,
-        approved,
-        mode=mode,
-    )
-    if isinstance(prepared, Err):
-        return prepared
-    planned = plan_candidate_promotion(prepared.value, registry_workspace)
+    promotions: list[PreparedCandidatePromotion] = []
+    for bundle, validation in zip(bundles, validations, strict=True):
+        prepared = prepare_candidate_promotion(bundle, validation, policy, approved, mode=mode)
+        if isinstance(prepared, Err):
+            return prepared
+        promotions.append(prepared.value)
+    planned = plan_promotion_transaction(tuple(promotions), registry_workspace)
     if isinstance(planned, Err):
         return planned
-    return _project_and_validate(prepared.value, planned.value, registry_workspace)
+    return _project_and_validate(tuple(promotions), planned.value, registry_workspace)
 
 
 ReadCandidatePort = Callable[[CandidateId], Result[CandidateBundle]]
@@ -523,11 +615,13 @@ def promotion_commit_subject(prepared: PreparedCandidatePromotionTransaction) ->
 
     if not isinstance(prepared, PreparedCandidatePromotionTransaction):
         raise ValueError("promotion commit subject needs a prepared transaction")
-    candidate = prepared.promotion.candidate.candidate
-    return (
-        f"Promote {candidate.artifact.coordinate.artifact}@"
-        f"{candidate.artifact.coordinate.version} to {candidate.target_registry}"
-    )
+    if len(prepared.promotions) == 1:
+        candidate = prepared.promotions[0].candidate.candidate
+        return (
+            f"Promote {candidate.artifact.coordinate.artifact}@"
+            f"{candidate.artifact.coordinate.version} to {prepared.target_registry}"
+        )
+    return f"Promote {len(prepared.promotions)} candidates to {prepared.target_registry}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -596,47 +690,49 @@ def execute_candidate_promotion(
             "review the current registry transaction again",
         )
 
-    candidate_id = prepared.promotion.observed.candidate.id
-    current_candidate = ports.read_candidate(candidate_id)
-    if isinstance(current_candidate, Err):
-        return current_candidate
-    if current_candidate.value != prepared.promotion.observed:
-        return _error(
-            "Candidate changed after promotion review",
-            "validate and review the current Candidate again",
-        )
-
-    current_approved = ports.read_approved(prepared.promotion.target_registry)
+    # Every Candidate the transaction carries is rechecked, not only the first: a bulk promotion
+    # that re-observed one of its members would write the other members on stale evidence.
+    baseline = prepared.promotions[0]
+    current_approved = ports.read_approved(prepared.target_registry)
     if isinstance(current_approved, Err):
         return current_approved
-    if current_approved.value != prepared.promotion.approved:
+    if current_approved.value != baseline.approved:
         return _error(
             "approved registry baseline changed after promotion review",
             "review promotion again against the current approved registry",
         )
 
+    current_promotions: list[PreparedCandidatePromotion] = []
+    for reviewed in prepared.promotions:
+        current_candidate = ports.read_candidate(reviewed.observed.candidate.id)
+        if isinstance(current_candidate, Err):
+            return current_candidate
+        if current_candidate.value != reviewed.observed:
+            return _error(
+                "Candidate changed after promotion review",
+                "validate and review the current Candidate again",
+            )
+        validation = validate_candidate(current_candidate.value, policy=reviewed.policy)
+        current_promotion = prepare_candidate_promotion(
+            current_candidate.value,
+            validation,
+            reviewed.policy,
+            current_approved.value,
+            mode=reviewed.mode,
+        )
+        if isinstance(current_promotion, Err):
+            return current_promotion
+        if current_promotion.value.review_digest != reviewed.review_digest:
+            return _error(
+                "Candidate validation or policy result changed after promotion review",
+                "review the current Candidate and policy again",
+            )
+        current_promotions.append(current_promotion.value)
+
     current_workspace = ports.output.current()
     if isinstance(current_workspace, Err):
         return current_workspace
-    validation = validate_candidate(
-        current_candidate.value,
-        policy=prepared.promotion.policy,
-    )
-    current_promotion = prepare_candidate_promotion(
-        current_candidate.value,
-        validation,
-        prepared.promotion.policy,
-        current_approved.value,
-        mode=prepared.promotion.mode,
-    )
-    if isinstance(current_promotion, Err):
-        return current_promotion
-    if current_promotion.value.review_digest != prepared.promotion.review_digest:
-        return _error(
-            "Candidate validation or policy result changed after promotion review",
-            "review the current Candidate and policy again",
-        )
-    replanned = plan_candidate_promotion(current_promotion.value, current_workspace.value)
+    replanned = plan_promotion_transaction(tuple(current_promotions), current_workspace.value)
     if isinstance(replanned, Err):
         return replanned
     if replanned.value.review_digest != prepared.plan.review_digest:
@@ -645,7 +741,7 @@ def execute_candidate_promotion(
             "review the current registry transaction again",
         )
     revalidated = _project_and_validate(
-        current_promotion.value,
+        tuple(current_promotions),
         replanned.value,
         current_workspace.value,
     )

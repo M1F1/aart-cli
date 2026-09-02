@@ -1773,3 +1773,28 @@ the Product Specification first instead of hiding the change here.
   `MaintainerViews.bulk_promotions` carries one selectable set per configured registry. The action
   that turns a selection into one `plan_bulk_promotion` transaction, and the reuse of screens 43–45
   for its diff, validation and commit, is the remaining work in step 5.
+
+## D-106 — One reviewed transaction carries a set of promotions, not one
+
+- **Decision:** `PreparedCandidatePromotionTransaction` carries `promotions: tuple[...]` rather than
+  a single promotion, `plan_promotion_transaction` plans the whole set through the existing
+  `plan_bulk_promotion`, and `prepare_promotion_transaction` prepares it; the single-Candidate
+  functions are the one-element case of the same path rather than a separate one. Confirmation
+  reads the approved baseline once and then rechecks every Candidate the transaction carries.
+  Screens 44 and 45 carry a tuple of Candidates, each with the validation-report and
+  effective-policy digests that approved it.
+- **Status:** accepted.
+- **Reason:** bulk promotion is one transaction, which is exactly what a loop over single
+  promotions is not: each iteration would take its own registry snapshot, write its own commit and
+  be able to half-succeed, leaving the registry in a state no review ever described. Two prepared
+  transaction types would have meant two review paths and two chances for them to diverge. The
+  approved baseline is read once because every member must be prepared against the same one;
+  reading it per Candidate would let one transaction assemble members against two registries.
+  Evidence stays per Candidate because each is approved by its own run and policy result, and one
+  summarized pair of digests could not be traced back through the transaction.
+- **Consequence:** the single-promotion flow is unchanged in behaviour and its execution now reads
+  `approved` before `candidate`, which its port-order tests state explicitly. A transaction whose
+  plan carries a Candidate the review never saw is rejected by construction. Screen 45's commit
+  subject names the artifact for one Candidate and the count for several. What remains is the
+  screen-47 action that turns a selection into one of these transactions and routes it through
+  screens 43–45.

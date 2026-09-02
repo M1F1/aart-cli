@@ -120,7 +120,7 @@ class CandidatePromotionExecutionTest(unittest.TestCase):
         approved: ApprovedRegistryState | None = None,
         commit_fails: bool = False,
     ) -> MaintainerCandidatePromotionPorts:
-        observed = self.prepared.value.promotion.observed
+        observed = self.prepared.value.promotions[0].observed
 
         def read_candidate(_candidate_id):
             self.calls.append("candidate")
@@ -128,7 +128,7 @@ class CandidatePromotionExecutionTest(unittest.TestCase):
 
         def read_approved(_alias):
             self.calls.append("approved")
-            return Ok(self.prepared.value.promotion.approved if approved is None else approved)
+            return Ok(self.prepared.value.promotions[0].approved if approved is None else approved)
 
         def commit(command):
             self.calls.append("commit")
@@ -168,7 +168,10 @@ class CandidatePromotionExecutionTest(unittest.TestCase):
         assert isinstance(completed, Ok), completed
         self.assertIsInstance(completed.value, CandidatePromotionExecutionResult)
         self.assertEqual(self.output.apply_calls, 1)
-        self.assertEqual(self.calls[:2], ["candidate", "approved"])
+        # The approved baseline is read once, before any Candidate: every Candidate a transaction
+        # carries is prepared against the same baseline, so reading it per Candidate would let a
+        # bulk transaction assemble members against two different registries.
+        self.assertEqual(self.calls[:2], ["approved", "candidate"])
         self.assertEqual(self.calls.count("write"), 1)
         self.assertLess(self.calls.index("approved"), self.calls.index("write"))
         self.assertGreater(self.calls.index("commit"), self.calls.index("write"))
@@ -191,7 +194,7 @@ class CandidatePromotionExecutionTest(unittest.TestCase):
         self.assertEqual(self.calls, [])
 
     def test_a_moved_candidate_refuses_before_reading_or_writing_the_registry(self) -> None:
-        original = self.prepared.value.promotion.observed
+        original = self.prepared.value.promotions[0].observed
         moved = dataclasses.replace(
             original,
             candidate=assess_candidate(original.candidate),
@@ -204,14 +207,14 @@ class CandidatePromotionExecutionTest(unittest.TestCase):
         )
 
         self.assertIsInstance(completed, Err)
-        self.assertEqual(self.calls, ["candidate"])
+        self.assertEqual(self.calls, ["approved", "candidate"])
         self.assertEqual(self.output.apply_calls, 0)
 
     def test_a_moved_approved_baseline_refuses_before_reading_or_writing_the_workspace(
         self,
     ) -> None:
         moved = dataclasses.replace(
-            self.prepared.value.promotion.approved,
+            self.prepared.value.promotions[0].approved,
             revision="1" * 40,
         )
 
@@ -222,7 +225,7 @@ class CandidatePromotionExecutionTest(unittest.TestCase):
         )
 
         self.assertIsInstance(completed, Err)
-        self.assertEqual(self.calls, ["candidate", "approved"])
+        self.assertEqual(self.calls, ["approved"])
         self.assertEqual(self.output.apply_calls, 0)
 
     def test_a_workspace_that_moved_after_screen_43_refuses_before_writing(self) -> None:

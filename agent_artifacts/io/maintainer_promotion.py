@@ -292,7 +292,7 @@ def complete_configured_candidate_promotion(
         prepared, PreparedConfiguredCandidatePromotion
     ):
         return _error("completing configured promotion needs configuration and a prepared review")
-    target = prepared.transaction.promotion.target_registry
+    target = prepared.transaction.target_registry
     registry = _configured_registry(effective, target)
     if registry is None:
         return _error(f"target registry {target} is no longer configured and enabled")
