@@ -19,7 +19,7 @@ from agent_artifacts.model import Err as LegacyErr
 from agent_artifacts.profiles.builtin import builtin
 from agent_artifacts.protocol.capabilities import Capability
 from agent_artifacts.reporting.projection import usage_report_from_consumer
-from agent_artifacts.wizard import BasketItem, WizardSession
+from agent_artifacts.wizard import WizardSession
 from tests.canonical_setup_application_test import Fixture as SetupFixture
 
 _INSTALL_STATE_FIXTURES = Path(__file__).resolve().parent / "fixtures" / "install-state"
@@ -52,160 +52,6 @@ def _tree_snapshot(root: Path) -> tuple[tuple[str, bytes], ...]:
 
 
 class TuiConsumerTextTest(unittest.TestCase):
-    def test_err06_review_prepare_failure_is_a_record_and_back_returns_to_artifacts(self) -> None:
-        session = WizardSession(
-            current="artifacts",
-            role="user",
-            action="install",
-            profiles=("claude",),
-            scope="project",
-        )
-        service = mock.Mock()
-        service.context.catalog.collections = ()
-        service.prepare.return_value = Err(
-            (
-                Diagnostic(
-                    DiagnosticCode("install-conflict"),
-                    Severity.ERROR,
-                    "the reviewed artifact plan is stale",
-                    remediation=("return to Artifacts and choose current entries",),
-                ),
-            )
-        )
-        recovered = Ok(
-            tui._UserWizardReadModel(
-                (tui._Choice("artifact", "review", "skill", "review"),),
-                {},
-            )
-        )
-        writes: list[str] = []
-
-        with (
-            mock.patch.object(tui, "_load_user_wizard_read_model", return_value=recovered),
-            mock.patch.object(tui, "ConsumerActionRequest", return_value=object()),
-        ):
-            code = tui._run_user_text_wizard(
-                session,
-                _scripted(["1", "b", "q", "y"]),
-                writes.append,
-                source_factory=mock.Mock(),
-                source_dir=None,
-                repo=None,
-                project="/work/project",
-                user_home=None,
-                consumer_service=service,
-            )
-
-        self.assertEqual(code, 0)
-        rendered = "\n".join(writes)
-        self.assertIn("Review could not be reviewed", rendered)
-        self.assertIn("error [install-conflict]", rendered)
-        self.assertIn("Back = b", rendered)
-        self.assertIn("Select artifact(s)/collection(s)", rendered)
-        service.prepare.assert_called_once()
-
-    def test_err06_finalize_failure_is_a_record_and_back_returns_to_artifacts(self) -> None:
-        session = WizardSession(
-            current="artifacts",
-            role="user",
-            action="install",
-            profiles=("claude",),
-            scope="project",
-        )
-        review = mock.Mock(review_digest=object())
-        service = mock.Mock()
-        service.context.catalog.collections = ()
-        service.prepare.return_value = Ok(review)
-        service.finalize.return_value = Err(
-            (
-                Diagnostic(
-                    DiagnosticCode("install-conflict"),
-                    Severity.ERROR,
-                    "the reviewed artifact plan changed before finalization",
-                    remediation=("return to Artifacts and review the current plan",),
-                ),
-            )
-        )
-        loaded = Ok(
-            tui._UserWizardReadModel(
-                (tui._Choice("artifact", "review", "skill", "review"),),
-                {},
-            )
-        )
-        writes: list[str] = []
-
-        with (
-            mock.patch.object(tui, "_load_user_wizard_read_model", return_value=loaded),
-            mock.patch.object(tui, "ConsumerActionRequest", return_value=object()),
-            mock.patch.object(tui, "render_consumer_review", return_value=()),
-            mock.patch.object(tui, "can_finalize", return_value=True),
-        ):
-            code = tui._run_user_text_wizard(
-                session,
-                _scripted(["1", "y", "b", "q", "y"]),
-                writes.append,
-                source_factory=mock.Mock(),
-                source_dir=None,
-                repo=None,
-                project="/work/project",
-                user_home=None,
-                consumer_service=service,
-            )
-
-        self.assertEqual(code, 0)
-        rendered = "\n".join(writes)
-        self.assertIn("Review could not be finalized", rendered)
-        self.assertIn("error [install-conflict]", rendered)
-        self.assertIn("Back = b", rendered)
-        self.assertIn("Select artifact(s)/collection(s)", rendered)
-        service.finalize.assert_called_once_with(review, review.review_digest)
-
-    def test_err04_retry_reloads_only_artifacts_and_keeps_the_existing_basket(self) -> None:
-        session = WizardSession(
-            current="artifacts",
-            action="install",
-            profiles=("claude",),
-            scope="project",
-            basket=(BasketItem("artifact", "skill/review", "review"),),
-        )
-        failed = Err(
-            (
-                Diagnostic(
-                    DiagnosticCode("install-state-legacy"),
-                    Severity.ERROR,
-                    "AART 0.1 installation state was detected.",
-                ),
-            )
-        )
-        recovered = Ok(
-            tui._UserWizardReadModel(
-                (tui._Choice("artifact", "review", "skill", "review"),),
-                {},
-            )
-        )
-        writes: list[str] = []
-
-        with mock.patch.object(
-            tui, "_load_user_wizard_read_model", side_effect=(failed, recovered)
-        ) as load:
-            code = tui._run_user_text_wizard(
-                session,
-                _scripted(["r", "q", "y"]),
-                writes.append,
-                source_factory=mock.Mock(),
-                source_dir=None,
-                repo=None,
-                project="/work/project",
-                user_home=None,
-            )
-
-        self.assertEqual(code, 0)
-        self.assertEqual(load.call_count, 2)
-        rendered = "\n".join(writes)
-        self.assertIn("Retry = r", rendered)
-        self.assertIn("Select artifact(s)/collection(s)", rendered)
-        self.assertIn("Discard 1 selected basket item(s)?", rendered)
-
     def test_err03_canonical_loader_returns_the_original_domain_error_unchanged(self) -> None:
         diagnostic = Diagnostic(
             DiagnosticCode("install-state-legacy"),
@@ -302,7 +148,7 @@ class TuiConsumerTextTest(unittest.TestCase):
             writes = []
 
             with mock.patch.object(tui.sys, "platform", "darwin"):
-                code = tui._run_canonical_setup_queue(
+                code = tui._canonical_setup_run(
                     service,
                     reviewed.value,
                     payload.value,
@@ -311,7 +157,7 @@ class TuiConsumerTextTest(unittest.TestCase):
                     # keystroke rather than the only path through the screen (`#113`).
                     read=_scripted(["y", "s", "y"]),
                     write=writes.append,
-                )
+                ).exit_code
 
             self.assertEqual(code, 0)
             rendered = "\n".join(writes)
@@ -354,13 +200,13 @@ class TuiConsumerTextTest(unittest.TestCase):
             assert isinstance(payload, Ok), payload
             writes: list[str] = []
 
-            code = tui._run_canonical_setup_queue(
+            code = tui._canonical_setup_run(
                 service,
                 reviewed.value,
                 payload.value,
                 read=_scripted(["y", "n"]),
                 write=writes.append,
-            )
+            ).exit_code
 
         self.assertEqual(code, 1)
         rendered = "\n".join(writes)
@@ -399,13 +245,13 @@ class TuiConsumerTextTest(unittest.TestCase):
             assert isinstance(payload, Ok), payload
             writes: list[str] = []
 
-            code = tui._run_canonical_setup_queue(
+            code = tui._canonical_setup_run(
                 service,
                 reviewed.value,
                 payload.value,
                 read=_scripted([]),
                 write=writes.append,
-            )
+            ).exit_code
 
         self.assertEqual(code, 1)
         rendered = "\n".join(writes)
@@ -501,13 +347,13 @@ class QuietSetupQueueTest(unittest.TestCase):
             assert isinstance(payload, Ok), payload
 
             with mock.patch.object(tui.sys, "platform", "darwin"):
-                code = tui._run_canonical_setup_queue(
+                code = tui._canonical_setup_run(
                     service,
                     reviewed.value,
                     payload.value,
                     read=_scripted(answers, prompts),
                     write=writes.append,
-                )
+                ).exit_code
             configured = (fixture.project / ".setup-config").exists()
         return code, "\n".join(writes), prompts, configured
 

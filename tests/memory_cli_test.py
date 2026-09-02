@@ -84,10 +84,6 @@ class TestTuiKnowsMemory(unittest.TestCase):
     def test_type_order_includes_memory(self):
         self.assertIn("memory", tui._TYPE_ORDER)
 
-    def test_memory_rank_is_stable(self):
-        # A defined rank, not the fall-through len() default reserved for unknown types.
-        self.assertEqual(tui._type_rank("memory"), tui._TYPE_ORDER.index("memory"))
-
 
 if __name__ == "__main__":
     unittest.main()

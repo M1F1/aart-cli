@@ -8,7 +8,6 @@ onboarding with the user's selections discarded.
 
 from __future__ import annotations
 
-import curses
 import io
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
@@ -22,7 +21,6 @@ from agent_artifacts.configuration.model import (
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.result import Err, Ok
 from agent_artifacts.tui_sources import build_source_stage
-from agent_artifacts.wizard import WizardSession
 
 
 class _TtyCapture(io.StringIO):
@@ -48,34 +46,49 @@ class CursesFallbackBoundaryTests(unittest.TestCase):
     against it (D-113).
     """
 
-    def test_failure_context_tracks_the_artifacts_loader_boundary(self):
-        context = tui.InternalFailureContext()
-        session = WizardSession(
-            current="artifacts",
-            action="install",
-            profiles=("claude",),
-            scope="project",
-        )
+    def test_a_composition_defect_and_a_running_defect_are_different_records(self):
+        """The record has to name the boundary it actually reached.
 
-        with mock.patch.object(
-            tui,
-            "_load_user_wizard_read_model",
-            side_effect=ValueError("broken marketplace projection"),
+        A defect while composing is a defect in reading the machine; a defect afterwards is the
+        running application's. They are reproduced differently, so a record that reported the same
+        boundary for both -- or named a wizard stage that no longer exists -- would send somebody
+        looking in the wrong place.
+        """
+
+        records: list[tuple[str, str]] = []
+
+        def capture(error, context=None):
+            records.append((context.stage, context.operation))
+            return 2
+
+        with (
+            mock.patch.object(tui, "_render_internal_failure", capture),
+            mock.patch.object(tui, "_curses_supported", return_value=True),
+            mock.patch.object(
+                tui,
+                "_canonical_consumer_actions",
+                side_effect=ValueError("broken local state"),
+            ),
         ):
-            with self.assertRaises(ValueError):
-                tui._run_user_curses_wizard(
-                    curses,
-                    object(),
-                    session,
-                    {},
-                    source_dir=None,
-                    repo=None,
-                    project="/work/project",
-                    user_home=None,
-                    failure_context=context,
-                )
+            self.assertEqual(tui.run(user_home="/tmp/aart-home"), 2)
 
-        self.assertEqual((context.stage, context.operation), ("artifacts", "load"))
+        with (
+            mock.patch.object(tui, "_render_internal_failure", capture),
+            mock.patch.object(tui, "_curses_supported", return_value=True),
+            mock.patch.object(tui, "_canonical_consumer_actions", return_value=Ok(mock.Mock())),
+            mock.patch.object(tui, "run_consumer", side_effect=ValueError("broken screen")),
+        ):
+            self.assertEqual(tui.run(user_home="/tmp/aart-home"), 2)
+
+        with (
+            mock.patch.object(tui, "_render_internal_failure", capture),
+            mock.patch.object(tui, "_curses_supported", return_value=False),
+            mock.patch.object(tui, "_canonical_consumer_actions", return_value=Ok(mock.Mock())),
+            mock.patch.object(tui, "run_consumer_text", side_effect=ValueError("broken line")),
+        ):
+            self.assertEqual(tui.run(user_home="/tmp/aart-home"), 2)
+
+        self.assertEqual(records, [("compose", "load"), ("curses", "load"), ("text", "load")])
 
     def test_failure_context_marks_reporting_after_the_known_setup_outcome(self):
         context = tui.InternalFailureContext("review", "setup")
@@ -182,7 +195,7 @@ class CursesFallbackBoundaryTests(unittest.TestCase):
         self.assertNotEqual(code, 0)
         fallback.assert_not_called()
         self.assertIn("tui-stage-internal", rendered)
-        self.assertIn("stage: onboarding", rendered)
+        self.assertIn("stage: curses", rendered)
         self.assertIn("operation: load", rendered)
 
     def test_internal_defect_output_carries_no_traceback_or_exception_text(self):

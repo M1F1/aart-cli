@@ -2062,3 +2062,91 @@ the Product Specification first instead of hiding the change here.
   `setup_engine/*` behind it, are the next removal. Two entry tests that asserted "not the legacy
   wizard" were restated as "the canonical application and nothing else", because a comparison to
   something that no longer exists pins nothing.
+
+## D-117 — The wizard front-end is removed, and the stack behind it is not legacy
+
+- **Decision:** the last of the legacy wizard front-end is deleted: `_run_user_curses_wizard`,
+  `_run_user_text_wizard`, `_prompt_curation_request`, the `_curses_source_*` maintenance screens
+  with `_selected_source_row`, `_offer_usage_report`, `_run_canonical_setup_queue`,
+  `_is_canonical_maintainer_workspace`, `_type_rank`, and the 22 further private definitions that
+  became unreferenced once they were gone — 1,515 lines out of `agent_artifacts/tui.py`, which
+  falls from 4,262 to 2,747. `tests/tui_curation_test.py` and `tests/reporting_tui_test.py` are
+  deleted, `SourceLifecycleCursesTests` and `CursesWizardFlowTests` with them.
+  **`consumer/application.py`, `lifecycle/*` and `setup_engine/*` are not removed, and are not
+  removable:** `NEXT.md` recorded that nothing but the wizard reached them, and that is wrong.
+- **Status:** accepted; corrects the removal plan recorded under D-116.
+- **Reason:** `agent_artifacts/commands/marketplace.py` — the public `aart marketplace
+  install|update|uninstall|setup` command — composes `ConsumerApplicationService` directly, and
+  runs the setup queue through it (`_run_setup_queue`, `service.setup_queue`,
+  `service.finalize_setup_queue`). `tui_marketplace.py`, which the canonical shell imports, takes
+  `LifecycleItem` from `lifecycle/model.py` and `InstallMode` from `installation/model.py`. So the
+  stack under the wizard is load-bearing for a public flow, exactly as `installation/*` already
+  was: it goes by symbol, if at all, and not by package.
+  Each removed test's capability was checked against a public flow before the removal, as D-091
+  requires:
+  - **`registry init`'s default compatibility window** (LAF-90, `tests/registry_cli_test.py`) was
+    the one assertion the wizard held alone — `RS-02`'s loop covers every registry action *except*
+    `init`, because `init` is the action that owns the two flags. It is restated against the CLI
+    parser's own defaults and verified red against a dead literal window;
+  - **the usage-report offer** (`tests/reporting_tui_test.py`) → `_render_cli_reporting` in
+    `commands/marketplace.py`, which had **no** test at all. Consent defaulting to no, the exact
+    payload being readable before anything opens, and a reporting failure leaving the marketplace
+    outcome unchanged are privacy boundaries, so they were carried to the reachable surface as
+    `tests/reporting_cli_offer_test.py` and verified red against a consent default of yes;
+  - **workspace classification** (`tests/tui_curation_test.py`) → the canonical planner requires
+    the exact `aart-registry.json` marker and refuses a snapshot without it, proven by
+    `tests/registry_maintenance_edges_test.py`. A retired `registry.json` is not translated into it,
+    which is the same statement the removed test made;
+  - **the maintainer action menu's no-commit-no-push label** → stale rather than carried: the
+    canonical Maintainer flow *does* commit locally and never pushes, proven by
+    `tests/maintainer_composition_e2e_test.py::test_validated_promotion_is_committed_locally_and_never_pushed`;
+  - **source maintenance** (`SourceLifecycleCursesTests`) → the `aart source` surface, 23 tests;
+  - **ERR06 refusal-as-a-record and quit-confirms-a-basket** (`CursesWizardFlowTests`, the
+    `_run_user_text_wizard` tests) → the canonical shell draws a refusal where it was asked, keeps
+    the application up and clears the review digest
+    (`tests/consumer_application_e2e_test.py::ConsumerApplicationRefusalTest`), and asks before
+    discarding a selection on quit (`tui_consumer.py`, `tests/consumer_text_terminal_test.py`).
+- **Consequence:** the wizard's *widgets* survive only as far as their tests hold them; 571 lines of
+  `tui.py` are still production-orphaned and are the next sweep. `_canonical_setup_run` and
+  `_complete_canonical_consumer_action` are **deliberately retained** — see D-118.
+
+## D-118 — The canonical consumer shell runs no setup queue and offers no usage report
+
+- **Decision:** record this as a gap rather than ratify it by deleting the code. The setup and
+  reporting completion the wizard performed — `_canonical_setup_run` and
+  `_complete_canonical_consumer_action` — is kept in `agent_artifacts/tui.py`, production-orphaned
+  and pinned by tests, as the material the canonical route will be wired to. It is promoted to the
+  critical path as **B-044**.
+- **Status:** accepted; the work itself is not done here.
+- **Reason:** `io/consumer_actions.py` contains no reporting and no setup: `_execute_installation`
+  calls `complete_configured_installation`, which reaches neither. So since D-115 put the canonical
+  application on both terminal routes, an artifact installed from the TUI that declares setup
+  requirements lands unconfigured, and no usage report is offered. The Product Specification names
+  interactive setup as work AART performs, and screen 09/11 summarize outcomes as "configured MCP
+  servers, isolated environments ... securely stored credentials" — so this is a mandatory
+  invariant a shipped path no longer satisfies, which is what makes it critical rather than backlog.
+  The public `aart marketplace install` carries both and is unaffected.
+  Deleting the two helpers as orphans would have been the mechanical reading of D-091 and the wrong
+  one: they are not legacy authority to strangle, they are the only implementation of a capability
+  the replacement lacks.
+- **Consequence:** `ConsumerApplicationService` stays reachable from `tui.py` as well as from
+  `commands/marketplace.py`. Closing B-044 means giving the canonical action handler its own setup
+  and reporting completion, at which point these two helpers are replaced rather than deleted.
+
+## D-119 — The internal-failure record names the boundary `run` actually reached
+
+- **Decision:** `InternalFailureContext.stage` accepts a `CanonicalBoundary` —
+  `"compose" | "curses" | "text"` — and defaults to `"compose"`; `run()` sets `"curses"` or
+  `"text"` before starting each terminal. The dead `capture(session, ...)` is removed. An
+  unexpected exception from `_canonical_consumer_actions` is now caught and rendered through
+  `internal_failure_lines` rather than propagating.
+- **Status:** accepted.
+- **Reason:** the field was typed `WizardStage` and set only by the wizard, so after D-117 the live
+  route could report exactly one value — `stage: onboarding` — naming a screen that no longer
+  exists and sending anybody who reported it looking in the wrong place. What `run` knows is
+  whether it was still composing or had handed the application to a terminal, and which terminal,
+  and those are reproduced differently. The composition reads local state, so an untyped defect
+  there carries paths and file contents in its message; `internal_failure_lines` exists to withhold
+  exactly that, and letting the exception past `run` bypassed it.
+- **Consequence:** `tests/tui_fallback_boundary_test.py` asserts the three boundaries produce three
+  different records, and the assertion that read `stage: onboarding` now reads `stage: curses`.

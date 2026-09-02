@@ -3,9 +3,9 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from agent_artifacts import __version__, cli, tui
+from agent_artifacts import __version__, cli
 from agent_artifacts.commands import registry as registry_command
-from agent_artifacts.curation.model import CurationAction, CurationRequest
+from agent_artifacts.curation.model import CurationAction
 from agent_artifacts.domain.result import Ok
 from agent_artifacts.model import Request
 from agent_artifacts.protocol.semver import VersionBounds, parse_semver
@@ -209,43 +209,33 @@ class RegistryCliTest(unittest.TestCase):
         self.assertEqual(request.registry_scopes, ("user",))
         self.assertEqual(request.registry_modes, ("symlink",))
 
-    def test_laf90_the_wizard_defaults_name_a_window_the_running_aart_is_inside(self) -> None:
-        # `LAF-90`: `RS-02` replaced the dead literals in every registry *request*, and the curses
-        # wizard kept offering the same two as the defaults for `registry init`.  There they are not
-        # dead: an operator who presses return at both prompts authors a registry the executable
-        # that wrote it then refuses to read.  The assertion is `RS-02`'s own, applied to the
-        # front-end it missed, so one statement now holds both.
-        answers: list[str] = []
-
-        def read(prompt: str) -> str:
-            answers.append(prompt)
-            if "ID" in prompt:
-                return "company"
-            if "display name" in prompt:
-                return "Company"
-            return ""
-
-        prompted = tui._prompt_curation_request(
-            CurationAction.INIT,
-            "/tmp/registry",
-            read,
-            lambda message: None,
-            existing=None,
+    def test_laf90_init_pressed_through_names_a_window_the_running_aart_is_inside(self) -> None:
+        # `LAF-90`: `RS-02` replaced the dead literals in every registry action that reaches the
+        # boundary with both versions unset.  `init` is the one action that does not: it owns the
+        # two flags, so it is the parser's defaults, not the boundary's fallback, that an operator
+        # who supplies neither authors the registry from.  Left dead, those defaults author a
+        # registry the executable that wrote it then refuses to read.  The assertion is `RS-02`'s
+        # own, applied to the one action its loop cannot cover.
+        request = cli._to_request(
+            cli.build_parser().parse_args(
+                "registry init --source /tmp/registry --source-id company "
+                "--display-name Company".split()
+            )
         )
+        curation = registry_command._curation_request(request, CurationAction.INIT)
 
-        assert isinstance(prompted, CurationRequest)
+        assert isinstance(curation, Ok)
         running = parse_semver(__version__)
-        minimum = parse_semver(prompted.minimum_version)
-        maximum = parse_semver(prompted.maximum_version)
+        minimum = parse_semver(curation.value.minimum_version)
+        maximum = parse_semver(curation.value.maximum_version)
         assert isinstance(running, Ok)
         assert isinstance(minimum, Ok) and isinstance(maximum, Ok)
 
         self.assertTrue(
             VersionBounds(minimum.value, maximum.value).allows(running.value),
-            f"pressing return offers {prompted.minimum_version}..{prompted.maximum_version}, "
-            f"which excludes the running {__version__}",
+            f"supplying neither flag offers {curation.value.minimum_version}.."
+            f"{curation.value.maximum_version}, which excludes the running {__version__}",
         )
-        self.assertIn(f"[{__version__}]", "".join(answers))
 
 
 if __name__ == "__main__":

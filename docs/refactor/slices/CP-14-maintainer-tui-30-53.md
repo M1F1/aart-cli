@@ -810,3 +810,68 @@ still compose it and 36 tests still cover them — those stages, and then `consu
 with `lifecycle/*` and `setup_engine/*` behind it, are what step 7 removes next.
 
 Checkpoint gates on 2026-09-02: `make quality` and `make integration` are both green, 3,173 tests.
+
+## Step 7e — the wizard front-end, and the stack under it that is not legacy
+
+The last of the wizard front-end is gone: `_run_user_curses_wizard`, `_run_user_text_wizard`,
+`_prompt_curation_request`, the `_curses_source_*` maintenance screens with `_selected_source_row`,
+`_offer_usage_report`, `_run_canonical_setup_queue`, `_is_canonical_maintainer_workspace`,
+`_type_rank`, and the 22 further definitions the fixpoint sweep found once they were gone — 1,515
+lines. `tui.py` is **2,747 lines**, down from 5,705 when step 7 began. `tests/tui_curation_test.py`
+and `tests/reporting_tui_test.py` are deleted; `SourceLifecycleCursesTests` and
+`CursesWizardFlowTests` go with them.
+
+**Step 7 does not end where this slice file said it would.** The plan recorded above — "then
+`consumer/application.py` with `lifecycle/*` and `setup_engine/*` behind it" — is wrong, and the
+correction matters more than the removal. `agent_artifacts/commands/marketplace.py`, the public
+`aart marketplace install|update|uninstall|setup` command, composes `ConsumerApplicationService`
+directly and runs the setup queue through it; `tui_marketplace.py`, which the canonical shell
+imports, takes `LifecycleItem` and `InstallMode` out of `lifecycle/model.py` and
+`installation/model.py`. That stack is load-bearing for a public flow. It is not legacy authority
+awaiting a strangler, and nothing further is removed for it (D-117).
+
+Two of the removed tests held an assertion nothing else did, so the assertion moved to the surface
+that is actually reachable rather than going with the test:
+
+- **LAF-90**, `registry init`'s default compatibility window. `RS-02`'s loop covers every registry
+  action *except* `init`, because `init` is the one action that owns `--minimum-version` and
+  `--maximum-version` — so what an operator who supplies neither gets is the parser's defaults, and
+  the wizard test was the only thing checking they admit the running executable. Restated against
+  the CLI in `tests/registry_cli_test.py` and verified red against a dead `1.0.0..2.0.0` window.
+- **The usage-report offer.** `_render_cli_reporting` in `commands/marketplace.py` had no test at
+  all, and `tests/reporting_tui_test.py` was the only thing pinning that consent defaults to no,
+  that the exact payload is readable before anything opens, and that a reporting failure leaves the
+  marketplace outcome unchanged. Those are privacy boundaries, so they are now
+  `tests/reporting_cli_offer_test.py` (7 tests), verified red against a consent default of yes. Two
+  properties the CLI has and the wizard did not are pinned there too: the second prompt can still
+  stop a report the first accepted, and a non-interactive stdin is a refusal rather than an
+  unanswered prompt.
+
+The rest went against evidence that already existed: workspace classification against the canonical
+planner's refusal of a snapshot with no `aart-registry.json`
+(`registry_maintenance_edges_test.py`); the "AART never commits or pushes" menu label against
+`maintainer_composition_e2e_test.py::test_validated_promotion_is_committed_locally_and_never_pushed`,
+which shows the label was stale rather than carried; source maintenance against the `aart source`
+surface; ERR06 refusal-as-a-record and quit-confirms-a-basket against
+`consumer_application_e2e_test.py::ConsumerApplicationRefusalTest` and the canonical shell's own
+discard prompt.
+
+**What the removal exposed, and what was deliberately not removed.** `io/consumer_actions.py`
+performs no setup and no reporting, so since D-115 an artifact installed from the TUI that declares
+setup requirements lands unconfigured and no usage report is offered. `_canonical_setup_run` and
+`_complete_canonical_consumer_action` are the only implementation of that capability, so they are
+kept — production-orphaned and test-pinned — as the material to wire it back. Recorded as D-118 and
+promoted to the critical path as **B-044**; the public `aart marketplace install` is unaffected.
+
+One live output was falsified by the removal and is fixed here: `InternalFailureContext.stage` was
+typed `WizardStage` and set only by the wizard, so every canonical crash would have reported
+`stage: onboarding`, naming a screen that no longer exists. It now takes a `CanonicalBoundary`
+(`compose` / `curses` / `text`) and `run()` sets it; an untyped defect from the composition, which
+reads local state and so carries paths in its message, is now redacted through
+`internal_failure_lines` instead of propagating (D-119).
+
+571 lines of `tui.py` remain production-orphaned, held only by the widget tests — `_curses_multiselect`
+and its 29 tests, the receipt screens, `_load_user_wizard_read_model`, `_curses_install_mode` — and
+are the next sweep, minus the two helpers B-044 holds.
+
+Checkpoint gates on 2026-09-02: `make quality` and `make integration` are both green.

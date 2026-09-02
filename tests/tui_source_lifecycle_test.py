@@ -9,7 +9,6 @@ exactly the requests the CLI does.
 
 from __future__ import annotations
 
-import curses
 import unittest
 
 from agent_artifacts import tui
@@ -50,7 +49,6 @@ from agent_artifacts.tui_sources import (
     render_source_sync_outcome,
     render_source_sync_review,
 )
-from tests.tui_wizard_curses_test import Screen
 
 
 def _unwrap(result):
@@ -340,156 +338,6 @@ class SourceRefusalWayOutTests(unittest.TestCase):
         self.assertNotIn("…", joined)
         for line in lines:
             self.assertLessEqual(len(line), CONTENT_MEASURE)
-
-
-class SourceLifecycleCursesTests(unittest.TestCase):
-    """The curses front-end binds the same three operations to s, i, and r on the Sources list."""
-
-    def test_the_sources_list_advertises_and_returns_every_maintenance_action(self) -> None:
-        for key, kind in ((ord("s"), "sync"), (ord("i"), "resubscribe"), (ord("r"), "remove")):
-            with self.subTest(kind=kind):
-                screen = Screen((key,), height=16, width=110)
-
-                event = tui._curses_multiselect(
-                    curses,
-                    screen,
-                    "Sources",
-                    ("registry — health: current",),
-                    wizard=True,
-                    allow_add=True,
-                    allow_source_maintenance=True,
-                )
-
-                assert not isinstance(event, tuple)
-                self.assertEqual(event.kind, kind)
-                self.assertEqual(event.selected, (0,))
-                bar = [value for row, _column, value in screen.lines if row == screen.height - 1][0]
-                self.assertIn("s=sync", bar)
-                self.assertIn("i=resubscribe", bar)
-                self.assertIn("r=remove", bar)
-
-    def test_a_list_without_source_maintenance_never_binds_those_keys(self) -> None:
-        screen = Screen((ord("s"), ord("r"), 10), height=16, width=110)
-
-        picked = tui._curses_multiselect(curses, screen, "Artifacts", ("one",), wizard=True)
-
-        self.assertEqual(picked.kind, "confirm")
-        bar = [value for row, _column, value in screen.lines if row == screen.height - 1][0]
-        self.assertNotIn("s=sync", bar)
-
-    def test_the_curses_sources_stage_reports_the_cursor_row_for_maintenance(self) -> None:
-        view = _view(_configuration(_registry("first"), _registry("second")))
-        screen = Screen((curses.KEY_DOWN, ord("r")), height=20, width=110)
-
-        event, selection, error = tui._curses_source_event(
-            curses,
-            screen,
-            tui.WizardSession(current="source"),
-            view,
-        )
-
-        self.assertEqual(event.kind, "remove")
-        self.assertIsNone(selection)
-        self.assertIsNone(error)
-        row = tui._selected_source_row(view, event.selected)
-        assert row is not None
-        self.assertEqual(row.source.alias, SourceAlias("second"))
-
-    def test_the_no_source_row_is_not_a_maintenance_target(self) -> None:
-        view = _view(_configuration(_registry()))
-
-        self.assertIsNone(tui._selected_source_row(view, (len(view.rows),)))
-
-    def test_the_curses_removal_screen_plans_and_reviews_before_returning(self) -> None:
-        view = _view(_configuration(_registry(), default="registry"))
-        session = tui.WizardSession(current="source")
-        screen = Screen((10,), height=24, width=110)
-
-        request = tui._curses_source_removal(curses, screen, session, view, view.rows[0])
-
-        assert not isinstance(request, tui.WizardInput)
-        self.assertEqual(request.source.alias, SourceAlias("registry"))
-        self.assertTrue(request.cleared_default)
-        rendered = "\n".join(value for _row, _column, value in screen.history)
-        self.assertIn("Source removal review:", rendered)
-        self.assertIn("enter=remove", rendered)
-
-    def test_the_curses_removal_screen_can_be_declined(self) -> None:
-        view = _view(_configuration(_registry()))
-        screen = Screen((ord("n"),), height=24, width=110)
-
-        request = tui._curses_source_removal(
-            curses,
-            screen,
-            tui.WizardSession(current="source"),
-            view,
-            view.rows[0],
-        )
-
-        self.assertIsInstance(request, tui.WizardInput)
-        assert isinstance(request, tui.WizardInput)
-        self.assertEqual(request.kind, "back")
-
-    def test_the_curses_resubscribe_screen_resolves_the_origin_then_reviews(self) -> None:
-        source = _registry()
-        view = _view(_configuration(source))
-        runtime = _Runtime(view, review=Ok(_adoption(source)))
-        screen = Screen((10,), height=24, width=110)
-
-        request = tui._curses_source_resubscription(
-            curses,
-            screen,
-            tui.WizardSession(current="source"),
-            view,
-            view.rows[0],
-            runtime.run_resubscribe,
-        )
-
-        assert not isinstance(request, tui.WizardInput)
-        # Review resolves the origin exactly once, and never with an expected transition: a curses
-        # screen cannot finalize something it has not yet drawn.
-        self.assertEqual(runtime.resubscribed, [(SourceAlias("registry"), None)])
-        self.assertEqual(request.transition, _TRANSITION)
-        rendered = "\n".join(value for _row, _column, value in screen.history)
-        self.assertIn("Source resubscription review:", rendered)
-        self.assertIn("team-registry -> renamed-registry", rendered)
-        self.assertIn("enter=resubscribe", rendered)
-
-    def test_the_curses_resubscribe_screen_can_be_declined(self) -> None:
-        source = _registry()
-        view = _view(_configuration(source))
-        runtime = _Runtime(view, review=Ok(_adoption(source)))
-        screen = Screen((ord("n"),), height=24, width=110)
-
-        request = tui._curses_source_resubscription(
-            curses,
-            screen,
-            tui.WizardSession(current="source"),
-            view,
-            view.rows[0],
-            runtime.run_resubscribe,
-        )
-
-        self.assertIsInstance(request, tui.WizardInput)
-        assert isinstance(request, tui.WizardInput)
-        self.assertEqual(request.kind, "back")
-        self.assertEqual([expected for _alias, expected in runtime.resubscribed], [None])
-
-    def test_the_curses_sync_screen_reviews_before_returning_the_row(self) -> None:
-        view = _view(_configuration(_registry()))
-        screen = Screen((10,), height=24, width=110)
-
-        reviewed = tui._curses_source_sync(
-            curses,
-            screen,
-            tui.WizardSession(current="source"),
-            view.rows[0],
-        )
-
-        self.assertIs(reviewed, view.rows[0])
-        rendered = "\n".join(value for _row, _column, value in screen.history)
-        self.assertIn("Source sync review:", rendered)
-        self.assertIn("enter=sync", rendered)
 
 
 if __name__ == "__main__":

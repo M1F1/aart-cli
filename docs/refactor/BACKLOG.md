@@ -647,8 +647,9 @@ Evidence/links: D-088, D-089; `agent_artifacts/application/promotion.py::plan_bu
 ## B-038 — Native source content has no canonical consumer path
 
 **Classification: PARTLY CLOSED (2026-09-02) — screen 21 now lists the configured sources and says
-why a native one offers nothing (D-114). Removing the legacy direct-install authority remains. Was
-re-triaged 2026-09-01 as a CP-14 dependency rather than an open product question; see D-091.**
+why a native one offers nothing (D-114). What remains is in `aart marketplace install`, not in the
+now-deleted wizard — see the restated section below. Was re-triaged 2026-09-01 as a CP-14 dependency
+rather than an open product question; see D-091.**
 
 Under INV-026 the canonical Marketplace projects configured *registries*, so an enabled
 `SourceKind.SOURCE_GIT` or `SOURCE_LOCAL` source now contributes its health to the source list and
@@ -671,14 +672,23 @@ with two configured registries opened on an empty screen 21 and a dashboard read
 takes it, and a row that is not a registry says so and offers `details` only rather than a sync
 whose advertised effect it cannot have.
 
-**What is left.** The legacy route's ability to install directly from a native Source has no basis
-in the specification. Screens 31–34 hold the canonical Source capability (D-093–D-097), including a
-real local Source Sync that creates Candidates without promotion, so the remaining CP-14 step is the
-characterized public-flow test and safe removal of that legacy direct-install authority. This stays
-sequenced behind the rest of the active slice rather than expanding an earlier slice.
+**What is left, restated (2026-09-02).** This said the remaining work was to remove the *legacy
+route's* direct-install authority. That route is gone — the wizard front-end was deleted in D-117 —
+and the residue is not where this item put it. It is in a public flow:
+`commands/marketplace.py::_configured_registry_selection` returns `None` for a direct or local
+source, which sends `aart marketplace install` down the characterized path that installs from it.
+Its own docstring says as much: "Collections and direct/local sources stay on the characterized path
+until their own public replacement evidence exists."
 
-**Why it is noncritical now.** Nothing installable was lost: the legacy route still operates direct
-and local sources, and the canonical shell no longer offers what it cannot carry out.
+Screens 31–34 hold the canonical Source capability (D-093–D-097), including a real local Source Sync
+that creates Candidates without promotion, so the evidence the docstring waits on now exists for
+Sources. The remaining step is therefore a characterized test of `aart marketplace install
+<direct-source-artifact>` and then the decision INV-021 already implies: a direct source is a
+maintainer's Candidate feed, so installing from one is refused rather than routed. Collections are a
+separate half and stay sequenced behind their own evidence.
+
+**Why it is noncritical now.** Nothing installable was lost: the CLI still operates direct and local
+sources, and the canonical shell no longer offers what it cannot carry out.
 
 Invariants touched: INV-026, INV-024.
 Evidence/links: D-088, D-093–D-097, D-114; `tests/consumer_registries_screen_test.py`;
@@ -688,8 +698,8 @@ Evidence/links: D-088, D-093–D-097, D-114; `tests/consumer_registries_screen_t
 
 ## B-039 — The legacy wizard is unreachable from the default terminal route
 
-**Classification: PARTLY CLOSED (2026-09-02) — the shell is removed (D-113); the semantic paths
-behind it remain. The first removal of CP-14 step 7.**
+**Classification: CLOSED (2026-09-02) — the wizard front-end is gone (D-113, D-116, D-117). The
+stack it stood on is not legacy and stays: see the corrected finding below.**
 
 With B-025 closed, `run()` composes `_canonical_consumer_actions` and calls `run_consumer` before
 any wizard composition, and the legacy `try: _run_curses(...)` block was deleted. `_run_curses`
@@ -702,12 +712,23 @@ it. The acceptance evidence pre-existed and needed no new test: `run()` never re
 is pinned on the canonical `run()` by `tests/tui_fallback_boundary_test.py`. The wizard's curses
 *primitives* stay — they are still composed by the surviving stages and still covered.
 
-**Remaining.** Retire the wizard's semantic authority path by path -- `consumer/application.py`,
-`lifecycle/application.py`, `installation/*`, `setup_engine/*`, and `_dispatch_result` with them --
-each removal preceded by a public-flow test proving the canonical path already carries it. Do not
-remove the text route: no-TTY is a supported environment, not a fallback for a broken one.
+**Done (D-115, D-116, D-117).** The text route became the canonical application, which unblocked
+the removal of `_run_text` and then of the wizard stages themselves. `tui.py` falls from 5,705 lines
+to 2,747. Do not remove the text *route*: no-TTY is a supported environment, and it is now the
+canonical application.
 
-Evidence/links: D-062, D-087, D-113; B-025; `agent_artifacts/tui.py::run`.
+**Corrected finding.** This item said to "retire the wizard's semantic authority path by path --
+`consumer/application.py`, `lifecycle/application.py`, `installation/*`, `setup_engine/*`". That is
+wrong and is not remaining work. `commands/marketplace.py` — the public `aart marketplace
+install|update|uninstall|setup` command — composes `ConsumerApplicationService` directly and runs
+the setup queue through it, and `tui_marketplace.py`, which the canonical shell imports, takes
+`LifecycleItem` and `InstallMode` from `lifecycle/model.py` and `installation/model.py`. The stack
+is load-bearing for a public flow; it is not legacy authority awaiting a strangler. What it *does*
+expose is B-044: the canonical shell reaches none of it, and so performs no post-install setup and
+offers no usage report.
+
+Evidence/links: D-062, D-087, D-113, D-115, D-116, D-117, D-118; B-025, B-044;
+`agent_artifacts/tui.py::run`.
 
 ## B-040 — The secondary file-diff bound is spent in path order, not shared between files
 
@@ -778,3 +799,23 @@ rather than widened into the transaction increment.
 
 What remains: decide which of the two owns the count -- the chrome states it for every selectable
 screen, so screen 47's own line is the likely one to drop -- and pin it with a rendering test.
+
+## B-044 — The canonical consumer shell runs no setup queue and offers no usage report — CRITICAL
+
+Discovered while retiring the wizard front-end (D-117), recorded in full as D-118. **Reclassified
+from backlog to critical path:** the Product Specification names interactive setup as work AART
+performs, and screens 09 and 11 summarize an install's outcome as "configured MCP servers, isolated
+environments ... securely stored credentials". Since D-115 put the canonical application on both
+terminal routes, `io/consumer_actions.py::_execute_installation` reaches
+`complete_configured_installation`, which runs no setup queue and offers no usage report — so an
+artifact installed from the TUI that declares setup requirements lands unconfigured. That is a
+mandatory invariant a shipped path no longer satisfies, which is the evidence the reclassification
+rule asks for. The public `aart marketplace install` carries both and is unaffected.
+
+What remains: give the canonical action handler its own setup and reporting completion.
+`_canonical_setup_run` and `_complete_canonical_consumer_action` are deliberately retained in
+`agent_artifacts/tui.py` as the material for it — they are the only implementation of the
+capability — but they take `ConsumerApplicationService`, `ConsumerReview` and `ConsumerOutcome`,
+and the canonical path has a receipt instead. So this is a slice, not a wiring change: either the
+setup engine is reached from the configured-installation action directly, or the action produces
+the outcome value the existing completion already accepts.

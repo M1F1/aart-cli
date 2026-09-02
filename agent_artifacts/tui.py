@@ -31,20 +31,11 @@ from .configuration.model import (
     UserConfiguration,
 )
 from .consumer import (
-    ConsumerActionRequest,
     ConsumerApplicationService,
     ConsumerOutcome,
     ConsumerReview,
-    render_consumer_outcome,
-    render_consumer_review,
 )
 from .consumer.application import CONSUMER_REVIEW_MISMATCH
-from .curation.model import (
-    DEFAULT_MAXIMUM_AART,
-    DEFAULT_MINIMUM_AART,
-    CurationAction,
-    CurationRequest,
-)
 from .curation.runtime import CurationService
 from .domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from .domain.harness import Scope
@@ -67,7 +58,6 @@ from .model import (
     Request,
     Result,
 )
-from .outcomes import ActionSummary, CommandOutcome, OutcomeItem, render_outcome
 from .profiles.loader import load_profiles
 from .profiles.model import Profile
 from .profiles.scope import profile_for_scope
@@ -104,7 +94,6 @@ from .tui_failures import (
     WizardOperation,
     WizardStageFailure,
     render_wizard_stage_failure,
-    wizard_stage_failure,
 )
 from .tui_layout import (
     BOX_CHECKED,
@@ -132,39 +121,16 @@ from .tui_sources import (
     SourceAdditionRequest,
     SourceManagementRequest,
     SourceRemovalRequest,
-    SourceResubscriptionRequest,
-    SourceSelection,
-    SourceStageRow,
     SourceStageView,
-    plan_source_management,
-    plan_source_removal,
-    plan_source_resubscription,
-    render_source_removal_review,
-    render_source_resubscription_review,
-    render_source_row,
-    render_source_sync_review,
 )
 from .wizard import (
     BasketItem,
     WizardInput,
     WizardSession,
     WizardStage,
-    can_finalize,
     initial_session,
     onboarding_lines,
-    reconcile_basket,
-    remember_position,
     render_header,
-    request_quit,
-)
-from .wizard import (
-    advance as wizard_advance,
-)
-from .wizard import (
-    back as wizard_back,
-)
-from .wizard import (
-    select as wizard_select,
 )
 
 # The three write actions the selector can drive; these are the verbs that build and dispatch a
@@ -233,12 +199,6 @@ ReadFn = Callable[[str], str]
 WriteFn = Callable[[str], None]
 SourceFactory = Callable[[Request], Result]
 DispatchFn = Callable[[Request], int]
-
-
-def _unsupported_source_factory(_request: Request) -> Result:
-    """Defend the removed direct-catalog seam for private legacy test callers."""
-
-    raise RuntimeError("direct catalog sources have been removed")
 
 
 SourceFinalizeFn = Callable[[SourceManagementRequest], DomainResult[object]]
@@ -342,10 +302,6 @@ class _Choice:
     qualified_key: str = ""
     cells: Tuple[str, ...] = ()
     row: Optional[MarketplaceArtifactRow] = None
-
-
-def _type_rank(t: ArtifactType) -> int:
-    return _TYPE_ORDER.index(t) if t in _TYPE_ORDER else len(_TYPE_ORDER)
 
 
 def _choice_label(
@@ -689,38 +645,6 @@ def _canonical_setup_run(
     )
 
 
-def _run_canonical_setup_queue(
-    service: ConsumerApplicationService,
-    review: ConsumerReview,
-    outcome: ConsumerOutcome,
-    *,
-    read: ReadFn,
-    write: WriteFn,
-) -> int:
-    return _canonical_setup_run(service, review, outcome, read=read, write=write).exit_code
-
-
-def _offer_usage_report(
-    service: ReportingApplicationService | None,
-    event: UsageReport,
-    *,
-    read: ReadFn,
-    write: WriteFn,
-) -> None:
-    """Offer/submit after terminal outcomes; every failure is warning-only."""
-
-    if service is None:
-        return
-    prepared = service.prepare(event)
-    if isinstance(prepared, DomainErr):
-        write("warning: usage report could not be prepared; the artifact outcome is unchanged")
-        return
-    plan = prepared.value
-    if plan is None:
-        return
-    _offer_prepared_usage_report(service, plan, read=read, write=write)
-
-
 def _offer_prepared_usage_report(
     service: ReportingApplicationService,
     plan: ReportingPlan,
@@ -815,125 +739,9 @@ def _complete_canonical_consumer_action(
     return setup.exit_code
 
 
-def _render_result(result: CommandOutcome, write: WriteFn) -> int:
-    for line in render_outcome(result):
-        write(line)
-    return result.exit_code
-
-
-def _cancel(write: WriteFn, message: str = "Cancelled; no changes were made.") -> int:
-    if message != "Cancelled; no changes were made.":
-        write(message)
-        return 0
-    return _render_result(
-        CommandOutcome(
-            0,
-            ActionSummary(
-                action="cancelled",
-                items=(OutcomeItem("selection", "cancelled"),),
-            ),
-        ),
-        write,
-    )
-
-
 # --------------------------------------------------------------------------- #
 # Text / fallback flow — fully injectable, headless-testable.                   #
 # --------------------------------------------------------------------------- #
-
-
-def _source_choice_rows(view: SourceStageView) -> Tuple[_Choice, ...]:
-    rows = tuple(
-        _Choice(
-            "profile",
-            row.source.alias.value,
-            None,
-            render_source_row(row),
-            description=(
-                "Use this source in the marketplace. "
-                + (row.reason if row.reason else "Its health and policy facts are shown above.")
-            ),
-            enabled=row.selectable,
-            reason=row.reason,
-        )
-        for row in view.rows
-    )
-    if view.allow_no_source:
-        rows += (
-            _Choice(
-                "profile",
-                "no-source",
-                None,
-                "Continue without sources — exit cleanly without installing artifacts.",
-                description="Do not force a registry or direct source during this run.",
-            ),
-        )
-    return rows
-
-
-def _source_selection_from_indices(
-    view: SourceStageView,
-    indices: Sequence[int],
-) -> DomainErr | SourceSelection:
-    no_source_index = len(view.rows)
-    no_source = view.allow_no_source and no_source_index in indices
-    aliases = tuple(
-        view.rows[index].source.alias for index in indices if 0 <= index < len(view.rows)
-    )
-    planned = plan_source_management(view, aliases, no_source=no_source)
-    return planned if isinstance(planned, DomainErr) else planned.value
-
-
-def _selected_source_row(
-    view: SourceStageView,
-    indices: Sequence[int],
-) -> SourceStageRow | None:
-    """Map a Sources cursor position back to a configured row, ignoring the no-source row."""
-
-    for index in indices:
-        if 0 <= index < len(view.rows):
-            return view.rows[index]
-    return None
-
-
-def _domain_feedback(result: DomainErr) -> str:
-    """Summarize a recoverable list-local diagnostic in the list's fixed feedback slot."""
-
-    first, *remaining = result.diagnostics
-    suffix = "" if not remaining else f" (+{len(remaining)} more)"
-    return _ellipsize(
-        f"{first.severity.value} [{first.code.value}]: {first.message}{suffix}",
-        CONTENT_MEASURE,
-    )
-
-
-def _finalize_source_selection(
-    session: WizardSession,
-    source_finalizer: Optional[SourceFinalizeFn],
-    write: WriteFn,
-) -> DomainErr | None:
-    """Persist the reviewed source selection, preserving expected failures for the frontend."""
-
-    selected = session.source_selection
-    if selected is None or not selected.request.operations:
-        return None
-    if source_finalizer is None:
-        return DomainErr(
-            (
-                Diagnostic(
-                    DiagnosticCode("source-unavailable"),
-                    Severity.ERROR,
-                    "source configuration cannot be saved by this TUI runtime",
-                    remediation=("return to Sources and retry with an available TUI runtime",),
-                ),
-            )
-        )
-    finalized = source_finalizer(selected.request)
-    if isinstance(finalized, DomainErr):
-        return finalized
-    count = len(selected.request.operations)
-    write(f"Sources: applied {count} reviewed configuration change(s).")
-    return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1028,12 +836,6 @@ def _canonical_collection_choices(
             )
         )
     return tuple(choices)
-
-
-def _write_wizard_header(session: WizardSession, write: WriteFn) -> None:
-    width = shutil.get_terminal_size(fallback=(100, 24)).columns
-    for line in render_header(session, width=max(width, 1), frontend="text"):
-        write(line)
 
 
 _NOTHING_SELECTED = (
@@ -1148,25 +950,6 @@ def _prompt_wizard_indices(
         )
 
 
-def _prompt_wizard_action(
-    read: ReadFn, write: WriteFn, *, choices: Tuple[str, ...] = ACTIONS
-) -> WizardInput | str:
-    while True:
-        line = _read_line(read, "Action (b=back, q=quit): ")
-        if line is None:
-            return WizardInput("quit")
-        answer = line.strip().lower()
-        if answer in ("q", "quit"):
-            return WizardInput("quit")
-        if answer in ("b", "back"):
-            return WizardInput("back")
-        if answer in choices:
-            return answer
-        if answer.isdigit() and 1 <= int(answer) <= len(choices):
-            return choices[int(answer) - 1]
-        write(f"Please enter 1-{len(choices)}, an action name, 'b', or 'q'.")
-
-
 def _prompt_wizard_scope(read: ReadFn, write: WriteFn) -> WizardInput | InstallScope:
     while True:
         line = _read_line(read, "Installation scope [1] (b=back, q=quit): ")
@@ -1262,347 +1045,6 @@ def _load_user_wizard_read_model(
             rows,
         )
     )
-
-
-def _confirm_wizard_quit(session: WizardSession, read: ReadFn, write: WriteFn) -> bool:
-    if request_quit(session) == "quit":
-        return True
-    write(f"Discard {len(session.basket)} selected basket item(s)?")
-    line = _read_line(read, f"Discard {len(session.basket)} selected basket item(s)? [y/N]: ")
-    if line is None:
-        write("Input ended; the basket was discarded and no changes were made.")
-        return True
-    if line.strip().lower() in ("y", "yes"):
-        return True
-    write("Returning to the wizard; no changes were made.")
-    return False
-
-
-def _failure_project_context(session: WizardSession, project: Optional[str]) -> str | None:
-    """Expose the selected project root only for the project-scoped local diagnostic view."""
-
-    return os.path.abspath(project or ".") if session.scope == "project" else None
-
-
-def _prompt_stage_failure_recovery(
-    failure: WizardStageFailure,
-    read: ReadFn,
-    write: WriteFn,
-) -> WizardInput:
-    """Render one record in text mode and return only one recovery the record advertised."""
-
-    width = shutil.get_terminal_size(fallback=(100, 24)).columns
-    for line in render_wizard_stage_failure(failure, width=max(width, 1)):
-        write(line)
-    shortcuts = {"retry": "r", "back": "b", "quit": "q"}
-    allowed = ", ".join(f"{shortcuts[choice]}={choice}" for choice in failure.choices)
-    while True:
-        recovery_line = _read_line(read, f"Recovery ({allowed}): ")
-        answer = "quit" if recovery_line is None else recovery_line.strip().lower()
-        for choice, shortcut in shortcuts.items():
-            if choice in failure.choices and answer in (choice, shortcut):
-                return WizardInput(choice)
-        write(f"Choose one available recovery: {allowed}.")
-
-
-def _recover_text_stage_failure(
-    failure: WizardStageFailure,
-    session: WizardSession,
-    read: ReadFn,
-    write: WriteFn,
-) -> WizardSession | int:
-    """Render one blocking record and keep only the recovery events it declares."""
-
-    recovery = _prompt_stage_failure_recovery(failure, read, write)
-    if recovery.kind == "back":
-        return wizard_back(session)
-    if _confirm_wizard_quit(session, read, write):
-        return _cancel(write)
-    return session
-
-
-def _run_user_text_wizard(
-    session: WizardSession,
-    read: ReadFn,
-    write: WriteFn,
-    *,
-    source_factory: SourceFactory,
-    source_dir: Optional[str],
-    repo: Optional[str],
-    project: Optional[str],
-    user_home: Optional[str],
-    source_finalizer: Optional[SourceFinalizeFn] = None,
-    consumer_service: Optional[ConsumerApplicationService] = None,
-    reporting_service: Optional[ReportingApplicationService] = None,
-) -> int | WizardSession:
-    read_model: Optional[_UserWizardReadModel] = None
-    read_key: Optional[tuple] = None
-    profile_names = tuple(sorted(load_profiles(project)))
-    while True:
-        if session.current in ("role", "source", "maintainer_action"):
-            return session
-        _write_wizard_header(session, write)
-        if session.current == "profiles":
-            write("Select profile(s):")
-            choices = tuple(_Choice("profile", name, None, name) for name in profile_names)
-            for index, choice in enumerate(choices, start=1):
-                write(f"  {index:>2}. {choice.label}")
-            selected = tuple(
-                index for index, name in enumerate(profile_names) if name in session.profiles
-            )
-            write(f"Selected: {len(selected)} profile(s)")
-            event = _prompt_wizard_indices(
-                read,
-                write,
-                "Profile(s) (b=back, q=quit): ",
-                choices,
-                selected=selected,
-            )
-            if event.kind == "back":
-                session = wizard_back(session)
-                continue
-            if event.kind == "quit":
-                if _confirm_wizard_quit(session, read, write):
-                    return _cancel(write)
-                continue
-            session = wizard_select(
-                session, "profiles", tuple(profile_names[index] for index in event.selected)
-            )
-            session = wizard_advance(session)
-            continue
-        if session.current == "action":
-            menu = ACTIONS + (RECEIPT_MENU_ACTION,)
-            write("Action:")
-            for index, action in enumerate(menu, start=1):
-                write(f"  {index:>2}. {action}")
-            selected_action = _prompt_wizard_action(read, write, choices=menu)
-            if selected_action == RECEIPT_MENU_ACTION:
-                # Runs and returns here: a receipt has no basket and no wizard Review, so the
-                # session is never told about it and the operator lands back on this menu.
-                _run_receipt_text(
-                    read,
-                    write,
-                    project=project,
-                    user_home=user_home,
-                    profiles=session.profiles,
-                )
-                continue
-            if isinstance(selected_action, WizardInput):
-                if selected_action.kind == "back":
-                    session = wizard_back(session)
-                elif _confirm_wizard_quit(session, read, write):
-                    return _cancel(write)
-                continue
-            session = wizard_select(session, "action", selected_action)
-            if selected_action == "status" and session.basket:
-                session = reconcile_basket(
-                    session,
-                    {item.key: "not applicable to the Status action" for item in session.basket},
-                )
-            session = wizard_advance(session)
-            read_model = None
-            continue
-        if session.current == "scope":
-            write("Installation scope:")
-            for index, scope_choice in enumerate(INSTALL_SCOPE_CHOICES, start=1):
-                write(f"  {index:>2}. {scope_choice.label:<23} {scope_choice.description}")
-            selected_scope = _prompt_wizard_scope(read, write)
-            if isinstance(selected_scope, WizardInput):
-                if selected_scope.kind == "back":
-                    session = wizard_back(session)
-                elif _confirm_wizard_quit(session, read, write):
-                    return _cancel(write)
-                continue
-            session = wizard_select(session, "scope", selected_scope)
-            session = wizard_advance(session)
-            read_model = None
-            continue
-        if session.current == "mode":
-            selected_mode = _prompt_install_mode(read, write)
-            if selected_mode is None:
-                if _confirm_wizard_quit(session, read, write):
-                    return _cancel(write)
-                continue
-            if selected_mode == "back":
-                session = wizard_back(session)
-                continue
-            session = wizard_select(session, "mode", selected_mode)
-            session = wizard_advance(session)
-            read_model = None
-            continue
-        if session.current == "artifacts":
-            key = (
-                session.action,
-                session.profiles,
-                session.scope,
-                session.install_mode,
-            )
-            if read_model is None or read_key != key:
-                loaded = _load_user_wizard_read_model(
-                    session,
-                    source_factory=source_factory,
-                    source_dir=source_dir,
-                    repo=repo,
-                    project=project,
-                    user_home=user_home,
-                    consumer_service=consumer_service,
-                )
-                if isinstance(loaded, DomainErr):
-                    failure = wizard_stage_failure(
-                        session,
-                        "load",
-                        loaded,
-                        project=_failure_project_context(session, project),
-                    )
-                    recovery = _prompt_stage_failure_recovery(failure, read, write)
-                    if recovery.kind == "retry":
-                        read_model = None
-                        read_key = None
-                        continue
-                    if recovery.kind == "back":
-                        session = wizard_back(session)
-                        continue
-                    if _confirm_wizard_quit(session, read, write):
-                        return _cancel(write)
-                    continue
-                read_model = loaded.value
-                read_key = key
-            if not read_model.choices:
-                write(_empty_choices_message(session.action or "", session.profiles))
-                return _render_result(
-                    CommandOutcome(0, ActionSummary(action=session.action or "selection")), write
-                )
-            availability = {
-                _basket_key(choice): "" if choice.enabled else choice.reason
-                for choice in read_model.choices
-            }
-            session = reconcile_basket(session, availability)
-            write(f"Select artifact(s)/collection(s) for {_profiles_label(session.profiles)}:")
-            width = shutil.get_terminal_size(fallback=(200, 24)).columns
-            for index, choice in enumerate(read_model.choices, start=1):
-                write(_text_choice_line(index, choice, width))
-            write(
-                "Enter ?N for details, /TEXT to search by name, coordinate or summary; "
-                "blank keeps the current basket."
-            )
-            selected = tuple(
-                index
-                for index, choice in enumerate(read_model.choices)
-                if _basket_key(choice) in {item.key for item in session.basket}
-            )
-            write(f"Selected: {len(selected)} basket item(s)")
-            event = _prompt_wizard_indices(
-                read,
-                write,
-                "Selection (/=search, b=back, q=quit): ",
-                read_model.choices,
-                selected=selected,
-            )
-            if event.kind == "back":
-                session = wizard_back(session)
-                continue
-            if event.kind == "quit":
-                if _confirm_wizard_quit(session, read, write):
-                    return _cancel(write)
-                continue
-            if not event.selected:
-                write("Select at least one artifact or collection before continuing.")
-                continue
-            session = wizard_select(
-                session,
-                "artifacts",
-                tuple(_basket_item(read_model.choices[index]) for index in event.selected),
-            )
-            session = wizard_advance(session)
-            continue
-        if session.current == "review":
-            assert consumer_service is not None
-            selected_keys = {item.key for item in session.basket}
-            selected_coordinates = (
-                set()
-                if read_model is None
-                else {
-                    row.coordinate
-                    for row in read_model.marketplace_rows
-                    if row.key in selected_keys
-                }
-            )
-            for collection in consumer_service.context.catalog.collections:
-                if str(collection.coordinate) in selected_keys:
-                    selected_coordinates.update(collection.members)
-            prepared = consumer_service.prepare(
-                ConsumerActionRequest(
-                    session.action or "status",  # type: ignore[arg-type]
-                    tuple(sorted(selected_coordinates, key=str)),
-                    tuple(sorted(session.profiles)),
-                    session.scope,  # type: ignore[arg-type]
-                    session.install_mode,  # type: ignore[arg-type]
-                )
-            )
-            if isinstance(prepared, DomainErr):
-                recovered = _recover_text_stage_failure(
-                    wizard_stage_failure(session, "review", prepared, recoverable=False),
-                    session,
-                    read,
-                    write,
-                )
-                if isinstance(recovered, int):
-                    return recovered
-                session = recovered
-                continue
-            canonical_review = prepared.value
-            for line in render_consumer_review(canonical_review):
-                write(line)
-            write("Finalize applies this reviewed action; Back edits without changes.")
-            review_answer = _read_line(read, "Finalize? [y/N] (b=back, q=quit): ")
-            answer = "q" if review_answer is None else review_answer.strip().lower()
-            if answer in ("b", "back"):
-                session = wizard_back(session)
-                continue
-            if answer in ("q", "quit"):
-                if _confirm_wizard_quit(session, read, write):
-                    return _cancel(write)
-                continue
-            if answer not in ("y", "yes", "f", "finalize"):
-                write("Review not finalized; no changes were made.")
-                continue
-            if not can_finalize(session, revision=session.revision):
-                write("Wizard state changed; review it again before Finalize.")
-                continue
-            source_failure = _finalize_source_selection(session, source_finalizer, write)
-            if source_failure is not None:
-                recovered = _recover_text_stage_failure(
-                    wizard_stage_failure(session, "finalize", source_failure, recoverable=False),
-                    session,
-                    read,
-                    write,
-                )
-                if isinstance(recovered, int):
-                    return recovered
-                session = recovered
-                continue
-            finalized = consumer_service.finalize(canonical_review, canonical_review.review_digest)
-            if isinstance(finalized, DomainErr):
-                recovered = _recover_text_stage_failure(
-                    wizard_stage_failure(session, "finalize", finalized, recoverable=False),
-                    session,
-                    read,
-                    write,
-                )
-                if isinstance(recovered, int):
-                    return recovered
-                session = recovered
-                continue
-            for line in render_consumer_outcome(finalized.value):
-                write(line)
-            return _complete_canonical_consumer_action(
-                consumer_service,
-                canonical_review,
-                finalized.value,
-                reporting_service,
-                read=read,
-                write=write,
-            )
 
 
 def _receipt_data_root(user_home: Optional[str]) -> str:
@@ -1779,12 +1221,6 @@ def _run_receipt_text(
         write(line)
 
 
-def _is_canonical_maintainer_workspace(root: str) -> bool:
-    """Classify only an explicit current registry marker as a maintainer workspace."""
-
-    return os.path.isfile(os.path.join(root, "aart-registry.json"))
-
-
 def _write_domain_diagnostics(result: DomainErr, write: WriteFn) -> None:
     for diagnostic in result.diagnostics:
         for line in wrap(
@@ -1798,374 +1234,6 @@ def _write_domain_diagnostics(result: DomainErr, write: WriteFn) -> None:
             write(prefix + lines[0])
             for line in lines[1:]:
                 write(" " * len(prefix) + line)
-
-
-def _prompt_wizard_csv(
-    read: ReadFn,
-    write: WriteFn,
-    prompt: str,
-    *,
-    current: Tuple[str, ...] = (),
-    default: Tuple[str, ...] = (),
-) -> Tuple[str, ...] | WizardInput:
-    while True:
-        line = _read_line(read, prompt)
-        if line is None:
-            return WizardInput("quit")
-        answer = line.strip()
-        if answer.lower() in ("q", "quit"):
-            return WizardInput("quit")
-        if answer.lower() in ("b", "back"):
-            return WizardInput("back")
-        if not answer:
-            return current or default
-        values = tuple(item.strip() for item in answer.split(",") if item.strip())
-        if values:
-            return values
-        write("Enter one or more comma-separated values, 'b' to go back, or 'q' to quit.")
-
-
-def _prompt_curation_request(
-    action: CurationAction,
-    workspace: str,
-    read: ReadFn,
-    write: WriteFn,
-    *,
-    existing: Optional[CurationRequest],
-) -> CurationRequest | WizardInput:
-    def value(
-        prompt: str,
-        field: str,
-        *,
-        required: bool = True,
-        default: Optional[str] = None,
-    ) -> str | None | WizardInput:
-        current = getattr(existing, field) if existing is not None else default
-        return _prompt_wizard_value(
-            read,
-            write,
-            prompt,
-            current=current,
-            required=required,
-        )
-
-    if action is CurationAction.INIT:
-        source_id = value("Registry/source ID: ", "source_id")
-        if isinstance(source_id, WizardInput):
-            return source_id
-        display_name = value("Registry display name: ", "display_name")
-        if isinstance(display_name, WizardInput):
-            return display_name
-        # `LAF-90`: the suggestion an operator accepts by pressing return has to name a window the
-        # running executable is inside, or `init` writes a registry the same AART then refuses to
-        # read.  `RS-02` derived that window once, in `curation/model.py`; this asks with it rather
-        # than deriving it a second time.
-        minimum = value(
-            f"Minimum AART version [{DEFAULT_MINIMUM_AART}]: ",
-            "minimum_version",
-            default=DEFAULT_MINIMUM_AART,
-        )
-        if isinstance(minimum, WizardInput):
-            return minimum
-        maximum = value(
-            f"Maximum AART version (exclusive) [{DEFAULT_MAXIMUM_AART}]: ",
-            "maximum_version",
-            default=DEFAULT_MAXIMUM_AART,
-        )
-        if isinstance(maximum, WizardInput):
-            return maximum
-        return CurationRequest(
-            action,
-            workspace,
-            source_id=source_id,
-            display_name=display_name,
-            minimum_version=minimum or DEFAULT_MINIMUM_AART,
-            maximum_version=maximum or DEFAULT_MAXIMUM_AART,
-        )
-
-    if action is CurationAction.SCAFFOLD:
-        kind = value("Artifact kind (skill/guideline/mcp/hook/memory): ", "kind")
-        if isinstance(kind, WizardInput):
-            return kind
-        name = value("Artifact name: ", "name")
-        if isinstance(name, WizardInput):
-            return name
-        summary = value("One-line value description: ", "summary")
-        if isinstance(summary, WizardInput):
-            return summary
-        version = value("Artifact version [1.0.0]: ", "artifact_version", default="1.0.0")
-        if isinstance(version, WizardInput):
-            return version
-        profiles = _prompt_wizard_csv(
-            read,
-            write,
-            "Harness profiles (comma-separated): ",
-            current=existing.profiles if existing else (),
-        )
-        if isinstance(profiles, WizardInput):
-            return profiles
-        platforms = _prompt_wizard_csv(
-            read,
-            write,
-            "Platforms (comma-separated): ",
-            current=existing.platforms if existing else (),
-        )
-        if isinstance(platforms, WizardInput):
-            return platforms
-        scopes = _prompt_wizard_csv(
-            read,
-            write,
-            "Install scopes [project]: ",
-            current=existing.scopes if existing else (),
-            default=("project",),
-        )
-        if isinstance(scopes, WizardInput):
-            return scopes
-        modes = _prompt_wizard_csv(
-            read,
-            write,
-            "Install modes [copy]: ",
-            current=existing.modes if existing else (),
-            default=("copy",),
-        )
-        if isinstance(modes, WizardInput):
-            return modes
-        return CurationRequest(
-            action,
-            workspace,
-            kind=kind,
-            name=name,
-            summary=summary,
-            artifact_version=version or "1.0.0",
-            profiles=profiles,
-            platforms=platforms,
-            scopes=scopes,
-            modes=modes,
-        )
-
-    if action is CurationAction.COLLECTION:
-        name = value("Collection name: ", "name")
-        if isinstance(name, WizardInput):
-            return name
-        summary = value("One-line collection description: ", "summary")
-        if isinstance(summary, WizardInput):
-            return summary
-        members = _prompt_wizard_csv(
-            read,
-            write,
-            "Members (comma-separated kind/name values): ",
-            current=existing.members if existing else (),
-        )
-        if isinstance(members, WizardInput):
-            return members
-        return CurationRequest(
-            action,
-            workspace,
-            name=name,
-            summary=summary,
-            members=members,
-        )
-
-    if action is CurationAction.PROMOTE_NATIVE:
-        kind = value("Artifact kind: ", "kind")
-        if isinstance(kind, WizardInput):
-            return kind
-        name = value("Artifact name: ", "name")
-        if isinstance(name, WizardInput):
-            return name
-        url = value("Credential-free Git URL: ", "url")
-        if isinstance(url, WizardInput):
-            return url
-        ref = value("Git ref [main]: ", "ref", default="main")
-        if isinstance(ref, WizardInput):
-            return ref
-        path = value("Canonical package path: ", "path")
-        if isinstance(path, WizardInput):
-            return path
-        policy = value(
-            "Review policy [manual-review-v1]: ",
-            "review_policy",
-            default="manual-review-v1",
-        )
-        if isinstance(policy, WizardInput):
-            return policy
-        return CurationRequest(
-            action,
-            workspace,
-            kind=kind,
-            name=name,
-            url=url,
-            ref=ref or "main",
-            path=path,
-            review_policy=policy or "manual-review-v1",
-        )
-
-    if action is CurationAction.REFRESH_NATIVE:
-        kind = value("Locked artifact kind: ", "kind")
-        if isinstance(kind, WizardInput):
-            return kind
-        name = value("Locked artifact name: ", "name")
-        if isinstance(name, WizardInput):
-            return name
-        return CurationRequest(action, workspace, kind=kind, name=name)
-
-    if action is CurationAction.VENDOR:
-        kind = value("Artifact kind (skill/guideline/mcp/hook/memory): ", "kind")
-        if isinstance(kind, WizardInput):
-            return kind
-        name = value("Artifact name: ", "name")
-        if isinstance(name, WizardInput):
-            return name
-        url = value("Credential-free Git URL: ", "url")
-        if isinstance(url, WizardInput):
-            return url
-        ref = value("Git ref [main]: ", "ref", default="main")
-        if isinstance(ref, WizardInput):
-            return ref
-        path = value("Subtree path inside that repository: ", "path")
-        if isinstance(path, WizardInput):
-            return path
-        summary = value("One-line value description: ", "summary")
-        if isinstance(summary, WizardInput):
-            return summary
-        # This registry owns the copy, so it declares the version; upstream's is not AART's to
-        # trust (design §4).
-        version = value("Artifact version [1.0.0]: ", "artifact_version", default="1.0.0")
-        if isinstance(version, WizardInput):
-            return version
-        artifact_license = value(
-            "SPDX license (blank = use what the subtree settles): ",
-            "artifact_license",
-            required=False,
-        )
-        if isinstance(artifact_license, WizardInput):
-            return artifact_license
-        setup_recipe = value(
-            "Package-relative setup recipe (blank = none): ",
-            "setup_recipe",
-            required=False,
-        )
-        if isinstance(setup_recipe, WizardInput):
-            return setup_recipe
-        profiles = _prompt_wizard_csv(
-            read,
-            write,
-            "Harness profiles (comma-separated): ",
-            current=existing.profiles if existing else (),
-        )
-        if isinstance(profiles, WizardInput):
-            return profiles
-        platforms = _prompt_wizard_csv(
-            read,
-            write,
-            "Platforms (comma-separated): ",
-            current=existing.platforms if existing else (),
-        )
-        if isinstance(platforms, WizardInput):
-            return platforms
-        scopes = _prompt_wizard_csv(
-            read,
-            write,
-            "Install scopes [project]: ",
-            current=existing.scopes if existing else (),
-            default=("project",),
-        )
-        if isinstance(scopes, WizardInput):
-            return scopes
-        modes = _prompt_wizard_csv(
-            read,
-            write,
-            "Install modes [copy]: ",
-            current=existing.modes if existing else (),
-            default=("copy",),
-        )
-        if isinstance(modes, WizardInput):
-            return modes
-        return CurationRequest(
-            action,
-            workspace,
-            kind=kind,
-            name=name,
-            summary=summary,
-            artifact_version=version or "1.0.0",
-            artifact_license=artifact_license,
-            profiles=profiles,
-            platforms=platforms,
-            scopes=scopes,
-            modes=modes,
-            url=url,
-            ref=ref or "main",
-            path=path,
-            setup_recipe=setup_recipe,
-        )
-
-    if action is CurationAction.REVENDOR:
-        kind = value("Vendored artifact kind: ", "kind")
-        if isinstance(kind, WizardInput):
-            return kind
-        name = value("Vendored artifact name: ", "name")
-        if isinstance(name, WizardInput):
-            return name
-        # Blank is an answer here, not a gap: it means "report what moved, plan nothing", which is
-        # what flag mode expresses by omitting `--artifact-version`.
-        version = value(
-            "New artifact version (blank = report what moved only): ",
-            "artifact_version",
-            required=False,
-        )
-        if isinstance(version, WizardInput):
-            return version
-        return CurationRequest(
-            action,
-            workspace,
-            kind=kind,
-            name=name,
-            artifact_version=version,
-        )
-
-    return CurationRequest(action, workspace)
-
-
-def _prompt_wizard_value(
-    read: ReadFn,
-    write: WriteFn,
-    prompt: str,
-    *,
-    current: Optional[str] = None,
-    required: bool,
-) -> str | None | WizardInput:
-    while True:
-        line = _read_line(read, prompt)
-        if line is None:
-            return WizardInput("quit")
-        answer = line.strip()
-        lower = answer.lower()
-        if lower in ("q", "quit"):
-            return WizardInput("quit")
-        if lower in ("b", "back"):
-            return WizardInput("back")
-        if answer:
-            return answer
-        if current is not None:
-            return current
-        if not required:
-            return None
-        write("A value is required (or enter 'b' to go back, 'q' to quit).")
-
-
-def _profiles_label(profile_names: Sequence[str]) -> str:
-    return ", ".join(profile_names)
-
-
-def _empty_choices_message(action: str, profile_names: Sequence[str]) -> str:
-    profiles = _profiles_label(profile_names)
-    if action == "install":
-        return f"No installable artifacts or collections for profile(s): {profiles}."
-    if action == "update":
-        return f"No installed artifacts to update for profile(s): {profiles}."
-    if action == "uninstall":
-        return f"No installed artifacts to uninstall for profile(s): {profiles}."
-    return f"No choices for profile(s): {profiles}."
 
 
 def _read_line(read: ReadFn, prompt: str) -> Optional[str]:
@@ -2200,31 +1268,6 @@ def _text_choice_line(index: int, choice: _Choice, width: int) -> str:
     if width <= len(prefix):
         return _ellipsize(prefix, width)
     return prefix + _ellipsize(choice.label, max(width - len(prefix), 0))
-
-
-def _prompt_install_mode(
-    read: ReadFn,
-    write: WriteFn,
-) -> Optional[Literal["copy", "symlink", "back"]]:
-    """Select the Install-only mode; blank is Copy and back returns to Action."""
-
-    write("Installation mode:")
-    for index, choice in enumerate(INSTALL_MODE_CHOICES, start=1):
-        write(f"  {index:>2}. {choice.label:<20} {choice.description}")
-    while True:
-        line = _read_line(read, "Installation mode [1] (b=back, q=quit): ")
-        if line is None:
-            return None
-        answer = line.strip().lower()
-        if answer in ("q", "quit"):
-            return None
-        if answer in ("b", "back"):
-            return "back"
-        if answer in ("", "1", "copy"):
-            return "copy"
-        if answer in ("2", "symlink", "link"):
-            return "symlink"
-        write("Please enter 1 (Copy), 2 (Symlink), 'b' to go back, or 'q' to quit.")
 
 
 # --------------------------------------------------------------------------- #
@@ -2265,139 +1308,6 @@ def _curses_single_event(curses, stdscr, title, labels, session: WizardSession) 
         return WizardInput("quit", cursor=cursor, scroll=scroll)
     selected = int(result)
     return WizardInput("confirm", (selected,), selected, scroll)
-
-
-def _curses_multi_event(
-    curses,
-    stdscr,
-    title,
-    labels,
-    session: WizardSession,
-    *,
-    selected: Sequence[int] = (),
-    details: Optional[Sequence[str]] = None,
-    disabled: Optional[Sequence[bool]] = None,
-    allow_add: bool = False,
-    allow_source_maintenance: bool = False,
-    cells: Optional[Sequence[Sequence[str]]] = None,
-    pane_for: Optional[Callable[[int, int], Sequence[str]]] = None,
-    reasons: Optional[Sequence[str]] = None,
-    detail_for: Optional[Callable[[int], Sequence[str]]] = None,
-    notice: str = "",
-    documents: Optional[Sequence[Document]] = None,
-) -> WizardInput:
-    cursor, scroll = _position(session, session.current)
-    try:
-        result = _curses_multiselect(
-            curses,
-            stdscr,
-            title,
-            labels,
-            details=details,
-            disabled=disabled,
-            wizard=True,
-            allow_add=allow_add,
-            allow_source_maintenance=allow_source_maintenance,
-            initial_checked=selected,
-            initial_cursor=cursor,
-            initial_scroll=scroll,
-            header=_curses_header(stdscr, session),
-            cells=cells,
-            pane_for=pane_for,
-            reasons=reasons,
-            detail_for=detail_for,
-            notice=notice,
-            documents=documents,
-        )
-    except TypeError as error:
-        if "unexpected keyword argument" not in str(error):
-            raise
-        result = _curses_multiselect(curses, stdscr, title, labels, details, disabled)
-    if isinstance(result, WizardInput):
-        return result
-    if result is None:
-        return WizardInput("quit", cursor=cursor, scroll=scroll)
-    picked = tuple(int(index) for index in result)
-    return WizardInput("confirm", picked, cursor, scroll)
-
-
-def _curses_empty_source_event(curses, stdscr, session: WizardSession) -> WizardInput:
-    """Keep source onboarding navigable when policy leaves no selectable source rows.
-
-    A required source may be named by policy before the user has configured its origin.  There
-    is deliberately no synthetic, untrusted row to toggle in that case; ``a`` remains the only
-    productive action.  This has a dedicated screen rather than relying on the generic checkbox
-    widget, whose empty-list result is a confirmation with no selection.
-    """
-
-    required = ("clear", "addstr", "refresh", "getch")
-    if not all(hasattr(stdscr, name) for name in required):
-        return WizardInput("quit")
-    backspace = {getattr(curses, "KEY_BACKSPACE", -1), 127, 8}
-    lines = _curses_header(stdscr, session) + (
-        "Sources",
-        "No sources are configured.",
-        "Press a to add a source, Backspace to return, or q to quit.",
-    )
-    while True:
-        stdscr.clear()
-        available = max(_width(stdscr) - 1, 0)
-        for row, line in enumerate(lines[: _height(stdscr)]):
-            stdscr.addstr(row, 0, _ellipsize(line, available))
-        stdscr.refresh()
-        key = stdscr.getch()
-        if key in (ord("a"), ord("A")):
-            return WizardInput("add")
-        if key in (ord("q"), 27):
-            return WizardInput("quit")
-        if key in backspace:
-            return WizardInput("back")
-
-
-def _curses_source_event(
-    curses,
-    stdscr,
-    session: WizardSession,
-    view: SourceStageView,
-) -> Tuple[WizardInput, Optional[SourceSelection], Optional[DomainErr]]:
-    choices = _source_choice_rows(view)
-    if not choices:
-        return _curses_empty_source_event(curses, stdscr, session), None, None
-    selected_aliases = (
-        set() if session.source_selection is None else set(session.source_selection.enabled_aliases)
-    )
-    selected = tuple(
-        index for index, row in enumerate(view.rows) if row.source.alias in selected_aliases
-    )
-    if session.source_selection is not None and session.source_selection.no_source:
-        selected += (len(view.rows),)
-    elif session.source_selection is None:
-        selected = tuple(index for index, row in enumerate(view.rows) if row.source.enabled)
-    missing = view.unconfigured_required or view.unconfigured_recommended
-    suffix = "" if not missing else " — configure: " + ", ".join(item.value for item in missing)
-    notice = ""
-    while True:
-        event = _curses_multi_event(
-            curses,
-            stdscr,
-            f"Sources{suffix}",
-            tuple(choice.label for choice in choices),
-            session,
-            selected=selected,
-            details=tuple(choice.description for choice in choices),
-            disabled=tuple(not choice.enabled for choice in choices),
-            reasons=tuple(choice.reason for choice in choices),
-            allow_add=True,
-            allow_source_maintenance=bool(view.rows),
-            notice=notice,
-        )
-        if event.kind != "confirm":
-            return event, None, None
-        planned = _source_selection_from_indices(view, event.selected)
-        if isinstance(planned, DomainErr):
-            notice = _domain_feedback(planned)
-            continue
-        return event, planned, None
 
 
 def _curses_text_input(
@@ -2507,175 +1417,6 @@ def _source_flow_diagnostics(result: DomainErr) -> tuple[str, ...]:
             lines += (prefix + wrapped[0],)
             lines += tuple(" " * len(prefix) + line for line in wrapped[1:])
     return lines
-
-
-def _curses_source_review(
-    curses,
-    stdscr,
-    session: WizardSession,
-    review: Sequence[str],
-    *,
-    confirm_label: str,
-) -> bool | WizardInput:
-    """Show one bounded source review and collect the single yes/no decision it asks for."""
-
-    required = ("clear", "addstr", "refresh", "getch")
-    if not all(hasattr(stdscr, name) for name in required):
-        return WizardInput("quit")
-    lines = _curses_header(stdscr, session) + tuple(review)
-    available = max(_width(stdscr) - 1, 1)
-    backspace = {getattr(curses, "KEY_BACKSPACE", -1), 127, 8}
-    enter = {getattr(curses, "KEY_ENTER", -1), 10, 13}
-    while True:
-        stdscr.clear()
-        for row, line in enumerate(lines[: max(_height(stdscr) - 1, 0)]):
-            stdscr.addstr(row, 0, _ellipsize(line, available))
-        if _height(stdscr) > 0:
-            stdscr.addstr(
-                _height(stdscr) - 1,
-                0,
-                status_bar(
-                    (("enter", confirm_label), ("b", "back"), ("q", "quit")),
-                    width=available,
-                ),
-            )
-        stdscr.refresh()
-        key = stdscr.getch()
-        if key in enter or key in (ord("y"), ord("Y")):
-            return True
-        if key in backspace or key in (ord("n"), ord("N"), ord("b")):
-            return WizardInput("back")
-        if key in (ord("q"), 27):
-            return WizardInput("quit")
-
-
-def _curses_source_sync(
-    curses,
-    stdscr,
-    session: WizardSession,
-    row: SourceStageRow,
-) -> WizardInput | SourceStageRow:
-    """Review one configured origin in curses before its snapshot is fetched again."""
-
-    reviewed = _curses_source_review(
-        curses,
-        stdscr,
-        session,
-        render_source_sync_review(row),
-        confirm_label="sync",
-    )
-    if isinstance(reviewed, WizardInput):
-        return reviewed
-    return row if reviewed else WizardInput("back")
-
-
-def _curses_source_removal(
-    curses,
-    stdscr,
-    session: WizardSession,
-    view: SourceStageView,
-    row: SourceStageRow,
-) -> WizardInput | SourceRemovalRequest:
-    """Plan and review one unsubscribe in curses through the planner the CLI also uses."""
-
-    planned = plan_source_removal(view, row.source.alias)
-    if isinstance(planned, DomainErr):
-        _curses_notice(
-            stdscr,
-            session,
-            "Source removal error",
-            (*_source_flow_diagnostics(planned), "Choose another source or press b."),
-        )
-        return WizardInput("back")
-    reviewed = _curses_source_review(
-        curses,
-        stdscr,
-        session,
-        render_source_removal_review(planned.value),
-        confirm_label="remove",
-    )
-    if isinstance(reviewed, WizardInput):
-        return reviewed
-    return planned.value if reviewed else WizardInput("back")
-
-
-def _curses_source_resubscription(
-    curses,
-    stdscr,
-    session: WizardSession,
-    view: SourceStageView,
-    row: SourceStageRow,
-    run: SourceResubscribeRunFn,
-) -> WizardInput | SourceResubscriptionRequest:
-    """Resolve the origin and review both identities before anything is published."""
-
-    planned = plan_source_resubscription(view, row.source.alias)
-    if isinstance(planned, DomainErr):
-        _curses_notice(
-            stdscr,
-            session,
-            "Source resubscription error",
-            (*_source_flow_diagnostics(planned), "Choose another source or press b."),
-        )
-        return WizardInput("back")
-    if all(hasattr(stdscr, name) for name in ("clear", "addstr", "refresh")):
-        stdscr.clear()
-        stdscr.addstr(0, 0, "Resolving the origin to see what it declares now…")
-        stdscr.refresh()
-    reviewed = run(row.source.alias, None)
-    if isinstance(reviewed, DomainErr):
-        _curses_notice(
-            stdscr,
-            session,
-            "Source resubscription error",
-            (*_source_flow_diagnostics(reviewed), "Choose another source or press b."),
-        )
-        return WizardInput("back")
-    request = SourceResubscriptionRequest(planned.value, reviewed.value.transition)
-    confirmed = _curses_source_review(
-        curses,
-        stdscr,
-        session,
-        render_source_resubscription_review(request),
-        confirm_label="resubscribe",
-    )
-    if isinstance(confirmed, WizardInput):
-        return confirmed
-    return request if confirmed else WizardInput("back")
-
-
-def _curses_confirm_discard(curses, stdscr, session: WizardSession) -> bool:
-    if request_quit(session) == "quit":
-        return True
-    if not all(hasattr(stdscr, name) for name in ("clear", "addstr", "refresh", "getch")):
-        return True
-    lines = _curses_header(stdscr, session) + (
-        f"Discard {len(session.basket)} selected basket item(s)?",
-    )
-    while True:
-        stdscr.clear()
-        available = max(_width(stdscr) - 1, 0)
-        height = _height(stdscr)
-        for row, line in enumerate(lines[: max(height - 1, 1)]):
-            stdscr.addstr(row, 0, _ellipsize(line, available))
-        if height:
-            stdscr.addstr(
-                height - 1,
-                0,
-                status_bar((("y", "discard"), ("n", "return")), width=available),
-            )
-        stdscr.refresh()
-        key = stdscr.getch()
-        if key in (ord("y"), ord("Y")):
-            return True
-        if key in (
-            ord("n"),
-            ord("N"),
-            getattr(curses, "KEY_BACKSPACE", -1),
-            127,
-            8,
-        ):
-            return False
 
 
 def _curses_review(curses, stdscr, session: WizardSession, lines: Sequence[str]):
@@ -2793,314 +1534,6 @@ def _run_receipt_curses(
     _curses_notice(stdscr, session, f"Receipt {action}", outcome.value)
 
 
-def _run_user_curses_wizard(
-    curses,
-    stdscr,
-    session: WizardSession,
-    selection: dict,
-    *,
-    source_dir: Optional[str],
-    repo: Optional[str],
-    project: Optional[str],
-    user_home: Optional[str],
-    consumer_service: Optional[ConsumerApplicationService] = None,
-    failure_context: InternalFailureContext | None = None,
-) -> WizardSession:
-    context = failure_context or InternalFailureContext()
-    profile_names = tuple(sorted(load_profiles(project)))
-    read_model: Optional[_UserWizardReadModel] = None
-    read_key: Optional[tuple] = None
-    while session.current not in ("role", "source", "maintainer_action"):
-        context.capture(session)
-        if session.current == "profiles":
-            selected = tuple(
-                index for index, name in enumerate(profile_names) if name in session.profiles
-            )
-            event = _curses_multi_event(
-                curses,
-                stdscr,
-                "Select profiles",
-                profile_names,
-                session,
-                selected=selected,
-            )
-            session = remember_position(
-                session, "profiles", cursor=event.cursor, scroll=event.scroll
-            )
-            if event.kind == "back":
-                session = wizard_back(session)
-                continue
-            if event.kind == "quit":
-                if _curses_confirm_discard(curses, stdscr, session):
-                    selection["cancelled"] = True
-                    return session
-                continue
-            if not event.selected:
-                selection["empty_selection"] = True
-                return session
-            session = wizard_select(
-                session,
-                "profiles",
-                tuple(profile_names[index] for index in event.selected),
-            )
-            session = wizard_advance(session)
-            continue
-
-        if session.current == "action":
-            menu = ACTIONS + (RECEIPT_MENU_ACTION,)
-            event = _curses_single_event(
-                curses,
-                stdscr,
-                "Action",
-                menu,
-                session,
-            )
-            session = remember_position(session, "action", cursor=event.cursor, scroll=event.scroll)
-            if event.kind == "back":
-                session = wizard_back(session)
-                continue
-            if event.kind == "quit":
-                if _curses_confirm_discard(curses, stdscr, session):
-                    selection["cancelled"] = True
-                    return session
-                continue
-            if menu[event.selected[0]] == RECEIPT_MENU_ACTION:
-                # As in the text flow: a receipt has no basket and no wizard Review, so it runs
-                # here and returns to this menu without entering the state machine.
-                _run_receipt_curses(curses, stdscr, session, project=project, user_home=user_home)
-                continue
-            action = ACTIONS[event.selected[0]]
-            session = wizard_select(session, "action", action)
-            if action == "status" and session.basket:
-                session = reconcile_basket(
-                    session,
-                    {item.key: "not applicable to the Status action" for item in session.basket},
-                )
-            session = wizard_advance(session)
-            read_model = None
-            continue
-
-        if session.current == "scope":
-            cursor, scroll = _position(session, "scope")
-            event = _curses_install_scope_event(
-                curses,
-                stdscr,
-                initial_cursor=cursor,
-                initial_scroll=scroll,
-                header=_curses_header(stdscr, session),
-            )
-            scope = INSTALL_SCOPE_CHOICES[event.selected[0]].scope if event.selected else None
-            session = remember_position(session, "scope", cursor=event.cursor, scroll=event.scroll)
-            if event.kind == "back":
-                session = wizard_back(session)
-                continue
-            if event.kind == "quit":
-                if _curses_confirm_discard(curses, stdscr, session):
-                    selection["cancelled"] = True
-                    return session
-                continue
-            assert scope is not None
-            session = wizard_select(session, "scope", scope)
-            session = wizard_advance(session)
-            read_model = None
-            continue
-
-        if session.current == "mode":
-            cursor, scroll = _position(session, "mode")
-            try:
-                result = _curses_install_mode(
-                    curses,
-                    stdscr,
-                    wizard=True,
-                    initial_cursor=cursor,
-                    initial_scroll=scroll,
-                    header=_curses_header(stdscr, session),
-                )
-            except TypeError as error:
-                if "unexpected keyword argument" not in str(error):
-                    raise
-                result = _curses_install_mode(curses, stdscr)
-            if isinstance(result, WizardInput):
-                event = result
-                mode = INSTALL_MODE_CHOICES[event.selected[0]].mode if event.selected else None
-            else:
-                mode = result
-                if result == "back":
-                    event = WizardInput("back", cursor=cursor, scroll=scroll)
-                elif result is None:
-                    event = WizardInput("quit", cursor=cursor, scroll=scroll)
-                else:
-                    index = 0 if result == "copy" else 1
-                    event = WizardInput("confirm", (index,), index, scroll)
-            session = remember_position(session, "mode", cursor=event.cursor, scroll=event.scroll)
-            if event.kind == "back":
-                session = wizard_back(session)
-                continue
-            if event.kind == "quit":
-                if _curses_confirm_discard(curses, stdscr, session):
-                    selection["cancelled"] = True
-                    return session
-                continue
-            assert mode is not None
-            session = wizard_select(session, "mode", mode)
-            session = wizard_advance(session)
-            read_model = None
-            continue
-
-        if session.current == "artifacts":
-            key = (session.action, session.profiles, session.scope, session.install_mode)
-            if read_model is None or read_key != key:
-                loaded = _load_user_wizard_read_model(
-                    session,
-                    source_factory=_unsupported_source_factory,
-                    source_dir=source_dir,
-                    repo=repo,
-                    project=project,
-                    user_home=user_home,
-                    consumer_service=consumer_service,
-                )
-                if isinstance(loaded, DomainErr):
-                    failure = wizard_stage_failure(
-                        session,
-                        "load",
-                        loaded,
-                        project=_failure_project_context(session, project),
-                    )
-                    recovery = _curses_stage_failure_recovery(curses, stdscr, failure)
-                    if recovery.kind == "retry":
-                        read_model = None
-                        read_key = None
-                        continue
-                    if recovery.kind == "back":
-                        session = wizard_back(session)
-                        continue
-                    if _curses_confirm_discard(curses, stdscr, session):
-                        selection["cancelled"] = True
-                        return session
-                    continue
-                read_model = loaded.value
-                read_key = key
-            if not read_model.choices:
-                selection["empty"] = (session.action or "selection", session.profiles)
-                return session
-            availability = {
-                _basket_key(choice): "" if choice.enabled else choice.reason
-                for choice in read_model.choices
-            }
-            session = reconcile_basket(session, availability)
-            basket_keys = {item.key for item in session.basket}
-            selected = tuple(
-                index
-                for index, choice in enumerate(read_model.choices)
-                if _basket_key(choice) in basket_keys
-            )
-            event = _curses_multi_event(
-                curses,
-                stdscr,
-                "Select artifacts and collections",
-                tuple(choice.label for choice in read_model.choices),
-                session,
-                selected=selected,
-                details=tuple(choice.description for choice in read_model.choices),
-                disabled=tuple(not choice.enabled for choice in read_model.choices),
-                reasons=tuple(choice.reason for choice in read_model.choices),
-                cells=tuple(choice.cells or (choice.label,) for choice in read_model.choices),
-                pane_for=functools.partial(_choice_pane, read_model.choices),
-                detail_for=functools.partial(_choice_detail, read_model.choices),
-                documents=_choice_documents(read_model.choices),
-            )
-            session = remember_position(
-                session, "artifacts", cursor=event.cursor, scroll=event.scroll
-            )
-            if event.kind == "back":
-                session = wizard_back(session)
-                continue
-            if event.kind == "quit":
-                if _curses_confirm_discard(curses, stdscr, session):
-                    selection["cancelled"] = True
-                    return session
-                continue
-            if not event.selected:
-                selection["empty_selection"] = True
-                return session
-            disabled_picks = tuple(
-                index for index in event.selected if not read_model.choices[index].enabled
-            )
-            if disabled_picks:
-                choice = read_model.choices[disabled_picks[0]]
-                selection["error"] = (f"{choice.name}: {choice.reason}", 2)
-                return session
-            session = wizard_select(
-                session,
-                "artifacts",
-                tuple(_basket_item(read_model.choices[index]) for index in event.selected),
-            )
-            session = wizard_advance(session)
-            continue
-
-        if session.current == "review":
-            context.capture(session, "review")
-            assert consumer_service is not None
-            selected_keys = {item.key for item in session.basket}
-            selected_coordinates = (
-                set()
-                if read_model is None
-                else {
-                    row.coordinate
-                    for row in read_model.marketplace_rows
-                    if row.key in selected_keys
-                }
-            )
-            for collection in consumer_service.context.catalog.collections:
-                if str(collection.coordinate) in selected_keys:
-                    selected_coordinates.update(collection.members)
-            prepared = consumer_service.prepare(
-                ConsumerActionRequest(
-                    session.action or "status",  # type: ignore[arg-type]
-                    tuple(sorted(selected_coordinates, key=str)),
-                    tuple(sorted(session.profiles)),
-                    session.scope,  # type: ignore[arg-type]
-                    session.install_mode,  # type: ignore[arg-type]
-                )
-            )
-            if isinstance(prepared, DomainErr):
-                failure = wizard_stage_failure(session, "review", prepared, recoverable=False)
-                recovery = _curses_stage_failure_recovery(curses, stdscr, failure)
-                if recovery.kind == "back":
-                    session = wizard_back(session)
-                    continue
-                if _curses_confirm_discard(curses, stdscr, session):
-                    selection["cancelled"] = True
-                    return session
-                continue
-            canonical_review = prepared.value
-            review = _curses_review(
-                curses,
-                stdscr,
-                session,
-                render_consumer_review(canonical_review),
-            )
-            if review == "back":
-                session = wizard_back(session)
-                continue
-            if review == "quit":
-                if _curses_confirm_discard(curses, stdscr, session):
-                    selection["cancelled"] = True
-                    return session
-                continue
-            if not review:
-                selection["cancelled"] = True
-                return session
-            if not can_finalize(session, revision=session.revision):
-                selection["error"] = ("Wizard state changed; review it again before Finalize.", 2)
-                return session
-            selection["consumer_review"] = canonical_review
-            selection["wizard_session"] = session
-            return session
-
-    return session
-
-
 class CursesUnavailable(Exception):
     """The terminal cannot host the curses wizard.
 
@@ -3115,16 +1548,19 @@ class CursesUnavailable(Exception):
 INTERNAL_FAILURE_CODE = "tui-stage-internal"
 
 
+#: The boundaries ``run`` itself can name. A canonical failure has no ``WizardStage`` to report --
+#: the stages are gone -- and reporting one anyway would send somebody looking for a screen that no
+#: longer exists. What ``run`` does know is whether it was still composing the application or had
+#: handed it to a terminal, and which terminal that was.
+CanonicalBoundary = Literal["compose", "curses", "text"]
+
+
 @dataclass(slots=True)
 class InternalFailureContext:
-    """The last safe frontend boundary, kept outside the persistent wizard session."""
+    """The last safe frontend boundary, kept outside any session it describes."""
 
-    stage: WizardStage = "onboarding"
+    stage: WizardStage | CanonicalBoundary = "compose"
     operation: WizardOperation = "load"
-
-    def capture(self, session: WizardSession, operation: WizardOperation = "load") -> None:
-        self.stage = session.current
-        self.operation = operation
 
     def capture_operation(self, operation: WizardOperation) -> None:
         """Mark a shell operation while retaining the stage captured at its boundary."""
@@ -4148,14 +2584,14 @@ def run(
 ) -> int:
     """Launch the interactive application; return a process exit code.
 
-    Called by ``cli._run_bare`` on a bare TTY invocation. A terminal that can run curses gets the
-    canonical consumer application (B-025); everything else **degrades to the ``input()`` flow**,
-    which is still the characterized wizard. A clean quit returns 0. Sources are loaded only from
-    canonical user configuration.
+    Called by ``cli._run_bare`` on a bare TTY invocation. Both routes run the same canonical
+    consumer application: over ``curses`` when the terminal can host it, and over a line-oriented
+    terminal when it cannot (D-115). A clean quit returns 0. Sources are loaded only from canonical
+    user configuration.
 
-    The canonical route is taken before any of the wizard's own composition runs. Composing both
-    and choosing afterwards would read the same machine twice, and the reading is where the local
-    state is opened -- so a failure would be reported by whichever half happened to open it first.
+    The application is composed once, before either terminal starts. Composing again on the
+    degradation path would read the same machine twice, and the reading is where the local state is
+    opened -- so a failure would be reported by whichever half happened to open it first.
     """
     if source_dir is not None or repo is not None:
         print(
@@ -4171,10 +2607,22 @@ def run(
     # One composition for whichever terminal answers. Composing again on the degradation path
     # would open the same local state twice, and a failure would then be reported by whichever
     # half opened it first.
-    composed = _canonical_consumer_actions(project=project, user_home=user_home, today=date.today())
+    try:
+        composed = _canonical_consumer_actions(
+            project=project, user_home=user_home, today=date.today()
+        )
+    except Exception as error:
+        # Composition reads local state, so an unexpected defect here carries paths and file
+        # contents in its message. A typed startup failure is rendered below; this is the untyped
+        # one, and it goes through the same redaction as any other internal defect.
+        return _render_internal_failure(error, canonical_failures)
     if isinstance(composed, DomainErr):
         return _render_consumer_startup_failure(composed)
     if canonical_terminal:
+        # Past this point a defect is the running application's, not the composition's, and the
+        # record has to say so -- including which terminal was hosting it, because the two answer
+        # for different things and a person reproducing it needs to know which one to reach.
+        canonical_failures.stage = "curses"
         try:
             run_consumer(composed.value)
         except CursesUnavailable:
@@ -4189,6 +2637,7 @@ def run(
             return _render_internal_failure(error, canonical_failures)
         else:
             return 0
+    canonical_failures.stage = "text"
     try:
         run_consumer_text(composed.value)
     except Exception as error:

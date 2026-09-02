@@ -2,7 +2,8 @@
 
 ## Current objective
 
-Continue **CP-14 Maintainer TUI 30–53**, now at step 7: retiring legacy authority. Screen 53 is
+Continue **CP-14 Maintainer TUI 30–53**. Step 7, retiring legacy authority, is done apart from a
+mechanical sweep; **B-044** is the critical work it uncovered. Screen 53 is
 live — the typed Candidate filter carries status, kind, Source and target registry, and `f` opens it
 from screen 35 (D-111). Screens 48–50 are live: lifecycle uses exact history plus registry evidence, provenance retains typed
 Git/local pins and compiler output, and immutable version conflicts require a new version
@@ -93,11 +94,10 @@ opened on an empty list and a dashboard reading "0 registries". `read_consumer_o
 the projected rows, `screens_from` takes them, and a row that is not a registry says so and offers
 `details` only instead of a sync whose advertised effect it cannot have.
 
-Step 7 then found why it could remove nothing further: every remaining target —
-`consumer/application.py`, `lifecycle/*`, `setup_engine/*`, and B-038's legacy direct-install from a
-native Source — was reachable only through `_run_text`, which is built on
-`ConsumerApplicationService` and through it on that whole stack. The blocker was a missing
-replacement, not missing evidence. So the text route is now the canonical application:
+Step 7 then found why it could remove nothing further: everything it was aiming at was reachable
+only through `_run_text`, which is built on `ConsumerApplicationService`. (The aim itself turned out
+to be wrong — see D-117 below — but the blocker was real, and it was a missing replacement rather
+than missing evidence.) So the text route is now the canonical application:
 `_TextTerminal` adapts the shell's two-method terminal port to `write`/`read`, `run()` composes once
 for whichever terminal answers, and its entire legacy tail is gone (D-115). ERR05 permits a text
 fallback for one condition — the terminal cannot host curses — and says nothing about the product
@@ -111,14 +111,41 @@ against `aart registry scaffold`, source maintenance against the `aart source` c
 against its flags half, ERR04's legacy install state against four other modules, ERR06 refusals
 against the canonical shell's drawn notice (D-116).
 
-**The exact next action** is the last of step 7. `ConsumerApplicationService` survives only because
-the curses wizard *stages* still compose it (`_run_user_curses_wizard` and the widgets around it),
-covered by 36 tests in `tests/tui_wizard_curses_test.py`. Retire those stages against the same
-public-flow evidence, and `consumer/application.py` follows, and with it `lifecycle/*` and
-`setup_engine/*`, which nothing else reaches. Note that `installation/*` is *not* purely legacy —
-its model is imported across the canonical `application/` layer — so it goes by symbol rather than
-by package, if at all. B-038's remaining half falls out of the same removal. Do not remove the text
-*route*: no-TTY is a supported environment, and it is now the canonical application.
+**The exact next action** is B-044, and step 7 is finished apart from one mechanical sweep.
+
+The wizard front-end is gone (D-117): `_run_user_curses_wizard`, `_run_user_text_wizard`,
+`_prompt_curation_request`, the `_curses_source_*` screens, and the 22 definitions that became
+unreferenced once they were — 1,515 lines. `tui.py` is 2,747 lines, down from 5,705 when step 7
+began. Two assertions the removed tests held alone were carried to the reachable surface first
+rather than deleted with them: `registry init`'s default compatibility window, restated against the
+CLI parser in `tests/registry_cli_test.py`, and the usage-report offer's consent-and-preview
+boundaries, which had **no** CLI test at all and are now `tests/reporting_cli_offer_test.py`. Both
+were verified red against the defect they exist to catch.
+
+**Do not try to remove `consumer/application.py`, `lifecycle/*` or `setup_engine/*`.** This file
+previously said nothing but the wizard reached them; that was wrong. `commands/marketplace.py` — the
+public `aart marketplace install|update|uninstall|setup` — composes `ConsumerApplicationService`
+directly and runs the setup queue through it, and `tui_marketplace.py`, which the canonical shell
+imports, takes `LifecycleItem` and `InstallMode` from `lifecycle/model.py` and
+`installation/model.py`. The stack is load-bearing for a public flow. Like `installation/*`, it goes
+by symbol if at all, and not by package.
+
+What the removal exposed is the actual next work. **B-044 (critical):** `io/consumer_actions.py`
+performs no setup and no reporting, so since D-115 an artifact installed from the TUI that declares
+setup requirements lands unconfigured and no usage report is offered — while the Product
+Specification names interactive setup as work AART performs and screens 09/11 summarize an install
+as "configured MCP servers, isolated environments ... securely stored credentials". That is a
+mandatory invariant a shipped path no longer satisfies. `_canonical_setup_run` and
+`_complete_canonical_consumer_action` are deliberately retained in `tui.py` as the material for it
+(D-118); they take `ConsumerApplicationService`, `ConsumerReview` and `ConsumerOutcome` and the
+canonical path has a receipt instead, so this is a slice, not a wiring change.
+
+Behind that, 571 lines of `tui.py` are still production-orphaned and held only by widget tests —
+`_curses_multiselect` and its 29 tests, the receipt screens, `_load_user_wizard_read_model`,
+`_curses_install_mode`, `_choice_pane`, `_basket_item`, `_canonical_consumer_source`. That sweep is
+mechanical and unblocked; it must skip the two helpers B-044 holds. B-038's remaining half was also
+restated: the direct-install residue is in `commands/marketplace.py::_configured_registry_selection`,
+a public flow, not in the deleted wizard.
 
 Behind it, step 6 left the surfaces complete: screen 53 is live (D-111) — the typed filter carries
 all four facets the Product Specification names, `f` opens it from screen 35, `Space` toggles a
@@ -126,11 +153,12 @@ facet row, and screen 35 narrows accordingly — and screens 51–52 are reachab
 end, with `c` on screen 35 opening Collection Candidates and Enter resolving one against approved
 registry state (D-112). What remains in CP-14:
 
-1. **Step 7: retire the legacy consumer/maintainer authority CP-13 left standing** — but only
-   behind the public-flow evidence D-091 requires, one route at a time. B-031's screens now exist
-   and are reachable (D-112), so the Collection half of that evidence is in place. B-039's shell
-   half is done (D-113) and B-038's screen-21 half is done (D-114); the semantic half of each is
-   what remains.
+1. **Step 7 is done except for one mechanical sweep.** The wizard front-end is removed (D-113,
+   D-116, D-117) and B-039 is closed. What it aimed at beyond that — `consumer/application.py`,
+   `lifecycle/*`, `setup_engine/*` — is load-bearing for `aart marketplace` and is not removed.
+   B-038's screen-21 half is done (D-114) and its remaining half is restated as a `aart marketplace
+   install` question. **B-044 (critical) is what the step actually leaves behind:** the canonical
+   shell performs no post-install setup and offers no usage report.
 2. Preserve D-089/B-037 whenever promotion planning is touched: retained approved records rebind to
    the transaction snapshot as metadata only, and published package bytes do not change.
 
