@@ -192,6 +192,48 @@ class PolicyAlgebraTest(unittest.TestCase):
         )
         self.assertEqual(effective.forbidden_effects, frozenset(first | second))
 
+    @given(
+        first=st.sets(st.text(alphabet="abc-", min_size=1, max_size=12)),
+        second=st.sets(st.text(alphabet="abc-", min_size=1, max_size=12)),
+    )
+    def test_required_check_composition_accumulates(
+        self, first: set[str], second: set[str]
+    ) -> None:
+        """INV-031, as a property rather than the one example that held it.
+
+        `required_checks` accumulates by union exactly as `forbidden_effects` does, and the two
+        lines sit next to each other in `compose_policy` -- so a mistake that turns one into an
+        intersection is a mistake that fits in either line, and only one of them was covered.
+        """
+
+        effective = compose_policy(
+            EffectivePolicy(required_checks=frozenset(first)),
+            PolicyOverlay(required_checks=frozenset(second)),
+        )
+
+        self.assertEqual(effective.required_checks, frozenset(first | second))
+        self.assertTrue(frozenset(first) <= effective.required_checks)
+        self.assertTrue(frozenset(second) <= effective.required_checks)
+
+    @given(
+        parent=st.sampled_from(tuple(RiskClass)),
+        overlay=st.sampled_from(tuple(RiskClass) + (None,)),
+    )
+    def test_the_risk_ceiling_only_ever_narrows(
+        self, parent: RiskClass, overlay: RiskClass | None
+    ) -> None:
+        """INV-028's other half: an overlay is a restriction, so it can lower a ceiling and must
+        never raise one -- including when it declines to state one at all."""
+
+        effective = compose_policy(
+            EffectivePolicy(risk_ceiling=parent),
+            PolicyOverlay(risk_ceiling=overlay),
+        )
+
+        self.assertLessEqual(effective.risk_ceiling, parent)
+        if overlay is not None:
+            self.assertLessEqual(effective.risk_ceiling, overlay)
+
 
 class CanonicalProjectionPropertyTest(unittest.TestCase):
     @given(st.lists(st.sampled_from(("stdio", "network", "filesystem")), max_size=20))
