@@ -272,6 +272,71 @@ low-severity item explicitly *not* filed under INV-078.
 
 ### Status
 
-**Step 2 is VERIFIED.** INV-072 through INV-080 all move PARTIAL → EVIDENCED. Steps 3–6 remain:
-legacy removal, docs reconciliation, traceability completion for the other 121 PARTIAL rows, and the
-closing gates.
+**Step 2 is VERIFIED.** INV-072 through INV-080 all move PARTIAL → EVIDENCED.
+
+---
+
+## Step 3 — legacy removal (PARTIAL)
+
+Begun by Codex, which removed seven production modules and the five test files that existed only to
+drive them — `application/compiler.py`, `compatibility.py`, `fp.py`, `hashing.py`, `io/cache.py`,
+`policy.py`, `registry_publication.py`, −2552 lines — and added
+`tests/legacy_authority_reachability_test.py` as the evidence.
+
+That test is the right shape for this step. It builds the import graph from `agent_artifacts.cli`
+and `agent_artifacts.__main__`, and asserts by `assertEqual` on an exact set that every shipped
+module is reachable or named as an exception. Its premise is the one the step needs: a production
+module reachable only from tests is not evidence of shipped behaviour, it is parallel authority
+whose callers have already disappeared.
+
+### What was left red
+
+Codex hit its weekly limit mid-step and the tree was **not** green when it stopped. Two failures:
+
+- `tests/compiler_boundary_test.py` still named `application/compiler.py` among the three files it
+  holds to a no-durable-IO boundary, so the deletion turned it into a `FileNotFoundError`. Narrowed
+  to the two `compiler/` files that survive and are really imported by the marketplace, catalog and
+  installation paths, with an existence assertion so the same failure cannot recur silently.
+- `docs/testing/PLAN-live-acceptance-v1.md` linked to the deleted `io/cache.py` for its claim that
+  overriding `HOME` isolates the object cache. The claim is still true and now belongs to
+  `configuration/paths.py`, so the link was repointed rather than dropped — and repointing it
+  surfaced a real gap in the plan's isolation: `XDG_CACHE_HOME` takes precedence over `HOME` in that
+  derivation, so a shell exporting it leaves the cache pointing at the real one while every other
+  path moves. That is exactly the shape that makes an offline scenario pass for the wrong reason,
+  and the plan now says to unset it along with `XDG_CONFIG_HOME` and `XDG_DATA_HOME`.
+
+### The finding that keeps the step open
+
+The exception list holds **six** names while the docstring justified **two**. The other four —
+`domain/ports.py`, `domain/outcomes.py`, `domain/collections.py`, `profiles/loader.py` — are
+production modules no runtime path reaches, imported only by tests, which is precisely the
+definition the docstring opens with. They were listed to keep the set exact, not because a decision
+was made about them, and the docstring said "two exceptions remain deliberate" while the code said
+six.
+
+The docstring now states a reason per name and says outright that those four are unexamined.
+**B-070** carries the decision. Each is one of: legacy to remove, the intended kernel that something
+else currently duplicates (in which case the duplicate is the legacy), or a genuine build exception
+like `_commit` — and telling them apart needs step 2's audit method, not a guess at the end of a
+budget window. `domain/collections.py` is generic immutable helpers, unrelated to B-067's Collection
+capability despite the name.
+
+### Targeted mutations (D-091)
+
+| # | mutation | red |
+|---|---|---|
+| M23 | add a production module nothing imports | `test_only_deliberate_non_runtime_modules_are_shipped` |
+| M24 | drop one name from the exception list | the same test, from the other direction |
+
+The `assertEqual` on an exact set is what makes both directions fire: an unreachable module that
+appears, and an exception that stops being needed, are both drift.
+
+### Status
+
+Step 3 is **PARTIAL**: the removal is real and verified green, and the reachability claim is now
+held by a test with teeth, but four modules sit in the exception list with no verdict. The step's
+own words are "remove only legacy code whose authority has been replaced **and verified**", and four
+undecided entries is the step unfinished rather than passed.
+
+Steps 4–6 remain: docs reconciliation, traceability completion for the other 121 PARTIAL rows, and
+the closing gates.

@@ -445,9 +445,34 @@ the tagger's email as `...@users.noreply.github.com`. INV-078 is about egress an
 connected to by nothing, so the claim is now stated over URLs with that occurrence pinned. B-069
 records the enterprise wart and says explicitly that it is not an INV-078 finding.
 
-**Next action: CP-18 step 3** -- the legacy removal audit. Remove only code whose authority has been
-replaced *and verified*. Then step 4 docs reconciliation, step 5 the remaining 121 PARTIAL
-traceability rows, step 6 the closing gates.
+**CP-18 step 3 is PARTIAL.** Codex removed seven production modules and the five test files that
+existed only to drive them (-2552 lines) and added `tests/legacy_authority_reachability_test.py`,
+which builds the import graph from `agent_artifacts.cli` and `__main__` and asserts on an exact set
+that every shipped module is reachable or named as an exception. That is the right evidence for this
+step, and two mutations show it has teeth in both directions.
+
+**Codex stopped on its weekly limit with the tree red.** Two failures, both repaired here:
+`compiler_boundary_test` still named the deleted `application/compiler.py`, and
+`docs/testing/PLAN-live-acceptance-v1.md` linked to the deleted `io/cache.py`. The doc's claim -- that
+overriding `HOME` isolates the object cache -- is still true and now belongs to
+`configuration/paths.py`, so the link was repointed rather than deleted; doing that surfaced a real
+gap, since `XDG_CACHE_HOME` takes precedence over `HOME` there, so a shell exporting it leaves the
+cache pointing at the real one while every other path moves. The plan now says to unset it.
+
+**Next action: finish CP-18 step 3 by deciding B-070.** The exception list holds six names and only
+two carried a reason. The other four -- `domain/ports.py`, `domain/outcomes.py`,
+`domain/collections.py`, `profiles/loader.py` -- are production modules no runtime path reaches,
+imported only by tests, which is the test's own definition of parallel authority. They were listed to
+keep the set exact, not because anything was decided; the docstring now says so outright. Each is one
+of: legacy to remove, the intended kernel that something else duplicates (in which case the
+*duplicate* is the legacy), or a real build exception like `_commit`. Use step 2's method -- read what
+the module claims authority over, find the runtime path answering the same question, then decide.
+
+`domain/collections.py` is generic immutable collection helpers and has nothing to do with B-067's
+Collection capability. The names collide; the subjects do not.
+
+Then step 4 docs reconciliation, step 5 the remaining 121 PARTIAL traceability rows, step 6 the
+closing gates.
 
 Do not read the 121 as 121 pieces of missing work. Every CP-18 row audited so far has been either
 stale bookkeeping or a real gap, roughly half and half, and the only way to tell them apart is the

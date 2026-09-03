@@ -1695,3 +1695,44 @@ Enterprise run to confirm the derived form, which is why it is not being guessed
 
 Evidence/links: INV-078; INV-074; `.github/actions/cut-release/action.yml`;
 `tests/enterprise_ci_template_test.py::NoPublicHostIsReachedThatAVariableCannotRetargetTest`.
+
+## B-070 — four unreachable production modules are listed as exceptions without a decision
+
+Found: CP-18 step 3 (2026-09-03) · Severity: medium · Status: open
+
+`tests/legacy_authority_reachability_test.py` builds the import graph from `agent_artifacts.cli`
+and `agent_artifacts.__main__` and asserts that every shipped module is reachable, or named in an
+exception list. Six names are listed. Two carry a reason:
+
+- `agent_artifacts._commit` — written by the build, which stamps a commit into release artifacts.
+- `agent_artifacts.application.credential_lifecycle` — retained deliberately, because the
+  credential lifecycle is incomplete and removing it would claim a replacement that has not
+  happened.
+
+The other four have no reason recorded, and the first draft of the test's docstring said "two
+exceptions remain deliberate" while the list held six:
+
+| module | lines | reached by |
+|---|---|---|
+| `agent_artifacts/domain/ports.py` | 26 | `domain_kernel_test` only |
+| `agent_artifacts/domain/outcomes.py` | 104 | `domain_kernel_test` only |
+| `agent_artifacts/domain/collections.py` | 21 | tests only |
+| `agent_artifacts/profiles/loader.py` | 147 | tests only |
+
+Each fits that test's own definition of parallel authority: a production module no runtime path
+reaches, whose callers have already disappeared. Note `domain/collections.py` is *generic immutable
+collection helpers*, not the Collection capability of B-067 — the names collide and the two are
+unrelated.
+
+**The decision has not been made, and the exception list must not be read as making it.** Each of
+the four is one of: legacy to remove, the intended kernel that something else currently duplicates
+(in which case the duplicate is the legacy), or a genuine build/tooling exception like `_commit`.
+Telling them apart needs the same audit CP-18 step 2 used — read what the module claims authority
+over, find the runtime path that answers the same question, and only then decide which one goes.
+
+It becomes critical for CP-18 step 3's completion: the step is "remove only legacy code whose
+authority has been replaced and verified", and four modules sitting in an exception list with no
+verdict is the step not finished rather than the step passed.
+
+Evidence/links: CP-18 step 3; B-067 (unrelated despite the name);
+`tests/legacy_authority_reachability_test.py`; `tests/domain_kernel_test.py`.
