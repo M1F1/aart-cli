@@ -1799,3 +1799,31 @@ covered by the mere existence of `profiles/loader.py`.
 
 Evidence/links: D-155; B-070; INV-001 (`PRODUCT_SPECIFICATION.md:5577`); the private layout at
 `PRODUCT_SPECIFICATION.md:1806`; `agent_artifacts/consumer/runtime.py:947`.
+
+## B-073 — no live smoke scenario runs in CI, and there is no workflow that could carry one
+
+Found: CP-18 step 5 (2026-09-04) · Severity: low · Status: open
+
+INV-123 asks that mandatory PR verification "retain a fast feedback path with selected live smoke
+scenarios", with broader expensive matrices allowed to run in "deep-quality, scheduled or
+release-candidate workflows".
+
+The fast half is satisfied: `pr-check.yml` runs the whole deterministic gate set, and the E2E suite
+is inside it (the `integration` gate is skipped as *contained* by `unit`, which `quality.py` checks
+at runtime rather than assuming). What is missing is the live half. Live acceptance in this
+repository is `docs/testing/PLAN-live-acceptance-v1.md`, a manual walk a person performs; no
+scenario touching a real remote runs automatically anywhere. There are three workflows —
+`pr-check` (pull request), `release` (tag) and `cut-release` (manual dispatch) — and none is
+scheduled, so there is also no place a broader matrix could live.
+
+This is a genuine tension with INV-078, which requires the supported enterprise profile to run with
+no public egress, so "add a live scenario to `pr-check`" is not the answer on its own: any live
+smoke would have to be gated on a variable-supplied endpoint and skip visibly when unconfigured
+(INV-080), which is the same shape the private-image arm already uses.
+
+Not critical: the deterministic suite is thorough (3,364 tests, 50 acceptance files, real Git
+repositories in temporary directories rather than mocks), and the live plan exists and has been
+walked. It becomes critical if a release is ever gated on live evidence that nothing produces.
+
+Evidence/links: INV-123; INV-078 and INV-080; `docs/testing/PLAN-live-acceptance-v1.md`;
+`.github/workflows/pr-check.yml`; `scripts/quality.py` `redundant_gates`.
