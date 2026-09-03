@@ -423,11 +423,35 @@ a skipped required check as satisfied. `_aggregate()` now emits `registry-qualit
 registry README names it, held to the workflow by a drift test rather than a repeated literal
 (D-153). INV-077 is EVIDENCED for both.
 
-**Next action: continue CP-18 step 2** with INV-072, 073, 074, 075, 076, 078, 079 and 080. Audit
-them the way INV-077 was audited -- read the invariant, find the flow that would break it, and only
-then decide whether an existing test holds it. Two rows in and both have found something, so do not
-assume the rest are bookkeeping. Then legacy removal, docs reconciliation, traceability completion
-and the closing gates.
+**Step 2 is VERIFIED. INV-072 through INV-080 are all EVIDENCED.** The remaining rows were audited
+the same way and, where the claim was universal, closed as a property over every CI source -- the
+three workflows, every composite action, and the three templates `registry init` emits -- rather
+than sampled one job at a time. INV-072: the only variables in any conditional are the container
+switch and `AART_PAGES`, and the action that runs the gates reads none, so no settings change can
+switch a check off. INV-073: every `secrets.` reference is `secrets[vars....]`, `GITHUB_TOKEN`
+excepted because GitHub mints it per run. INV-074/078: every absolute URL is a variable default and
+`pypi.org` is the only public host named anywhere. INV-076: every step in this repository's
+workflows is a checkout or a composite action, and the single remaining inline script is the one
+`aggregate_gate_test` executes. INV-079 and INV-080 follow from those plus the pre-existing
+reporting tests.
+
+Two findings worth carrying forward. **A mutation caught the test, not the code**: M18 wrote a
+variable onto a gate step in the inline `- if:` spelling and walked straight past the INV-072 test,
+which only read lines beginning `if:`. It was caught by the *documentation* test instead -- a
+different claim that a fork writing the variable onto the page would have satisfied. The harvester
+now reads both spellings and the guard test says so. **And a test overclaimed**: the first draft
+asserted nothing names github.com, which failed on the untouched tree, because `cut-release` builds
+the tagger's email as `...@users.noreply.github.com`. INV-078 is about egress and an email is
+connected to by nothing, so the claim is now stated over URLs with that occurrence pinned. B-069
+records the enterprise wart and says explicitly that it is not an INV-078 finding.
+
+**Next action: CP-18 step 3** -- the legacy removal audit. Remove only code whose authority has been
+replaced *and verified*. Then step 4 docs reconciliation, step 5 the remaining 121 PARTIAL
+traceability rows, step 6 the closing gates.
+
+Do not read the 121 as 121 pieces of missing work. Every CP-18 row audited so far has been either
+stale bookkeeping or a real gap, roughly half and half, and the only way to tell them apart is the
+one used here: read the invariant, find the flow that would break it, and only then look for a test.
 
 The Collection capability may be scheduled ahead of the rest of CP-18. B-067 carries the four-layer
 scope and is the natural candidate for a slice of its own: INV-186 and INV-213 cannot be evidenced

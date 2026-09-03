@@ -1668,3 +1668,30 @@ for another reason.
 
 Evidence/links: D-134; INV-080; `pyproject.toml` `[tool.poetry.group.dev.dependencies]`;
 `poetry.lock`; `scripts/dev_tools.py`; `scripts/mutants.py`.
+
+## B-069 — the release tagger's email hardcodes github.com's noreply domain
+
+Found: CP-18 step 2 (2026-09-03) · Severity: low · Status: open
+
+`.github/actions/cut-release/action.yml` names the tagger as:
+
+```bash
+git config --global user.email "$GITHUB_ACTOR_ID+$GITHUB_ACTOR@users.noreply.github.com"
+```
+
+On a GitHub Enterprise Server instance the noreply domain is the instance's own, so a release cut
+there records a committer email pointing at a domain that instance does not own. Nothing breaks: the
+tag is created, the release is published, and the address is never delivered to.
+
+**This is not an INV-078 finding, and the distinction is the point.** INV-078 is about egress -- the
+profile must be able to run with no public network. A committer email is written into a commit and
+connected to by nothing. `NoPublicHostIsReachedThatAVariableCannotRetargetTest` states the egress
+claim over URLs and pins this one occurrence explicitly, so a real `github.com` URL added anywhere
+fails immediately while this string does not have to be excused each time.
+
+Fixing it means deriving the domain from `GITHUB_SERVER_URL` the way `GH_HOST` already is, or
+naming a variable for it. Worth doing when the release action is next touched; it needs a real
+Enterprise run to confirm the derived form, which is why it is not being guessed at now.
+
+Evidence/links: INV-078; INV-074; `.github/actions/cut-release/action.yml`;
+`tests/enterprise_ci_template_test.py::NoPublicHostIsReachedThatAVariableCannotRetargetTest`.

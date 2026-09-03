@@ -222,6 +222,56 @@ Each turned red only the test stating the claim it breaks; the other eleven stay
 ### Status
 
 Step 2 for INV-077: **VERIFIED**, PARTIAL → EVIDENCED, for both this repository's CI and the CI it
-ships to others. The remaining rows (INV-072, 073, 074, 075, 076, 078, 079, 080) are still to be
-audited the same way — read the invariant, find the flow, and only then decide whether an existing
-test holds it.
+ships to others.
+
+### The remaining rows, audited
+
+Each was read against its own words, then against the flow that would break it. Where a claim was
+universal it was closed as a property over every CI source — the three workflows, every composite
+action, and the three templates `registry init` emits — rather than sampled a job at a time.
+
+| invariant | what was already held | what was added |
+|---|---|---|
+| INV-072 | the two container shapes run identical steps | **closed:** the only repository variables appearing in *any* conditional are `AART_IMAGE_USERNAME_SECRET` (which shape) and `AART_PAGES` (whether a dashboard is published). The action that runs the gates reads no variable at all, and its gate step carries no condition. So no settings change can switch a check off. |
+| INV-073 | credential halves remasked, no log line carries the assembled URL | **closed:** every `secrets.` reference is `secrets[vars.…]`. The one exception is `GITHUB_TOKEN`, which GitHub mints per run and scopes to the instance, so there is no stored secret for a variable to name. |
+| INV-074 | runner/container/index defaults, no credentials block by default | **closed:** every absolute URL in every source is the fallback of a variable, in both the expression and the shell spelling. |
+| INV-075 | the variable table is complete in both directions | the registry README now names the requirable check, held to the emitted YAML by a drift test. |
+| INV-076 | the shared step is the only copy | **closed:** every step in this repository's three workflows is a checkout or a composite action; exactly one inline script remains, the aggregate's own report, and `aggregate_gate_test` executes it under `bash`. The emitted templates are deliberately exempt — they run where no action of this project's is reachable until AART has been fetched, which is what their inline step does. |
+| INV-078 | four fetch arms, `gh` pointed at the instance, Pages switchable | **closed:** the only public host named anywhere is `pypi.org`, always as a variable default. |
+| INV-079 | version verified against the pin; both shapes identical | carried by INV-072's closed property: no variable changes the verdict, only where the work runs. |
+| INV-080 | a skipped gate is named and never on the OK line; the skip is proven rather than assumed | the aggregate names both arms whatever it decides, and both-skipped fails instead of passing. |
+
+### The finding the mutations produced
+
+M18 put a variable on a gate step of the emitted registry workflow, written `- if:` — the inline
+spelling of a step condition. The INV-072 test did **not** catch it. It was caught only by the
+documentation test noticing an undeclared variable, which is a different claim that a fork writing
+the variable onto the page would satisfy. The harvester read lines beginning `if:` and the inline
+form begins `- `. Fixed, with the guard test now asserting both spellings.
+
+That is the mutation doing its actual job: not confirming the code, but finding that the test's
+reach was narrower than its name.
+
+M21 produced the other finding. `test_nothing_names_github_com` failed on the *unmutated* tree,
+because `cut-release` builds the tagger's email as `…@users.noreply.github.com`. The test as first
+written overclaimed: INV-078 is about egress, and a committer email is connected to by nothing. It
+is now stated over URLs, with that one occurrence pinned so a real `github.com` URL fails
+immediately. **B-069** records the enterprise wart — an instance has its own noreply domain — as a
+low-severity item explicitly *not* filed under INV-078.
+
+### Targeted mutations (D-091)
+
+| # | mutation | red |
+|---|---|---|
+| M17 | `if: vars.AART_SKIP_GATES != 'true'` on the gate run | both INV-072 tests |
+| M18 | `- if: vars.AART_AUDIT != 'false'` on an emitted gate step | `test_no_variable_outside_the_two_infrastructure_switches_gates_anything` (after the harvester fix; **survived it before**) |
+| M19 | `secrets.ACME_NEXUS_CREDENTIALS` in place of `secrets[vars.…]` | `test_no_workflow_names_a_secret_it_was_not_told_the_name_of` |
+| M20 | a hardcoded index host in `pip-index` | `test_every_absolute_url_is_a_variable_default`, `test_the_only_public_host_is_the_package_index` |
+| M21 | a `curl https://api.github.com/meta` step | all four URL tests |
+| M22 | a third-party action added to a workflow | `test_every_step_is_a_checkout_or_a_composite_action`, `test_the_two_shapes_run_the_same_steps` |
+
+### Status
+
+**Step 2 is VERIFIED.** INV-072 through INV-080 all move PARTIAL → EVIDENCED. Steps 3–6 remain:
+legacy removal, docs reconciliation, traceability completion for the other 121 PARTIAL rows, and the
+closing gates.
