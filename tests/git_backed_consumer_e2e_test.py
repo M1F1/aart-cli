@@ -91,14 +91,18 @@ def _registry_snapshot(
 
 
 class _Environment:
-    def __init__(self, root: Path) -> None:
+    def __init__(
+        self,
+        root: Path,
+        *authored: tuple[tuple[str, str] | tuple[str, str, bool], ...],
+    ) -> None:
         self.root = root
         self.home = root / "home"
         self.project = root / "project"
         self.repository = root / "registry"
         self.home.mkdir()
         self.project.mkdir()
-        _materialize(self.repository, _registry_snapshot())
+        _materialize(self.repository, _registry_snapshot(*authored))
         _git(self.repository, "init", "-b", "main")
         _git(self.repository, "config", "user.email", "test@example.invalid")
         _git(self.repository, "config", "user.name", "AART Test")

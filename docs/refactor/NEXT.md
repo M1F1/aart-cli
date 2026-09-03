@@ -296,10 +296,26 @@ validates its `resolved_revision` exactly as `ResolvedArtifact` does, and deleti
 left the whole repository green -- 3,357 tests. Both are now stated as properties in
 `tests/git_revision_provenance_test.py`.
 
-**3b is the next action: start the installed artifact over a Git-backed source.** That needs the
-real virtual environment and stdio launcher `mcp_stdio_e2e_test` builds, not the skill this fixture
-installs, so it means carrying an MCP artifact through the same real Git repository. The update must
-stay traceable to the approved registry state, not to an author repository.
+**3b is done, so step 3 is complete.** `git_backed_runtime_e2e_test` carries an MCP artifact
+through the same real Git repository and installs it with public verbs only; the install's four
+receipt effects (`copy-tree`, `create-python-environment`, `write-file`, `configure-harness`) show a
+virtual environment was really built, and the launcher it wrote then answers `initialize`,
+`tools/list` and `tools/call` over stdio. The server runs on the interpreter the install created,
+with the `--strict` argument the manifest declared, and cannot import `agent_artifacts`. A second
+test starts what `.mcp.json` names, which is the file a harness actually consults.
+
+The artifact declares no inputs deliberately, and that is now a claim rather than a choice: the CLI
+has no flag that answers a declared input, so an artifact declaring one is refused outright. The
+finding is where that refusal lives -- disabling the adapter's guard in `io/configured_installation.py`
+killed nothing, because the CLI never reaches it, and the refusal an operator meets is
+`commands/marketplace.py`'s. B-064 records the capability question; B-065 records that
+`marketplace list` publishes a provenance `resolved_commit` of all zeros beside the real
+`source.resolved_revision`, which is the maintainer half of the chain still being synthetic.
+
+**Next action: step 4 -- drift, repair, rollback and uninstall over the live installation.** The
+Git-backed MCP installation is the one to damage and reconcile: it is the only installation anywhere
+that a real commit produced and that really starts, so a repair that claims to restore it can be
+checked by starting it again.
 
 Do not configure `file://` or a local path and do not set `allow_local_transport` through the public
 flow. Both refusals remain security boundaries. Do not make the legacy `registry publish` command

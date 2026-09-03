@@ -238,6 +238,45 @@ Three mutations, and the third is the one that matters:
   once from an empty store cannot see a pointer that never advances. That is D-145's argument at the
   scale of the chain, and it is why this increment is not a longer version of step 2.
 
+## Step 3b evidence — the server an operator ends up running came out of a real commit
+
+`mcp_stdio_e2e_test` starts a real MCP server and speaks JSON-RPC to it, but it assembles the
+installation itself: it writes the payload by hand, creates the environment by hand and calls
+`generate_launcher` directly. Nothing joined that runtime to the chain in front of it.
+`git_backed_runtime_e2e_test` does. One real Git repository, synchronized and installed through
+public verbs only, and then the launcher that install wrote is executed exactly as a harness would
+execute it.
+
+The install is real throughout: its receipt's four effects are `copy-tree`,
+`create-python-environment`, `write-file` and `configure-harness`, so a virtual environment was
+actually built rather than files merely placed. The server then answers `initialize`, `tools/list`
+and `tools/call`; `serverInfo` is a literal in the author's `server.py`, so the bytes answering are
+the ones the commit carried. It runs on the interpreter the install created rather than the one
+running the tests, with the `--strict` argument the manifest declared, and `agent_artifacts` is not
+importable inside it. A second test reads `.mcp.json`, the file a harness actually consults, and
+starts what it names.
+
+**Why the artifact declares no inputs, stated rather than assumed.** `aart marketplace install` has
+no flag that answers a declared input -- the required-input form belongs to the persistent shell --
+so an artifact declaring one cannot be installed through the CLI at all. The third test pins that
+boundary: the refusal is `consumer-invalid`, it names each unanswered field and its kind, and
+nothing is built for an install that cannot complete, with no runtime directory, no harness entry
+and no receipt. The finding behind it is where the refusal lives. Disabling the adapter's own guard
+in `io/configured_installation.py` killed nothing, because the CLI never reaches it; the refusal an
+operator meets is `commands/marketplace.py`'s, and the adapter's is a second line of defence with no
+public flow through it. B-064 records the capability question that leaves open.
+
+Three mutations, each red only where claimed: pointing the launcher at the ambient interpreter turns
+the runtime test red on the executable it reports; recording the payload entrypoint instead of the
+launcher turns the harness test red on the command it names; and removing the CLI's unanswered-input
+refusal turns the refusal test red.
+
+B-065 records what the probe saw on the way past: `marketplace list` publishes a `provenance` block
+whose `resolved_commit` is all zeros while `source.resolved_revision` beside it carries the real
+commit. It is not a defect -- provenance describes the author repository at promotion time, and the
+zeros come from the promotion-evidence fixture -- but it is this slice's own thesis pointing at the
+half of the chain it does not reach.
+
 ## Quality gates
 
 - Step 1 focused: 25 tests across the new Git-to-store E2E, Git adapter, source store and source
@@ -254,6 +293,8 @@ Three mutations, and the third is the one that matters:
   tests and 85.40% branch coverage.
 - Step 3a: 24 tests across the Git-backed chain, Git publication, provenance, configured update and
   upstream movement are green; ruff format/check and mypy are green.
+- Step 3b: the three runtime tests are green, each starting a real server from a real virtual
+  environment the install built; ruff format/check and mypy are green.
 
 ## Blockers
 
@@ -263,13 +304,12 @@ every downstream stage reachable through public commands.
 
 ## Handoff
 
-- Current working state: steps 1, 2 and 3a are VERIFIED. Step 2 was independently reviewed (D-149),
+- Current working state: steps 1, 2, 3a and 3b are VERIFIED, so step 3 is complete. Step 2 was independently reviewed (D-149),
   which added `tests/git_revision_provenance_test.py` and changed no production code; step 3a added
   the upstream movement to the same fixture, also with no production change.
-- Exact next action: step 3b -- start the installed artifact. 3a (upstream movement, explicit
-  update, both revisions durable) is done; what remains of step 3 is a real MCP server launched over
-  a Git-backed source, which needs the real virtual environment `mcp_stdio_e2e_test` builds rather
-  than the skill this fixture installs.
+- Exact next action: step 4 -- drift, repair, rollback and uninstall over the live installation.
+  The Git-backed MCP installation from step 3b is the one to damage and reconcile, because it is the
+  only installation anywhere that a real commit produced and that really starts.
 - Do not undo: the Git transport allowlist, and the configuration schema's refusal of local Git
   locations behind it. `file://` and local paths are refused on purpose at both layers, and no test
   may widen either to make itself hermetic. Substitute the transport port; never the verdict.

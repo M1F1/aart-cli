@@ -1495,3 +1495,45 @@ selections and asserting ordering directly, which is a different question from C
 out-of-scope survivor a backlog note rather than a finding.
 
 Evidence/links: D-134; D-149; CP-17 step 2 review; `agent_artifacts/domain/selection.py`.
+
+## B-064 — The CLI cannot install any artifact that declares an input
+
+`aart marketplace install` has no flag that answers a declared input: the required-input form belongs
+to the persistent shell. An artifact declaring one is therefore refused outright, with
+`consumer-invalid` naming each unanswered field and its kind. The refusal is correct and is now
+pinned by `git_backed_runtime_e2e_test`, including that nothing is built for an install that cannot
+complete -- no runtime directory, no harness entry, no receipt.
+
+What it means in practice is that the CLI can install artifacts that need no configuration, while
+the most common MCP shape -- a server needing a token -- is reachable only from the shell. Whether
+the CLI should grow a way to answer the form, or should keep sending an operator to the shell for
+it, is a Product Specification question rather than a defect.
+
+**Not critical path.** No mandatory invariant requires the CLI to answer inputs, and the boundary
+fails closed and says why.
+
+Evidence/links: CP-17 step 3b; `tests/git_backed_runtime_e2e_test.py`;
+`agent_artifacts/commands/marketplace.py`; `agent_artifacts/io/configured_installation.py`.
+
+## B-065 — Marketplace provenance names a synthetic author commit
+
+`marketplace list` publishes a `provenance` block per artifact carrying `origin_url`, `path` and
+`resolved_commit`. Over the CP-17 Git-backed chain it reads
+`{"origin_url": "https://git.example/servers.git", "resolved_commit": "000...0"}` while
+`source.resolved_revision` alongside it carries the real commit.
+
+That is not a defect: provenance describes the *author* repository a candidate was scanned from at
+promotion time, which is a different repository from the one a consumer synchronizes, and the zeros
+come from the promotion-evidence fixture rather than from the code. But it is CP-17's own thesis
+pointing at the half of the chain this slice does not reach: the maintainer side is still proven
+against a precondition a test synthesized, and a `resolved_commit` of all zeros is the same tell
+`"a" * 40` was on the consumer side.
+
+Closing it means a maintainer-side fixture that scans and promotes from a second real Git
+repository, so that the provenance an operator reads is a commit that exists.
+
+**Not critical path.** CP-17's chain is the consumer's; no mandatory invariant requires the author
+repository to be real in these fixtures.
+
+Evidence/links: CP-17 step 3b probe; D-091; `tests/promotion_planning_test.py::_evidence`;
+`tests/git_backed_runtime_e2e_test.py`.
