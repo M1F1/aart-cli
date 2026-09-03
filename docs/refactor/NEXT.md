@@ -375,10 +375,47 @@ wrong.
 **CP-17 is complete.** Steps 1, 2, 3a, 3b, 4 and 5 are VERIFIED, with step 5's Collection half
 pinned as an evidenced refusal by `CollectionsAreNotReachableTest` rather than left as prose.
 
-**Next action: CP-18, the migration and release gate**, unless the Collection capability is
-scheduled first. B-067 now carries the four-layer scope and is the natural candidate for a slice of
-its own: INV-186 and INV-213 cannot be evidenced through any public verb until it exists, so it has
-to be built before either can move off PARTIAL.
+**CP-18 Migration completion and release gate is IN PROGRESS.** The slice document is
+`docs/refactor/slices/CP-18-migration-and-release-gate.md`, and it opens on the same finding CP-15
+did: read the traceability table alone and CP-18 looks like eleven untouched invariants, but most of
+INV-072-080 is already held by `enterprise_ci_template_test.py` (forty-odd assertions over the
+emitted workflows: pip pointed at the configured index first, every variable documented and every
+documented variable read, an exclusive container switch whose default shape carries no credentials,
+both halves of an index credential remasked with no log line carrying the assembled URL) and by
+`release_workflow_test.py`. Those rows are stale bookkeeping rather than missing work, and step 2
+audits them one at a time.
+
+**Step 1 is VERIFIED: INV-071 is now evidenced against the import graph rather than a declaration.**
+`dev_tools_test` asserts `[project] dependencies = []` and `scripts/packaging_check.py` refuses a
+non-extra `Requires-Dist` in the built wheel. Both are worth keeping and neither holds INV-071: a
+runtime module that imports a development tool *inside a function body* declares nothing, adds no
+`Requires-Dist`, ships in the wheel, and violates the invariant on the first call. Measured, not
+supposed -- with `import hypothesis` inserted into a function body in
+`agent_artifacts/application/installed_state.py`, `dev_tools_test` and `packaging_test` were green
+and `packaging_check` said `packaging check OK`. `tests/runtime_purity_test.py` reads every module
+under `agent_artifacts/` with `ast` and asserts none imports a development tool, the test suite or
+the gate scripts; its forbidden set is derived from Poetry's dev group at test time rather than
+hardcoded, and `ast` is deliberate, since import-time introspection sees only module-level imports
+and would miss the one shape that defeats both incumbent checks. INV-071 moves to EVIDENCED.
+
+The first draft read the dev group with `tomllib` and mypy refused it: `requires-python` is `>=3.10`
+and `tomllib` arrived in 3.11, which `dev_tools_test`'s docstring already records for `poetry.lock`.
+A test for *this* invariant that runs on only some supported interpreters is the wrong shape, so the
+group is read by a flat-table shortcut with a claim of its own. Deriving the set also turned up
+B-068: `mutmut` is declared in the dev group but absent from `poetry.lock`, so the provisioning path
+omits it and `make mutants` cannot run in an environment built that way. Advisory tooling, so it is
+backlog, not a blocker.
+
+**Next action: CP-18 step 2** -- audit INV-072-080 against the tests that already hold them, mark
+EVIDENCED only where a public flow proves the claim, and open a step for each that is genuinely
+unheld. Then legacy removal, docs reconciliation, traceability completion and the closing gates.
+
+The Collection capability may be scheduled ahead of the rest of CP-18. B-067 carries the four-layer
+scope and is the natural candidate for a slice of its own: INV-186 and INV-213 cannot be evidenced
+through any public verb until it exists, so it has to be built before either can move off PARTIAL.
+
+Do not weaken `runtime_purity_test`'s two guards. Without them a rename of `agent_artifacts/` leaves
+four green tests asserting nothing, which is the failure mode D-149 names.
 
 Do not widen `_reported`'s keep-rule on either axis. Payload-only and ABSENT/DIVERGENT-only are
 load-bearing, and D-150's mutation 4 is the uninstall and repair tests catching the widening.

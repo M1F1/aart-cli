@@ -1636,3 +1636,35 @@ must not become a partial install of some members, and must not silently succeed
 
 Evidence/links: CP-17 step 5; D-131; B-038; INV-186; INV-213;
 `agent_artifacts/io/configured_selection.py`.
+
+## B-068 — `mutmut` is declared in the dev group but absent from `poetry.lock`
+
+Found: CP-18 step 1 (2026-09-03) · Severity: low · Status: open
+
+D-134 added `mutmut` to Poetry's dev group and put `make mutants` behind it. `poetry.lock` was never
+regenerated, so it carries no `mutmut` entry, and `scripts/dev_tools.py::requirements("dev")` --
+which reads the lock and is the list a provisioned environment installs from -- returns twelve pins
+with `mutmut` not among them:
+
+```text
+coverage, exceptiongroup, hypothesis, librt, mypy, mypy-extensions,
+pathspec, poetry-core, ruff, sortedcontainers, tomli, typing-extensions
+```
+
+An environment provisioned by that path therefore cannot run `make mutants` at all; it fails on the
+missing module rather than reporting an unadequate suite.
+
+Not critical. `make mutants` is advisory and always scoped by contract (D-134), it is not one of the
+nine quality gates, and no gate command names it -- which is also why
+`dev_tools_test::test_every_gate_tool_is_pinned_by_the_lock` is right to stay green: mutmut is not a
+gate tool. Nothing mandatory is blocked.
+
+It becomes critical if mutation adequacy is ever promoted to a gate, or if a CI job is expected to
+run `make mutants` unattended, since either would make the tool's absence a silent skip rather than
+a developer's local surprise -- the shape INV-080 forbids.
+
+The fix is to regenerate the lock, not to hand-edit it. Worth doing next time the lock is touched
+for another reason.
+
+Evidence/links: D-134; INV-080; `pyproject.toml` `[tool.poetry.group.dev.dependencies]`;
+`poetry.lock`; `scripts/dev_tools.py`; `scripts/mutants.py`.

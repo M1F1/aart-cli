@@ -3150,3 +3150,47 @@ licence to build the Collection capability inside an acceptance slice.
 Evidence/links: B-067; D-131; B-038; INV-186; INV-213;
 `tests/git_backed_bulk_install_e2e_test.py::CollectionsAreNotReachableTest`;
 `agent_artifacts/application/promotion.py`; `agent_artifacts/io/configured_selection.py`.
+
+## D-152 — A declaration is not a dependency graph, so INV-071 is read off the source
+
+Date: 2026-09-03 · Slice: CP-18 step 1 · Status: accepted
+
+**Context.** INV-071 requires that development verification tooling stay outside the
+production/runtime dependency graph. Two checks claimed to cover it. `dev_tools_test` reads
+`[project] dependencies` out of `pyproject.toml` and asserts it is `[]`. `scripts/packaging_check.py`
+builds the wheel and refuses any non-extra `Requires-Dist` in its metadata. Both are true, both are
+worth keeping, and both are statements about what the project *declares*.
+
+**The finding.** A runtime module can import a development tool without declaring anything. Put the
+import inside a function body and it adds no `Requires-Dist`, changes no manifest, ships inside the
+wheel, and breaks on the first call in an environment installed from that wheel. This was measured
+rather than reasoned about: with `import hypothesis` inserted into a function body in
+`agent_artifacts/application/installed_state.py`, `dev_tools_test` and `packaging_test` reported 36
+passed and 1 skipped, and `packaging_check` reported `packaging check OK`.
+
+**Decision.** INV-071 is evidenced against the import graph. `tests/runtime_purity_test.py` parses
+every module under `agent_artifacts/` with `ast` and asserts that none of them imports a development
+tool, the test suite, or the gate scripts.
+
+Two choices carry the claim and should not be undone:
+
+- **The forbidden set is derived, not hardcoded.** It is read out of Poetry's dev group at test time,
+  so a tool added to the group tomorrow is covered without anyone remembering to extend a literal.
+  `poetry-core` maps to its import name `poetry`; names normalise `-` to `_`.
+- **`ast`, not import-time introspection.** Walking `sys.modules` after importing the package sees
+  only what module-level imports pulled in. The function-body case is both the realistic shape of
+  such a leak and the *only* shape that defeats both incumbent checks, so the one approach that
+  cannot see it is the one approach that must not be used here.
+
+Two of the file's four tests are guards on the test itself, because an absence assertion evaluated
+over an empty tree passes for the wrong reason (D-149): the forbidden set must be non-empty, and the
+package tree must yield more than a hundred sources. Without them a rename of `agent_artifacts/`
+turns this file into four green tests that assert nothing.
+
+**Consequence.** Neither existing check is replaced; a third has been added at the layer the
+invariant is actually about. The general form is worth carrying into the rest of CP-18's
+traceability audit: a row is not EVIDENCED because something adjacent is green, and a check that
+reads a manifest has not checked the code.
+
+Evidence/links: INV-071; D-149; D-091; `tests/runtime_purity_test.py`; `tests/dev_tools_test.py`;
+`scripts/packaging_check.py`; `docs/refactor/slices/CP-18-migration-and-release-gate.md`.
