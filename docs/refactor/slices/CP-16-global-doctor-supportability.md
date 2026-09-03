@@ -172,6 +172,7 @@ survivor outside the increment's claims is a finding, not a reason to invent a f
 - Step 2 full gates: `make quality` green -- all nine gates, 3,251 tests, 1 skipped, 85.37% branch
   coverage -- and `make integration` separately green with 287 E2E tests.
 - Step 3 focused: eight repair E2E tests (ten including subtests) green; five targeted mutations each red only where claimed.
+- Step 3 full gates: the first run failed on `source_remediation_test`'s repository-wide rule that every command string the package shows an operator must be one the parser accepts. The no-match remediation read `run aart doctor and choose one exact installed coordinate`, and the scanner's bare-command pattern runs to the first comma or semicolon, so it extracted the whole sentence as the command. Reworded to `run aart doctor, then pass one exact installed coordinate to --repair`, which leaves `aart doctor` as the runnable part. Worth recording because no focused run could have caught it: the rule lives in a test that scans every module, and the eight repair E2E tests were green throughout.
 
 ## Remaining
 

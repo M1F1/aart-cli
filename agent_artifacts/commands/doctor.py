@@ -175,7 +175,7 @@ def _run_repair(
             request,
             _error(
                 f"no {scope.value}-scope installation matches {coordinate}",
-                "run aart doctor and choose one exact installed coordinate",
+                "run aart doctor, then pass one exact installed coordinate to --repair",
             ),
             _REPAIR_OPERATION,
             finalized=False,
