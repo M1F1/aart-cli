@@ -54,7 +54,8 @@ score.
 3. **VERIFIED:** add safe repair review and finalize entry points. Re-inspect and re-plan under the same
    precondition discipline as every configured lifecycle action; apply only an explicitly reviewed
    minimal plan.
-4. **IN PROGRESS (4a done):** make Activity, Receipt, configuration, credential and orphaned-run diagnostics usable from the
+4. **IN PROGRESS (4a orphaned-run and 4b Activity/Receipt done; configuration and credential
+   remain):** make Activity, Receipt, configuration, credential and orphaned-run diagnostics usable from the
    global report without weakening their existing evidence or undo boundaries. Triage B-052 and
    B-055 here only where a mandatory invariant requires it.
 5. Run the full public-flow, negative/property, integration and mutation-adequacy evidence; close
@@ -238,6 +239,67 @@ per-effect consent, which is a CLI capability rather than a Doctor one, and B-05
 marketplace graph rather than the installed machine. Neither is reachable from a global report and
 no mandatory invariant requires either, so both stay in the backlog rather than expanding the slice.
 
+### Step 4b — the audit trail, and the undo Doctor must not invent (D-143)
+
+`project_activity`, `activity_from_receipts`, `activity_view_to_data` and `render_activity` all
+existed, and every one of them was referenced by `application/consumer_session.py` and by nothing
+under `agent_artifacts/commands/`. The record of what AART did to a machine -- the trail INV-191
+makes the audit evidence -- was reachable from the interactive shell and from nowhere else. That is
+the same shape as steps 1, 2 and 4a, and the third time in this slice that a capability turned out
+to exist at a seam with no verb reporting it.
+
+`tests/doctor_activity_e2e_test.py` drives `aart doctor` over a real configured registry. The
+report now carries the accepted day-grouped timeline and, beside it, each recorded action with the
+undo answer its own receipt holds. The timeline and the action list are asserted to carry the same
+recorded moments, so they are one observation rendered twice rather than two reads that can drift.
+The trail is newest first and holds every action of the run.
+
+**INV-192 is held as a pair produced by one flow.** An install that placed a payload and a delivery
+reports `available: true` naming exactly `delivery:claude` and `payload`. The uninstall that follows
+reports `available: false`, names nothing to reverse, and gives the receipt's own reason -- nothing
+retained here can reverse a removal. The false half is evidence only because the true half sits
+beside it in the same trail (D-138), and no fixture had to be invented for either: one install and
+one uninstall produce both.
+
+**What this deliberately does not claim.** `marketplace receipt show` is a different record -- the
+*setup* receipt for one coordinate, with its own retry and rollback commands and no `recorded_at`
+or `undo` field at all. The first draft of this file cross-checked Doctor's undo against it and was
+wrong to; the two are different receipts about different things. The timeline carries lifecycle
+receipts, which is what 165 means by Activity, and the honest cross-check is that the undo answer
+*varies with what actually took effect* rather than that it matches a record it is not derived from.
+
+Six mutations, each red only where it belongs: synthesizing the undo as always available instead of
+reading the receipt (1 test); truncating the trail to its newest entry (2); building the timeline
+from an empty trail (1); rendering every action as undoable (1); and re-deriving the recorded moment
+from the clock instead of the receipt (2).
+
+**The finding is in the empty case.** Removing the special-cased "nothing has been recorded on this
+machine yet" line killed nothing: the baseline scenario asserted only the JSON, so the human
+rendering was free to print a bare `Recent activity:` header with nothing beneath it. That reads as
+a rendering that failed rather than as a machine that has done nothing -- the same "absence against
+unknown" confusion step 2 refused for the offline capabilities and step 4a refused for the run root.
+The baseline now asserts the words, and the mutation turns it red.
+
+A scoped `make mutants ONLY=agent_artifacts/commands/doctor.py` over all four Doctor test files
+produced 499 mutants, 354 killed. Nine survivors fall inside this step's two functions and three of
+them were real:
+
+- `_action_data` published `artifact` and `status`, and renaming either key killed nothing, because
+  no test read either. A field the payload publishes that nothing holds is a contract nobody is
+  keeping; both are now asserted.
+- The human undo line joined its components with `", "`, and changing the separator killed nothing.
+  With two components that separator is visible to the reader, and an operator deciding whether to
+  undo needs to see what would be reversed. Now asserted in full.
+
+The remaining six are string-spelling mutants that substring assertions cannot distinguish --
+mutmut wraps a literal as `XXRecent activity:XX`, which still contains `Recent activity:` -- plus
+one blank separator line. They are recorded, not chased: tightening an assertion to an exact line
+would hold the rendering's whitespace rather than its meaning.
+
+**Outside this step's claims:** 84 of the 145 survivors are in step 3's `_run_repair`, which was
+proven by five targeted mutations and never given a scoped run of its own. That is a finding about
+step 3's test depth rather than about step 4b, and it is recorded as B-060.
+
 ## Quality gates
 
 - Baseline before CP-16: `make quality` green (3,237 tests, 1 skipped, 85.32% branch coverage) and
@@ -262,6 +324,11 @@ no mandatory invariant requires either, so both stay in the backlog rather than 
   where claimed; ruff, format and mypy green over the four changed files. Fresh scoped
   mutation: 43 mutants, 40 killed, three reviewed survivors (two on an unexecuted guard, one
   equivalent under the run directory's naming).
+- Step 4b focused: five activity E2E tests green, all five RED against the previous commit;
+  nine targeted mutations each red only where claimed. Scoped mutation over the whole command
+  module with all four Doctor test files: 499 mutants, 354 killed; three real gaps inside this
+  step's functions were found and closed, six string-spelling survivors recorded, and 84
+  survivors in step 3's `_run_repair` handed to B-060.
 
 ## Remaining
 
@@ -280,10 +347,11 @@ Activity, Receipt, configuration and credential diagnostics remain.
 
 - B-058: scoped mutmut results can remain stale after test-only changes.
 - B-059: Doctor's exactly-one-match repair guard is defensive code of unproven reachability.
+- B-060: step 3's `_run_repair` has 84 surviving mutants under a scoped run it never had.
 
 ## Blockers
 
-None for step 4b.
+None for step 4c.
 
 ## Legacy removal criteria
 

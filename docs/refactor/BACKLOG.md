@@ -1404,3 +1404,25 @@ is conservative either way — it refuses rather than repairing an ambiguous tar
 recorded as a finding, not repaired by inventing a fixture the capability does not support.
 
 Evidence/links: D-134; D-091; CP-16 slice step 3; `agent_artifacts/commands/doctor.py`.
+
+## B-060 — Step 3's repair command was never given a scoped mutation run
+
+Found in CP-16 step 4b. Running `make mutants ONLY=agent_artifacts/commands/doctor.py` over all four
+Doctor test files produced 499 mutants and 145 survivors, of which 84 are in `_run_repair` — step
+3's reviewed-repair entry point. Step 3 was proven by five targeted mutations, each red exactly
+where claimed, and that remains true; what it never had was a scoped run to find the claims nobody
+thought to make, which is the other half of what D-134 asks for.
+
+The survivors are unclassified. Step 4b's own nine broke down as three real gaps and six
+string-spelling artifacts, so a similar split is plausible here — but plausible is not measured, and
+84 is large enough that assuming would be the wrong move. What is needed is one scoped run of
+`_run_repair` against `tests/doctor_repair_command_e2e_test.py` alone, with the survivors read and
+split into real gaps, equivalent mutants and presentation noise.
+
+**Not critical path.** INV-194 is EVIDENCED on public-flow evidence and five mutations that each
+turn red only their own claim; no Product Specification invariant depends on closing these. It
+becomes critical if any of the survivors turns out to be a reachable defect in the confirmation
+boundary, which is the part worth reading first: the `--expect` comparison, the scope selection and
+the exactly-one-match guard that B-059 already questions.
+
+Evidence/links: D-134; D-091; B-059; CP-16 slice steps 3 and 4b; `agent_artifacts/commands/doctor.py`.

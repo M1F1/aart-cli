@@ -56,13 +56,27 @@ D-138. And the scoped mutmut run then found four gaps the seven manual mutations
 falsey-but-not-`false` is `null` in JSON, and `continue`/`break` plus `or`/`and` at the loop guards
 cannot be distinguished by a fixture holding a single working copy.
 
-**Next action: CP-16 step 4b.** Make the Activity, Receipt, configuration and credential diagnostics
-reachable from the global report without weakening their existing evidence or undo boundaries.
-INV-192 is the constraint: Doctor may point at a receipt's own `rollback_command` but must not
-synthesize one, and D-133 already makes that field depend on the steps still standing. `Activity`
-has `project_activity` and `render_activity` and is referenced only by the TUI, which is the same
-"capability exists at a seam, no verb reports it" shape as steps 1, 2 and 4a. Then step 5 closes the
-slice.
+Step 4b is VERIFIED (D-143). The audit trail INV-191 names had `project_activity`,
+`activity_from_receipts`, `activity_view_to_data` and `render_activity` all built and referenced
+only by the TUI's assembly -- the third capability in this slice found at a seam with no verb
+reporting it. `aart doctor` now carries the day-grouped timeline and each recorded action's own undo
+answer, and INV-192 is held as a pair one flow produces: an install reports an undo naming
+`delivery:claude` and `payload`, the uninstall that follows reports none. D-143 records the mistake
+the first draft made -- cross-checking against `marketplace receipt show`, which returns the *setup*
+receipt, a different record with no `recorded_at` or `undo` field at all. Two findings: removing the
+"nothing has been recorded yet" line killed nothing, and the scoped run found `artifact` and
+`status` published in the payload with no test reading either. B-060 records 84 survivors in step
+3's `_run_repair`, which never had a scoped run of its own.
+
+**Next action: CP-16 step 4c.** Configuration and credential diagnostics are the remainder of step
+4's declared scope and are deliberately not backlogged. `project_credential_record` is the fourth
+instance of the same pattern: it exists, and `application/consumer_session.py` is its only caller.
+Doctor already reads credential observations -- it passes `credential_providers` into
+`read_installed_inspections` and never reports `inspected.value.credentials`. `CredentialObservation`
+"deliberately has no value field", so a report cannot leak a secret by construction, which is a
+claim worth asserting rather than assuming. Reading is safe on darwin where `MacOsKeychainProvider`
+is real; CP-15 step 8's warning was about *storing*. The dependants list also makes CP-15's
+retention claim (INV-231/232) visible for the first time. Then step 5 closes the slice.
 
 **CP-15 is VERIFIED — all eight steps done.** Step 8 is
 `tests/credential_contract_migration_e2e_test.py`, closing INV-231 and INV-232 and the slice with

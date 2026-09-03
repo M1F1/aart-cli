@@ -2817,3 +2817,28 @@ report is for.
 
 Evidence/links: CP-16 step 4a; `application/orphaned_runs.py`; `io/orphaned_runs.py`;
 `setup_verify_probes.py::orphan_run_directories`; CP-15 step 4b; INV-192.
+
+## D-143
+
+A cross-check is only evidence when both sides are records of the same thing.
+
+`aart doctor` now reports the lifecycle audit trail with each action's undo availability. The first
+draft asserted that Doctor's undo block matched what `aart marketplace receipt show` returned, and
+that was wrong twice over: `receipt show` returns the *setup* receipt for one coordinate, which
+carries `retry_command` and `rollback_command` and has no `recorded_at` or `undo` field at all,
+while the trail carries lifecycle receipts — install, update, uninstall, repair. The test failed
+with `KeyError: 'recorded_at'`, and the useful part was not the fix but what the failure said: the
+two are different receipts about different things, and a passing version of that assertion would
+have encoded a relationship that does not exist.
+
+INV-192 is held instead by showing that the undo answer varies with what actually took effect, in a
+pair one flow produces: an install that placed a payload and a delivery reports an undo naming
+exactly those components, and the uninstall that follows reports none, because nothing retained can
+reverse a removal. Neither half is a second opinion about reversibility — both are
+`receipt_detail_to_data`'s own block — and the pair is what makes the false half evidence (D-138).
+
+The general rule: before asserting that two surfaces agree, establish that they are reporting the
+same record. Two names containing the word "receipt" are not that establishment.
+
+Evidence/links: CP-16 step 4b; `commands/doctor.py::_action_data`; `receipt_service.py::show_view`;
+`application/consumer_views.py::_undo_availability`; INV-191; INV-192; D-133; D-138.

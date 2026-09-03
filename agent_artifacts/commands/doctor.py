@@ -14,8 +14,12 @@ from datetime import datetime, timezone
 
 from agent_artifacts import command_outcome as _common
 from agent_artifacts.application.consumer_views import (
+    ActivityView,
     InstalledArtifactView,
     PresentationProfile,
+    ReceiptDetailView,
+    activity_from_receipts,
+    activity_view_to_data,
     project_doctor,
     project_installed_artifact,
     project_lifecycle_plan,
@@ -45,9 +49,11 @@ from agent_artifacts.io.consumer_machine import read_installed_inspections
 from agent_artifacts.io.credentials import MacOsKeychainProvider
 from agent_artifacts.io.offline_readiness import read_offline_readiness
 from agent_artifacts.io.orphaned_runs import read_orphaned_runs
+from agent_artifacts.io.receipt_store import LocalReceiptStore
 from agent_artifacts.model import Request
 from agent_artifacts.receipt_service import resolved_paths
 from agent_artifacts.tui_consumer import (
+    render_activity,
     render_doctor,
     render_lifecycle_plan,
     render_receipt_detail,
@@ -119,6 +125,43 @@ def _item_data(item: InstalledArtifactView) -> dict[str, object]:
             for drift in item.drift
         ],
     }
+
+
+def _action_data(item: ReceiptDetailView) -> dict[str, object]:
+    """One finished action, with the undo answer taken from the receipt rather than recomputed.
+
+    INV-192: Doctor must not invent stronger undo guarantees than a receipt carries. Reusing
+    `receipt_detail_to_data`'s own block is what keeps that structural rather than remembered --
+    there is no second opinion here to drift out of step with the first.
+    """
+
+    return {
+        "artifact": item.artifact,
+        "intent": item.intent,
+        "recorded_at": item.recorded_at,
+        "status": item.status,
+        "undo": receipt_detail_to_data(item)["undo"],
+    }
+
+
+def _activity_lines(
+    actions: tuple[ReceiptDetailView, ...],
+    view: ActivityView,
+    profile: PresentationProfile,
+) -> tuple[str, ...]:
+    """The accepted timeline, then what each recorded action says about reversing itself."""
+
+    if not actions:
+        return ("Recent activity: nothing has been recorded on this machine yet.",)
+    lines = ["Recent activity:", *render_activity(view, profile), ""]
+    for item in actions:
+        answer = (
+            "can be undone: " + ", ".join(item.undo.components)
+            if item.undo.available
+            else "cannot be undone -- " + item.undo.reason
+        )
+        lines.append(f"  {item.artifact} ({item.intent}) {answer}")
+    return tuple(lines)
 
 
 def _offline_lines(readiness: OfflineReadiness) -> tuple[str, ...]:
@@ -311,6 +354,11 @@ def run(request: Request) -> int:
         return _emit_error(request, offline)
     # The run root is the data root, not the project root: deriving it a second time is `LAF-66`.
     orphaned = read_orphaned_runs(run_root=runtime.value.paths.data_root)
+    recorded = LocalReceiptStore(os.path.join(runtime.value.paths.data_root, "state")).actions()
+    if isinstance(recorded, Err):
+        return _emit_error(request, recorded)
+    now = datetime.now(timezone.utc)
+    timeline = activity_from_receipts(recorded.value, today=now.date())
 
     artifacts = tuple(
         project_installed_artifact(
@@ -344,6 +392,8 @@ def run(request: Request) -> int:
         "repairs": repairs,
         "offline_readiness": offline_readiness_to_data(offline.value),
         "orphaned_runs": orphaned_runs_to_data(orphaned),
+        "activity": activity_view_to_data(timeline),
+        "recorded_actions": [_action_data(item) for item in recorded.value],
     }
     if request.json:
         print(json.dumps(payload, indent=2))
@@ -356,6 +406,8 @@ def run(request: Request) -> int:
                     *_offline_lines(offline.value),
                     "",
                     *orphaned_run_lines(orphaned),
+                    "",
+                    *_activity_lines(recorded.value, timeline, PresentationProfile.FAST),
                 )
             )
         )
