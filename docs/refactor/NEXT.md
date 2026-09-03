@@ -406,9 +406,28 @@ B-068: `mutmut` is declared in the dev group but absent from `poetry.lock`, so t
 omits it and `make mutants` cannot run in an environment built that way. Advisory tooling, so it is
 backlog, not a blocker.
 
-**Next action: CP-18 step 2** -- audit INV-072-080 against the tests that already hold them, mark
-EVIDENCED only where a public flow proves the claim, and open a step for each that is genuinely
-unheld. Then legacy removal, docs reconciliation, traceability completion and the closing gates.
+**Step 2 is under way, and its first row justified the whole audit.** INV-077 (one stable required
+gate) turned out to be two different situations. This repository's `pr-check` aggregate was already
+right -- one stable name, `if: always()`, an explicit failure when both arms skip, an allowlist
+rather than a check for `failure` -- and tested by nothing: `quality_gates_test` covers the matrix
+default and the composite-action delegation, while the shell that decides the verdict, the one thing
+branch protection depends on, was covered by nothing. `tests/aggregate_gate_test.py` now extracts
+that script and *runs it under bash* for each combination of `needs.*.result`, which is INV-076
+collecting on its own promise that such logic stays runnable outside GitHub Actions.
+
+The second situation was a real defect. The CI `aart registry init` writes had no aggregate at all:
+`registry-quality` and `registry-quality-private-image`, two container shapes of which one ever
+runs, each a matrix -- so a registry owner protecting `main` had no name that is stable across
+configurations, and naming an arm their deployment skips is worse than useless, because GitHub reads
+a skipped required check as satisfied. `_aggregate()` now emits `registry-quality-gate`, and the
+registry README names it, held to the workflow by a drift test rather than a repeated literal
+(D-153). INV-077 is EVIDENCED for both.
+
+**Next action: continue CP-18 step 2** with INV-072, 073, 074, 075, 076, 078, 079 and 080. Audit
+them the way INV-077 was audited -- read the invariant, find the flow that would break it, and only
+then decide whether an existing test holds it. Two rows in and both have found something, so do not
+assume the rest are bookkeeping. Then legacy removal, docs reconciliation, traceability completion
+and the closing gates.
 
 The Collection capability may be scheduled ahead of the rest of CP-18. B-067 carries the four-layer
 scope and is the natural candidate for a slice of its own: INV-186 and INV-213 cannot be evidenced

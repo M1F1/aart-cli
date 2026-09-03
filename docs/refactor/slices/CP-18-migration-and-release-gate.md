@@ -156,3 +156,72 @@ gate command names the tool. Not fixed here: regenerating the lock is not this s
 ### Status
 
 Step 1: **VERIFIED**. INV-071 moves PARTIAL → EVIDENCED.
+
+---
+
+## Step 2 — the CI/release rows, audited one at a time
+
+**INV-077:** *Branch protection should depend on one stable aggregate gate name rather than
+matrix-specific or environment-specific job names. The aggregate gate MUST fail when no valid gate
+arm ran or when any selected arm failed.*
+
+The audit found two different situations under this one invariant.
+
+### `pr-check` was right and untested
+
+`.github/workflows/pr-check.yml` already carries the aggregate correctly: one stable name,
+`if: always()`, an explicit failure when both arms are `skipped`, and an allowlist rather than a
+check for `failure`. Nothing tested it. `quality_gates_test` covers the matrix default and the
+delegation to the composite action — the shell that decides the verdict, which is the one thing
+branch protection depends on, was covered by nothing.
+
+`tests/aggregate_gate_test.py` extracts that script from the YAML and **executes it under `bash`**
+with each combination of `needs.*.result`. That is INV-076 collecting on its own promise that such
+logic stays "runnable/testable outside GitHub Actions when practical": a workflow cannot be run
+here, but this part of one can, and grepping YAML for the substrings a correct script would contain
+is a far weaker claim than watching it exit 1.
+
+| `gates` | `gates-private-image` | verdict |
+|---|---|---|
+| success | skipped | pass |
+| skipped | success | pass |
+| skipped | skipped | **fail** — "neither gate job ran" |
+| failure / cancelled | either | **fail** |
+| success | failure | **fail** |
+
+Both arms are named in the output whatever the verdict, which is INV-080's visible-evidence half.
+
+### The emitted registry CI had no aggregate at all
+
+`aart registry init` writes a workflow with `registry-quality` and
+`registry-quality-private-image` — two container shapes of which exactly one ever runs, each a
+matrix over `compatibility: [minimum, latest]`. A registry owner protecting `main` therefore had no
+name that is the same in every configuration. Naming an arm their deployment skips is worse than
+useless: GitHub counts a skipped required check as *satisfied*, so the rule passes precisely when
+nothing was proven. INV-077's failure mode, in a shipped scaffold — a real defect, not a
+bookkeeping gap.
+
+`_aggregate()` now emits `registry-quality-gate` beside the two arms with the same verdict logic,
+no container and no Python, since the job branch protection depends on must not be able to fail for
+a reason unrelated to the gates. The registry README gained a "Protecting `main`" section naming
+it, because a stable name nobody is told about protects nothing (INV-075), and a drift test reads
+the name out of the emitted YAML rather than repeating the literal.
+
+### Targeted mutations (D-091)
+
+| # | mutation | red |
+|---|---|---|
+| M12 | delete `pr-check`'s both-skipped branch | `test_no_arm_running_at_all_fails_instead_of_looking_like_a_pass` |
+| M13 | widen the allowlist to `success\|skipped\|cancelled` | `test_any_arm_failing_fails_the_aggregate`, both cancelled subtests |
+| M14 | drop `if: always()` from the emitted gate | `test_the_template_offers_one_requirable_name` |
+| M15 | delete the README section, leaving the workflow intact | `test_the_registry_readme_names_the_check_the_workflow_actually_emits` |
+| M16 | give the emitted gate a container | `test_the_gate_needs_no_container_because_it_runs_no_python` |
+
+Each turned red only the test stating the claim it breaks; the other eleven stayed green each time.
+
+### Status
+
+Step 2 for INV-077: **VERIFIED**, PARTIAL → EVIDENCED, for both this repository's CI and the CI it
+ships to others. The remaining rows (INV-072, 073, 074, 075, 076, 078, 079, 080) are still to be
+audited the same way — read the invariant, find the flow, and only then decide whether an existing
+test holds it.

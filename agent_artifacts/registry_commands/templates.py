@@ -186,7 +186,71 @@ def _job(job_id: bytes, body: bytes, header: bytes = b"", when: bytes = b"") -> 
     return b"".join(emitted)
 
 
-REGISTRY_CI_WORKFLOW = b"""name: AART registry quality
+def _aggregate(job_id: bytes) -> bytes:
+    """The one job name branch protection can require, over a job `_job` emitted in two shapes.
+
+    Neither shape is requirable on its own. Each is a matrix, so the name GitHub reports carries a
+    matrix value; and only one of the two ever runs, so a rule naming the shape a deployment does
+    not use would wait forever -- except that GitHub counts a skipped required check as
+    *satisfied*, so it would not wait at all. It would pass, having proven nothing. This job's name
+    is the same on every instance and in every configuration (INV-077).
+
+    `if: always()` is what makes it a gate rather than a formality: without it a skipped or failed
+    dependency skips this job too, and the rule is satisfied again for the same reason.
+
+    It runs no Python and pulls no image. The job branch protection depends on must not be able to
+    fail for a reason that has nothing to do with the gates.
+    """
+
+    return b"".join(
+        (
+            b"  ",
+            job_id,
+            b"-gate:\n    if: always()\n    needs: [",
+            job_id,
+            b", ",
+            job_id,
+            b"-private-image]\n",
+            _RUNS_ON,
+            b"""    steps:
+      - name: Report the gate results
+        shell: bash
+        env:
+          PLAIN: ${{ needs.""",
+            job_id,
+            b""".result }}
+          PRIVATE: ${{ needs.""",
+            job_id,
+            b"""-private-image.result }}
+        run: |
+          set -euo pipefail
+          echo "plain:         $PLAIN"
+          echo "private-image: $PRIVATE"
+
+          # Exactly one arm is meant to run; the other stands down by its own `if:`.  Both skipped
+          # means the gates never ran at all -- a broken condition, an image variable set to
+          # something unexpected -- and that must fail rather than look like a pass.
+          if [ "$PLAIN" = "skipped" ] && [ "$PRIVATE" = "skipped" ]; then
+            echo "::error::neither gate job ran; check AART_IMAGE_USERNAME_SECRET" >&2
+            exit 1
+          fi
+          # An allowlist rather than a check for "failure": a cancelled run is neither success nor
+          # failure and proves nothing, and any result GitHub adds later should stop this gate
+          # rather than slip through it.
+          for result in "$PLAIN" "$PRIVATE"; do
+            case "$result" in
+              success|skipped) ;;
+              *) echo "::error::a gate job reported '$result'" >&2; exit 1 ;;
+            esac
+          done
+          echo "all gates passed"
+""",
+        )
+    )
+
+
+REGISTRY_CI_WORKFLOW = (
+    b"""name: AART registry quality
 on:
   pull_request:
   push:
@@ -194,26 +258,29 @@ on:
 permissions:
   contents: read
 jobs:
-""" + _job(
-    b"registry-quality",
-    header=b"""    strategy:
+"""
+    + _job(
+        b"registry-quality",
+        header=b"""    strategy:
       fail-fast: false
       matrix:
         compatibility: [minimum, latest]
 """,
-    body=b"""    steps:
+        body=b"""    steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
 """
-    + _PROVIDE_AART
-    + b"""      - run: aart registry format --source . --check
+        + _PROVIDE_AART
+        + b"""      - run: aart registry format --source . --check
       - run: aart registry validate --source . --strict --frozen
       - run: aart registry lock --source . --check
       - run: aart registry build --source . --check
       - run: aart registry audit --source .
       - run: aart registry test --source . --compatibility ${{ matrix.compatibility }}
 """,
+    )
+    + _aggregate(b"registry-quality")
 )
 USAGE_REPORT_ISSUE_FORM = b"""name: AART redacted usage report
 description: Share one voluntary, bounded AART session result with this registry.
@@ -462,6 +529,17 @@ AART: aart-cli 2.8.5  via index https://nexus.corp/pypi/simple (aart-cli==2.8.5)
 | `AART_PYTHON` | `python3` | The interpreter's name inside that image |
 | `AART_GH_HOST` | derived | Only needed if your instance is served on a path or a non-default port |
 | `AART_PAGES` | unset | Set to `false` where the instance offers no GitHub Pages. The dashboard is still built, only publication is skipped |
+
+## Protecting `main`
+
+Require one status check: **`registry-quality-gate`**.
+
+Do not require the gate jobs themselves. Each is a matrix, so the name GitHub reports carries a
+compatibility arm, and the quality job is emitted in two container shapes of which only one ever
+runs on your instance. A rule naming the shape you do not use would never be satisfied - except
+that GitHub counts a *skipped* required check as satisfied, so it would pass, having proven
+nothing. `registry-quality-gate` has the same name in every configuration, runs whatever its
+dependencies did, and fails if any arm failed or if no arm ran at all.
 
 ## The version window
 
