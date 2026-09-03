@@ -1223,3 +1223,23 @@ Evidence/links: INV-223; `docs/product-specification/PRODUCT_SPECIFICATION.md` 1
 `agent_artifacts/marketplace/catalog.py` `_resolution_failure`;
 `agent_artifacts/installation/application.py` `INSTALL_OBJECT_UNAVAILABLE`;
 `agent_artifacts/io/python_runtime.py` `_install_argv`; `tests/offline_capability_test.py`.
+
+## B-052 — Cancel-after-partial-apply has no public flow to test it
+
+Found in CP-15 step 4a. `_apply_effects` handles two rollback paths: a step that failed, and a
+person who declined consent for the *next* effect after earlier ones already applied. D-133 gives
+both the same compensated-evidence retention, and only the first has an end-to-end test.
+
+The second is unreachable from the CLI: `--approve-setup-effects` is one flag for the whole plan,
+so a non-interactive run either approves every effect or none, and a cancel therefore always lands
+before the first effect applies -- which is exactly what
+`marketplace_lifecycle_e2e_test::test_an_authorized_plan_is_reviewed_and_applies_nothing_until_its
+_effects_are` measures. Per-effect consent is the interactive wizard's, and nothing drives that
+route over a real machine.
+
+Noncritical because the branch is one line different from the tested one and both go through the
+same `_compensated` helper and the same `_record`. It is recorded so that whoever adds a
+public-flow driver for interactive per-effect consent knows there is a claim waiting for it.
+
+Evidence/links: D-133; `agent_artifacts/setup_runtime.py` `_apply_effects`;
+`tests/verification_failure_e2e_test.py`.

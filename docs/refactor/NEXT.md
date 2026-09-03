@@ -15,7 +15,15 @@ carry the same three words in their evidence column -- *scattered source/registr
 safeguards* -- and that phrase is the slice's whole subject. A safeguard at a seam is worth what
 the verb an operator actually runs makes of it.
 
-**Steps 1, 2 and 3 are done.** Step 3 is `tests/offline_capability_test.py`: Product Specification
+**Steps 1, 2, 3 and 4a are done.** Step 4a is `tests/verification_failure_e2e_test.py`: a declared
+setup that writes one managed block and then fails one verification command. 165.12's report half
+already held -- non-zero exit, `verification-failed` as its own status, the compensatable block
+restored, the separately-placed payload still `current`. Its evidence half did not: the receipt
+recorded the verification result and no applied effects at all, because the engine dropped the step
+receipts whenever the rollback succeeded. D-133 keeps them, marked `compensated`, and moves
+`rollback_command` to depend on the steps still standing.
+
+**Steps 1, 2 and 3 before it.** Step 3 is `tests/offline_capability_test.py`: Product Specification
 165.11 decomposes offline installability into metadata cached / canonical payload cached / runtime
 dependencies cached, and AART holds all three as separate refusals under distinct codes even though
 `--offline` is one boolean. The dependency layer had no test at all before this, so removing
@@ -39,35 +47,42 @@ read as "this source is gone" in three places, so one invalid upstream revision 
 
 ## Exact next action
 
-**Continue CP-15 with step 4 of `slices/CP-15-edge-case-hardening.md`**: verification failure and
-partial/interrupted execution through the public verbs (INV-224, INV-225, INV-226). Two Product
-Specification statements carry it. 165.12: successful effects followed by *failed verification* are
-not reported as clean success -- so an install that placed its bytes and then failed to verify them
-must not exit 0 and must not leave a record claiming a verified installation. And 165.13: AART does
-not claim transaction atomicity beyond actual effect guarantees -- so a run interrupted midway must
-say what it actually did rather than implying an all-or-nothing rollback it never performed, and
-INV-226's re-inspection before resume is the other half of the same claim.
+**Continue CP-15 with step 4b of `slices/CP-15-edge-case-hardening.md`**: interrupted execution
+(INV-226, Product Specification 165.14). Two claims: an interrupted operation is *discoverable*
+rather than silently forgotten, and *"an interrupted operation is never resumed by blindly
+continuing from the next imperative command"* -- resume re-inspects and reconciles before
+constructing the remaining plan.
 
-The evidence that exists is at the seam: CP-12's executor replans under lease, which is the
-machinery. What is missing is a public flow -- no test anywhere drives a verb through an
-interruption, and none asserts that a post-effect verification failure is distinguishable in the
-exit code, the rendering and the persisted record from both a clean success and a plan that never
-ran. Start by reading how the setup engine records step outcomes (`setup_engine/application.py`,
-`_previous_record`) and how `setup_receipt.py` reads one back from outside a run: an interrupted run
-that re-inspects before resuming is exactly a run reading its own previous record, so the read path
-is already there and the question is what the public verbs make of it.
+The machinery exists and has no public flow over it. `application/execution.py` catches
+`KeyboardInterrupt` per step, marks the step `INTERRUPTED`, stops, and still re-inspects
+(`execution_test::test_an_interruption_stops_execution_and_still_re_inspects` is the seam claim).
+Every lifecycle execution replans under lease and refuses a stale review digest
+(`_execute_lifecycle_locked`). And the setup engine binds `previous_record` and the state snapshot
+into the plan's review digest, so a second run cannot reuse a plan built before the first one
+touched anything.
 
-The shape steps 1-3 established is the one to repeat -- name the verb an operator runs, drive it
+The discoverable half has a concrete, already-built surface to drive: `receipt verify` carries a
+`no-orphan-run-directory` claim (`LAF-61`, `setup_verify_probes.py::orphan_run_directories`) that
+reports a working copy an interrupted run left under `<data_root>/.agent-artifacts/setup-runs`,
+names it, and leaves it where it is. `LAF-66` records that this claim answered `true` in every scope
+for a while because the probe composed the path from the project root while the engine composed it
+from the data root -- two places deriving one path. That is a defect class worth a regression test
+over a real machine, and there is none: the existing coverage is unit-level with a hand-built
+record. Start there, then ask what a *second* `aart marketplace setup` does when the first left an
+orphan and no persisted record.
+
+The shape steps 1-4a established is the one to repeat -- name the verb an operator runs, drive it
 over a real temporary machine, and prove each test red against a real mutation of the code it names,
 not against a broken fixture. Where a test is a guard with no mutation available, say so in its
 docstring and rest its non-vacuousness on a sibling that moves the same values.
 
-Two helpers to build on. `_environment_over_a_writable_source` in
-`tests/source_sync_command_e2e_test.py` gives a real synchronized local source a test may republish
-into, and `_source`/`_source_json` beside it run the source verbs, which take no `--project` and so
-cannot use the lifecycle harness's own runner. And the coverage sweep found whole scenarios with no
-test file matching them at all -- `purge`, `collection.*drift`, `manual.*drift` -- so steps 5 and 6
-are greenfield rather than re-characterization.
+Two helpers to build on. `_environment_whose_verification_fails` in
+`tests/verification_failure_e2e_test.py` is a real machine with a declared, authorized, approved
+setup that runs actual effects, which is what an interruption needs something to interrupt; and
+`_environment_over_a_writable_source` in `tests/source_sync_command_e2e_test.py` gives a real
+synchronized local source a test may republish into. The coverage sweep also found whole scenarios
+with no test file matching them at all -- `purge`, `collection.*drift`, `manual.*drift` -- so steps
+5 and 6 are greenfield rather than re-characterization.
 
 The CP-14 record follows.
 

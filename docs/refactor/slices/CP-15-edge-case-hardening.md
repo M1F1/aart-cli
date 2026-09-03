@@ -45,7 +45,7 @@ temporary machine, and (c) records which mutation it was proven against.
 | Registry rollback preserves history | INV-216 | promotion audit chain walks backwards from the approved snapshot (D-104) | **Closed for the consumer half by increment 2.** The Git revert/commit half waits on CP-17 |
 | Provenance is not rewritten when upstream moves | INV-219 | typed Git/local audit pins (D-107) | **Closed by increment 2**, on both sides: the installation record, and the promotion audit under D-089's rebinding |
 | Physical purge is exceptional | INV-221, INV-222 | none found: no test file matches `purge` | Whole scenario unmeasured |
-| Interrupted operations re-inspect before resume | INV-226 | CP-12 executor replans under lease | No public-flow interruption test |
+| Interrupted operations re-inspect before resume | INV-226 | CP-12 executor replans under lease; `receipt verify` carries a `no-orphan-run-directory` claim (`LAF-61`) | No public-flow interruption test. **Step 4b.** |
 | Input/credential contract changes | INV-231, INV-232 | CP-08 credential lifecycle | No test that changing one artifact's contract leaves another's credential owned |
 | Policy drift contributes to health | INV-233 | `EffectivePolicy` is read at validation time (D-099) | Installed-artifact health does not consult current policy |
 | Development installs are visibly distinct | INV-237 | none found | Whole scenario unmeasured |
@@ -59,7 +59,11 @@ temporary machine, and (c) records which mutation it was proven against.
 2. **DONE:** Rollback and provenance under a moving upstream (INV-216, INV-219; INV-229 was already EVIDENCED by D-094).
 3. **DONE:** Offline decomposition: metadata, payload and runtime dependencies as separate
    capabilities (INV-223).
-4. Verification failure and partial/interrupted execution through the public verbs (INV-224–226).
+4. Split when it was opened, because the two halves have different subjects.
+   - **4a DONE:** verification failure and the compensatable restore (INV-224, INV-225;
+     165.12, 165.13).
+   - **4b:** interrupted execution -- discoverable, and re-inspected before resume
+     (INV-226; 165.14).
 5. Purge boundaries and the erasure claim AART must not make (INV-221, INV-222).
 6. Policy drift in installed health, and development installs kept visibly distinct
    (INV-233, INV-237).
@@ -182,3 +186,35 @@ on every `--offline` install.
 What is not closed: nothing *reports* the three capabilities before an install is attempted, which
 is the reading 165.11 shows. Recorded as B-051 for CP-16, where `aart doctor` is the surface that
 would carry it; INV-223 stays PARTIAL against it.
+
+### Step 4a — effects that applied, then a verification that failed (INV-224, D-133)
+
+`tests/verification_failure_e2e_test.py` runs a declared setup whose recipe writes one managed
+block and then runs one command that exits non-zero. Both halves are chosen: the block is
+compensatable, so 165.13's *"if all applied effects are safely compensatable, the previous state may
+be restored"* is the branch taken and the file's absence afterwards is what proves the restore ran;
+the failing command is `/usr/bin/false`, which needs no network, no tool and no secret, so nothing
+about the machine can explain the failure except that verification failed. The payload is installed
+first and separately, which is the shape 165.12 describes -- *"github-mcp was installed, but
+verification failed"* -- and `marketplace status` afterwards still reports it `current`, so a failed
+check on one transaction does not un-install what another already placed.
+
+165.12 makes two claims and they came apart. The report half already held: `aart marketplace setup`
+exits non-zero, `ok` is false, the item is `verification-failed` -- its own word, not
+`apply-failed-rolled-back` and not `cancelled`, because an operator told the wrong one repairs the
+wrong thing -- the counts read `configured=0, incomplete=1`, and the human rendering carries the
+artifact and the retry rather than only a count.
+
+The evidence half did not. The receipt recorded the verification result and the final health and
+recorded *no applied effects at all*: `steps` was empty, because `_apply_effects` dropped the
+receipt list whenever the rollback succeeded. So `receipt show` said a check had failed while saying
+nothing about what had already been done to the machine before it did. D-133 fixes it by keeping the
+steps and marking them `setup_disposition: "compensated"` -- the word the persistence-failure path
+in `setup_engine/application.py` already writes, which all three readers already honour -- and by
+deciding `rollback_command` from the steps still standing, so a fully compensated record offers no
+undo to run.
+
+Proven against mutations: the two evidence tests were red against the shipped code before the fix
+and the four report tests were green, which is the split above measured rather than asserted;
+reverting `standing` to `receipts` in `_record` turns the undo claim red on its own, and only that
+one.

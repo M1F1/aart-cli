@@ -2550,3 +2550,39 @@ the Product Specification first instead of hiding the change here.
   `tests/source_sync_command_e2e_test.py` over the public verbs plus the two seam tests; reverting
   the `RS-08` refusal in `sources/validation.py` turns all eight end-to-end tests red, so they
   measure the gate rather than the fixture.
+
+## D-133 — A rolled-back setup step is kept as evidence, not dropped
+
+- **Context:** Product Specification 165.12 requires the receipt of a run whose verification failed
+  to record *"applied effects, verification result and final health"*. CP-15 step 4a drove that
+  through the public verbs for the first time: a recipe that writes one managed block and then runs
+  one command that exits non-zero. The report half held -- `aart marketplace setup` exits non-zero,
+  the item is `verification-failed` and not `apply-failed-rolled-back`, the counts say
+  `configured=0, incomplete=1`, and 165.13's compensatable-restore branch removed the block. The
+  evidence half did not: `_apply_effects` passed `receipts=() if rolled_back else receipts`, so the
+  persisted record's `steps` list was empty and `aart marketplace receipt show` said a verification
+  had failed while saying nothing about what had already been done to the machine before it did.
+- **Decision:** a run that rolled back keeps its step receipts, each marked
+  `setup_disposition: "compensated"`. `_record` decides `rollback_command` from the steps that are
+  still standing, so a fully compensated record offers no undo.
+- **Status:** accepted.
+- **Reason:** the effects were applied -- they are what the rollback undid -- so a receipt that
+  omits them fails 165.12 on its own terms. The alternative reading, that an empty list is how the
+  record says "nothing is standing", conflates two different states: a run that applied nothing and
+  a run that applied and reversed. An operator investigating a failed setup needs to know which.
+  Nothing new was invented for it: `setup_disposition: "compensated"` is the word
+  `setup_engine/application.py` already writes on the persistence-failure path, and all three
+  readers already honour it -- `_rollback_receipt` treats a compensated step as terminal,
+  `plan_verification` asks nothing about its former target, and `plan_undo` keeps rather than
+  reverses it. The change makes one path use the vocabulary the other already had.
+- **Consequence:** `rollback_command` moves from "any receipt" to "any *standing* receipt", which is
+  what the persistence-failure path was already doing by hand with an explicit
+  `rollback_command=""`; both paths now get it from one place. A retained compensated step makes no
+  live-world claim, so `receipt verify` still reports zero false claims after the rollback and
+  `receipt undo` offers nothing to reverse -- which matters, because offering to undo an already
+  undone change would delete whatever a person put back in its place. The consent-declined path in
+  `_apply_effects` gets the same retention for the same reason; it has no public-flow test because
+  `--approve-setup-effects` is all-or-nothing at the CLI, so a cancel can only land before the first
+  effect applies (B-052). Evidence is `tests/verification_failure_e2e_test.py`; the two evidence
+  tests were red against the shipped code and reverting `standing` to `receipts` in `_record` turns
+  the undo claim red on its own.
