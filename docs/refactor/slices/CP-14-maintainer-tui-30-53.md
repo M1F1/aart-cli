@@ -1175,3 +1175,12 @@ separator is enforced on some projections and not others, and the Product Specif
 mockups use it).
 
 Checkpoint gates on 2026-09-02: `make quality` and `make integration` are both green.
+
+**B-046 is closed (D-130).** The setup run a configured install performs is now reachable through
+`aart marketplace receipt show|verify|undo`: `locate_receipt_setup_record` reads the pointer off the
+receipt, and `receipt_service.load_receipt` asks the canonical store before the retiring manifest.
+No legacy install state is written. What the canonical store's shape forced is recorded in D-130 --
+scope checked rather than rebound, profile taken from the record, and the manifest's "no
+installation state in this scope" kept only when the canonical store is empty too.
+
+Checkpoint gates on 2026-09-03: `make quality` and `make integration` are both green.

@@ -2443,3 +2443,45 @@ the Product Specification first instead of hiding the change here.
     help-screen test asserts.
   - The match-count notice (B-047) and refusal wrapping (B-048), which the canonical shell does
     not do. Neither is asserted as though it held.
+
+## D-130 — Two stores can say an artifact is installed, so there are two setup-record locators
+
+- **Context:** B-046. D-128 gave configured installs a real setup run whose durable pointer is the
+  receipt's `setup_state_ref`, but `setup_receipt.locate_setup_record` reads that pointer only out
+  of the retiring install-state manifest. A configured install therefore performed a setup run that
+  `aart marketplace receipt show|verify|undo` answered for with "this scope has no installation
+  state" -- a run the operator had to take on faith and could not roll back.
+- **Decision:** add `locate_receipt_setup_record`, which takes the pointer off the receipt, beside
+  the manifest-backed locator that keeps reading it out of install state. `receipt_service.
+  load_receipt` asks the canonical store first -- the same order `marketplace setup` already uses
+  (D-128) -- and falls back to the manifest when the canonical store does not know the selector.
+  Nothing writes legacy install state.
+- **Status:** accepted.
+- **Reason:** the pointer is the only thing that differs. The file it names, the three absences it
+  can report and the record it yields are identical, so a second locator is a few lines while a
+  second reader would be a second set of refusals to keep in agreement. Canonical-first, because
+  that is the store the manifest is being retired in favour of; falling through rather than
+  choosing means a machine holding only legacy installations answers exactly as it did before, and
+  one holding both answers for each from the store that recorded it.
+- **Consequence:** three things the canonical store's shape forced, each measured rather than
+  assumed:
+  - **Scope is checked, not rebound.** The receipt store keeps one file per coordinate and
+    partitions nothing by scope, so until the record is read the scope is only the one the operator
+    asked about. A record belonging to the other scope is refused, naming the scope it is in --
+    answering `--scope project` with a user-scope installation reads exactly like a correct answer
+    to a question nobody asked.
+  - **The profile comes from the record.** A receipt can serve several harnesses while setup ran
+    for exactly one, and only the record knows which. `receipt_service._bound` replaces the
+    provisional profile after parsing; the test proves it by giving the receipt a second harness
+    that sorts *before* the one setup ran for.
+  - **"This scope has no installation state" is now conditional.** On a machine whose
+    installations are all configured, that sentence is false and points the operator at a file that
+    will never exist. It is kept only when the canonical store is also empty; otherwise an unknown
+    selector gets the refusal that names the selector.
+  A fourth was a corrected expectation rather than a design choice: an install that declines setup
+  still writes a record, with status `cancelled`, no steps, and the exact retry command. The test
+  written to assert a refusal there was wrong and now asserts what the machine does, because the
+  record is the more useful answer -- it names the thing to do next.
+  `domain/receipts.py` gains `receipt_profiles`, moved out of `io/configured_setup.py` where it was
+  private, because the read path needs the same derivation and duplicating it is how two readers
+  start disagreeing about which harnesses an installation serves.

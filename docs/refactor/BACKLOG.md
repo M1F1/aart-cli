@@ -1091,6 +1091,16 @@ the existing review-before-undo and stale-record checks.
 Evidence/links: D-126, D-128; B-044; `agent_artifacts/setup_receipt.py`,
 `agent_artifacts/io/configured_setup.py`.
 
+### Completion (2026-09-03)
+
+Closed by D-130. `setup_receipt.locate_receipt_setup_record` reads the pointer off the receipt;
+`receipt_service.load_receipt` asks the canonical store first and falls back to the manifest, so a
+machine holding only legacy installations answers exactly as before. No legacy install state is
+written. Acceptance is `tests/configured_setup_gap_test.py::ConfiguredReceiptVerbsTest`, which
+installs through the public command and then drives all three verbs against what that install
+recorded, plus `tests/setup_receipt_cli_test.py::CanonicalReceiptCommandTests` (every legacy
+assertion re-run over a canonical receipt) and `::CanonicalReceiptAbsenceTests`.
+
 ## B-047 — The canonical shell never says how much of a list a filter matched
 
 Discovered during the `agent_artifacts/tui.py` orphan sweep (D-129). The retired wizard answered

@@ -28,7 +28,11 @@ from agent_artifacts.consumer.model import (
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.effects import DeliveryKind
 from agent_artifacts.domain.identifiers import ArtifactCoordinate, ObjectDigest
-from agent_artifacts.domain.receipts import InstallationReceipt, PlacedArtifactReceipt
+from agent_artifacts.domain.receipts import (
+    InstallationReceipt,
+    PlacedArtifactReceipt,
+    receipt_profiles,
+)
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.install_state.model import (
     ArtifactEvidence,
@@ -112,18 +116,6 @@ def _source_path(path: str, root: str) -> str:
     return relative
 
 
-def _receipt_profiles(receipt: InstallationReceipt | PlacedArtifactReceipt) -> frozenset[str]:
-    if isinstance(receipt, InstallationReceipt):
-        return frozenset(item.target.harness for item in receipt.registrations)
-    return frozenset(
-        (
-            *(item.harness for item in receipt.deliveries),
-            *(item.harness for item in receipt.merges),
-            *(item.harness for item in receipt.settings),
-        )
-    )
-
-
 def _effect_proofs(
     receipt: InstallationReceipt | PlacedArtifactReceipt,
     *,
@@ -131,7 +123,7 @@ def _effect_proofs(
     host: InstallationHost,
 ) -> tuple[EffectProof, ...]:
     if isinstance(receipt, InstallationReceipt):
-        if profile not in _receipt_profiles(receipt):
+        if profile not in receipt_profiles(receipt):
             return ()
         return (
             EffectProof(
@@ -186,7 +178,7 @@ def configured_setup_subject(
             item
             for item in installed.value
             if _unversioned(item.coordinate) == request.coordinate
-            and request.profile in _receipt_profiles(item.receipt)
+            and request.profile in receipt_profiles(item.receipt)
         )
         if len(matches) != 1:
             return _error("setup requires one exact configured installation receipt")

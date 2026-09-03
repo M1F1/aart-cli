@@ -13,6 +13,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import pathlib
 import sys
 import unittest
 from unittest import mock
@@ -21,6 +22,7 @@ from agent_artifacts import tui
 from agent_artifacts.application.consumer_ui import ConsumerUiState
 from agent_artifacts.application.consumer_views import ConsumerScreen, ConsumerSession
 from agent_artifacts.domain.result import Ok
+from agent_artifacts.install_state.paths import install_state_paths
 from agent_artifacts.tui_consumer import run_consumer_shell
 from tests.configured_install_command_e2e_test import _environment
 from tests.configured_installation_draft_e2e_test import AuthoredSetup, _published_registry
@@ -155,6 +157,133 @@ class ConfiguredInstallCommandSetupTest(unittest.TestCase):
             self.assertTrue(payload["ok"])
             self.assertEqual(payload["setup"]["configured"], 1)
             self.assertTrue((env.project / CONFIGURED).exists())
+
+
+@unittest.skipUnless(
+    sys.platform == "darwin",
+    "the setup engine accepts only darwin recipes (setup.py:562), so applying one elsewhere is "
+    "refused for the platform before the effect this asserts on is reached",
+)
+class ConfiguredReceiptVerbsTest(unittest.TestCase):
+    """B-046: the setup run a configured install performed is one the receipt verbs can find.
+
+    B-044 made the run happen; this is the other half of it being real. A setup run nobody can
+    show, verify or undo is one the operator has to take on faith and cannot roll back, and until
+    the receipt-backed locator existed that was exactly the state a configured install left behind:
+    the effect on disk, the record under the data root, and `aart marketplace receipt show`
+    answering that this scope has no installation state.
+
+    Nothing here is a fixture. The install is the public command, the receipt is the one it wrote,
+    and the record is the one the engine persisted -- so the pointer being followed is the one a
+    real install produces, not one this test composed.
+    """
+
+    def _installed(self, env):
+        code, payload = env.run(
+            "marketplace",
+            "install",
+            COORDINATE,
+            "--profile",
+            "claude",
+            "--yes",
+            "--approve-setup-effects",
+        )
+        self.assertEqual(code, 0, payload)
+        self.assertEqual(payload["setup"]["configured"], 1)
+        # The premise of B-046 in one line: this route writes no install-state manifest, so the
+        # pointer the receipt verbs follow cannot be the manifest's.
+        self.assertFalse(
+            pathlib.Path(
+                install_state_paths(
+                    "project",
+                    project_root=str(env.project),
+                    user_home=str(env.home),
+                    data_root=env.paths.data_root,
+                ).destination_path
+            ).exists()
+        )
+        return payload
+
+    def test_show_finds_the_run_a_configured_install_performed(self) -> None:
+        with _declaring_setup() as env:
+            self._installed(env)
+
+            code, text = env.run_text("marketplace", "receipt", "show", COORDINATE)
+
+            self.assertEqual(code, 0, text)
+            self.assertIn("Setup receipt", text)
+            self.assertIn("status          configured", text)
+            self.assertIn(COORDINATE, text)
+
+    def test_verify_asks_the_filesystem_about_the_effect_the_install_applied(self) -> None:
+        with _declaring_setup() as env:
+            self._installed(env)
+
+            code, text = env.run_text("marketplace", "receipt", "verify", COORDINATE)
+
+            self.assertEqual(code, 0, text)
+            self.assertIn("false=0", text)
+
+            (env.project / CONFIGURED).unlink()
+            code, text = env.run_text("marketplace", "receipt", "verify", COORDINATE)
+
+            # A claim that is no longer true is a finding, and a finding must not report success.
+            self.assertNotEqual(code, 0, text)
+            self.assertIn("false=1", text)
+
+    def test_undo_reviews_first_and_then_reverses_what_the_install_configured(self) -> None:
+        with _declaring_setup() as env:
+            self._installed(env)
+            self.assertTrue((env.project / CONFIGURED).exists())
+
+            code, text = env.run_text("marketplace", "receipt", "undo", COORDINATE)
+            self.assertEqual(code, 0, text)
+            self.assertIn("re-run with --yes to apply this exact undo", text)
+            self.assertTrue(
+                (env.project / CONFIGURED).exists(), "a review must not change anything"
+            )
+
+            code, text = env.run_text("marketplace", "receipt", "undo", COORDINATE, "--yes")
+
+            self.assertEqual(code, 0, text)
+            self.assertFalse((env.project / CONFIGURED).exists())
+
+    def test_an_install_that_declined_setup_is_shown_as_cancelled_with_its_way_back(self) -> None:
+        """Declining setup still records the attempt, and the record is what an operator needs.
+
+        This was measured rather than assumed, and the measurement corrected the expectation: a
+        configured install that is not given `--approve-setup-effects` writes a record whose
+        status is `cancelled`, whose steps say the run applied no effect, and which carries the
+        exact retry command. `receipt show` finding that is strictly better than the refusal a
+        run-less installation gets, because the answer names the thing to do next instead of
+        leaving the operator to work out that setup was ever declared.
+        """
+
+        with _declaring_setup() as env:
+            code, payload = env.run(
+                "marketplace", "install", COORDINATE, "--profile", "claude", "--yes"
+            )
+            self.assertEqual(code, 0, payload)
+            self.assertFalse((env.project / CONFIGURED).exists())
+
+            code, text = env.run_text("marketplace", "receipt", "show", COORDINATE)
+
+            self.assertEqual(code, 0, text)
+            self.assertIn("status          cancelled", text)
+            self.assertIn("this run applied no effect", text)
+            self.assertIn("--approve-setup-effects", text)
+
+    def test_verify_makes_no_live_claim_about_a_run_that_applied_nothing(self) -> None:
+        """A cancelled run licenses no claim, and reporting one would be the worst outcome here."""
+
+        with _declaring_setup() as env:
+            env.run("marketplace", "install", COORDINATE, "--profile", "claude", "--yes")
+
+            code, text = env.run_text("marketplace", "receipt", "verify", COORDINATE)
+
+            self.assertEqual(code, 0, text)
+            self.assertIn("false=0", text)
+            self.assertNotIn(CONFIGURED, text)
 
 
 @unittest.skipUnless(

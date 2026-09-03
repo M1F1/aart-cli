@@ -327,6 +327,27 @@ dot-separator rule) are recorded as B-047, B-048 and B-049 rather than asserted 
 
 Step 7 of CP-14 is therefore complete. The next executable work is B-046.
 
+## Canonical setup runs are readable through the public receipt verbs (D-130)
+
+`aart marketplace receipt show|verify|undo` follows the setup pointer off a canonical installation
+receipt as well as out of the retiring install-state manifest. Before this, a configured install
+performed a real setup run (D-128) and then answered every question about it with "this scope has
+no installation state": the effect was on disk, the record was under the data root, and neither was
+reachable. The canonical store is asked first and the manifest second, so a machine holding only
+legacy installations answers exactly as it did before.
+
+Three things the canonical store's shape forced, each measured: scope is checked against the record
+rather than rebound to it, because the store partitions nothing by scope; the profile is taken from
+the record, because a receipt can serve several harnesses while setup ran for one; and the
+manifest's "no installation state in this scope" is kept only when the canonical store is also
+empty, because on a configured machine it names a file that will never exist. An install that
+declines setup writes a `cancelled` record with its retry command, and `receipt show` finding that
+is the useful answer, not a refusal -- an expectation this work corrected rather than enforced.
+
+Acceptance is `tests/configured_setup_gap_test.py::ConfiguredReceiptVerbsTest`, which installs
+through the public command and drives all three verbs over what that install recorded, with no
+fixture standing in for any part of the chain.
+
 ## Update rule
 
 Never mark a slice beyond the strongest evidence actually present.

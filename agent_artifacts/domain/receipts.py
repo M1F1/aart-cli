@@ -52,6 +52,7 @@ __all__ = [
     "installation_receipt_to_data",
     "placed_artifact_receipt_from_data",
     "placed_artifact_receipt_to_data",
+    "receipt_profiles",
 ]
 
 RECEIPT_INVALID = DiagnosticCode("receipt-invalid")
@@ -384,6 +385,27 @@ def _within(root: str, path: str) -> bool:
 #: transport; a Skill, a guideline, a hook or a memory leaves what was delivered and where. They are
 #: two types rather than one with optional halves, so neither can be missing what it must have.
 ArtifactReceipt: TypeAlias = InstallationReceipt | PlacedArtifactReceipt
+
+
+def receipt_profiles(receipt: ArtifactReceipt) -> frozenset[str]:
+    """Which harnesses a receipt actually did something for.
+
+    Derived from the recorded effects rather than from anything the install was asked for: a
+    profile nobody registered, delivered, merged or configured under is not one this installation
+    serves, whatever the request that produced it said.
+    """
+
+    if isinstance(receipt, InstallationReceipt):
+        return frozenset(item.target.harness for item in receipt.registrations)
+    if isinstance(receipt, PlacedArtifactReceipt):
+        return frozenset(
+            (
+                *(item.harness for item in receipt.deliveries),
+                *(item.harness for item in receipt.merges),
+                *(item.harness for item in receipt.settings),
+            )
+        )
+    raise ValueError("receipt profiles need an installation or placed artifact receipt")
 
 
 @dataclass(frozen=True, slots=True)

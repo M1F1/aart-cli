@@ -3,11 +3,13 @@
 ## Current objective
 
 Continue **CP-14 Maintainer TUI 30–53**. Step 7, retiring legacy authority, is **done**:
-**B-044 is closed by D-128** and the evidence-led orphan sweep of `agent_artifacts/tui.py` is
-closed by **D-129**, which took the module from 2,767 to 1,087 lines with every unheld assertion
-carried and proven red first. The next executable work is **B-046**, the receipt-backed setup
-locator, which is what a canonical install still cannot show, verify or undo; B-045 remains
-non-critical, and B-047–B-049 are the presentation findings the sweep produced. Screen 53 is
+**B-044 is closed by D-128**, the evidence-led orphan sweep of `agent_artifacts/tui.py` is closed
+by **D-129**, and **B-046 is closed by D-130**: the receipt verbs now follow the pointer off a
+canonical receipt, so a setup run a configured install performed is one an operator can show,
+verify and undo. The next executable work is **B-038's remaining half** —
+`commands/marketplace.py::_configured_registry_selection` returns `None` for direct and local
+sources, routing `aart marketplace install` for them down the characterized legacy path. B-045
+remains non-critical, and B-047–B-049 are the presentation findings the sweep produced. Screen 53 is
 live — the typed Candidate filter carries status, kind, Source and target registry, and `f` opens it
 from screen 35 (D-111). Screens 48–50 are live: lifecycle uses exact history plus registry evidence, provenance retains typed
 Git/local pins and compiler output, and immutable version conflicts require a new version
@@ -299,16 +301,16 @@ the sweep terminates with `0 dead definitions` over the remaining 1,087. `tui_se
 `setup_receipt_cli_test.py` is new; five files are retargeted. `_canonical_setup_run` and
 `_complete_canonical_consumer_action` are production-reachable through D-128 and were not orphans.
 
-**The exact next action** is **B-046**: `setup_receipt.locate_setup_record` reads the setup pointer
-only from the retiring install-state manifest, so `aart marketplace receipt show|verify|undo`
-cannot find a setup run made by a configured install. The new `tests/setup_receipt_cli_test.py`
-characterizes all three verbs against the legacy manifest fixture and is the file the receipt-backed
-locator should extend with a canonical-receipt fixture, red first. Do not write legacy install
-state to satisfy it (D-128).
+B-046 is **done** (D-130). `locate_receipt_setup_record` reads the pointer off the receipt;
+`receipt_service.load_receipt` asks the canonical store first and falls back to the manifest, so a
+machine holding only legacy installations answers exactly as before. No legacy install state is
+written. `tests/configured_setup_gap_test.py::ConfiguredReceiptVerbsTest` installs through the
+public command and drives all three verbs against what that install actually recorded.
 
-B-038's remaining half stands as restated: the direct-install residue is in
-`commands/marketplace.py::_configured_registry_selection`, a public flow, not in the deleted
-wizard.
+**The exact next action** is **B-038's remaining half**: the direct-install residue is in
+`commands/marketplace.py::_configured_registry_selection`, which returns `None` for direct and
+local sources so their installs take the characterized legacy path. That is a public flow, not
+anything left over from the deleted wizard.
 
 Behind it, step 6 left the surfaces complete: screen 53 is live (D-111) — the typed filter carries
 all four facets the Product Specification names, `f` opens it from screen 35, `Space` toggles a
@@ -320,8 +322,7 @@ registry state (D-112). What remains in CP-14:
    and the orphaned implementation behind it is swept (D-129). What it aimed at beyond that — `consumer/application.py`,
    `lifecycle/*`, `setup_engine/*` — is load-bearing for `aart marketplace` and is not removed.
    B-038's screen-21 half is done (D-114) and its remaining half is restated as an `aart marketplace
-   install` question. B-044 is closed (D-128); B-046 records the non-blocking canonical setup
-   receipt-locator follow-up.
+   install` question. B-044 is closed (D-128) and B-046 with it (D-130).
 2. Preserve D-089/B-037 whenever promotion planning is touched: retained approved records rebind to
    the transaction snapshot as metadata only, and published package bytes do not change.
 

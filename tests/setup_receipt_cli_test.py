@@ -18,6 +18,7 @@ import os
 import pathlib
 import tempfile
 import unittest
+from dataclasses import replace
 from unittest import mock
 
 from agent_artifacts import cli
@@ -28,7 +29,17 @@ from agent_artifacts.configuration.model import (
 )
 from agent_artifacts.configuration.paths import Platform, resolve_config_paths
 from agent_artifacts.configuration.schema import user_configuration_bytes
+from agent_artifacts.domain.effects import DeliveryKind
+from agent_artifacts.domain.identifiers import (
+    ArtifactCoordinate,
+    ArtifactIdentity,
+    ObjectDigest,
+    SourceAlias,
+)
+from agent_artifacts.domain.receipts import ArtifactDelivery, PlacedArtifactReceipt
+from agent_artifacts.domain.result import Ok
 from agent_artifacts.install_state.paths import install_state_paths
+from agent_artifacts.io.receipt_store import LocalReceiptStore
 from agent_artifacts.model import SetupState, SetupStateRecord
 from agent_artifacts.setup import dump_setup_state
 from agent_artifacts.setup_receipt import ReceiptLocation, setup_state_file
@@ -258,6 +269,176 @@ class ReceiptCommandTests(unittest.TestCase):
                 self._run("marketplace", "receipt", "explode", COORDINATE)
 
         self.assertNotEqual(raised.exception.code, 0)
+
+
+class CanonicalReceiptCommandTests(ReceiptCommandTests):
+    """B-046: the same three verbs, over a setup run a *configured* install recorded.
+
+    The canonical route writes no install-state manifest (D-128). What says an artifact is
+    installed there is the receipt in `LocalReceiptStore`, and what says setup ran for it is that
+    receipt's `setup_state_ref`. Every assertion is inherited: an operator asking about a
+    configured installation must get the same answers, from the same commands, as one asking
+    about a legacy installation -- otherwise a setup run that happened is one the machine cannot
+    show, verify or undo.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        # The legacy manifest this artifact was found through is gone: what remains is exactly
+        # what a configured install leaves behind.
+        pathlib.Path(
+            install_state_paths(
+                "project",
+                project_root=str(self.project),
+                user_home=str(self.home),
+                data_root=self.paths.data_root,
+            ).destination_path
+        ).unlink()
+
+        root = str(self.project / "runtimes" / "github-docker")
+        recorded = LocalReceiptStore(
+            os.path.join(self.paths.data_root, "state")
+        ).record_installation(
+            ArtifactCoordinate(
+                SourceAlias("registry-a"), ArtifactIdentity("mcp", "github-docker"), "1.0.0"
+            ),
+            PlacedArtifactReceipt(
+                "mcp/github-docker",
+                root,
+                ObjectDigest("sha256", "c" * 64),
+                (
+                    ArtifactDelivery(
+                        "claude",
+                        f"{root}/payload",
+                        str(self.project / ".mcp.json"),
+                        DeliveryKind.FILE,
+                        ObjectDigest("sha256", "d" * 64),
+                    ),
+                ),
+                object_digest=ObjectDigest("sha256", "b" * 64),
+                setup_state_ref=SETUP_REF,
+            ),
+        )
+        self.assertIsInstance(recorded, Ok, getattr(recorded, "diagnostics", ()))
+        # The one difference from the legacy route, and it is the canonical store being more
+        # precise rather than different: a receipt is filed under the exact version installed,
+        # while the manifest records a coordinate with the version left off. `show` prints what
+        # the store holds.
+        self.location = replace(self.location, coordinate=f"{COORDINATE}@1.0.0")
+
+
+class CanonicalReceiptAbsenceTests(CanonicalReceiptCommandTests):
+    """The three absences stay three sentences when the pointer comes off a receipt.
+
+    `locate_setup_record` was written so that "never installed", "installed with no run recorded"
+    and "points at a record that is gone" cannot be confused with each other, because an operator
+    holding the wrong one of those has no idea what to do next. The receipt-backed locator has to
+    keep that apart, and one of the three is now reachable in a way it was not before: a machine
+    with configured installations and no install-state manifest at all.
+    """
+
+    def _forget_setup_pointer(self) -> None:
+        store = LocalReceiptStore(os.path.join(self.paths.data_root, "state"))
+        coordinate = ArtifactCoordinate(
+            SourceAlias("registry-a"), ArtifactIdentity("mcp", "github-docker"), "1.0.0"
+        )
+        record = store.record(coordinate)
+        self.assertIsInstance(record, Ok, getattr(record, "diagnostics", ()))
+        assert isinstance(record, Ok)
+        rewritten = store.record_installation(
+            coordinate, replace(record.value.receipt, setup_state_ref=None)
+        )
+        self.assertIsInstance(rewritten, Ok, getattr(rewritten, "diagnostics", ()))
+
+    def test_a_configured_installation_with_no_recorded_run_says_exactly_that(self) -> None:
+        self._forget_setup_pointer()
+
+        code, text = self._run("marketplace", "receipt", "show", COORDINATE)
+
+        self.assertNotEqual(code, 0, text)
+        self.assertIn("is installed and no setup run has been recorded for it", text)
+        # Not the manifest's sentence: there is no manifest, and its absence says nothing about
+        # an artifact the configured store knows perfectly well is installed.
+        self.assertNotIn("this scope has no installation state", text)
+
+    def test_a_pointer_whose_record_is_gone_is_its_own_refusal(self) -> None:
+        self.state_path.unlink()
+
+        code, text = self._run("marketplace", "receipt", "show", COORDINATE)
+
+        self.assertNotEqual(code, 0, text)
+        self.assertIn("points at setup record", text)
+        self.assertIn("not present under the data root", text)
+
+    def test_an_unknown_coordinate_on_a_configured_machine_names_the_coordinate(self) -> None:
+        """The regression B-046 leaves behind if only the happy path is wired.
+
+        With no install-state manifest the old reader answered every question with "this scope has
+        no installation state", which on a machine whose installations are all configured is both
+        false and useless -- it points the operator at a file that is never going to exist.
+        """
+
+        code, text = self._run("marketplace", "receipt", "show", "mcp/never-installed")
+
+        self.assertNotEqual(code, 0, text)
+        self.assertIn("no installation of mcp/never-installed in project scope", text)
+        self.assertIn("aart marketplace status", text)
+
+    def test_a_record_belonging_to_the_other_scope_is_refused_not_silently_shown(self) -> None:
+        """The receipt store partitions nothing by scope, so only the record knows.
+
+        Rebinding the answer to whatever the record says would mean `--scope project` printing a
+        user-scope installation, which reads exactly like a correct answer to a question nobody
+        asked.
+        """
+
+        self.state_path.write_text(
+            dump_setup_state(SetupState((replace(self.record, scope="user"),))) + "\n",
+            encoding="utf-8",
+        )
+
+        code, text = self._run("marketplace", "receipt", "show", COORDINATE)
+
+        self.assertNotEqual(code, 0, text)
+        self.assertIn("belongs to user scope, not project", text)
+        self.assertIn("--scope user", text)
+
+    def test_a_profile_the_receipt_never_served_matches_nothing(self) -> None:
+        code, text = self._run("marketplace", "receipt", "show", COORDINATE, "--profile", "codex")
+
+        self.assertNotEqual(code, 0, text)
+        self.assertIn("no installation of", text)
+
+    def test_the_profile_shown_is_the_one_the_record_says_setup_ran_for(self) -> None:
+        """A receipt can serve several harnesses; setup ran once, for one of them.
+
+        The second harness sorts *before* the one setup ran for, so a reader that answered with
+        whichever profile the receipt happens to name first would print `aider` here. Only the
+        record knows, and it is read before the answer is composed.
+        """
+
+        store = LocalReceiptStore(os.path.join(self.paths.data_root, "state"))
+        coordinate = ArtifactCoordinate(
+            SourceAlias("registry-a"), ArtifactIdentity("mcp", "github-docker"), "1.0.0"
+        )
+        held = store.record(coordinate)
+        assert isinstance(held, Ok), held
+        receipt = held.value.receipt
+        second = replace(
+            receipt.deliveries[0],
+            harness="aider",
+            destination=str(self.project / ".aider" / "mcp.json"),
+        )
+        rewritten = store.record_installation(
+            coordinate, replace(receipt, deliveries=(*receipt.deliveries, second))
+        )
+        self.assertIsInstance(rewritten, Ok, getattr(rewritten, "diagnostics", ()))
+
+        code, text = self._run("marketplace", "receipt", "show", COORDINATE)
+
+        self.assertEqual(code, 0, text)
+        self.assertIn(f"mcp/github-docker@{self.record.profile} (project)", text)
+        self.assertNotIn("@aider", text)
 
 
 if __name__ == "__main__":  # pragma: no cover
