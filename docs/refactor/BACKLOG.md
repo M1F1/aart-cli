@@ -1176,3 +1176,22 @@ either drop the marketplace guard or change the maintainer projections -- not bo
 
 Evidence/links: D-129; `docs/product-specification/PRODUCT_SPECIFICATION.md` screen mockups;
 `agent_artifacts/tui_maintainer.py`; `tests/tui_marketplace_test.py`.
+
+## B-050 — `aart source health` has no public-flow test
+
+Found while opening CP-15, when `aart source sync` turned out to have none either and step 1 wrote
+the first. `source health` is the other verb in `commands/source.py` that nothing drives through
+`cli.main`: `tests/source_cli_command_test.py` covers `add`, `list`, `remove`, `resubscribe` and
+the marketplace browse, and asserts the health *projection* through `source list`, but `_health`
+itself -- its per-alias selection, its `degraded` exit condition, and the JSON shape it prints --
+is reached by no test.
+
+Noncritical because the health assessment it renders is well covered at the application seam
+(`tests/source_sync_application_test.py`) and because `source list` proves the same values reach a
+public payload. What is unproven is only this verb's own selection and exit code. CP-15 step 1's
+`_source`/`_source_json` helpers in `tests/source_sync_command_e2e_test.py` are the runner it
+needs -- the source verbs take no `--project`, which is why the lifecycle harness's own `run` could
+not be reused.
+
+Evidence/links: D-132; `agent_artifacts/commands/source.py` `_health`;
+`tests/source_cli_command_test.py`; `tests/source_sync_command_e2e_test.py`.

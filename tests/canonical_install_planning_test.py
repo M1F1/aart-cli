@@ -5,6 +5,7 @@ import unittest
 from dataclasses import replace
 
 from agent_artifacts.configuration.model import OrganizationPolicy, SourceKind
+from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.identifiers import ArtifactIdentity, ObjectDigest, SourceAlias
 from agent_artifacts.domain.result import Err, Ok
 from agent_artifacts.installation.application import InstallReadPorts, prepare_install
@@ -38,6 +39,7 @@ from agent_artifacts.protocol.native_schema import (
 from agent_artifacts.protocol.native_tree import SnapshotEntry, SnapshotEntryKind
 from agent_artifacts.protocol.paths import parse_relative_path
 from agent_artifacts.protocol.semver import SemVer
+from agent_artifacts.sources.model import HealthStatus
 from agent_artifacts.store.model import StoredObject, make_object_candidate, object_store_paths
 from tests.marketplace_fixtures import (
     artifact,
@@ -233,6 +235,67 @@ class CanonicalInstallPlanningTest(unittest.TestCase):
         self.assertEqual(operation.destination, ".claude/skills/review")
         self.assertEqual(operation.absolute_destination, "/project/.claude/skills/review")
         self.assertEqual(operation.source_path, "payload")
+
+    def test_a_source_that_could_not_be_checked_still_installs_from_its_last_snapshot(
+        self,
+    ) -> None:
+        """Product Specification 165.11: the Marketplace may keep using the last synced snapshot.
+
+        `could-not-check` is what a source reports when the live re-check against its origin failed
+        and the published snapshot is intact -- it is exactly what `SyncDisposition.RETAINED`, the
+        explicit last-known-good fallback, produces. The plan pins that snapshot by digest and the
+        object by digest, so nothing it installs depends on the check that failed.
+
+        The plan invariant rejected it, and did so as a `ValueError` rather than a diagnostic, so
+        the public command answered `canonical install plan is not exactly review-bound` -- an
+        internal sentence, with no remediation, for the one state 165.11 says to keep working in.
+        """
+
+        candidate = _candidate("skill")
+        catalog, effective = _catalog("skill", candidate)
+        view = replace(
+            catalog.sources[0],
+            health=HealthStatus.CHECK_UNAVAILABLE,
+            diagnostics=(
+                Diagnostic(
+                    DiagnosticCode("source-invalid"),
+                    Severity.ERROR,
+                    "aart-registry.json is present and does not parse",
+                ),
+            ),
+        )
+        unchecked = replace(
+            catalog,
+            sources=(view,),
+            items=tuple(replace(item, source=view) for item in catalog.items),
+        )
+
+        result = prepare_install(
+            InstallRequest(
+                ArtifactIdentity("skill", "review"),
+                profile="claude",
+                platform="darwin",
+            ),
+            unchecked,
+            effective,
+            builtin()["claude"],
+            self.location,
+            object_store_paths("/data/aart"),
+            _MemoryReads(
+                StoredObject(
+                    candidate,
+                    f"/data/aart/objects/sha256/{candidate.digest.value[:2]}/"
+                    f"{candidate.digest.value[2:]}",
+                )
+            ),
+        )
+
+        self.assertIsInstance(result, Ok, result)
+        assert isinstance(result, Ok)
+        # Recorded, not hidden: the plan says which reading it was built under, so the review can
+        # state it and the finalize recheck has something exact to compare against.
+        self.assertEqual(result.value.source_health, "could-not-check")
+        self.assertIsNotNone(result.value.source_snapshot_digest)
 
     def test_review_digest_describes_the_plan_not_the_moment(self) -> None:
         # published_at is 90 and the freshness threshold is 30, so these three readings of one

@@ -379,7 +379,15 @@ def _recorded_subscription_current(
         and configured.ref == record.source.subscription_ref
         and source.resolved_revision is not None
         and source.snapshot_digest is not None
-        and source.health.value in {"healthy", "stale", "degraded"}
+        # `could-not-check` belongs here with the rest.  It does not mean the source is gone; it
+        # means the live re-check against the origin failed while the published snapshot -- the
+        # one the two lines above just required, and the one this comparison is actually made
+        # against -- is intact and still serving.  That is exactly what a refused `aart source
+        # sync` leaves behind, and excluding it made one invalid upstream revision report every
+        # installation from that source as `source-unavailable` and gave `aart marketplace update`
+        # a terminal refusal for an installation that was current.  Whether a snapshot exists is
+        # the digest check; health is not asked that question twice.
+        and source.health.value in {"healthy", "stale", "degraded", "could-not-check"}
     )
 
 

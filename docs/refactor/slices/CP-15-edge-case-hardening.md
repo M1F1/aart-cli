@@ -1,0 +1,110 @@
+# CP-15 — Accepted lifecycle/edge-case hardening 54–100
+Status: IN PROGRESS (opened 2026-09-03)
+
+## Goal
+
+Take the accepted lifecycle edge cases of Product Specification sections 165.1–165.28 from
+"the machinery holds it somewhere" to "the public surface holds it, measured". Every invariant
+listed below is currently PARTIAL in `INVARIANT_TRACEABILITY.md` with the same three words in its
+evidence column — *scattered source/registry/lifecycle safeguards* — and that phrase is the slice's
+whole subject. A safeguard at a seam is worth what the verb an operator actually runs makes of it.
+
+## Product Specification sections/invariants
+
+Sections 165.1–165.28. Sixteen invariants are marked PARTIAL against CP-15: INV-210, 216, 218, 219,
+221, 222, 223, 226, 231, 232, 233, 237, 238, 240, 241, 242.
+
+Load-bearing statements:
+
+- "Marketplace may continue using the last known valid local snapshot." (165.11)
+- "Offline installability is decomposed into separate capabilities: metadata cached / canonical
+  payload cached / runtime dependencies cached." (165.11, INV-223)
+- "Registry changes may trigger health/policy findings, but installation mutations still require
+  explicit reconciliation plans and applicable policy." (INV-210)
+- "Validation gates activation of newly synchronized registry snapshots." (INV-218)
+- "Successful effects followed by failed verification are not reported as clean success." (165.12)
+- "AART does not claim transaction atomicity beyond actual effect guarantees." (165.13, INV-225)
+- "Normal registry lifecycle uses deprecation, revocation and hiding from new installs rather than
+  physical deletion." (165.10, INV-221)
+- "Removing the current payload does not guarantee removal from Git history." (165.10, INV-222)
+
+## Method
+
+The same one CP-13 and CP-14 ended on, and the one D-091 states: a claim is not held until a public
+flow proves it, and a test is not evidence until a real mutation of the code it names turns it red.
+Each increment below therefore (a) names the verb an operator runs, (b) drives it over a real
+temporary machine, and (c) records which mutation it was proven against.
+
+## Scenario map at slice start
+
+| Accepted scenario | Invariant | Evidence that existed | Gap |
+|---|---|---|---|
+| Source publishes an invalid revision | INV-218 | `source_store_adapter_test` (corrupt convergent snapshot never becomes current); `source_sync_application_test` (validation failure publishes nothing) | Both drive the seam. Nothing drove `aart source sync`. **Closed by increment 1.** |
+| Registry change must not silently mutate installations | INV-210 | `canonical_lifecycle_test` covers a source that is missing, disabled or has moved origin | The state a refused sync actually leaves — `could-not-check` — was untested, and was being read as "source gone". **Closed by increment 1 (D-132).** |
+| Registry unavailable / offline | INV-223, 165.11 | `--offline` installs from cached objects | Online-but-unreachable was a hard failure with an internal message. **Closed by increment 1 (D-132).** The three-way decomposition (metadata / payload / runtime deps) is not yet distinguished anywhere. |
+| Registry rollback preserves history | INV-216 | promotion audit chain walks backwards from the approved snapshot (D-104) | No test that a correction is a new record rather than an erasure |
+| Provenance is not rewritten when upstream moves | INV-219 | typed Git/local audit pins (D-107) | No test that an old record keeps its old origin after the Source is repointed |
+| Physical purge is exceptional | INV-221, INV-222 | none found: no test file matches `purge` | Whole scenario unmeasured |
+| Interrupted operations re-inspect before resume | INV-226 | CP-12 executor replans under lease | No public-flow interruption test |
+| Input/credential contract changes | INV-231, INV-232 | CP-08 credential lifecycle | No test that changing one artifact's contract leaves another's credential owned |
+| Policy drift contributes to health | INV-233 | `EffectivePolicy` is read at validation time (D-099) | Installed-artifact health does not consult current policy |
+| Development installs are visibly distinct | INV-237 | none found | Whole scenario unmeasured |
+| Promotion evidence, audit, Git authority, publication | INV-238, 240, 241, 242 | D-103–D-107 promotion records and local-commit boundary | No test that *local promotion is not publication* from the consumer side |
+| Exact collection drift | 165.x | none found: no test file matches `collection.*drift` | Waits on the Collection capability B-038 is sequenced behind (D-131) |
+| Manual drift | INV-228 | canonical drift detection exists | No test file matches `manual.*drift` |
+
+## Implementation steps
+
+1. **DONE:** Registry state safety through the public source verb (INV-218, INV-210, 165.11).
+2. Rollback, superseding and provenance under a moving upstream (INV-216, INV-219, INV-229).
+3. Offline decomposition: metadata, payload and runtime dependencies as separate capabilities
+   (INV-223).
+4. Verification failure and partial/interrupted execution through the public verbs (INV-224–226).
+5. Purge boundaries and the erasure claim AART must not make (INV-221, INV-222).
+6. Policy drift in installed health, and development installs kept visibly distinct
+   (INV-233, INV-237).
+7. Promotion evidence, audit and the local-promotion-is-not-publication boundary
+   (INV-238, 240, 241, 242).
+
+## Blockers
+
+Exact-collection drift waits on the Collection capability that B-038 is sequenced behind (D-131).
+Nothing else is blocked at slice start.
+
+## Completed increments
+
+### Step 1 — registry state safety through `aart source sync` (D-132)
+
+`tests/source_sync_command_e2e_test.py` is the first thing anywhere to drive `aart source sync`
+over a real source that turned invalid under it. The upstream publishes a new revision *and* an
+`aart-registry.json` that does not parse, which is the `RS-08` refusal a real publisher can cause;
+both halves are deliberate, because an invalid revision carrying the good bytes would pass every
+assertion even if it had replaced the store.
+
+What the eight tests hold:
+
+- the refusal is per-source in the JSON payload and exits non-zero, and the human rendering carries
+  the remediation rather than only the complaint;
+- the store still points at the last good snapshot and `aart marketplace list` still offers every
+  artifact of it, digest for digest;
+- the source stops claiming to be healthy: `could-not-check` with a named `source-invalid`
+  diagnostic, degraded rather than withdrawn;
+- an installation made from the good snapshot is byte-identical, its recorded state is unchanged,
+  and it still reports `current`;
+- installing after the refused sync places the *accepted* revision's bytes, and updating is a no-op
+  rather than a refusal;
+- a repaired upstream publishes and the pointer moves, so the refusal was about the content rather
+  than `sync` being inert.
+
+Writing them found the defect D-132 records: `could-not-check` — which is exactly what the explicit
+last-known-good fallback `SyncDisposition.RETAINED` produces — was read as "this source is gone" in
+three places, so one invalid upstream revision made `aart marketplace status` report every
+installation as `source-unavailable` and made `install` and `update` fail on a plan-construction
+invariant with no remediation on it. Product Specification 165.11 settles it, and both sets now
+admit it.
+
+The two seams carry their own claims: `canonical_lifecycle_test` for reconciliation, and
+`canonical_install_planning_test` for the plan invariant. Both were written red first.
+
+Proven against a mutation: removing the `RS-08` refusal in `sources/validation.py` — so the invalid
+revision publishes — turns all eight end-to-end tests red.

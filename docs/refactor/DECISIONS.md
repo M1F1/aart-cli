@@ -2512,3 +2512,41 @@ the Product Specification first instead of hiding the change here.
   case, both direct source kinds, the Collection case, the disabled-registry case, and the fact
   that one direct selector declines a whole batch because a Selection executes as one transaction.
   Closing either capability turns exactly one of those red.
+
+## D-132 — `could-not-check` is the last-known-good state, not a missing source
+
+- **Context:** CP-15's first increment drove `aart source sync` over a real source whose upstream
+  had published an invalid revision. INV-218 held where it was already tested -- the store kept the
+  last-known-good snapshot and the Marketplace kept serving it -- and then failed everywhere else.
+  After a refused sync the source's health is `could-not-check`, and three places read that as
+  "this source is gone": `lifecycle/application.py::_recorded_subscription_current`, which made
+  `aart marketplace status` report every installation from that source as `source-unavailable`;
+  `prepare_update`, which takes the same branch, so `aart marketplace update` returned a terminal
+  refusal for an installation that was current against the snapshot on disk; and
+  `installation/model.py::InstallPlan.__post_init__`, which carried the same set as a *construction*
+  invariant, so no plan could be built at all and `aart marketplace install` answered `canonical
+  install plan is not exactly review-bound` -- an internal sentence, with no remediation -- on a
+  machine whose store was intact.
+- **Decision:** `could-not-check` joins `healthy`, `stale` and `degraded` in both sets. `missing`
+  and `not-synchronized` stay excluded.
+- **Status:** accepted.
+- **Reason:** Product Specification 165.11 settles it: a registry that cannot be reached is shown as
+  Offline and *"Marketplace may continue using the last known valid local snapshot."*
+  `could-not-check` is not a report that the snapshot is absent -- it is what
+  `SyncDisposition.RETAINED`, the explicit last-known-good fallback, produces, and every branch that
+  returns it returns a published snapshot with it. Whether a snapshot exists is already tested one
+  line above, by requiring a resolved revision and a snapshot digest; health was being asked the
+  same question a second time and answering it wrong. Both plans pin the snapshot and the object
+  they install by digest, so they depend on nothing the failed check would have told them, which is
+  why `--offline` already installed the identical bytes successfully while the plain command died.
+  `missing` and `not-synchronized` stay excluded because they mean there is no snapshot, so there is
+  nothing to install from.
+- **Consequence:** the plan still records which reading it was built under, so the review states it
+  and the finalize recheck has something exact to compare against; the separate rule that a source
+  which *degraded* between review and finalize invalidates the plan is unchanged. Two questions that
+  were being answered by one field are now separate: `check_installations` stays fetch-free and
+  says whether an installation is current against the snapshot the store serves, while the source's
+  own health says, next to it, that the origin could not be checked. Evidence is
+  `tests/source_sync_command_e2e_test.py` over the public verbs plus the two seam tests; reverting
+  the `RS-08` refusal in `sources/validation.py` turns all eight end-to-end tests red, so they
+  measure the gate rather than the fixture.
