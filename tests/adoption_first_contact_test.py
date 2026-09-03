@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from agent_artifacts import __version__, model, tui, wizard
+from agent_artifacts import __version__, model, wizard
 
 _ROOT = Path(__file__).resolve().parents[1]
 _README = (_ROOT / "README.md").read_text(encoding="utf-8")
@@ -123,9 +123,6 @@ class CollectionVocabularyTest(unittest.TestCase):
             wizard.BasketItem("collection", "company/collection/base", "base").kind,
             "collection",
         )
-        choice = tui._Choice("collection", "base", None, "base")
-        self.assertEqual(tui._basket_item(choice).kind, "collection")
-        self.assertEqual(tui._choice_label("collection", "base", None, ""), "[collection] base")
 
 
 if __name__ == "__main__":

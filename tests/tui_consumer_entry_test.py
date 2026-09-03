@@ -1,4 +1,10 @@
-"""The default terminal route is the canonical consumer application (B-025)."""
+"""The default terminal route is the canonical consumer application (B-025).
+
+The three composition tests below were written against `tui._canonical_consumer_source`, a
+wrapper that read the machine and handed back only the screens. It is gone with the rest of the
+wizard surface; the same reads now happen once inside `_canonical_consumer_actions`, whose
+`source()` is what the shell draws, so that is what they drive.
+"""
 
 from __future__ import annotations
 
@@ -109,14 +115,22 @@ class CanonicalConsumerEntryTest(unittest.TestCase):
 
     def test_the_machine_reader_receives_the_managed_state_and_harness_scope(self) -> None:
         machine = assemble_consumer_machine((), today=TODAY)
-        with mock.patch.object(tui, "read_consumer_machine", return_value=Ok(machine)) as read:
-            loaded = tui._canonical_consumer_source(
+        with (
+            mock.patch.object(tui, "read_consumer_machine", return_value=Ok(machine)) as read,
+            mock.patch.object(
+                tui,
+                "_canonical_consumer_configuration",
+                return_value=Ok(effective_configuration(())),
+            ),
+            mock.patch.object(tui, "read_consumer_offers", return_value=Ok(ConsumerOffers())),
+        ):
+            composed = tui._canonical_consumer_actions(
                 project="/work/project",
                 user_home="/users/alice",
                 today=TODAY,
             )
 
-        self.assertIsInstance(loaded, Ok)
+        self.assertIsInstance(composed, Ok, composed)
         arguments = read.call_args.kwargs
         self.assertEqual(arguments["harness_root"], "/work/project")
         self.assertTrue(arguments["state_root"].endswith("agent-artifacts/state"))
@@ -134,16 +148,21 @@ class CanonicalConsumerEntryTest(unittest.TestCase):
         offers = ConsumerOffers((MarketplaceEntry(_row()),))
         with (
             mock.patch.object(tui, "read_consumer_machine", return_value=Ok(machine)),
+            mock.patch.object(
+                tui,
+                "_canonical_consumer_configuration",
+                return_value=Ok(effective_configuration(())),
+            ),
             mock.patch.object(tui, "read_consumer_offers", return_value=Ok(offers)) as read,
         ):
-            loaded = tui._canonical_consumer_source(
+            composed = tui._canonical_consumer_actions(
                 project="/work/project",
                 user_home="/users/alice",
                 today=TODAY,
             )
 
-        self.assertIsInstance(loaded, Ok)
-        self.assertEqual(loaded.value.screens.marketplace, offers.artifacts)
+        self.assertIsInstance(composed, Ok, composed)
+        self.assertEqual(composed.value.source().screens.marketplace, offers.artifacts)
         # Measured harnesses only: an offer marked compatible with one nobody measured is a claim
         # AART cannot keep.
         self.assertEqual(
@@ -152,7 +171,12 @@ class CanonicalConsumerEntryTest(unittest.TestCase):
         )
 
     def test_an_unreadable_configuration_refuses_rather_than_offering_nothing(self) -> None:
-        """An empty Marketplace and an unreadable one are different facts."""
+        """An empty Marketplace and an unreadable one are different facts.
+
+        ERR03, carried from the retired wizard loader: the refusal that comes back is the one the
+        boundary raised, not a rewrapping of it. A composition that replaced a typed diagnostic
+        with one of its own would hide which read failed from the person who has to fix it.
+        """
 
         machine = assemble_consumer_machine((), today=TODAY)
         refusal = Err(
@@ -160,15 +184,20 @@ class CanonicalConsumerEntryTest(unittest.TestCase):
         )
         with (
             mock.patch.object(tui, "read_consumer_machine", return_value=Ok(machine)),
+            mock.patch.object(
+                tui,
+                "_canonical_consumer_configuration",
+                return_value=Ok(effective_configuration(())),
+            ),
             mock.patch.object(tui, "read_consumer_offers", return_value=refusal),
         ):
-            loaded = tui._canonical_consumer_source(
+            composed = tui._canonical_consumer_actions(
                 project="/work/project",
                 user_home="/users/alice",
                 today=TODAY,
             )
 
-        self.assertIsInstance(loaded, Err)
+        self.assertIs(composed, refusal)
 
 
 if __name__ == "__main__":

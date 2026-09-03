@@ -1153,8 +1153,25 @@ typed `WizardStage` and set only by the wizard, so every canonical crash would h
 reads local state and so carries paths in its message, is now redacted through
 `internal_failure_lines` instead of propagating (D-119).
 
-571 lines of `tui.py` remain production-orphaned, held only by the widget tests — `_curses_multiselect`
-and its 29 tests, the receipt screens, `_load_user_wizard_read_model`, `_curses_install_mode` — and
-are the next sweep, minus the two helpers B-044 holds.
+**Step 7's sweep is complete (D-129).** The "571 lines" above was a single-pass estimate and was
+wrong: the dead wizard definitions call each other, so a one-pass reference check keeps whole
+clusters alive by their own internal references. Reachability computed to a fixpoint from the
+module's live entry points found **1,680**; `tui.py` is now 1,087 lines and the detector reports
+`0 dead definitions` over what remains. `_canonical_setup_run` and
+`_complete_canonical_consumer_action` are production-reachable through D-128 and were never part of
+the sweep.
+
+Every test that held a removed definition went through D-091 before its file was touched.
+`tests/tui_search_test.py`, `tests/tui_wizard_curses_test.py`, `tests/tui_install_scope_test.py`
+and `tests/tui_receipt_test.py` are deleted. `tests/setup_receipt_cli_test.py` is new and is the
+first thing anywhere to drive `aart marketplace receipt show|verify|undo` through a front end on
+real records — that reachability was previously asserted only against the retired wizard skins.
+`tests/consumer_shell_test.py` gains three carried assertions, each proven red against a real
+mutation; `tui_consumer_entry_test.py`, `tui_consumer_text_test.py`, `tui_source_lifecycle_test.py`,
+`memory_cli_test.py` and `adoption_first_contact_test.py` are retargeted at the live surface. Three
+behaviours the canonical shell genuinely does not have were recorded rather than asserted: B-047
+(no match count on a filtered list), B-048 (refusal lines are not wrapped), B-049 (the dot
+separator is enforced on some projections and not others, and the Product Specification's own
+mockups use it).
 
 Checkpoint gates on 2026-09-02: `make quality` and `make integration` are both green.

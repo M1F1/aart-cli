@@ -13,13 +13,10 @@ from agent_artifacts.consumer import (
     ConsumerContext,
     LocalConsumerAdapter,
 )
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.model import Err as LegacyErr
+from agent_artifacts.domain.result import Ok
 from agent_artifacts.profiles.builtin import builtin
 from agent_artifacts.protocol.capabilities import Capability
 from agent_artifacts.reporting.projection import usage_report_from_consumer
-from agent_artifacts.wizard import WizardSession
 from tests.canonical_setup_application_test import Fixture as SetupFixture
 
 _INSTALL_STATE_FIXTURES = Path(__file__).resolve().parent / "fixtures" / "install-state"
@@ -52,75 +49,6 @@ def _tree_snapshot(root: Path) -> tuple[tuple[str, bytes], ...]:
 
 
 class TuiConsumerTextTest(unittest.TestCase):
-    def test_err03_canonical_loader_returns_the_original_domain_error_unchanged(self) -> None:
-        diagnostic = Diagnostic(
-            DiagnosticCode("install-state-legacy"),
-            Severity.ERROR,
-            "AART 0.1 installation state was detected.",
-            details=(("detected_schema", "install-state-v0.1"),),
-        )
-        expected = Err((diagnostic,))
-        service = mock.Mock()
-        service.browse.return_value = expected
-        session = WizardSession(
-            current="artifacts",
-            action="install",
-            profiles=("claude",),
-            scope="project",
-        )
-
-        loaded = tui._load_user_wizard_read_model(
-            session,
-            source_factory=mock.Mock(),
-            source_dir=None,
-            repo=None,
-            project=None,
-            user_home=None,
-            consumer_service=service,
-        )
-
-        self.assertIs(loaded, expected)
-        service.browse.assert_called_once()
-
-    def test_err03_consumer_loader_reports_one_named_boundary_failure(self) -> None:
-        """Without a canonical consumer service the wizard fails at one named boundary.
-
-        The retired catalog source factory is never consulted as a fallback: a missing
-        canonical service is an error to report, not a reason to read a legacy catalog.
-        """
-
-        source_factory = mock.Mock(return_value=LegacyErr("legacy catalog could not open", code=7))
-        session = WizardSession(
-            current="artifacts",
-            action="install",
-            profiles=("claude",),
-            scope="project",
-        )
-
-        loaded = tui._load_user_wizard_read_model(
-            session,
-            source_factory=source_factory,
-            source_dir="/legacy/catalog",
-            repo=None,
-            project=None,
-            user_home=None,
-        )
-
-        self.assertIsInstance(loaded, Err)
-        assert isinstance(loaded, Err)
-        self.assertEqual(
-            loaded.diagnostics,
-            (
-                Diagnostic(
-                    DiagnosticCode("canonical-consumer-unavailable"),
-                    Severity.ERROR,
-                    "the canonical consumer service is unavailable",
-                    remediation=("configure and synchronize a canonical registry source",),
-                ),
-            ),
-        )
-        source_factory.assert_not_called()
-
     def test_canonical_setup_queue_has_separate_authorize_review_apply_feedback(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             fixture = SetupFixture(Path(raw))

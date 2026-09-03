@@ -33,6 +33,7 @@ from agent_artifacts.tui_consumer import (
 from tests.consumer_activity_test import lifecycle_outcome
 
 ESCAPE, ENTER, BACKSPACE, SLASH = 27, 10, 263, ord("/")
+QUESTION = ord("?")
 UP, DOWN, SPACE = 259, 258, 32
 TODAY = dt.date(2026, 8, 31)
 
@@ -134,6 +135,68 @@ class ConsumerShellTest(unittest.TestCase):
         self.assertEqual(state.rows, ("public/mcp/jira@2.2.0",))
         self.assertEqual(state.search, "jira")
         self.assertIn("Filter: jira", terminal.last)
+
+    def test_the_help_screen_advertises_the_filter_key(self):
+        """Carried from the removed wizard's `tui_search_test.py`.
+
+        A filter nobody is told about is a filter nobody uses, and the wizard's status-bar test was
+        the only thing anywhere that said the key is advertised. The canonical shell advertises it
+        on the `?` help instead of in a permanent status bar, so that is where the assertion lands.
+        """
+
+        _, terminal = drive(QUESTION, state=_at(ConsumerScreen.INSTALLED))
+
+        advertised = [line for line in terminal.last.splitlines() if "search" in line]
+        self.assertEqual(len(advertised), 1, terminal.last)
+        self.assertIn("/", advertised[0])
+
+    def test_a_filter_that_matches_nothing_empties_the_screen_without_leaving_it(self):
+        """Also carried: a query that answers nothing is a narrowing, not an exit.
+
+        The wizard refused to confirm a hidden row and said nothing matched. The canonical shell has
+        no such notice -- recorded in `BACKLOG.md` -- but the half that matters for safety holds
+        here: no row is offered, so no row can be acted on, and the screen is still the one the
+        person was on. (`exited` is not asserted: the fake terminal running out of keys ends the
+        loop, so every drive finishes exited and the flag says nothing about the filter.)
+        """
+
+        state, terminal = drive(
+            SLASH, *map(ord, "nothing-here"), ENTER, state=_at(ConsumerScreen.INSTALLED)
+        )
+
+        self.assertEqual(state.rows, ())
+        self.assertEqual(state.current_row, "")
+        self.assertEqual(state.session.screen, ConsumerScreen.INSTALLED)
+        self.assertIn("Filter: nothing-here", terminal.last)
+
+    def test_the_artifact_type_is_searchable_so_one_kind_can_be_listed_alone(self):
+        """Carried: the wizard proved a query matches the type, not only the name.
+
+        A person who wants to see what Skills they have types `skill`, and the reason that works
+        is that the coordinate the row carries names its type. Nothing else asserts it, and a
+        filter that quietly matched names only would answer this question with an empty screen.
+        The fixture is local because the shared one holds a single kind.
+        """
+
+        mixed = (
+            installed("public/mcp/github@1.6.0", "ready"),
+            installed("public/skill/code-review@1.0.0", "ready"),
+        )
+        terminal = FakeTerminal(SLASH, *map(ord, "skill"), ENTER)
+        state = run_consumer_shell(
+            CanonicalScreenSource(
+                ConsumerScreens(
+                    project_dashboard(mixed, registry_count=1),
+                    mixed,
+                    project_activity((), today=TODAY),
+                )
+            ),
+            terminal,
+            state=_at(ConsumerScreen.INSTALLED),
+            settings_writer=_Preferences(),
+        )
+
+        self.assertEqual(state.rows, ("public/skill/code-review@1.0.0",))
 
     def test_clearing_the_filter_brings_the_hidden_rows_back(self):
         state, _ = drive(

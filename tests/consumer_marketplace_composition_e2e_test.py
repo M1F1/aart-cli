@@ -1,8 +1,8 @@
 """The canonical shell's Marketplace is the configured registries, read from disk.
 
-Screens 02 to 04a were reachable but empty in the composed application: `_canonical_consumer_source`
-read the machine and handed `screens_from` no offers at all, so a person opening the canonical shell
-saw a Marketplace with nothing in it while their configured registries sat on disk beside it.
+Screens 02 to 04a were reachable but empty in the composed application: composition read the
+machine and handed `screens_from` no offers at all, so a person opening the canonical shell saw a
+Marketplace with nothing in it while their configured registries sat on disk beside it.
 
 Where the offers come from is INV-026: a Marketplace is a projection over configured *registries*,
 and it does not redefine what a registry approved.  So an offer here is an approved published

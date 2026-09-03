@@ -308,6 +308,25 @@ file previously recorded as not constructible: `native_tree.py:512` defines it a
 the object carries. Recording it is not the same as cross-checking against it, and the independent
 check is the approved object identity above. Step 7j of the CP-14 slice carries the rest.
 
+## CP-14 step 7 — the wizard implementation is swept (D-129)
+
+`agent_artifacts/tui.py` is **2,767 -> 1,087 lines**. The removal was driven by reachability
+computed to a fixpoint from the module's live entry points, not by a single-pass reference scan:
+the retired wizard's definitions call each other, and the one-pass estimate this file and `NEXT.md`
+previously carried (~571 lines) kept whole clusters alive by their own internal references. The
+true figure was 1,680, and the sweep terminates with the detector reporting `0 dead definitions`.
+
+No test file was deleted before D-091 was applied to every assertion it held. That produced one new
+file and five retargeted ones. The new file matters on its own account:
+`tests/setup_receipt_cli_test.py` drives `aart marketplace receipt show|verify|undo` on real
+on-disk records, which nothing did — the renderers and the rollback were characterized, but the
+only front-end reachability test for them drove the retired wizard skins. Three assertions were
+carried into `tests/consumer_shell_test.py` and each proven red against a real production mutation.
+Three behaviours the canonical shell does not have (a filter's match count, refusal wrapping, the
+dot-separator rule) are recorded as B-047, B-048 and B-049 rather than asserted as though they held.
+
+Step 7 of CP-14 is therefore complete. The next executable work is B-046.
+
 ## Update rule
 
 Never mark a slice beyond the strongest evidence actually present.

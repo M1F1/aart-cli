@@ -1090,3 +1090,50 @@ the existing review-before-undo and stale-record checks.
 
 Evidence/links: D-126, D-128; B-044; `agent_artifacts/setup_receipt.py`,
 `agent_artifacts/io/configured_setup.py`.
+
+## B-047 — The canonical shell never says how much of a list a filter matched
+
+Discovered during the `agent_artifacts/tui.py` orphan sweep (D-129). The retired wizard answered
+every query with a count -- `2 of 4 match 'review'.`, `Nothing matches 'kubernetes'. 4 entries
+searched.` -- so a person could tell an empty screen caused by a typo from one caused by having
+nothing installed. `CanonicalScreenSource.rows` filters and returns; `frame()` draws `Filter: <q>`
+and the surviving rows, and nothing anywhere reports how many were hidden.
+
+The safety half of the wizard's behaviour does hold and is now pinned: a filter that matches
+nothing yields no rows, so no row can be acted on, and the screen does not change
+(`tests/consumer_shell_test.py::test_a_filter_that_matches_nothing_empties_the_screen_without_leaving_it`).
+Only the count is missing, which is why this is noncritical: no invariant depends on it.
+
+Evidence/links: D-129; `agent_artifacts/tui_consumer.py` `CanonicalScreenSource.rows`, `frame`;
+the removed `tests/tui_search_test.py::test_the_answer_says_how_much_of_the_list_matched` and
+`::test_a_query_that_matches_nothing_says_so_and_keeps_the_prompt`.
+
+## B-048 — A refusal line longer than the content measure is neither wrapped nor elided
+
+Also from the D-129 sweep. `tui._source_flow_diagnostics` wrapped a refusal to `CONTENT_MEASURE`
+so a long remediation stayed readable and was provably not truncated. The shipped shell renders
+every declined action through `io/consumer_actions.py::_refusal`, which splits on newlines only:
+a single long remediation becomes one long row, and what happens to the overflow is the curses
+adapter's business rather than a decision anything states or tests.
+
+The half that matters -- the remediation survives beside the message, in order, with nothing
+elided -- is carried in `tests/tui_source_lifecycle_test.py::SourceRefusalWayOutTests`. Wrapping
+is a presentation choice with no invariant behind it, so it stays here until a screen needs it.
+
+Evidence/links: D-129; `agent_artifacts/io/consumer_actions.py` `_refusal`, `_lines`;
+`agent_artifacts/tui_layout.py` `CONTENT_MEASURE`, `wrap`.
+
+## B-049 — `tui_maintainer.py` uses the dot separator the other projections forbid
+
+Noticed while deciding which chrome guards to carry in D-129. `tests/tui_marketplace_test.py::
+test_no_projection_uses_the_dot_as_a_separator` still holds for the marketplace projection, and
+the retired `tui_wizard_curses_test.py` held the same rule over `tui.py`. `tui_maintainer.py`
+contains seven ` · ` separators, so the rule is now enforced on some screens and not others.
+
+Which way it should be resolved is a product question, not a cleanup: the Product Specification's
+own screen mockups use ` · ` (for example its dashboard and review summaries), so the wizard-era
+prohibition may be the thing that is wrong rather than the maintainer screens. Decide once, then
+either drop the marketplace guard or change the maintainer projections -- not both by accident.
+
+Evidence/links: D-129; `docs/product-specification/PRODUCT_SPECIFICATION.md` screen mockups;
+`agent_artifacts/tui_maintainer.py`; `tests/tui_marketplace_test.py`.

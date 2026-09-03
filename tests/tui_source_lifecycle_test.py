@@ -23,6 +23,7 @@ from agent_artifacts.configuration.model import (
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.identifiers import ObjectDigest, SourceAlias, SourceId
 from agent_artifacts.domain.result import Err, Ok
+from agent_artifacts.io.consumer_actions import _refusal
 from agent_artifacts.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
@@ -40,7 +41,6 @@ from agent_artifacts.sources.model import (
     make_source_candidate,
     source_instance_id,
 )
-from agent_artifacts.tui_layout import CONTENT_MEASURE
 from agent_artifacts.tui_sources import (
     build_source_stage,
     plan_source_removal,
@@ -313,31 +313,43 @@ class SourceRefusalWayOutTests(unittest.TestCase):
     This is the failure the whole stage exists to end: an origin that re-declared its identity
     refuses every sync, and a notice that shows only the refusal leaves the user exactly where
     they were before these operations existed.
+
+    Carried from the retired wizard's `tui._source_flow_diagnostics` to the shipped shell's
+    `_refusal`, which is what every declined consumer action now renders through. The wizard also
+    wrapped a long line to the content measure; the canonical shell does not, and that half is
+    recorded in `BACKLOG.md` rather than asserted here as though it held.
     """
 
-    IDENTITY_CHANGE = Err(
-        (
-            tui.Diagnostic(
-                tui.DiagnosticCode("source-invalid"),
-                tui.Severity.ERROR,
-                "resolved source changed its declared source identity",
-                remediation=(
-                    "review the origin, then run `aart source remove --alias registry` and add "
-                    "it again to subscribe to the new identity",
-                ),
+    IDENTITY_CHANGE = (
+        Diagnostic(
+            DiagnosticCode("source-invalid"),
+            Severity.ERROR,
+            "resolved source changed its declared source identity",
+            remediation=(
+                "review the origin, then run `aart source remove --alias registry` and add "
+                "it again to subscribe to the new identity",
             ),
-        )
+        ),
     )
 
-    def test_the_curses_notice_keeps_remediation_and_wraps_instead_of_truncating(self) -> None:
-        lines = tui._source_flow_diagnostics(self.IDENTITY_CHANGE)
+    def test_the_refusal_keeps_its_remediation_rather_than_only_the_complaint(self) -> None:
+        lines = _refusal(self.IDENTITY_CHANGE)
 
-        joined = " ".join(line.strip() for line in lines)
-        self.assertIn("changed its declared source identity", joined)
-        self.assertIn("aart source remove --alias registry", joined)
-        self.assertNotIn("…", joined)
-        for line in lines:
-            self.assertLessEqual(len(line), CONTENT_MEASURE)
+        self.assertEqual(lines[0], "resolved source changed its declared source identity")
+        self.assertEqual(lines[1:], self.IDENTITY_CHANGE[0].remediation)
+        self.assertNotIn("\u2026", " ".join(lines))
+
+    def test_every_diagnostic_is_drawable_as_one_row_each(self) -> None:
+        """A terminal row cannot hold a newline, so a multi-line message becomes several rows."""
+
+        wrapped = Diagnostic(
+            DiagnosticCode("source-invalid"),
+            Severity.ERROR,
+            "first line\nsecond line",
+            remediation=("do the thing",),
+        )
+
+        self.assertEqual(_refusal((wrapped,)), ("first line", "second line", "do the thing"))
 
 
 if __name__ == "__main__":

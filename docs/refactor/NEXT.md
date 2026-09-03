@@ -2,10 +2,12 @@
 
 ## Current objective
 
-Continue **CP-14 Maintainer TUI 30–53**. Step 7, retiring legacy authority, is done apart from a
-mechanical sweep; **B-044 is closed by D-128**. The next executable work is that evidence-led
-orphan sweep, still skipping nothing merely because a widget test is its only caller; B-046 is the
-separate receipt-locator follow-up and B-045 remains non-critical. Screen 53 is
+Continue **CP-14 Maintainer TUI 30–53**. Step 7, retiring legacy authority, is **done**:
+**B-044 is closed by D-128** and the evidence-led orphan sweep of `agent_artifacts/tui.py` is
+closed by **D-129**, which took the module from 2,767 to 1,087 lines with every unheld assertion
+carried and proven red first. The next executable work is **B-046**, the receipt-backed setup
+locator, which is what a canonical install still cannot show, verify or undo; B-045 remains
+non-critical, and B-047–B-049 are the presentation findings the sweep produced. Screen 53 is
 live — the typed Candidate filter carries status, kind, Source and target registry, and `f` opens it
 from screen 35 (D-111). Screens 48–50 are live: lifecycle uses exact history plus registry evidence, provenance retains typed
 Git/local pins and compiler output, and immutable version conflicts require a new version
@@ -288,14 +290,25 @@ unrooted in the store. That is **B-045**, independent of setup.
 Every trust, evidence and policy check stays inside the engine; a third implementation of the
 planning is what produced the hardcoded trust constant in the preserved draft.
 
-**The exact next action** is the evidence-led mechanical sweep. About 571 lines of `tui.py` are
-still production-orphaned and held only by widget tests —
-`_curses_multiselect` and its 29 tests, the receipt screens, `_load_user_wizard_read_model`,
-`_curses_install_mode`, `_choice_pane`, `_basket_item`, `_canonical_consumer_source`. That sweep is
-mechanical and unblocked. `_canonical_setup_run` and `_complete_canonical_consumer_action` are now
-production-reachable through D-128 and are not orphans. B-038's remaining half was also
-restated: the direct-install residue is in `commands/marketplace.py::_configured_registry_selection`,
-a public flow, not in the deleted wizard.
+The orphan sweep is **done** (D-129). Its estimate of "about 571 lines" was produced by a
+single-pass reference scan and was wrong by a factor of three: the dead wizard definitions call
+each other, so a one-pass check keeps whole clusters alive by their own internal references.
+Reachability computed to a fixpoint from the module's live entry points found **1,680** lines, and
+the sweep terminates with `0 dead definitions` over the remaining 1,087. `tui_search_test.py`,
+`tui_wizard_curses_test.py`, `tui_install_scope_test.py` and `tui_receipt_test.py` are deleted;
+`setup_receipt_cli_test.py` is new; five files are retargeted. `_canonical_setup_run` and
+`_complete_canonical_consumer_action` are production-reachable through D-128 and were not orphans.
+
+**The exact next action** is **B-046**: `setup_receipt.locate_setup_record` reads the setup pointer
+only from the retiring install-state manifest, so `aart marketplace receipt show|verify|undo`
+cannot find a setup run made by a configured install. The new `tests/setup_receipt_cli_test.py`
+characterizes all three verbs against the legacy manifest fixture and is the file the receipt-backed
+locator should extend with a canonical-receipt fixture, red first. Do not write legacy install
+state to satisfy it (D-128).
+
+B-038's remaining half stands as restated: the direct-install residue is in
+`commands/marketplace.py::_configured_registry_selection`, a public flow, not in the deleted
+wizard.
 
 Behind it, step 6 left the surfaces complete: screen 53 is live (D-111) — the typed filter carries
 all four facets the Product Specification names, `f` opens it from screen 35, `Space` toggles a
@@ -303,8 +316,8 @@ facet row, and screen 35 narrows accordingly — and screens 51–52 are reachab
 end, with `c` on screen 35 opening Collection Candidates and Enter resolving one against approved
 registry state (D-112). What remains in CP-14:
 
-1. **Step 7 is done except for one mechanical sweep.** The wizard front-end is removed (D-113,
-   D-116, D-117) and B-039 is closed. What it aimed at beyond that — `consumer/application.py`,
+1. **Step 7 is done.** The wizard front-end is removed (D-113, D-116, D-117), B-039 is closed,
+   and the orphaned implementation behind it is swept (D-129). What it aimed at beyond that — `consumer/application.py`,
    `lifecycle/*`, `setup_engine/*` — is load-bearing for `aart marketplace` and is not removed.
    B-038's screen-21 half is done (D-114) and its remaining half is restated as an `aart marketplace
    install` question. B-044 is closed (D-128); B-046 records the non-blocking canonical setup
@@ -313,7 +326,9 @@ registry state (D-112). What remains in CP-14:
    the transaction snapshot as metadata only, and published package bytes do not change.
 
 Noticed while proving the walk, not fixed here: screen 47 draws its "N selected" footer once of its
-own and once from the shell chrome, so the count appears twice. Recorded in `BACKLOG.md`.
+own and once from the shell chrome, so the count appears twice. Recorded in `BACKLOG.md`, with the
+sweep's three further presentation findings — no match count on a filtered list (B-047), unwrapped
+refusal lines (B-048), and the dot separator enforced on some projections but not others (B-049).
 
 ## Critical boundaries for this slice
 

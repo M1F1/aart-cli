@@ -2396,3 +2396,50 @@ the Product Specification first instead of hiding the change here.
   and a recipe may declare only `darwin`, so elsewhere the run is `unsupported` and the artifact is
   reported as still-pending setup with a retry command rather than as a failed install. That was
   measured by forcing the platform, not assumed.
+
+## D-129 — The wizard surface in `tui.py` is removed by reachability, with every unheld assertion carried first
+
+- **Context:** `NEXT.md` named an evidence-led orphan sweep of `agent_artifacts/tui.py` as the next
+  executable work once B-044 closed. An earlier handoff estimated ~571 orphaned lines from a
+  single-pass scan. That estimate was wrong in a way worth recording: the retired wizard's dead
+  definitions call each other, so a one-pass "is this name referenced anywhere?" check keeps whole
+  clusters alive by their own internal references. Computing reachability to a fixpoint from the
+  module's live entry points instead found 1,680 lines, and the sweep terminates with the detector
+  reporting `0 dead definitions` over the remaining 1,087.
+- **Decision:** remove the unreachable definitions, and apply D-091 to the tests that held them
+  before deleting any test file: for each assertion, either find the public flow that already
+  covers it, or carry it to the reachable surface and prove it red against a real mutation.
+  `tui.py` goes from 2,767 to 1,087 lines; four test files are deleted; six are retargeted.
+- **Status:** accepted.
+- **Reason:** the surface is genuinely gone (D-113, D-116, B-039), so keeping tests that drive it
+  reports coverage of screens no one can open. Deleting them without the D-091 step is what loses
+  behaviour, which is why the carries below exist rather than a bare removal.
+- **Consequence:** what was carried, and where it landed:
+  - `tests/setup_receipt_cli_test.py` is new. `tui_receipt_test.py` was the only place any front
+    end was driven through `show`, `verify` and `undo` on real records: the renderers and the
+    rollback are characterized in `setup_receipt_show_test.py`, `setup_verify_test.py` and
+    `setup_undo_test.py`, but nothing proved an operator could reach them. The same fixture now
+    drives `aart marketplace receipt`, including verify reporting a hand-edited managed block as
+    `false=1` with a nonzero exit, and undo reviewing before `--yes`.
+  - `tests/consumer_shell_test.py` gains three: the `?` help advertises the filter key exactly
+    once; a filter matching nothing empties the screen without leaving it; and the artifact *type*
+    is searchable, because the row a screen carries names its kind. Each was proven red by
+    mutating production code, the last by matching only the final coordinate segment.
+  - `tests/tui_consumer_entry_test.py` moves three tests from the removed
+    `_canonical_consumer_source` wrapper to `_canonical_consumer_actions(...).source()`, which is
+    what the shell actually draws. ERR03's surviving claim -- a refusal comes back as the object
+    the boundary raised, not a rewrapping -- is now `assertIs` there rather than in the deleted
+    wizard-loader test.
+  - `tests/tui_source_lifecycle_test.py` retargets the refusal test from
+    `tui._source_flow_diagnostics` to `io/consumer_actions.py::_refusal`.
+  - `tests/memory_cli_test.py` retargets `tui._TYPE_ORDER` to `tui_marketplace._KINDS`.
+  What was deliberately *not* carried, with the reason:
+  - The wizard's "no screen string uses the dot as a separator" guard. The Product Specification's
+    own screen mockups use ` · `, and the Specification wins; the equivalent guard survives where
+    it is still true (`tui_marketplace_test.py`), and the divergence is B-049.
+  - The wizard's key-hint chrome guard. Its regex is wizard vocabulary (`enter=finalize`,
+    `b=back`) and matches no literal in any shipped shell module, so carrying it would add a test
+    that cannot fail. The claim behind it -- keys are advertised in one place -- is what the new
+    help-screen test asserts.
+  - The match-count notice (B-047) and refusal wrapping (B-048), which the canonical shell does
+    not do. Neither is asserted as though it held.
