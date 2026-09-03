@@ -54,10 +54,9 @@ score.
 3. **VERIFIED:** add safe repair review and finalize entry points. Re-inspect and re-plan under the same
    precondition discipline as every configured lifecycle action; apply only an explicitly reviewed
    minimal plan.
-4. **IN PROGRESS (4a orphaned-run and 4b Activity/Receipt done; configuration and credential
-   remain):** make Activity, Receipt, configuration, credential and orphaned-run diagnostics usable from the
-   global report without weakening their existing evidence or undo boundaries. Triage B-052 and
-   B-055 here only where a mandatory invariant requires it.
+4. **VERIFIED:** make Activity, Receipt, configuration, credential and orphaned-run diagnostics
+   usable from the global report without weakening their existing evidence or undo boundaries.
+   Triage B-052 and B-055 here only where a mandatory invariant requires it.
 5. Run the full public-flow, negative/property, integration and mutation-adequacy evidence; close
    the slice only when every declared invariant has a traceable public surface.
 
@@ -300,6 +299,81 @@ would hold the rendering's whitespace rather than its meaning.
 proven by five targeted mutations and never given a scoped run of its own. That is a finding about
 step 3's test depth rather than about step 4b, and it is recorded as B-060.
 
+### Step 4c — what a machine ignores on purpose, and never says (D-144)
+
+Two configurations are honoured silently. A source with `enabled: false` is skipped by every other
+part of this report deliberately -- step 2's offline readiness iterates enabled sources only -- so an
+operator asking why nothing offers an artifact sees a report in which that source does not appear at
+all, which is indistinguishable from never having configured it. And an organization policy that
+sets a reporting field replaces the value in the user's own configuration file: the runtime path is
+answered, because `_locked_override_diagnostics` refuses a `--reporting-mode` flag that contradicts
+policy, but the configured path is not. `EffectiveConfiguration` has carried `locked_fields` for
+exactly this purpose and, before this step, `grep` found no reader of it anywhere in the package.
+
+`project_credential_record` was the same shape once more: `application/consumer_session.py` was its
+only caller, so credential health and its dependants were reachable from the interactive shell and
+from nowhere else. That is the fifth capability in this slice found fully built at a seam with no
+verb reporting it, after Doctor itself, offline readiness, the orphaned run root and the Activity
+trail.
+
+`aart doctor` now reports both, and the report answers the empty case in words rather than by
+omission -- "every configured source is enabled and no field is policy-locked", "no installed
+artifact references one" -- which is the same refusal of "absence against unknown" steps 2, 4a and
+4b each made in their own section.
+
+**Two claims are measured at the seam, and the reasons are concrete rather than convenient.** This
+is the split CP-15 step 8 recorded for the same kind of reason, and each is named in the test file
+so a later reader can retire it if the constraint goes away:
+
+- The **populated credential list**. Recording a credential reference on an installation means
+  running a setup recipe that declares a secret input and supplying a value for it, and
+  `commands/marketplace.py` wires a real `MacOsKeychainProvider` on darwin -- so that flow would
+  write into the developer's own login Keychain. Reading is safe, so the empty case runs through the
+  verb end to end; the populated shape is projected directly.
+- The **policy-locked field**. `resolve_config_paths` puts the organization policy at
+  `/Library/Application Support/agent-artifacts/policy.json` on darwin and no CLI flag overrides
+  that path, so no test can install one without writing to a root-owned system location.
+
+The credential projection also carries a guarantee that is structural rather than asserted per
+field: `CredentialObservation` "deliberately has no value field", so `_credential_data` has no
+material available to leak. The test asserts the type's field names, which means a later field named
+`value` or `secret` fails there rather than silently reaching the report.
+
+Eight targeted mutations, each red only where it belongs: inverting the disabled-source filter (2
+tests, the reported case and its baseline); publishing an empty `policy_locked_fields` (1); emitting
+the all-clear line when something is in fact disabled or locked (2); naming no fields in the
+locked-field explanation (1); publishing an empty dependant list (1); rendering a credential with
+dependants as if it had none (1); inverting the empty-credential answer (1); and describing a
+disabled source without naming which one (1). A ninth belongs to the finding below.
+
+**The finding is what the scoped run caught before any mutant ran.** Its baseline stats pass failed
+on `doctor_offline_readiness_e2e_test`, which held step 2's "cached is not installed" claim as
+`assertNotIn("installed", output.lower())` over the whole human report. The new credential section
+says "no installed artifact references one" -- true, and in the section whose subject genuinely is
+installed artifacts. Nothing regressed: the assertion had been holding a claim about the report's
+vocabulary while its name claimed something about the offline capabilities, and the two coincided
+only while the report was short enough. It is now scoped to the offline block, which is a
+strengthening rather than a weakening -- putting the word `installed` into the offline renderer
+still turns it red -- and the general form is D-144. Worth recording twice over because the focused
+runs for this step were all green: only the file the step did not touch could see it.
+
+**The second finding repeats step 4b's exactly, which is what makes it a pattern rather than an
+accident.** Once the run completed, 29 of its 595 survivors were inside this step's four functions,
+and they said three things. Six credential payload keys -- `reference`, `provider`, `service`,
+`account`, `provider_state`, `detail` -- and the disabled source's `kind` could each be renamed with
+nothing turning red, because no test read any of them: a field the payload publishes that nothing
+holds is a contract nobody is keeping, and that is the same defect step 4b found in `_action_data`.
+The human line for a credential *nothing* depends on was unheld, though the JSON half of that case
+was asserted -- and "deletable" is the entire point of that case. And the separator between
+dependants, and between locked fields, was invisible to a fixture that only ever had one of each,
+which is the shape step 4a hit at its loop guards.
+
+All 29 are closed. The full-record and full-line assertions that close them are stated as
+equalities rather than substrings, because for a section that is one or two lines the whole line is
+the meaning -- unlike step 4b's multi-line block, where an exact match would have held whitespace.
+A fresh scoped run confirms it: 595 mutants, 450 killed, and no survivor left in any of
+`_credential_data`, `_credential_lines`, `_configuration_data` or `_configuration_lines`.
+
 ## Quality gates
 
 - Baseline before CP-16: `make quality` green (3,237 tests, 1 skipped, 85.32% branch coverage) and
@@ -324,6 +398,16 @@ step 3's test depth rather than about step 4b, and it is recorded as B-060.
   where claimed; ruff, format and mypy green over the four changed files. Fresh scoped
   mutation: 43 mutants, 40 killed, three reviewed survivors (two on an unexecuted guard, one
   equivalent under the run directory's naming).
+- Step 4c verified: `make quality` green across all nine gates -- 3,281 tests, 1 skipped, 85.38%
+  branch coverage -- with the integration gate skipped as redundant because all of its tests are
+  among the 3,281 the unit gate runs.
+- Step 4c focused: ten configuration/credential tests green; nine targeted mutations each red only
+  where claimed. The scoped run over the whole command module with all six Doctor test files first
+  refused to start -- its baseline caught the step-2 collision described above -- and then produced
+  595 mutants at 421 killed, with 29 survivors inside this step's four functions. All 29 are now
+  closed and re-verified by a fresh run: 595 mutants, 450 killed, and no survivor in
+  `_credential_data`, `_credential_lines`, `_configuration_data` or `_configuration_lines`. The
+  remaining 145 are B-060's 84 in `_run_repair` and 47 in `run` itself, recorded as B-061.
 - Step 4b focused: five activity E2E tests green, all five RED against the previous commit;
   nine targeted mutations each red only where claimed. Scoped mutation over the whole command
   module with all four Doctor test files: 499 mutants, 354 killed; three real gaps inside this
@@ -332,26 +416,34 @@ step 3's test depth rather than about step 4b, and it is recorded as B-060.
 
 ## Remaining
 
-Step 4b and step 5. Doctor now reviews and applies one explicitly confirmed minimal plan, and step
-4a made the orphaned-run diagnostic reachable from the global report without a receipt to name. The
-Activity, Receipt, configuration and credential diagnostics remain.
+Step 5. Step 4 is complete: the orphaned-run root (4a), the Activity trail with each action's own
+undo answer (4b), and the disabled-source, policy-locked-field and credential diagnostics (4c) are
+all reachable from the global report. What remains is the slice-closing evidence pass -- every
+declared invariant traced to a public surface, with the full quality suite green.
 
 ## Known compromises
 
 - The current canonical inspection does not calculate Marketplace update availability, so Doctor
   reports installed health and machine drift without an update offer.
-- Credential state is observable only where the platform provider exists; broader provider and
-  configuration diagnostics belong to step 4.
+- Credential state is observable only where the platform provider exists, so the report's
+  credential section is empty on a machine with no provider rather than reporting that it could not
+  look. Distinguishing those is not in this slice.
+- Two step-4c claims are held at the seam rather than through the verb, for the reasons recorded in
+  that step: driving a populated credential list through the CLI would write to the developer's real
+  Keychain, and installing an organization policy would require writing to a root-owned system path.
 
 ## Backlog discoveries
 
 - B-058: scoped mutmut results can remain stale after test-only changes.
 - B-059: Doctor's exactly-one-match repair guard is defensive code of unproven reachability.
 - B-060: step 3's `_run_repair` has 84 surviving mutants under a scoped run it never had.
+- B-061: Doctor's `run` composition has 47 surviving mutants under the step-4c scoped run.
+- B-062: a machine with no credential provider reports no credentials rather than saying it could
+  not look.
 
 ## Blockers
 
-None for step 4c.
+None for step 5.
 
 ## Legacy removal criteria
 
@@ -359,9 +451,10 @@ This slice adds a public support surface; it authorizes no legacy deletion by it
 
 ## Handoff
 
-- Current working state: steps 1, 2 and 3 are VERIFIED; CP-16 remains IN PROGRESS.
-- Exact next action: begin step 4 with a public RED over the support diagnostics the global
-  report cannot yet reach.
+- Current working state: steps 1, 2, 3 and 4 (4a, 4b, 4c) are VERIFIED; CP-16 remains IN PROGRESS
+  with step 5 outstanding.
+- Exact next action: step 5 -- walk every invariant this slice declares and show the public surface
+  that holds it, then run the full quality suite on a clean tree and close the slice.
 - Do not undo: one observed installation set feeds both `project_doctor` and
   `prepare_configured_repair`; offline readiness reuses the installation package verifier but stops
   before object publication; Doctor mutates nothing unless

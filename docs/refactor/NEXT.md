@@ -68,15 +68,38 @@ receipt, a different record with no `recorded_at` or `undo` field at all. Two fi
 `status` published in the payload with no test reading either. B-060 records 84 survivors in step
 3's `_run_repair`, which never had a scoped run of its own.
 
-**Next action: CP-16 step 4c.** Configuration and credential diagnostics are the remainder of step
-4's declared scope and are deliberately not backlogged. `project_credential_record` is the fourth
-instance of the same pattern: it exists, and `application/consumer_session.py` is its only caller.
-Doctor already reads credential observations -- it passes `credential_providers` into
-`read_installed_inspections` and never reports `inspected.value.credentials`. `CredentialObservation`
-"deliberately has no value field", so a report cannot leak a secret by construction, which is a
-claim worth asserting rather than assuming. Reading is safe on darwin where `MacOsKeychainProvider`
-is real; CP-15 step 8's warning was about *storing*. The dependants list also makes CP-15's
-retention claim (INV-231/232) visible for the first time. Then step 5 closes the slice.
+Step 4c is VERIFIED (D-144), and step 4 is complete. Two configurations were being honoured in
+silence. A source with `enabled: false` is skipped by every other part of the report deliberately,
+so an operator asking why nothing offers an artifact saw a report the source did not appear in at
+all -- indistinguishable from never having configured it. And an organization policy that sets a
+reporting field replaces the value in the user's own configuration file: `_locked_override_diagnostics`
+refuses a contradicting `--reporting-mode` flag, but the configured path was silent, and
+`EffectiveConfiguration.locked_fields` had no reader anywhere in the package. Credentials were the
+fifth capability in this slice found built at a seam with no verb reporting it. Both are now in the
+report, both empty cases are answered in words, and the credential projection's no-leak guarantee is
+asserted structurally -- against `CredentialObservation`'s field names, so a future field called
+`value` fails there rather than reaching the report. Two claims are held at the seam for reasons
+named in the test file: the populated credential list would write to the developer's real Keychain,
+and installing an organization policy would mean writing to a root-owned system path.
+
+The finding came from the scoped run before a single mutant executed. Its baseline failed on step
+2's `assertNotIn("installed", output.lower())`, which scanned the whole human report while claiming
+something about the offline capabilities alone; the new credential section says "no installed
+artifact references one", which is true and belongs. The assertion is now scoped to the offline
+block and a mutation putting `installed` into that renderer still turns it red. D-144 records the
+general form: scope an absence assertion to the surface whose claim it is. Every focused run for
+step 4c was green -- only the file the step did not touch could see this.
+
+The second finding repeats step 4b's exactly: six credential payload keys and the disabled source's
+`kind` were published with nothing reading any of them, the human line for a credential nothing
+depends on was unheld even though its JSON half was asserted, and the separator between dependants
+was invisible to a fixture holding one. All 29 survivors inside this step's functions are closed and
+re-verified -- 595 mutants, 450 killed, none left in the four functions. The remaining 145 are
+B-060's 84 in `_run_repair` and 47 in the report composition, now B-061.
+
+**Next action: CP-16 step 5.** Walk every invariant the slice declares -- INV-194, INV-223, INV-191,
+INV-192 and screen 29 / section 161.11 -- and show the public surface holding each, then run the
+full quality suite on a clean tree and close the slice.
 
 **CP-15 is VERIFIED — all eight steps done.** Step 8 is
 `tests/credential_contract_migration_e2e_test.py`, closing INV-231 and INV-232 and the slice with

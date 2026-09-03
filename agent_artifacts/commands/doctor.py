@@ -13,13 +13,16 @@ import sys
 from datetime import datetime, timezone
 
 from agent_artifacts import command_outcome as _common
+from agent_artifacts.application.consumer_session import credential_dependants
 from agent_artifacts.application.consumer_views import (
     ActivityView,
+    CredentialRecordView,
     InstalledArtifactView,
     PresentationProfile,
     ReceiptDetailView,
     activity_from_receipts,
     activity_view_to_data,
+    project_credential_record,
     project_doctor,
     project_installed_artifact,
     project_lifecycle_plan,
@@ -34,6 +37,7 @@ from agent_artifacts.application.orphaned_runs import (
     orphaned_runs_to_data,
 )
 from agent_artifacts.application.reconciliation import repair_plan_to_data
+from agent_artifacts.configuration.policy import EffectiveConfiguration
 from agent_artifacts.consumer.application import CONSUMER_REVIEW_MISMATCH
 from agent_artifacts.consumer.coordinates import CONSUMER_INVALID, parse_artifact_selector
 from agent_artifacts.domain.diagnostics import Diagnostic, Severity, diagnostic_to_data
@@ -161,6 +165,78 @@ def _activity_lines(
             else "cannot be undone -- " + item.undo.reason
         )
         lines.append(f"  {item.artifact} ({item.intent}) {answer}")
+    return tuple(lines)
+
+
+def _credential_data(view: CredentialRecordView) -> dict[str, object]:
+    """One credential reference and its observed health.
+
+    `CredentialObservation` "deliberately has no value field", so there is no material here to
+    withhold -- the type makes the guarantee, and this function cannot break it by forgetting.
+    """
+
+    return {
+        "reference": view.reference,
+        "input": view.input,
+        "provider": view.provider,
+        "service": view.service,
+        "account": view.account,
+        "provider_state": view.provider_state,
+        "health": view.health,
+        "detail": view.detail,
+        "dependants": list(view.dependants),
+        "actions": list(view.actions),
+    }
+
+
+def _configuration_data(effective: EffectiveConfiguration) -> dict[str, object]:
+    """The two ways a machine quietly ignores what an operator configured.
+
+    A disabled source is skipped by every other part of this report, deliberately, so nothing says
+    it exists. And an organization policy that sets a reporting field replaces the user's own
+    configured value -- `_locked_override_diagnostics` refuses a *runtime* override of one, but a
+    value written in the user's configuration file is replaced in silence.
+    """
+
+    configuration = effective.configuration
+    return {
+        "disabled_sources": [
+            {"alias": source.alias.value, "kind": source.kind.value, "location": source.location}
+            for source in configuration.sources
+            if not source.enabled
+        ],
+        "policy_locked_fields": list(effective.locked_fields),
+    }
+
+
+def _configuration_lines(effective: EffectiveConfiguration) -> tuple[str, ...]:
+    disabled = tuple(source for source in effective.configuration.sources if not source.enabled)
+    locked = effective.locked_fields
+    if not disabled and not locked:
+        return ("Configuration: every configured source is enabled and no field is policy-locked.",)
+    lines = ["Configuration:"]
+    for source in disabled:
+        lines.append(
+            f"  source {source.alias.value} is configured but disabled, so nothing offers it"
+        )
+    if locked:
+        lines.append(
+            "  set by organization policy, so your own value is not in force: " + ", ".join(locked)
+        )
+    return tuple(lines)
+
+
+def _credential_lines(records: tuple[CredentialRecordView, ...]) -> tuple[str, ...]:
+    if not records:
+        return ("Credentials: no installed artifact references one.",)
+    lines = ["Credentials:"]
+    for item in records:
+        needed = (
+            "needed by " + ", ".join(item.dependants)
+            if item.dependants
+            else "no installed artifact needs it"
+        )
+        lines.append(f"  {item.reference} is {item.health} ({needed})")
     return tuple(lines)
 
 
@@ -359,6 +435,14 @@ def run(request: Request) -> int:
         return _emit_error(request, recorded)
     now = datetime.now(timezone.utc)
     timeline = activity_from_receipts(recorded.value, today=now.date())
+    credentials = tuple(
+        project_credential_record(
+            item,
+            dependants=credential_dependants(item, inspected.value.inspections),
+        )
+        for item in inspected.value.credentials
+    )
+    effective = runtime.value.loaded.effective
 
     artifacts = tuple(
         project_installed_artifact(
@@ -394,6 +478,8 @@ def run(request: Request) -> int:
         "orphaned_runs": orphaned_runs_to_data(orphaned),
         "activity": activity_view_to_data(timeline),
         "recorded_actions": [_action_data(item) for item in recorded.value],
+        "credentials": [_credential_data(item) for item in credentials],
+        "configuration": _configuration_data(effective),
     }
     if request.json:
         print(json.dumps(payload, indent=2))
@@ -408,6 +494,10 @@ def run(request: Request) -> int:
                     *orphaned_run_lines(orphaned),
                     "",
                     *_activity_lines(recorded.value, timeline, PresentationProfile.FAST),
+                    "",
+                    *_credential_lines(credentials),
+                    "",
+                    *_configuration_lines(effective),
                 )
             )
         )

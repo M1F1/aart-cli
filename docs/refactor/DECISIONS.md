@@ -2842,3 +2842,31 @@ same record. Two names containing the word "receipt" are not that establishment.
 
 Evidence/links: CP-16 step 4b; `commands/doctor.py::_action_data`; `receipt_service.py::show_view`;
 `application/consumer_views.py::_undo_availability`; INV-191; INV-192; D-133; D-138.
+
+## D-144
+
+An asserted absence over a whole report holds its claim only until some other part of the report
+legitimately uses the word.
+
+CP-16 step 2 established that a cached payload is not an installed artifact, and held it with
+`assertNotIn("installed", output.lower())` over the entire human `aart doctor` report. That was
+correct when the report had two sections. Step 4c added a credential section whose empty answer is
+"no installed artifact references one" — a true statement, in the section whose subject genuinely
+is installed artifacts — and the step-2 test failed. Nothing had regressed: the assertion had been
+holding "no section of this report says installed" while its claim was "the offline capabilities
+are not described as installations", and the two coincided only by accident of how little else the
+report said.
+
+The assertion is now scoped to the offline-readiness block, and the narrowing is a strengthening
+rather than a weakening: it names the section the claim is about, and a mutation that puts the word
+`installed` into the offline renderer still turns it red. The whole-report form would have gone on
+passing for the wrong reason, or forced every later section to avoid a word Doctor's own subject
+matter requires.
+
+The general rule: scope an absence assertion to the surface whose claim it is. An absence measured
+somewhere the thing could never have appeared measures nothing (D-138); an absence measured
+everywhere is a claim about vocabulary, not about the thing.
+
+Evidence/links: CP-16 step 2 and step 4c; `tests/doctor_offline_readiness_e2e_test.py::
+test_human_output_keeps_the_three_capabilities_visibly_separate`; `commands/doctor.py::
+_credential_lines`; D-138; D-140.

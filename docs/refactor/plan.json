@@ -189,12 +189,12 @@
         {
           "id": "4",
           "title": "Activity, Receipt, configuration, credential and orphan-run diagnostics",
-          "status": "in_progress"
+          "status": "done"
         },
         {
           "id": "5",
           "title": "Public-flow hardening, mutation evidence and full slice verification",
-          "status": "todo"
+          "status": "in_progress"
         }
       ]
     },

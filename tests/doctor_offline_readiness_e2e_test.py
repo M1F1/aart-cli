@@ -255,7 +255,14 @@ class DoctorOfflineReadinessE2ETest(unittest.TestCase):
             self.assertIn("metadata cached", output)
             self.assertIn("canonical payload cached", output)
             self.assertIn("runtime dependencies unverified", output)
-            self.assertNotIn("installed", output.lower())
+            # The claim is about this section, not the whole report: "cached" is not "installed",
+            # and a later section that legitimately says "installed artifact" is not a violation
+            # of it. Scanning the whole report held this only for as long as no other section
+            # used the word.
+            offline = next(
+                block for block in output.split("\n\n") if block.startswith("Offline readiness")
+            )
+            self.assertNotIn("installed", offline.lower())
 
 
 if __name__ == "__main__":

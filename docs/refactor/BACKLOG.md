@@ -1426,3 +1426,48 @@ boundary, which is the part worth reading first: the `--expect` comparison, the 
 the exactly-one-match guard that B-059 already questions.
 
 Evidence/links: D-134; D-091; B-059; CP-16 slice steps 3 and 4b; `agent_artifacts/commands/doctor.py`.
+
+## B-061 — Doctor's `run` composition has 47 surviving mutants under a scoped run
+
+Found in CP-16 step 4c. The scoped run over `commands/doctor.py` with all six Doctor test files
+produced 595 mutants; 47 of the survivors are in `run` itself — the function that assembles the
+report from seven observations and serializes it two ways.
+
+This is a different question from B-060. `_run_repair` is one guarded operation whose survivors are
+about a confirmation boundary; `run` is composition, where many mutants are plausibly equivalent by
+construction (reordering independent reads, changing a local name, altering a blank separator line
+between sections). What is not known is how many. Every step of this slice that read its own
+survivors found at least one real gap hiding among the noise — published payload keys nothing read,
+twice — so the noise assumption is exactly the one that has failed here before.
+
+What is needed: read the 47, split them into equivalent, presentation-only and real, and either
+close the real ones or record why each stands.
+
+**Not critical path.** Every claim the slice declares is held by a public flow and by targeted
+mutations that turn red only where claimed; these survivors are about depth beyond those claims.
+
+Evidence/links: D-134; D-091; B-060; CP-16 slice steps 4b and 4c; `agent_artifacts/commands/doctor.py`.
+
+## B-062 — A machine with no credential provider reports no credentials rather than saying it could not look
+
+Found in CP-16 step 4c. `aart doctor` reports credential health from
+`read_installed_inspections`, which observes references only where a provider exists —
+`MacOsKeychainProvider` on darwin, nothing elsewhere. On a machine with no provider the report says
+"no installed artifact references one", which is the same answer it gives when there genuinely are
+none.
+
+That is the "absence against unknown" confusion this slice refused three times in its own new
+surfaces: step 2 kept "missing" distinct from "not looked at" for the offline capabilities, step 4a
+kept "no working copy" distinct from "the run root could not be read", and step 4b answered the
+empty activity trail in words. The credential section is the one place in the report where the two
+are still spelled the same, because the distinction lives upstream in the inspection reader rather
+than in the projection this step added.
+
+Fixing it means the inspection result carrying whether a provider was available at all, then the
+report distinguishing "none referenced" from "cannot observe credentials on this platform".
+
+**Not critical path.** No Product Specification invariant requires the distinction, and the report
+under-claims rather than over-claims: it never says a credential is healthy when it could not look.
+
+Evidence/links: D-138; D-140; D-142; CP-16 slice steps 2, 4a and 4c;
+`agent_artifacts/io/consumer_machine.py`; `agent_artifacts/commands/doctor.py::_credential_lines`.

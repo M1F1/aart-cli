@@ -143,7 +143,7 @@ class ConsumerMachine:
     doctor: DoctorView | None = None
 
 
-def _dependants(
+def credential_dependants(
     observation: CredentialObservation, inspections: tuple[InstalledInspection, ...]
 ) -> tuple[str, ...]:
     """The installations that would stop working without this credential.
@@ -214,7 +214,7 @@ def assemble_consumer_machine(
         )
 
     records = tuple(
-        project_credential_record(item, dependants=_dependants(item, inspections))
+        project_credential_record(item, dependants=credential_dependants(item, inspections))
         for item in credentials
     )
     by_reference = {item.reference: item for item in records}
