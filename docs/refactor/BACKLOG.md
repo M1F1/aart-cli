@@ -1592,22 +1592,44 @@ coordinate form -- and the answer is always `collection-not-found`, regardless o
 approved. Measured against a real Git-backed registry publishing two artifacts:
 `marketplace list` returns `"collections": []` while offering both members.
 
-Two things to fix together when this is picked up:
+**Corrected scope (D-151).** This first read as a projection bug. It is not: tracing it end to end
+shows nothing in the product can produce an approved Collection for the projection to carry.
 
-1. The projection. A collection version has to survive into `ApprovedRegistrySnapshot.collections`,
-   which also means the promotion pipeline has to publish one -- `_promote_one`'s test fixture
-   takes `scanned.value.active[0]` and `compile_author_snapshot` returns artifacts only, so the
-   authoring side of this is unexercised too.
-2. The refusal's remediation, which is empty. `collection-not-found` gives an operator no next
-   step, where the neighbouring `receipt-no-setup` gives three. Even while the capability is
-   absent, a refusal should say what to do.
+The maintainer side models Collections and then stops. `domain/collection_candidates.py` defines
+`CollectionCandidate`, `compile_author_source` returns `.collections`, `reconcile_source_scan`
+accepts them and produces `collection_active`, and the maintainer TUI shows them --
+but `CollectionCandidate` appears in only six modules and `promotion.py` is not one of them.
+`collection_active` reaches candidate history, which is an audit record, and goes no further. No
+collection candidate is promoted, so no registry version of kind `collection` is ever published,
+and no test anywhere publishes one. Resolution is the one part already built, which is what makes
+the gap look smaller than it is.
 
-**Not critical path for CP-17.** The slice's subject is that the chain's stages are real, and its
-bulk-install half is proven over a real commit
-(`tests/git_backed_bulk_install_e2e_test.py`). This is a missing capability rather than a defect in
-the chain, and it is the same Collection work D-131 sequenced B-038 behind. It becomes critical when
-a slice must satisfy INV-186 or INV-213 through a public verb, since neither can be evidenced while
-no Collection is reachable.
+Four layers, to be built together as their own vertical slice:
+
+1. **Promotion.** A `CollectionCandidate` has to become an approved registry version -- today it
+   reaches history and nothing else.
+2. **Registry representation.** A published collection version, and the manifest read that turns
+   one back into a `Collection`.
+3. **The configured projection.** `_approved_snapshot` must populate
+   `ApprovedRegistrySnapshot.collections` instead of skipping kind `collection`.
+4. **Install planning over members**, with the ownership graph uninstall already respects, and the
+   member-health aggregation INV-186 requires.
+
+Separately, and worth doing while the capability is absent: the refusal's remediation is empty.
+`collection-not-found` gives an operator no next step, where the neighbouring `receipt-no-setup`
+gives three.
+
+**Not critical path for CP-17 (D-151).** CP-17's subject is that each stage of the chain is real
+rather than fixture-assembled, and its bulk-install half is proven over a real commit. A step cannot
+be blocked on an acceptance claim about a capability that does not exist -- its premise was wrong,
+which is what D-151 records. Building this inside an acceptance slice is the big-bang expansion
+CLAUDE.md's migration discipline forbids; it is the same Collection capability D-131 already
+sequenced B-038 behind, seen from the consumer end.
+
+It becomes critical when a slice must satisfy INV-186 (collection health derives from member state)
+or INV-213 (exact Collections preserve exactness) through a public verb, since neither can be
+evidenced while no Collection is reachable. Those two invariants are the reason this is a capability
+worth scheduling rather than a curiosity.
 
 `CollectionsAreNotReachableTest` pins the current behaviour so the gap stays an honest refusal: it
 must not become a partial install of some members, and must not silently succeed.

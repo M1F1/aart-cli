@@ -3088,3 +3088,65 @@ is a receipt schema change; B-066 carries it with this evidence.
 Evidence/links: CP-17 step 4; INV-175; INV-194; INV-228; D-029; D-091;
 `tests/placement_observation_test.py::UnrepairablePayloadIsStillReportedTest`;
 `tests/reconciliation_test.py::ComparisonTest`.
+
+---
+
+## D-151 — CP-17 step 5's Collection half is an unbuilt capability, not an acceptance gap
+
+**Context.** CP-17 step 5 is written as "Collection and bulk install with one full-chain acceptance
+proof". Its bulk half is done and verified. Its Collection half cannot be done, and the reason is
+not that the chain is synthetic somewhere -- it is that nothing in the product can produce an
+approved Collection for the chain to carry.
+
+**Evidence, traced end to end.** The maintainer side models Collections properly:
+`domain/collection_candidates.py` defines `CollectionCandidate`, `compile_author_source` returns
+`.collections` beside `.artifacts`, `reconcile_source_scan` takes `collections=` and
+`previous_collections=` and produces `collection_active`, and the maintainer TUI shows them. Then it
+stops. `CollectionCandidate` appears in exactly six modules -- the two TUIs, `maintainer_views`,
+`candidate_history`, `maintainer`, and its own domain module -- and `promotion.py` is not among
+them. `collection_active` reaches candidate *history*, which is an audit record, and nothing else.
+No collection candidate is ever promoted, so no registry version of kind `collection` is ever
+published, and no test anywhere publishes one.
+
+The consumer side is consistent with that. `io/configured_selection.py::_approved_snapshot` skips
+approved versions of kind `collection` and leaves `ApprovedRegistrySnapshot.collections` at its
+default; `marketplace list` returns `"collections": []`; installing one answers
+`collection-not-found`. Resolution is the one part that is ready -- `resolve_selection` documents
+"one/many/direct/Collection intent through one deterministic pipeline" and the expansion exists --
+which is why the gap reads at first like a projection bug. It is not. The projection has nothing to
+project.
+
+**Decision.** B-067 is **not** reclassified as critical for CP-17, and step 5 is recorded as
+complete for what CP-17 can actually prove.
+
+The reclassification rule admits a backlog item to the critical path when evidence shows a
+critical-path slice cannot complete without it. That rule is about *unblocking a slice's own
+subject*. CP-17's subject is that each stage of the chain is real rather than assembled by a
+fixture: a real Git commit, real validation and publication, a real install, a real runtime, real
+drift and removal. It is an acceptance slice. Building promotion for collection candidates, a
+registry representation for a collection version, the configured projection, and install planning
+over members with ownership is a capability spanning four layers -- and CLAUDE.md's migration
+discipline is explicit that discovered work does not expand the active slice, and that new
+capability arrives as its own vertical slice rather than as a big-bang addition inside another.
+
+Proving an acceptance claim about a capability that does not exist is not a thing a slice can be
+blocked on; it is a step whose premise was wrong. The step was written expecting Collections to be
+installable, and they never have been -- this is the same Collection capability D-131 already
+sequenced B-038 behind, seen from the consumer end.
+
+**What was done instead.** The gap is pinned by a test rather than left as prose.
+`CollectionsAreNotReachableTest` asserts that the Marketplace offers no collections and that
+installing one is refused by name and installs nothing. That is deliberately a test of a refusal
+nobody wants: when the capability is built, it is what should turn red, and it should be replaced by
+the install it stands in for rather than deleted to make room. B-067 carries the corrected scope --
+four layers, not one -- and the empty `collection-not-found` remediation, which is worth fixing on
+its own while the capability is absent.
+
+**Consequence for the plan.** CP-17 step 5 reads "Collection and bulk install"; what it can deliver
+is bulk install plus an evidenced refusal. Recorded here so the next agent does not re-derive the
+same four-layer trace before reaching the same conclusion, and does not read the step's wording as
+licence to build the Collection capability inside an acceptance slice.
+
+Evidence/links: B-067; D-131; B-038; INV-186; INV-213;
+`tests/git_backed_bulk_install_e2e_test.py::CollectionsAreNotReachableTest`;
+`agent_artifacts/application/promotion.py`; `agent_artifacts/io/configured_selection.py`.

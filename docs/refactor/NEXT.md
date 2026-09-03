@@ -360,11 +360,25 @@ with empty remediation. B-067 records it with the two things to fix together, an
 `CollectionsAreNotReachableTest` pins the gap as an honest refusal so it cannot become a partial
 install.
 
-**Next action: decide B-067.** Either CP-17 closes with the bulk half proven and the Collection
-capability recorded as sequenced work -- it is the same Collection capability D-131 already
-sequenced B-038 behind -- or B-067 is reclassified as critical, in which case the projection and
-the promotion of a collection version are built before CP-17 can close. Nothing else in CP-17 is
-outstanding.
+**B-067 is decided (D-151): not reclassified, and CP-17 step 5 is complete for what CP-17 can
+prove.** Tracing it end to end shows this is not a projection bug. The maintainer side models
+Collections and stops: `CollectionCandidate` appears in six modules and `promotion.py` is not one of
+them, `collection_active` reaches candidate history and goes no further, so no collection candidate
+is ever promoted, no registry version of kind `collection` is ever published, and no test anywhere
+publishes one. Resolution is the one part already built, which is what makes the gap look smaller
+than it is. Closing it means four layers together -- promotion, registry representation, the
+configured projection, and install planning over members with ownership and INV-186's health
+aggregation -- which is a vertical capability slice, not a step inside an acceptance slice. A step
+cannot be blocked on an acceptance claim about a capability that does not exist; its premise was
+wrong.
+
+**CP-17 is complete.** Steps 1, 2, 3a, 3b, 4 and 5 are VERIFIED, with step 5's Collection half
+pinned as an evidenced refusal by `CollectionsAreNotReachableTest` rather than left as prose.
+
+**Next action: CP-18, the migration and release gate**, unless the Collection capability is
+scheduled first. B-067 now carries the four-layer scope and is the natural candidate for a slice of
+its own: INV-186 and INV-213 cannot be evidenced through any public verb until it exists, so it has
+to be built before either can move off PARTIAL.
 
 Do not widen `_reported`'s keep-rule on either axis. Payload-only and ABSENT/DIVERGENT-only are
 load-bearing, and D-150's mutation 4 is the uninstall and repair tests catching the widening.

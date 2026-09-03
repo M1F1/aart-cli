@@ -435,19 +435,26 @@ current behaviour so the gap stays an honest refusal -- it must not become a par
 members, and must not silently succeed -- and B-067 also records the empty remediation, which is
 worth fixing even while the capability is absent.
 
-So step 5's bulk half is VERIFIED and its Collection half is BLOCKED on a capability outside this
-slice. The step is not marked done.
+Following that up settled it (D-151). The gap is not the projection: `CollectionCandidate` appears
+in six modules and `promotion.py` is not one of them, and `collection_active` reaches candidate
+history and stops. No collection candidate is promoted, no registry version of kind `collection` is
+published by any path, and no test anywhere publishes one. Resolution is the one part already built.
+Closing it means promotion, registry representation, the configured projection and member install
+planning together -- a vertical capability slice, not a step inside an acceptance slice. A step
+cannot be blocked on an acceptance claim about a capability that does not exist; its premise was
+wrong, and that is what D-151 records.
+
+**Step 5 is VERIFIED for what this slice can prove**, and with it CP-17.
 
 ## Handoff
 
-- Current working state: steps 1, 2, 3a, 3b and 4 are VERIFIED. Step 4 is the first step in this
+- Current working state: steps 1, 2, 3a, 3b, 4 and 5 are VERIFIED, so **CP-17 is complete**. Step 4 is the first step in this
   slice to change production code (D-150), in `domain/reconciliation.py`,
   `application/installed_state.py` and `application/installation_verification.py`.
-- Exact next action: step 5's Collection half, which is blocked on B-067 -- no approved Collection
-  reaches the configured Marketplace, so no public verb can install one. Decide there whether CP-17
-  closes with the bulk half plus a recorded capability gap, or whether B-067 is reclassified as
-  critical and the Collection projection is built first. The bulk half is VERIFIED and needs
-  nothing further.
+- Exact next action: CP-18, the migration and release gate. CP-17 is complete. B-067 carries the
+  Collection capability with its corrected four-layer scope and is the natural next slice if one is
+  scheduled before CP-18 -- INV-186 and INV-213 cannot be evidenced through a public verb until it
+  exists.
 - Do not undo, added by step 5: `CollectionsAreNotReachableTest` asserts a refusal, not a
   behaviour anyone wants. If B-067 is implemented, that class is what should turn red, and it
   should be replaced by the install it was standing in for -- not deleted to make room.
