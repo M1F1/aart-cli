@@ -2485,3 +2485,30 @@ the Product Specification first instead of hiding the change here.
   `domain/receipts.py` gains `receipt_profiles`, moved out of `io/configured_setup.py` where it was
   private, because the read path needs the same derivation and duplicating it is how two readers
   start disagreeing about which harnesses an installation serves.
+
+## D-131 — B-038's routing question is sequenced behind two canonical capabilities, and pinned meanwhile
+
+- **Context:** `NEXT.md` named B-038's remaining half as the next executable work: make
+  `commands/marketplace.py::_configured_registry_selection` stop returning `None` for direct and
+  local sources, on the reading that INV-021/INV-026 imply installing from a Source is refused
+  rather than routed. The item asked for a characterization of `aart marketplace install
+  <direct-source-artifact>` first.
+- **Decision:** do not change the route. Record that the characterization already exists, that the
+  route is load-bearing for more than the question it is being asked about, and pin the decision
+  and each of its reasons in `tests/marketplace_install_routing_test.py`.
+- **Status:** accepted.
+- **Reason:** measured, not assumed. `tests/marketplace_lifecycle_e2e_test.py` configures one real
+  `SOURCE_LOCAL` source, synchronizes it for real, and drives 27 end-to-end tests of this exact
+  command through it -- so the characterization the item waits on is already there, and all 27 go
+  down this `None`. More importantly, only one of the seam's three declining reasons is the policy
+  question: it also declines every Collection, because the canonical seam expands none, and
+  `_configured_lifecycle` refuses anything but `--mode copy`. Removing the route now would delete
+  direct/local installs, Collection installs and symlink installs together, and two of those three
+  are the canonical route being unfinished rather than anything INV-021 or INV-026 argues about.
+  A capability is not retired by deciding a different question next to it.
+- **Consequence:** B-038 stays open with the sequencing written down: the Collection and symlink
+  capabilities are the work, and the routing decision is cheap once they exist. Nothing about the
+  route is now implicit -- the new test names the approved-registry case, the default-registry
+  case, both direct source kinds, the Collection case, the disabled-registry case, and the fact
+  that one direct selector declines a whole batch because a Selection executes as one transaction.
+  Closing either capability turns exactly one of those red.

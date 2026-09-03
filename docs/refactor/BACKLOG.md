@@ -687,6 +687,35 @@ Sources. The remaining step is therefore a characterized test of `aart marketpla
 maintainer's Candidate feed, so installing from one is refused rather than routed. Collections are a
 separate half and stay sequenced behind their own evidence.
 
+**What is left, measured (2026-09-03).** The step above asked for "a characterized test of `aart
+marketplace install <direct-source-artifact>`, and then the decision". The characterization already
+exists and is thorough: `tests/marketplace_lifecycle_e2e_test.py` configures one real
+`SourceKind.SOURCE_LOCAL` source, synchronizes it for real, and drives 27 end-to-end tests of this
+exact command against it -- copy install, collection install, managed-symlink install, user-scope
+install, update, forced reinstall, uninstall, setup review and authorized setup. Every one of them
+routes through the `None` this item names, because `_configured_registry_selection` returns `None`
+as soon as no enabled `REGISTRY_GIT` source exists.
+
+So what remains is only the decision, and the decision is not a small one. Two of the three reasons
+the seam declines are **missing canonical capabilities, not policy**:
+
+- **Collections.** `_configured_registry_selection` returns `None` for any collection selector. The
+  canonical seam expands no Collection, so `test_collection_install_materializes_every_expanded_
+  member` has no canonical equivalent to move to.
+- **Symlink mode.** `_configured_lifecycle` refuses anything but `--mode copy` outright
+  ("approved registry installation currently supports copy mode only"), so
+  `test_managed_symlink_install_produces_a_link_into_the_object_store` has none either.
+
+Refusing direct-source installs today would therefore remove three working, characterized
+capabilities at once -- direct/local installs, Collection installs and symlink installs -- and only
+the first of those is what INV-021/INV-026 argue about. The other two are the canonical route not
+being finished. **Sequence the capabilities first**; the routing question is answerable cheaply once
+they exist, and is a product decision either way.
+
+The routing decision itself is now pinned by `tests/marketplace_install_routing_test.py`, which
+names each reason separately, so closing either capability turns exactly one test red rather than
+leaving the route to be re-derived.
+
 **Why it is noncritical now.** Nothing installable was lost: the CLI still operates direct and local
 sources, and the canonical shell no longer offers what it cannot carry out.
 

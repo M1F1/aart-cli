@@ -6,10 +6,17 @@ Continue **CP-14 Maintainer TUI 30–53**. Step 7, retiring legacy authority, is
 **B-044 is closed by D-128**, the evidence-led orphan sweep of `agent_artifacts/tui.py` is closed
 by **D-129**, and **B-046 is closed by D-130**: the receipt verbs now follow the pointer off a
 canonical receipt, so a setup run a configured install performed is one an operator can show,
-verify and undo. The next executable work is **B-038's remaining half** —
-`commands/marketplace.py::_configured_registry_selection` returns `None` for direct and local
-sources, routing `aart marketplace install` for them down the characterized legacy path. B-045
-remains non-critical, and B-047–B-049 are the presentation findings the sweep produced. Screen 53 is
+verify and undo. **B-038's remaining half was examined and is not the next action**: its characterization already
+exists, and the two reasons the seam declines beyond direct sources are missing canonical
+capabilities rather than policy (Collections, and `--mode symlink`). Removing the route today would
+delete three working characterized capabilities to settle one question. The routing decision is now
+pinned by `tests/marketplace_install_routing_test.py`; the capabilities are the work, and the
+decision is cheap once they exist. B-045 remains non-critical, and B-047–B-049 are the presentation
+findings the D-129 sweep produced.
+
+**The next executable work is a decision, not code**: CP-14's critical path is complete, so the next
+agent should re-read `EXECUTION_PLAN.md` and pick the next critical-path slice rather than continue
+draining the backlog. Screen 53 is
 live — the typed Candidate filter carries status, kind, Source and target registry, and `f` opens it
 from screen 35 (D-111). Screens 48–50 are live: lifecycle uses exact history plus registry evidence, provenance retains typed
 Git/local pins and compiler output, and immutable version conflicts require a new version
@@ -307,10 +314,17 @@ machine holding only legacy installations answers exactly as before. No legacy i
 written. `tests/configured_setup_gap_test.py::ConfiguredReceiptVerbsTest` installs through the
 public command and drives all three verbs against what that install actually recorded.
 
-**The exact next action** is **B-038's remaining half**: the direct-install residue is in
+**On B-038's remaining half**, measured rather than assumed: the direct-install residue is in
 `commands/marketplace.py::_configured_registry_selection`, which returns `None` for direct and
 local sources so their installs take the characterized legacy path. That is a public flow, not
-anything left over from the deleted wizard.
+anything left over from the deleted wizard. The characterization the item asked for already exists
+-- `tests/marketplace_lifecycle_e2e_test.py` drives 27 end-to-end tests of this command against a
+real synchronized `SOURCE_LOCAL` source -- and every one of them routes through that `None`. Two of
+the seam's three declining reasons are unfinished canonical capabilities rather than policy: it
+expands no Collection, and `_configured_lifecycle` refuses anything but `--mode copy`. So closing
+B-038 by refusing direct installs would remove three characterized capabilities to settle one
+question. Sequence the capabilities first. See BACKLOG B-038 and
+`tests/marketplace_install_routing_test.py`, which pins each reason separately.
 
 Behind it, step 6 left the surfaces complete: screen 53 is live (D-111) — the typed filter carries
 all four facets the Product Specification names, `f` opens it from screen 35, `Space` toggles a
