@@ -294,8 +294,20 @@ def compare_states(desired: DesiredState, current: CurrentState) -> tuple[Drift,
 
     wanted = {component.id for component in desired.components}
     for item in current.components:
-        if item.id not in wanted:
-            drift.append(Drift(item.id, DriftKind.UNEXPECTED, False))
+        if item.id in wanted:
+            continue
+        # Undesired and intact is the stray case the docstring describes: something is here that
+        # nobody asked for, and the remedy is removal. Undesired and *damaged* is a different
+        # situation entirely -- an inspector that could see a component the planner had no source
+        # to repair from -- and naming that UNEXPECTED would tell an operator whose payload is
+        # gone that they have one too many. Report what is wrong; repairable stays false either
+        # way, because nothing here planned an effect to put it right (INV-175).
+        kind = (
+            DriftKind.UNEXPECTED
+            if item.state is ComponentState.MATCHED
+            else _FROM_STATE[item.state]
+        )
+        drift.append(Drift(item.id, kind, False))
 
     return tuple(sorted(drift, key=lambda item: item.sort_key))
 

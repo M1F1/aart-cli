@@ -210,6 +210,37 @@ class ComparisonTest(unittest.TestCase):
             compare_states(desired_state(), current), (Drift(stray, DriftKind.UNEXPECTED, False),)
         )
 
+    def _without_payload(self) -> DesiredState:
+        """The desired state a doctor builds: no payload source, so no payload to repair."""
+        kept = tuple(item for item in desired_state().components if item.id != PAYLOAD)
+        self.assertEqual(len(kept), len(desired_state().components) - 1)
+        return DesiredState(ARTIFACT, kept)
+
+    def test_a_component_nothing_desires_that_is_gone_is_named_by_what_is_wrong(self):
+        """INV-228: owned state changed outside AART is surfaced, in the words of the damage.
+
+        A payload the reconciler has no source to repair from is still a payload that is gone.
+        Calling that UNEXPECTED -- the word for something present nobody wanted, whose remedy is
+        uninstall -- describes the opposite of the situation the operator is actually in.
+        """
+        for state, kind in (
+            (ComponentState.ABSENT, DriftKind.MISSING),
+            (ComponentState.DIVERGENT, DriftKind.DIVERGENT),
+            (ComponentState.UNKNOWN, DriftKind.UNVERIFIABLE),
+        ):
+            with self.subTest(state=state):
+                self.assertEqual(
+                    compare_states(self._without_payload(), current_state(payload=state)),
+                    (Drift(PAYLOAD, kind, False),),
+                )
+
+    def test_damage_nothing_can_repair_is_never_reported_as_repairable(self):
+        """No effect was planned for it, so no plan may claim to put it right."""
+        (drift,) = compare_states(
+            self._without_payload(), current_state(payload=ComponentState.ABSENT)
+        )
+        self.assertFalse(drift.repairable)
+
     def test_comparing_states_for_different_artifacts_is_refused(self):
         other = ArtifactCoordinate(
             SourceAlias("public"), ArtifactIdentity("mcp", "gitlab"), "1.0.0"

@@ -21,7 +21,6 @@ from agent_artifacts.domain.effects import DeliverArtifact, DeliveryKind
 from agent_artifacts.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
-    ObjectDigest,
     SourceAlias,
 )
 from agent_artifacts.domain.receipts import ArtifactDelivery, PlacedArtifactReceipt
@@ -31,6 +30,7 @@ from agent_artifacts.domain.selection import OwnershipKind, OwnershipReason
 from agent_artifacts.io.consumer_machine import read_consumer_machine
 from agent_artifacts.io.execution import DeliveryEffectInterpreter
 from agent_artifacts.io.receipt_store import LocalReceiptStore
+from agent_artifacts.io.runtime_projection import tree_digest_at
 from agent_artifacts.protocol.hashing import file_entry, tree_digest
 from agent_artifacts.protocol.paths import parse_relative_path
 
@@ -73,10 +73,14 @@ class PlacedMachineTest(unittest.TestCase):
             )
         )
         assert isinstance(digest, Ok)
+        # The tree that is really on disk. A placeholder here would describe some other
+        # installation, and every "ready" asserted below would be about a payload nobody has.
+        measured = tree_digest_at(str(payload))
+        assert measured is not None
         self.receipt = PlacedArtifactReceipt(
             "skill/code-review",
             str(self.root),
-            ObjectDigest("sha256", "a" * 64),
+            measured,
             (
                 ArtifactDelivery(
                     "claude",

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -164,3 +165,91 @@ class GitBackedRuntimeE2ETest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GitBackedDoctorE2ETest(unittest.TestCase):
+    """CP-17 step 4: what `aart doctor` says about the installation the chain just produced.
+
+    D-150's subject, proved where an operator meets it. The installation under test is the real
+    one -- synchronized from a Git commit and installed through public verbs -- and the damage is
+    done to the tree on disk rather than to a fixture's idea of it.
+    """
+
+    def _installed(self, raw: str):
+        env = _Environment(Path(raw).resolve(), AUTHORED_SERVER)
+        env.run("source", "sync", source_transport=True)
+        code, installed = env.run(
+            "marketplace", "install", COORDINATE, "--profile", "claude", "--yes"
+        )
+        self.assertEqual(code, 0, installed)
+        runtime = env.project / ".agent-artifacts/runtimes/company/mcp/notes"
+        self.assertTrue((runtime / "payload").is_dir(), "nothing to damage")
+        return env, runtime
+
+    def _delete_payload(self, runtime: Path) -> None:
+        """An installed payload is deliberately read-only, so removing it takes the same
+        deliberate act it would take an operator."""
+
+        payload = runtime / "payload"
+        payload.chmod(0o700)
+        for item in payload.rglob("*"):
+            item.chmod(0o700)
+        shutil.rmtree(payload)
+        self.assertFalse(payload.exists())
+
+    def _report(self, env, *, ok: bool):
+        """Doctor's exit code is part of the claim: a machine needing attention does not exit 0."""
+
+        code, report = env.run("doctor")
+        self.assertEqual(0 if ok else 1, code, report)
+        self.assertEqual(ok, report["ok"])
+        return report
+
+    def _health(self, env, *, ok: bool):
+        report = self._report(env, ok=ok)
+        (installation,) = [item for item in report["items"] if "mcp/notes" in item["coordinate"]]
+        return installation
+
+    def test_a_healthy_installation_is_reported_ready(self) -> None:
+        """The guard that makes the next test mean something: this is not a doctor that always
+        complains."""
+
+        with tempfile.TemporaryDirectory() as raw:
+            env, _ = self._installed(raw)
+            installation = self._health(env, ok=True)
+            self.assertEqual("ready", installation["health"])
+            self.assertEqual([], installation["drift"])
+
+    def test_a_payload_somebody_deleted_is_reported_rather_than_called_ready(self) -> None:
+        """INV-228. Before D-150 this said `ready` with an empty drift list, while the server
+        below could not start -- the payload was measured, then dropped before anything read it."""
+
+        with tempfile.TemporaryDirectory() as raw:
+            env, runtime = self._installed(raw)
+            self._delete_payload(runtime)
+
+            installation = self._health(env, ok=False)
+
+            self.assertEqual("broken", installation["health"])
+            (drift,) = [item for item in installation["drift"] if item["component"] == "payload"]
+            self.assertEqual("missing", drift["kind"])
+            # INV-175: nothing here can put it back, and the report says so rather than offering
+            # a repair that would fail when an operator reached for it.
+            self.assertFalse(drift["repairable"])
+
+    def test_the_installation_doctor_calls_broken_really_cannot_start(self) -> None:
+        """The verdict is checked against the world, not against another projection of itself."""
+
+        with tempfile.TemporaryDirectory() as raw:
+            env, runtime = self._installed(raw)
+            launcher = str(runtime / "launch.sh")
+            started = speak(launcher, [{"jsonrpc": "2.0", "id": 1, "method": "initialize"}])
+            self.assertEqual("aart-e2e-github", started[0]["result"]["serverInfo"]["name"])
+
+            self._delete_payload(runtime)
+
+            self.assertEqual("broken", self._health(env, ok=False)["health"])
+
+            with self.assertRaises(AssertionError) as refused:
+                speak(str(launcher), [{"jsonrpc": "2.0", "id": 1, "method": "initialize"}])
+            self.assertIn("server.py", str(refused.exception))

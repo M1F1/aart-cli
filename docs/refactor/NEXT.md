@@ -312,10 +312,34 @@ killed nothing, because the CLI never reaches it, and the refusal an operator me
 `marketplace list` publishes a provenance `resolved_commit` of all zeros beside the real
 `source.resolved_revision`, which is the maintainer half of the chain still being synthetic.
 
-**Next action: step 4 -- drift, repair, rollback and uninstall over the live installation.** The
-Git-backed MCP installation is the one to damage and reconcile: it is the only installation anywhere
-that a real commit produced and that really starts, so a repair that claims to restore it can be
-checked by starting it again.
+Step 4's drift half is VERIFIED, and it is the first step in this slice to change production code.
+Damaging the live Git-backed MCP installation four ways found that `aart doctor` reported
+`health: ready, drift: []` for every kind of payload damage -- while the server exited 1 -- and was
+precise about a rewritten launcher in the same report. D-150 has the cause and the fix: both
+observers measure the payload, and both current-state builders discarded that measurement before
+the comparison could read it, because a doctor supplies no `payload_source` and so nothing desires
+the payload. Omitting it from the *desired* state is right; using that as a reason not to *report*
+it is what INV-228 and INV-175 forbid. `_reported` now keeps a damaged undesired payload,
+`compare_states` names it `missing`/`divergent` rather than `UNEXPECTED`, and `repairable` stays
+false because nothing planned an effect -- which is exactly what INV-175 asks to be said aloud.
+Three things fell out of it, all recorded in D-150: the first, wider attempt broke uninstall
+convergence and would have called an unhashable tree broken, so the keep-rule is payload-only and
+ABSENT/DIVERGENT-only; `placed_machine_e2e_test` was asserting `ready` over a payload digest of
+`"a" * 64` while measuring the real tree only for its delivery; and
+`InstallationObservation.payload_present` was a bool that made every partial observation claim the
+payload was deleted, now `bool | None`. Four targeted mutations, each red only where claimed. B-066
+records the remaining gap: no tree digest exists on the installation path, so an MCP payload
+rewritten in place is still invisible and only whole-tree deletion is caught.
+
+**Next action: finish step 4 -- rollback and uninstall over the *live* installation.** Both are
+covered today only against installations a fixture assembled (`repair_e2e`,
+`receipt_persistence_e2e`). The Git-backed MCP installation is the one to uninstall and roll back:
+it is the only installation anywhere that a real commit produced and that really starts, so a
+repair that claims to restore it can be checked by starting it again. Then step 5:
+collection/bulk install with one full-chain acceptance proof.
+
+Do not widen `_reported`'s keep-rule on either axis. Payload-only and ABSENT/DIVERGENT-only are
+load-bearing, and D-150's mutation 4 is the uninstall and repair tests catching the widening.
 
 Do not configure `file://` or a local path and do not set `allow_local_transport` through the public
 flow. Both refusals remain security boundaries. Do not make the legacy `registry publish` command

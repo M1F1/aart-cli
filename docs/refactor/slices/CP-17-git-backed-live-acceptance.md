@@ -295,6 +295,9 @@ half of the chain it does not reach.
   upstream movement are green; ruff format/check and mypy are green.
 - Step 3b: the three runtime tests are green, each starting a real server from a real virtual
   environment the install built; ruff format/check and mypy are green.
+- Step 4: all nine quality gates are green, and separately run `make integration` is green with 331
+  E2E tests. The whole unit suite is green at 3,372 tests and one skipped. Step 4 found and fixed a
+  real defect; D-150 records it, and the evidence below is what it turns on.
 
 ## Blockers
 
@@ -302,14 +305,94 @@ None. `git` is already a test dependency (`git_source_adapter_test`). The transp
 is a constraint on shape, not a blocker: it moves one seam from the verb to the adapter and leaves
 every downstream stage reachable through public commands.
 
+## Step 4 evidence -- drift over the live installation, and what it found
+
+The measurement that started it. `aart doctor`, over the step 3b installation, under four kinds of
+damage done to the real tree:
+
+| damage | before | after |
+|---|---|---|
+| launcher rewritten | `broken`, divergent, repairable | unchanged |
+| whole payload tree deleted | `ready`, `drift: []` | `broken`, missing, not repairable |
+| one payload file rewritten | `ready`, `drift: []` | `ready` -- B-066 |
+| one payload file deleted | `ready`, `drift: []` | `ready` -- B-066 |
+
+In the rewritten case the server exits 1 while the report says ready. The launcher case was already
+correct, which is what made the payload rows worth chasing rather than dismissing as "doctor is
+shallow": the same report is precise about one component and silent about another.
+
+**The defect and the fix** are D-150. In short: the payload was measured by both observers, then
+discarded by `tuple(item for item in components if item.id in wanted)` before the comparison could
+read it, because a doctor supplies no `payload_source` and so nothing desires the payload. Omitting
+it from the *desired* state is right -- guessing where a tree came from would overwrite it from
+somewhere nobody chose. That was being used as a reason not to *report* it, which is a different
+claim, and INV-228 and INV-175 both speak to the reporting one.
+
+**Scope taken, and why the first attempt was wrong.** The first version kept every damaged undesired
+component. It broke 15 tests, and two of them were right to break:
+
+- `installation_health` turns *any* unrepairable drift into `BROKEN`, including `UNVERIFIABLE`. A
+  payload that resisted hashing would have been reported as broken. So the keep-rule is `ABSENT` and
+  `DIVERGENT` only -- "measured and could not tell" is not damage.
+- On a removal state, components absent by design are undesired and absent. Uninstall stopped
+  converging. So the keep-rule is `Component.PAYLOAD` only, which on a removal state is desired and
+  takes the ordinary branch.
+
+**A fixture that was lying, exposed by the change.** `placed_machine_e2e_test` recorded
+`ObjectDigest("sha256", "a" * 64)` as its payload digest while measuring the real tree only for the
+delivery. Every `ready` it asserted was about a payload nobody had; the claim was invisible while the
+observation was being dropped, and surfaced as `'ready' != 'broken'` the moment it was not. The
+fixture now measures the tree it built. This is D-091's shape again, and worth noting as a pattern:
+the fix did not just add coverage, it made an existing lie fail.
+
+**A distinction the change forced.** `InstallationObservation.payload_present` was `bool = False`, so
+any caller assembling a partial observation implicitly claimed the payload was deleted. The
+regression test that describing less must not invent drift caught it. It is now `bool | None`, and
+D-029's "nobody looked" is representable where it was not.
+
+**Targeted mutations.** Four, each red only where it claims to be.
+
+1. *Discard the observation again* -- `_reported`'s keep-rule reduced to `item.id in wanted`. Turns
+   red: both payload cases and the health verdict in `placement_observation_test`, and both damage
+   tests in `git_backed_runtime_e2e_test`, where doctor reports `'ok': True` over a deleted payload
+   -- the original defect, reproduced exactly. Stays green: the drift-naming tests, which are about
+   a different claim.
+2. *Name damage `UNEXPECTED` again* -- the conditional in `compare_states` collapsed to the constant.
+   Turns red: the naming claim at all three levels -- the domain subtests, both placement kind
+   assertions, and `'missing' != 'unexpected'` through the public verb. Stays green: the health
+   verdicts, which turn on `repairable` rather than on the kind.
+3. *Report "nobody looked" as "gone"* -- `if observation.payload_present is not None` forced true.
+   Turns red: the three D-029 regressions in `InstalledStateBridgeTest`, including the one whose
+   name is that describing less must not invent drift. Worth noting that no new test was needed
+   here: the existing regression already held the claim, which is why the conflation surfaced as a
+   failure rather than as a silent widening.
+4. *Widen the keep-rule* to every damaged undesired component -- the first attempt, restored. Turns
+   red: uninstall convergence in `receipt_persistence_e2e` and `repair_e2e`. This is the mutation
+   that makes the "do not undo" note below evidence rather than an opinion.
+
+**What step 4 does not close.** B-066: the installation path has no tree digest on either the
+observation or the receipt, so an MCP payload rewritten in place is still invisible and only
+whole-tree deletion is caught. The observed component's detail says `presence only; this observation
+carries no tree digest` rather than letting a partial check read as a full one.
+
+Rollback and uninstall over the live installation remain: `receipt_persistence_e2e` and
+`repair_e2e` cover both against assembled installations, and neither has been run against one a real
+commit produced.
+
 ## Handoff
 
-- Current working state: steps 1, 2, 3a and 3b are VERIFIED, so step 3 is complete. Step 2 was independently reviewed (D-149),
-  which added `tests/git_revision_provenance_test.py` and changed no production code; step 3a added
-  the upstream movement to the same fixture, also with no production change.
-- Exact next action: step 4 -- drift, repair, rollback and uninstall over the live installation.
-  The Git-backed MCP installation from step 3b is the one to damage and reconcile, because it is the
-  only installation anywhere that a real commit produced and that really starts.
+- Current working state: steps 1, 2, 3a, 3b are VERIFIED. Step 4 covers drift over the live
+  installation and is VERIFIED for that half; it is the first step in this slice to change
+  production code (D-150), in `domain/reconciliation.py`,
+  `application/installed_state.py` and `application/installation_verification.py`.
+- Exact next action: finish step 4 -- rollback and uninstall over the *live* installation. Both are
+  covered today only against assembled installations (`repair_e2e`, `receipt_persistence_e2e`);
+  the Git-backed MCP installation is the one to uninstall, because it is the only one a real commit
+  produced. Then step 5, collection/bulk install with one full-chain proof.
+- Do not undo, added by step 4: the keep-rule in `_reported` is narrow on both axes on purpose --
+  payload only, and `ABSENT`/`DIVERGENT` only. Widening either re-breaks uninstall convergence or
+  reports an unhashable tree as broken; both failures are recorded in D-150 with the tests that
+  caught them.
 - Do not undo: the Git transport allowlist, and the configuration schema's refusal of local Git
   locations behind it. `file://` and local paths are refused on purpose at both layers, and no test
   may widen either to make itself hermetic. Substitute the transport port; never the verdict.

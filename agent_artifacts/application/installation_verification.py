@@ -170,7 +170,10 @@ class PlacementObservation:
 class InstallationObservation:
     """What an interpreter found. Facts only -- no comparison has happened yet."""
 
-    payload_present: bool = False
+    #: Tri-state on purpose. `False` is "the tree is gone", `None` is "nobody looked" -- D-029,
+    #: and the reason this is not a plain bool: a caller assembling a partial observation would
+    #: otherwise report every payload it did not measure as deleted.
+    payload_present: bool | None = None
     launcher_present: bool = False
     launcher_executable: bool = False
     launcher_digest: ObjectDigest | None = None
@@ -178,8 +181,9 @@ class InstallationObservation:
     registered_commands: tuple[tuple[str, str, str | None], ...] = ()
 
     def __post_init__(self) -> None:
+        if self.payload_present is not None and not isinstance(self.payload_present, bool):
+            raise ValueError("observed installed payload presence is invalid")
         for value, label in (
-            (self.payload_present, "installed payload presence"),
             (self.launcher_present, "launcher presence"),
             (self.launcher_executable, "launcher executability"),
             (self.interpreter_present, "interpreter presence"),

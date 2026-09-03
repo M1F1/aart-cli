@@ -16,6 +16,9 @@ state a repair afterwards keeps, and two builders would be free to disagree abou
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Iterator
+from collections.abc import Set as AbstractSet
+
 from agent_artifacts.domain.credentials import CredentialReference
 from agent_artifacts.domain.effects import (
     ConfigureHarness,
@@ -444,7 +447,39 @@ def current_state_from_placement(
         components.append(
             ObservedComponent(ComponentId(Component.SETTINGS, entry_found.harness), state)
         )
-    return CurrentState(desired.artifact, tuple(item for item in components if item.id in wanted))
+    return CurrentState(desired.artifact, tuple(_reported(components, wanted)))
+
+
+_DAMAGE = frozenset({ComponentState.ABSENT, ComponentState.DIVERGENT})
+
+
+def _reported(
+    components: Iterable[ObservedComponent], wanted: AbstractSet[ComponentId]
+) -> Iterator[ObservedComponent]:
+    """The observations a comparison is entitled to see.
+
+    An observation of something nobody desires is normally noise: the inspector measures whatever
+    the receipt describes, and a caller that supplied no payload source did not ask for the payload
+    to be reconciled. Dropping all of it, though, is how a doctor came to report a deleted payload
+    as ready -- the measurement was taken, and then discarded before anything could read it.
+
+    So a payload nobody desires is kept when it is damaged, and dropped when it is not. INV-228 is
+    that state changed outside AART is surfaced; INV-175 is that AART says when it cannot repair
+    something rather than staying quiet about it. Neither is a licence to invent a repair, and
+    keeping the observation invents nothing: `compare_states` reports it unrepairable.
+
+    Narrow on both axes, because `installation_health` turns *any* unrepairable drift into BROKEN.
+    Only the payload, because it is the one component every installation has by nature -- an
+    undesired harness entry is a stray, which is a different claim with a different remedy. Only
+    ABSENT and DIVERGENT, because UNKNOWN is "measured and could not tell", and a health rule that
+    cannot distinguish that from "gone" would report every installation whose tree resisted
+    hashing as broken. And never on a removal state, where absence is the goal rather than the
+    damage: those components are desired, so they take the `wanted` branch above.
+    """
+
+    for item in components:
+        if item.id in wanted or (item.id.component is Component.PAYLOAD and item.state in _DAMAGE):
+            yield item
 
 
 def _launcher_state(findings: frozenset[VerificationFinding]) -> ComponentState:
@@ -489,12 +524,21 @@ def current_state_from_observation(
     wanted = {component.id for component in desired.components}
 
     components: list[ObservedComponent] = [
-        ObservedComponent(
-            ComponentId(Component.PAYLOAD),
-            ComponentState.MATCHED if observation.payload_present else ComponentState.ABSENT,
-        ),
-        ObservedComponent(ComponentId(Component.LAUNCHER), _launcher_state(found)),
+        ObservedComponent(ComponentId(Component.LAUNCHER), _launcher_state(found))
     ]
+    # Omitted rather than guessed when nobody looked, so the comparison says "unobserved" instead
+    # of reporting an unmeasured payload as deleted. Presence is the whole of the claim here: this
+    # observation carries no tree digest, so a payload somebody rewrote in place is not visible on
+    # this path (B-066). What is claimed is only what was measured.
+    if observation.payload_present is not None:
+        components.insert(
+            0,
+            ObservedComponent(
+                ComponentId(Component.PAYLOAD),
+                ComponentState.MATCHED if observation.payload_present else ComponentState.ABSENT,
+                "presence only; this observation carries no tree digest",
+            ),
+        )
     if observation.interpreter_present:
         components.append(
             ObservedComponent(ComponentId(Component.RUNTIME_ENVIRONMENT), ComponentState.MATCHED)
@@ -542,4 +586,4 @@ def current_state_from_observation(
         ObservedComponent(ComponentId(Component.CREDENTIAL, name), state)
         for name, state in credentials
     )
-    return CurrentState(desired.artifact, tuple(item for item in components if item.id in wanted))
+    return CurrentState(desired.artifact, tuple(_reported(components, wanted)))

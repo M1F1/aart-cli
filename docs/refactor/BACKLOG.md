@@ -1537,3 +1537,37 @@ repository to be real in these fixtures.
 
 Evidence/links: CP-17 step 3b probe; D-091; `tests/promotion_planning_test.py::_evidence`;
 `tests/git_backed_runtime_e2e_test.py`.
+
+---
+
+## B-066 — An MCP payload rewritten in place is still invisible to doctor
+
+D-150 stopped `aart doctor` reporting `ready` over a payload that is gone. On the placement path the
+fix is complete: `PlacedArtifactReceipt.payload_digest` exists, so the observer measures a tree
+digest and both deletion and rewriting are caught.
+
+The installation path has no such digest on either side. `InstallationObservation` carries
+`payload_present` and no tree digest, and `InstallationReceipt` records `object_digest` -- the
+immutable package the installation was materialized *from* -- which is not the digest of the
+installed tree and cannot be compared against one. So for an MCP installation the claim is presence
+only, and the measured table after D-150 reads:
+
+| damage | doctor |
+|---|---|
+| launcher rewritten | `broken`, divergent, repairable |
+| whole payload tree deleted | `broken`, missing, not repairable |
+| one payload file rewritten | `ready` -- the directory is still there |
+| one payload file deleted | `ready` -- the directory is still there |
+
+The observed component says so in its detail (`presence only; this observation carries no tree
+digest`) rather than letting a partial check read as a full one, which is the B-029 pattern.
+
+Closing it means recording the installed tree's digest on `InstallationReceipt` at install time and
+measuring it in `observe_installation` -- a receipt schema change, so it carries a migration for
+receipts already written, which is why it is not folded into D-150.
+
+**Not critical path.** INV-228 is satisfied for the damage that is detectable without a schema
+change, and the remaining gap is stated in the component detail rather than claimed as health. It
+becomes critical if a slice needs an MCP installation's tree to be verifiable.
+
+Evidence/links: D-150; D-029; B-029; CP-17 step 4 probe; `agent_artifacts/application/installed_state.py`.

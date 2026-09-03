@@ -24,6 +24,7 @@ from agent_artifacts.application.installed_state import (
     current_state_from_placement,
     desired_state_from_placement,
 )
+from agent_artifacts.application.intents import InstalledHealth, installation_health
 from agent_artifacts.domain.effects import DeliveryKind
 from agent_artifacts.domain.identifiers import (
     ArtifactCoordinate,
@@ -190,3 +191,60 @@ class PlacementCurrentStateTest(_Placed, unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class UnrepairablePayloadIsStillReportedTest(_Placed, unittest.TestCase):
+    """CP-17: a doctor has no plan knowledge, and must not turn that into a health claim.
+
+    `desired_state_from_placement` omits the payload when no source was supplied, because
+    guessing where a tree came from would repair it into something nobody chose. That omission
+    is about *repair*. INV-228 requires state changed outside AART to be surfaced, and INV-175
+    requires AART to say when it cannot repair a component rather than fabricate a guarantee --
+    so what the reconciler cannot fix it must still report.
+    """
+
+    def _doctor_states(self, receipt=None):
+        """The states a doctor sees: desired built from the receipt alone, with no source."""
+        receipt = receipt or self._receipt()
+        desired = desired_state_from_placement(COORDINATE, receipt)
+        self.assertNotIn(
+            ComponentId(Component.PAYLOAD),
+            {component.id for component in desired.components},
+            "the fixture must omit the payload, or it is not exercising the doctor's situation",
+        )
+        current = current_state_from_placement(desired, receipt, observe_placement(receipt))
+        return desired, current
+
+    def test_an_intact_payload_no_source_can_repair_asks_for_nothing(self) -> None:
+        desired, current = self._doctor_states()
+        self.assertEqual((), compare_states(desired, current))
+
+    def test_a_payload_somebody_deleted_is_reported_even_though_nothing_can_repair_it(self) -> None:
+        receipt = self._receipt()
+        (self.root / "payload" / "SKILL.md").unlink()
+        (self.root / "payload").rmdir()
+        desired, current = self._doctor_states(receipt=receipt)
+        (drift,) = compare_states(desired, current)
+        self.assertEqual(ComponentId(Component.PAYLOAD), drift.component)
+        self.assertEqual(DriftKind.MISSING, drift.kind)
+        self.assertFalse(drift.repairable)
+
+    def test_a_payload_somebody_rewrote_is_reported_as_divergent(self) -> None:
+        receipt = self._receipt()
+        (self.root / "payload" / "SKILL.md").write_text("# sabotaged\n", encoding="utf-8")
+        desired, current = self._doctor_states(receipt=receipt)
+        (drift,) = compare_states(desired, current)
+        self.assertEqual(ComponentId(Component.PAYLOAD), drift.component)
+        self.assertEqual(DriftKind.DIVERGENT, drift.kind)
+        self.assertFalse(drift.repairable)
+
+    def test_a_damaged_payload_makes_the_installation_broken_rather_than_ready(self) -> None:
+        """The verdict an operator actually reads. INV-228, at the surface it is claimed on."""
+        receipt = self._receipt()
+        (self.root / "payload" / "SKILL.md").write_text("# sabotaged\n", encoding="utf-8")
+        desired, current = self._doctor_states(receipt=receipt)
+        self.assertEqual(InstalledHealth.BROKEN, installation_health(desired, current))
+
+    def test_an_intact_payload_is_still_reported_ready(self) -> None:
+        desired, current = self._doctor_states()
+        self.assertEqual(InstalledHealth.READY, installation_health(desired, current))

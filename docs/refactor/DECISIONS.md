@@ -3023,3 +3023,68 @@ reason to preserve it. When a decision record names a guarantee, some test's nam
 
 Evidence/links: CP-17 step 2 review; `tests/git_revision_provenance_test.py`; D-091; D-138; D-145;
 D-148.
+
+---
+
+## D-150 — What a reconciler cannot repair, it must still report
+
+**Context.** CP-17 step 4 measured `aart doctor` against a live Git-backed MCP installation under
+four kinds of damage. A rewritten launcher was caught: `broken`, `divergent`, repairable. All three
+kinds of payload damage -- one file rewritten, one file deleted, the whole tree deleted -- were
+reported as `health: ready, drift: []`, while the server itself exited 1. The report claimed
+readiness for a component it had not examined.
+
+**Cause.** Not a missing measurement. `observe_installation` and `observe_placement` both measure
+the payload, and `current_state_from_placement` even judges it by tree digest under a docstring
+arguing that presence is the wrong question. The measurement was then discarded: both current-state
+builders ended with `tuple(item for item in components if item.id in wanted)`, and `wanted` is the
+desired components, from which the payload is absent whenever no `payload_source` was supplied.
+`io/consumer_machine.py` supplies none, because a doctor has no plan knowledge. So the payload was
+measured, dropped, and its absence from the drift list read as health.
+
+**The distinction the omission conflates.** Omitting the payload from the *desired* state is right,
+and `desired_state_from_receipt` says why: a reconciler that guessed where a tree came from would
+overwrite it from somewhere nobody chose. That is a statement about **repair**. It was being used as
+a statement about **reporting**, and INV-228 (state changed outside AART is surfaced) and INV-175
+(AART says when it cannot safely repair a component rather than fabricating a minimal-repair
+guarantee) are both about reporting. Neither is satisfied by silence, and neither asks for an
+invented repair.
+
+**Decision.** Keep the desired state as it is; stop discarding the observation.
+
+1. `_reported` replaces the `item.id in wanted` filter in both builders. An undesired component that
+   is `MATCHED` is still dropped -- nothing is wrong with it and nobody asked for it. An undesired
+   component that is damaged is kept.
+2. `compare_states` names undesired damage by what is wrong -- `MISSING`, `DIVERGENT`,
+   `UNVERIFIABLE` -- instead of `UNEXPECTED`. `UNEXPECTED` means "here and nobody wanted it", whose
+   remedy is uninstall; telling an operator whose payload is gone that they have one too many
+   describes the opposite of their situation. A stray *matched* component is still `UNEXPECTED`,
+   which is what that word is for.
+3. `repairable` stays `False` on both paths. Nothing planned an effect, so no plan may claim to put
+   it right -- which is precisely what INV-175 asks to be said out loud.
+
+`Component.PAYLOAD` was already in `installation_health`'s critical set, so a kept payload drift
+turns `READY` into `BROKEN` with no change to the health rule.
+
+**A conflation the change exposed.** `InstallationObservation.payload_present` was `bool = False`,
+so every caller assembling a partial observation implicitly claimed the payload was deleted. Once
+undesired damage stopped being dropped, one existing test -- the regression that describing less
+must not invent drift -- turned red and said so. It is now `bool | None = None`: `False` is "the
+tree is gone", `None` is "nobody looked", and the component is omitted so the comparison reports
+`UNOBSERVED`. That is D-029's distinction, which a plain bool could not hold.
+
+**Reclassification.** Recorded as critical rather than backlog. CLAUDE.md admits a backlog item to
+the critical path when evidence proves a mandatory invariant cannot otherwise be satisfied; a health
+verdict of `ready` over a deleted payload violates INV-228 and INV-175 directly, and the evidence is
+a measured probe against a real installation rather than an argument.
+
+**What this does not close.** On the placement path the payload is judged by tree digest, so
+rewritten and deleted are both caught. On the installation path `InstallationObservation` carries no
+tree digest and `InstallationReceipt` records no payload digest to compare one against -- only
+`object_digest`, which names the package the tree was materialized *from*, not the tree. So an MCP
+payload rewritten in place is still invisible, and only whole-tree deletion is caught. Closing that
+is a receipt schema change; B-066 carries it with this evidence.
+
+Evidence/links: CP-17 step 4; INV-175; INV-194; INV-228; D-029; D-091;
+`tests/placement_observation_test.py::UnrepairablePayloadIsStillReportedTest`;
+`tests/reconciliation_test.py::ComparisonTest`.
