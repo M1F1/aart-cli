@@ -201,7 +201,7 @@
     {
       "id": "CP-17",
       "title": "Git-backed live acceptance",
-      "status": "in_progress",
+      "status": "done",
       "steps": [
         {
           "id": "1",
@@ -233,7 +233,39 @@
     {
       "id": "CP-18",
       "title": "Migration and release gate",
-      "status": "todo"
+      "status": "in_progress",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Zero runtime dependencies, evidenced by the import graph (INV-071)",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "CI/release profile contract complete (INV-072 through INV-080)",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "Legacy removal: only authority that is replaced and verified",
+          "status": "todo"
+        },
+        {
+          "id": "4",
+          "title": "Docs reconciled with the Product Specification",
+          "status": "todo"
+        },
+        {
+          "id": "5",
+          "title": "Traceability complete for all mandatory invariants",
+          "status": "todo"
+        },
+        {
+          "id": "6",
+          "title": "Full quality, packaging, security and deep acceptance gates",
+          "status": "todo"
+        }
+      ]
     }
   ]
 }
