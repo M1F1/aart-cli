@@ -1479,3 +1479,19 @@ under-claims rather than over-claims: it never says a credential is healthy when
 
 Evidence/links: D-138; D-140; D-142; CP-16 slice steps 2, 4a and 4c;
 `agent_artifacts/io/consumer_machine.py`; `agent_artifacts/commands/doctor.py::_credential_lines`.
+
+## B-063 — Twelve unclaimed mutation survivors in `domain/selection.py`
+
+A scoped run over `agent_artifacts/domain/selection.py` with the three test files that claim it
+(`git_revision_provenance_test`, `selection_domain_test`, `installation_proposal_test`) left twelve
+survivors, none of them in the code those files claim: eight in `_safe_line` and two each in
+`artifact_request_sort_key` and `artifact_coordinate_sort_key`. Ordering is exercised widely
+elsewhere in the repository, so these are survivors of the *scope*, not necessarily of the suite.
+
+Reading them means running the same module against the broader set of tests that construct
+selections and asserting ordering directly, which is a different question from CP-17's.
+
+**Not critical path.** No Product Specification invariant depends on it, and D-134 makes an
+out-of-scope survivor a backlog note rather than a finding.
+
+Evidence/links: D-134; D-149; CP-17 step 2 review; `agent_artifacts/domain/selection.py`.

@@ -170,6 +170,39 @@ that validation. The added empty/stale-catalog negative kills that omission and 
 which the explicit call exists; the rerun produced 76 killed, 61 outside the selected tests and 25
 survivors, none in the new representation dispatch.
 
+### Step 2 review — the two halves of D-148, measured apart (D-149)
+
+Step 2's evidence is a single continuous run, which is the right shape for a chain claim and the
+wrong shape for two of the guarantees the step introduced. D-148 says the revision is a pinned
+Source revision and that every added field is optional so existing receipt bytes keep their
+canonical form. Neither is reachable from the chain: a real run builds exactly one well-formed
+revision, and it cannot write a receipt from before the field existed. Both were re-measured rather
+than accepted, and they came apart.
+
+- **The shape guard was held by nothing.** Deleting the `is_pinned_source_revision` clause from
+  `ResolvedArtifact.__post_init__` left the entire repository green -- 3,349 tests, one skipped.
+- **The decode tolerance was held incidentally.** Removing the decoder's `"source_revision" not in
+  row` guard does turn `installation_transaction_receipt_test` red, but by way of a round-trip whose
+  name speaks of rebuilding an activity entry, over a fixture that happens to carry no revision.
+
+`tests/git_revision_provenance_test.py` states both. The shape is a Hypothesis property over every
+string that is not a pinned revision -- the guard admits an unbounded set and three examples cannot
+say so (D-145) -- with a truncated SHA as the named near-miss a prefix check would admit. The
+durability is the D-138 pair: a receipt carrying a revision reads it back, and the same receipt with
+the key removed reads back as unknown rather than failing or guessing. A third claim separates a key
+omitted from a key written as `null`, which is the same answer to a reader and different bytes on
+disk.
+
+Three mutations, each red only where claimed: deleting the shape guard turns the two property tests
+red and no receipt test; refusing an absent key turns the two decode tests red; writing `null` in
+place of omitting turns the byte-level test red on its own assertion. A scoped mutmut run over
+`domain/selection.py` with the three files that claim it left no survivor anywhere in the code they
+claim; its twelve survivors are in `_safe_line` and the two sort keys, recorded as B-063.
+
+No production code changed. D-149 records the general form: a test that turns red under a mutation
+shows that *something* holds the claim, not that the claim is stated, and a claim held by a
+fixture's accidental shape is one refactor away from being held by nothing.
+
 ## Quality gates
 
 - Step 1 focused: 25 tests across the new Git-to-store E2E, Git adapter, source store and source
@@ -180,6 +213,9 @@ survivors, none in the new representation dispatch.
   projections, configured resolution/install and receipt round-trip are green; ruff and mypy are
   green. Full `make quality` is green with 3,295 tests, one skipped and 85.39% branch coverage;
   separately run `make integration` is green with 324 E2E tests.
+- Step 2 review: `make quality` was re-run independently on the committed step 2 tree and is green
+  across all nine gates -- 3,295 tests and 85.39% branch coverage -- before any review change was
+  made. The review then added tests only.
 
 ## Blockers
 
@@ -189,7 +225,8 @@ every downstream stage reachable through public commands.
 
 ## Handoff
 
-- Current working state: steps 1 and 2 are VERIFIED.
+- Current working state: steps 1 and 2 are VERIFIED, and step 2 has been independently reviewed
+  (D-149), which added `tests/git_revision_provenance_test.py` and changed no production code.
 - Exact next action: step 3 -- start the installed artifact, commit an upstream
   update, synchronize it and prove the explicit update plus its receipt bind the new Git commit.
 - Do not undo: the Git transport allowlist, and the configuration schema's refusal of local Git

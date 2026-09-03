@@ -263,6 +263,18 @@ read as "this source is gone" in three places, so one invalid upstream revision 
 
 ## Exact next action
 
+**Step 2 has been independently reviewed (D-149) and the review added tests only.** D-148's two
+guarantees -- that a revision is a pinned Source revision, and that every added field is optional so
+existing receipt bytes keep their canonical form -- are claims about inputs the chain cannot
+produce, so they were re-measured rather than accepted. They came apart: deleting the
+`is_pinned_source_revision` clause from `ResolvedArtifact` left all 3,349 tests passing, and the
+decode tolerance turned out to be held incidentally, by a round-trip whose name speaks of rebuilding
+an activity entry over a fixture that happens to carry no revision.
+`tests/git_revision_provenance_test.py` now states both, with three mutations each red only where
+claimed and a scoped mutmut run leaving no survivor in the code those tests claim (its twelve, in
+`_safe_line` and the sort keys, are B-063). D-149 records the general form: a claim held by a
+fixture's accidental shape is one refactor away from being held by nothing.
+
 **Implement CP-17 step 3.** Extend the same Git-backed consumer fixture: start the installed
 artifact, make and commit an upstream registry update, run public source sync, and prove
 that only an explicit Marketplace update changes the installed bytes and records the new real Git

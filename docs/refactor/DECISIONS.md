@@ -2978,3 +2978,40 @@ also changes what a person reviews and confirms.
 
 Evidence/links: CP-17 step 2; `git_backed_consumer_e2e_test.py`; `domain/plans.py`;
 `application/consumer_views.py`; INV-112; INV-119; D-146.
+
+## D-149 — A claim held by accident is not held
+
+**Context.** CP-17 step 2 added a Source revision to resolved artifacts, install plans and receipts,
+and D-148 recorded two guarantees about it: the value is a pinned Source revision, and every field
+is optional so existing receipt bytes keep their canonical form. Both are claims about inputs the
+end-to-end chain cannot produce -- a real run builds exactly one well-formed revision, and it cannot
+write a receipt from before the field existed -- so neither could be evidenced by the chain test
+that motivated them.
+
+Measured separately, they came apart. Deleting the `is_pinned_source_revision` clause from
+`ResolvedArtifact.__post_init__` left all 3,349 repository tests passing: the shape of a revision
+was held by nothing. Removing the decoder's tolerance of a missing key does turn
+`installation_transaction_receipt_test` red, so that half was held -- but incidentally, by a
+round-trip whose name speaks of rebuilding an activity entry, over a fixture that happens to carry
+no revision.
+
+**Decision.** Both halves are stated in `tests/git_revision_provenance_test.py`, the shape as a
+Hypothesis property over every string that is not a pinned revision (D-145: the guard admits an
+unbounded set, and three examples cannot say so), the durability as the D-138 pair -- a receipt
+carrying a revision reads it back, and the same receipt with the key removed reads back as unknown
+-- plus the distinction between a key omitted and a key written as `null`, which is the same answer
+to a reader and different bytes on disk.
+
+**Consequence.** Three mutations, each red only where claimed: deleting the shape guard turns the
+two property tests red and no receipt test; refusing an absent key turns the two decode tests red;
+writing `null` in place of omitting turns the byte-level test red on its own assertion. The
+incidental round-trip coverage is unchanged and still passes -- this states what it was holding
+without being asked to, which is what makes it survivable when the encoder is next edited.
+
+**The general form.** A test that turns red under a mutation is evidence that *something* holds the
+claim, not that the claim is stated. A claim held only by a fixture's accidental shape is one
+refactor of that fixture away from being held by nothing, and its name gives the next reader no
+reason to preserve it. When a decision record names a guarantee, some test's name should carry it.
+
+Evidence/links: CP-17 step 2 review; `tests/git_revision_provenance_test.py`; D-091; D-138; D-145;
+D-148.
