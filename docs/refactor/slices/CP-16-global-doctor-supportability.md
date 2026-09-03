@@ -51,7 +51,7 @@ score.
    minimal-repair planner; expose complete JSON and readable screen-29 text.
 2. **VERIFIED:** report 165.11's three offline capabilities before installation (B-051), without
    collapsing them into one online/offline answer.
-3. Add safe repair review and finalize entry points. Re-inspect and re-plan under the same
+3. **VERIFIED:** add safe repair review and finalize entry points. Re-inspect and re-plan under the same
    precondition discipline as every configured lifecycle action; apply only an explicitly reviewed
    minimal plan.
 4. Make Activity, Receipt, configuration, credential and orphaned-run diagnostics usable from the
@@ -117,6 +117,45 @@ filter gaps. The pure application projection killed all 30 mutants. The final I/
 `False` to `None` in a falsey input whose public state is identically `missing/unverified`. Per
 D-134 they are findings, not a score or a reason to invent a fixture outside the active capability.
 
+### Step 3 — one reviewed plan is applied, and only that one (D-141)
+
+`tests/doctor_repair_command_e2e_test.py` drives `aart doctor --repair` over a real canonical
+installation whose delivered file has been removed outside AART. Review and finalize are two
+separate command invocations, and the digest the first returns is authorization input to the second.
+
+Without `--yes`, the command returns a complete plan — the review digest, the components changing,
+and the same minimal plan the read-only report already serializes — and the delivered file is still
+absent afterwards, so the review did not quietly apply its own repair. The human rendering names the
+same delta, the review identity and the confirmation boundary, and neither surface contains the word
+`reinstall`. With `--yes` and the matching digest, the repair runs, records a `repair` receipt whose
+steps equal the observed drift, and a following `aart doctor` reports `{"ready": 1,
+"needs_attention": 0}` — health measured by the same read that found the damage, not by the repair
+reporting on itself.
+
+The refusals are the substance. `--yes` without `--expect` is refused as `consumer-review-mismatch`
+and repairs nothing. A machine moved between review and confirmation returns the *recomputed* plan
+alongside the stale expectation instead of applying the old one, and leaves the new drift untouched.
+And because a digest comparison in the command would only prove the command re-planned, the last
+scenario moves the machine *after* the command's own re-plan, inside the lifecycle call: the effect
+is refused as `execution-review-stale`, which is the adapter re-observing under its lease rather than
+the command trusting what it computed a moment earlier.
+
+Five mutations, each turning red only the claim it belongs to: inverting the review branch (7 tests);
+never comparing `--expect` to the recomputed digest (2); dropping the version half of exactness (1
+subtest); dropping the source half (1 subtest); and hardcoding project scope (1).
+
+**The finding is in the exactness test.** It was named "source and version", but its only input
+omitted the source — so removing the version requirement entirely killed nothing, and half the name
+was unheld. It now runs both under-specified forms as subtests, and each half of the mutation kills
+exactly its own subtest. This is the same shape as CP-15's D-138 finding, arriving from the opposite
+direction: there an absence was asserted where it could not have been present, here a conjunction was
+asserted with only one conjunct ever supplied.
+
+One survivor is recorded rather than chased: weakening the exactly-one-match guard from `!= 1` to
+`< 1` kills nothing, because a second installation of one identical coordinate in one scope is not
+known to be representable. B-059 records it as defensive code of unproven reachability; per D-134 a
+survivor outside the increment's claims is a finding, not a reason to invent a fixture.
+
 ## Quality gates
 
 - Baseline before CP-16: `make quality` green (3,237 tests, 1 skipped, 85.32% branch coverage) and
@@ -132,11 +171,13 @@ D-134 they are findings, not a score or a reason to invent a fixture outside the
   survivors.
 - Step 2 full gates: `make quality` green -- all nine gates, 3,251 tests, 1 skipped, 85.37% branch
   coverage -- and `make integration` separately green with 287 E2E tests.
+- Step 3 focused: eight repair E2E tests (ten including subtests) green; five targeted mutations each red only where claimed.
 
 ## Remaining
 
-Steps 3–5 above. In particular, Doctor reports plans but deliberately applies none; a safe repair
-entry point remains part of CP-16.
+Steps 4–5 above. Doctor now reviews and applies one explicitly confirmed minimal plan; the
+remaining work is making Activity, Receipt, configuration, credential and orphaned-run diagnostics
+reachable from the global report.
 
 ## Known compromises
 
@@ -148,10 +189,11 @@ entry point remains part of CP-16.
 ## Backlog discoveries
 
 - B-058: scoped mutmut results can remain stale after test-only changes.
+- B-059: Doctor's exactly-one-match repair guard is defensive code of unproven reachability.
 
 ## Blockers
 
-None for step 3.
+None for step 4.
 
 ## Legacy removal criteria
 
@@ -159,11 +201,14 @@ This slice adds a public support surface; it authorizes no legacy deletion by it
 
 ## Handoff
 
-- Current working state: steps 1 and 2 are VERIFIED; CP-16 remains IN PROGRESS.
-- Exact next action: begin step 3 with a public reviewed-repair RED.
+- Current working state: steps 1, 2 and 3 are VERIFIED; CP-16 remains IN PROGRESS.
+- Exact next action: begin step 4 with a public RED over the support diagnostics the global
+  report cannot yet reach.
 - Do not undo: one observed installation set feeds both `project_doctor` and
   `prepare_configured_repair`; offline readiness reuses the installation package verifier but stops
-  before object publication; Doctor remains read-only.
+  before object publication; Doctor mutates nothing unless
+  `--repair --yes --expect` are all present, and the lifecycle adapter, not the command, is what
+  re-observes the machine under its lease before any effect runs.
 - Tests last run/results: `make quality` -- 3,251 green, 1 skipped, 85.37%; `make integration` --
   287 green.
 - Failure evidence: the report's absence was the initial RED; payload, dependency, cold-metadata,

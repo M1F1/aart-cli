@@ -2772,3 +2772,24 @@ are independently reachable in real public-command tests; multiple sources and a
 observed, deprecated versions are not advertised as installable, and Doctor writes no target or
 object-store content. B-051 is closed and INV-223 is EVIDENCED. Full offline dependency-cache
 inventory and installation remain the distinct deferred B-010 capability.
+
+## D-141
+
+A confirmation digest computed by the command proves only that the command re-planned. The claim
+worth holding is that the machine has not moved since the operator saw it, and only the layer that
+holds the execution lease can hold that.
+
+`aart doctor --repair` therefore checks `--expect` twice, against two different things. The command
+compares the operator's digest to its own freshly recomputed plan, which catches drift between the
+review the human read and the confirmation they typed, and returns the recomputed plan rather than
+applying the stale one. The configured lifecycle adapter then re-observes the machine under its
+lease and refuses with `execution-review-stale` if it moved again. The second check is not redundant
+with the first: a test that moves the machine only before the command runs cannot tell them apart,
+which is why the evidence includes a scenario that moves it *after* the command's own re-plan.
+
+The consequence for future repair-like verbs is that the command layer owns the operator-facing
+staleness message and the adapter owns the effect-facing one, and neither is allowed to stand in for
+the other.
+
+Evidence/links: CP-16 step 3; `commands/doctor.py`; `io/configured_repair_action.py`; INV-194;
+D-091.

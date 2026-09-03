@@ -520,3 +520,10 @@ catch-all, and the sort key that orders fields, which two tests asserting a sing
 cannot hold. They stay under B-054.
 
 INV-231 and INV-232 move from PARTIAL to EVIDENCED, and with them CP-15's declared scope is complete.
+
+**Gates.** Step 8's own gate runs were both spoiled — the first by a commit made while
+`scripts/quality.py` held its workspace snapshot, which moves a file from untracked to tracked and
+trips the guard by path set rather than by content; the second by concurrent edits to the tree. The
+clean run exists as CP-16's recorded baseline at this slice's final commit `33054a0`: `make quality`
+green across all nine gates with 3,237 tests, 1 skipped, 85.32% branch coverage, and `make
+integration` green with 273 E2E tests. CP-15 is verified against that run.

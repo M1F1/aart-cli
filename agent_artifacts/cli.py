@@ -136,9 +136,28 @@ def build_parser() -> argparse.ArgumentParser:
         help="inspect installed artifacts and report minimal repair plans",
         description=(
             "Inspect the installed environment, report measured drift, and construct the smallest "
-            "policy-permitted reconciliation plans. This command never reinstalls everything and "
-            "does not apply the plans it reports."
+            "policy-permitted reconciliation plans. With --repair, review one exact installed "
+            "artifact's plan; applying it requires both --yes and the prior review's --expect "
+            "digest. This command never reinstalls everything."
         ),
+    )
+    p.add_argument(
+        "--repair",
+        dest="names",
+        nargs=1,
+        metavar="COORDINATE",
+        help="review one installed artifact's minimal repair plan",
+    )
+    _add_scope(p)
+    p.add_argument(
+        "--yes",
+        action="store_true",
+        help="apply the selected repair; requires --expect from a prior review",
+    )
+    p.add_argument(
+        "--expect",
+        metavar="DIGEST",
+        help="review digest returned by the prior --repair review",
     )
     _add_project(p)
     _add_json(p)

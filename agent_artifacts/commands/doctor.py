@@ -18,36 +18,56 @@ from agent_artifacts.application.consumer_views import (
     PresentationProfile,
     project_doctor,
     project_installed_artifact,
+    project_lifecycle_plan,
+    receipt_detail_to_data,
 )
 from agent_artifacts.application.offline_readiness import (
     OfflineReadiness,
     offline_readiness_to_data,
 )
 from agent_artifacts.application.reconciliation import repair_plan_to_data
-from agent_artifacts.domain.diagnostics import diagnostic_to_data
+from agent_artifacts.consumer.application import CONSUMER_REVIEW_MISMATCH
+from agent_artifacts.consumer.coordinates import CONSUMER_INVALID, parse_artifact_selector
+from agent_artifacts.domain.diagnostics import Diagnostic, Severity, diagnostic_to_data
+from agent_artifacts.domain.harness import Scope
 from agent_artifacts.domain.policies import EffectivePolicy
 from agent_artifacts.domain.result import Err
-from agent_artifacts.io.configured_repair_action import prepare_configured_repair
+from agent_artifacts.io.configured_installation_action import InstallationHost
+from agent_artifacts.io.configured_repair_action import (
+    complete_configured_repair,
+    prepare_configured_repair,
+)
 from agent_artifacts.io.consumer_machine import read_installed_inspections
 from agent_artifacts.io.credentials import MacOsKeychainProvider
 from agent_artifacts.io.offline_readiness import read_offline_readiness
 from agent_artifacts.model import Request
 from agent_artifacts.receipt_service import resolved_paths
-from agent_artifacts.tui_consumer import render_doctor
+from agent_artifacts.tui_consumer import (
+    render_doctor,
+    render_lifecycle_plan,
+    render_receipt_detail,
+)
 
 from ._configured_runtime import load_runtime_configuration
 
 _OPERATION = "doctor"
+_REPAIR_OPERATION = "doctor.repair"
 
 
-def _emit_error(request: Request, result: Err) -> int:
+def _emit_error(
+    request: Request,
+    result: Err,
+    operation: str = _OPERATION,
+    **fields: object,
+) -> int:
     if request.json:
         print(
             json.dumps(
                 {
                     "schema_version": 1,
                     "ok": False,
-                    "operation": _OPERATION,
+                    "operation": operation,
+                    **fields,
                     "diagnostics": [diagnostic_to_data(item) for item in result.diagnostics],
                 },
                 indent=2,
@@ -59,6 +79,26 @@ def _emit_error(request: Request, result: Err) -> int:
             for remediation in diagnostic.remediation:
                 print(f"  remediation: {remediation}")
     return _common.ERROR
+
+
+def _error(message: str, *remediation: str) -> Err:
+    return Err(
+        (
+            Diagnostic(
+                CONSUMER_INVALID,
+                Severity.ERROR,
+                message,
+                remediation=remediation,
+            ),
+        )
+    )
+
+
+def _emit(request: Request, payload: dict[str, object], lines: tuple[str, ...]) -> None:
+    if request.json:
+        print(json.dumps(payload, indent=2))
+    else:
+        print("\n".join(lines))
 
 
 def _item_data(item: InstalledArtifactView) -> dict[str, object]:
@@ -92,6 +132,145 @@ def _offline_lines(readiness: OfflineReadiness) -> tuple[str, ...]:
     return tuple(lines)
 
 
+def _run_repair(
+    request: Request,
+    *,
+    data_root: str,
+    project_root: str,
+    user_home: str,
+    credential_providers: tuple[MacOsKeychainProvider, ...],
+) -> int:
+    """Review or execute one exact repair through the configured lifecycle adapter."""
+
+    scope = Scope(request.scope)
+    inspected = read_installed_inspections(
+        state_root=os.path.join(data_root, "state"),
+        harness_root=project_root if scope is Scope.PROJECT else user_home,
+        credential_providers=credential_providers,
+        scope=scope,
+    )
+    if isinstance(inspected, Err):
+        return _emit_error(request, inspected, _REPAIR_OPERATION, finalized=False)
+
+    raw = request.names[0]
+    selector = parse_artifact_selector(raw)
+    if isinstance(selector, Err):
+        return _emit_error(request, selector, _REPAIR_OPERATION, finalized=False)
+    if selector.value.source is None or selector.value.version is None:
+        return _emit_error(
+            request,
+            _error(
+                "Doctor repair needs an exact source-qualified installed version",
+                "pass --repair <source>/<kind>/<name>@<version>",
+            ),
+            _REPAIR_OPERATION,
+            finalized=False,
+        )
+    coordinate = str(selector.value)
+    matches = tuple(
+        item for item in inspected.value.inspections if str(item.record.coordinate) == coordinate
+    )
+    if len(matches) != 1:
+        return _emit_error(
+            request,
+            _error(
+                f"no {scope.value}-scope installation matches {coordinate}",
+                "run aart doctor and choose one exact installed coordinate",
+            ),
+            _REPAIR_OPERATION,
+            finalized=False,
+        )
+
+    policy = EffectivePolicy()
+    prepared = prepare_configured_repair(matches[0], policy=policy)
+    if isinstance(prepared, Err):
+        return _emit_error(request, prepared, _REPAIR_OPERATION, finalized=False)
+    digest = str(prepared.value.review_digest)
+    review = repair_plan_to_data(prepared.value.plan.repair)
+    review_lines = render_lifecycle_plan(
+        project_lifecycle_plan(prepared.value.plan), PresentationProfile.FAST
+    )
+    base = {
+        "schema_version": 1,
+        "operation": _REPAIR_OPERATION,
+        "coordinate": coordinate,
+        "scope": scope.value,
+        "review_digest": digest,
+        "review": review,
+    }
+    if not request.yes:
+        _emit(
+            request,
+            {**base, "ok": True, "finalized": False},
+            (*review_lines, "Reviewed only; re-run with --yes and --expect to apply this plan."),
+        )
+        return _common.OK
+
+    if request.expect is None or request.expect != digest:
+        expected = request.expect
+        message = (
+            "repair confirmation requires --expect with the digest from a prior review"
+            if expected is None
+            else f"the plan changed since it was reviewed: expected {expected}, recomputed {digest}"
+        )
+        refusal = Err(
+            (
+                Diagnostic(
+                    CONSUMER_REVIEW_MISMATCH,
+                    Severity.ERROR,
+                    message,
+                    remediation=(
+                        "re-read the repair review, then re-run --yes --expect with its review_digest",
+                    ),
+                ),
+            )
+        )
+        return _emit_error(
+            request,
+            refusal,
+            _REPAIR_OPERATION,
+            finalized=False,
+            expected_review_digest=expected,
+            review_digest=digest,
+            review=review,
+        )
+
+    host = InstallationHost(data_root, project_root, user_home, scope)
+    now = datetime.now(timezone.utc)
+    completed = complete_configured_repair(
+        prepared.value,
+        expected_review_digest=prepared.value.review_digest,
+        host=host,
+        policy=policy,
+        recorded_at=now.isoformat(),
+        today=now.date(),
+        credential_providers=credential_providers,
+        offline=request.offline,
+    )
+    if isinstance(completed, Err):
+        return _emit_error(
+            request,
+            completed,
+            _REPAIR_OPERATION,
+            finalized=False,
+            review_digest=digest,
+        )
+    receipt = completed.value.recorded.receipt
+    successful = receipt.outcome.value in {"succeeded", "attention"}
+    _emit(
+        request,
+        {
+            **base,
+            "ok": successful,
+            "finalized": True,
+            "session_status": receipt.outcome.value,
+            "receipt": receipt_detail_to_data(receipt),
+        },
+        render_receipt_detail(receipt, PresentationProfile.FAST),
+    )
+    return _common.OK if successful else _common.ERROR
+
+
 def run(request: Request) -> int:
     """Inspect every canonical installation and report minimal reconciliation plans."""
 
@@ -104,6 +283,14 @@ def run(request: Request) -> int:
         user_home=request.user_home,
     )
     providers = (MacOsKeychainProvider(),) if sys.platform == "darwin" else ()
+    if request.names:
+        return _run_repair(
+            request,
+            data_root=runtime.value.paths.data_root,
+            project_root=project_root,
+            user_home=user_home,
+            credential_providers=providers,
+        )
     inspected = read_installed_inspections(
         state_root=os.path.join(runtime.value.paths.data_root, "state"),
         harness_root=project_root,

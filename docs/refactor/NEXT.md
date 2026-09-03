@@ -30,6 +30,22 @@ B-051 is closed and INV-223 is EVIDENCED; B-010 remains the deliberately separat
 dependency-cache capability. Eight new E2E scenarios, both scoped mutation passes, all nine quality
 gates (3,251 tests, 85.37% branch coverage) and 287 integration tests are green.
 
+Step 3 is VERIFIED (D-141): `aart doctor --repair` reviews and applies exactly one minimal plan.
+Review and confirmation are separate invocations and the review's digest is authorization input to
+the confirmation; a review applies nothing, `--yes` without the digest is refused, and a machine
+that moved returns the recomputed plan rather than applying the stale one. The staleness check
+happens twice against two different things, which is the decision D-141 records: the command catches
+drift between what the operator read and what they confirmed, and the lifecycle adapter re-observes
+under its lease and refuses with `execution-review-stale`. INV-194 is EVIDENCED. The finding was in
+the exactness test, whose name claimed source *and* version while only ever omitting the source, so
+removing the version requirement killed nothing; it now runs both under-specified forms and each
+mutation half kills its own subtest. B-059 records the one survivor left standing.
+
+**Next action: CP-16 step 4.** Make Activity, Receipt, configuration, credential and orphaned-run
+diagnostics reachable from the global report without weakening their existing evidence or undo
+boundaries, triaging B-052 and B-055 only where a mandatory invariant requires it. Then step 5
+closes the slice.
+
 **CP-15 is VERIFIED — all eight steps done.** Step 8 is
 `tests/credential_contract_migration_e2e_test.py`, closing INV-231 and INV-232 and the slice with
 them. 165.19 says old credentials remain if still referenced by other installed artifacts, and

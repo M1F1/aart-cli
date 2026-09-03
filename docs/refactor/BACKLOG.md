@@ -1385,3 +1385,22 @@ D-134 keeps mutation testing advisory, and targeted manual mutations remain the 
 declared claim.
 
 Evidence/links: D-134; CP-16 slice step 1; `scripts/mutants.py`.
+
+## B-059 — Doctor's exactly-one-match repair guard has unproven reachability
+
+Found in CP-16 step 3. `commands/doctor.py` refuses when `len(matches) != 1` for an exact
+source-qualified coordinate within one scope. Weakening the guard to `< 1` survives every test in
+`tests/doctor_repair_command_e2e_test.py`, because no fixture produces two installations of one
+identical coordinate in one scope, and it is not established that the canonical state store can
+represent that at all.
+
+Either the duplicate state is representable, in which case the `> 1` half is a real refusal that
+deserves a fixture and a test, or it is not, in which case the guard is equivalent to `< 1` and the
+survivor is correct to survive. Deciding requires reading the state store's uniqueness guarantees,
+which is outside step 3's claims.
+
+**Not critical path.** No Product Specification invariant requires the duplicate case, and the guard
+is conservative either way — it refuses rather than repairing an ambiguous target. Per D-134 this is
+recorded as a finding, not repaired by inventing a fixture the capability does not support.
+
+Evidence/links: D-134; D-091; CP-16 slice step 3; `agent_artifacts/commands/doctor.py`.
