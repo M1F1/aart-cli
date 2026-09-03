@@ -626,6 +626,9 @@ def _lifecycle_terminal(
         "pending"
         if setup and item.status in {LifecycleStatus.CHANGED, LifecycleStatus.CURRENT}
         else ("skipped" if setup else "not-required"),
+        item.policy.status,
+        item.policy.detail,
+        item.policy.trust,
     )
 
 

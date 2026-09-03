@@ -1306,3 +1306,28 @@ Noncritical: no invariant needs it, and the two that cover withdrawal (INV-221, 
 EVIDENCED without it.
 
 Evidence/links: `tests/withdrawal_and_purge_e2e_test.py`; CP-15 step 5; `compiler/graph.py:49,641`.
+
+## B-056 — `EffectivePolicy` never reaches the consumer path
+
+`commands/marketplace.py` constructs `EffectivePolicy()` — the permissive default — at both the
+install seam (line ~1067) and the uninstall seam (line ~1408), and nothing anywhere composes one
+from configuration. So `forbidden_effects`, `risk_ceiling`, `allowed_runtimes`,
+`allowed_network_hosts` and the rest of the domain policy are inert for a consumer: `compose_policy`
+and `PolicyOverlay` exist and are tested at the seam, and no operator can set any of them.
+
+The policy that *is* live is `OrganizationPolicy`, read from the administrator's `policy.json`, and
+that is what CP-15 step 6 built the compliance report on — `minimum_trust_for_user_scope` is the one
+lever it carries that applies to an installation rather than to adding a source. So the invariant is
+held by the policy AART actually enforces.
+
+What is missing is the wiring, not the machinery: a configuration surface for `EffectivePolicy` and
+a composition at the consumer seam would let `165.21`'s worked example — *"external launch scripts
+are no longer allowed"*, a `forbidden_effects` rule — become reportable, which it is not today.
+`_standing` is the one place that would then have more to say.
+
+Noncritical: INV-233 is EVIDENCED through the live policy, and no other invariant needs the
+domain policy to be configurable. Worth doing before CP-16's doctor, which is the other place a
+policy finding would surface.
+
+Evidence/links: `agent_artifacts/commands/marketplace.py`; `agent_artifacts/domain/policies.py`;
+D-136; CP-15 step 6.

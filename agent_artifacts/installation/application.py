@@ -160,19 +160,28 @@ def _configured_source(effective: EffectiveConfiguration, alias):
     )
 
 
+def trust_shortfall(scope: str, trust: str, effective: EffectiveConfiguration) -> str | None:
+    """Why the policy in force refuses this trust at this scope, or ``None`` when it permits it.
+
+    Public because installing is not the only moment the question is asked. Product Specification
+    165.21 makes policy compliance part of an *installed* artifact's health, and health that
+    disagreed with the gate would be worse than no health at all -- an operator told an artifact
+    complies, by a rule slightly different from the one that would refuse to install it again, has
+    been told something false in the most expensive way. So `lifecycle` asks this same function.
+    """
+
+    minimum = effective.policy.minimum_trust_for_user_scope
+    if scope == "user" and minimum is not None and _TRUST_RANK[trust] < _TRUST_RANK[minimum]:
+        return f"user-scope install requires trust {minimum!r}; artifact trust is {trust!r}"
+    return None
+
+
 def _policy_allows(
     request: InstallRequest, trust: str, effective: EffectiveConfiguration
 ) -> Result[None]:
-    minimum = effective.policy.minimum_trust_for_user_scope
-    if (
-        request.scope == "user"
-        and minimum is not None
-        and _TRUST_RANK[trust] < _TRUST_RANK[minimum]
-    ):
-        return _error(
-            INSTALL_POLICY_DENIED,
-            f"user-scope install requires trust {minimum!r}; artifact trust is {trust!r}",
-        )
+    refusal = trust_shortfall(request.scope, trust, effective)
+    if refusal is not None:
+        return _error(INSTALL_POLICY_DENIED, refusal)
     return Ok(None)
 
 

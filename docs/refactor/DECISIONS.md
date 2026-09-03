@@ -2633,3 +2633,24 @@ the Product Specification first instead of hiding the change here.
   require editing them to stay true.
 - **Consequence:** the label moves when the rules or their reach move; the digest moves whenever any
   rule's text does, which is the finer-grained guarantee and the one staleness is computed from.
+
+## D-136 — Policy compliance is reported beside the status, not folded into it
+
+- **Context:** Product Specification 165.21 makes effective-policy compliance part of an installed
+  artifact's health. `LifecycleStatus` already has fifteen members and `marketplace status` reports
+  exactly one of them per installation.
+- **Decision:** carry compliance as its own dimension — `PolicyStanding(status, detail, trust)` on
+  `LifecycleItem`, flattened to `policy_status`, `policy_detail` and `trust` on
+  `ConsumerTerminalItem` and in the JSON payload — rather than adding a `policy-drift` status value.
+- **Why:** the two answer different questions and an installation can need both. An artifact that is
+  out of date *and* no longer compliant has one status slot and two things to say, and whichever
+  won would make the other invisible. A new status value would also have had to be added to three
+  separate allowed-value sets and would change the answer every existing reader gets for an
+  artifact that is otherwise `current`. `setup_status` is the precedent in the same record: an
+  orthogonal dimension carried beside the status, defaulting to a value that means "nothing to say".
+- **Consequence:** the compliance rule is not duplicated. `installation/application.py`'s user-scope
+  trust check is now the public `trust_shortfall` and `lifecycle` asks that same function, so the
+  gate and the health report cannot drift apart — health computed by a near-miss rule would tell an
+  operator something false in the most expensive way. `not-evaluated` is a third value and not a
+  pass: where the record resolves to no current item there is no trust to judge, and every such path
+  reports it by leaving `PolicyStanding()` alone rather than by answering.

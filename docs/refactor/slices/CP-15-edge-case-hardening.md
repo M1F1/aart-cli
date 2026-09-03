@@ -47,8 +47,8 @@ temporary machine, and (c) records which mutation it was proven against.
 | Physical purge is exceptional | INV-221, INV-222 | none found: no test file matches `purge` | **Closed by increment 5.** No purge verb exists at all; what needed measuring was the ordinary withdrawal, and the erasure sentence 165.10 requires was missing (D-135) |
 | Interrupted operations re-inspect before resume | INV-226 | CP-12 executor replans under lease; `receipt verify` carries a `no-orphan-run-directory` claim (`LAF-61`) | **Closed by increment 4b**, over a working copy the engine really failed to remove |
 | Input/credential contract changes | INV-231, INV-232 | CP-08 credential lifecycle | No test that changing one artifact's contract leaves another's credential owned |
-| Policy drift contributes to health | INV-233 | `EffectivePolicy` is read at validation time (D-099) | Installed-artifact health does not consult current policy |
-| Development installs are visibly distinct | INV-237 | none found | Whole scenario unmeasured |
+| Policy drift contributes to health | INV-233 | `EffectivePolicy` is read at validation time (D-099) | **Closed by increment 6** (D-136). The live policy is `OrganizationPolicy`; the domain `EffectivePolicy` never reaches the consumer path at all (B-056) |
+| Development installs are visibly distinct | INV-237 | none found | **Closed by increment 6.** `marketplace list` always showed `trust`; what is *installed* did not |
 | Promotion evidence, audit, Git authority, publication | INV-238, 240, 241, 242 | D-103–D-107 promotion records and local-commit boundary | No test that *local promotion is not publication* from the consumer side |
 | Exact collection drift | 165.x | none found: no test file matches `collection.*drift` | Waits on the Collection capability B-038 is sequenced behind (D-131) |
 | Manual drift | INV-228 | canonical drift detection exists | No test file matches `manual.*drift` |
@@ -65,7 +65,7 @@ temporary machine, and (c) records which mutation it was proven against.
    - **4b DONE:** interrupted execution -- discoverable, and re-inspected before resume
      (INV-226; 165.14).
 5. **DONE:** Purge boundaries and the erasure claim AART must not make (INV-221, INV-222).
-6. Policy drift in installed health, and development installs kept visibly distinct
+6. **DONE:** Policy drift in installed health, and development installs kept visibly distinct
    (INV-233, INV-237).
 7. Promotion evidence, audit and the local-promotion-is-not-publication boundary
    (INV-238, 240, 241, 242).
@@ -342,3 +342,59 @@ decided. `security_baseline_test` gained the case that isolates it, in prose rat
 because `_json_findings` raises the same rule for a credential member and a `.json` fixture passes
 with the assignment branch deleted outright. That test is the mutant's only killer. The remaining
 survivors are outside this slice's claims and stay under B-054.
+
+### Step 6 — the policy in force, and where an installation's content came from (INV-233, INV-237)
+
+`tests/policy_drift_e2e_test.py`. Two Product Specification sections, one fact about one
+installation, which is why they are one increment. 165.21 says health includes effective policy
+compliance and that drift produces a decision rather than a silent mutation; 165.23 says a
+development install is clearly marked and keeps being surfaced afterwards. What both turn on is the
+*trust* an artifact is installed at, and what the machine's policy says about that trust now.
+
+Two of the eight claims passed on shipped code and they are the ones that matter as premises: a
+policy that tightens after the fact changes nothing on disk, and `aart marketplace install` really
+does refuse the same artifact under the new rule (`install-policy-denied`). Six were red. `aart
+marketplace status` reported `current` and nothing else — not that the artifact would be refused
+today, not the reason, and not that its content came from a mutable directory on somebody's disk
+rather than a reviewed registry. `marketplace list` has shown `trust` since the marketplace existed;
+the verb that says what a project is *running* did not.
+
+The shape follows `setup_status`, which is already an orthogonal dimension carried beside `status`
+rather than folded into it — an installation can be simultaneously out of date and no longer
+compliant, and one status string cannot say both. So `LifecycleItem` gains a `PolicyStanding`
+(status, detail, trust) and `ConsumerTerminalItem` gains the three flattened fields it serializes.
+
+The compliance rule itself is not new code. `installation/application.py`'s user-scope trust check
+became the public `trust_shortfall`, and `lifecycle` asks *that function*: health computed by a rule
+slightly different from the gate's would be worse than no health, because an operator told an
+artifact complies by a near-miss rule has been told something false in the most expensive way.
+
+`not-evaluated` is the third value and it is not a pass. An artifact its source withdrew has no
+current trust to judge, and calling that compliant would assert a measurement nobody took — the same
+reasoning `InstalledHealth.UNKNOWN` already carries.
+
+Proven against six mutations. Making the policy refuse nothing turns four red; calling everything
+measurable compliant turns three; assuming the trust instead of reading it turns four; dropping the
+human-rendering warning turns exactly one; and dropping the upstream standing where the merged
+status is assembled turns five, which is what says the carry-through is load-bearing rather than
+incidental.
+
+The seventh mutation is the interesting one. Reporting an unmeasurable trust as compliant **killed
+nothing**, and the reason was a real defect in the change: `_standing` had a `current is None`
+branch that no caller could reach, because every path where the record resolves to nothing
+`continue`s out of the loop earlier. The claim was being held by `LifecycleItem`'s default, not by
+the code that looked like it held it. The unreachable branch is gone and the default is now what the
+docstring points at — and mutating *that* default to a pass turns exactly the one test red.
+
+`make mutants ONLY=agent_artifacts/lifecycle/application.py` then found one more, and it was inside
+this slice's own new code: dropping the standing on the *other* branch of the merge -- the one taken
+when the local installation is itself damaged -- killed nothing, because every test here had a
+healthy payload. That is precisely the case D-136 exists for: a payload edited under AART's feet
+owns the status, the policy question is about the artifact's origin and is answered the same either
+way, and an operator deciding whether to repair or remove needs both halves at once. The ninth test
+drives it, and it is the mutant's only killer. The other survivors in that module are outside this
+slice and stay under B-054.
+
+The remaining unproven claim is honest to state: that asking about compliance changes nothing on
+disk has no available mutation, because nothing in the code mutates there. It rests on its
+siblings, which drive the same verb over the same machine.

@@ -258,6 +258,13 @@ class ConsumerTerminalItem:
     status: str
     detail: str = ""
     setup_status: str = "not-required"
+    # Two orthogonal dimensions, the way `setup_status` already is one. `policy_status` is what the
+    # policy in force says about this installation now (165.21), and `trust` is where its content
+    # came from -- a reviewed registry or a mutable directory on somebody's disk (165.23). Neither
+    # is derivable from `status`, and an operator reading what a project runs needs both.
+    policy_status: str = "not-evaluated"
+    policy_detail: str = ""
+    trust: str = ""
 
     def __post_init__(self) -> None:
         if (
@@ -265,6 +272,10 @@ class ConsumerTerminalItem:
             or self.status not in _TERMINAL_STATUSES
             or "\r" in self.detail
             or self.setup_status not in {"not-required", "pending", "skipped"}
+            or self.policy_status not in {"compliant", "non-compliant", "not-evaluated"}
+            or "\r" in self.policy_detail
+            or "\n" in self.policy_detail
+            or (self.policy_status == "non-compliant") != bool(self.policy_detail)
         ):
             raise ValueError("consumer terminal item is invalid")
 
@@ -412,7 +423,16 @@ def render_consumer_outcome(outcome: ConsumerOutcome) -> tuple[str, ...]:
         f"  - {item.key}: {item.status}"
         + (f" — {item.detail}" if item.detail else "")
         + (f" · setup {item.setup_status}" if item.setup_status != "not-required" else "")
+        + (f" · trust {item.trust}" if item.trust else "")
         for item in outcome.items
+    )
+    # On its own line and with the reason, because this is the one thing here an operator has to
+    # decide about rather than read past: the artifact is installed and working, and the rule it
+    # was admitted under no longer admits it (165.21).
+    lines += tuple(
+        f"  ! {item.key}: no longer complies with current policy — {item.policy_detail}"
+        for item in outcome.items
+        if item.policy_status == "non-compliant"
     )
     return lines
 

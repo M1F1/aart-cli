@@ -1850,6 +1850,9 @@ def _lifecycle(request: Request, action: str) -> int:
                 "status": item.status,
                 "detail": item.detail,
                 "setup_status": item.setup_status,
+                "policy_status": item.policy_status,
+                "policy_detail": item.policy_detail,
+                "trust": item.trust,
             }
             for item in outcome.items
         ],

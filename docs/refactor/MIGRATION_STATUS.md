@@ -376,6 +376,32 @@ acting on -- the assignment credential detector decided nothing in any test, bec
 also carried a vendor-shaped token -- and `security_baseline_test` gained the prose case that
 isolates it. B-055 records the `ArtifactLifecycle.REMOVED` merge path no production caller reaches.
 
+## What is installed now says whether the policy still allows it (CP-15 step 6, D-136)
+
+`aart marketplace status` reported one word per installation and it was about the payload. An
+artifact installed under a permissive policy, on a machine whose administrator later required
+`registry-reviewed` trust for user scope, reported `current` -- while `aart marketplace install`
+would have refused the very same artifact. Product Specification 165.21 makes compliance part of
+health, and 165.23 asks that a development install stay distinguishable from a reviewed one after
+the install is over. Both turn on the same fact: the trust an artifact's content came from.
+
+Every lifecycle item now carries a `PolicyStanding` -- compliant, non-compliant with the unmet
+requirement named, or `not-evaluated` where no current trust can be read -- plus the trust itself,
+reported in the JSON payload and in the human rendering. It is a dimension beside `status` rather
+than a new status value (D-136), because an installation can be out of date *and* non-compliant and
+one slot cannot say both. The rule is the installer's own: `trust_shortfall` is now public and
+`lifecycle` asks that function, so the gate and the health report cannot drift apart.
+
+Nothing is mutated by the drift: 165.21 asks for a decision, and status remains a read.
+`tests/policy_drift_e2e_test.py` drives it over a real machine whose administrator policy is
+rewritten between commands, and asserts on both sides -- that the installation is untouched, and
+that the operator is told. INV-233 and INV-237 move from PARTIAL to EVIDENCED.
+
+Writing it found that the domain `EffectivePolicy` never reaches the consumer path at all: both
+consumer seams construct the permissive default and nothing composes one from configuration
+(B-056). The policy that is live is the administrator's `OrganizationPolicy`, and that is what the
+compliance report judges.
+
 ## Update rule
 
 Never mark a slice beyond the strongest evidence actually present.

@@ -152,7 +152,7 @@
         {
           "id": "6",
           "title": "Policy drift in installed health, and development installs kept distinct (INV-233, INV-237)",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "7",

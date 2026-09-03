@@ -15,7 +15,24 @@ carry the same three words in their evidence column -- *scattered source/registr
 safeguards* -- and that phrase is the slice's whole subject. A safeguard at a seam is worth what
 the verb an operator actually runs makes of it.
 
-**Steps 1, 2, 3, 4a, 4b and 5 are done.** Step 5 is
+**Steps 1, 2, 3, 4a, 4b, 5 and 6 are done.** Step 6 is
+`tests/policy_drift_e2e_test.py`, and it closes two invariants with one fact. `aart marketplace
+status` reported one word per installation and it was about the payload: an artifact installed under
+a permissive policy, on a machine whose administrator later required `registry-reviewed` trust,
+reported `current` while `marketplace install` would have refused the very same artifact. And
+nothing said its content came from a mutable directory rather than a reviewed registry -- a thing
+`marketplace list` has shown since the marketplace existed.
+
+Every lifecycle item now carries a `PolicyStanding` (compliant / non-compliant with the unmet
+requirement named / `not-evaluated`) plus the trust itself, in both renderings. It is a dimension
+beside `status` rather than a new status value (D-136), and the rule is the installer's own:
+`trust_shortfall` is public and `lifecycle` asks that function, so the gate and the health report
+cannot drift apart. Nothing is mutated by the drift; 165.21 asks for a decision. INV-233 and INV-237
+move to EVIDENCED. B-056 records that the domain `EffectivePolicy` never reaches the consumer path
+at all -- both seams construct the permissive default -- so only the live organization policy is
+judged.
+
+**Steps 1, 2, 3, 4a, 4b and 5 before it.** Step 5 is
 `tests/withdrawal_and_purge_e2e_test.py`, and 165.10's two statements needed measuring separately.
 The purge half passed on shipped code and the reason is the strongest one available: there is no
 `purge` verb anywhere in `agent_artifacts` -- the word does not appear -- and the registry lifecycle
@@ -81,17 +98,16 @@ read as "this source is gone" in three places, so one invalid upstream revision 
 
 ## Exact next action
 
-**Continue CP-15 with step 6 of `slices/CP-15-edge-case-hardening.md`**: policy drift in installed
-health, and development installs kept visibly distinct (INV-233, INV-237). Both are greenfield --
-no test file matches `collection.*drift` or `manual.*drift`, and nothing anywhere measures INV-237.
-The scenario map records the shape of the first: `EffectivePolicy` is read at validation time
-(D-099), so a policy that changes *after* an install is not consulted when installed-artifact health
-is computed, and the question is what `aart marketplace status` should say about an artifact that
-would no longer be installable under the policy now in force. Start by finding whether it says
-anything at all. The second half is about whether a development install -- one whose payload is a
-working tree rather than a resolved snapshot -- is distinguishable from a normal one in every place
-a person is told what is installed. Follow the shape of steps 1-5: name the verb, drive it over a
-real temporary machine, and record the mutation each claim was proven against.
+**Continue CP-15 with step 7 of `slices/CP-15-edge-case-hardening.md`**, the last one: promotion
+evidence, audit, and the local-promotion-is-not-publication boundary (INV-238, 240, 241, 242).
+Product Specification 165.24 makes missing required evidence block promotion and keeps warnings in
+the candidate, promotion and provenance records; 165.26 lists the seven fields a promotion record
+must preserve. The scenario map records that D-103--D-107 already built the promotion records and
+the local-commit boundary, and that what is missing is the *consumer-side* claim -- no test anywhere
+shows that a locally promoted artifact is not thereby published, which is the boundary a maintainer
+is most likely to assume the other way. Start from `application/promotion.py`'s audit fields and
+find which verb an operator runs to see them; the same shape as steps 1-6 applies -- name the verb,
+drive it over a real temporary machine, and record the mutation each claim was proven against.
 
 This is greenfield, not re-characterization: the coverage sweep found **no test file anywhere
 matching `purge`**. Start by finding what the verb actually is — whether purge exists as a command,
