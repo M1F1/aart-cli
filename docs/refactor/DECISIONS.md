@@ -2680,3 +2680,34 @@ exists; `git_location_parts` admits no `file://` remote, so it cannot be driven 
 **Consequence.** A test that measures a boundary must be red for the boundary's own reason. Where
 the only available failure mode is an unrelated one, arrange the fixture until the intended failure
 is the one that fires, and record the mutation that proves it.
+
+## D-138 — An asserted absence is evidence only where the fixture could have produced the thing
+
+**Context.** CP-15 step 8 had to hold INV-232: a removal does not delete a credential another
+installed artifact still references. The obvious test drives `aart marketplace uninstall` and asserts
+no credential deletion appears in the reviewed plan.
+
+**Decision.** Assert an absence only against a fixture in which the thing asserted absent is
+reachable, and prove that reachability in the same test. Where the public verb's fixture cannot
+produce it, measure the claim one level down at the function the verb calls, passing exactly the
+arguments the verb passes, and say in the docstring why.
+
+**Why.** The obvious test passed, and defaulting `delete_credentials` to true — the whole behaviour
+it claimed to guard — killed nothing. The fixture registry's Skill declares no inputs, and the native
+source protocol has no `inputs` field at all (`protocol/native_schema.py` never mentions one), so a
+native-source artifact reaches a credential only through its setup recipe. The test was asserting
+that nothing was deleted in a scenario with nothing to delete, which is a sentence that stays true
+however the code changes.
+
+The replacement makes two calls on one record that does carry a credential reference: the call
+`commands/marketplace.py` makes, which passes no `delete_credentials` at all, and the same call when
+asked. The second is what makes the first mean something. Driving it at the seam is not a
+convenience either — `commands/marketplace.py` wires a real `MacOsKeychainProvider` on darwin, so a
+command-line test that stored a credential would write into the developer's own Keychain, which is
+why every existing credential test uses a file-backed provider.
+
+**Consequence.** Two habits, both of which caught a defect in the same increment. Before asserting
+that something is absent, make the fixture produce it once and watch the assertion fail. And assert
+that any collection an absence is checked against is non-empty first — a fourth draft test here read
+a receipt step's `effect` as a dict when it is a string, filtered every step away, and passed over an
+empty set. See [[D-091]]: a test is not evidence until a real mutation turns it red.

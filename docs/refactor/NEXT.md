@@ -7,15 +7,27 @@ the one shared shell, and step 7's legacy retirement finished with the evidence-
 `agent_artifacts/tui.py` (D-129), B-044 closed by D-128 and B-046 closed by D-130. The CP-14
 narrative below is kept as the record of how it got there.
 
-**CP-15 Accepted lifecycle/edge-case hardening 54–100 is now IN PROGRESS**, per
-`EXECUTION_PLAN.md`'s dependency order. The slice document is
-`docs/refactor/slices/CP-15-edge-case-hardening.md`, and it opens with the scenario map: sixteen
+**CP-15 Accepted lifecycle/edge-case hardening 54–100 is VERIFIED.** The slice document is
+`docs/refactor/slices/CP-15-edge-case-hardening.md`. It opened on a scenario map where sixteen
 invariants (INV-210, 216, 218, 219, 221, 222, 223, 226, 231, 232, 233, 237, 238, 240, 241, 242) all
-carry the same three words in their evidence column -- *scattered source/registry/lifecycle
-safeguards* -- and that phrase is the slice's whole subject. A safeguard at a seam is worth what
-the verb an operator actually runs makes of it.
+carried the same three words in their evidence column -- *scattered source/registry/lifecycle
+safeguards* -- and that phrase was the slice's whole subject: a safeguard at a seam is worth what
+the verb an operator actually runs makes of it. All sixteen now carry public-flow evidence, and the
+narrative below is kept as the record of how each one got there.
 
-**Steps 1 through 7 are done; step 8 is the last one open.** Step 7 is
+**CP-15 is VERIFIED — all eight steps done.** Step 8 is
+`tests/credential_contract_migration_e2e_test.py`, closing INV-231 and INV-232 and the slice with
+them. 165.19 says old credentials remain if still referenced by other installed artifacts, and
+nothing held it for a structural reason: every credential test here has exactly one installation in
+scope, and what happens to B when A changes cannot be measured with only an A. Nothing needed
+changing — `marketplace uninstall` already says `credentials: retained` in both renderings, no verb
+sets `delete_credentials`, and `_dependants` keys on the reference rather than the provider account.
+The finding was in the third mutation: switching credential deletion on by default killed nothing,
+because the fixture's Skill declares no inputs and the test asserted an absence that could never
+have been present. It is now a pair of calls differing in one keyword, so the absence is evidence
+only because the other call shows the deletion was reachable.
+
+**Step 7 before it** is
 `tests/promotion_publication_boundary_e2e_test.py`, and it is the one increment in this slice that
 changed **no production code** — the finding, not a disappointment. `registry promote --yes` already
 honoured 165.28's boundary exactly: it reports `commit: false` and `push: false`, makes no commit,
@@ -117,23 +129,32 @@ read as "this source is gone" in three places, so one invalid upstream revision 
 
 ## Exact next action
 
-**Continue CP-15 with step 8 of `slices/CP-15-edge-case-hardening.md`** — the last step in the
-slice: input and credential contract migrations, and unrelated credential ownership (INV-231,
-INV-232). These are the only two invariants in CP-15's declared scope still PARTIAL, and their
-scenario-map row has stood open since slice start with the same gap: *no test that changing one
-artifact's contract leaves another artifact's credential owned*.
+**Open CP-16 — Global doctor and supportability.** CP-15 is VERIFIED and every invariant it
+declared is EVIDENCED, so the critical path moves on per `EXECUTION_PLAN.md`: implement `aart doctor`
+as environment-wide inspection and reconciliation, with readable Activity/Receipt diagnostics, safe
+repair entry points and machine-complete JSON. The plan is explicit that **reinstall-all is not a
+repair** — do not implement it as one.
 
-Start from CP-08's credential lifecycle, which the scenario map names as the existing evidence, and
-find the public verb that migrates a contract — whether an input-contract change arrives through
-`marketplace update`, through `marketplace setup` re-running a changed recipe, or only through a
-re-scan on the maintainer side. INV-232's claim is a *negative* about a second artifact: A's
-credential contract changes, and B's credential is still owned by B, still resolvable, and not
-re-prompted. That shape wants two artifacts installed against the same profile, which is what makes
-it different from every CP-08 test, and it is the shape a mutation can actually kill.
+Start from the backlog CP-15 filled for exactly this slice, because three of its items are `doctor`'s
+subject matter and were written with the evidence attached:
 
-Note the asymmetry to check first: if an input-contract migration has no public verb at all — the
-way step 5 found no `purge` verb — then say so with the same strength of evidence step 5 used, and
-measure the ordinary path instead. Characterize before changing anything.
+- **B-051** is the closest thing to a specification already written down. 165.11 decomposes offline
+  installability into three capabilities — metadata cached / canonical payload cached / runtime
+  dependencies cached — and CP-15 step 3 proved AART *refuses* correctly on all three with three
+  distinct codes. What no verb does is **report** them before an install is attempted. That is a
+  doctor check with its acceptance criteria already measured.
+- **B-057** matters before CP-17, not after: `registry promote` writes a versioned layout
+  `registry publish` refuses, and `publish` requires an `aart-registry.json` marker `promote` does
+  not. Whoever drives the two verbs in sequence hits it first.
+- **B-052** (cancel-after-partial-apply has no public flow) and **B-055** (`ArtifactLifecycle.REMOVED`
+  is unreachable) are both diagnosability gaps of the kind doctor exists to close.
+
+The method does not change. Name the verb an operator runs, drive it over a real temporary machine,
+and prove each test red against a real mutation of the code it names. CP-15 ended with two lessons
+worth carrying: an assertion of *absence* is only evidence if the same fixture can be made to produce
+the thing (step 8's third mutation killed nothing until the fixture carried a credential at all), and
+an assertion over a collection must assert the collection non-empty first (step 8's fourth draft
+filtered every element away and still passed).
 
 The shape steps 1–4b established is the one to repeat — name the verb an operator runs, drive it
 over a real temporary machine, and prove each test red against a real mutation of the code it names,

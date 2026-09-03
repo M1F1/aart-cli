@@ -1,5 +1,5 @@
 # CP-15 — Accepted lifecycle/edge-case hardening 54–100
-Status: IN PROGRESS (opened 2026-09-03)
+Status: VERIFIED (opened 2026-09-03, closed 2026-09-03)
 
 ## Goal
 
@@ -46,7 +46,7 @@ temporary machine, and (c) records which mutation it was proven against.
 | Provenance is not rewritten when upstream moves | INV-219 | typed Git/local audit pins (D-107) | **Closed by increment 2**, on both sides: the installation record, and the promotion audit under D-089's rebinding |
 | Physical purge is exceptional | INV-221, INV-222 | none found: no test file matches `purge` | **Closed by increment 5.** No purge verb exists at all; what needed measuring was the ordinary withdrawal, and the erasure sentence 165.10 requires was missing (D-135) |
 | Interrupted operations re-inspect before resume | INV-226 | CP-12 executor replans under lease; `receipt verify` carries a `no-orphan-run-directory` claim (`LAF-61`) | **Closed by increment 4b**, over a working copy the engine really failed to remove |
-| Input/credential contract changes | INV-231, INV-232 | CP-08 credential lifecycle | No test that changing one artifact's contract leaves another's credential owned |
+| Input/credential contract changes | INV-231, INV-232 | CP-08 credential lifecycle | **Closed by increment 8**, which changed no production code. The gap was structural: every credential test had one installation in scope, and INV-232 is a claim about a second one |
 | Policy drift contributes to health | INV-233 | `EffectivePolicy` is read at validation time (D-099) | **Closed by increment 6** (D-136). The live policy is `OrganizationPolicy`; the domain `EffectivePolicy` never reaches the consumer path at all (B-056) |
 | Development installs are visibly distinct | INV-237 | none found | **Closed by increment 6.** `marketplace list` always showed `trust`; what is *installed* did not |
 | Promotion evidence, audit, Git authority, publication | INV-238, 240, 241, 242 | D-103–D-107 promotion records and local-commit boundary | **Closed by increment 7**, which changed no production code: the boundary was already right and nothing said so from the consumer's side. The Git hop stays with CP-17 |
@@ -69,10 +69,8 @@ temporary machine, and (c) records which mutation it was proven against.
    (INV-233, INV-237).
 7. **DONE:** Promotion evidence, audit and the local-promotion-is-not-publication boundary
    (INV-238, 240, 241, 242).
-8. Input and credential contract migrations, and unrelated credential ownership
-   (INV-231, INV-232) — the last two invariants in this slice's declared scope. The scenario map
-   row has stood open since slice start: no test shows that changing one artifact's contract leaves
-   another artifact's credential owned.
+8. **DONE:** Input and credential contract migrations, and unrelated credential ownership
+   (INV-231, INV-232) — the last two invariants in this slice's declared scope.
 
 ## Blockers
 
@@ -468,3 +466,57 @@ and `git_location_parts` admits no `file://` remote, so branch protection, pull 
 merge that constitutes publication cannot be driven here. This file proves the property that makes
 the hop *necessary* — AART leaves the checkout with nothing committed, no branch and no remote, and
 the consumer's view does not move — rather than the hop's outcome.
+
+### Step 8 — the credential another artifact still needs (INV-231, INV-232)
+
+`tests/credential_contract_migration_e2e_test.py`, and it closes CP-15. Product Specification 165.19
+makes three statements about a version update that alters an input contract: AART asks only for the
+*newly* required value, an authentication-model change is explicit, and old credentials remain if
+still referenced by other installed artifacts.
+
+That third statement is a negative about a *second* artifact, which is why nothing held it. Every
+credential test in this repository has exactly one installation in scope, and what happens to B when
+A changes cannot be measured with only an A.
+
+Nothing needed changing. The claims split three ways by where they can honestly be measured, and the
+split is recorded here rather than smoothed over:
+
+- **The retention statement runs through the public verb.** `aart marketplace uninstall` already
+  emits `"credentials": "retained"` and the line `Credentials: retained.`, with a source comment
+  saying a review that stayed silent would leave the reader assuming the opposite. No test anywhere
+  asserted either string.
+- **The plan behind that statement is measured at the seam**, deliberately. `commands/marketplace.py`
+  wires a real `MacOsKeychainProvider` on darwin, so a command-line test that stored a credential
+  would write into the developer's own Keychain — which is why every existing credential test uses a
+  file-backed provider.
+- **The contract-migration claims run through `compose_installation_inputs`**, which decides the form
+  an operator is shown; the install command publishes its result as the `unanswered` list, so the
+  seam and the verb agree by construction rather than by a second implementation.
+
+Seven mutations, each turning red exactly the claim it belongs to: dropping the JSON key; dropping
+the human line; defaulting `delete_credentials` to true; matching dependants on the provider account
+instead of the reference; emptying `_dependants`; making `unanswered` return every required field;
+and removing the conflicting-redeclaration branch.
+
+**The finding is in the third mutation.** The first draft asserted "no effect in the reviewed removal
+deletes a credential" through the CLI, and defaulting `delete_credentials` to true **killed nothing**
+— because the fixture registry's Skill declares no inputs, so the test asserted an absence in a
+scenario where nothing could ever have been present. The native source protocol has no `inputs` field
+at all (`protocol/native_schema.py` never mentions one), so a native-source artifact reaches a
+credential only through its setup recipe. The test now uses a record that carries a credential
+reference and makes two calls differing in one keyword — the call the command actually makes, which
+passes no `delete_credentials`, and the same call when asked. The pair is the point: the absence in
+the first is evidence only because the second shows the deletion was reachable.
+
+A fourth draft test was cut for the same reason after being caught by inspection rather than by a
+mutation: it read `step["effect"]["kind"]` from a finalized receipt where `effect` is a string, so
+its comprehension filtered every step away and the assertion ran over an empty set. Where an
+absence is asserted here, the set it is asserted over is now asserted non-empty first.
+
+`make mutants ONLY=agent_artifacts/application/installation_inputs.py` scoped to this file: 94
+mutants, 77 killed, 17 survived. All seventeen are outside these claims — the defensive
+`INPUT_COMPOSITION_INVALID` type-guard branch, the wording of that message, the `ValueError`
+catch-all, and the sort key that orders fields, which two tests asserting a single-element list
+cannot hold. They stay under B-054.
+
+INV-231 and INV-232 move from PARTIAL to EVIDENCED, and with them CP-15's declared scope is complete.

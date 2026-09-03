@@ -117,7 +117,7 @@
     {
       "id": "CP-15",
       "title": "Edge-case hardening",
-      "status": "in_progress",
+      "status": "done",
       "steps": [
         {
           "id": "1",
@@ -162,7 +162,7 @@
         {
           "id": "8",
           "title": "Input and credential contract migrations, and unrelated credential ownership (INV-231, INV-232)",
-          "status": "todo"
+          "status": "done"
         }
       ]
     },
