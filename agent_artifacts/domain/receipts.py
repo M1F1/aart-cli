@@ -21,6 +21,7 @@ launcher field to leave empty.
 from __future__ import annotations
 
 import hashlib
+import re
 from dataclasses import dataclass
 from typing import TypeAlias
 
@@ -54,6 +55,7 @@ __all__ = [
 ]
 
 RECEIPT_INVALID = DiagnosticCode("receipt-invalid")
+_SETUP_REF_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,255}$")
 
 
 def config_fingerprint(input_id: InputId, value: str) -> "ConfigFingerprint":
@@ -97,6 +99,9 @@ class InstallationReceipt:
     #: field on :class:`PlacedArtifactReceipt`; both shapes answer the same question, because both
     #: come from one object and neither could name it before.
     object_digest: ObjectDigest | None = None
+    #: The durable setup record attached to this installation, when setup has run. Kept on the
+    #: receipt because that is the canonical store that says this payload is installed.
+    setup_state_ref: str | None = None
 
     def __post_init__(self) -> None:
         for value, label in (
@@ -112,6 +117,11 @@ class InstallationReceipt:
                 raise ValueError(f"installation receipt {label} must be absolute")
         if self.object_digest is not None and not isinstance(self.object_digest, ObjectDigest):
             raise ValueError("installation receipt object digest is invalid")
+        if (
+            self.setup_state_ref is not None
+            and _SETUP_REF_RE.fullmatch(self.setup_state_ref) is None
+        ):
+            raise ValueError("installation receipt setup state reference is invalid")
         if self.base_interpreter is not None and (
             not isinstance(self.base_interpreter, str)
             or not self.base_interpreter.startswith("/")
@@ -146,8 +156,12 @@ def installation_receipt_to_data(receipt: InstallationReceipt) -> dict[str, obje
     identity: dict[str, object] = (
         {} if receipt.object_digest is None else {"object_digest": str(receipt.object_digest)}
     )
+    setup: dict[str, object] = (
+        {} if receipt.setup_state_ref is None else {"setup_state_ref": receipt.setup_state_ref}
+    )
     return {
         **identity,
+        **setup,
         "artifact": receipt.artifact,
         "base_interpreter": receipt.base_interpreter,
         "config": [
@@ -299,6 +313,8 @@ class PlacedArtifactReceipt:
     #: Optional because a receipt written before this was recorded cannot acquire it after the
     #: fact: an installation whose object nobody wrote down is honestly unknown, not guessable.
     object_digest: ObjectDigest | None = None
+    #: The setup record belongs to this receipt rather than to the retired install-state manifest.
+    setup_state_ref: str | None = None
 
     def __post_init__(self) -> None:
         for value, label in ((self.artifact, "artifact"), (self.root, "root")):
@@ -310,6 +326,11 @@ class PlacedArtifactReceipt:
             raise ValueError("placed artifact receipt payload digest is invalid")
         if self.object_digest is not None and not isinstance(self.object_digest, ObjectDigest):
             raise ValueError("placed artifact receipt object digest is invalid")
+        if (
+            self.setup_state_ref is not None
+            and _SETUP_REF_RE.fullmatch(self.setup_state_ref) is None
+        ):
+            raise ValueError("placed artifact receipt setup state reference is invalid")
         for items, kind, label in (
             (self.deliveries, ArtifactDelivery, "deliveries"),
             (self.config, ConfigFingerprint, "config"),
@@ -414,8 +435,12 @@ def placed_artifact_receipt_to_data(receipt: PlacedArtifactReceipt) -> dict[str,
     identity: dict[str, object] = (
         {} if receipt.object_digest is None else {"object_digest": str(receipt.object_digest)}
     )
+    setup: dict[str, object] = (
+        {} if receipt.setup_state_ref is None else {"setup_state_ref": receipt.setup_state_ref}
+    )
     return {
         **identity,
+        **setup,
         "artifact": receipt.artifact,
         "config": [
             {"digest": str(item.digest), "input": item.input.value} for item in receipt.config
@@ -585,6 +610,7 @@ def placed_artifact_receipt_from_data(data: object) -> Result[PlacedArtifactRece
                     if data.get("object_digest") is not None
                     else None
                 ),
+                None if data.get("setup_state_ref") is None else str(data["setup_state_ref"]),
             )
         )
     except ValueError as error:
@@ -627,6 +653,7 @@ def installation_receipt_from_data(data: object) -> Result[InstallationReceipt]:
                     if data.get("object_digest") is not None
                     else None
                 ),
+                None if data.get("setup_state_ref") is None else str(data["setup_state_ref"]),
             )
         )
     except ValueError as error:

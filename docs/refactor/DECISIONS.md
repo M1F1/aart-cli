@@ -2359,3 +2359,40 @@ the Product Specification first instead of hiding the change here.
   registry's object plans, another object is refused with "registry publishes", and the legacy arm
   keeps its own meaning. The subject no longer references `InstallStatePaths`, so nothing left in
   the engine names the store that recorded the installation.
+
+## D-128 — Configured setup is a receipt-backed engine composition, followed by terminal-owned consent
+
+- **Decision:** `io/configured_setup.py` is the configured implementation of the public
+  `SetupSubjectPort` and setup persistence boundary. It reconstructs an `InstallationRecord` in
+  memory from the canonical receipt, the synchronized configured source and the approved registry
+  version; project destinations are relativized before becoming `EffectProof`s; trust is exactly
+  `RegistryTrust.REGISTRY_REVIEWED -> TrustClass.REGISTRY_REVIEWED`; and declaration evidence is
+  `ApprovedObjectIdentity` for the registry-published object. It never writes the retiring
+  install-state manifest. `LocalConfiguredSetupAdapter.persist_setup` takes the receipt-side lock,
+  writes the setup record, replaces the receipt's optional `setup_state_ref`, and moves the setup
+  CAS reference as one compensated unit. Both receipt shapes keep older documents readable by
+  treating absence of that pointer as unknown/not-yet-recorded.
+- **Status:** accepted.
+- **Reason:** the engine already owns recipe parsing, trust, policy, capability, object-identity,
+  precondition and per-effect consent decisions. The configured route needed ports supplying real
+  evidence, not a third planner. Re-asking the subject under the receipt lock gives finalize the
+  same stale-review protection as the legacy record. A forced reference-write failure proves the
+  receipt pointer and setup-state file return to their prior bytes.
+- **Consequence:** configured `marketplace install|update` now prepare setup after the payload is
+  durably recorded, and their parsers expose the same three independent setup authorizations as the
+  legacy route. Omitting effect approval applies nothing and leaves `pending_setup`; explicit
+  approval configures it. `marketplace setup` resolves canonical receipts before the legacy
+  catalogue, so a declined configured install is recoverable. The persistent shell receives a
+  typed completion from its action update; the IO handler accepts an injected completion factory
+  and never imports the terminal module. The terminal adapter uses `draw(lines)` / `key()` and
+  sends every key through `key_event`, with bracketed decisions completing on one key. It then
+  reuses `_canonical_setup_run` and `_complete_canonical_consumer_action`, including exact redacted
+  usage-report preview and default-no consent. Reporting failure remains advisory and cannot change
+  the installation result. The bridge into those retained contracts is a real `ConsumerReview`:
+  its documented sentinel is supplied only to the constructor, which immediately replaces it with
+  the digest of the exact projected items; setup plans retain their own engine review digests.
+  The three acceptance tests that assert setup *ran* are `skipUnless(darwin)`, for the reason
+  D-121's `DeclaredSetupE2ETest` already carries: the seam takes its platform from `sys.platform`
+  and a recipe may declare only `darwin`, so elsewhere the run is `unsupported` and the artifact is
+  reported as still-pending setup with a retry command rather than as a failed install. That was
+  measured by forcing the platform, not assumed.

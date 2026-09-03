@@ -8,6 +8,7 @@ from typing import Literal, Mapping, TypeAlias
 
 from agent_artifacts.configuration.policy import EffectiveConfiguration
 from agent_artifacts.domain.identifiers import ArtifactCoordinate, ObjectDigest
+from agent_artifacts.domain.plans import InstallPlan as ConfiguredInstallPlan
 from agent_artifacts.install_state.model import InstallScope
 from agent_artifacts.installation.model import InstallLocation, InstallMode, InstallPlan
 from agent_artifacts.lifecycle.model import LifecycleItem, UninstallPlan, UpdatePlan
@@ -21,7 +22,14 @@ from agent_artifacts.setup_engine.model import CanonicalSetupPlan
 from agent_artifacts.store.model import ObjectStorePaths
 
 ConsumerAction = Literal["install", "update", "uninstall", "status", "check"]
-ConsumerPlan: TypeAlias = InstallPlan | UpdatePlan | UninstallPlan | LifecycleItem
+ConsumerPlan: TypeAlias = (
+    InstallPlan
+    | UpdatePlan
+    | UninstallPlan
+    | LifecycleItem
+    | ConfiguredInstallPlan
+    | CanonicalSetupPlan
+)
 _PROFILE_RE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 _TERMINAL_STATUSES = frozenset(
     {

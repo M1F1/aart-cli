@@ -1,32 +1,11 @@
-"""B-044: what the configured install seam leaves undone when an artifact declares setup.
+"""B-044: configured installs perform declared setup through the shared engine.
 
-An artifact can declare that placing its files is not the whole of installing it -- that a
-configuration file has to be written, a credential stored, an MCP server registered -- by carrying
-a `setup` reference and a declarative recipe in its package. The Product Specification names
-performing that work as AART's, and screens 09 and 11 summarize a finished install as "configured
-MCP servers, isolated environments ... securely stored credentials".
-
-The configured canonical seam does not perform it. `complete_configured_installation` places the
-payload, writes a receipt and returns; nothing between the confirmed review and the drawn success
-consults the setup declaration. Both front ends reach installation through that one seam --
-`aart marketplace install` for an approved RegistryGit coordinate, and the persistent shell's
-action handler for every install it makes -- so both report a finished install of an artifact that
-is not configured.
-
-These tests characterize that. Every assertion below states what the two routes do today, and each
-one is written so that closing B-044 breaks it: the recipe writes a file with a name nothing else
-on the machine writes, and the assertion is that the file is not there. When the seam runs setup,
-these invert rather than quietly keep passing.
-
-Half of the original characterization has already inverted. Both routes reported the finished
-install and said nothing at all about the setup they skipped; both now name it, which
-`tests/configured_setup_report_test.py` owns and which those assertions were moved to rather than
-weakened. What is characterized here is the part that remains: the work itself is still not done.
-
-The legacy path is where setup does run, and it is reached only when a Selection is *not* an
-approved registry coordinate (`commands/marketplace.py::_configured_registry_selection` returns
-`None` for a direct or local source). That is why the gap was not visible from the setup engine's
-own tests: SET01 proves the engine, and the engine is never asked.
+The fixture first proved the shipped defect: both configured front ends placed a real promoted
+artifact and reported success without running its declarative recipe. These acceptance assertions
+are the inversion of that RED. Explicit CLI effect approval and terminal consent now write the
+recipe's unique configuration file, while the separate setup command recovers an install whose
+first offer was declined. The promoted fixture keeps every object and recipe digest derived by the
+real transaction, so the tests cannot pass against hand-patched evidence.
 """
 
 from __future__ import annotations
@@ -34,6 +13,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import sys
 import unittest
 from unittest import mock
 
@@ -124,15 +104,26 @@ class DeclaredSetupFixtureTest(unittest.TestCase):
         self.assertIn(f"{root}/SETUP.md", entries)
 
 
+@unittest.skipUnless(
+    sys.platform == "darwin",
+    "the setup engine accepts only darwin recipes (setup.py:562), so applying one elsewhere is "
+    "refused for the platform before the effect this asserts on is reached",
+)
 class ConfiguredInstallCommandSetupTest(unittest.TestCase):
     """`aart marketplace install`, for a coordinate the configured registry approved."""
 
-    def test_an_artifact_that_declares_setup_installs_and_reports_success_unconfigured(
+    def test_an_artifact_that_declares_setup_is_configured_after_explicit_effect_approval(
         self,
     ) -> None:
         with _declaring_setup() as env:
             code, payload = env.run(
-                "marketplace", "install", COORDINATE, "--profile", "claude", "--yes"
+                "marketplace",
+                "install",
+                COORDINATE,
+                "--profile",
+                "claude",
+                "--yes",
+                "--approve-setup-effects",
             )
 
             self.assertEqual(code, 0, payload)
@@ -142,40 +133,39 @@ class ConfiguredInstallCommandSetupTest(unittest.TestCase):
                 (env.project / ".claude/skills/code-review/SKILL.md").is_file(),
                 "the Skill never reached the harness, so this proves nothing about setup",
             )
-            # B-044. The declared setup did not run. The command now says so -- see
-            # `configured_setup_report_test.py`, which owns that assertion -- but saying it is not
-            # doing it, and the file the recipe writes is still not there.
-            self.assertFalse((env.project / CONFIGURED).exists())
+            self.assertTrue((env.project / CONFIGURED).exists())
+            self.assertEqual(payload["setup"]["configured"], 1)
 
-    def test_the_setup_command_cannot_reach_what_the_configured_seam_installed(self) -> None:
-        """And the operator's remaining move does not work either.
-
-        `aart marketplace setup` is the separate verb that runs a queued setup, so an install that
-        skipped it would still be recoverable by hand. It is not: that command resolves through the
-        legacy catalogue, which reads root manifests a promoted registry snapshot does not carry,
-        so it refuses before it ever looks at what is installed.
-        """
+    def test_the_setup_command_recovers_a_configured_install_that_declined_setup(self) -> None:
 
         with _declaring_setup() as env:
             env.run("marketplace", "install", COORDINATE, "--profile", "claude", "--yes")
 
             code, payload = env.run(
-                "marketplace", "setup", COORDINATE, "--profile", "claude", "--yes"
+                "marketplace",
+                "setup",
+                COORDINATE,
+                "--profile",
+                "claude",
+                "--yes",
+                "--approve-setup-effects",
             )
 
-            self.assertEqual(code, 1)
-            self.assertFalse(payload["ok"])
-            self.assertEqual(
-                [item["message"] for item in payload["diagnostics"]],
-                ["registry company has invalid root manifests"],
-            )
-            self.assertFalse((env.project / CONFIGURED).exists())
+            self.assertEqual(code, 0, payload)
+            self.assertTrue(payload["ok"])
+            self.assertEqual(payload["setup"]["configured"], 1)
+            self.assertTrue((env.project / CONFIGURED).exists())
 
 
+@unittest.skipUnless(
+    sys.platform == "darwin",
+    "the setup engine accepts only darwin recipes (setup.py:562), so applying one elsewhere is "
+    "refused for the platform before the effect this asserts on is reached",
+)
 class ConsumerShellSetupTest(unittest.TestCase):
     """The persistent shell, installing the same artifact through the same seam."""
 
-    def test_the_shell_draws_success_for_an_install_whose_setup_never_ran(self) -> None:
+    def test_the_shell_configures_the_install_after_terminal_consent(self) -> None:
         with _declaring_setup() as env:
             with mock.patch.dict(os.environ, env.xdg, clear=False):
                 composed = tui._canonical_consumer_actions(
@@ -200,10 +190,7 @@ class ConsumerShellSetupTest(unittest.TestCase):
                 (env.project / ".claude/skills/code-review/SKILL.md").is_file(),
                 "the Skill never reached the harness, so this proves nothing about setup",
             )
-            # B-044. Success is drawn, the payload is placed, and the artifact is unconfigured.
-            # The shell now names the outstanding setup on that screen (proven in
-            # `configured_setup_report_test.py`); what it still does not do is perform it.
-            self.assertFalse((env.project / CONFIGURED).exists())
+            self.assertTrue((env.project / CONFIGURED).exists())
 
 
 if __name__ == "__main__":

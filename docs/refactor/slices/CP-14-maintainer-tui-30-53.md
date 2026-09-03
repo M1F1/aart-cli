@@ -707,6 +707,57 @@ canonical `persist_setup`, whose durable pointer belongs on the receipt rather t
 install-state manifest, and a canonical equivalent of `setup_receipt.locate_setup_record` for
 `aart marketplace receipt show|verify|undo` (follow-up, not blocking the wiring).
 
+## Step 7k — configured setup and reporting completion (2026-09-03)
+
+B-044 is closed (D-128). The RED in `tests/configured_setup_gap_test.py` first proved a real
+promoted artifact reached both configured front ends, placed its payload and left the recipe's
+unique file absent. The assertions now invert: `marketplace install --yes
+--approve-setup-effects` and the persistent shell's one-key setup consent both write that file, and
+the explicit `marketplace setup` verb recovers the same canonical installation after the first
+offer was declined.
+
+`configured_setup_subject` reconstructs the setup engine's `InstalledSubject` from three
+independent durable sources: the canonical receipt, the synchronized configured Source and the
+approved registry version. It maps only the trust actually established by the approved snapshot,
+relativizes project effects before constructing the in-memory `InstallationRecord`, and uses
+`ApprovedObjectIdentity` to compare the receipt's object with the registry's. It writes no legacy
+install state. `LocalConfiguredSetupAdapter` persists the setup record, receipt-side
+`setup_state_ref` and setup CAS reference under the receipt lock as one compensated unit; a forced
+reference failure proves the receipt and state file return to their prior bytes. Both receipt
+shapes accept the optional pointer and keep older documents readable.
+
+The public CLI and shell project the already-reviewed/recorded canonical action into the existing
+consumer setup/reporting contract; this projection makes no setup decision. `ConsumerReview` turns
+its documented construction sentinel into a digest over the exact projected items, while each
+setup plan retains the engine's own review digest. `ConsumerActionUpdate` may carry a typed terminal
+completion. The IO handler receives its factory by injection and never imports `tui`; the shell
+runs it before reducing `ACTION_RECORDED`, using `draw(lines)` / `key()` and routing every key
+through `key_event`. The retained `_canonical_setup_run` and
+`_complete_canonical_consumer_action` now serve production again. Reporting tests prove default-no,
+exact payload before provider invocation and advisory failure with the install result still on the
+success screen.
+
+The configured receipt locator for `marketplace receipt show|verify|undo` is a separate follow-up,
+B-046. The setup operation itself and operator recovery no longer depend on it. B-045 remains the
+independent installed-object GC rooting question.
+
+Evidence: `tests/configured_setup_gap_test.py`, `tests/configured_setup_subject_test.py`,
+`tests/configured_setup_report_test.py`, the legacy setup-engine suite and the configured install /
+update E2Es.
+
+**Corrected on review: the three acceptance tests that assert setup *ran* are darwin-only.** They
+were written without the guard and passed on the darwin host they were written on, but the seam
+takes its platform from `sys.platform` (`commands/marketplace.py:1642`) and a recipe may declare
+only `darwin` (`setup.py:562`), so on linux the run is `unsupported` -- `configured: 0`, the file
+absent, `pending_setup` reported again with a retry command. Measured, not assumed: forcing
+`sys.platform` to `linux` produced exactly that. `ConfiguredInstallCommandSetupTest`,
+`ConsumerShellSetupTest` and
+`ConfiguredInstallCommandReportTest::test_shell_previews_exact_payload_and_reporting_failure_is_advisory`
+now carry the same `skipUnless(darwin)` guard, and for the same stated reason, as D-121's
+`DeclaredSetupE2ETest`. The tests that assert setup did *not* run are platform-independent and stay
+unguarded. The graceful linux behaviour is itself worth recording: an unsupported platform is
+reported as outstanding setup with a retry, not as a failed install.
+
 ## Step 5e — one transaction carrying a set of promotions
 
 A loop over single promotions is exactly what bulk promotion is not: each iteration would take its

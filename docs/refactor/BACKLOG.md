@@ -821,6 +821,12 @@ is about the store's rooting, that one is about the receipt naming the object at
 
 ## B-044 — The canonical consumer shell runs no setup queue and offers no usage report — CRITICAL
 
+**Resolved on 2026-09-03 (D-128).** Both configured front ends now compose the public setup engine
+from receipt-backed evidence and offer privacy-bounded usage reporting. Explicit CLI effect
+approval and shell terminal consent are proven on the real promoted fixture; omission/refusal
+applies no setup effect; `marketplace setup` recovers the declined canonical install. The detailed
+history below is retained because it records the RED and the rejected planner fork.
+
 Discovered while retiring the wizard front-end (D-117), recorded in full as D-118. **Reclassified
 from backlog to critical path:** the Product Specification names interactive setup as work AART
 performs, and screens 09 and 11 summarize an install's outcome as "configured MCP servers, isolated
@@ -1057,3 +1063,30 @@ capability — but they take `ConsumerApplicationService`, `ConsumerReview` and 
 and the canonical path has a receipt instead. So this is a slice, not a wiring change: either the
 setup engine is reached from the configured-installation action directly, or the action produces
 the outcome value the existing completion already accepts.
+
+### Completion (2026-09-03)
+
+The receipt-backed subject and persistence adapter are `io/configured_setup.py`; no legacy install
+state is written. The setup engine still performs every trust, policy, declaration, object,
+capability, precondition and effect-consent decision. `setup_state_ref` is now an optional field on
+both canonical receipt shapes, with round-trip, old-document and malformed-value tests. A forced
+CAS-reference failure proves receipt and setup-state compensation. The public configured install,
+update and explicit setup routes use the adapter. The shell runs the retained canonical completion
+through a typed action completion and its `draw`/`key` terminal port; `key_event` remains the only
+key interpreter. Reporting defaults to no, displays the exact payload before provider invocation,
+and is advisory on provider failure. Acceptance is
+`tests/configured_setup_gap_test.py`, `tests/configured_setup_subject_test.py` and
+`tests/configured_setup_report_test.py`.
+
+## B-046 — Canonical setup receipts are not yet found by receipt show/verify/undo
+
+Discovered while closing B-044 and explicitly outside that wiring slice. Canonical setup now stores
+the same setup record and CAS reference as the legacy route, but its durable pointer is the
+installation receipt's `setup_state_ref`. `setup_receipt.locate_setup_record` still reads that
+pointer only from the retiring install-state manifest, so `aart marketplace receipt
+show|verify|undo` cannot yet locate a setup run made by a configured install. Add a receipt-backed
+locator (without writing legacy install state), characterize all three public verbs, and preserve
+the existing review-before-undo and stale-record checks.
+
+Evidence/links: D-126, D-128; B-044; `agent_artifacts/setup_receipt.py`,
+`agent_artifacts/io/configured_setup.py`.

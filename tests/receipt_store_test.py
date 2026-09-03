@@ -81,6 +81,26 @@ class ReceiptParsingTest(unittest.TestCase):
         self.assertIsInstance(parsed, Ok, getattr(parsed, "diagnostics", ()))
         self.assertEqual(parsed.value, original)
 
+    def test_a_setup_record_pointer_round_trips_and_older_receipts_remain_readable(self):
+        setup_ref = "setup-" + "e" * 48
+        current = installation_receipt_to_data(receipt(setup_state_ref=setup_ref))
+
+        parsed = installation_receipt_from_data(current)
+        older = installation_receipt_from_data(installation_receipt_to_data(receipt()))
+
+        self.assertIsInstance(parsed, Ok, getattr(parsed, "diagnostics", ()))
+        self.assertEqual(parsed.value.setup_state_ref, setup_ref)
+        self.assertIsInstance(older, Ok, getattr(older, "diagnostics", ()))
+        self.assertIsNone(older.value.setup_state_ref)
+
+    def test_an_invalid_setup_record_pointer_is_refused(self):
+        data = installation_receipt_to_data(receipt())
+        data["setup_state_ref"] = "../outside"
+
+        parsed = installation_receipt_from_data(data)
+
+        self.assertIsInstance(parsed, Err)
+
     def test_a_reference_whose_parts_contain_punctuation_still_round_trips(self):
         awkward = CredentialReference(
             InputId("token"), CredentialProviderRef("vault", "team@acme:prod", "a/b@c")

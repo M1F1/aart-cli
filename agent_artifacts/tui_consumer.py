@@ -109,6 +109,7 @@ from agent_artifacts.tui_marketplace import (
 
 __all__ = [
     "CanonicalScreenSource",
+    "ConsumerActionCompletion",
     "ConsumerActionHandler",
     "ConsumerActionUpdate",
     "ConsumerScreenSource",
@@ -998,12 +999,19 @@ class ConsumerScreenSource(Protocol):
         """What this screen opens with ticked, or `None` where it has no opinion."""
 
 
+class ConsumerActionCompletion(Protocol):
+    """A post-payload terminal conversation that returns the truthful result screen."""
+
+    def complete(self, terminal: ConsumerTerminal) -> ConsumerScreenSource: ...
+
+
 @dataclass(frozen=True, slots=True)
 class ConsumerActionUpdate:
     """A new immutable screen snapshot and the event that says what the action established."""
 
     source: ConsumerScreenSource
     event: ConsumerUiEvent
+    completion: ConsumerActionCompletion | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.event, ConsumerUiEvent) or self.event.kind not in (
@@ -1011,6 +1019,8 @@ class ConsumerActionUpdate:
             ConsumerUiEventKind.ACTION_RECORDED,
         ):
             raise ValueError("a consumer action update needs a prepared or recorded event")
+        if self.completion is not None and not callable(getattr(self.completion, "complete", None)):
+            raise ValueError("a consumer action completion needs a terminal boundary")
 
 
 class ConsumerActionHandler(Protocol):
@@ -1123,7 +1133,9 @@ def run_consumer_shell(
             )
             if update.event.kind is not expected or update.event.action is not command.action:
                 raise ValueError("a consumer action handler returned the wrong action update")
-            active_source = update.source
+            active_source = (
+                update.source if update.completion is None else update.completion.complete(terminal)
+            )
             current, followup = reduce_consumer_ui(current, update.event)
             entering = entering or any(
                 item.kind is ConsumerUiCommandKind.LOAD_SCREEN for item in followup

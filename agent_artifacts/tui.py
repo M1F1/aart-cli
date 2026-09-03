@@ -20,12 +20,19 @@ import os
 import shutil
 import sys
 import traceback
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from typing import Callable, List, Literal, Mapping, Optional, Sequence, Tuple
 
 from . import __version__
-from .application.consumer_ui import ConsumerUiState, opening_state
+from .application.consumer_ui import (
+    ConsumerUiEventKind,
+    ConsumerUiState,
+    key_event,
+    opening_state,
+)
+from .application.consumer_views import ConsumerScreen, ConsumerSession
+from .application.installed_setup import DeclaredArtifactSetup
 from .application.sources import SourceAdoptionOutcome
 from .configuration.model import (
     UserConfiguration,
@@ -43,7 +50,11 @@ from .domain.identifiers import ArtifactCoordinate, SourceAlias
 from .domain.result import Err as DomainErr
 from .domain.result import Ok as DomainOk
 from .domain.result import Result as DomainResult
-from .io.configured_installation_action import InstallationHost
+from .io.configured_installation_action import (
+    CompletedConfiguredInstallation,
+    InstallationHost,
+)
+from .io.configured_setup import ConfiguredSetupService, configured_consumer_completion
 from .io.consumer_actions import ConsumerActionContext, LocalConsumerActions
 from .io.consumer_machine import read_consumer_machine
 from .io.consumer_settings import read_consumer_settings
@@ -69,6 +80,7 @@ from .reporting.projection import (
     usage_report_from_consumer,
     usage_reports_by_registry_from_consumer,
 )
+from .reporting.runtime import load_local_reporting_service
 from .setup import (
     SETUP_EFFECT_PROMPT,
     SETUP_QUEUE_PROMPT,
@@ -87,6 +99,10 @@ from .setup import (
 from .sources.model import SourceIdentityTransition, SourceSyncOutcome
 from .tui_consumer import (
     CanonicalScreenSource,
+    ConsumerActionCompletion,
+    ConsumerScreenSource,
+    ConsumerTerminal,
+    key_name,
     read_consumer_offers,
     run_consumer_shell,
 )
@@ -392,8 +408,80 @@ def _setup_reporting_key(
     return f"{coordinate}#{profile}/{scope}"
 
 
+class _TerminalConversation:
+    """Adapt the shell's draw/key port to the retained line-oriented completion boundary."""
+
+    def __init__(self, terminal: ConsumerTerminal) -> None:
+        self._terminal = terminal
+        self._lines: list[str] = []
+
+    def write(self, value: str) -> None:
+        self._lines.extend(str(value).replace("\r", "\n").split("\n"))
+        self._terminal.draw(tuple(self._lines))
+
+    def read(self, prompt: str) -> str:
+        value = ""
+        state = ConsumerUiState(
+            session=ConsumerSession(ConsumerScreen.MARKETPLACE),
+            searching=True,
+        )
+        while True:
+            self._terminal.draw((*self._lines, f"{prompt}{value}_"))
+            name = key_name(self._terminal.key())
+            if not name:
+                continue
+            event = key_event(name, state)
+            if event is None:
+                continue
+            if event.kind is ConsumerUiEventKind.SEARCH:
+                value = event.text
+                # Shell confirmation prompts are one-key decisions, not line input disguised as
+                # a screen.  The same adapter still supports ordinary setup text inputs below.
+                if "[" in prompt and value in {"y", "Y", "n", "N", "s", "S", "v", "V"}:
+                    return value
+                state = replace(state, search=value)
+                continue
+            if event.kind is ConsumerUiEventKind.SEARCH_CLOSE:
+                if event.accepted is not True:
+                    raise EOFError
+                return value
+
+
+@dataclass(frozen=True, slots=True)
+class _CanonicalTerminalCompletion:
+    service: ConsumerApplicationService | ConfiguredSetupService
+    review: ConsumerReview
+    outcome: ConsumerOutcome
+    reporting: ReportingApplicationService | None
+    pending_setup: tuple[DeclaredArtifactSetup, ...]
+    source: Callable[[tuple[DeclaredArtifactSetup, ...]], ConsumerScreenSource]
+
+    def complete(self, terminal: ConsumerTerminal) -> ConsumerScreenSource:
+        conversation = _TerminalConversation(terminal)
+        exit_code = _complete_canonical_consumer_action(
+            self.service,
+            self.review,
+            self.outcome,
+            self.reporting,
+            read=conversation.read,
+            write=conversation.write,
+        )
+        return self.source(() if exit_code == 0 else self.pending_setup)
+
+
+@dataclass(frozen=True, slots=True)
+class _UnavailableTerminalCompletion:
+    message: str
+    pending_setup: tuple[DeclaredArtifactSetup, ...]
+    source: Callable[[tuple[DeclaredArtifactSetup, ...]], ConsumerScreenSource]
+
+    def complete(self, terminal: ConsumerTerminal) -> ConsumerScreenSource:
+        terminal.draw((f"warning: {self.message}",))
+        return self.source(self.pending_setup)
+
+
 def _canonical_setup_run(
-    service: ConsumerApplicationService,
+    service: ConsumerApplicationService | ConfiguredSetupService,
     review: ConsumerReview,
     outcome: ConsumerOutcome,
     *,
@@ -703,7 +791,7 @@ def _offer_routed_usage_reports(
 
 
 def _complete_canonical_consumer_action(
-    consumer: ConsumerApplicationService,
+    consumer: ConsumerApplicationService | ConfiguredSetupService,
     review: ConsumerReview,
     outcome: ConsumerOutcome,
     reporting: ReportingApplicationService | None,
@@ -2474,6 +2562,39 @@ def _canonical_consumer_actions(
     )
     if isinstance(maintainer, DomainErr):
         return maintainer
+    reporting_result = load_local_reporting_service(
+        user_home=home,
+        configuration=loaded.value.configuration,
+    )
+    reporting = reporting_result.value if isinstance(reporting_result, DomainOk) else None
+
+    def completion_factory(
+        completed: CompletedConfiguredInstallation,
+        action: Literal["install", "update"],
+        source: Callable[[tuple[DeclaredArtifactSetup, ...]], ConsumerScreenSource],
+    ) -> ConsumerActionCompletion:
+        projected = configured_consumer_completion(
+            completed,
+            loaded.value,
+            InstallationHost(paths.data_root, project_root, home, Scope.PROJECT, target.profiles),
+            action=action,
+        )
+        if isinstance(projected, DomainErr):
+            return _UnavailableTerminalCompletion(
+                "setup/reporting completion is unavailable; the installed payload is unchanged",
+                completed.pending_setup,
+                source,
+            )
+        review, outcome, service = projected.value
+        return _CanonicalTerminalCompletion(
+            service,
+            review,
+            outcome,
+            reporting,
+            completed.pending_setup,
+            source,
+        )
+
     return DomainOk(
         LocalConsumerActions(
             ConsumerActionContext(
@@ -2488,6 +2609,7 @@ def _canonical_consumer_actions(
                 credential_providers=providers,
             ),
             data_root=paths.data_root,
+            completion_factory=completion_factory,
         )
     )
 

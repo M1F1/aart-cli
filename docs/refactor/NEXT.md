@@ -3,7 +3,9 @@
 ## Current objective
 
 Continue **CP-14 Maintainer TUI 30–53**. Step 7, retiring legacy authority, is done apart from a
-mechanical sweep; **B-044** is the critical work it uncovered. Screen 53 is
+mechanical sweep; **B-044 is closed by D-128**. The next executable work is that evidence-led
+orphan sweep, still skipping nothing merely because a widget test is its only caller; B-046 is the
+separate receipt-locator follow-up and B-045 remains non-critical. Screen 53 is
 live — the typed Candidate filter carries status, kind, Source and target registry, and `f` opens it
 from screen 35 (D-111). Screens 48–50 are live: lifecycle uses exact history plus registry evidence, provenance retains typed
 Git/local pins and compiler output, and immutable version conflicts require a new version
@@ -111,7 +113,12 @@ against `aart registry scaffold`, source maintenance against the `aart source` c
 against its flags half, ERR04's legacy install state against four other modules, ERR06 refusals
 against the canonical shell's drawn notice (D-116).
 
-**The exact next action** is B-044, and step 7 is finished apart from one mechanical sweep.
+**B-044 is complete (D-128), and step 7 is finished apart from one mechanical sweep.** One
+correction landed on review: the three acceptance tests that assert setup *ran* now carry the same
+`skipUnless(darwin)` guard D-121 already carries, because the seam takes its platform from
+`sys.platform` and a recipe may declare only `darwin` — measured by forcing the platform, where the
+run comes back `unsupported` and the artifact is reported as still-pending setup with a retry
+command rather than as a failed install.
 
 The wizard front-end is gone (D-117): `_run_user_curses_wizard`, `_run_user_text_wizard`,
 `_prompt_curation_request`, the `_curses_source_*` screens, and the 22 definitions that became
@@ -243,9 +250,9 @@ existing setup record. And the last check that only a separate index could satis
 the loaded object against the digest the approved registry publishes for the coordinate — two
 values from two documents, which is the honest check where the index *is* the package.
 
-**What remains for (3b) is exactly two things**, and both are now unblocked:
+**Those two pieces have landed and B-044 is closed (D-128):**
 
-1. **A canonical `SetupSubjectPort`.** Every field it must produce has been traced to a real source:
+1. **The canonical `SetupSubjectPort`.** Every field comes from the traced real source:
    the receipt store gives the record and `object_digest` (D-122); `load_configured_approved_marketplace`
    gives the approved `RegistryArtifactVersion` and `RegistryTrust.REGISTRY_REVIEWED`, which maps to
    `TrustClass.REGISTRY_REVIEWED` exactly as the legacy `marketplace/catalog.py::_trust` does;
@@ -257,13 +264,21 @@ values from two documents, which is the honest check where the index *is* the pa
    deliveries, and note `InstallationRecord.__post_init__` requires a project-scope destination to
    be a *safe relative path*, so the receipt's absolute destinations must be made relative to the
    project root. `declaration` is `ApprovedObjectIdentity(version.object_digest)`.
-2. **A canonical `persist_setup`.** `setup_engine/io.py::LocalSetupAdapter.persist_setup` records
+2. **Canonical `persist_setup`.** `setup_engine/io.py::LocalSetupAdapter.persist_setup` records
    that setup ran by taking the install-state lock, replacing the record's `setup_state_ref` and
    moving a CAS reference as one compensated unit. The canonical adapter writes the same setup
    record and moves the same reference, but its durable pointer belongs on the receipt rather than
    in an install-state manifest. `setup_receipt.locate_setup_record` reads that pointer for
    `aart marketplace receipt show|verify|undo` and needs a canonical equivalent (follow-up, not
-   blocking the wiring).
+   blocking the wiring). The receipt-backed equivalent is now B-046.
+
+`io/configured_setup.py` implements both without writing install state. Install/update and the
+explicit setup command run the public engine; the shell receives an injected typed completion and
+uses only `draw`/`key`, with every key passing through `key_event`. Refusing effect consent leaves
+the declaration pending, explicit approval configures it, and the usage-report offer defaults to
+no, previews exact redacted bytes before provider invocation and remains advisory on failure.
+`tests/configured_setup_gap_test.py`, `tests/configured_setup_subject_test.py` and
+`tests/configured_setup_report_test.py` are the acceptance evidence.
 
 A second measurement stands on its own account: the canonical seam registers **no CAS reference of
 any kind** — no references file exists in the data root after a successful install — while the
@@ -273,10 +288,12 @@ unrooted in the store. That is **B-045**, independent of setup.
 Every trust, evidence and policy check stays inside the engine; a third implementation of the
 planning is what produced the hardcoded trust constant in the preserved draft.
 
-Behind that, 571 lines of `tui.py` are still production-orphaned and held only by widget tests —
+**The exact next action** is the evidence-led mechanical sweep. About 571 lines of `tui.py` are
+still production-orphaned and held only by widget tests —
 `_curses_multiselect` and its 29 tests, the receipt screens, `_load_user_wizard_read_model`,
 `_curses_install_mode`, `_choice_pane`, `_basket_item`, `_canonical_consumer_source`. That sweep is
-mechanical and unblocked; it must skip the two helpers B-044 holds. B-038's remaining half was also
+mechanical and unblocked. `_canonical_setup_run` and `_complete_canonical_consumer_action` are now
+production-reachable through D-128 and are not orphans. B-038's remaining half was also
 restated: the direct-install residue is in `commands/marketplace.py::_configured_registry_selection`,
 a public flow, not in the deleted wizard.
 
@@ -289,9 +306,9 @@ registry state (D-112). What remains in CP-14:
 1. **Step 7 is done except for one mechanical sweep.** The wizard front-end is removed (D-113,
    D-116, D-117) and B-039 is closed. What it aimed at beyond that — `consumer/application.py`,
    `lifecycle/*`, `setup_engine/*` — is load-bearing for `aart marketplace` and is not removed.
-   B-038's screen-21 half is done (D-114) and its remaining half is restated as a `aart marketplace
-   install` question. **B-044 (critical) is what the step actually leaves behind:** the canonical
-   shell performs no post-install setup and offers no usage report.
+   B-038's screen-21 half is done (D-114) and its remaining half is restated as an `aart marketplace
+   install` question. B-044 is closed (D-128); B-046 records the non-blocking canonical setup
+   receipt-locator follow-up.
 2. Preserve D-089/B-037 whenever promotion planning is touched: retained approved records rebind to
    the transaction snapshot as metadata only, and published package bytes do not change.
 

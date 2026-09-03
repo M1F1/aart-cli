@@ -458,13 +458,13 @@ def build_parser() -> argparse.ArgumentParser:
         _add_json(lifecycle)
         return lifecycle
 
-    _add_lifecycle(
+    p_marketplace_install = _add_lifecycle(
         "install",
         "install configured-source artifacts for the selected harness profiles",
         coordinates="artifact or collection coordinate(s) to install",
         memory_mode=True,
     )
-    _add_lifecycle(
+    p_marketplace_update = _add_lifecycle(
         "update",
         "update installed artifacts against their configured sources",
         coordinates="artifact or collection coordinate(s) to update; omit for all installed",
@@ -488,21 +488,26 @@ def build_parser() -> argparse.ArgumentParser:
         coordinates="artifact or collection coordinate(s) whose setup should run",
         placement=False,
     )
-    p_marketplace_setup.add_argument(
-        "--authorize-untrusted-source",
-        action="store_true",
-        help="authorize setup declared by a source that is not company-reviewed",
-    )
-    p_marketplace_setup.add_argument(
-        "--authorize-custom-entrypoint",
-        action="store_true",
-        help="authorize a setup recipe that declares a non-standard entrypoint",
-    )
-    p_marketplace_setup.add_argument(
-        "--approve-setup-effects",
-        action="store_true",
-        help="approve every reviewed setup effect; without it each effect is declined",
-    )
+
+    def _add_setup_controls(parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            "--authorize-untrusted-source",
+            action="store_true",
+            help="authorize setup declared by a source that is not company-reviewed",
+        )
+        parser.add_argument(
+            "--authorize-custom-entrypoint",
+            action="store_true",
+            help="authorize a setup recipe that declares a non-standard entrypoint",
+        )
+        parser.add_argument(
+            "--approve-setup-effects",
+            action="store_true",
+            help="approve every reviewed setup effect; without it each effect is declined",
+        )
+
+    for setup_capable in (p_marketplace_install, p_marketplace_update, p_marketplace_setup):
+        _add_setup_controls(setup_capable)
 
     # `receipt` lives under `marketplace` rather than under a top-level `setup` group, because
     # `marketplace setup` already owns that word: a second `aart setup` would name two different

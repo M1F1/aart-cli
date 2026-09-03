@@ -1,19 +1,9 @@
-"""The configured seam says which installed artifact is still unconfigured.
+"""Configured setup refusal and usage-report consent remain explicit at both front ends.
 
-B-044's first gate, on the route that does not have it. `tests/configured_setup_gap_test.py`
-characterizes an install that reports success for an artifact whose declared setup never ran; on
-the legacy route the same install at least *names* the setup it did not perform
-(`marketplace_lifecycle_e2e_test.py::DeclaredSetupE2ETest`), so an operator knows there is work
-left. The configured seam emitted no `setup` key and drew no line, so the omission was silent --
-which is worse than not running setup, because nothing points at the outstanding work.
-
-This is what the receipt's object identity (D-122) is first spent on. Setup is declared on the
-package manifest, not on anything the installation plan carries, so saying "this artifact declares
-setup" means going back to the immutable object the installation came from -- which is exactly the
-thing the canonical receipt could not name until it recorded `object_digest`.
-
-Reporting is not performing, and these tests hold that line: the configured file the recipe writes
-is still absent afterwards. What changes is that the absence is now stated rather than hidden.
+The install route now reaches the setup engine, but omitting effect approval at the CLI or choosing
+``n`` in the shell still applies no setup effect and keeps the declaration visible as pending.
+Usage reporting is a second consent boundary: the terminal defaults to no, previews exact redacted
+bytes before a provider is called, and treats provider failure as advisory.
 """
 
 from __future__ import annotations
@@ -21,19 +11,24 @@ from __future__ import annotations
 import datetime as dt
 import os
 import pathlib
+import sys
 import unittest
 from unittest import mock
 
 from agent_artifacts import tui
 from agent_artifacts.application.consumer_ui import ConsumerUiState
 from agent_artifacts.application.consumer_views import ConsumerScreen, ConsumerSession
+from agent_artifacts.configuration.model import ReportingMode
+from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
     SourceAlias,
 )
-from agent_artifacts.domain.result import Ok
+from agent_artifacts.domain.result import Err, Ok
 from agent_artifacts.io.receipt_store import LocalReceiptStore
+from agent_artifacts.reporting.application import ReportingApplicationService
+from agent_artifacts.reporting.model import ReportingDestination, ReportingSubmission
 from agent_artifacts.tui_consumer import run_consumer_shell
 from tests.configured_install_command_e2e_test import _environment
 from tests.configured_installation_draft_e2e_test import AuthoredSetup
@@ -67,8 +62,128 @@ class ConfiguredInstallCommandReportTest(unittest.TestCase):
                     }
                 ],
             )
-            # Still B-044: naming the work is not doing it.
+            # Declining setup remains an explicit, recoverable outcome.
             self.assertFalse((env.project / CONFIGURED).exists())
+
+    def test_usage_reporting_defaults_to_no_on_the_shell_terminal_port(self) -> None:
+        calls: list[bytes] = []
+
+        def opened(plan):
+            calls.append(plan.payload)
+            return Ok(ReportingSubmission("browser-opened"))
+
+        reporting = ReportingApplicationService(
+            ReportingDestination(ReportingMode.PROMPT, "github.com", "org/registry"),
+            opened,
+            lambda _plan: self.fail("automatic provider used in prompt mode"),
+        )
+        with _declaring_setup() as env:
+            with (
+                mock.patch.dict(os.environ, env.xdg, clear=False),
+                mock.patch.object(tui, "load_local_reporting_service", return_value=Ok(reporting)),
+            ):
+                composed = tui._canonical_consumer_actions(
+                    project=str(env.project), user_home=str(env.home), today=TODAY
+                )
+            assert isinstance(composed, Ok)
+            terminal = FakeTerminal(
+                SPACE,
+                ord("i"),
+                ENTER,
+                ENTER,
+                ENTER,
+                ENTER,
+                ord("y"),
+                ENTER,
+            )
+
+            with mock.patch.dict(os.environ, env.xdg, clear=False):
+                finished = run_consumer_shell(
+                    composed.value.source(),
+                    terminal,
+                    state=ConsumerUiState(ConsumerSession(ConsumerScreen.MARKETPLACE)),
+                    action_handler=composed.value,
+                    settings_writer=composed.value.save_settings,
+                )
+
+            self.assertEqual(finished.session.screen, ConsumerScreen.SUCCESS)
+            self.assertEqual(calls, [])
+            self.assertFalse(
+                any(
+                    "Exact redacted usage report payload" in "\n".join(frame)
+                    for frame in terminal.frames
+                )
+            )
+
+    @unittest.skipUnless(
+        sys.platform == "darwin",
+        "the setup engine accepts only darwin recipes (setup.py:562), so applying one elsewhere is "
+        "refused for the platform before the effect this asserts on is reached",
+    )
+    def test_shell_previews_exact_payload_and_reporting_failure_is_advisory(self) -> None:
+        called_at_frame: list[int] = []
+        failure = Err(
+            (
+                Diagnostic(
+                    DiagnosticCode("reporting-provider-failed"),
+                    Severity.ERROR,
+                    "provider unavailable",
+                ),
+            )
+        )
+        with _declaring_setup() as env:
+            terminal = FakeTerminal(
+                SPACE,
+                ord("i"),
+                ENTER,
+                ENTER,
+                ENTER,
+                ENTER,
+                ord("y"),
+                ord("y"),
+                ord("y"),
+            )
+
+            def unavailable(_plan):
+                called_at_frame.append(len(terminal.frames))
+                return failure
+
+            reporting = ReportingApplicationService(
+                ReportingDestination(ReportingMode.PROMPT, "github.com", "org/registry"),
+                unavailable,
+                lambda _plan: self.fail("automatic provider used in prompt mode"),
+            )
+            with (
+                mock.patch.dict(os.environ, env.xdg, clear=False),
+                mock.patch.object(tui, "load_local_reporting_service", return_value=Ok(reporting)),
+            ):
+                composed = tui._canonical_consumer_actions(
+                    project=str(env.project), user_home=str(env.home), today=TODAY
+                )
+            assert isinstance(composed, Ok)
+
+            with mock.patch.dict(os.environ, env.xdg, clear=False):
+                finished = run_consumer_shell(
+                    composed.value.source(),
+                    terminal,
+                    state=ConsumerUiState(ConsumerSession(ConsumerScreen.MARKETPLACE)),
+                    action_handler=composed.value,
+                    settings_writer=composed.value.save_settings,
+                )
+
+            payload_frames = [
+                index
+                for index, frame in enumerate(terminal.frames)
+                if '"report_type":"aart-usage-session"' in "\n".join(frame)
+            ]
+            self.assertTrue(payload_frames)
+            self.assertEqual(len(called_at_frame), 1)
+            self.assertLess(payload_frames[0], called_at_frame[0])
+            self.assertTrue(
+                any("outcome is unchanged" in "\n".join(frame) for frame in terminal.frames)
+            )
+            self.assertEqual(finished.session.screen, ConsumerScreen.SUCCESS)
+            self.assertTrue((env.project / CONFIGURED).exists())
 
     def test_the_named_object_is_the_one_the_receipt_recorded(self) -> None:
         """The report is derived from the durable record, not from what the action believed.
@@ -130,7 +245,7 @@ class ConsumerShellReportTest(unittest.TestCase):
             self.assertIsInstance(composed, Ok, getattr(composed, "diagnostics", ()))
             assert isinstance(composed, Ok)
             handler = composed.value
-            terminal = FakeTerminal(SPACE, ord("i"), ENTER, ENTER, ENTER, ENTER, ord("y"))
+            terminal = FakeTerminal(SPACE, ord("i"), ENTER, ENTER, ENTER, ENTER, ord("n"))
 
             with mock.patch.dict(os.environ, env.xdg, clear=False):
                 finished = run_consumer_shell(

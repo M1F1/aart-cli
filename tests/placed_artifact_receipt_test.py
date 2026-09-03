@@ -105,6 +105,27 @@ class PlacedArtifactReceiptRoundTripTest(unittest.TestCase):
         self.assertIsInstance(parsed, Ok, getattr(parsed, "diagnostics", ()))
         self.assertEqual(parsed.value, receipt)
 
+    def test_a_setup_record_pointer_round_trips_and_defaults_to_unknown(self) -> None:
+        setup_ref = "setup-" + "e" * 48
+
+        current = placed_artifact_receipt_from_data(
+            placed_artifact_receipt_to_data(_receipt(setup_state_ref=setup_ref))
+        )
+        older = placed_artifact_receipt_from_data(placed_artifact_receipt_to_data(_receipt()))
+
+        self.assertIsInstance(current, Ok, getattr(current, "diagnostics", ()))
+        self.assertEqual(current.value.setup_state_ref, setup_ref)
+        self.assertIsInstance(older, Ok, getattr(older, "diagnostics", ()))
+        self.assertIsNone(older.value.setup_state_ref)
+
+    def test_an_invalid_setup_record_pointer_is_refused(self) -> None:
+        data = placed_artifact_receipt_to_data(_receipt())
+        data["setup_state_ref"] = "../outside"
+
+        parsed = placed_artifact_receipt_from_data(data)
+
+        self.assertIsInstance(parsed, Err)
+
     def test_a_record_missing_its_deliveries_is_reported_rather_than_read_as_empty(self) -> None:
         data = placed_artifact_receipt_to_data(_receipt())
         del data["deliveries"]

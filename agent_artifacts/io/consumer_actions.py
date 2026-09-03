@@ -26,6 +26,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
+from typing import Callable, Literal
 
 from agent_artifacts.application.consumer_session import ConsumerMachine, InstalledInspection
 from agent_artifacts.application.consumer_ui import (
@@ -61,6 +62,7 @@ from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.domain.selection import ArtifactRequest, ArtifactSelection, VersionConstraint
 from agent_artifacts.tui_consumer import (
     CanonicalScreenSource,
+    ConsumerActionCompletion,
     ConsumerActionUpdate,
     ConsumerOffers,
     MarketplaceEntry,
@@ -68,6 +70,7 @@ from agent_artifacts.tui_consumer import (
 )
 
 from .configured_installation_action import (
+    CompletedConfiguredInstallation,
     InstallationHost,
     PreparedConfiguredInstallation,
     complete_configured_installation,
@@ -172,6 +175,15 @@ _Pending = (
     | PreparedConfiguredCandidatePromotion
 )
 
+ConfiguredCompletionFactory = Callable[
+    [
+        CompletedConfiguredInstallation,
+        Literal["install", "update"],
+        Callable[[tuple[DeclaredArtifactSetup, ...]], CanonicalScreenSource],
+    ],
+    ConsumerActionCompletion | None,
+]
+
 
 class LocalConsumerActions:
     """One machine's install, update, verify-and-repair and uninstall, behind `handle`.
@@ -182,7 +194,12 @@ class LocalConsumerActions:
     """
 
     def __init__(
-        self, context: ConsumerActionContext, *, now=None, data_root: str | None = None
+        self,
+        context: ConsumerActionContext,
+        *,
+        now=None,
+        data_root: str | None = None,
+        completion_factory: ConfiguredCompletionFactory | None = None,
     ) -> None:
         if not isinstance(context, ConsumerActionContext):
             raise ValueError("consumer actions need a composed action context")
@@ -192,6 +209,7 @@ class LocalConsumerActions:
         self._pending: _Pending | None = None
         self._pending_action: ConsumerActionKind | None = None
         self._data_root = data_root
+        self._completion_factory = completion_factory
 
     # -- preferences --------------------------------------------------------- #
 
@@ -667,7 +685,12 @@ class LocalConsumerActions:
     # -- execution ------------------------------------------------------------ #
 
     def _recorded(
-        self, command: ConsumerUiCommand, recorded_at: str, **views
+        self,
+        command: ConsumerUiCommand,
+        recorded_at: str,
+        *,
+        completion: ConsumerActionCompletion | None = None,
+        **views,
     ) -> ConsumerActionUpdate:
         self._pending, self._pending_action = None, None
         return ConsumerActionUpdate(
@@ -677,6 +700,7 @@ class LocalConsumerActions:
                 action=command.action,
                 text=recorded_at,
             ),
+            completion,
         )
 
     def _failed(self, command: ConsumerUiCommand, notice: tuple[str, ...]) -> ConsumerActionUpdate:
@@ -812,9 +836,20 @@ class LocalConsumerActions:
         self._machine = completed.value.machine
         receipt = completed.value.action.flow.outcome
         assert receipt is not None
+        completion = None
+        if self._completion_factory is not None:
+            completion = self._completion_factory(
+                completed.value,
+                "update" if command.action is ConsumerActionKind.UPDATE else "install",
+                lambda remaining: self.source(
+                    transaction=receipt,
+                    pending_setup=remaining,
+                ),
+            )
         return self._recorded(
             command,
             receipt.recorded_at,
+            completion=completion,
             transaction=receipt,
             pending_setup=completed.value.pending_setup,
         )

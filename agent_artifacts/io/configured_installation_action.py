@@ -196,11 +196,9 @@ class CompletedConfiguredInstallation:
 
     action: CompletedInstallationAction
     machine: ConsumerMachine
-    #: The setup this installation did not perform, read back off the objects it recorded. Placing
-    #: an artifact's files is not always the whole of installing it, and this seam performs none of
-    #: the rest (B-044). Reporting is not performing, but an install that finishes silently on an
-    #: artifact that is still unconfigured leaves nobody anything to act on, so what is outstanding
-    #: travels with what was done and both front ends can say it.
+    #: Setup declarations read back off the objects this action recorded. Placing an artifact's
+    #: files is not always the whole of installing it, so these travel to the separately reviewed
+    #: completion boundary that runs setup and offers the privacy-bounded usage report (D-128).
     pending_setup: tuple[DeclaredArtifactSetup, ...] = ()
 
     def __post_init__(self) -> None:

@@ -86,6 +86,11 @@ from agent_artifacts.io.configured_installation_action import (
     complete_configured_installation,
     prepare_configured_installation,
 )
+from agent_artifacts.io.configured_setup import (
+    ConfiguredSetupService,
+    configured_consumer_completion,
+    configured_installed_setup_completion,
+)
 from agent_artifacts.io.configured_uninstall_action import (
     complete_configured_uninstall,
     prepare_configured_uninstall,
@@ -179,14 +184,28 @@ class _CliReporting:
     warning: str | None = None
 
 
-def _setup_report_states(payload: dict | None) -> tuple[SetupReportState, ...]:
+def _setup_report_states(
+    payload: dict | None, review: ConsumerReview | None = None
+) -> tuple[SetupReportState, ...]:
     """Recover the typed, privacy-bounded setup statuses from this command's own projection."""
 
     if payload is None:
         return ()
     states = []
     for item in payload.get("items", ()):  # populated only after a setup queue was attempted
-        states.append(SetupReportState(item["key"], item["status"]))
+        key = item["key"]
+        if review is not None:
+            matches = tuple(
+                reviewed.key
+                for reviewed in review.items
+                if str(ArtifactCoordinate(reviewed.coordinate.source, reviewed.coordinate.artifact))
+                == item.get("coordinate")
+                and reviewed.profile == item.get("profile")
+                and reviewed.scope == item.get("scope")
+            )
+            if len(matches) == 1:
+                key = matches[0]
+        states.append(SetupReportState(key, item["status"]))
     for failure in payload.get("planning_failures", ()):
         states.append(
             SetupReportState(
@@ -201,7 +220,7 @@ def _setup_report_states(payload: dict | None) -> tuple[SetupReportState, ...]:
 
 def _prepare_cli_reporting(
     request: Request,
-    service: ConsumerApplicationService,
+    service: ConsumerApplicationService | ConfiguredSetupService,
     review: ConsumerReview,
     outcome: ConsumerOutcome,
     setup_payload: dict | None,
@@ -221,7 +240,7 @@ def _prepare_cli_reporting(
             warning="usage reporting is unavailable; the marketplace outcome is unchanged",
         )
     try:
-        states = _setup_report_states(setup_payload)
+        states = _setup_report_states(setup_payload, review)
         event = usage_report_from_consumer(
             review,
             outcome,
@@ -852,7 +871,7 @@ def _setup_payload(queue: ConsumerSetupQueue, outcome=None) -> dict:
 
 def _run_setup_queue(
     request: Request,
-    service: ConsumerApplicationService,
+    service: ConsumerApplicationService | ConfiguredSetupService,
     review: ConsumerReview,
     outcome: ConsumerOutcome,
 ) -> tuple[dict, bool]:
@@ -1183,10 +1202,43 @@ def _configured_lifecycle(
         "receipt": receipt_data,
     }
     lines = render_transaction_success(receipt, PresentationProfile.FAST)
+    setup_payload: dict | None = None
+    reporting: _CliReporting | None = None
+    projected = configured_consumer_completion(
+        completed.value,
+        runtime.loaded.effective,
+        host,
+        action="update" if operation == "marketplace.update" else "install",
+    )
+    if isinstance(projected, Ok):
+        review, outcome, setup_service = projected.value
+        if completed.value.pending_setup:
+            setup_payload, _setup_ok = _run_setup_queue(request, setup_service, review, outcome)
+            payload["setup"] = setup_payload
+            lines += render_setup_payload(setup_payload)
+        reporting = _prepare_cli_reporting(
+            request,
+            setup_service,
+            review,
+            outcome,
+            setup_payload,
+        )
+        reporting_data = _json_reporting_data(reporting) if request.json else None
+        if reporting_data is not None:
+            payload["reporting"] = reporting_data
+    else:
+        lines += (
+            "warning: setup/reporting completion is unavailable; the installed payload is unchanged",
+        )
     # Additive, and absent when there is nothing to say. An install that always carried the key --
     # empty -- would make every artifact look like one that was checked and found to need nothing,
     # which is a stronger claim than this seam makes.
-    if completed.value.pending_setup:
+    setup_complete = (
+        setup_payload is not None
+        and setup_payload.get("incomplete") == 0
+        and not (setup_payload.get("planning_failures"))
+    )
+    if completed.value.pending_setup and not setup_complete:
         payload["pending_setup"] = [
             declared_setup_to_data(item) for item in completed.value.pending_setup
         ]
@@ -1197,6 +1249,8 @@ def _configured_lifecycle(
         payload,
         lines,
     )
+    if not request.json:
+        _render_cli_reporting(reporting)
     return _common.OK if successful else _common.ERROR
 
 
@@ -1543,6 +1597,111 @@ def _configured_status(request: Request, selectors: tuple[ArtifactSelector, ...]
     return _common.OK
 
 
+def _configured_setup(request: Request, selectors: tuple[ArtifactSelector, ...]) -> int | None:
+    """Run setup from canonical receipts without consulting the retiring install-state store."""
+
+    operation = "marketplace.setup"
+    runtime = load_runtime_configuration(request, content_required=True)
+    if isinstance(runtime, Err):
+        return _emit_error(request, runtime, operation)
+    project_root, user_home = resolved_paths(
+        data_root=runtime.value.paths.data_root,
+        project=request.project,
+        user_home=request.user_home,
+    )
+    scope = Scope(request.scope)
+    providers = (MacOsKeychainProvider(),) if sys.platform == "darwin" else ()
+    inspected = read_installed_inspections(
+        state_root=os.path.join(runtime.value.paths.data_root, "state"),
+        harness_root=project_root if scope is Scope.PROJECT else user_home,
+        credential_providers=providers,
+        scope=scope,
+        profiles=tuple(request.profiles),
+    )
+    if isinstance(inspected, Err):
+        return _emit_error(request, inspected, operation)
+    installed = tuple(
+        item.record.coordinate
+        for item in inspected.value.inspections
+        if not selectors
+        or any(_status_matches(selector, item.coordinate) for selector in selectors)
+    )
+    if not installed:
+        return None
+    host = InstallationHost(
+        runtime.value.paths.data_root,
+        project_root,
+        user_home,
+        scope,
+        tuple(request.profiles),
+    )
+    projected = configured_installed_setup_completion(
+        runtime.value.loaded.effective,
+        host,
+        installed,
+        platform=sys.platform,
+        authorize_untrusted_source=request.authorize_untrusted_source,
+        authorize_custom_entrypoint=request.authorize_custom_entrypoint,
+    )
+    if isinstance(projected, Err):
+        return _emit_error(request, projected, operation)
+    review, outcome, service = projected.value
+    review_data = json.loads(canonical_json_bytes(consumer_review_value(review)).decode("utf-8"))
+    queue = service.setup_queue(
+        review,
+        outcome,
+        authorize_untrusted_source=request.authorize_untrusted_source,
+        authorize_custom_entrypoint=request.authorize_custom_entrypoint,
+    )
+    if not request.yes:
+        setup_data = _setup_payload(queue)
+        _emit(
+            request,
+            operation,
+            {
+                "schema_version": 1,
+                "ok": True,
+                "operation": operation,
+                "finalized": False,
+                "review_digest": str(review.review_digest),
+                "review": review_data,
+                "setup": setup_data,
+            },
+            render_consumer_review(review)
+            + tuple(line for plan in queue.plans for line in render_setup_review(plan.legacy_plan))
+            + render_setup_payload(setup_data, planned_effects=False)
+            + ("Reviewed only; re-run with --yes to apply this exact plan.",),
+        )
+        return _common.OK
+    if request.expect is not None and request.expect != str(review.review_digest):
+        refusal = Diagnostic(
+            CONSUMER_REVIEW_MISMATCH,
+            Severity.ERROR,
+            f"the plan changed since it was reviewed: expected {request.expect}, recomputed {review.review_digest}",
+            remediation=("re-read the review, then re-run --expect with its review_digest",),
+        )
+        return _emit_error(request, Err((refusal,)), operation)
+    setup_payload, setup_ok = _run_setup_queue(request, service, review, outcome)
+    payload = {
+        "schema_version": 1,
+        "ok": setup_ok,
+        "operation": operation,
+        "finalized": True,
+        "review_digest": str(review.review_digest),
+        "session_status": outcome.session_status,
+        "setup": setup_payload,
+    }
+    lines = render_setup_payload(setup_payload)
+    reporting = _prepare_cli_reporting(request, service, review, outcome, setup_payload)
+    reporting_data = _json_reporting_data(reporting) if request.json else None
+    if reporting_data is not None:
+        payload["reporting"] = reporting_data
+    _emit(request, operation, payload, lines)
+    if not request.json:
+        _render_cli_reporting(reporting)
+    return _common.OK if setup_ok else _common.ERROR
+
+
 def _lifecycle(request: Request, action: str) -> int:
     operation = f"marketplace.{action}"
     selection = _selection(request, action)
@@ -1562,6 +1721,10 @@ def _lifecycle(request: Request, action: str) -> int:
             return configured
     if action == "status":
         configured = _configured_status(request, selection.value)
+        if configured is not None:
+            return configured
+    if action == "setup":
+        configured = _configured_setup(request, selection.value)
         if configured is not None:
             return configured
     service = load_local_consumer_service(
@@ -1699,10 +1862,10 @@ def _lifecycle(request: Request, action: str) -> int:
         payload["setup"] = setup_payload
         # `LAF-52`: the counts stay, at the end, after the content they used to replace.
         lines += render_setup_payload(setup_payload)
-    # Install and update report the payload transaction they were asked to perform. Their
-    # parsers intentionally carry none of the flags that can authorize a setup queue, so a
-    # planning refusal here is pending follow-up work rather than a retroactive payload failure.
-    # The explicit setup command still owns (and reports) the queue's terminal verdict.
+    # Install and update report the payload transaction they were asked to perform. Setup has its
+    # own separately reviewed effects and consent flags, so declining or failing it does not turn a
+    # successfully placed payload into a failed placement. The explicit setup command owns only
+    # that second operation and therefore reports the queue's terminal verdict as its exit status.
     setup_controls_exit = action == "setup"
     payload["ok"] = outcome.session_status != "failed" and (setup_ok or not setup_controls_exit)
     reporting = _prepare_cli_reporting(

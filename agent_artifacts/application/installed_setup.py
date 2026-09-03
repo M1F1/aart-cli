@@ -8,9 +8,8 @@ go back to the immutable object the installation came from, which is what the re
 `object_digest` was recorded for (D-122).
 
 This module is the reading of that, and only the reading. It performs no setup, decides no trust
-and plans no effect -- those belong to the setup engine, which the configured seam does not yet
-reach (B-044). What it does is let both front ends say which installed artifact is still
-unconfigured, rather than reporting a finished install and staying silent about the rest.
+and plans no effect -- those belong to the setup engine. What it does is carry the declarations
+from the durable installation record to the completion boundary that prepares that engine.
 """
 
 from __future__ import annotations
