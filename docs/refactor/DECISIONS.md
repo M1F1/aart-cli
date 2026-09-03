@@ -2900,3 +2900,30 @@ and was only ever demonstrated for one.
 
 Evidence/links: CP-16 steps 4a, 4b, 4c and 5; `tests/doctor_properties_test.py`; D-091; D-134;
 D-138; D-144.
+
+## D-146 — A cross-stage fixture carries the whole prior result, not a reconstruction
+
+**Context.** Before CP-17, the real Git adapter and every consumer stage had separate E2E evidence,
+but the consumer fixtures rebuilt a source candidate from fixture bytes and `"a" * 40`. That proves
+each stage against a precondition invented by its test, not against the value the preceding stage
+emits. Selected-field assertions have the same weakness: the first scoped mutation run showed that
+the store could replace a candidate's source instance while commit, digest and entries still passed.
+
+**Decision.** Each CP-17 increment passes the complete value returned by the preceding stage into
+the next one and asserts complete equality at the durable readback boundary. Step 1 passes the real
+`SourceCandidate` from `acquire_git_snapshot` through validation and publication unchanged, then
+compares the fresh reader's candidate to it. Local transport is enabled only on this direct adapter
+request; later public-flow steps retain a valid remote identity and substitute the acquisition port,
+never configuration validation or the transport verdict.
+
+**Why.** A chain is evidence only when identity, provenance and payload move together. Reconstructing
+one stage's output at the next seam can preserve the fields the test remembers while silently losing
+the ones it does not. Full value equality killed that exact mutation and also covers immutable-Git
+origin, aliases and executable metadata without duplicating their representation in the test.
+
+**Consequence.** CP-17 fixtures grow by extending one continuous result, not by publishing a new
+hand-built prerequisite at each step. A port may stand in for unavailable network transport, but its
+input and output remain the real production values and every security verdict remains unmodified.
+
+Evidence/links: CP-17 step 1; `tests/git_source_publication_e2e_test.py`; INV-112; INV-115; D-091;
+D-134.

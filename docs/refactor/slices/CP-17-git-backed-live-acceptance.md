@@ -13,7 +13,9 @@ Acceptance tests assert public contracts, not module layout.
 ## Product Specification sections/invariants
 
 Identified per increment. The slice adds no new behavior; it asserts the behavior already accepted
-by CP-02 through CP-16 survives being connected end to end.
+by CP-02 through CP-16 survives being connected end to end. Step 1 begins INV-112 and INV-115: the
+fixture is an ordinary repository with real commits, and the first cross-boundary value is Git's
+actual output rather than a reconstructed candidate.
 
 ## What is already covered, and what this slice is actually for
 
@@ -98,9 +100,11 @@ CP-15 step 8's and CP-16 step 4c's precedent, not quietly dropped.
 
 ## Implementation steps
 
-1. A real Git source repository, cloned by the real adapter, becomes the approved snapshot the
-   source store holds -- the entries `acquire_git_snapshot` returned and the commit `git rev-parse`
-   printed, replacing the `"a" * 40` placeholder.
+1. **DONE.** A real Git source repository, cloned by the real adapter, becomes the managed snapshot
+   the source store holds -- the exact candidate `acquire_git_snapshot` returned and the commit
+   `git rev-parse` printed, replacing the `"a" * 40` placeholder. An unchanged second acquisition
+   converges without another snapshot, an upstream commit becomes current, and a fresh reader
+   returns the complete candidate byte-for-byte.
 2. That snapshot reaches a consumer: a real user configuration naming a real remote host, synced
    through the public verb with the transport port standing in for the network only, then
    marketplace listing and one install whose receipt names the real commit.
@@ -108,6 +112,35 @@ CP-15 step 8's and CP-16 step 4c's precedent, not quietly dropped.
    traceable to the new commit.
 4. Drift, repair, rollback and uninstall over the same live installation.
 5. Collection/bulk install across the same source, and the full-chain assertion in one test.
+
+## Step 1 evidence
+
+`tests/git_source_publication_e2e_test.py` is the first test to pass a candidate returned by the
+system Git adapter directly through native-source validation, atomic publication and a fresh store
+read. It asserts full candidate equality, not just selected fields: source instance, alias, real
+resolved commit, immutable-Git origin, snapshot digest, paths, bytes and executable metadata all
+survive together. The first commit is explicitly not `"a" * 40`.
+
+The correct implementation already composed, so RED was a deliberate mutation at the seam rather
+than an invented production change. Replacing the resolved revision in `CurrentPointer` with
+`"a" * 40` made both scenarios fail; restoring it returned them green. A fresh scoped mutation run
+over `io/source_store.py` produced 669 mutants: 217 killed, 335 outside these two tests and 117
+survivors. Tightening the assertions from truthiness and selected fields to exact booleans and full
+candidate equality killed two additional normal-path mutants. The remaining normal-path differences
+are permission/staging details outside this step, error-branch presentation, or the `source` / `SOURCE`
+case mutation that is equivalent on the case-insensitive test volume; they are not a score and do
+not broaden this slice.
+
+No production code changed. `allow_local_transport=True` appears only on the adapter request in this
+test, exactly where that test-only capability already existed; neither public source synchronization
+nor configuration parsing was widened.
+
+## Quality gates
+
+- Step 1 focused: 25 tests across the new Git-to-store E2E, Git adapter, source store and source
+  acquisition suites are green; ruff format/check and mypy are green.
+- Step 1 full gates: `make quality` is green across all nine gates -- 3,293 tests, one skipped and
+  85.38% branch coverage -- and the separately run `make integration` is green with 323 E2E tests.
 
 ## Blockers
 
@@ -117,9 +150,9 @@ every downstream stage reachable through public commands.
 
 ## Handoff
 
-- Current working state: opening survey done; no code written yet.
-- Exact next action: step 1 -- a real Git repository whose clone becomes the published snapshot,
-  with the commit `git rev-parse` returned carried into the store rather than a placeholder.
+- Current working state: step 1 VERIFIED; no production code changed.
+- Exact next action: step 2 -- public source sync, Marketplace listing and one
+  install over the real Git candidate, with only the network transport substituted.
 - Do not undo: the Git transport allowlist, and the configuration schema's refusal of local Git
   locations behind it. `file://` and local paths are refused on purpose at both layers, and no test
   may widen either to make itself hermetic. Substitute the transport port; never the verdict.

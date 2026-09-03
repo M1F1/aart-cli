@@ -15,7 +15,7 @@ safeguards* -- and that phrase was the slice's whole subject: a safeguard at a s
 the verb an operator actually runs makes of it. All sixteen now carry public-flow evidence, and the
 narrative below is kept as the record of how each one got there.
 
-**CP-16 Global doctor and supportability is IN PROGRESS.** Step 1 adds the public, read-only
+**CP-16 Global doctor and supportability is VERIFIED.** Step 1 adds the public, read-only
 `aart doctor` (D-139): one environment-wide observation of canonical project and user installations
 feeds both the accepted screen-29 health projection and the existing minimal-reconciliation
 planner. Its JSON carries every item, component drift and full repair plans; its human output names
@@ -127,6 +127,16 @@ items, none blocking a mandatory invariant: B-060 (84 unclassified mutation surv
 `_run_repair`) and B-061 (47 in the report composition) are the two worth reading first, then B-062
 (a machine with no credential provider reports no credentials rather than saying it could not look),
 B-052, B-055 and B-059.
+
+**CP-17 Git-backed live acceptance is IN PROGRESS.** Step 1 joins the first previously isolated
+stages. `tests/git_source_publication_e2e_test.py` builds a real repository, resolves it with the
+system Git adapter, validates the exact returned candidate, publishes that candidate without
+reconstructing it, and reads it through a fresh source-store reader. The durable candidate equals
+the adapter candidate including its real commit, immutable-Git origin, paths, bytes and executable
+metadata. A second acquisition of the unmoved repository creates no snapshot; a new upstream commit
+becomes the next current snapshot. No production code or security boundary changed.
+The step is VERIFIED: `make quality` is green across all nine gates with 3,293 tests, one skipped
+and 85.38% branch coverage; the separately run `make integration` is green with 323 E2E tests.
 
 **CP-15 is VERIFIED — all eight steps done.** Step 8 is
 `tests/credential_contract_migration_e2e_test.py`, closing INV-231 and INV-232 and the slice with
@@ -242,35 +252,16 @@ read as "this source is gone" in three places, so one invalid upstream revision 
 
 ## Exact next action
 
-**Implement CP-17 step 1: real Git output becomes the published snapshot.** The slice document is
-`docs/refactor/slices/CP-17-git-backed-live-acceptance.md`, opened with its survey done and no code
-written yet. The next RED belongs to a test that builds a real Git repository, has the real
-`acquire_git_snapshot` clone it, and publishes what came back -- the entries the adapter actually
-returned and the commit `git rev-parse` actually printed -- into the source store, then reads it
-back. `assertNotEqual(head, "a" * 40)` is the point of the test, not decoration.
+**Implement CP-17 step 2: carry the real Git candidate through the public consumer surface.** Use a
+real user configuration naming a valid remote HTTPS hostname, then substitute only the Git
+acquisition port so that its genuine `GitSnapshotRequest` clones the temporary repository. Drive
+`aart source sync`, Marketplace listing and one install; the installed receipt must name the real
+commit produced in step 1. Configuration parsing, source identity, transport policy, publication
+and consumer resolution remain production code.
 
-The opening survey's finding is that every stage of the chain already has E2E coverage and **nothing
-joins them**: every consumer-side fixture publishes its snapshot by hand and records `"a" * 40` as
-the commit, so each stage is proven against a precondition a test synthesized rather than against
-what the previous stage really emits.
-
-Two refusals shape the work and neither may be widened to make a test hermetic. The transport
-allowlist means `aart source sync` cannot clone a local repository: `application/sources.py:285`
-leaves `allow_local_transport` at its default `False` and nothing in the package ever passes `True`.
-Behind it, and stricter, the configuration schema itself refuses a local Git location --
-`parse_user_configuration` runs `git_location_parts` on every non-local source, and `file:///...`
-and `/path/to/repo.git` both return `None`. So a consumer cannot even be *configured* with a local
-Git source.
-
-That fixes step 2's shape rather than blocking it. Source identity -- the `source_instance_id` the
-store is keyed by -- derives from the configured location, so the configuration must name the real
-remote host and the substitution belongs at the transport: the port receives the genuine
-`GitSnapshotRequest` and clones a real local repository instead of reaching the network.
-Configuration parsing, identity, publication and every consumer stage downstream then run unmodified
-against real Git output. Standing in for the network is what a port is for; standing in for the
-allowlist's verdict would be weakening a security boundary to make a test pass.
-
-B-057 belongs before CP-17's later steps and does not expand step 1.
+Do not configure `file://` or a local path and do not set `allow_local_transport` through the public
+flow. Both refusals are security boundaries. B-057 must be resolved before the later promotion /
+publication chain needs those two commands to compose; it does not broaden step 2.
 
 The CP-14 record follows.
 
