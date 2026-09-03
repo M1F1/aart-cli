@@ -41,10 +41,28 @@ the exactness test, whose name claimed source *and* version while only ever omit
 removing the version requirement killed nothing; it now runs both under-specified forms and each
 mutation half kills its own subtest. B-059 records the one survivor left standing.
 
-**Next action: CP-16 step 4.** Make Activity, Receipt, configuration, credential and orphaned-run
-diagnostics reachable from the global report without weakening their existing evidence or undo
-boundaries, triaging B-052 and B-055 only where a mandatory invariant requires it. Then step 5
-closes the slice.
+Step 4a is VERIFIED (D-142). `aart marketplace receipt verify` finds an interrupted run's working
+copy only if the operator already knows which receipt to verify, because the probe filters the run
+root by one receipt's `plan_hash[:16]` -- and being interrupted is usually the reason they stopped
+watching. `aart doctor` is now told nothing and finds it anyway, naming the plan-hash prefix that
+ties it back to its run. `LAF-61` and `LAF-66` are both preserved and both have a mutation proving
+it. B-052 and B-055 were triaged and stay in the backlog: neither is reachable from a global report
+and no mandatory invariant requires either.
+
+The findings were methodological. A phantom-working-copy mutation survived not because a test was
+weak but because a healthy machine leaves through the `FileNotFoundError` branch above the line that
+changed -- an unexecuted mutation measures nothing, which is the mutation-testing counterpart of
+D-138. And the scoped mutmut run then found four gaps the seven manual mutations had not: `readable`
+falsey-but-not-`false` is `null` in JSON, and `continue`/`break` plus `or`/`and` at the loop guards
+cannot be distinguished by a fixture holding a single working copy.
+
+**Next action: CP-16 step 4b.** Make the Activity, Receipt, configuration and credential diagnostics
+reachable from the global report without weakening their existing evidence or undo boundaries.
+INV-192 is the constraint: Doctor may point at a receipt's own `rollback_command` but must not
+synthesize one, and D-133 already makes that field depend on the steps still standing. `Activity`
+has `project_activity` and `render_activity` and is referenced only by the TUI, which is the same
+"capability exists at a seam, no verb reports it" shape as steps 1, 2 and 4a. Then step 5 closes the
+slice.
 
 **CP-15 is VERIFIED — all eight steps done.** Step 8 is
 `tests/credential_contract_migration_e2e_test.py`, closing INV-231 and INV-232 and the slice with

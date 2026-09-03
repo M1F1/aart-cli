@@ -25,6 +25,10 @@ from agent_artifacts.application.offline_readiness import (
     OfflineReadiness,
     offline_readiness_to_data,
 )
+from agent_artifacts.application.orphaned_runs import (
+    orphaned_run_lines,
+    orphaned_runs_to_data,
+)
 from agent_artifacts.application.reconciliation import repair_plan_to_data
 from agent_artifacts.consumer.application import CONSUMER_REVIEW_MISMATCH
 from agent_artifacts.consumer.coordinates import CONSUMER_INVALID, parse_artifact_selector
@@ -40,6 +44,7 @@ from agent_artifacts.io.configured_repair_action import (
 from agent_artifacts.io.consumer_machine import read_installed_inspections
 from agent_artifacts.io.credentials import MacOsKeychainProvider
 from agent_artifacts.io.offline_readiness import read_offline_readiness
+from agent_artifacts.io.orphaned_runs import read_orphaned_runs
 from agent_artifacts.model import Request
 from agent_artifacts.receipt_service import resolved_paths
 from agent_artifacts.tui_consumer import (
@@ -304,6 +309,8 @@ def run(request: Request) -> int:
     )
     if isinstance(offline, Err):
         return _emit_error(request, offline)
+    # The run root is the data root, not the project root: deriving it a second time is `LAF-66`.
+    orphaned = read_orphaned_runs(run_root=runtime.value.paths.data_root)
 
     artifacts = tuple(
         project_installed_artifact(
@@ -336,13 +343,20 @@ def run(request: Request) -> int:
         "items": [_item_data(item) for item in artifacts],
         "repairs": repairs,
         "offline_readiness": offline_readiness_to_data(offline.value),
+        "orphaned_runs": orphaned_runs_to_data(orphaned),
     }
     if request.json:
         print(json.dumps(payload, indent=2))
     else:
         print(
             "\n".join(
-                (*render_doctor(view, PresentationProfile.FAST), "", *_offline_lines(offline.value))
+                (
+                    *render_doctor(view, PresentationProfile.FAST),
+                    "",
+                    *_offline_lines(offline.value),
+                    "",
+                    *orphaned_run_lines(orphaned),
+                )
             )
         )
     return _common.OK if payload["ok"] else _common.ERROR

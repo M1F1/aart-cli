@@ -2793,3 +2793,27 @@ the other.
 
 Evidence/links: CP-16 step 3; `commands/doctor.py`; `io/configured_repair_action.py`; INV-194;
 D-091.
+
+## D-142
+
+A diagnostic that requires the operator to name its subject cannot report the case where the subject
+is unknown, and that is usually the case worth reporting.
+
+`orphan_run_directories` filters the run root by one receipt's `plan_hash[:16]`, so finding an
+interrupted run's working copy required already knowing which run was interrupted. The global report
+sweeps the same root with no plan hash and reports whatever is there, keyed by the prefix each run
+directory's own name encodes so the result still ties back to a receipt.
+
+Two boundaries are preserved rather than widened. `LAF-61`: the sweep reports, names and leaves —
+Doctor deletes nothing, and the human rendering says so. `LAF-66`: the run root is supplied by the
+caller and never derived a second time, because that defect was this exact path composed from the
+project root in one place and the data root in another.
+
+The observation distinguishes "no working copy" from "the run root could not be read", and the
+projection refuses to represent an unreadable root that also lists runs. The general rule for
+diagnostics added to a global report: a surface that can only answer when asked a specific question
+is not the same capability as one that can find the thing unprompted, and the second is what a
+report is for.
+
+Evidence/links: CP-16 step 4a; `application/orphaned_runs.py`; `io/orphaned_runs.py`;
+`setup_verify_probes.py::orphan_run_directories`; CP-15 step 4b; INV-192.

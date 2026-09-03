@@ -54,7 +54,7 @@ score.
 3. **VERIFIED:** add safe repair review and finalize entry points. Re-inspect and re-plan under the same
    precondition discipline as every configured lifecycle action; apply only an explicitly reviewed
    minimal plan.
-4. Make Activity, Receipt, configuration, credential and orphaned-run diagnostics usable from the
+4. **IN PROGRESS (4a done):** make Activity, Receipt, configuration, credential and orphaned-run diagnostics usable from the
    global report without weakening their existing evidence or undo boundaries. Triage B-052 and
    B-055 here only where a mandatory invariant requires it.
 5. Run the full public-flow, negative/property, integration and mutation-adequacy evidence; close
@@ -156,6 +156,88 @@ One survivor is recorded rather than chased: weakening the exactly-one-match gua
 known to be representable. B-059 records it as defensive code of unproven reachability; per D-134 a
 survivor outside the increment's claims is a finding, not a reason to invent a fixture.
 
+### Step 4a — the working copy nobody knew to ask about (D-142)
+
+CP-15 step 4b proved that `aart marketplace receipt verify <coordinate>` names the working copy an
+interrupted run left behind. That claim carries a precondition inside it: the operator must already
+know which receipt to verify. `setup_verify_probes.orphan_run_directories` filters the run root by
+`plan_hash[:16]`, so without a plan hash it answers nothing — and being interrupted is usually the
+reason an operator stopped watching, which makes the one fact they cannot supply the one the
+existing surface requires.
+
+`tests/doctor_orphaned_runs_e2e_test.py` drives `aart doctor`, which is told nothing: no
+coordinate, no receipt, no plan hash. It reports the working copy at the path the engine actually
+created, and names the plan-hash prefix that ties it back to its run, cross-checked against the
+receipt's own `plan_hash`. A machine with no interrupted run reports none, which is what stops the
+finding from being consistent with reporting one unconditionally.
+
+Every scenario runs CP-15 step 4b's real failing custom entrypoint — `apply` exits non-zero,
+`rollback` then also exits non-zero, the one path in `_custom_apply` that raises without removing
+its run directory — so the directory asserted on is one the engine really created and really failed
+to clean up. Patching cleanup away would produce the same directory and prove nothing about when
+one is actually left.
+
+`LAF-61` governs what Doctor may then do about it. The report names the working copy and leaves it:
+one test compares the directory's contents before and after and asserts the human rendering says
+AART does not delete them. An inspection that tidies away its own evidence is worse than none,
+because the second operator finds a clean machine and no reason to doubt it.
+
+`LAF-66` governs where it looks. That defect was one path composed in two places that disagreed —
+the probe from the project root, the engine from the data root — so the claim answered `true` in
+every scope without ever looking where runs are made. `read_orphaned_runs` takes the run root from
+its caller for the same reason `orphan_run_directories` now does, and the E2E test asserts the
+*identity* of the directory reported rather than merely that some path was.
+
+"Nothing is there" and "we could not look" are kept apart, which is step 2's subject applied to a
+different observation: an unreadable run root reports `readable: false` with no working copies, and
+the projection refuses to construct an unreadable observation that also lists runs. An operator told
+there are no leftovers stops looking for them.
+
+Seven mutations, each red only where it belongs: the sweep never finding anything (3 tests); an
+unreadable run root reported as empty (1); `LAF-66` reintroduced by taking the run root from the
+project instead of the data root (4); `LAF-61` broken by having the report delete what it found (1);
+the whole directory name reported in place of the plan-hash prefix (1); a phantom working copy
+reported where the run root never existed (1); and that same absence reported as unknown (1). The
+last two exist because the baseline test asserts an absence, which D-138 says is evidence only where
+the fixture could have produced the thing — and both halves of what it claims, *not a phantom* and
+*not merely unknown*, needed their own mutation.
+
+**The finding is methodological.** The first attempt at that phantom mutation survived, and it was
+not a weak test: it mutated the line reached when the run root exists, while a healthy machine has
+never created one and leaves through the `FileNotFoundError` branch above it. The mutation was never
+executed, so its survival measured nothing. A survivor is a finding only once the scenario is shown
+to run the line that changed; otherwise it is noise that looks exactly like a gap. This is the
+mutation-testing counterpart of D-138 — there an absence was asserted where nothing could have been
+present, here a mutation was read as surviving where nothing could have executed it.
+
+A fresh scoped `make mutants ONLY=agent_artifacts/io/orphaned_runs.py
+TESTS="tests/doctor_orphaned_runs_e2e_test.py"` produced 43 mutants and found four real gaps that
+the seven manual mutations had not, which is exactly the division of labour D-134 describes: the
+targeted mutation proves the claim you made is load-bearing, the scoped run finds claims nobody
+thought to make.
+
+- `readable=False` becoming `readable=None` survived. `None` is falsey, so `assertFalse` passed --
+  but in JSON the difference is `false` against `null`, and a consumer testing for `false` stops
+  seeing the case. The projection now refuses a non-boolean and the test asserts `is False`.
+- `continue` becoming `break` survived at both loop guards, and `or` becoming `and` survived at the
+  second. One working copy alone cannot tell those apart: with `break`, anything sorting before the
+  real directory hides it entirely. A stray file and a dashless directory, both named in all-zero
+  hexadecimal so they sort ahead of any real plan-hash prefix, now sit beside the working copy; all
+  three mutants turn that test red.
+
+The run went from 36/43 to 40/43. The three that remain are classified rather than chased. Two
+change `readable=False` in the `if not run_root:` guard, which no scenario executes because the run
+root is always the data root -- the same unexecuted-line trap the phantom mutation fell into above,
+and confirmed here by locating which of the two occurrences each mutant sits on rather than assuming.
+The third replaces `partition("-")` with `rpartition("-")`, which is equivalent for every real run
+directory: `tempfile.mkdtemp` draws its suffix from `abcdefghijklmnopqrstuvwxyz0123456789_`, so the
+name has exactly one dash. That is a checked property of the naming, not a guess.
+
+**Triage of the two backlog items this step names.** B-052 needs a public driver for interactive
+per-effect consent, which is a CLI capability rather than a Doctor one, and B-055 concerns the
+marketplace graph rather than the installed machine. Neither is reachable from a global report and
+no mandatory invariant requires either, so both stay in the backlog rather than expanding the slice.
+
 ## Quality gates
 
 - Baseline before CP-16: `make quality` green (3,237 tests, 1 skipped, 85.32% branch coverage) and
@@ -173,12 +255,19 @@ survivor outside the increment's claims is a finding, not a reason to invent a f
   coverage -- and `make integration` separately green with 287 E2E tests.
 - Step 3 focused: eight repair E2E tests (ten including subtests) green; five targeted mutations each red only where claimed.
 - Step 3 full gates: the first run failed on `source_remediation_test`'s repository-wide rule that every command string the package shows an operator must be one the parser accepts. The no-match remediation read `run aart doctor and choose one exact installed coordinate`, and the scanner's bare-command pattern runs to the first comma or semicolon, so it extracted the whole sentence as the command. Reworded to `run aart doctor, then pass one exact installed coordinate to --repair`, which leaves `aart doctor` as the runnable part. Worth recording because no focused run could have caught it: the rule lives in a test that scans every module, and the eight repair E2E tests were green throughout.
+- Step 3 verified: `make quality` green across all nine gates -- 3,259 tests, 1 skipped, 85.37%
+  branch coverage -- with the integration gate skipped as redundant because all 295 of its tests
+  are among the 3,259 the unit gate runs.
+- Step 4a focused: seven orphaned-run E2E tests green; seven targeted mutations each red only
+  where claimed; ruff, format and mypy green over the four changed files. Fresh scoped
+  mutation: 43 mutants, 40 killed, three reviewed survivors (two on an unexecuted guard, one
+  equivalent under the run directory's naming).
 
 ## Remaining
 
-Steps 4–5 above. Doctor now reviews and applies one explicitly confirmed minimal plan; the
-remaining work is making Activity, Receipt, configuration, credential and orphaned-run diagnostics
-reachable from the global report.
+Step 4b and step 5. Doctor now reviews and applies one explicitly confirmed minimal plan, and step
+4a made the orphaned-run diagnostic reachable from the global report without a receipt to name. The
+Activity, Receipt, configuration and credential diagnostics remain.
 
 ## Known compromises
 
@@ -194,7 +283,7 @@ reachable from the global report.
 
 ## Blockers
 
-None for step 4.
+None for step 4b.
 
 ## Legacy removal criteria
 
