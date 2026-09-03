@@ -15,7 +15,28 @@ carry the same three words in their evidence column -- *scattered source/registr
 safeguards* -- and that phrase is the slice's whole subject. A safeguard at a seam is worth what
 the verb an operator actually runs makes of it.
 
-**Steps 1, 2, 3, 4a and 4b are done.** Step 4b is `tests/interrupted_execution_e2e_test.py`: a real
+**Steps 1, 2, 3, 4a, 4b and 5 are done.** Step 5 is
+`tests/withdrawal_and_purge_e2e_test.py`, and 165.10's two statements needed measuring separately.
+The purge half passed on shipped code and the reason is the strongest one available: there is no
+`purge` verb anywhere in `agent_artifacts` -- the word does not appear -- and the registry lifecycle
+only deprecates and revokes. So what the file measures is the *ordinary* withdrawal: an upstream
+that deletes an artifact and re-points its Collection, then `aart source sync`. The artifact stops
+being offered, installing it is refused with a remediation, **what is already installed is untouched
+and reports `removed-upstream`**, the payload bytes stay in the object store, and `uninstall` still
+works -- the last held by a deliberate special case, since uninstall resolves against the manifest
+and never through the source.
+
+The erasure half was red. The `embedded-credential` remediation said "remove the value, rotate it if
+real", which names rotation but implies removing is what finishes the job; for content published
+from a version-controlled source that is false in the way that costs the most. It now states the
+Git-history non-guarantee and names the repository's own secret-removal procedure as still owed.
+The ruleset label stays `baseline-v1.1` (D-135) because the digest already carries the change.
+INV-221 and INV-222 both move to EVIDENCED. The scoped `make mutants` run over
+`security/baseline.py` found its first real gap -- the assignment credential detector decided
+nothing in any test -- and `security_baseline_test` gained the case that closes it. B-055 records
+the unreachable `ArtifactLifecycle.REMOVED` merge path.
+
+**Steps 1, 2, 3, 4a and 4b before it.** Step 4b is `tests/interrupted_execution_e2e_test.py`: a real
 custom entrypoint whose apply fails and whose rollback then also fails, which is the one path that
 raises without removing its run directory. So the working copy it asserts on is one the engine
 really failed to clean up. `receipt verify` finds it, names the directory the engine actually
@@ -60,14 +81,17 @@ read as "this source is gone" in three places, so one invalid upstream revision 
 
 ## Exact next action
 
-**Continue CP-15 with step 5 of `slices/CP-15-edge-case-hardening.md`**: purge boundaries and the
-erasure claim AART must not make (INV-221, INV-222). Two Product Specification statements, and the
-second is the harder one. 165.10: *"normal registry lifecycle uses deprecation, revocation and
-hiding from new installs rather than physical deletion"* — so a maintainer removing an artifact must
-get the lifecycle transition, and physical purge must be the exceptional, explicitly-chosen path.
-And: *"removing the current payload does not guarantee removal from Git history"* — so AART must not
-tell anyone a purge erased something when the object is still reachable in the repository it was
-published from.
+**Continue CP-15 with step 6 of `slices/CP-15-edge-case-hardening.md`**: policy drift in installed
+health, and development installs kept visibly distinct (INV-233, INV-237). Both are greenfield --
+no test file matches `collection.*drift` or `manual.*drift`, and nothing anywhere measures INV-237.
+The scenario map records the shape of the first: `EffectivePolicy` is read at validation time
+(D-099), so a policy that changes *after* an install is not consulted when installed-artifact health
+is computed, and the question is what `aart marketplace status` should say about an artifact that
+would no longer be installable under the policy now in force. Start by finding whether it says
+anything at all. The second half is about whether a development install -- one whose payload is a
+working tree rather than a resolved snapshot -- is distinguishable from a normal one in every place
+a person is told what is installed. Follow the shape of steps 1-5: name the verb, drive it over a
+real temporary machine, and record the mutation each claim was proven against.
 
 This is greenfield, not re-characterization: the coverage sweep found **no test file anywhere
 matching `purge`**. Start by finding what the verb actually is — whether purge exists as a command,

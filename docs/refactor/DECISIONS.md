@@ -2617,3 +2617,19 @@ the Product Specification first instead of hiding the change here.
   findings: one inside the current slice's claims is a test that does not hold what its name says,
   one outside them is a backlog note (B-054 records that no module has a trustworthy baseline yet).
   Never weaken a test to change the figure.
+
+## D-135 — A remediation reworded does not bump the ruleset revision label
+
+- **Context:** CP-15 step 5 changed the `embedded-credential` rule's remediation text so it carries
+  165.10's Git-history statement. `_RULESET_REVISION` is commented "bumped when the rules or their
+  reach change", and it currently reads `baseline-v1.1`.
+- **Decision:** keep the label at `baseline-v1.1`.
+- **Why:** the remediation string is already inside `BASELINE_RULES_DIGEST`, so every assessment
+  recorded under the old wording is reported stale by the mechanism that exists for exactly that —
+  the staleness guarantee needs no label change to work. What the label is *for* is telling a reader
+  which detection ruleset produced a finding, and it is quoted as such in `compatibility-v14/15/18`
+  and the v2.5.0 release notes. Nothing about what the scanner detects changed here. Bumping it
+  would announce a detection change to those published documents that did not happen, and would
+  require editing them to stay true.
+- **Consequence:** the label moves when the rules or their reach move; the digest moves whenever any
+  rule's text does, which is the finer-grained guarantee and the one staleness is computed from.

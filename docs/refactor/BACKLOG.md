@@ -1274,3 +1274,35 @@ module the critical path is about to change — `setup_runtime.py` and `installa
 are the two with the most behaviour and the least direct unit coverage.
 
 Evidence/links: D-134; `scripts/mutants.py`; `make mutants`.
+
+**Addendum (CP-15 step 5).** The third scoped run — `security/baseline.py` against the three test
+files nearest it — was the first to pay for itself: 1218 mutants, 335 survivors, and one of them was
+a real gap that a test now closes (the assignment credential detector, see the slice document).
+Three others in the same function are worth a look when someone next touches it and are recorded
+here rather than acted on: `entry.kind is not FILE and not _text_like(entry)` in place of `or`
+(nothing distinguishes them, so no fixture pairs a real file with an unreadable suffix);
+`_finding(reason, path=None)` and `_finding(reason)` on the decode-failure path (the
+`text-decode-failed` test asserts the rule fires but never which file it names); and `break` in
+place of `continue` there (no fixture has two undecodable files). All three are about the skipped
+branch, which is the part of the scanner that decides what it did *not* look at.
+
+## B-055 — `ArtifactLifecycle.REMOVED` is unreachable in production
+
+`compiler/graph.py:641` marks a withdrawn artifact `REMOVED` rather than dropping it, but only when
+`compile_marketplace_graph` is given `previous=`, and none of the three production callers passes it
+(`io/configured_offers.py:257`, `consumer/runtime.py:810`, `consumer/runtime.py:919`). So in a real
+machine a withdrawn artifact is simply absent from the recompiled graph, `marketplace/catalog.py`'s
+three `REMOVED` filters never see one, and there is no `--include-removed` flag to ask for the
+history either.
+
+This is dead machinery, not a defect: CP-15 step 5 measured the withdrawal end to end and every
+claim 165.10 makes holds without it. But it means the graph carries a lifecycle vocabulary nothing
+populates, which is the kind of thing a future change will read as load-bearing. Either wire the
+previous graph in and give operators a way to see what a source withdrew — which is the useful
+version, and would let `marketplace list` explain an absence rather than just having one — or delete
+the merge path and the enum member together.
+
+Noncritical: no invariant needs it, and the two that cover withdrawal (INV-221, INV-222) are
+EVIDENCED without it.
+
+Evidence/links: `tests/withdrawal_and_purge_e2e_test.py`; CP-15 step 5; `compiler/graph.py:49,641`.

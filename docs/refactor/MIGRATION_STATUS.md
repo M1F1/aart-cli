@@ -348,6 +348,34 @@ Acceptance is `tests/configured_setup_gap_test.py::ConfiguredReceiptVerbsTest`, 
 through the public command and drives all three verbs over what that install recorded, with no
 fixture standing in for any part of the chain.
 
+## AART says what removing a leaked credential does not do (CP-15 step 5, D-135)
+
+Product Specification 165.10 requires two things and CP-15 step 5 measured them apart.
+
+The purge boundary held on shipped code, in the strongest available form: there is no `purge` verb
+anywhere in `agent_artifacts`, and the registry lifecycle only deprecates and revokes. So
+`tests/withdrawal_and_purge_e2e_test.py` measures the ordinary case instead -- a real upstream that
+deletes an artifact and re-points its Collection, then `aart source sync`. The artifact stops being
+offered and installing it is refused with a remediation; what is already installed is byte-identical
+and reports `removed-upstream`; the payload stays in the content-addressed store; and `uninstall`
+still works, so not-deleting never becomes not-removable.
+
+The erasure claim did not hold. The `embedded-credential` finding -- the only place AART tells
+anyone a credential is sitting in artifact content -- said "remove the value, rotate it if real",
+which by saying "remove" with no caveat implies removing is what closes the leak. Artifact content
+is published from a version-controlled source, so it is not. The remediation now states that
+removing the current payload does not guarantee removal from Git history and names the repository's
+own secret-removal procedure as still owed. The ruleset revision label stays `baseline-v1.1`
+(D-135): the remediation is inside `BASELINE_RULES_DIGEST`, so recorded evidence goes stale on its
+own, and the label is quoted in published compatibility documents as naming a *detection* ruleset
+that did not change.
+
+INV-221 and INV-222 both move from PARTIAL to EVIDENCED. Six targeted mutations, one per claim
+group. The scoped `make mutants` run over `security/baseline.py` returned its first finding worth
+acting on -- the assignment credential detector decided nothing in any test, because every fixture
+also carried a vendor-shaped token -- and `security_baseline_test` gained the prose case that
+isolates it. B-055 records the `ArtifactLifecycle.REMOVED` merge path no production caller reaches.
+
 ## Update rule
 
 Never mark a slice beyond the strongest evidence actually present.

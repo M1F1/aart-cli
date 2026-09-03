@@ -44,7 +44,7 @@ temporary machine, and (c) records which mutation it was proven against.
 | Registry unavailable / offline | INV-223, 165.11 | `--offline` installs from cached objects | Online-but-unreachable was a hard failure with an internal message. **Closed by increment 1 (D-132).** The three-way decomposition is **held and measured by increment 3**; what remains is *reporting* it before an install is attempted (B-051). |
 | Registry rollback preserves history | INV-216 | promotion audit chain walks backwards from the approved snapshot (D-104) | **Closed for the consumer half by increment 2.** The Git revert/commit half waits on CP-17 |
 | Provenance is not rewritten when upstream moves | INV-219 | typed Git/local audit pins (D-107) | **Closed by increment 2**, on both sides: the installation record, and the promotion audit under D-089's rebinding |
-| Physical purge is exceptional | INV-221, INV-222 | none found: no test file matches `purge` | Whole scenario unmeasured |
+| Physical purge is exceptional | INV-221, INV-222 | none found: no test file matches `purge` | **Closed by increment 5.** No purge verb exists at all; what needed measuring was the ordinary withdrawal, and the erasure sentence 165.10 requires was missing (D-135) |
 | Interrupted operations re-inspect before resume | INV-226 | CP-12 executor replans under lease; `receipt verify` carries a `no-orphan-run-directory` claim (`LAF-61`) | **Closed by increment 4b**, over a working copy the engine really failed to remove |
 | Input/credential contract changes | INV-231, INV-232 | CP-08 credential lifecycle | No test that changing one artifact's contract leaves another's credential owned |
 | Policy drift contributes to health | INV-233 | `EffectivePolicy` is read at validation time (D-099) | Installed-artifact health does not consult current policy |
@@ -64,7 +64,7 @@ temporary machine, and (c) records which mutation it was proven against.
      165.12, 165.13).
    - **4b DONE:** interrupted execution -- discoverable, and re-inspected before resume
      (INV-226; 165.14).
-5. Purge boundaries and the erasure claim AART must not make (INV-221, INV-222).
+5. **DONE:** Purge boundaries and the erasure claim AART must not make (INV-221, INV-222).
 6. Policy drift in installed health, and development installs kept visibly distinct
    (INV-233, INV-237).
 7. Promotion evidence, audit and the local-promotion-is-not-publication boundary
@@ -263,3 +263,82 @@ removing the run directory on the failing path, killed nothing and is worth reco
 directory is the one the tests see. The claim that verify does not delete the evidence has no
 available mutation -- nothing in the code deletes it -- and rests on its siblings, which move the
 same directory through the same reader.
+
+### Step 5 — what a withdrawal does, and the erasure claim AART must not make (INV-221, INV-222)
+
+`tests/withdrawal_and_purge_e2e_test.py`. Product Specification 165.10 makes two statements that
+pull in opposite directions, so the file has two halves and they were measured separately.
+
+**The first half is characterization and it passed on shipped code.** There is no `purge` verb
+anywhere in `agent_artifacts` — the word does not appear — and the registry lifecycle offers only
+`deprecate_registry_version` and `revoke_registry_version`, both of which `replace()` state and
+delete nothing. So "physical purge is exceptional" is held in the strongest available form, and what
+needed measuring was the *ordinary* path: what a real upstream withdrawal does to a real machine.
+
+The upstream deletes the artifact and re-points its Collection at the one that remains, which is what
+a maintainer withdrawing one artifact would actually publish; the withdrawal has to be coherent to
+be measured at all, because deleting the artifact alone leaves the graph invalid and emptying the
+Collection is refused for its own reason, and both refusals arrive before any of these questions is
+reached. Then `aart source sync`, and five claims:
+
+- the artifact stops being offered by `aart marketplace list`, and the source keeps serving the rest;
+- installing it is refused as `artifact-not-found` with a remediation on it, rather than as a crash;
+- **what is already installed is not touched** — the placed files are byte-identical and
+  `aart marketplace status` says `removed-upstream`, which is the honest word: not `current`, and
+  not `broken`. A registry that could uninstall by publishing would be a registry that reaches into
+  a project without a plan, which is the boundary INV-210 draws;
+- the payload bytes stay in the content-addressed object store, which is what keeps that
+  installation whole;
+- and `aart marketplace uninstall` still works, because not-deleting must not become
+  not-removable — withdrawal cannot be a way to pin something on a machine permanently. This one is
+  held by a deliberate special case: uninstall resolves against the manifest and never through the
+  source, with `commands/marketplace.py` saying so in its own comment.
+
+**The second half was red, and 165.10 is why.** The one place AART tells anyone a credential is
+sitting in artifact content is the `embedded-credential` baseline finding, and its remediation read
+*"Remove the value, rotate it if real, and use runtime credential indirection."* That names rotation
+and, by saying "remove" with no caveat, implies removing is what finishes the job. Artifact content
+is published from a version-controlled source: removing the literal changes what is current and
+leaves the object reachable in history. The sentence now says so, and names the repository's own
+secret-removal procedure as still owed. Asserted over a real scan rather than over the rule table,
+because the rule table is not what anybody reads — the finding on an assessment is, and
+`tui_marketplace` renders its remediation verbatim under `remediation`.
+
+The ruleset revision label stays `baseline-v1.1` (D-135): the remediation is inside
+`BASELINE_RULES_DIGEST`, so recorded evidence goes stale on its own, and bumping the label would
+signal a detection change to the published compatibility documents that did not happen.
+
+Proven against six mutations, each killing the claims it should and no others: reverting the
+remediation turns the two erasure tests red; reporting `REMOVED_UPSTREAM` as `CURRENT` turns the
+status test red; dropping the artifact half of `_current_item`'s coordinate match turns it red the
+other way; making `sync` keep the snapshot it already has turns three red (offered, refused,
+status); purging the object store on sync turns the retention test red; and making uninstall resolve
+through the catalog like every other verb turns the uninstall test red — one test each, which is
+what says the special case is load-bearing.
+
+Two findings worth recording. The object-store mutation **survived** on the first attempt and the
+reason is a product property, not a weak test: the content-addressed store is written read-only, so
+a plain `shutil.rmtree(..., ignore_errors=True)` deletes nothing and reports nothing. The mutation
+had to `chmod` first to be a mutation at all. And the claim that the finding does not echo the
+credential it reports has no available mutation — the remediation is a static string that never sees
+the matched value — so it is a guard held by construction rather than evidence, and is recorded as
+such.
+
+B-055 records the unreachable `ArtifactLifecycle.REMOVED` merge path found while writing this.
+
+`make mutants ONLY=agent_artifacts/security/baseline.py` was run over this module with the three
+test files nearest it, per D-134: 1218 mutants, 335 survivors. The count means nothing on its own
+(B-054), but one survivor did. Replacing the assignment-detector's result with `None` —
+
+```python
+        if not detected:
+            detected = None       # was: any(not _placeholder(m.group(2)) for m in ...)
+```
+
+— changed nothing anywhere. `_SECRET_PREFIX` recognises the vendors whose tokens have a shape, and
+every fixture in the suite happened to carry one, so the rule that catches *everything else* — a
+long value next to a key named `password`, `secret`, `token`, `api_key` — was never the thing that
+decided. `security_baseline_test` gained the case that isolates it, in prose rather than JSON,
+because `_json_findings` raises the same rule for a credential member and a `.json` fixture passes
+with the assignment branch deleted outright. That test is the mutant's only killer. The remaining
+survivors are outside this slice's claims and stay under B-054.
