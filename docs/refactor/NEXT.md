@@ -15,7 +15,15 @@ carry the same three words in their evidence column -- *scattered source/registr
 safeguards* -- and that phrase is the slice's whole subject. A safeguard at a seam is worth what
 the verb an operator actually runs makes of it.
 
-**Steps 1 and 2 are done.** Step 2 is `tests/source_upstream_movement_e2e_test.py` plus one
+**Steps 1, 2 and 3 are done.** Step 3 is `tests/offline_capability_test.py`: Product Specification
+165.11 decomposes offline installability into metadata cached / canonical payload cached / runtime
+dependencies cached, and AART holds all three as separate refusals under distinct codes even though
+`--offline` is one boolean. The dependency layer had no test at all before this, so removing
+`--no-index`/`--offline` from the installer argv would have left every gate green while every
+`--offline` install silently reached the network. INV-223 stays PARTIAL against a named gap: nothing
+*reports* the three before an install is attempted (B-051, for CP-16's `aart doctor`).
+
+Step 2 is `tests/source_upstream_movement_e2e_test.py` plus one
 promotion-planning claim: a moving upstream may offer new work and may not rewrite what an
 installation says it was installed from, and D-089's rebinding of an already-approved record is
 pinned to `registry_snapshot` alone with the promotion audit byte-identical. INV-219 moves to
@@ -31,14 +39,25 @@ read as "this source is gone" in three places, so one invalid upstream revision 
 
 ## Exact next action
 
-**Continue CP-15 with step 3 of `slices/CP-15-edge-case-hardening.md`**: the offline decomposition
-(INV-223). Product Specification 165.11 names three separate capabilities -- metadata cached,
-canonical payload cached, runtime dependencies cached -- and says a locally available payload does
-not imply that package-manager dependencies can be installed offline. Nothing today distinguishes
-them: `--offline` is one boolean, and step 1 measured that it succeeds against a source whose origin
-is unreachable without ever saying which of the three it actually has.
+**Continue CP-15 with step 4 of `slices/CP-15-edge-case-hardening.md`**: verification failure and
+partial/interrupted execution through the public verbs (INV-224, INV-225, INV-226). Two Product
+Specification statements carry it. 165.12: successful effects followed by *failed verification* are
+not reported as clean success -- so an install that placed its bytes and then failed to verify them
+must not exit 0 and must not leave a record claiming a verified installation. And 165.13: AART does
+not claim transaction atomicity beyond actual effect guarantees -- so a run interrupted midway must
+say what it actually did rather than implying an all-or-nothing rollback it never performed, and
+INV-226's re-inspection before resume is the other half of the same claim.
 
-The shape steps 1 and 2 established is the one to repeat -- name the verb an operator runs, drive it
+The evidence that exists is at the seam: CP-12's executor replans under lease, which is the
+machinery. What is missing is a public flow -- no test anywhere drives a verb through an
+interruption, and none asserts that a post-effect verification failure is distinguishable in the
+exit code, the rendering and the persisted record from both a clean success and a plan that never
+ran. Start by reading how the setup engine records step outcomes (`setup_engine/application.py`,
+`_previous_record`) and how `setup_receipt.py` reads one back from outside a run: an interrupted run
+that re-inspects before resuming is exactly a run reading its own previous record, so the read path
+is already there and the question is what the public verbs make of it.
+
+The shape steps 1-3 established is the one to repeat -- name the verb an operator runs, drive it
 over a real temporary machine, and prove each test red against a real mutation of the code it names,
 not against a broken fixture. Where a test is a guard with no mutation available, say so in its
 docstring and rest its non-vacuousness on a sibling that moves the same values.

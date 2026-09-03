@@ -1195,3 +1195,31 @@ not be reused.
 
 Evidence/links: D-132; `agent_artifacts/commands/source.py` `_health`;
 `tests/source_cli_command_test.py`; `tests/source_sync_command_e2e_test.py`.
+
+## B-051 — The three offline capabilities are refusable but not reportable
+
+Found closing INV-223 in CP-15 step 3. Product Specification 165.11 shows the decomposition as
+something an operator *reads*:
+
+```text
+metadata cached
+canonical payload cached
+runtime dependencies cached
+```
+
+AART implements all three and distinguishes all three, but only at the moment one of them fails:
+`source-not-synchronized` names a cold cache, `install-object-unavailable` says "while offline",
+and the dependency layer denies the installer an index and reports whatever it says. Nothing
+answers "is this artifact installable offline" before an install is attempted, so the three lines
+above have no producer.
+
+Noncritical because the invariant's prohibition -- the capabilities must not be conflated -- is now
+held and tested (`tests/offline_capability_test.py`), and nothing depends on the display. It is
+recorded here rather than added to CP-15 because it is an inspection surface rather than an
+edge-case behaviour, which is what CP-16 (`aart doctor` as environment-wide inspection with
+machine-complete JSON) exists to build. Whoever opens CP-16 should read this item first.
+
+Evidence/links: INV-223; `docs/product-specification/PRODUCT_SPECIFICATION.md` 165.11;
+`agent_artifacts/marketplace/catalog.py` `_resolution_failure`;
+`agent_artifacts/installation/application.py` `INSTALL_OBJECT_UNAVAILABLE`;
+`agent_artifacts/io/python_runtime.py` `_install_argv`; `tests/offline_capability_test.py`.

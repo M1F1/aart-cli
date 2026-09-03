@@ -41,7 +41,7 @@ temporary machine, and (c) records which mutation it was proven against.
 |---|---|---|---|
 | Source publishes an invalid revision | INV-218 | `source_store_adapter_test` (corrupt convergent snapshot never becomes current); `source_sync_application_test` (validation failure publishes nothing) | Both drive the seam. Nothing drove `aart source sync`. **Closed by increment 1.** |
 | Registry change must not silently mutate installations | INV-210 | `canonical_lifecycle_test` covers a source that is missing, disabled or has moved origin | The state a refused sync actually leaves — `could-not-check` — was untested, and was being read as "source gone". **Closed by increment 1 (D-132).** |
-| Registry unavailable / offline | INV-223, 165.11 | `--offline` installs from cached objects | Online-but-unreachable was a hard failure with an internal message. **Closed by increment 1 (D-132).** The three-way decomposition (metadata / payload / runtime deps) is not yet distinguished anywhere. |
+| Registry unavailable / offline | INV-223, 165.11 | `--offline` installs from cached objects | Online-but-unreachable was a hard failure with an internal message. **Closed by increment 1 (D-132).** The three-way decomposition is **held and measured by increment 3**; what remains is *reporting* it before an install is attempted (B-051). |
 | Registry rollback preserves history | INV-216 | promotion audit chain walks backwards from the approved snapshot (D-104) | **Closed for the consumer half by increment 2.** The Git revert/commit half waits on CP-17 |
 | Provenance is not rewritten when upstream moves | INV-219 | typed Git/local audit pins (D-107) | **Closed by increment 2**, on both sides: the installation record, and the promotion audit under D-089's rebinding |
 | Physical purge is exceptional | INV-221, INV-222 | none found: no test file matches `purge` | Whole scenario unmeasured |
@@ -57,8 +57,8 @@ temporary machine, and (c) records which mutation it was proven against.
 
 1. **DONE:** Registry state safety through the public source verb (INV-218, INV-210, 165.11).
 2. **DONE:** Rollback and provenance under a moving upstream (INV-216, INV-219; INV-229 was already EVIDENCED by D-094).
-3. Offline decomposition: metadata, payload and runtime dependencies as separate capabilities
-   (INV-223).
+3. **DONE:** Offline decomposition: metadata, payload and runtime dependencies as separate
+   capabilities (INV-223).
 4. Verification failure and partial/interrupted execution through the public verbs (INV-224–226).
 5. Purge boundaries and the erasure claim AART must not make (INV-221, INV-222).
 6. Policy drift in installed health, and development installs kept visibly distinct
@@ -143,3 +143,42 @@ turns the promotion test red, and it is the only one of that file's sixteen test
 The first end-to-end test is a guard rather than a regression -- nothing on the sync path writes
 install state today -- and its docstring says so, resting its non-vacuousness on the sibling that
 changes the same fields through the same comparison.
+
+### Step 3 — offline installability is three capabilities, not one flag (INV-223)
+
+Product Specification 165.11 decomposes offline installability into *metadata cached*, *canonical
+payload cached* and *runtime dependencies cached*, and says outright that a locally available
+payload does not imply that package-manager dependencies can be installed offline. `--offline` is
+one boolean, so the question this step had to answer is whether the three collapse into it.
+
+They do not. `tests/offline_capability_test.py` pins each layer where it lives and, more to the
+point, pins that they stay distinguishable from each other:
+
+- a source whose metadata was never synchronized refuses by naming the *cache* -- `aart source
+  sync` as the way forward -- rather than the artifact, because an artifact that was never offered
+  cannot be the thing at fault;
+- a cached-metadata, uncached-object install is a different refusal under a different code, and the
+  words "while offline" are what separate it from the same object being missing while connected;
+- the dependency installer is denied an index (`pip --no-index`, `uv --offline`) exactly when
+  offline is asked for, in both backends, and that flag is the *only* difference between the
+  connected and offline argument vectors -- so the test fails both if the flag disappears and if
+  anything else moves with it;
+- the three codes are asserted pairwise distinct, which is the invariant's actual prohibition:
+  conflating them is what makes an operator re-sync a source to fix a missing wheel.
+
+Layers 1 and 2 collapse *for a local source* -- the object store has nothing in it before the first
+install, and the object is published from the cached snapshot during it -- so layer 2 is measured at
+the planning seam rather than end to end. That is a property of the fixture, not of the code, and
+the seam is where the refusal is constructed.
+
+Proven against three separate mutations, one per layer: emptying `flags` in both branches of
+`io/python_runtime.py::_install_argv` turns three of the four red; replacing `if offline:` with
+`if False:` in `marketplace/catalog.py::_resolution_failure` turns one red; dropping the
+`" while offline"` suffix in `installation/application.py` turns a different one red. Before this
+step the dependency layer had no test at all -- `python_environment_integration_test` runs real
+offline installs and would have stayed green with the flag removed, silently reaching the network
+on every `--offline` install.
+
+What is not closed: nothing *reports* the three capabilities before an install is attempted, which
+is the reading 165.11 shows. Recorded as B-051 for CP-16, where `aart doctor` is the surface that
+would carry it; INV-223 stays PARTIAL against it.
