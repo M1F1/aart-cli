@@ -1827,3 +1827,33 @@ walked. It becomes critical if a release is ever gated on live evidence that not
 
 Evidence/links: INV-123; INV-078 and INV-080; `docs/testing/PLAN-live-acceptance-v1.md`;
 `.github/workflows/pr-check.yml`; `scripts/quality.py` `redundant_gates`.
+
+## B-074 — INV-057's warning has no destructive credential flow to attach to
+
+Found: CP-18 step 5 (2026-09-04) · Severity: low · Status: open
+
+INV-057 requires that "deleting/replacing/rebinding a credential reference warns about artifacts
+that depend on the same reference before destructive mutation".
+
+Half of it ships. `application/consumer_session.py` computes `credential_dependants`, and
+`aart doctor` reports each credential reference with its health and the installations that depend
+on it — `doctor_configuration_credentials_e2e_test.py` holds that.
+
+The other half has nothing to attach to, because no public verb performs the destructive mutation.
+`plan_removal` takes `delete_credentials`, and its docstring records the choice deliberately: it
+"defaults to False everywhere: a credential outliving its last dependant is the documented
+behaviour, not an oversight to be corrected by whoever calls this". No CLI flag sets it —
+`aart marketplace uninstall --help` offers none — and `application/credential_lifecycle.py`, which
+would own rotation and rebinding, is one of the three modules `legacy_authority_reachability_test.py`
+lists as deliberately unreachable, for exactly this reason.
+
+So the invariant is not violated; the flow it governs does not exist yet. The work is the credential
+lifecycle itself, and when it lands, the dependants warning is a precondition of its review step
+rather than a feature to remember afterwards — `credential_dependants` already returns what that
+warning needs.
+
+Not critical to CP-18. It becomes critical the moment any public verb can delete, replace or rebind
+a credential reference.
+
+Evidence/links: INV-057; `agent_artifacts/application/removal_proposal.py:99-106`;
+`agent_artifacts/application/consumer_session.py:146`; B-070's `credential_lifecycle` exception.
