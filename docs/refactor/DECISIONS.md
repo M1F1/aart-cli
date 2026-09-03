@@ -2870,3 +2870,33 @@ everywhere is a claim about vocabulary, not about the thing.
 Evidence/links: CP-16 step 2 and step 4c; `tests/doctor_offline_readiness_e2e_test.py::
 test_human_output_keeps_the_three_capabilities_visibly_separate`; `commands/doctor.py::
 _credential_lines`; D-138; D-140.
+
+## D-145
+
+A single-example fixture cannot see a separator, a loop guard, or a plural. State those claims as
+properties, not as one more example.
+
+Three times in CP-16 a scoped mutation run found the same class of gap, and each time the immediate
+fix was to add a second item to a fixture. Step 4a: `continue` and `break` were indistinguishable
+in the run-root sweep, because with one working copy there is nothing for `break` to skip. Step 4b:
+the separator joining an undo's components was invisible until two components existed. Step 4c: the
+separator between a credential's dependants, and between locked configuration fields, was invisible
+for the same reason, and "only the first one is rendered" would have passed every test in the file.
+
+Adding the second item fixes the instance. It does not fix the kind — the next section rendered as
+a list starts with one example again, and nothing in the repository says why that is not enough.
+
+The claims are universal, so `tests/doctor_properties_test.py` states them that way: for any mix of
+enabled and disabled sources the reported set is exactly the complement of the enabled ones; for any
+number of locked fields, dependants or working copies, none is dropped from the rendering; a
+credential is deletable exactly when nothing depends on it; and the count in a summary line agrees
+with the list beneath it. Eleven targeted mutations confirm the properties are load-bearing, and
+three of them -- `disabled[:1]`, `dependants[:1]`, `runs[:1]` -- are precisely the defect no
+single-item fixture can express.
+
+This does not replace example tests. The Product Specification names specific scenarios and those
+stay as examples; what moves to a property is the part of the claim that was always "for every",
+and was only ever demonstrated for one.
+
+Evidence/links: CP-16 steps 4a, 4b, 4c and 5; `tests/doctor_properties_test.py`; D-091; D-134;
+D-138; D-144.

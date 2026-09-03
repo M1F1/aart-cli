@@ -1,5 +1,5 @@
 # CP-16 — Global doctor and supportability
-Status: IN PROGRESS (opened 2026-09-03)
+Status: VERIFIED (opened 2026-09-03)
 
 ## Goal
 
@@ -57,8 +57,8 @@ score.
 4. **VERIFIED:** make Activity, Receipt, configuration, credential and orphaned-run diagnostics
    usable from the global report without weakening their existing evidence or undo boundaries.
    Triage B-052 and B-055 here only where a mandatory invariant requires it.
-5. Run the full public-flow, negative/property, integration and mutation-adequacy evidence; close
-   the slice only when every declared invariant has a traceable public surface.
+5. **VERIFIED:** run the full public-flow, negative/property, integration and mutation-adequacy
+   evidence; close the slice only when every declared invariant has a traceable public surface.
 
 ## Completed increments
 
@@ -374,6 +374,66 @@ the meaning -- unlike step 4b's multi-line block, where an exact match would hav
 A fresh scoped run confirms it: 595 mutants, 450 killed, and no survivor left in any of
 `_credential_data`, `_credential_lines`, `_configuration_data` or `_configuration_lines`.
 
+### Step 5 — the front door, the universal halves, and the invariant walk (D-145)
+
+Four steps made a capability reachable that had been sitting at a seam. `aart doctor --help` still
+described the step-1 report: "inspect installed artifacts and report minimal repair plans". An
+operator was told about one of six sections and had no way to discover the other five short of
+running the command and reading its output. A capability nobody can find is only marginally better
+than one nobody can reach, which is the argument this whole slice has been making one section at a
+time -- so the last place it applied was the command's own front door. `tests/doctor_help_e2e_test.py`
+holds it: the help names every section the report carries, says the report on its own changes
+nothing, and is reachable from the top-level `aart --help`, where argparse propagates the one-line
+`help=` string.
+
+**The universal halves.** Three times in this slice a scoped run found a gap whose immediate fix was
+to add a second item to a fixture: `continue`/`break` in step 4a's sweep, the undo component
+separator in 4b, the dependant and locked-field separators in 4c. Adding the second item fixes the
+instance and not the kind. `tests/doctor_properties_test.py` states the claims as properties over
+generated input instead -- the reported disabled set is exactly the complement of the enabled ones;
+no locked field, dependant or working copy is ever dropped from a rendering; a credential is
+deletable exactly when nothing depends on it; a summary count agrees with the list beneath it.
+D-145 records the reasoning. Eleven targeted mutations prove they are load-bearing, and three of
+them -- `disabled[:1]`, `dependants[:1]`, `runs[:1]` -- are exactly the defect a single-item fixture
+cannot express.
+
+One Hypothesis health check is suppressed and only one: `differing_executors`, which fires because
+`scripts/mutants.py` re-runs the same test method object from a fresh runner per mutant. These
+properties are pure functions of generated input holding no state between executions, so the
+condition the check exists to catch cannot arise; it never fires under `make quality`.
+
+**The scoped run then found two real gaps in step 4a's own claims.** Running `orphaned_runs.py`
+against its E2E file plus the new properties left five survivors, and neither group was noise. The
+unreadable-run-root branch had *no human-output assertion anywhere* -- step 4a asserted
+`readable is False` in JSON and stopped -- so the report was free to answer "I could not look" the
+same way it answers "there is nothing here", which is the precise confusion D-142 exists to refuse,
+left standing on the surface an operator actually reads. And `LAF-61`'s promise was held by the
+fragment "does not delete" rather than the sentence, so the rest of the line could say anything.
+Both are closed, and the module now kills 25 of 25, up from step 4a's 40 of 43.
+
+**What the wider scoped run did not change, which is worth saying.** Re-running
+`commands/doctor.py` against all eight Doctor test files -- the six from earlier steps plus the two
+new ones -- produced 595 mutants and 450 killed, the same count and the same survivor distribution
+as before the properties existed. That is the correct result rather than a disappointing one: the
+new suites exercise `cli.py`, `orphaned_runs.py` and `consumer_views.py`, not the command's own
+composition. The 145 are B-060's 84 in `_run_repair`, B-061's 47 in `run`, and 14 string-spelling
+mutants in the error and emit helpers that substring assertions cannot distinguish. A number that
+did not move where nothing should have moved it is evidence the scoping is honest.
+
+**The invariant walk.** INV-191 moves to EVIDENCED: `aart doctor` is the first surface anywhere to
+carry both of the invariant's layers at once -- the projection describing meaningful user actions
+and the complete record beside it, asserted to share the same recorded moments. INV-192 moves to
+EVIDENCED on step 4b's pair. INV-189 moves to EVIDENCED on step 4c: the public report exposes
+exactly provider, health, usage and lifecycle actions, every one now asserted, and the never-half is
+structural rather than per-field.
+
+INV-190 stays PARTIAL, deliberately. Its sentence has two halves -- "a credential reference may
+serve multiple artifacts **and** replacement/verification must account for affected consumers" --
+and step 4c discharges only the first, on a public surface, for any number of dependants. A
+read-only report that lists who would be affected does not show that `replace` and `verify`
+themselves account for them. Promoting on half a sentence is the kind of claim this slice has spent
+five steps refusing.
+
 ## Quality gates
 
 - Baseline before CP-16: `make quality` green (3,237 tests, 1 skipped, 85.32% branch coverage) and
@@ -398,6 +458,15 @@ A fresh scoped run confirms it: 595 mutants, 450 killed, and no survivor left in
   where claimed; ruff, format and mypy green over the four changed files. Fresh scoped
   mutation: 43 mutants, 40 killed, three reviewed survivors (two on an unexecuted guard, one
   equivalent under the run directory's naming).
+- Step 5 focused: three help E2E tests and six Hypothesis properties green, all five help
+  assertions RED against the previous commit; eleven targeted mutations each red only where
+  claimed, three of them (`disabled[:1]`, `dependants[:1]`, `runs[:1]`) being defects no
+  single-item fixture can express. Scoped mutation on `application/orphaned_runs.py` found two real
+  gaps in step 4a's claims -- an unreadable run root with no human-output assertion anywhere, and
+  `LAF-61` held by a fragment rather than its sentence -- and after closing both the module kills
+  25 of 25, up from 40 of 43. Scoped mutation on `commands/doctor.py` with all eight Doctor test
+  files: 595 mutants, 450 killed, distribution unchanged, as expected for suites that exercise
+  other modules.
 - Step 4c verified: `make quality` green across all nine gates -- 3,281 tests, 1 skipped, 85.38%
   branch coverage -- with the integration gate skipped as redundant because all of its tests are
   among the 3,281 the unit gate runs.
@@ -416,10 +485,10 @@ A fresh scoped run confirms it: 595 mutants, 450 killed, and no survivor left in
 
 ## Remaining
 
-Step 5. Step 4 is complete: the orphaned-run root (4a), the Activity trail with each action's own
-undo answer (4b), and the disabled-source, policy-locked-field and credential diagnostics (4c) are
-all reachable from the global report. What remains is the slice-closing evidence pass -- every
-declared invariant traced to a public surface, with the full quality suite green.
+None. All five steps are VERIFIED and every invariant the slice declares has a traceable public
+surface: INV-194 (step 3), INV-223 (step 2), INV-191 and INV-192 (step 4b), and 161.11 / screen 29
+(step 1, recorded on INV-187's row). Step 4c additionally discharged INV-189, which the slice had
+not declared. INV-190 stays PARTIAL for a reason recorded in step 5, not for lack of attention.
 
 ## Known compromises
 
@@ -443,7 +512,7 @@ declared invariant traced to a public surface, with the full quality suite green
 
 ## Blockers
 
-None for step 5.
+None. The slice is closed.
 
 ## Legacy removal criteria
 
@@ -451,10 +520,11 @@ This slice adds a public support surface; it authorizes no legacy deletion by it
 
 ## Handoff
 
-- Current working state: steps 1, 2, 3 and 4 (4a, 4b, 4c) are VERIFIED; CP-16 remains IN PROGRESS
-  with step 5 outstanding.
-- Exact next action: step 5 -- walk every invariant this slice declares and show the public surface
-  that holds it, then run the full quality suite on a clean tree and close the slice.
+- Current working state: CP-16 is VERIFIED. All five steps are done.
+- Exact next action: none in this slice. The open questions it leaves are backlog items B-052,
+  B-055, B-059, B-060, B-061 and B-062, none of which blocks a mandatory invariant; B-060 and B-061
+  are the two worth reading first, being unclassified mutation survivors in the repair entry point
+  and the report composition.
 - Do not undo: one observed installation set feeds both `project_doctor` and
   `prepare_configured_repair`; offline readiness reuses the installation package verifier but stops
   before object publication; Doctor mutates nothing unless

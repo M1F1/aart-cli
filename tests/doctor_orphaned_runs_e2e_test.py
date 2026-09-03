@@ -138,7 +138,14 @@ class DoctorOrphanedRunsE2ETest(unittest.TestCase):
             self.assertIn("Interrupted runs:", output)
             self.assertIn(str(left[0]), output)
             self.assertIn("not removed", output)
-            self.assertIn("does not delete", output)
+            # The whole sentence, not the fragment: `LAF-61` is a promise about what the report
+            # will not do, and scoped mutation showed "does not delete" alone leaves the rest of
+            # the line free to say anything.
+            self.assertIn(
+                "Inspect each one before removing it yourself;"
+                " AART reports these and does not delete them.",
+                output.splitlines(),
+            )
 
     def test_a_stray_entry_beside_a_working_copy_does_not_hide_it(self) -> None:
         """The sweep skips what it cannot read as a run and keeps going.
@@ -186,6 +193,33 @@ class DoctorOrphanedRunsE2ETest(unittest.TestCase):
             self.assertEqual(payload["orphaned_runs"]["working_copies"], [])
             # Still there afterwards: an unreadable root is not a reason to touch anything.
             self.assertEqual(len(_working_copies(env)), 1)
+
+    def test_the_human_report_says_it_could_not_look_rather_than_that_nothing_is_there(
+        self,
+    ) -> None:
+        """The half of D-142 the JSON assertion above cannot make.
+
+        An operator reads words, not `readable: false`. Scoped mutation found this branch's line
+        held by nothing at all, which left the human report free to answer an unreadable run root
+        the same way it answers an empty one -- the exact confusion this projection exists to
+        refuse.
+        """
+
+        with _environment_whose_rollback_fails() as env:
+            self._interrupted(env)
+            runs = _runs_root(env)
+            original = stat.S_IMODE(runs.stat().st_mode)
+            os.chmod(runs, 0o000)
+            try:
+                _code, output = env.run_text("doctor")
+            finally:
+                os.chmod(runs, original)
+
+            self.assertIn(
+                "Interrupted runs: could not read the run directory, so leftovers are unknown.",
+                output.splitlines(),
+            )
+            self.assertNotIn("no working copy was left behind", output)
 
 
 if __name__ == "__main__":

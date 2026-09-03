@@ -169,7 +169,7 @@
     {
       "id": "CP-16",
       "title": "Doctor and supportability",
-      "status": "in_progress",
+      "status": "done",
       "steps": [
         {
           "id": "1",
@@ -194,14 +194,14 @@
         {
           "id": "5",
           "title": "Public-flow hardening, mutation evidence and full slice verification",
-          "status": "in_progress"
+          "status": "done"
         }
       ]
     },
     {
       "id": "CP-17",
       "title": "Git-backed live acceptance",
-      "status": "todo"
+      "status": "in_progress"
     },
     {
       "id": "CP-18",

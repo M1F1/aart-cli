@@ -97,9 +97,36 @@ was invisible to a fixture holding one. All 29 survivors inside this step's func
 re-verified -- 595 mutants, 450 killed, none left in the four functions. The remaining 145 are
 B-060's 84 in `_run_repair` and 47 in the report composition, now B-061.
 
-**Next action: CP-16 step 5.** Walk every invariant the slice declares -- INV-194, INV-223, INV-191,
-INV-192 and screen 29 / section 161.11 -- and show the public surface holding each, then run the
-full quality suite on a clean tree and close the slice.
+Step 5 is VERIFIED (D-145) and **CP-16 is VERIFIED**. Three things closed it.
+
+The front door: `aart doctor --help` still described the step-1 report, naming one of the six
+sections the command now carries, so four steps of newly reachable capability stayed undiscoverable
+short of running the verb and reading its output. `tests/doctor_help_e2e_test.py` holds the help
+against the report it fronts.
+
+The universal halves: three times in this slice a scoped run found a gap whose immediate fix was to
+add a second item to a fixture -- `continue`/`break` in 4a, the undo separator in 4b, the dependant
+and locked-field separators in 4c. That fixes the instance, not the kind.
+`tests/doctor_properties_test.py` states the claims as Hypothesis properties, and eleven targeted
+mutations prove they hold; three of them (`disabled[:1]`, `dependants[:1]`, `runs[:1]`) are exactly
+what a single-item fixture cannot express. D-145 records the reasoning.
+
+That run then found two real gaps in step 4a's own claims. The unreadable-run-root branch had no
+human-output assertion anywhere -- 4a asserted `readable is False` in JSON and stopped -- leaving the
+report free to answer "I could not look" the same way it answers "there is nothing here", which is
+the confusion D-142 exists to refuse, standing on the surface an operator actually reads. And
+LAF-61's promise was held by the fragment "does not delete" rather than the sentence. Both closed;
+`orphaned_runs.py` now kills 25 of 25, up from 40 of 43.
+
+The walk: INV-189, INV-191 and INV-192 move to EVIDENCED. INV-190 stays PARTIAL deliberately -- its
+sentence has two halves and a read-only report that lists affected consumers does not show that
+`replace` and `verify` account for them.
+
+**Next action: none in CP-16.** The plan's critical path is complete. What remains are backlog
+items, none blocking a mandatory invariant: B-060 (84 unclassified mutation survivors in
+`_run_repair`) and B-061 (47 in the report composition) are the two worth reading first, then B-062
+(a machine with no credential provider reports no credentials rather than saying it could not look),
+B-052, B-055 and B-059.
 
 **CP-15 is VERIFIED — all eight steps done.** Step 8 is
 `tests/credential_contract_migration_e2e_test.py`, closing INV-231 and INV-232 and the slice with
@@ -215,16 +242,35 @@ read as "this source is gone" in three places, so one invalid upstream revision 
 
 ## Exact next action
 
-**Implement CP-16 step 3: safe reviewed repair.** The next RED belongs to a public `aart doctor`
-repair entry point: it must expose the already-reported minimal reconciliation plan for review,
-mutate nothing without explicit confirmation, then re-inspect and re-plan under the lifecycle lease
-before execution. The report's digest is a precondition, never standing authorization, and a
-changed machine must refuse or present the new plan rather than blindly execute the old one.
+**Implement CP-17 step 1: real Git output becomes the published snapshot.** The slice document is
+`docs/refactor/slices/CP-17-git-backed-live-acceptance.md`, opened with its survey done and no code
+written yet. The next RED belongs to a test that builds a real Git repository, has the real
+`acquire_git_snapshot` clone it, and publishes what came back -- the entries the adapter actually
+returned and the commit `git rev-parse` actually printed -- into the source store, then reads it
+back. `assertNotEqual(head, "a" * 40)` is the point of the test, not decoration.
 
-Reuse `prepare_configured_repair` and the configured lifecycle executor; do not add a Doctor-local
-planner or a reinstall-all shortcut. D-139 remains the authority constraint. Activity/Receipt,
-configuration, credential and orphan-run diagnostics remain step 4. B-057 belongs before CP-17 and
-does not expand this increment.
+The opening survey's finding is that every stage of the chain already has E2E coverage and **nothing
+joins them**: every consumer-side fixture publishes its snapshot by hand and records `"a" * 40` as
+the commit, so each stage is proven against a precondition a test synthesized rather than against
+what the previous stage really emits.
+
+Two refusals shape the work and neither may be widened to make a test hermetic. The transport
+allowlist means `aart source sync` cannot clone a local repository: `application/sources.py:285`
+leaves `allow_local_transport` at its default `False` and nothing in the package ever passes `True`.
+Behind it, and stricter, the configuration schema itself refuses a local Git location --
+`parse_user_configuration` runs `git_location_parts` on every non-local source, and `file:///...`
+and `/path/to/repo.git` both return `None`. So a consumer cannot even be *configured* with a local
+Git source.
+
+That fixes step 2's shape rather than blocking it. Source identity -- the `source_instance_id` the
+store is keyed by -- derives from the configured location, so the configuration must name the real
+remote host and the substitution belongs at the transport: the port receives the genuine
+`GitSnapshotRequest` and clones a real local repository instead of reaching the network.
+Configuration parsing, identity, publication and every consumer stage downstream then run unmodified
+against real Git output. Standing in for the network is what a port is for; standing in for the
+allowlist's verdict would be weakening a security boundary to make a test pass.
+
+B-057 belongs before CP-17's later steps and does not expand step 1.
 
 The CP-14 record follows.
 

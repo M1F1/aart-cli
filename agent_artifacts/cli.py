@@ -133,12 +133,17 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser(
         "doctor",
         formatter_class=_HELP_FORMATTER,
-        help="inspect installed artifacts and report minimal repair plans",
+        help="report installed health, offline readiness, activity, credentials and configuration",
         description=(
-            "Inspect the installed environment, report measured drift, and construct the smallest "
-            "policy-permitted reconciliation plans. With --repair, review one exact installed "
-            "artifact's plan; applying it requires both --yes and the prior review's --expect "
-            "digest. This command never reinstalls everything."
+            "Inspect the installed environment and report it in one place: measured drift with the "
+            "smallest policy-permitted reconciliation plans; offline readiness for each enabled "
+            "source, as metadata, canonical payload and runtime dependencies separately; any "
+            "working copy an interrupted run left behind; the recorded activity trail and what "
+            "each action can undo; credential health and which installations depend on it; and the "
+            "configuration this machine is ignoring, meaning disabled sources and fields your "
+            "organization's policy has locked. On its own the report changes nothing. With "
+            "--repair, review one exact installed artifact's plan; applying it requires both --yes "
+            "and the prior review's --expect digest. This command never reinstalls everything."
         ),
     )
     p.add_argument(
