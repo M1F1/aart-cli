@@ -1,7 +1,14 @@
 # TODO
 
-Backup implementation tracker. GitHub issues remain the source of truth for discussion and status;
-keep this file aligned with them.
+> [!WARNING]
+> Historical record of the completed `M1F1/agent-artifacts` 1.0 program, kept as evidence. It is
+> **not** the source of truth for `aart-cli` and its GitHub issues are not this repository's.
+> Current authority is [`docs/product-specification/PRODUCT_SPECIFICATION.md`](docs/product-specification/PRODUCT_SPECIFICATION.md),
+> and the active work is tracked in [`docs/refactor/NEXT.md`](docs/refactor/NEXT.md).
+
+Backup implementation tracker for that program. Its GitHub issues were the source of truth for
+discussion and status *there*; in this repository they are neither, and nothing here should be
+kept aligned with them.
 
 ## Post-1.0.0 follow-ups
 

@@ -1,5 +1,11 @@
 # AART 1.0 Implementation Plan
 
+> [!WARNING]
+> Historical record of the completed `M1F1/agent-artifacts` 1.0 program, kept as evidence. It is
+> **not** the source of truth for `aart-cli` and its GitHub issues are not this repository's.
+> Current authority is [`docs/product-specification/PRODUCT_SPECIFICATION.md`](docs/product-specification/PRODUCT_SPECIFICATION.md),
+> and the active work is tracked in [`docs/refactor/NEXT.md`](docs/refactor/NEXT.md).
+
 - **Status:** Completed and released as `v1.0.0` on 2026-08-10
 - **Target:** `1.0.0`
 - **Historical development train:** `1.0.0aN`

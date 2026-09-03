@@ -253,12 +253,12 @@
     {
      "id": "4",
      "title": "Docs reconciled with the Product Specification",
-     "status": "in_progress"
+     "status": "done"
     },
     {
      "id": "5",
      "title": "Traceability complete for all mandatory invariants",
-     "status": "todo"
+     "status": "in_progress"
     },
     {
      "id": "6",

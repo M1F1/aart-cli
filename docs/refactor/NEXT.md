@@ -2,7 +2,7 @@
 
 ## Current objective
 
-**CP-18 Migration and release gate is IN PROGRESS: steps 1-3 done, step 4 active.** The slice
+**CP-18 Migration and release gate is IN PROGRESS: steps 1-4 done, step 5 active.** The slice
 document is `docs/refactor/slices/CP-18-migration-and-release-gate.md`.
 
 Step 1 (INV-071, zero runtime dependencies) is done: `tests/runtime_purity_test.py` reads the
@@ -24,7 +24,16 @@ outside the public tool and this is the only mechanism admitting one, so the fin
 module but an unwired invariant -- nothing calls it, and a project's `.agent-artifacts/profiles.json`
 is parsed by three test files and ignored by the product (D-155, B-072).
 
-The rule those four decisions produced, which the next agent should carry into steps 4-6: an
+Step 4 (docs reconciled) is done. It applied steps 1-3's method to prose — a document that names a
+command is a checkable claim about `cli.build_parser()` — and compared both directions, because an
+invented command wastes a reader's time while an omitted one is capability nobody can find. The
+omission was `aart doctor`: the whole of CP-16, an entire top-level command, documented nowhere in
+the README. The same comparison now covers the product's own user-facing strings, since a
+remediation is documentation read at the worst possible moment. Four documents carried stale 0.1
+verbs, and the three root trackers (`PLAN.md`, `PROGRESS.md`, `TODO.md`) pointed a newcomer at the
+legacy repository's issues as "the source of truth" (D-156).
+
+The rule those four decisions produced, which the next agent should carry into steps 5-6: an
 unreachable module is *replaced*, *unadopted*, or *unwired*, and only the middle case is safe to
 delete. Unreachability is a reason to ask, never on its own an answer.
 
@@ -291,21 +300,23 @@ read as "this source is gone" in three places, so one invalid upstream revision 
 
 ## Exact next action
 
-**CP-18 step 4 — reconcile the docs with the Product Specification.** Step 3's four decisions each
-turned on reading what a module claims authority over and finding the shipped thing that answers the
-same question; step 4 is that method applied to prose. Two concrete inputs are already on the table:
+**CP-18 step 5 — traceability for the remaining PARTIAL invariant rows.** Step 4 closed the
+*names*: every command a doc or a diagnostic's remediation mentions resolves against
+`cli.build_parser()`, in both directions, held by tests. What that method cannot do is step 5's whole
+subject — a page whose every command exists can still describe behaviour those commands do not have,
+and no parser comparison will say so.
 
-- `docs/design/DESIGN.md` and `docs/plan/PLAN.md` describe the `.agent-artifacts/profiles.json`
-  overlay as though it ships. It does not reach the product (B-072). Either the docs say so or the
-  wiring lands; they must not keep describing a route no user can take.
-- `tests/legacy_authority_reachability_test.py`'s docstring was itself found stale during step 3 —
-  it stated that `domain.outcomes` was gone while the module was back in the tree. Prose that
-  asserts repository facts is subject to the same staleness as a hardcoded list, so prefer claims a
-  test can hold over claims a reader must re-verify.
+Two constraints carried forward:
 
-Then step 5 (traceability for the remaining PARTIAL rows) and step 6 (full quality, packaging,
-security and deep acceptance gates). Step 5 must not mark INV-001 covered by the existence of
-`profiles/loader.py`; B-072 is the reason.
+- Do not read the ~121 PARTIAL rows as 121 pieces of missing work. Every row audited across steps 2-4
+  has been either stale bookkeeping or a real gap, roughly half and half.
+- **INV-001 must not be marked covered by the existence of `profiles/loader.py`.** Nothing calls it,
+  so the public tool currently admits no externally-defined profile at all (D-155, B-072).
+
+The audit method that produced every verdict so far: read the invariant's own words, find the flow
+that would break it, and only then look for a test. Not the reverse.
+
+Then step 6: full quality, packaging, security and deep acceptance gates.
 
 **The CP-17 narrative below is kept as the record of how that slice got there.**
 

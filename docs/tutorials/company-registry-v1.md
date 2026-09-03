@@ -1,4 +1,4 @@
-# Tutorial: AART 1.0.0 with a company registry
+# Tutorial: AART with a company registry
 
 A company registry adds reviewed discovery and policy while direct team/private sources remain
 possible when organization policy permits them.

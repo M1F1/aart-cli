@@ -3327,3 +3327,57 @@ module still stays for a reason outside the import graph entirely (D-154). For `
 the answer is *nothing does*, and a module that is the sole answer to a question the specification
 requires an answer to is never legacy — however few things import it. An unreachable module is
 either replaced, unadopted, or unwired, and only the middle case is safe to delete.
+
+## D-156 — Docs reconcile against the parser, not against a reviewer's memory
+
+Date: 2026-09-04 · Slice: CP-18 step 4 · Status: accepted
+
+**Context.** "Reconcile docs with the Product Specification" invites a reading pass, and a reading
+pass finds what the reader happens to notice. The three CP-18 steps before it were decided by
+mechanical comparison against a shipped artefact — the import graph, the emitted YAML, the release
+contract's declared inputs — and the same method applies to prose: a document that names a command
+is making a checkable claim about the parser.
+
+**Decision.** Read the command surface off `cli.build_parser()` and compare in both directions,
+because the two failures are different failures. A command the README invents wastes a reader's time
+at the shell; a command the README omits is capability nobody can find. The second is the one a
+reading pass never finds, because nothing on the page is wrong.
+
+It found `aart doctor` — the whole of CP-16, three verified steps, an entire top-level command —
+documented nowhere in the README. Both directions are now held in
+`tests/adoption_first_contact_test.py`, and the same comparison is applied to the *product's own*
+strings: a diagnostic's remediation is documentation read at the worst possible moment, and it
+drifts the way a page does with no reader to notice. Every command AART names in its own user-facing
+strings does exist; that is now a claim rather than a coincidence.
+
+**The first draft of the test was right for the wrong reason** and said so out loud: requiring a
+backticked `` `aart <name> `` spelling made it report five commands the README documents perfectly
+well inside fenced shell blocks. A test that reports true findings among false ones teaches the next
+reader to skim it.
+
+**What the sweep found beyond the README.** Two unlinked tutorials still used the flat 0.1 verbs
+(`aart status`, `aart check`, `aart update`, `aart uninstall`) and pinned a wheel version in a
+literal; `docs/installation/canonical-setup-v1.md` claimed "legacy `aart setup` remains available
+during the staged 0.1.x migration", which `docs/release/compatibility-v8.md` had already recorded as
+replaced. The largest was `docs/state/installation-state-v2.md`, which opens "This document records
+the **implemented** STATE01/MIG01 boundary" and then describes a `prepare`/`apply`/`rollback`
+migration service, a `LegacyMigrationCandidate`, an `aart migrate state` command surface and two
+`state-migration-*` diagnostics — none of which exist. What ships is the opposite: the retired
+envelope is detected and *refused* with `install-state-legacy`, whose remediation says the state is
+"not converted at runtime". Its schema, path and transaction sections are still accurate, so the
+document is bannered rather than deleted.
+
+**Three root files were the sharpest case, because they are what a newcomer opens first.**
+`PLAN.md`, `PROGRESS.md` and `TODO.md` are the completed `M1F1/agent-artifacts` 1.0 program, cited 75
+times between them, and `TODO.md` opened by stating that its GitHub issues "remain the source of
+truth for discussion and status" — pointing at a repository the execution contract names as legacy.
+CLAUDE.md classifies them correctly, which does nothing for a reader who never opened CLAUDE.md, so
+the documents now say it themselves and a test holds both halves.
+
+**Consequence.** Where a doc and the code disagree, the check belongs in the gate, not in a review
+comment. Where a document is a design record rather than shipped behaviour, it says so in its own
+first paragraph, since the alternative is that its accuracy depends on the reader already knowing.
+
+**What this method cannot do.** It compares names. A page whose every command exists can still
+describe behaviour those commands do not have, and no parser comparison will say so. That is step
+5's subject, and the remaining PARTIAL rows are where it gets answered.

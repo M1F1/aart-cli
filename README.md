@@ -225,6 +225,42 @@ partial success the record is written back as `rollback_incomplete`.
 
 All three are also reachable from `aart` with no arguments, under **Action → receipt**.
 
+### One report for the whole machine
+
+The three commands above each answer a question about one installation. `aart doctor` answers them
+for everything at once, and reads only — it resolves no marketplace content and applies nothing.
+
+```sh
+# What is the state of everything installed here?
+aart doctor
+aart doctor --json
+```
+
+One run reports measured drift with the smallest policy-permitted repair plan for each item; offline
+readiness for every enabled source, as three separate answers — cached metadata, cached canonical
+payload, cached runtime dependencies — because `--offline` is one flag and those are three different
+reasons it can fail; any working copy an interrupted run left behind; the activity trail and what
+each entry can still undo; credential health and which installations depend on it; and the
+configuration this machine is ignoring, meaning disabled sources and fields your organization's
+policy has locked.
+
+Repair follows the same review-then-confirm boundary as everything else, one artifact at a time:
+
+```sh
+# Review one artifact's minimal plan — applies nothing
+aart doctor --repair company/mcp/github
+
+# Apply exactly the plan that review returned
+aart doctor --repair company/mcp/github --yes --expect <digest>
+```
+
+`--yes` without `--expect` is refused, and a machine that changed between the review and the
+confirmation returns the recomputed plan instead of applying the stale one. There is no flag that
+repairs everything.
+
+What it cannot repair, it still reports: an artifact whose payload is missing or divergent is named
+with what is wrong, rather than being omitted because no repair for it exists.
+
 ## Maintaining a registry
 
 A registry is an ordinary Git checkout. Maintainer mutations prepare reviewed files and stop. The

@@ -401,3 +401,81 @@ but nothing has yet wired.
 
 Steps 4–6 remain: docs reconciliation, traceability completion for the other 121 PARTIAL rows, and
 the closing gates.
+
+
+## Step 4 — docs reconciled with the Product Specification (DONE)
+
+Steps 1-3 were each decided by mechanical comparison against a shipped artefact — the import graph,
+the emitted YAML, the release contract's declared inputs. Step 4 applies the same method to prose: a
+document that names a command is making a checkable claim about `cli.build_parser()`.
+
+### Both directions, because they fail differently
+
+A command the README invents wastes a reader's time at the shell. A command the README omits is
+capability nobody can find — and it is the one a reading pass never finds, because nothing on the
+page is wrong.
+
+The omission was **`aart doctor`**: the whole of CP-16, three verified steps, an entire top-level
+command, documented nowhere in the README. It now has a section covering what one read reports, the
+three separate offline answers, the review-then-confirm repair boundary, and D-150's rule that what
+it cannot repair it still reports.
+
+The first draft of the test was right for the wrong reason: requiring a backticked `` `aart <name> ``
+spelling made it report five commands the README documents perfectly well inside fenced shell blocks.
+A test that mixes true findings with false ones teaches the next reader to skim it.
+
+### The same comparison, applied to the product's own strings
+
+A diagnostic's remediation is documentation read at the worst possible moment, and it drifts the way
+a page does with nobody to notice. Every `aart <group> <subcommand>` in every user-facing string in
+the package resolves against the real parser. That was already true; it is now a claim rather than a
+coincidence. The check is deliberately scoped to the two-token shape, because bare `aart <word>` also
+matches the managed-block marker `# >>> aart setup: ... >>>` and prose like "aart installs".
+
+### What the sweep found beyond the README
+
+| document | finding |
+|---|---|
+| `docs/tutorials/direct-source-v1.md` | flat 0.1 verbs `aart status`, `aart check`, `aart update`, `aart uninstall`, plus a pinned wheel version in a literal |
+| `docs/tutorials/company-registry-v1.md` | a `1.0.0` in the title, a version this repository is not at |
+| `docs/installation/canonical-setup-v1.md` | "legacy `aart setup` remains available during the staged 0.1.x migration" — already recorded as replaced in `compatibility-v8.md` |
+| `docs/state/installation-state-v2.md` | opens "records the **implemented** STATE01/MIG01 boundary", then describes a migration service that does not exist |
+
+The state document was the largest. It describes `prepare`/`apply`/`rollback`, a
+`LegacyMigrationCandidate`, an `aart migrate state` command surface and two `state-migration-*`
+diagnostics — none of which are in the package. What ships is the opposite:
+`install_state/schema.py` detects the retired envelope and *refuses* it with `install-state-legacy`,
+remediation "not converted at runtime". Its schema, path and transaction sections remain accurate, so
+it is bannered rather than deleted.
+
+Deliberately **not** reconciled: `CHANGELOG.md` and `docs/release/compatibility-v*.md` name retired
+verbs because recording their retirement is their job, and the Product Specification's
+`aart registry policy-check`, `refresh-upstreams` and `sync` appear under "Suggested flow" and
+"Possible maintainer-side vocabulary" — illustrative, not mandates, and therefore not capability
+gaps. Recorded here so the next agent does not re-chase them.
+
+### The three root files, which is what a newcomer opens first
+
+`PLAN.md`, `PROGRESS.md` and `TODO.md` are the completed `M1F1/agent-artifacts` 1.0 program, cited 75
+times between them, and `TODO.md` opened by stating its GitHub issues "remain the source of truth for
+discussion and status" — pointing at a repository the execution contract names as legacy. CLAUDE.md
+classifies them correctly, which does nothing for a reader who never opened CLAUDE.md. They now say
+it themselves, and a test holds both halves.
+
+### Targeted mutations (D-091)
+
+| # | mutation | red |
+|---|---|---|
+| M28 | rename `aart doctor` out of the README | `test_every_shipped_top_level_command_is_named` |
+| M29 | write `aart marketplace reinstall` into the README | `test_the_readme_invents_no_command` |
+| M30 | strip a root file's historical banner | `test_a_root_document_citing_the_legacy_program_says_it_is_historical` |
+| M31 | restore the wrong-source-of-truth sentence | `test_no_root_document_sends_a_reader_to_the_legacy_issue_tracker_for_status` |
+| M32 | point a real remediation at `aart marketplace migrate` | `test_no_user_facing_string_names_a_subcommand_that_does_not_exist` |
+
+### Status
+
+Step 4 is **DONE**. Nine quality gates green.
+
+**What this method cannot do, which is step 5's subject.** It compares *names*. A page whose every
+command exists can still describe behaviour those commands do not have, and no parser comparison
+will say so. The remaining PARTIAL traceability rows are where that gets answered.

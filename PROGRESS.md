@@ -1,5 +1,11 @@
 # AART 1.0 Execution Progress
 
+> [!WARNING]
+> Historical record of the completed `M1F1/agent-artifacts` 1.0 program, kept as evidence. It is
+> **not** the source of truth for `aart-cli` and its GitHub issues are not this repository's.
+> Current authority is [`docs/product-specification/PRODUCT_SPECIFICATION.md`](docs/product-specification/PRODUCT_SPECIFICATION.md),
+> and the active work is tracked in [`docs/refactor/NEXT.md`](docs/refactor/NEXT.md).
+
 - **Plan:** [PLAN.md](PLAN.md)
 - **1.0 issue (historical):** [#27](https://github.com/M1F1/agent-artifacts/issues/27)
 - **Post-1.0 issue:** [#61](https://github.com/M1F1/agent-artifacts/issues/61)
