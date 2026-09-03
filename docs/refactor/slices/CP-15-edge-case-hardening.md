@@ -42,8 +42,8 @@ temporary machine, and (c) records which mutation it was proven against.
 | Source publishes an invalid revision | INV-218 | `source_store_adapter_test` (corrupt convergent snapshot never becomes current); `source_sync_application_test` (validation failure publishes nothing) | Both drive the seam. Nothing drove `aart source sync`. **Closed by increment 1.** |
 | Registry change must not silently mutate installations | INV-210 | `canonical_lifecycle_test` covers a source that is missing, disabled or has moved origin | The state a refused sync actually leaves — `could-not-check` — was untested, and was being read as "source gone". **Closed by increment 1 (D-132).** |
 | Registry unavailable / offline | INV-223, 165.11 | `--offline` installs from cached objects | Online-but-unreachable was a hard failure with an internal message. **Closed by increment 1 (D-132).** The three-way decomposition (metadata / payload / runtime deps) is not yet distinguished anywhere. |
-| Registry rollback preserves history | INV-216 | promotion audit chain walks backwards from the approved snapshot (D-104) | No test that a correction is a new record rather than an erasure |
-| Provenance is not rewritten when upstream moves | INV-219 | typed Git/local audit pins (D-107) | No test that an old record keeps its old origin after the Source is repointed |
+| Registry rollback preserves history | INV-216 | promotion audit chain walks backwards from the approved snapshot (D-104) | **Closed for the consumer half by increment 2.** The Git revert/commit half waits on CP-17 |
+| Provenance is not rewritten when upstream moves | INV-219 | typed Git/local audit pins (D-107) | **Closed by increment 2**, on both sides: the installation record, and the promotion audit under D-089's rebinding |
 | Physical purge is exceptional | INV-221, INV-222 | none found: no test file matches `purge` | Whole scenario unmeasured |
 | Interrupted operations re-inspect before resume | INV-226 | CP-12 executor replans under lease | No public-flow interruption test |
 | Input/credential contract changes | INV-231, INV-232 | CP-08 credential lifecycle | No test that changing one artifact's contract leaves another's credential owned |
@@ -56,7 +56,7 @@ temporary machine, and (c) records which mutation it was proven against.
 ## Implementation steps
 
 1. **DONE:** Registry state safety through the public source verb (INV-218, INV-210, 165.11).
-2. Rollback, superseding and provenance under a moving upstream (INV-216, INV-219, INV-229).
+2. **DONE:** Rollback and provenance under a moving upstream (INV-216, INV-219; INV-229 was already EVIDENCED by D-094).
 3. Offline decomposition: metadata, payload and runtime dependencies as separate capabilities
    (INV-223).
 4. Verification failure and partial/interrupted execution through the public verbs (INV-224–226).
@@ -108,3 +108,38 @@ The two seams carry their own claims: `canonical_lifecycle_test` for reconciliat
 
 Proven against a mutation: removing the `RS-08` refusal in `sources/validation.py` — so the invalid
 revision publishes — turns all eight end-to-end tests red.
+
+### Step 2 — what a moving upstream may and may not rewrite (INV-219, INV-216, INV-210)
+
+`tests/source_upstream_movement_e2e_test.py` republishes into a real local source and asks the
+public verbs what changed. Four claims:
+
+- a sync that publishes a new revision leaves the installation record identical in every field, not
+  just in its revision;
+- the new revision is *offered* -- `status` says `update-available` and the file on disk is still
+  the reviewed one -- because a registry change raises a finding and mutating an installation needs
+  a plan (INV-210);
+- an explicit `update` is what rebinds the record and places the new bytes, so the record is not
+  frozen, it is only not rewritten behind the operator;
+- an upstream rolled back to its first revision is new work rather than an erased event (INV-216).
+
+The rollback case is the one worth reading twice. A snapshot is identified by its content, so
+republishing the first revision's bytes republishes the first revision's *digest*: the store looks
+exactly as it did before the second revision ever existed. Reconciliation that compared the store
+against itself would call the installation current and quietly leave the superseded payload in the
+project. It compares against the record, which is why the rollback is offered and then applied.
+
+On the registry side, `promotion_planning_test::test_a_second_promotion_rewrites_one_field_and_no
+_provenance` closes the other half. D-089's rebinding is the one place this codebase writes over an
+already-approved record, and the sibling test beside it only proved the *package* does not move.
+The new one proves the two documents that say where the package came from do not either: the
+promotion audit comes back byte-identical -- byte equality on purpose, because a named-field
+comparison cannot see a field being added, dropped or re-derived -- and the version record differs
+in `registry_snapshot` and nothing else.
+
+Proven against mutations: forcing `check_installations` to decide on version alone turns two of the
+four end-to-end tests red; making the rebinding re-derive one further field of a retained record
+turns the promotion test red, and it is the only one of that file's sixteen tests that catches it.
+The first end-to-end test is a guard rather than a regression -- nothing on the sync path writes
+install state today -- and its docstring says so, resting its non-vacuousness on the sibling that
+changes the same fields through the same comparison.

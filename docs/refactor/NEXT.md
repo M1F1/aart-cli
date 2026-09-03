@@ -15,7 +15,13 @@ carry the same three words in their evidence column -- *scattered source/registr
 safeguards* -- and that phrase is the slice's whole subject. A safeguard at a seam is worth what
 the verb an operator actually runs makes of it.
 
-**Step 1 is done.** `tests/source_sync_command_e2e_test.py` drives `aart source sync` over a real
+**Steps 1 and 2 are done.** Step 2 is `tests/source_upstream_movement_e2e_test.py` plus one
+promotion-planning claim: a moving upstream may offer new work and may not rewrite what an
+installation says it was installed from, and D-089's rebinding of an already-approved record is
+pinned to `registry_snapshot` alone with the promotion audit byte-identical. INV-219 moves to
+EVIDENCED and INV-216's consumer half is closed.
+
+Step 1 is `tests/source_sync_command_e2e_test.py`, which drives `aart source sync` over a real
 source whose upstream published an invalid revision, and INV-218 moves to EVIDENCED. Writing it
 found D-132: `could-not-check` -- the health an explicit last-known-good fallback produces -- was
 read as "this source is gone" in three places, so one invalid upstream revision made
@@ -25,16 +31,24 @@ read as "this source is gone" in three places, so one invalid upstream revision 
 
 ## Exact next action
 
-**Continue CP-15 with step 2 of `slices/CP-15-edge-case-hardening.md`**: rollback, superseding and
-provenance under a moving upstream (INV-216, INV-219, INV-229). The shape step 1 established is the
-one to repeat -- name the verb an operator runs, drive it over a real temporary machine, and prove
-each test red against a real mutation of the code it names, not against a broken fixture.
+**Continue CP-15 with step 3 of `slices/CP-15-edge-case-hardening.md`**: the offline decomposition
+(INV-223). Product Specification 165.11 names three separate capabilities -- metadata cached,
+canonical payload cached, runtime dependencies cached -- and says a locally available payload does
+not imply that package-manager dependencies can be installed offline. Nothing today distinguishes
+them: `--offline` is one boolean, and step 1 measured that it succeeds against a source whose origin
+is unreachable without ever saying which of the three it actually has.
 
-Two things step 1 measured that step 2 starts from. The `_environment_over_a_writable_source`
-helper in `tests/source_sync_command_e2e_test.py` already gives a real synchronized local source
-that a test may republish into, which is what "upstream moves" needs. And the coverage sweep found
-whole scenarios with no test file matching them at all -- `purge`, `collection.*drift`,
-`manual.*drift` -- so steps 5 and 6 are greenfield rather than re-characterization.
+The shape steps 1 and 2 established is the one to repeat -- name the verb an operator runs, drive it
+over a real temporary machine, and prove each test red against a real mutation of the code it names,
+not against a broken fixture. Where a test is a guard with no mutation available, say so in its
+docstring and rest its non-vacuousness on a sibling that moves the same values.
+
+Two helpers to build on. `_environment_over_a_writable_source` in
+`tests/source_sync_command_e2e_test.py` gives a real synchronized local source a test may republish
+into, and `_source`/`_source_json` beside it run the source verbs, which take no `--project` and so
+cannot use the lifecycle harness's own runner. And the coverage sweep found whole scenarios with no
+test file matching them at all -- `purge`, `collection.*drift`, `manual.*drift` -- so steps 5 and 6
+are greenfield rather than re-characterization.
 
 The CP-14 record follows.
 

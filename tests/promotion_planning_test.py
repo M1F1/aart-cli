@@ -378,6 +378,53 @@ class PromotionPlanningTest(unittest.TestCase):
         self.assertTrue(after)
         self.assertEqual(after, {path: before[path] for path in after})
 
+    def test_a_second_promotion_rewrites_one_field_and_no_provenance(self) -> None:
+        """INV-219: old provenance is historical truth, and rebinding is not a rewrite of it.
+
+        D-089 rebinds every retained approved record when a promotion changes the registry's
+        content digest, and a rebinding is the one place this codebase writes over a record that
+        was already approved. The sibling test above proves the *package* at a coordinate does not
+        move. This one proves the same about the two documents that say where it came from: the
+        promotion audit -- which carries the Source provenance, the validation report digest and
+        the effective policy that authorized it -- must come back byte-identical, and the version
+        record must differ in `registry_snapshot` and in nothing else.
+
+        Byte equality rather than field-by-field comparison on the audit, because the failure this
+        guards against is a field being added, dropped or re-derived, and a comparison that names
+        the fields it checks cannot see any of those.
+        """
+
+        empty = SourceSnapshot(SnapshotOrigin.LOCAL, ())
+        first = _ready_bundle("github-mcp")
+        promoted = plan_bulk_promotion(empty, (first,), evidence=_evidence(first), approved=())
+        assert isinstance(promoted, Ok), promoted
+        one = project_promotion(empty, promoted.value)
+        assert isinstance(one, Ok), one
+        approved = load_registry_versions(one.value)
+        assert isinstance(approved, Ok), approved
+        before = {str(entry.path): entry.content for entry in one.value.entries}
+
+        second = _ready_bundle("jira-mcp")
+        again = plan_bulk_promotion(
+            one.value, (second,), evidence=_evidence(second), approved=approved.value
+        )
+        assert isinstance(again, Ok), again
+        two = project_promotion(one.value, again.value)
+        assert isinstance(two, Ok), two
+        after = {str(entry.path): entry.content for entry in two.value.entries}
+
+        audits = [path for path in before if path.startswith("registry/promotions/")]
+        self.assertEqual(len(audits), 1, audits)
+        self.assertEqual(after[audits[0]], before[audits[0]])
+
+        version_path = "registry/versions/mcp/github-mcp/1.0.0.json"
+        was = json.loads(before[version_path])
+        now = json.loads(after[version_path])
+        self.assertEqual(
+            {key for key in set(was) | set(now) if was.get(key) != now.get(key)},
+            {"registry_snapshot"},
+        )
+
     def test_review_mismatch_cannot_reach_the_atomic_output_port(self) -> None:
         bundle = _ready_bundle()
         empty = SourceSnapshot(SnapshotOrigin.LOCAL, ())
