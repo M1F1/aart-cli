@@ -16,6 +16,7 @@ from .identifiers import (
     ArtifactIdentity,
     ObjectDigest,
     SourceAlias,
+    is_pinned_source_revision,
 )
 from .registry import RegistryArtifactVersion
 
@@ -206,6 +207,7 @@ class ResolvedArtifact:
     version: RegistryArtifactVersion
     ownership: tuple[OwnershipReason, ...]
     dependencies: tuple[ArtifactCoordinate, ...] = ()
+    source_revision: str | None = None
 
     def __post_init__(self) -> None:
         if (
@@ -213,6 +215,10 @@ class ResolvedArtifact:
             or not self.ownership
             or any(not isinstance(item, OwnershipReason) for item in self.ownership)
             or any(not isinstance(item, ArtifactCoordinate) for item in self.dependencies)
+            or (
+                self.source_revision is not None
+                and not is_pinned_source_revision(self.source_revision)
+            )
         ):
             raise ValueError("resolved artifact is invalid")
         object.__setattr__(

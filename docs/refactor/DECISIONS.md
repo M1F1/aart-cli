@@ -2927,3 +2927,54 @@ input and output remain the real production values and every security verdict re
 
 Evidence/links: CP-17 step 1; `tests/git_source_publication_e2e_test.py`; INV-112; INV-115; D-091;
 D-134.
+
+## D-147 — Each registry representation is validated by the authority that writes it
+
+**Context.** CP-17 step 2's first public sync of a real promoted registry failed before Marketplace
+or installation. Promotion writes the accepted versioned representation -- vendored packages under
+`artifacts/<kind>/<name>/<version>` and exact `registry/versions`, `registry/index.json` and
+`registry/snapshot.json` metadata. Source validation and the read-only CLI Marketplace instead
+interpreted those bytes as the older maintainer workspace, requiring unversioned artifact roots and
+`aart.lock.json` / `aart.index.json`. This was B-057's consumer-facing consequence.
+
+**Decision.** A configured RegistryGit snapshot carrying the `registry/` namespace is an approved
+promotion representation and is validated by `load_registry_versions` plus
+`validate_promoted_registry`, the reader and validator paired with promotion's writer. A snapshot
+without that namespace retains the characterized compiled-workspace validation during the
+strangler migration. The read-only Marketplace projection calls the same
+`project_configured_registry` package compiler as the persistent shell for the approved shape,
+rather than growing a second versioned-layout reader.
+
+**Consequence.** A real promoted registry can pass public source sync and Marketplace listing, and
+malformed or stale catalogs are still refused -- including an empty approved projection, whose
+negative test kills omission of the explicit validator. No transport or configuration allowlist
+changed. The old `registry publish` verb still expects the compiled maintainer-workspace shape and
+remains B-057; CP-17 follows 165.27/165.28, where Git review and merge publish promotion's local
+state.
+
+Evidence/links: CP-17 step 2; `git_backed_consumer_e2e_test.py`;
+`source_registry_validation_test.py`; B-057; INV-112; INV-119.
+
+## D-148 — The transport revision is digest-bound installation provenance
+
+**Context.** After public sync and Marketplace listing carried Git's real commit, the configured
+install receipt did not. Resolution kept the approved object and registry snapshot but discarded
+the `CurrentSource` revision, so a receipt could identify exactly what content was installed without
+identifying the Git state through which the consumer obtained that approval.
+
+**Decision.** The configured boundary adds the pinned revision to `ApprovedRegistrySnapshot`,
+resolution copies it to each `ResolvedArtifact`, and canonical install-plan serialization includes
+it before calculating the review digest. Receipt projection takes the revision from that reviewed
+plan, never from a later source-store read, and serializes it on the matching artifact member.
+Every added field is optional so hand-built/domain-only selections and existing receipt bytes keep
+their old canonical form; reading an older receipt yields unknown provenance rather than a guessed
+commit.
+
+**Consequence.** The public install payload and a fresh durable receipt read both name the actual
+commit produced by Git. Changing the configured revision to `"a" * 40` turns the end-to-end test red
+at the receipt while sync and Marketplace continue to report the real SHA, proving the value is not
+being re-read or inferred at presentation time. Because it is part of the plan, a changed revision
+also changes what a person reviews and confirms.
+
+Evidence/links: CP-17 step 2; `git_backed_consumer_e2e_test.py`; `domain/plans.py`;
+`application/consumer_views.py`; INV-112; INV-119; D-146.

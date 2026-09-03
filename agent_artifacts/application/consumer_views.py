@@ -1206,6 +1206,7 @@ class ReceiptArtifactView:
     residual_drift: tuple[LifecycleDriftView, ...] = ()
     diagnostics: tuple[str, ...] = ()
     detail: str = ""
+    source_revision: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1320,6 +1321,11 @@ def project_installation_receipt(
     proposal = outcome.proposal
     plan = proposal.plan if isinstance(proposal, InstallationProposal) else None
     selection = None if plan is None else project_selection(plan.selection)
+    revisions = (
+        {}
+        if plan is None
+        else {item.version.coordinate: item.source_revision for item in plan.selection.artifacts}
+    )
     artifacts = tuple(
         ReceiptArtifactView(
             str(item.plan.intent.desired.artifact),
@@ -1329,6 +1335,7 @@ def project_installation_receipt(
             () if item.outcome is None else project_lifecycle_outcome(item.outcome).residual_drift,
             tuple(diagnostic.message for diagnostic in item.diagnostics),
             item.detail,
+            revisions.get(item.plan.intent.desired.artifact),
         )
         for item in outcome.artifacts
     )
@@ -1419,6 +1426,11 @@ def receipt_detail_to_data(view: ReceiptDetailView) -> dict[str, object]:
                             {"kind": owner.kind, "owner": owner.owner} for owner in item.ownership
                         ],
                         "status": item.status,
+                        **(
+                            {}
+                            if item.source_revision is None
+                            else {"source_revision": item.source_revision}
+                        ),
                         "steps": [
                             {
                                 "component": step.component,
@@ -1915,6 +1927,7 @@ def receipt_detail_from_data(data: object) -> Result[ReceiptDetailView]:
                         ),
                         _strings(row, "diagnostics"),
                         _string(row, "detail"),
+                        (None if "source_revision" not in row else _string(row, "source_revision")),
                     )
                     for row in _rows(data, "artifacts")
                 ),

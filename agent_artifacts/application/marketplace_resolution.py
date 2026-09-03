@@ -16,6 +16,7 @@ from agent_artifacts.domain.identifiers import (
     ArtifactIdentity,
     ObjectDigest,
     SourceAlias,
+    is_pinned_source_revision,
 )
 from agent_artifacts.domain.registry import (
     PublicationStage,
@@ -100,6 +101,7 @@ class ApprovedRegistrySnapshot:
     trust: RegistryTrust
     artifacts: tuple[ApprovedMarketplaceArtifact, ...]
     collections: tuple[Collection, ...] = ()
+    resolved_revision: str | None = None
 
     def __post_init__(self) -> None:
         if (
@@ -113,6 +115,10 @@ class ApprovedRegistrySnapshot:
             or any(item.version.registry_snapshot != self.snapshot for item in self.artifacts)
             or any(item.coordinate.source != self.alias for item in self.collections)
             or any(item.registry_snapshot != self.snapshot for item in self.collections)
+            or (
+                self.resolved_revision is not None
+                and not is_pinned_source_revision(self.resolved_revision)
+            )
         ):
             raise ValueError("approved registry snapshot is inconsistent")
         object.__setattr__(self, "artifacts", tuple(sorted(self.artifacts, key=_artifact_key)))
@@ -638,6 +644,7 @@ def resolve_selection(
     )
     if isinstance(solved, Err):
         return solved
+    revisions = {registry.alias: registry.resolved_revision for registry in marketplace.registries}
     artifacts = tuple(
         ResolvedArtifact(
             artifact.version,
@@ -646,6 +653,7 @@ def resolve_selection(
                 solved.value.chosen[dependency].version.coordinate
                 for dependency in solved.value.edges.get(identity, frozenset())
             ),
+            revisions.get(artifact.version.coordinate.source),
         )
         for identity, artifact in solved.value.chosen.items()
     )

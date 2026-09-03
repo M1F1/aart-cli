@@ -177,6 +177,11 @@ def _selection_data(selection: ResolvedSelection) -> dict[str, object]:
                 "payload_digest": str(item.version.payload_digest),
                 "publication": item.version.publication.value,
                 "registry_snapshot": str(item.version.registry_snapshot),
+                **(
+                    {}
+                    if item.source_revision is None
+                    else {"source_revision": item.source_revision}
+                ),
             }
             for item in selection.artifacts
         ],

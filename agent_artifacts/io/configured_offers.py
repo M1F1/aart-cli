@@ -57,6 +57,7 @@ from .source_store import read_current_source
 __all__ = [
     "CONFIGURED_OFFERS_INVALID",
     "ConfiguredMarketplace",
+    "project_configured_registry",
     "read_configured_marketplace",
 ]
 
@@ -148,7 +149,7 @@ def _package_entries(snapshot: SourceSnapshot, prefix: tuple[str, ...]):
     )
 
 
-def _graph_source(
+def project_configured_registry(
     configured: ConfiguredSource,
     current: CurrentSource,
 ) -> Result[tuple[GraphSource, tuple[str, ...]]]:
@@ -249,7 +250,7 @@ def read_configured_marketplace(
         states.append(MarketplaceSourceState(configured, health, order))
         if configured.kind is not SourceKind.REGISTRY_GIT or health.current is None:
             continue
-        projected = _graph_source(configured, health.current)
+        projected = project_configured_registry(configured, health.current)
         if isinstance(projected, Err):
             return projected
         graph_sources.append(projected.value[0])

@@ -417,6 +417,17 @@ def _project_graph_source(
             )
         )
 
+    # The approved registry projection is the canonical consumer representation produced by
+    # promotion.  Reuse the same compiler as the persistent shell instead of interpreting it as
+    # the older lock/index maintainer workspace below.
+    if any(str(entry.path).startswith("registry/") for entry in snapshot.entries):
+        from agent_artifacts.io.configured_offers import project_configured_registry
+
+        approved = project_configured_registry(configured, current)
+        if isinstance(approved, Err):
+            return approved
+        return Ok(_GraphProjection(approved.value[0]))
+
     files = {str(item.path): item for item in snapshot.entries}
     source_entry = files.get("aart-source.json")
     registry_entry = files.get("aart-registry.json")

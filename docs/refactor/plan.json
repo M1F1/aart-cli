@@ -201,7 +201,34 @@
     {
       "id": "CP-17",
       "title": "Git-backed live acceptance",
-      "status": "in_progress"
+      "status": "in_progress",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Real Git acquisition through validation and durable source publication",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Public sync, Marketplace install and receipt with the real Git revision",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "Runtime launch and explicit update traceable to a new Git commit",
+          "status": "todo"
+        },
+        {
+          "id": "4",
+          "title": "Drift, repair, rollback and uninstall over the live installation",
+          "status": "todo"
+        },
+        {
+          "id": "5",
+          "title": "Collection and bulk install with one full-chain acceptance proof",
+          "status": "todo"
+        }
+      ]
     },
     {
       "id": "CP-18",

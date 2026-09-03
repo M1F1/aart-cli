@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from agent_artifacts.application.promotion import (
+    load_registry_versions,
+    validate_promoted_registry,
+)
 from agent_artifacts.configuration.model import ConfiguredSource, SourceKind
 from agent_artifacts.domain.diagnostics import Diagnostic, Severity
 from agent_artifacts.domain.identifiers import SourceId
@@ -176,22 +180,35 @@ def _registry_identity(request: SourceValidationRequest) -> Result[SourceId]:
 def validate_registry_source_candidate(
     request: SourceValidationRequest,
 ) -> Result[ValidatedSourceCandidate]:
-    """Require a current compiled registry before admitting it as a marketplace source."""
+    """Require one validated registry representation before admitting a marketplace source."""
 
-    checked = validate_registry_workspace(
-        request.candidate.snapshot,
-        executable_version=request.executable_version,
-        available_capabilities=request.available_capabilities,
-        require_compiled=True,
-    )
-    if isinstance(checked, Err):
-        return checked
-    if not checked.value.passed:
-        diagnostics = tuple(
-            diagnostic for check in checked.value.checks for diagnostic in check.diagnostics
+    snapshot = request.candidate.snapshot
+    # Promotion produces the approved, versioned registry representation named by the Product
+    # Specification (`registry/versions/*` plus exact catalogs).  The older maintainer workspace
+    # compiler produces `aart.lock.json` and `aart.index.json`.  During the strangler migration both
+    # remain readable, but they must be validated by the authority that writes their own shape.
+    if any(str(entry.path).startswith("registry/") for entry in snapshot.entries):
+        versions = load_registry_versions(snapshot)
+        if isinstance(versions, Err):
+            return versions
+        checked_promotion = validate_promoted_registry(snapshot, versions.value)
+        if isinstance(checked_promotion, Err):
+            return checked_promotion
+    else:
+        checked = validate_registry_workspace(
+            snapshot,
+            executable_version=request.executable_version,
+            available_capabilities=request.available_capabilities,
+            require_compiled=True,
         )
-        assert diagnostics
-        return Err(diagnostics)
+        if isinstance(checked, Err):
+            return checked
+        if not checked.value.passed:
+            diagnostics = tuple(
+                diagnostic for check in checked.value.checks for diagnostic in check.diagnostics
+            )
+            assert diagnostics
+            return Err(diagnostics)
     identity = _registry_identity(request)
     if isinstance(identity, Err):
         return identity

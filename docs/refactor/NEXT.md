@@ -128,15 +128,26 @@ items, none blocking a mandatory invariant: B-060 (84 unclassified mutation surv
 (a machine with no credential provider reports no credentials rather than saying it could not look),
 B-052, B-055 and B-059.
 
-**CP-17 Git-backed live acceptance is IN PROGRESS.** Step 1 joins the first previously isolated
-stages. `tests/git_source_publication_e2e_test.py` builds a real repository, resolves it with the
-system Git adapter, validates the exact returned candidate, publishes that candidate without
-reconstructing it, and reads it through a fresh source-store reader. The durable candidate equals
-the adapter candidate including its real commit, immutable-Git origin, paths, bytes and executable
-metadata. A second acquisition of the unmoved repository creates no snapshot; a new upstream commit
-becomes the next current snapshot. No production code or security boundary changed.
-The step is VERIFIED: `make quality` is green across all nine gates with 3,293 tests, one skipped
-and 85.38% branch coverage; the separately run `make integration` is green with 323 E2E tests.
+**CP-17 Git-backed live acceptance is IN PROGRESS.** Steps 1 and 2 now join Git acquisition to a
+real public consumer install. Step 1 (`git_source_publication_e2e_test.py`) passes the complete
+candidate returned by the system Git adapter through validation, publication and a fresh store read
+without reconstruction. Step 2 (`git_backed_consumer_e2e_test.py`) commits a promoted vendored
+registry to a real repository, configures its valid HTTPS identity, substitutes only the transport
+port, and drives public source sync, Marketplace list and install. Sync, the Marketplace row, the
+returned receipt and a fresh durable receipt read all name Git's actual SHA rather than
+`"a" * 40`; the installed Skill bytes are the promoted payload.
+
+Step 2 found and closed B-057's consumer-facing half. Promotion writes the versioned approved
+registry representation required by the Product Specification, but source validation and the
+read-only CLI Marketplace still interpreted it as the older compiled maintainer workspace. D-147
+routes each shape through its writer's validator and reuses the canonical configured-registry
+projection. The old `registry publish` command's disagreement remains backlog; 165.27/165.28 make
+Git review/merge, not that command, the publication boundary. D-148 makes the synchronized source
+revision an optional, digest-bound provenance value through resolution, planning and lifecycle
+receipt serialization, so old receipts remain readable without invented history.
+
+Steps 1 and 2 are VERIFIED. Step 2's full `make quality` is green with 3,295 tests, one skipped and
+85.39% branch coverage; the separately run `make integration` is green with 324 E2E tests.
 
 **CP-15 is VERIFIED — all eight steps done.** Step 8 is
 `tests/credential_contract_migration_e2e_test.py`, closing INV-231 and INV-232 and the slice with
@@ -252,16 +263,15 @@ read as "this source is gone" in three places, so one invalid upstream revision 
 
 ## Exact next action
 
-**Implement CP-17 step 2: carry the real Git candidate through the public consumer surface.** Use a
-real user configuration naming a valid remote HTTPS hostname, then substitute only the Git
-acquisition port so that its genuine `GitSnapshotRequest` clones the temporary repository. Drive
-`aart source sync`, Marketplace listing and one install; the installed receipt must name the real
-commit produced in step 1. Configuration parsing, source identity, transport policy, publication
-and consumer resolution remain production code.
+**Implement CP-17 step 3.** Extend the same Git-backed consumer fixture: start the installed
+artifact, make and commit an upstream registry update, run public source sync, and prove
+that only an explicit Marketplace update changes the installed bytes and records the new real Git
+SHA. The update must be traceable to the approved registry state, not to an author repository.
 
 Do not configure `file://` or a local path and do not set `allow_local_transport` through the public
-flow. Both refusals are security boundaries. B-057 must be resolved before the later promotion /
-publication chain needs those two commands to compose; it does not broaden step 2.
+flow. Both refusals remain security boundaries. Do not make the legacy `registry publish` command
+part of the chain: the accepted publication authority is Git review/merge, and B-057 retains the
+command disagreement as noncritical backlog.
 
 The CP-14 record follows.
 

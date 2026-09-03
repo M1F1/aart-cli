@@ -1369,6 +1369,14 @@ not do it under either layout. This becomes critical if CP-17's Git-backed accep
 `promote` and `publish` in sequence over one repository, which is the natural way to write it —
 whoever opens CP-17 should read this first.
 
+**CP-17 step 2 update.** The consumer consequence became critical and is closed: public source
+validation and Marketplace projection now recognize promotion's versioned approved-registry shape
+and validate it with `load_registry_versions` / `validate_promoted_registry` (D-147). The original
+command disagreement remains here: the older `registry publish` verb still expects the compiled
+maintainer-workspace shape. CP-17 follows the accepted 165.27/165.28 boundary instead -- promotion
+prepares local state and Git review/merge publishes it -- so making that legacy verb compose is not
+required to continue the live chain.
+
 ## B-058 — Scoped mutmut can reuse stale outcomes after test-only changes
 
 Found in CP-16 step 1. After adding assertions to `tests/doctor_command_e2e_test.py`, rerunning the

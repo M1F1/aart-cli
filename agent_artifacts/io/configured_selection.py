@@ -110,6 +110,7 @@ def _approved_artifact(
 def _approved_snapshot(
     alias,
     snapshot: SourceSnapshot,
+    resolved_revision: str | None = None,
 ) -> Result[ApprovedRegistrySnapshot | None]:
     loaded = load_registry_versions(snapshot)
     if isinstance(loaded, Err):
@@ -138,6 +139,7 @@ def _approved_snapshot(
                 next(iter(registry_snapshots)),
                 RegistryTrust.REGISTRY_REVIEWED,
                 tuple(artifacts),
+                resolved_revision=resolved_revision,
             )
         )
     except ValueError as error:
@@ -165,7 +167,11 @@ def load_configured_approved_marketplace(
             return current
         if current.value is None:
             continue
-        approved = _approved_snapshot(configured.alias, current.value.candidate.snapshot)
+        approved = _approved_snapshot(
+            configured.alias,
+            current.value.candidate.snapshot,
+            current.value.candidate.resolved_revision,
+        )
         if isinstance(approved, Err):
             return approved
         if approved.value is not None:

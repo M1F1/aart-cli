@@ -105,7 +105,7 @@ CP-15 step 8's and CP-16 step 4c's precedent, not quietly dropped.
    `git rev-parse` printed, replacing the `"a" * 40` placeholder. An unchanged second acquisition
    converges without another snapshot, an upstream commit becomes current, and a fresh reader
    returns the complete candidate byte-for-byte.
-2. That snapshot reaches a consumer: a real user configuration naming a real remote host, synced
+2. **DONE.** That snapshot reaches a consumer: a real user configuration naming a real remote host, synced
    through the public verb with the transport port standing in for the network only, then
    marketplace listing and one install whose receipt names the real commit.
 3. The installed artifact starts, updates when the upstream repository moves, and the update is
@@ -135,12 +135,51 @@ No production code changed. `allow_local_transport=True` appears only on the ada
 test, exactly where that test-only capability already existed; neither public source synchronization
 nor configuration parsing was widened.
 
+## Step 2 evidence
+
+`tests/git_backed_consumer_e2e_test.py` commits a real promoted, vendored registry tree, writes a
+real user configuration whose source is the valid remote identity
+`https://company.example/agents/company.git`, and drives the public `aart source sync`,
+`aart marketplace list` and `aart marketplace install` verbs. The only substitution is the
+acquisition port: it first asserts that production supplied the remote URL with
+`allow_local_transport=False`, then hands an otherwise identical request to the real system-Git
+adapter with the temporary repository as transport. The public sync payload and Marketplace row
+carry Git's real SHA, the Skill bytes are placed by the install, and both the returned lifecycle
+receipt and a fresh `LocalReceiptStore` read name the same SHA.
+
+The first RED stopped at source validation rather than the final receipt and made B-057 critical
+for this increment: a promoted registry has the Product Specification's versioned
+`artifacts/<kind>/<name>/<version>` and `registry/{versions,index,snapshot}` representation, while
+the consumer was validating it as the older maintainer workspace with unversioned artifact roots
+and `aart.{lock,index}.json`. D-147 routes each representation through the validator that writes
+it, retains the legacy compiled form during the strangler migration, and reuses the shell's
+approved-registry projection in the read-only Marketplace path. The remaining disagreement between
+the old `registry publish` command and promotion stays in B-057; the accepted Git/PR publication
+boundary does not require that command to turn a local promotion into publication.
+
+The final RED was the missing provenance field. D-148 carries the synchronized source revision
+through `ApprovedRegistrySnapshot`, `ResolvedArtifact` and the digest-bound `InstallPlan`, then
+writes it on each receipt member. The field is additive and optional: older plans/receipts retain
+their canonical bytes and still parse as unknown rather than receiving invented provenance.
+Replacing the configured revision with `"a" * 40` made the E2E fail at the receipt assertion while
+sync and Marketplace still reported the real SHA. A fresh scoped run over
+`io/configured_selection.py` killed the mutation that omitted the new revision. A second fresh run
+over `sources/validation.py` initially found that a valid non-empty registry could not tell whether
+the explicit promoted-registry validator ran, because `load_registry_versions` already performs
+that validation. The added empty/stale-catalog negative kills that omission and holds the case for
+which the explicit call exists; the rerun produced 76 killed, 61 outside the selected tests and 25
+survivors, none in the new representation dispatch.
+
 ## Quality gates
 
 - Step 1 focused: 25 tests across the new Git-to-store E2E, Git adapter, source store and source
   acquisition suites are green; ruff format/check and mypy are green.
 - Step 1 full gates: `make quality` is green across all nine gates -- 3,293 tests, one skipped and
   85.38% branch coverage -- and the separately run `make integration` is green with 323 E2E tests.
+- Step 2 focused: 108 tests across Git publication, source validation/sync, both Marketplace
+  projections, configured resolution/install and receipt round-trip are green; ruff and mypy are
+  green. Full `make quality` is green with 3,295 tests, one skipped and 85.39% branch coverage;
+  separately run `make integration` is green with 324 E2E tests.
 
 ## Blockers
 
@@ -150,9 +189,9 @@ every downstream stage reachable through public commands.
 
 ## Handoff
 
-- Current working state: step 1 VERIFIED; no production code changed.
-- Exact next action: step 2 -- public source sync, Marketplace listing and one
-  install over the real Git candidate, with only the network transport substituted.
+- Current working state: steps 1 and 2 are VERIFIED.
+- Exact next action: step 3 -- start the installed artifact, commit an upstream
+  update, synchronize it and prove the explicit update plus its receipt bind the new Git commit.
 - Do not undo: the Git transport allowlist, and the configuration schema's refusal of local Git
   locations behind it. `file://` and local paths are refused on purpose at both layers, and no test
   may widen either to make itself hermetic. Substitute the transport port; never the verdict.
