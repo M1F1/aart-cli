@@ -2711,3 +2711,31 @@ that something is absent, make the fixture produce it once and watch the asserti
 that any collection an absence is checked against is non-empty first — a fourth draft test here read
 a receipt step's `effect` as a dict when it is a string, filtered every step away, and passed over an
 empty set. See [[D-091]]: a test is not evidence until a real mutation turns it red.
+
+## D-139 — Doctor is one read projected twice, and repair starts as a plan
+
+**Context.** CP-16 needs a public, environment-wide `aart doctor`. The accepted screen-29
+projection already answers health, while the reconciliation engine already answers the smallest
+policy-permitted repair. Reimplementing either answer in the command would let the visible finding
+and the executable plan disagree. Resolving Marketplace content would also make inspection of an
+installed artifact depend on its source still being available.
+
+**Decision.** Read all canonical project and user installations once with
+`read_installed_inspections`. Project each same immutable observation through `project_doctor` for
+human health and through `prepare_configured_repair` for a canonical repair plan. Emit plans only
+where observed drift is non-empty. The first public command is read-only: it reports those plans but
+does not apply them, and an attention finding exits non-zero. It loads configuration without
+requiring source content.
+
+**Why.** "Environment-wide" is a scope statement, not a synonym for the current project, and the
+real two-scope E2E turns red if the read is narrowed. "Doctor uses reconciliation" means the plan
+must come from the same planner lifecycle repair executes, not that Doctor may choose a convenient
+installation action. A non-empty healthy fixture turns red if healthy artifacts receive plans, so
+the empty repair collection is evidence rather than an empty-machine accident. Source-independent
+inspection is what lets Doctor explain an installation whose registry has disappeared.
+
+**Consequence.** JSON carries every measured artifact, its component drift, and the complete domain
+repair plans; the existing screen-29 renderer now lists the same artifacts and reasons before its
+counts. A later repair entry point must review, re-inspect and re-plan before applying one of these
+plans. It may not treat this report as authorization and may not replace the plans with
+reinstall-all.

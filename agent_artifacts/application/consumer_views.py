@@ -1791,6 +1791,7 @@ class DoctorView:
     issues: tuple[str, ...]
     repairable_issues: tuple[str, ...]
     actions: tuple[str, ...]
+    artifacts: tuple[InstalledArtifactView, ...] = ()
 
 
 def project_doctor(artifacts: tuple[InstalledArtifactView, ...]) -> DoctorView:
@@ -1809,6 +1810,7 @@ def project_doctor(artifacts: tuple[InstalledArtifactView, ...]) -> DoctorView:
         issues,
         repairable,
         actions,
+        artifacts,
     )
 
 

@@ -1359,3 +1359,20 @@ step 7's boundary claims are unaffected: they are about what promotion does *not
 not do it under either layout. This becomes critical if CP-17's Git-backed acceptance drives
 `promote` and `publish` in sequence over one repository, which is the natural way to write it —
 whoever opens CP-17 should read this first.
+
+## B-058 — Scoped mutmut can reuse stale outcomes after test-only changes
+
+Found in CP-16 step 1. After adding assertions to `tests/doctor_command_e2e_test.py`, rerunning the
+same `make mutants ONLY=agent_artifacts/commands/doctor.py TESTS="tests/doctor_command_e2e_test.py"`
+completed at zero mutants per second and returned the previous verdicts. Moving the ignored
+`mutants/` directory aside forced a fresh run and killed eleven additional mutants. The wrapper's
+`finally` then restores `setup.cfg`, so a later `mutmut show` cannot load the scoped source path
+either; the generated mutant files have to be inspected directly.
+
+The tool should have an explicit fresh/invalidation mode and a supported way to inspect survivors
+after the tracked configuration is restored. Until then, move the ignored mutation cache aside
+before assessing a run whose tests changed and record whether the result was fresh. Noncritical:
+D-134 keeps mutation testing advisory, and targeted manual mutations remain the evidence for each
+declared claim.
+
+Evidence/links: D-134; CP-16 slice step 1; `scripts/mutants.py`.

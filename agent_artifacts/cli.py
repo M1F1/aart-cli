@@ -57,6 +57,12 @@ def _run_marketplace(request: Request) -> int:
     return marketplace.run(request)
 
 
+def _run_doctor(request: Request) -> int:
+    from .commands import doctor
+
+    return doctor.run(request)
+
+
 # Command name -> handler. Value-keyed dispatch, not a class hierarchy (docs/design/DESIGN.md §14).
 DISPATCH: dict[str, Callable[[Request], int]] = {
     "upgrade": upgrade.run,
@@ -65,6 +71,7 @@ DISPATCH: dict[str, Callable[[Request], int]] = {
     "reporting": _run_reporting,
     "source": _run_source,
     "marketplace": _run_marketplace,
+    "doctor": _run_doctor,
 }
 
 # Structured results used by interactive frontends. Flag mode retains ``DISPATCH`` and its
@@ -121,6 +128,20 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--source", dest="source_dir", metavar="DIR", help=help_text)
 
     sub = parser.add_subparsers(dest="command", metavar="COMMAND")
+
+    # doctor ------------------------------------------------------------------ #
+    p = sub.add_parser(
+        "doctor",
+        formatter_class=_HELP_FORMATTER,
+        help="inspect installed artifacts and report minimal repair plans",
+        description=(
+            "Inspect the installed environment, report measured drift, and construct the smallest "
+            "policy-permitted reconciliation plans. This command never reinstalls everything and "
+            "does not apply the plans it reports."
+        ),
+    )
+    _add_project(p)
+    _add_json(p)
 
     # upgrade ----------------------------------------------------------------- #
     p = sub.add_parser(

@@ -15,6 +15,15 @@ safeguards* -- and that phrase was the slice's whole subject: a safeguard at a s
 the verb an operator actually runs makes of it. All sixteen now carry public-flow evidence, and the
 narrative below is kept as the record of how each one got there.
 
+**CP-16 Global doctor and supportability is IN PROGRESS.** Step 1 adds the public, read-only
+`aart doctor` (D-139): one environment-wide observation of canonical project and user installations
+feeds both the accepted screen-29 health projection and the existing minimal-reconciliation
+planner. Its JSON carries every item, component drift and full repair plans; its human output names
+the same artifacts and reasons. It resolves no Marketplace content and applies nothing. Step 1 is
+VERIFIED: six real-machine E2E scenarios, a fresh 132-mutant pass, all nine quality gates (3,243
+tests, 85.34% branch coverage) and 279 E2E tests are green. The active slice is
+`docs/refactor/slices/CP-16-global-doctor-supportability.md`.
+
 **CP-15 is VERIFIED — all eight steps done.** Step 8 is
 `tests/credential_contract_migration_e2e_test.py`, closing INV-231 and INV-232 and the slice with
 them. 165.19 says old credentials remain if still referenced by other installed artifacts, and
@@ -129,48 +138,22 @@ read as "this source is gone" in three places, so one invalid upstream revision 
 
 ## Exact next action
 
-**Open CP-16 — Global doctor and supportability.** CP-15 is VERIFIED and every invariant it
-declared is EVIDENCED, so the critical path moves on per `EXECUTION_PLAN.md`: implement `aart doctor`
-as environment-wide inspection and reconciliation, with readable Activity/Receipt diagnostics, safe
-repair entry points and machine-complete JSON. The plan is explicit that **reinstall-all is not a
-repair** — do not implement it as one.
+**Implement CP-16 step 2: B-051's offline readiness report.** The next RED belongs to the public
+`aart doctor`: before an install is attempted it must report 165.11's three independent
+capabilities -- metadata cached, canonical payload cached and runtime dependencies cached --
+without reducing them to one online/offline boolean.
 
-Start from the backlog CP-15 filled for exactly this slice, because three of its items are `doctor`'s
-subject matter and were written with the evidence attached:
+Reuse the already-measured refusal seams from `tests/offline_capability_test.py`; do not invent a
+second interpretation of cache or dependency readiness in the command. Establish which coordinate
+or source Doctor can honestly assess from durable state, then drive the report over a real temporary
+machine. Keep the three values distinct in JSON and human output, and prove each against its own
+mutation. The command remains a read: no synchronization, object publication, package-manager
+network access or install attempt is an acceptable way to answer readiness.
 
-- **B-051** is the closest thing to a specification already written down. 165.11 decomposes offline
-  installability into three capabilities — metadata cached / canonical payload cached / runtime
-  dependencies cached — and CP-15 step 3 proved AART *refuses* correctly on all three with three
-  distinct codes. What no verb does is **report** them before an install is attempted. That is a
-  doctor check with its acceptance criteria already measured.
-- **B-057** matters before CP-17, not after: `registry promote` writes a versioned layout
-  `registry publish` refuses, and `publish` requires an `aart-registry.json` marker `promote` does
-  not. Whoever drives the two verbs in sequence hits it first.
-- **B-052** (cancel-after-partial-apply has no public flow) and **B-055** (`ArtifactLifecycle.REMOVED`
-  is unreachable) are both diagnosability gaps of the kind doctor exists to close.
-
-The method does not change. Name the verb an operator runs, drive it over a real temporary machine,
-and prove each test red against a real mutation of the code it names. CP-15 ended with two lessons
-worth carrying: an assertion of *absence* is only evidence if the same fixture can be made to produce
-the thing (step 8's third mutation killed nothing until the fixture carried a credential at all), and
-an assertion over a collection must assert the collection non-empty first (step 8's fourth draft
-filtered every element away and still passed).
-
-The shape steps 1–4b established is the one to repeat — name the verb an operator runs, drive it
-over a real temporary machine, and prove each test red against a real mutation of the code it names,
-not against a broken fixture. Where a test is a guard with no mutation available, say so in its
-docstring and rest its non-vacuousness on a sibling that moves the same values. Now also run
-`make mutants` over the module the step changes, scoped to the tests that claim to cover it (D-134),
-and treat a survivor inside the step's own claims as a test that does not hold what its name says.
-
-Three fixtures to build on, all real machines driven through the actual CLI:
-`_environment_over_a_writable_source` in `tests/source_sync_command_e2e_test.py` (a synchronized
-local source a test may republish into); `_environment_whose_verification_fails` in
-`tests/verification_failure_e2e_test.py` (a declared setup that runs actual effects); and
-`_environment_whose_rollback_fails` in `tests/interrupted_execution_e2e_test.py` (a real custom
-entrypoint following the plan/apply/verify/rollback protocol). The sweep also found no test file
-matching `collection.*drift` or `manual.*drift`, so step 6 is greenfield too; exact-collection drift
-is blocked on the Collection capability B-038 is sequenced behind (D-131).
+D-139 is the constraint step 2 inherits: one observation is projected through existing authority.
+B-058 is tooling only -- force a fresh ignored mutmut cache after test changes and record survivors
+as findings, never a score. Safe reviewed repair remains step 3; Activity/Receipt/configuration and
+credential diagnostics remain step 4. B-057 belongs before CP-17 and does not expand this increment.
 
 The CP-14 record follows.
 

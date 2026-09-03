@@ -808,12 +808,18 @@ def render_settings(view: ConsumerSettings, focus: str = "") -> tuple[str, ...]:
 def render_doctor(view: DoctorView, profile: PresentationProfile) -> tuple[str, ...]:
     if not isinstance(view, DoctorView) or not isinstance(profile, PresentationProfile):
         raise ValueError("Doctor rendering needs a Doctor view and presentation profile")
-    lines = [
-        "AART / Check system",
-        f"{view.ready_count} ready",
-        f"{view.attention_count} needs attention",
-    ]
-    lines.extend(f"  - {item}" for item in view.issues)
+    lines = ["AART / Check system"]
+    for item in view.artifacts:
+        marker = "✓" if item.health in {"ready", "update"} else "⚠"
+        lines.append(f"{marker} {item.coordinate}")
+        if item.health in {"attention", "broken"}:
+            lines.extend(f"  {drift.component}: {_human(drift.kind)}" for drift in item.drift)
+    lines.extend(
+        (
+            f"{view.ready_count} ready",
+            f"{view.attention_count} needs attention",
+        )
+    )
     if view.actions:
         lines.append("Actions: repair issues using minimal reconciliation plans.")
     if profile is PresentationProfile.VERBOSE and view.repairable_issues:
