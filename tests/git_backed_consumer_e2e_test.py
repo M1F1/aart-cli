@@ -6,6 +6,7 @@ import contextlib
 import io
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -28,7 +29,11 @@ from agent_artifacts.io.receipt_store import LocalReceiptStore
 from agent_artifacts.protocol.native_tree import SnapshotEntry, SnapshotEntryKind, SourceSnapshot
 from agent_artifacts.sources.git import acquire_git_snapshot
 from agent_artifacts.sources.model import GitSnapshotRequest
-from tests.configured_installation_draft_e2e_test import _published_registry
+from tests.configured_installation_draft_e2e_test import _published_registries
+from tests.configured_update_command_e2e_test import (
+    AUTHORED_SKILL_1_3_0,
+    UPDATED_SKILL_BODY,
+)
 from tests.marketplace_fixtures import configured_source
 from tests.placed_installation_e2e_test import AUTHORED_SKILL, SKILL_BODY
 from tests.registry_maintenance_fixtures import empty_registry_snapshot
@@ -49,7 +54,7 @@ def _git(repository: Path, *arguments: str) -> str:
 
 
 def _materialize(root: Path, snapshot: SourceSnapshot) -> None:
-    root.mkdir()
+    root.mkdir(exist_ok=True)
     for entry in snapshot.entries:
         target = root.joinpath(*entry.path.parts)
         if entry.kind is SnapshotEntryKind.DIRECTORY:
@@ -62,8 +67,15 @@ def _materialize(root: Path, snapshot: SourceSnapshot) -> None:
         target.chmod(0o700 if entry.executable else 0o600)
 
 
-def _registry_snapshot() -> SourceSnapshot:
-    """Add the public workspace identity that promotion output does not yet carry (B-057)."""
+def _registry_snapshot(
+    *authored: tuple[tuple[str, str] | tuple[str, str, bool], ...],
+) -> SourceSnapshot:
+    """Add the public workspace identity that promotion output does not yet carry (B-057).
+
+    The authored trees are a parameter because a registry gains versions over time and each
+    promotion rebinds the ones it retains. Publishing the second version means promoting both, in
+    order, exactly as the maintainer side does -- not editing the first registry's bytes.
+    """
 
     markers = tuple(
         SnapshotEntry(
@@ -74,7 +86,7 @@ def _registry_snapshot() -> SourceSnapshot:
         )
         for entry in empty_registry_snapshot().entries
     )
-    published = _published_registry(AUTHORED_SKILL)
+    published = _published_registries(*(authored or (AUTHORED_SKILL,)))
     return SourceSnapshot(published.origin, (*markers, *published.entries))
 
 
@@ -120,6 +132,24 @@ class _Environment:
         config_path.parent.mkdir(parents=True, exist_ok=True)
         config_path.write_bytes(user_configuration_bytes(configuration))
         self.transport_requests: list[GitSnapshotRequest] = []
+
+    def publish(self, *authored: tuple[tuple[str, str] | tuple[str, str, bool], ...]) -> str:
+        """Move the real upstream repository the way a reviewed merge does.
+
+        The working tree is replaced rather than added to, because a promotion rewrites the
+        registry's index and snapshot metadata; leaving the previous ones in place would publish a
+        repository no maintainer could have produced.
+        """
+
+        for path in self.repository.iterdir():
+            if path.name == ".git":
+                continue
+            shutil.rmtree(path) if path.is_dir() else path.unlink()
+        _materialize(self.repository, _registry_snapshot(*authored))
+        _git(self.repository, "add", "-A")
+        _git(self.repository, "commit", "-m", "approved registry update")
+        self.head = _git(self.repository, "rev-parse", "HEAD")
+        return self.head
 
     def _local_transport(self, request: GitSnapshotRequest):
         """Substitute the unavailable network, after the production verdict built its request."""
@@ -198,6 +228,69 @@ class GitBackedConsumerE2ETest(unittest.TestCase):
             self.assertIsInstance(persisted, Ok, persisted)
             assert isinstance(persisted, Ok)
             self.assertEqual(persisted.value[0].artifacts[0].source_revision, env.head)
+
+    def test_an_upstream_commit_is_offered_but_only_an_explicit_update_rebinds_it(self) -> None:
+        """The seam CP-15 step 2 proved over a synthetic store, driven by a real Git commit.
+
+        `source_upstream_movement_e2e_test` already holds that a sync offers rather than applies.
+        What it cannot show is that the revision an operator is offered, reviews and ends up with is
+        the one Git actually resolved, because every revision in it is a string the test chose.
+        """
+
+        with tempfile.TemporaryDirectory() as raw:
+            env = _Environment(Path(raw).resolve())
+            delivered = env.project / ".claude/skills/code-review/SKILL.md"
+            env.run("source", "sync", source_transport=True)
+            env.run("marketplace", "install", COORDINATE, "--profile", "claude", "--yes")
+            installed_revision = env.head
+
+            moved = env.publish(AUTHORED_SKILL, AUTHORED_SKILL_1_3_0)
+
+            self.assertNotEqual(moved, installed_revision)
+
+            sync_code, synchronized = env.run("source", "sync", source_transport=True)
+
+            self.assertEqual(sync_code, 0, synchronized)
+            self.assertEqual(synchronized["sources"][0]["resolved_revision"], moved)
+            # The sync offered the commit and applied nothing: the delivered bytes are the ones
+            # reviewed at install, and the record still names the revision they came from.
+            self.assertEqual(delivered.read_text(encoding="utf-8"), SKILL_BODY)
+
+            review_code, review = env.run(
+                "marketplace", "update", COORDINATE, "--profile", "claude"
+            )
+
+            self.assertEqual(review_code, 0, review)
+            self.assertFalse(review["finalized"])
+            self.assertEqual(review["review"]["items"][0]["key"], "company/skill/code-review@1.3.0")
+            self.assertEqual(delivered.read_text(encoding="utf-8"), SKILL_BODY)
+
+            update_code, updated = env.run(
+                "marketplace",
+                "update",
+                COORDINATE,
+                "--profile",
+                "claude",
+                "--expect",
+                review["review_digest"],
+                "--yes",
+            )
+
+            self.assertEqual(update_code, 0, updated)
+            self.assertTrue(updated["finalized"])
+            self.assertEqual(delivered.read_text(encoding="utf-8"), UPDATED_SKILL_BODY)
+            self.assertEqual(updated["receipt"]["artifacts"][0]["source_revision"], moved)
+
+            # Both revisions are real, distinct and durable: the audit trail remembers the commit
+            # each installation came from, which is the whole point of recording one.
+            persisted = LocalReceiptStore(str(Path(env.paths.data_root) / "state")).actions()
+            self.assertIsInstance(persisted, Ok, persisted)
+            assert isinstance(persisted, Ok)
+            recorded = [
+                item.artifacts[0].source_revision for item in persisted.value if item.artifacts
+            ]
+            self.assertEqual(recorded[0], moved)
+            self.assertIn(installed_revision, recorded)
 
 
 if __name__ == "__main__":

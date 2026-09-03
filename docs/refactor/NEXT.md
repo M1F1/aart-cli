@@ -275,10 +275,31 @@ claimed and a scoped mutmut run leaving no survivor in the code those tests clai
 `_safe_line` and the sort keys, are B-063). D-149 records the general form: a claim held by a
 fixture's accidental shape is one refactor away from being held by nothing.
 
-**Implement CP-17 step 3.** Extend the same Git-backed consumer fixture: start the installed
-artifact, make and commit an upstream registry update, run public source sync, and prove
-that only an explicit Marketplace update changes the installed bytes and records the new real Git
-SHA. The update must be traceable to the approved registry state, not to an author repository.
+**Step 3a is done; implement step 3b.** Step 3 bundles two things needing different fixtures --
+the installed artifact *starting*, and the installation *following* the upstream repository -- so it
+is split the way CP-16 step 4 was.
+
+3a is the movement half. The same Git-backed fixture now re-promotes the registry with both
+versions, replaces the repository's working tree and commits, so the second commit is a real SHA
+distinct from the first. One continuous run holds five claims through public verbs: a second sync
+reports the new commit; the delivered bytes are still the ones reviewed at install, so the sync
+offered and applied nothing; `marketplace update` without `--yes` reviews, names 1.3.0 and writes
+nothing; the confirmed update with the review's `--expect` digest converges the delivery and records
+a receipt naming the new commit; and the durable trail holds both revisions at once.
+
+The mutation that justifies the increment: writing the source store's current pointer once and never
+advancing it turns this test red on a stale `1.2.0` offer **while step 2's chain test still passes**,
+because a fixture that syncs once from an empty store cannot see a pointer that never advances.
+
+A second instance of D-149's gap was found by going to look for it: `ApprovedRegistrySnapshot`
+validates its `resolved_revision` exactly as `ResolvedArtifact` does, and deleting that guard also
+left the whole repository green -- 3,357 tests. Both are now stated as properties in
+`tests/git_revision_provenance_test.py`.
+
+**3b is the next action: start the installed artifact over a Git-backed source.** That needs the
+real virtual environment and stdio launcher `mcp_stdio_e2e_test` builds, not the skill this fixture
+installs, so it means carrying an MCP artifact through the same real Git repository. The update must
+stay traceable to the approved registry state, not to an author repository.
 
 Do not configure `file://` or a local path and do not set `allow_local_transport` through the public
 flow. Both refusals remain security boundaries. Do not make the legacy `registry publish` command

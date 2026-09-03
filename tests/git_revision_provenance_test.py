@@ -30,6 +30,7 @@ from agent_artifacts.application.consumer_views import (
 )
 from agent_artifacts.domain.identifiers import is_pinned_source_revision
 from agent_artifacts.domain.result import Ok
+from tests.approved_marketplace_resolution_test import _snapshot
 from tests.installation_proposal_test import _resolved
 from tests.installation_transaction_receipt_test import MOMENT, _executed
 
@@ -76,6 +77,31 @@ class ResolvedRevisionProperties(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             replace(_resolved(), source_revision=GIT_REVISION[:12])
+
+
+class ApprovedSnapshotRevisionProperties(unittest.TestCase):
+    """The same guard, in the second place it was written.
+
+    `ApprovedRegistrySnapshot` validates its `resolved_revision` exactly as `ResolvedArtifact`
+    validates its own, and for the same reason: it is the revision an operator is offered, and the
+    one resolution copies onto everything downstream.  It was unheld for the same reason too --
+    every revision any test supplies is well formed, so no test could ever reach the branch.
+    """
+
+    @SETTINGS
+    @given(st.text(max_size=64).filter(lambda value: not is_pinned_source_revision(value)))
+    def test_no_unpinned_string_is_accepted_as_an_approved_snapshot_revision(
+        self, value: str
+    ) -> None:
+        with self.assertRaises(ValueError):
+            replace(_snapshot("company", "a", ()), resolved_revision=value)
+
+    def test_both_pinned_revision_kinds_and_an_absent_one_are_accepted(self) -> None:
+        for value in (GIT_REVISION, LOCAL_REVISION, None):
+            with self.subTest(revision=value):
+                snapshot = replace(_snapshot("company", "a", ()), resolved_revision=value)
+
+                self.assertEqual(snapshot.resolved_revision, value)
 
 
 class OlderReceiptProvenanceTest(unittest.TestCase):

@@ -3008,6 +3008,14 @@ writing `null` in place of omitting turns the byte-level test red on its own ass
 incidental round-trip coverage is unchanged and still passes -- this states what it was holding
 without being asked to, which is what makes it survivable when the encoder is next edited.
 
+**The second instance, found by looking for it.** The same guard is written twice: `ResolvedArtifact`
+validates the revision it carries, and `ApprovedRegistrySnapshot` validates the revision an operator
+is offered and resolution copies downstream. Deleting the second one also left the whole repository
+green -- 3,357 tests -- and for the same structural reason: every revision any test supplies is well
+formed, so nothing could reach the branch. Both are now stated as properties in the same file. A gap
+of this shape is rarely alone, because what causes it is not carelessness but the fixtures being
+realistic.
+
 **The general form.** A test that turns red under a mutation is evidence that *something* holds the
 claim, not that the claim is stated. A claim held only by a fixture's accidental shape is one
 refactor of that fixture away from being held by nothing, and its name gives the next reader no

@@ -203,6 +203,41 @@ No production code changed. D-149 records the general form: a test that turns re
 shows that *something* holds the claim, not that the claim is stated, and a claim held by a
 fixture's accidental shape is one refactor away from being held by nothing.
 
+## Step 3a evidence — a real commit moves, and only an explicit update follows it
+
+Step 3 as planned bundles two things: the installed artifact *starting*, and the installation
+*following* the upstream repository. They need different fixtures -- starting means a real MCP
+server with a real virtual environment, following means a second real commit -- so they are split
+the way CP-16 step 4 was. 3a is the movement half and is done; 3b, MCP start over a Git-backed
+source, remains.
+
+`git_backed_consumer_e2e_test` now moves the real upstream repository: the registry is re-promoted
+with both versions, its working tree replaced rather than added to (a promotion rewrites the index
+and snapshot metadata, and leaving the old ones would publish a repository no maintainer could have
+produced), and committed. The second commit is a real SHA distinct from the first.
+
+One continuous run then holds five claims through public verbs. A second `source sync` reports the
+new commit as the resolved revision. The delivered bytes are still the ones reviewed at install --
+the sync offered and applied nothing. `marketplace update` without `--yes` reviews, names version
+1.3.0 and still writes nothing. The confirmed update, with the review's `--expect` digest, converges
+the delivery and records a receipt naming the *new* commit. And the durable audit trail holds both
+revisions: the newest action names the commit it came from and the install before it still names
+the one it came from.
+
+`source_upstream_movement_e2e_test` already proved that a sync offers rather than applies. What it
+could not show is that the revision an operator is offered, reviews and ends up with is the one Git
+actually resolved, because every revision in it is a string that test chose.
+
+Three mutations, and the third is the one that matters:
+
+- Deleting the `ApprovedRegistrySnapshot` revision guard turns exactly the new property red.
+- Stopping resolution from copying the registry revision onto artifacts turns both chain tests red.
+- Writing the source store's current pointer once and never advancing it -- a sync that publishes a
+  snapshot but never moves what the machine reads -- turns this test red on
+  `1.2.0 != 1.3.0`, a stale offer, **while step 2's chain test still passes**. A fixture that syncs
+  once from an empty store cannot see a pointer that never advances. That is D-145's argument at the
+  scale of the chain, and it is why this increment is not a longer version of step 2.
+
 ## Quality gates
 
 - Step 1 focused: 25 tests across the new Git-to-store E2E, Git adapter, source store and source
@@ -215,7 +250,10 @@ fixture's accidental shape is one refactor away from being held by nothing.
   separately run `make integration` is green with 324 E2E tests.
 - Step 2 review: `make quality` was re-run independently on the committed step 2 tree and is green
   across all nine gates -- 3,295 tests and 85.39% branch coverage -- before any review change was
-  made. The review then added tests only.
+  made. The review then added tests only, and `make quality` is green again afterwards with 3,302
+  tests and 85.40% branch coverage.
+- Step 3a: 24 tests across the Git-backed chain, Git publication, provenance, configured update and
+  upstream movement are green; ruff format/check and mypy are green.
 
 ## Blockers
 
@@ -225,10 +263,13 @@ every downstream stage reachable through public commands.
 
 ## Handoff
 
-- Current working state: steps 1 and 2 are VERIFIED, and step 2 has been independently reviewed
-  (D-149), which added `tests/git_revision_provenance_test.py` and changed no production code.
-- Exact next action: step 3 -- start the installed artifact, commit an upstream
-  update, synchronize it and prove the explicit update plus its receipt bind the new Git commit.
+- Current working state: steps 1, 2 and 3a are VERIFIED. Step 2 was independently reviewed (D-149),
+  which added `tests/git_revision_provenance_test.py` and changed no production code; step 3a added
+  the upstream movement to the same fixture, also with no production change.
+- Exact next action: step 3b -- start the installed artifact. 3a (upstream movement, explicit
+  update, both revisions durable) is done; what remains of step 3 is a real MCP server launched over
+  a Git-backed source, which needs the real virtual environment `mcp_stdio_e2e_test` builds rather
+  than the skill this fixture installs.
 - Do not undo: the Git transport allowlist, and the configuration schema's refusal of local Git
   locations behind it. `file://` and local paths are refused on purpose at both layers, and no test
   may widen either to make itself hermetic. Substitute the transport port; never the verdict.
