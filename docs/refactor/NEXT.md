@@ -331,12 +331,21 @@ payload was deleted, now `bool | None`. Four targeted mutations, each red only w
 records the remaining gap: no tree digest exists on the installation path, so an MCP payload
 rewritten in place is still invisible and only whole-tree deletion is caught.
 
-**Next action: finish step 4 -- rollback and uninstall over the *live* installation.** Both are
-covered today only against installations a fixture assembled (`repair_e2e`,
-`receipt_persistence_e2e`). The Git-backed MCP installation is the one to uninstall and roll back:
-it is the only installation anywhere that a real commit produced and that really starts, so a
-repair that claims to restore it can be checked by starting it again. Then step 5:
-collection/bulk install with one full-chain acceptance proof.
+Step 4's uninstall and rollback halves are VERIFIED too, so **CP-17 step 4 is complete**.
+Uninstall was already proven to be reverse reconciliation, but only against installations a fixture
+assembled; `GitBackedUninstallE2ETest` starts the server first and then removes it through the
+public verb -- four effects in reverse dependency order, the runtime gone, no `notes` left in
+`.mcp.json`, and doctor reporting a clean machine rather than a record for something that no longer
+exists. Rollback's honest answer for this artifact is that there is none, which is the claim worth
+pinning: building a virtual environment is not reversible by anything retained, so the receipt says
+`undo.available: false` naming `runtime-environment`, and asking anyway is refused as
+`receipt-no-setup` while the server still answers afterwards (INV-192). Three more mutations, each
+red only where claimed -- including the non-recursive tree removal, which fails honestly with
+`Directory not empty` and a `partial` session rather than reporting success over a tree still there.
+
+**Next action: step 5 -- collection and bulk install with one full-chain acceptance proof.** The
+Git-backed fixture already publishes more than one artifact into one registry, so what step 5 adds
+is a Collection carried over a real commit, not a second repository.
 
 Do not widen `_reported`'s keep-rule on either axis. Payload-only and ABSENT/DIVERGENT-only are
 load-bearing, and D-150's mutation 4 is the uninstall and repair tests catching the widening.

@@ -253,3 +253,144 @@ class GitBackedDoctorE2ETest(unittest.TestCase):
             with self.assertRaises(AssertionError) as refused:
                 speak(str(launcher), [{"jsonrpc": "2.0", "id": 1, "method": "initialize"}])
             self.assertIn("server.py", str(refused.exception))
+
+
+class GitBackedUninstallE2ETest(unittest.TestCase):
+    """CP-17 step 4: uninstalling the installation a real commit produced.
+
+    `receipt_persistence_e2e` and `repair_e2e` already prove uninstall is reverse reconciliation,
+    but against installations their own fixtures assembled. What is unproven there is that the
+    thing being removed is one the public chain really built -- a runtime with a virtual
+    environment in it, a launcher a harness really started, and a `.mcp.json` entry that really
+    pointed at it. Removing an installation nobody could start proves less than removing this one.
+    """
+
+    def _installed(self, raw: str):
+        env = _Environment(Path(raw).resolve(), AUTHORED_SERVER)
+        env.run("source", "sync", source_transport=True)
+        code, _ = env.run("marketplace", "install", COORDINATE, "--profile", "claude", "--yes")
+        self.assertEqual(0, code)
+        runtime = env.project / ".agent-artifacts/runtimes/company/mcp/notes"
+        # It really runs before it is removed, so what follows is about a working installation.
+        started = speak(
+            str(runtime / "launch.sh"), [{"jsonrpc": "2.0", "id": 1, "method": "initialize"}]
+        )
+        self.assertEqual("aart-e2e-github", started[0]["result"]["serverInfo"]["name"])
+        return env, runtime
+
+    def _uninstall(self, env):
+        code, out = env.run(
+            "marketplace",
+            "uninstall",
+            COORDINATE,
+            "--profile",
+            "claude",
+            "--yes",
+            "--project",
+            str(env.project),
+        )
+        self.assertEqual(0, code, out)
+        return out
+
+    def test_uninstalling_the_live_installation_removes_every_component_it_built(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            env, runtime = self._installed(raw)
+
+            receipt = self._uninstall(env)["receipt"]
+
+            self.assertEqual("completed", receipt["status"])
+            # Reverse dependency order: the harness stops pointing at the launcher before the
+            # launcher goes, and the environment goes before the tree that contains it.
+            self.assertEqual(
+                [(step["component"], step["effect"]) for step in receipt["steps"]],
+                [
+                    ("harness:claude", "unconfigure-harness"),
+                    ("launcher", "remove-owned-path"),
+                    ("runtime-environment", "remove-owned-path"),
+                    ("payload", "remove-owned-path"),
+                ],
+            )
+            self.assertTrue(all(step["status"] == "applied" for step in receipt["steps"]))
+            self.assertFalse(runtime.exists(), "the tree the install built is still on disk")
+
+    def test_the_harness_no_longer_names_a_server_that_is_gone(self) -> None:
+        """The failure this prevents is a harness starting a launcher nobody removed it from."""
+
+        with tempfile.TemporaryDirectory() as raw:
+            env, runtime = self._installed(raw)
+            self._uninstall(env)
+
+            recorded = json.loads((env.project / ".mcp.json").read_text(encoding="utf-8"))
+
+            self.assertNotIn("notes", recorded["mcpServers"])
+            self.assertFalse((runtime / "launch.sh").exists())
+
+    def test_doctor_reports_a_clean_machine_rather_than_drift_it_cannot_repair(self) -> None:
+        """The other way to fail this: leave the record behind, so every later report is about an
+        installation that no longer exists -- which after D-150 would now be `broken` forever."""
+
+        with tempfile.TemporaryDirectory() as raw:
+            env, _ = self._installed(raw)
+            self._uninstall(env)
+
+            code, report = env.run("doctor")
+
+            self.assertEqual(0, code, report)
+            self.assertTrue(report["ok"])
+            self.assertEqual(
+                [], [item for item in report["items"] if "notes" in item["coordinate"]]
+            )
+            self.assertEqual(0, report["summary"]["needs_attention"])
+
+
+class GitBackedUndoE2ETest(unittest.TestCase):
+    """CP-17 step 4: what the live installation says about reversing itself.
+
+    INV-192 is that AART must not invent stronger undo guarantees than a receipt carries. The
+    interesting case is this one rather than a setup-bearing artifact, because here the honest
+    answer is no: building a virtual environment is not an act anything retained can reverse, and
+    the receipt has to say so instead of offering an undo that would fail when reached for.
+    """
+
+    def _installed(self, raw: str):
+        env = _Environment(Path(raw).resolve(), AUTHORED_SERVER)
+        env.run("source", "sync", source_transport=True)
+        code, installed = env.run(
+            "marketplace", "install", COORDINATE, "--profile", "claude", "--yes"
+        )
+        self.assertEqual(0, code, installed)
+        return env, installed
+
+    def test_the_receipt_refuses_an_undo_it_cannot_honour_and_names_why(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, installed = self._installed(raw)
+
+            undo = installed["receipt"]["undo"]
+
+            self.assertFalse(undo["available"])
+            self.assertEqual([], undo["components"])
+            # The reason names the component that cannot be reversed, not a generic refusal --
+            # `create-python-environment` is the effect that makes this install one-way.
+            self.assertIn("runtime-environment", undo["reason"])
+
+    def test_asking_to_undo_it_anyway_refuses_by_name_and_changes_nothing(self) -> None:
+        """A refusal that left the installation half-reversed would be worse than no undo."""
+
+        with tempfile.TemporaryDirectory() as raw:
+            env, _ = self._installed(raw)
+            runtime = env.project / ".agent-artifacts/runtimes/company/mcp/notes"
+
+            code, refused = env.run("marketplace", "receipt", "undo", COORDINATE)
+
+            self.assertEqual(1, code)
+            self.assertFalse(refused["ok"])
+            (diagnostic,) = refused["diagnostics"]
+            self.assertEqual("receipt-no-setup", diagnostic["code"])
+            self.assertTrue(diagnostic["remediation"], "a refusal with no way forward")
+
+            # Nothing moved, and the server the refusal declined to unbuild still runs.
+            self.assertTrue(runtime.exists())
+            started = speak(
+                str(runtime / "launch.sh"), [{"jsonrpc": "2.0", "id": 1, "method": "initialize"}]
+            )
+            self.assertEqual("aart-e2e-github", started[0]["result"]["serverInfo"]["name"])

@@ -375,20 +375,41 @@ observation or the receipt, so an MCP payload rewritten in place is still invisi
 whole-tree deletion is caught. The observed component's detail says `presence only; this observation
 carries no tree digest` rather than letting a partial check read as a full one.
 
-Rollback and uninstall over the live installation remain: `receipt_persistence_e2e` and
-`repair_e2e` cover both against assembled installations, and neither has been run against one a real
-commit produced.
+**Uninstall, over the installation a real commit produced.** `receipt_persistence_e2e` and
+`repair_e2e` already prove uninstall is reverse reconciliation, but against installations their own
+fixtures assembled; removing an installation nobody could start proves less than removing this one.
+`GitBackedUninstallE2ETest` starts the server first, so what follows is about a working
+installation, then removes it through the public verb: four effects in reverse dependency order
+(`unconfigure-harness`, then the launcher, then the environment, then the tree that contains it),
+every step `applied`, the runtime gone, no `notes` left in `.mcp.json`, and doctor reporting a clean
+machine rather than a record for something that no longer exists -- which after D-150 would now be
+`broken` forever rather than merely stale.
+
+Two mutations. Dropping the harness components from `removal_state_from_receipt` leaves `.mcp.json`
+pointing at a launcher that has been deleted, which is the failure that test exists for. Removing
+the artifact tree non-recursively turns all three red, and does it honestly: the step reports
+`failed` with `Directory not empty` and the session goes `partial`, rather than reporting success
+over a tree that is still there.
+
+**Rollback.** The honest answer for this artifact is that there is none, and that is the claim worth
+pinning. INV-192 is that AART must not invent stronger undo guarantees than a receipt carries;
+building a virtual environment is not an act anything retained can reverse, so the install receipt
+reports `undo.available: false` with a reason naming `runtime-environment` rather than refusing
+generically. Asking anyway is refused by name -- `receipt-no-setup`, with remediation -- and changes
+nothing: the tree is untouched and the server still answers `initialize` afterwards. A refusal that
+left the installation half-reversed would be worse than no undo at all. Forcing `irreversible` empty
+in `consumer_views.py` makes the receipt claim it can be undone and turns the first of those red,
+while the second stays green, because they are claims about different things.
 
 ## Handoff
 
-- Current working state: steps 1, 2, 3a, 3b are VERIFIED. Step 4 covers drift over the live
-  installation and is VERIFIED for that half; it is the first step in this slice to change
-  production code (D-150), in `domain/reconciliation.py`,
+- Current working state: steps 1, 2, 3a, 3b and 4 are VERIFIED. Step 4 is the first step in this
+  slice to change production code (D-150), in `domain/reconciliation.py`,
   `application/installed_state.py` and `application/installation_verification.py`.
-- Exact next action: finish step 4 -- rollback and uninstall over the *live* installation. Both are
-  covered today only against assembled installations (`repair_e2e`, `receipt_persistence_e2e`);
-  the Git-backed MCP installation is the one to uninstall, because it is the only one a real commit
-  produced. Then step 5, collection/bulk install with one full-chain proof.
+- Exact next action: step 5 -- collection and bulk install with one full-chain acceptance proof.
+  The Git-backed fixture already publishes two artifacts into one registry (step 3a re-promotes
+  with both versions), so the shape to add is a Collection over a real commit rather than a second
+  repository.
 - Do not undo, added by step 4: the keep-rule in `_reported` is narrow on both axes on purpose --
   payload only, and `ABSENT`/`DIVERGENT` only. Widening either re-breaks uninstall convergence or
   reports an unhashable tree as broken; both failures are recorded in D-150 with the tests that
