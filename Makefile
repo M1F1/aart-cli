@@ -9,7 +9,7 @@ PYTHON ?= python
 REGISTRY ?=
 QUALITY = $(PYTHON) scripts/quality.py
 
-.PHONY: check test unit integration system-matrix release-freeze release-check wheel validate clean lint format format-check typecheck coverage packaging-check docs-check secret-shape-check quality version-check version-show version-next-alpha version-bump-alpha version-finalize version-set
+.PHONY: check test unit integration system-matrix release-freeze release-check wheel validate clean lint format format-check typecheck coverage packaging-check docs-check secret-shape-check quality mutants version-check version-show version-next-alpha version-bump-alpha version-finalize version-set
 
 # Aggregate. The Python discovery is the broad unit/regression gate; integration is end to end.
 test: unit integration
@@ -68,6 +68,18 @@ secret-shape-check:
 
 quality:
 	$(QUALITY)
+
+# Mutation adequacy, advisory and always scoped (D-134). A suite that passes proves the code does
+# what the tests say; a killed mutant proves the test would have noticed if it did not.
+#
+#   make mutants ONLY=agent_artifacts/setup_render.py TESTS="tests/setup_render_test.py"
+#
+# Survivors are findings to read, not a number to drive to zero. Never weaken a test to move it.
+ONLY ?=
+TESTS ?=
+mutants:
+	@test -n "$(ONLY)" || { echo 'usage: make mutants ONLY=<path.py> [TESTS="<test files>"]'; exit 2; }
+	$(PYTHON) scripts/mutants.py --only $(ONLY) $(if $(TESTS),--tests $(TESTS),)
 
 # The developer loop: every cheap gate in full, and only the tests the current change could have
 # reached. Falls back to the whole suite whenever it cannot prove what is safe to skip, and is

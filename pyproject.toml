@@ -60,6 +60,11 @@ ruff = "0.16.4"
 mypy = "^1.11"
 coverage = "^7.6"
 hypothesis = "^6.165"
+# Mutation adequacy (D-134). Advisory and always scoped -- `make mutants ONLY=... TESTS=...` --
+# because mutating 40k statements at ~3 mutants/second is days of compute, and the question is
+# asked of the module a slice just changed. Dev group like the rest: nothing here reaches the
+# zero-dependency runtime.
+mutmut = "^3.7"
 # The build backend, installed rather than merely declared.  Two gates need it present: the
 # offline editable install (`pip install --no-index --no-build-isolation -e .`) has no index to
 # fetch a backend from, and `scripts/build_wheel.py` checks that whatever built the wheel is the

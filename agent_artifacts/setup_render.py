@@ -15,6 +15,7 @@ from __future__ import annotations
 from typing import Any, Mapping, Sequence, Tuple
 
 from agent_artifacts.setup import (
+    plain_value,
     public_text,
     render_recovery_notes,
     render_run_summary,
@@ -139,7 +140,12 @@ def receipt_payload(record: Any, *, location: Any) -> dict[str, Any]:
         "exit_status": record.exit_status,
         "retry_command": record.retry_command,
         "rollback_command": record.rollback_command,
-        "steps": [dict(step) for step in record.receipt],
+        # `plain_value` and not `dict`: a parsed record's steps are frozen recursively, and a
+        # shallow copy leaves every nested object a `MappingProxyType` that `json.dumps` refuses.
+        # The custom setup protocol writes exactly such a step, so `receipt show --json` used to
+        # end in a `TypeError` traceback for the one recipe kind whose evidence is hardest to
+        # reconstruct without it.
+        "steps": [plain_value(step) for step in record.receipt],
     }
 
 

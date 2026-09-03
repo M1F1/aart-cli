@@ -1243,3 +1243,34 @@ public-flow driver for interactive per-effect consent knows there is a claim wai
 
 Evidence/links: D-133; `agent_artifacts/setup_runtime.py` `_apply_effects`;
 `tests/verification_failure_e2e_test.py`.
+
+## B-053 — `CLAUDE.md` carries a section `AGENTS.md` does not
+
+`CLAUDE.md` opens by saying it mirrors `AGENTS.md` and must be corrected to match whenever the two
+diverge. They diverge today: `CLAUDE.md` ends with a **Repository commands** section — the `make`
+target table — that `AGENTS.md` has never had. Noticed while adding `make mutants` to both under
+D-134, which is why only one file needed the table row.
+
+The section is useful, so the fix is to add it to `AGENTS.md` rather than to delete it. Noncritical:
+nothing depends on the table being in both, and the two files agree on every rule that binds
+behaviour. Recorded so the next person to touch either file does not have to rediscover which
+direction the correction runs.
+
+Evidence/links: `CLAUDE.md` header paragraph; `AGENTS.md` ends at *Durable handoff*.
+
+## B-054 — No module has a trustworthy mutation baseline
+
+D-134 added `make mutants` and it has been run twice, both times scoped to `setup_render.py` and
+`receipt_service.py` with only the two or four test files nearest the current slice selected. Those
+runs proved the tooling works — a `rollback_command` key mutant is killed by
+`verification_failure_e2e_test`, a `coordinate` key mutant survives — but their survivor counts (719
+of 1436, then 728 of 1121) say nothing about those modules, because the selected tests are not the
+tests that actually cover them.
+
+A baseline worth keeping would run one module against every test that touches it, and record the
+survivors that matter as backlog items. Noncritical because the per-claim targeted mutations each
+slice records are what make its evidence load-bearing, and those are unaffected. Worth doing for a
+module the critical path is about to change — `setup_runtime.py` and `installation/application.py`
+are the two with the most behaviour and the least direct unit coverage.
+
+Evidence/links: D-134; `scripts/mutants.py`; `make mutants`.

@@ -2586,3 +2586,34 @@ the Product Specification first instead of hiding the change here.
   effect applies (B-052). Evidence is `tests/verification_failure_e2e_test.py`; the two evidence
   tests were red against the shipped code and reverting `standing` to `receipts` in `_record` turns
   the undo claim red on its own.
+
+## D-134 — Mutation adequacy is a scoped, advisory tool, not a gate
+
+- **Context:** every slice from CP-13 on has proved its tests by hand: make one deliberate,
+  semantically real change to the code a test names, and watch that test turn red. That practice
+  answers "is this claim load-bearing" and cannot answer "what claims did nobody think to make",
+  which is the question coverage also cannot answer — a line that ran is not a line whose behaviour
+  anything asserts. `mutmut` answers it mechanically, and this repository was not using it.
+- **Decision:** `mutmut` joins Poetry's dev group and is run through
+  `make mutants ONLY=<path.py> TESTS="<test files>"` (`scripts/mutants.py`). It is advisory, never a
+  release gate, and always scoped to the module a slice just changed. Hypothesis, already in the dev
+  group and used by eleven test files, is named alongside it in `AGENTS.md` as the tool for
+  universal claims. Neither replaces the targeted per-claim mutation the slice documents record.
+- **Status:** accepted.
+- **Reason:** scope and advisory status are both forced by measurement rather than preference. The
+  first run managed ~3 mutants a second; `agent_artifacts` is 40k statements, so a whole-repository
+  run is days of compute and could never sit in `make quality`. And the survivor *count* is not
+  meaningful on its own: a scoped run's figure depends entirely on which tests were selected, so
+  728 survivors in `setup_render.py` against two end-to-end files says nothing about the module's
+  real coverage. What is meaningful is a specific survivor read against a specific claim. Making it
+  a gate would therefore create pressure to move a number that does not mean what it looks like —
+  the exact failure the "do not weaken quality gates" rule exists to prevent, arriving from the
+  other direction.
+- **Consequence:** `scripts/mutants.py` writes the scope into `setup.cfg` and restores it in a
+  `finally`, because mutmut 3.x reads its configuration from that file and accepts no scope on the
+  command line. That means `make mutants` must not run while a quality gate is running:
+  `scripts/quality.py` fails a run whose tracked files moved under it, and that is the guard
+  working. `mutants/`, `mutmut-stats.json` and `.mutmut-cache` are ignored. Read survivors as
+  findings: one inside the current slice's claims is a test that does not hold what its name says,
+  one outside them is a backlog note (B-054 records that no module has a trustworthy baseline yet).
+  Never weaken a test to change the figure.

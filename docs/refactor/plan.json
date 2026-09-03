@@ -1,180 +1,180 @@
 {
- "version": 1,
- "title": "AART refactor",
- "epics": [
-  {
-   "id": "CP-00",
-   "title": "Canonical planning baseline",
-   "status": "done"
-  },
-  {
-   "id": "CP-01",
-   "title": "Repository characterization and invariant map",
-   "status": "done"
-  },
-  {
-   "id": "CP-02",
-   "title": "Clean architecture migration seam",
-   "status": "done"
-  },
-  {
-   "id": "CP-03",
-   "title": "Five core algebras",
-   "status": "done"
-  },
-  {
-   "id": "CP-04",
-   "title": "Native authoring manifest and canonical compiler",
-   "status": "done"
-  },
-  {
-   "id": "CP-05",
-   "title": "Source, Candidate, Registry and Promotion lifecycle",
-   "status": "done"
-  },
-  {
-   "id": "CP-06",
-   "title": "Marketplace, Selection and Collections",
-   "status": "done"
-  },
-  {
-   "id": "CP-07",
-   "title": "Inspection, Remediation, Policy and Plan",
-   "status": "done"
-  },
-  {
-   "id": "CP-08",
-   "title": "Runtime inputs and credential lifecycle",
-   "status": "done"
-  },
-  {
-   "id": "CP-09",
-   "title": "Python environments and dependencies",
-   "status": "done"
-  },
-  {
-   "id": "CP-10",
-   "title": "MCP stdio vertical slice",
-   "status": "done"
-  },
-  {
-   "id": "CP-11",
-   "title": "Desired-state reconciliation engine",
-   "status": "done"
-  },
-  {
-   "id": "CP-12",
-   "title": "Installed lifecycle on reconciliation",
-   "status": "done"
-  },
-  {
-   "id": "CP-13",
-   "title": "Consumer TUI, screens 01-29",
-   "status": "done"
-  },
-  {
-   "id": "CP-14",
-   "title": "Maintainer TUI, screens 30-53",
-   "status": "done",
-   "steps": [
+  "version": 1,
+  "title": "AART refactor",
+  "epics": [
     {
-     "id": "1",
-     "title": "Maintainer screen catalog, navigation and the Maintainer Mode boundary",
-     "status": "done"
+      "id": "CP-00",
+      "title": "Canonical planning baseline",
+      "status": "done"
     },
     {
-     "id": "2",
-     "title": "Screen 30 and screens 31-34 over the canonical source scan",
-     "status": "done"
+      "id": "CP-01",
+      "title": "Repository characterization and invariant map",
+      "status": "done"
     },
     {
-     "id": "3",
-     "title": "Screens 35-37: Candidate list, detail and semantic-first diff",
-     "status": "done"
+      "id": "CP-02",
+      "title": "Clean architecture migration seam",
+      "status": "done"
     },
     {
-     "id": "4",
-     "title": "Screens 38-40: validation pipeline and policy review",
-     "status": "done"
+      "id": "CP-03",
+      "title": "Five core algebras",
+      "status": "done"
     },
     {
-     "id": "5",
-     "title": "Screens 41-47: promotion review, registry diff, explicit commit, registry view, bulk promotion",
-     "status": "done"
+      "id": "CP-04",
+      "title": "Native authoring manifest and canonical compiler",
+      "status": "done"
     },
     {
-     "id": "6",
-     "title": "Screens 48-53: lifecycle, provenance, conflicts, Collection candidates, filters",
-     "status": "done"
+      "id": "CP-05",
+      "title": "Source, Candidate, Registry and Promotion lifecycle",
+      "status": "done"
     },
     {
-     "id": "7",
-     "title": "Retire the legacy consumer/maintainer authority CP-13 left standing",
-     "status": "done"
+      "id": "CP-06",
+      "title": "Marketplace, Selection and Collections",
+      "status": "done"
+    },
+    {
+      "id": "CP-07",
+      "title": "Inspection, Remediation, Policy and Plan",
+      "status": "done"
+    },
+    {
+      "id": "CP-08",
+      "title": "Runtime inputs and credential lifecycle",
+      "status": "done"
+    },
+    {
+      "id": "CP-09",
+      "title": "Python environments and dependencies",
+      "status": "done"
+    },
+    {
+      "id": "CP-10",
+      "title": "MCP stdio vertical slice",
+      "status": "done"
+    },
+    {
+      "id": "CP-11",
+      "title": "Desired-state reconciliation engine",
+      "status": "done"
+    },
+    {
+      "id": "CP-12",
+      "title": "Installed lifecycle on reconciliation",
+      "status": "done"
+    },
+    {
+      "id": "CP-13",
+      "title": "Consumer TUI, screens 01-29",
+      "status": "done"
+    },
+    {
+      "id": "CP-14",
+      "title": "Maintainer TUI, screens 30-53",
+      "status": "done",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Maintainer screen catalog, navigation and the Maintainer Mode boundary",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Screen 30 and screens 31-34 over the canonical source scan",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "Screens 35-37: Candidate list, detail and semantic-first diff",
+          "status": "done"
+        },
+        {
+          "id": "4",
+          "title": "Screens 38-40: validation pipeline and policy review",
+          "status": "done"
+        },
+        {
+          "id": "5",
+          "title": "Screens 41-47: promotion review, registry diff, explicit commit, registry view, bulk promotion",
+          "status": "done"
+        },
+        {
+          "id": "6",
+          "title": "Screens 48-53: lifecycle, provenance, conflicts, Collection candidates, filters",
+          "status": "done"
+        },
+        {
+          "id": "7",
+          "title": "Retire the legacy consumer/maintainer authority CP-13 left standing",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "CP-15",
+      "title": "Edge-case hardening",
+      "status": "in_progress",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Registry state safety through the public source verb (INV-218, INV-210)",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Rollback and provenance under a moving upstream (INV-216, INV-219)",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "Offline decomposition: metadata, payload and runtime dependencies (INV-223)",
+          "status": "done"
+        },
+        {
+          "id": "4a",
+          "title": "Verification failure and the compensatable restore (INV-224, INV-225)",
+          "status": "done"
+        },
+        {
+          "id": "4b",
+          "title": "Interrupted execution: discoverable, and re-inspected before resume (INV-226)",
+          "status": "done"
+        },
+        {
+          "id": "5",
+          "title": "Purge boundaries and the erasure claim AART must not make (INV-221, INV-222)",
+          "status": "todo"
+        },
+        {
+          "id": "6",
+          "title": "Policy drift in installed health, and development installs kept distinct (INV-233, INV-237)",
+          "status": "todo"
+        },
+        {
+          "id": "7",
+          "title": "Promotion evidence, audit and the local-promotion-is-not-publication boundary (INV-238, 240, 241, 242)",
+          "status": "todo"
+        }
+      ]
+    },
+    {
+      "id": "CP-16",
+      "title": "Doctor and supportability",
+      "status": "todo"
+    },
+    {
+      "id": "CP-17",
+      "title": "Git-backed live acceptance",
+      "status": "todo"
+    },
+    {
+      "id": "CP-18",
+      "title": "Migration and release gate",
+      "status": "todo"
     }
-   ]
-  },
-  {
-   "id": "CP-15",
-   "title": "Edge-case hardening",
-   "status": "in_progress",
-   "steps": [
-    {
-     "id": "1",
-     "title": "Registry state safety through the public source verb (INV-218, INV-210)",
-     "status": "done"
-    },
-    {
-     "id": "2",
-     "title": "Rollback and provenance under a moving upstream (INV-216, INV-219)",
-     "status": "done"
-    },
-    {
-     "id": "3",
-     "title": "Offline decomposition: metadata, payload and runtime dependencies (INV-223)",
-     "status": "done"
-    },
-    {
-     "id": "4a",
-     "title": "Verification failure and the compensatable restore (INV-224, INV-225)",
-     "status": "done"
-    },
-    {
-     "id": "4b",
-     "title": "Interrupted execution: discoverable, and re-inspected before resume (INV-226)",
-     "status": "todo"
-    },
-    {
-     "id": "5",
-     "title": "Purge boundaries and the erasure claim AART must not make (INV-221, INV-222)",
-     "status": "todo"
-    },
-    {
-     "id": "6",
-     "title": "Policy drift in installed health, and development installs kept distinct (INV-233, INV-237)",
-     "status": "todo"
-    },
-    {
-     "id": "7",
-     "title": "Promotion evidence, audit and the local-promotion-is-not-publication boundary (INV-238, 240, 241, 242)",
-     "status": "todo"
-    }
-   ]
-  },
-  {
-   "id": "CP-16",
-   "title": "Doctor and supportability",
-   "status": "todo"
-  },
-  {
-   "id": "CP-17",
-   "title": "Git-backed live acceptance",
-   "status": "todo"
-  },
-  {
-   "id": "CP-18",
-   "title": "Migration and release gate",
-   "status": "todo"
-  }
- ]
+  ]
 }

@@ -353,11 +353,19 @@ def _freeze(value: object) -> object:
     return value
 
 
-def _plain(value: object) -> object:
+def plain_value(value: object) -> object:
+    """The JSON-safe projection of a frozen record value: the inverse of `_freeze`.
+
+    `_freeze` makes every nested object a `MappingProxyType` so a parsed record cannot be edited in
+    place. `json.dumps` refuses one, and a shallow `dict(step)` converts only the outer level, so
+    anything that renders a receipt's steps has to come back through here or it crashes on the
+    first step that carries a nested object -- which the custom setup protocol's receipt does.
+    """
+
     if isinstance(value, Mapping):
-        return {str(key): _plain(item) for key, item in value.items()}
+        return {str(key): plain_value(item) for key, item in value.items()}
     if isinstance(value, tuple):
-        return [_plain(item) for item in value]
+        return [plain_value(item) for item in value]
     return value
 
 
@@ -918,7 +926,7 @@ def _plan_payload(
                 "target": effect.target,
                 "argv": list(effect.argv),
                 "reversible": effect.reversible,
-                "config": _plain(effect.config),
+                "config": plain_value(effect.config),
             }
             for effect in effects
         ],

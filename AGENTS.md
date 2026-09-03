@@ -62,6 +62,31 @@ Do not weaken quality gates to make a change pass. Keep secret values out of pla
 output, fixtures and committed files. Run the strongest relevant repository gates after each slice
 and the full quality suite before declaring a slice verified.
 
+### The two tools that check the tests themselves
+
+Passing tests prove the code does what the tests say. They do not prove the tests say anything worth
+holding, and coverage does not either: a line that ran is not a line whose behaviour anything
+asserts. Two dev-group packages exist to close that gap and both are to be used.
+
+**Hypothesis** for property tests. Where a claim is universal — a parser rejects every malformed
+input, a projection round-trips, an ordering is total — state it as a property over generated input
+rather than over three examples chosen by the person who wrote the code. Prefer it wherever the
+invariant is genuinely universal; keep example-based tests for the specific scenarios a Product
+Specification section names.
+
+**mutmut** for mutation adequacy, through `make mutants ONLY=<path.py> TESTS="<test files>"`
+(`scripts/mutants.py`). A mutant that survives is a change to the code that no test noticed, which
+means some claim is unheld. Run it over the module a slice just changed, with the tests that claim
+to cover it. It is advisory rather than a gate, and always scoped: mutating this repository whole is
+days of compute (D-134). Read survivors as findings — one inside the slice's claims is a test that
+does not hold what its name says; one outside them is a backlog note. Never weaken a test to change
+the number.
+
+Neither replaces the targeted mutation each slice records. Before a test counts as evidence, make
+one deliberate, semantically real change to the code it names and watch that test — and ideally only
+that test — turn red. `make mutants` finds claims nobody thought to make; the targeted mutation
+proves the claim you did make is load-bearing, and it is what the slice document records.
+
 ## Durable handoff
 
 At the end of every meaningful work segment update:

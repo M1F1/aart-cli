@@ -45,7 +45,7 @@ temporary machine, and (c) records which mutation it was proven against.
 | Registry rollback preserves history | INV-216 | promotion audit chain walks backwards from the approved snapshot (D-104) | **Closed for the consumer half by increment 2.** The Git revert/commit half waits on CP-17 |
 | Provenance is not rewritten when upstream moves | INV-219 | typed Git/local audit pins (D-107) | **Closed by increment 2**, on both sides: the installation record, and the promotion audit under D-089's rebinding |
 | Physical purge is exceptional | INV-221, INV-222 | none found: no test file matches `purge` | Whole scenario unmeasured |
-| Interrupted operations re-inspect before resume | INV-226 | CP-12 executor replans under lease; `receipt verify` carries a `no-orphan-run-directory` claim (`LAF-61`) | No public-flow interruption test. **Step 4b.** |
+| Interrupted operations re-inspect before resume | INV-226 | CP-12 executor replans under lease; `receipt verify` carries a `no-orphan-run-directory` claim (`LAF-61`) | **Closed by increment 4b**, over a working copy the engine really failed to remove |
 | Input/credential contract changes | INV-231, INV-232 | CP-08 credential lifecycle | No test that changing one artifact's contract leaves another's credential owned |
 | Policy drift contributes to health | INV-233 | `EffectivePolicy` is read at validation time (D-099) | Installed-artifact health does not consult current policy |
 | Development installs are visibly distinct | INV-237 | none found | Whole scenario unmeasured |
@@ -62,7 +62,7 @@ temporary machine, and (c) records which mutation it was proven against.
 4. Split when it was opened, because the two halves have different subjects.
    - **4a DONE:** verification failure and the compensatable restore (INV-224, INV-225;
      165.12, 165.13).
-   - **4b:** interrupted execution -- discoverable, and re-inspected before resume
+   - **4b DONE:** interrupted execution -- discoverable, and re-inspected before resume
      (INV-226; 165.14).
 5. Purge boundaries and the erasure claim AART must not make (INV-221, INV-222).
 6. Policy drift in installed health, and development installs kept visibly distinct
@@ -218,3 +218,48 @@ Proven against mutations: the two evidence tests were red against the shipped co
 and the four report tests were green, which is the split above measured rather than asserted;
 reverting `standing` to `receipts` in `_record` turns the undo claim red on its own, and only that
 one.
+
+### Step 4b — the working copy a stopped run leaves, and what a retry does with it (INV-226)
+
+`tests/interrupted_execution_e2e_test.py` reads 165.13 and 165.14 as one scenario at two moments.
+The recipe carries a real custom entrypoint -- a shell script following the plan/apply/verify/
+rollback protocol -- whose `apply` phase exits non-zero and whose `rollback` phase then also exits
+non-zero. That is the one path that raises without removing its run directory, so the working copy
+these tests assert on is one the engine really created and really failed to clean up. Patching the
+cleanup away would have produced the same directory and proved nothing about *when* a directory is
+actually left. It also had to be this route: a run directory is opened only by `custom.install@1`
+and `docker.build@1`, so the managed-block recipe of step 4a can leave no orphan at all and the
+`no-orphan-run-directory` claim answers `true` about a directory that was never made -- which is how
+the first attempt at this step measured nothing.
+
+Six claims:
+
+- a failure whose compensation also failed is `rollback-incomplete` and not
+  `apply-failed-rolled-back`, and it carries a recovery line. Those are two different promises about
+  the machine, and an operator told the restoring one when the other is true stops looking (165.13);
+- the working copy is still there afterwards;
+- `aart marketplace receipt verify` finds it, exits non-zero, and names *the directory the engine
+  actually created* -- asserted by identity, and cross-checked against the record's own plan hash;
+- verify reports it and leaves it exactly where it is (`LAF-61`), because inspection that deletes
+  its own evidence is worse than no inspection;
+- the receipt reads back as JSON;
+- a retry re-plans rather than resuming: the second run's review digest differs from the first
+  because the plan binds the record the first run persisted, the protocol starts again from its
+  first phase, and both working copies are then reported rather than the second hiding the first.
+
+The JSON claim is there because writing this file found the defect. A parsed record's steps are
+frozen recursively into `MappingProxyType` and the receipt projection copied each step shallowly, so
+every nested object stayed a proxy and `json.dumps` refused it — `aart marketplace receipt show
+--json` ended in a `TypeError` traceback for exactly the run whose evidence is hardest to
+reconstruct by hand. `setup.py`'s `_plain` was already the inverse of `_freeze`; it is now public as
+`plain_value` and the projection uses it.
+
+Proven against three mutations, one per group: pointing the probe's run root at the project root
+instead of the data root -- which is precisely the `LAF-66` defect class, at the one seam
+`setup_verify_test` cannot reach -- turns two red; restoring the shallow `dict(step)` projection
+turns two red; and calling an incomplete rollback a completed one turns two red. A fourth attempt,
+removing the run directory on the failing path, killed nothing and is worth recording: the outer
+`_rollback_all` re-creates it when it writes the receipt its own compensation attempt needs, so that
+directory is the one the tests see. The claim that verify does not delete the evidence has no
+available mutation -- nothing in the code deletes it -- and rests on its siblings, which move the
+same directory through the same reader.
