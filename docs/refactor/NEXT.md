@@ -22,7 +22,13 @@ planner. Its JSON carries every item, component drift and full repair plans; its
 the same artifacts and reasons. It resolves no Marketplace content and applies nothing. Step 1 is
 VERIFIED: six real-machine E2E scenarios, a fresh 132-mutant pass, all nine quality gates (3,243
 tests, 85.34% branch coverage) and 279 E2E tests are green. The active slice is
-`docs/refactor/slices/CP-16-global-doctor-supportability.md`.
+`docs/refactor/slices/CP-16-global-doctor-supportability.md`. Step 2 is VERIFIED (D-140): before
+installation the same command now reports cached Source/artifact metadata, an exact approved
+canonical payload and runtime-dependency evidence as three independent values. It reads every
+enabled source once and performs no sync, object publication, package-manager call or install.
+B-051 is closed and INV-223 is EVIDENCED; B-010 remains the deliberately separate durable
+dependency-cache capability. Eight new E2E scenarios, both scoped mutation passes, all nine quality
+gates (3,251 tests, 85.37% branch coverage) and 287 integration tests are green.
 
 **CP-15 is VERIFIED — all eight steps done.** Step 8 is
 `tests/credential_contract_migration_e2e_test.py`, closing INV-231 and INV-232 and the slice with
@@ -138,22 +144,16 @@ read as "this source is gone" in three places, so one invalid upstream revision 
 
 ## Exact next action
 
-**Implement CP-16 step 2: B-051's offline readiness report.** The next RED belongs to the public
-`aart doctor`: before an install is attempted it must report 165.11's three independent
-capabilities -- metadata cached, canonical payload cached and runtime dependencies cached --
-without reducing them to one online/offline boolean.
+**Implement CP-16 step 3: safe reviewed repair.** The next RED belongs to a public `aart doctor`
+repair entry point: it must expose the already-reported minimal reconciliation plan for review,
+mutate nothing without explicit confirmation, then re-inspect and re-plan under the lifecycle lease
+before execution. The report's digest is a precondition, never standing authorization, and a
+changed machine must refuse or present the new plan rather than blindly execute the old one.
 
-Reuse the already-measured refusal seams from `tests/offline_capability_test.py`; do not invent a
-second interpretation of cache or dependency readiness in the command. Establish which coordinate
-or source Doctor can honestly assess from durable state, then drive the report over a real temporary
-machine. Keep the three values distinct in JSON and human output, and prove each against its own
-mutation. The command remains a read: no synchronization, object publication, package-manager
-network access or install attempt is an acceptable way to answer readiness.
-
-D-139 is the constraint step 2 inherits: one observation is projected through existing authority.
-B-058 is tooling only -- force a fresh ignored mutmut cache after test changes and record survivors
-as findings, never a score. Safe reviewed repair remains step 3; Activity/Receipt/configuration and
-credential diagnostics remain step 4. B-057 belongs before CP-17 and does not expand this increment.
+Reuse `prepare_configured_repair` and the configured lifecycle executor; do not add a Doctor-local
+planner or a reinstall-all shortcut. D-139 remains the authority constraint. Activity/Receipt,
+configuration, credential and orphan-run diagnostics remain step 4. B-057 belongs before CP-17 and
+does not expand this increment.
 
 The CP-14 record follows.
 

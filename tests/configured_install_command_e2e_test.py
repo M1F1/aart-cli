@@ -27,6 +27,7 @@ from agent_artifacts.configuration.model import (
 from agent_artifacts.configuration.paths import Platform, resolve_config_paths
 from agent_artifacts.configuration.schema import user_configuration_bytes
 from agent_artifacts.domain.identifiers import SourceId
+from agent_artifacts.domain.registry import PromotionMode
 from agent_artifacts.domain.result import Ok
 from agent_artifacts.io.source_store import publish_source_snapshot
 from agent_artifacts.sources.model import (
@@ -50,8 +51,10 @@ class _Environment:
         *,
         authored: tuple[tuple[str, str] | tuple[str, str, bool], ...] = AUTHORED_SKILL,
         setup: AuthoredSetup | None = None,
+        promotion_mode: PromotionMode = PromotionMode.VENDORED,
     ) -> None:
         self.setup = setup
+        self.promotion_mode = promotion_mode
         self.root = root
         self.home = root / "home"
         self.project = root / "project"
@@ -97,7 +100,7 @@ class _Environment:
             source_instance_id(self.source),
             self.source.alias,
             "a" * 40,
-            _published_registry(authored, setup=self.setup),
+            _published_registry(authored, setup=self.setup, mode=self.promotion_mode),
         )
         assert isinstance(candidate, Ok), candidate
         published = publish_source_snapshot(
@@ -144,9 +147,15 @@ def _environment(
     *,
     authored: tuple[tuple[str, str] | tuple[str, str, bool], ...] = AUTHORED_SKILL,
     setup: AuthoredSetup | None = None,
+    promotion_mode: PromotionMode = PromotionMode.VENDORED,
 ):
     with tempfile.TemporaryDirectory() as raw:
-        yield _Environment(pathlib.Path(raw).resolve(), authored=authored, setup=setup)
+        yield _Environment(
+            pathlib.Path(raw).resolve(),
+            authored=authored,
+            setup=setup,
+            promotion_mode=promotion_mode,
+        )
 
 
 class ConfiguredInstallCommandTest(unittest.TestCase):

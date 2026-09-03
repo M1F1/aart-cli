@@ -24,7 +24,7 @@ from agent_artifacts.domain.harness import Scope
 from agent_artifacts.domain.inputs import InputValueSource
 from agent_artifacts.domain.policies import EffectivePolicy
 from agent_artifacts.domain.python_runtime import PythonInstaller
-from agent_artifacts.domain.registry import PromotionMode
+from agent_artifacts.domain.registry import PromotionMode, RegistryArtifactVersion
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.domain.selection import ArtifactSelection, ResolvedArtifact, ResolvedSelection
 from agent_artifacts.protocol.native_tree import SnapshotEntry, SnapshotEntryKind, SourceSnapshot
@@ -35,6 +35,7 @@ from agent_artifacts.sources.model import (
     source_store_paths,
 )
 from agent_artifacts.store.model import (
+    ObjectCandidate,
     ObjectPublishCommand,
     ObjectReadRequest,
     ObjectStorePaths,
@@ -51,6 +52,8 @@ __all__ = [
     "CONFIGURED_INSTALLATION_INVALID",
     "CONFIGURED_INSTALLATION_INPUTS_REQUIRED",
     "ConfiguredInstallationDraft",
+    "configured_object_candidate",
+    "object_candidate_from_registry_snapshot",
     "prepare_configured_installation_draft",
 ]
 
@@ -103,11 +106,11 @@ class ConfiguredInstallationDraft:
 
 def _configured_snapshot(
     effective: EffectiveConfiguration,
-    artifact: ResolvedArtifact,
+    version: RegistryArtifactVersion,
     *,
     data_root: str,
 ) -> Result[SourceSnapshot]:
-    alias = artifact.version.coordinate.source
+    alias = version.coordinate.source
     configured = next(
         (
             item
@@ -119,7 +122,7 @@ def _configured_snapshot(
     if configured is None:
         return _error(
             CONFIGURED_INSTALLATION_INVALID,
-            f"resolved artifact {artifact.version.coordinate} has no enabled configured registry",
+            f"resolved artifact {version.coordinate} has no enabled configured registry",
         )
     paths = source_store_paths(data_root, source_instance_id(configured))
     current = read_current_source(CurrentSourceRequest(paths, alias))
@@ -134,23 +137,22 @@ def _configured_snapshot(
     if isinstance(loaded, Err):
         return loaded
     exact = next(
-        (item for item in loaded.value if item.coordinate == artifact.version.coordinate),
+        (item for item in loaded.value if item.coordinate == version.coordinate),
         None,
     )
-    if exact != artifact.version:
+    if exact != version:
         return _error(
             CONFIGURED_INSTALLATION_INVALID,
             f"configured registry {alias} no longer contains the resolved approved version "
-            f"{artifact.version.coordinate}",
+            f"{version.coordinate}",
         )
     return Ok(current.value.candidate.snapshot)
 
 
 def _object_entries(
     snapshot: SourceSnapshot,
-    artifact: ResolvedArtifact,
+    version: RegistryArtifactVersion,
 ) -> Result[tuple[SnapshotEntry, ...]]:
-    version = artifact.version
     if version.mode is not PromotionMode.VENDORED:
         return _error(
             CONFIGURED_INSTALLATION_INVALID,
@@ -183,6 +185,37 @@ def _object_entries(
     return Ok(tuple(entries))
 
 
+def configured_object_candidate(
+    effective: EffectiveConfiguration,
+    version: RegistryArtifactVersion,
+    *,
+    data_root: str,
+) -> Result[ObjectCandidate]:
+    """Read and verify one approved object's cached bytes without publishing them.
+
+    Offline readiness and installation must answer the same question about the registry snapshot.
+    Keeping extraction and digest verification here prevents Doctor from growing a second package
+    reader merely to avoid the write that materialization performs.
+    """
+
+    snapshot = _configured_snapshot(effective, version, data_root=data_root)
+    if isinstance(snapshot, Err):
+        return snapshot
+    return object_candidate_from_registry_snapshot(snapshot.value, version)
+
+
+def object_candidate_from_registry_snapshot(
+    snapshot: SourceSnapshot,
+    version: RegistryArtifactVersion,
+) -> Result[ObjectCandidate]:
+    """Verify one approved object's exact bytes from an already observed registry snapshot."""
+
+    entries = _object_entries(snapshot, version)
+    if isinstance(entries, Err):
+        return entries
+    return make_object_candidate(entries.value, expected_digest=version.object_digest)
+
+
 def _materialize(
     effective: EffectiveConfiguration,
     artifact: ResolvedArtifact,
@@ -197,15 +230,10 @@ def _materialize(
         item.code.value not in {"digest-mismatch", "store-invalid"} for item in existing.diagnostics
     ):
         return existing
-    snapshot = _configured_snapshot(effective, artifact, data_root=data_root)
-    if isinstance(snapshot, Err):
-        return snapshot
-    entries = _object_entries(snapshot.value, artifact)
-    if isinstance(entries, Err):
-        return entries
-    candidate = make_object_candidate(
-        entries.value,
-        expected_digest=artifact.version.object_digest,
+    candidate = configured_object_candidate(
+        effective,
+        artifact.version,
+        data_root=data_root,
     )
     if isinstance(candidate, Err):
         return candidate

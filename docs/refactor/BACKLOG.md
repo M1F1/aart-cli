@@ -1198,6 +1198,8 @@ Evidence/links: D-132; `agent_artifacts/commands/source.py` `_health`;
 
 ## B-051 — The three offline capabilities are refusable but not reportable
 
+Status: CLOSED by CP-16 step 2 / D-140.
+
 Found closing INV-223 in CP-15 step 3. Product Specification 165.11 shows the decomposition as
 something an operator *reads*:
 
@@ -1218,6 +1220,13 @@ held and tested (`tests/offline_capability_test.py`), and nothing depends on the
 recorded here rather than added to CP-15 because it is an inspection surface rather than an
 edge-case behaviour, which is what CP-16 (`aart doctor` as environment-wide inspection with
 machine-complete JSON) exists to build. Whoever opens CP-16 should read this item first.
+
+Resolution: `aart doctor` now reports source/artifact metadata, exact approved canonical payload
+and runtime-dependency readiness as separate fields in both renderings before installation. It
+verifies vendored bytes against the approved object digest without publishing them. Declared
+runtime dependencies remain `unverified`, rather than guessed cached or missing, until the deferred
+B-010 capability supplies durable package-manager cache evidence. Public E2E scenarios hold cold,
+referenced, dependency-free, dependency-declaring, multi-source and multi-artifact states.
 
 Evidence/links: INV-223; `docs/product-specification/PRODUCT_SPECIFICATION.md` 165.11;
 `agent_artifacts/marketplace/catalog.py` `_resolution_failure`;

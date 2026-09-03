@@ -169,7 +169,34 @@
     {
       "id": "CP-16",
       "title": "Doctor and supportability",
-      "status": "in_progress"
+      "status": "in_progress",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Environment-wide read-only Doctor and minimal reconciliation plans (INV-194)",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Offline readiness: metadata, canonical payload and runtime dependencies (INV-223)",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "Reviewed repair entry points with re-inspection before execution",
+          "status": "todo"
+        },
+        {
+          "id": "4",
+          "title": "Activity, Receipt, configuration, credential and orphan-run diagnostics",
+          "status": "todo"
+        },
+        {
+          "id": "5",
+          "title": "Public-flow hardening, mutation evidence and full slice verification",
+          "status": "todo"
+        }
+      ]
     },
     {
       "id": "CP-17",

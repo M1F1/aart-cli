@@ -19,6 +19,10 @@ from agent_artifacts.application.consumer_views import (
     project_doctor,
     project_installed_artifact,
 )
+from agent_artifacts.application.offline_readiness import (
+    OfflineReadiness,
+    offline_readiness_to_data,
+)
 from agent_artifacts.application.reconciliation import repair_plan_to_data
 from agent_artifacts.domain.diagnostics import diagnostic_to_data
 from agent_artifacts.domain.policies import EffectivePolicy
@@ -26,6 +30,7 @@ from agent_artifacts.domain.result import Err
 from agent_artifacts.io.configured_repair_action import prepare_configured_repair
 from agent_artifacts.io.consumer_machine import read_installed_inspections
 from agent_artifacts.io.credentials import MacOsKeychainProvider
+from agent_artifacts.io.offline_readiness import read_offline_readiness
 from agent_artifacts.model import Request
 from agent_artifacts.receipt_service import resolved_paths
 from agent_artifacts.tui_consumer import render_doctor
@@ -71,6 +76,22 @@ def _item_data(item: InstalledArtifactView) -> dict[str, object]:
     }
 
 
+def _offline_lines(readiness: OfflineReadiness) -> tuple[str, ...]:
+    lines = ["Offline readiness"]
+    for source in readiness.sources:
+        lines.append(f"{source.alias}: metadata {source.metadata.value}")
+        for artifact in source.artifacts:
+            lines.extend(
+                (
+                    str(artifact.coordinate),
+                    f"  metadata {artifact.metadata.value}",
+                    f"  canonical payload {artifact.canonical_payload.value}",
+                    f"  runtime dependencies {artifact.runtime_dependencies.value}",
+                )
+            )
+    return tuple(lines)
+
+
 def run(request: Request) -> int:
     """Inspect every canonical installation and report minimal reconciliation plans."""
 
@@ -90,6 +111,12 @@ def run(request: Request) -> int:
     )
     if isinstance(inspected, Err):
         return _emit_error(request, inspected)
+    offline = read_offline_readiness(
+        runtime.value.loaded.effective,
+        data_root=runtime.value.paths.data_root,
+    )
+    if isinstance(offline, Err):
+        return _emit_error(request, offline)
 
     artifacts = tuple(
         project_installed_artifact(
@@ -121,9 +148,14 @@ def run(request: Request) -> int:
         },
         "items": [_item_data(item) for item in artifacts],
         "repairs": repairs,
+        "offline_readiness": offline_readiness_to_data(offline.value),
     }
     if request.json:
         print(json.dumps(payload, indent=2))
     else:
-        print("\n".join(render_doctor(view, PresentationProfile.FAST)))
+        print(
+            "\n".join(
+                (*render_doctor(view, PresentationProfile.FAST), "", *_offline_lines(offline.value))
+            )
+        )
     return _common.OK if payload["ok"] else _common.ERROR

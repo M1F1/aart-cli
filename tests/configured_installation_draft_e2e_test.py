@@ -25,7 +25,7 @@ from agent_artifacts.domain.harness import Scope
 from agent_artifacts.domain.identifiers import ArtifactIdentity, SourceAlias, SourceId
 from agent_artifacts.domain.inputs import PromptedConfigValue, SecretProviderReference
 from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.registry import publish_registry_version
+from agent_artifacts.domain.registry import PromotionMode, publish_registry_version
 from agent_artifacts.domain.result import Ok
 from agent_artifacts.domain.selection import (
     ArtifactRequest,
@@ -137,6 +137,7 @@ def _promote_one(
     onto: SourceSnapshot,
     revision: str,
     setup: AuthoredSetup | None = None,
+    mode: PromotionMode = PromotionMode.VENDORED,
 ) -> SourceSnapshot:
     """One author tree through one real promote-and-publish transaction onto `onto`."""
 
@@ -167,7 +168,13 @@ def _promote_one(
     bundle = scanned.value.active[0]
     bundle = dataclasses.replace(bundle, candidate=assess_candidate(bundle.candidate))
     evidence = cast(tuple[tuple[CandidateId, PromotionEvidence], ...], _evidence(bundle))
-    promoted = plan_bulk_promotion(onto, (bundle,), evidence=evidence, approved=approved.value)
+    promoted = plan_bulk_promotion(
+        onto,
+        (bundle,),
+        evidence=evidence,
+        approved=approved.value,
+        mode=mode,
+    )
     assert isinstance(promoted, Ok), promoted
     projected = project_promotion(onto, promoted.value)
     assert isinstance(projected, Ok), projected
@@ -188,6 +195,7 @@ def _promote_one(
 def _published_registries(
     *authored: tuple[tuple[str, str] | tuple[str, str, bool], ...],
     setup: AuthoredSetup | None = None,
+    mode: PromotionMode = PromotionMode.VENDORED,
 ) -> SourceSnapshot:
     """Several author trees taken to a published registry, one promotion transaction each.
 
@@ -198,7 +206,13 @@ def _published_registries(
 
     snapshot = SourceSnapshot(SnapshotOrigin.LOCAL, ())
     for index, tree in enumerate(authored):
-        snapshot = _promote_one(tree, onto=snapshot, revision=f"{index:x}" * 40, setup=setup)
+        snapshot = _promote_one(
+            tree,
+            onto=snapshot,
+            revision=f"{index:x}" * 40,
+            setup=setup,
+            mode=mode,
+        )
     return snapshot
 
 
@@ -206,6 +220,7 @@ def _published_registry(
     authored: tuple[tuple[str, str] | tuple[str, str, bool], ...] = AUTHORED_MCP,
     *,
     setup: AuthoredSetup | None = None,
+    mode: PromotionMode = PromotionMode.VENDORED,
 ) -> SourceSnapshot:
     """Take an author's files all the way to a published registry snapshot.
 
@@ -215,7 +230,7 @@ def _published_registry(
     nothing else about the pipeline changes for one.
     """
 
-    return _published_registries(authored, setup=setup)
+    return _published_registries(authored, setup=setup, mode=mode)
 
 
 class ConfiguredInstallationDraftTest(unittest.TestCase):

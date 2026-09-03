@@ -49,7 +49,7 @@ score.
 1. **VERIFIED:** add the read-only, environment-wide `aart doctor` report over
    canonical project and user installations, using the existing health projection and canonical
    minimal-repair planner; expose complete JSON and readable screen-29 text.
-2. **NEXT:** report 165.11's three offline capabilities before installation (B-051), without
+2. **VERIFIED:** report 165.11's three offline capabilities before installation (B-051), without
    collapsing them into one online/offline answer.
 3. Add safe repair review and finalize entry points. Re-inspect and re-plan under the same
    precondition discipline as every configured lifecycle action; apply only an explicitly reviewed
@@ -90,6 +90,33 @@ unavailable platform credential providers, update metadata the current inspectio
 and presentation whitespace. B-058 records that the wrapper otherwise reuses stale outcomes after
 test-only changes.
 
+### Step 2 — three offline capabilities remain three observations (D-140)
+
+`tests/doctor_offline_readiness_e2e_test.py` drives the public `aart doctor` before any install. A
+real approved vendored Skill reports source and artifact metadata cached, its canonical payload
+cached, and runtime dependencies not required. A real referenced publication keeps the metadata
+but reports the payload missing. A packaged MCP declaration proves that a cached payload does not
+invent dependency readiness: because AART has no durable package-manager cache inventory, declared
+dependencies are honestly `unverified`. Removing the real Source store reports cold metadata and
+no invented artifacts. Human output names the same three capabilities separately and does not call
+the artifact installed.
+
+The observation is environment-wide rather than a single-source shortcut. One scenario configures
+an ignored disabled registry, an unsynchronized registry, a synchronized local Source and the
+approved registry; Doctor reports every enabled source and does not parse the ordinary Source as a
+registry. A mixed referenced/vendored registry proves one missing payload does not stop later
+artifacts from being reported. A real lifecycle transition to deprecated proves unavailable
+metadata is not presented as installable offline.
+
+The first five tests were RED with `KeyError: offline_readiness` (and absent human text). Three
+manual mutations independently made the canonical payload always cached, dependencies always
+`not-required`, and cold metadata cached; each turned only its named public claim red. Fresh scoped
+mutation runs then found and closed the multi-source, ordinary-Source, multi-artifact and lifecycle
+filter gaps. The pure application projection killed all 30 mutants. The final I/O run killed 73 of
+76; two survivors alter the currently unproducible Collection filter spelling, and one changes
+`False` to `None` in a falsey input whose public state is identically `missing/unverified`. Per
+D-134 they are findings, not a score or a reason to invent a fixture outside the active capability.
+
 ## Quality gates
 
 - Baseline before CP-16: `make quality` green (3,237 tests, 1 skipped, 85.32% branch coverage) and
@@ -99,10 +126,16 @@ test-only changes.
   killed, 28 survivors, none untested.
 - Step 1 full gates: `make quality` green -- all nine gates, 3,243 tests, 1 skipped, 85.34% branch
   coverage -- and `make integration` separately green with 279 E2E tests.
+- Step 2 focused: eight offline-readiness E2E tests and all 24 tests in the four nearest suites are
+  green; ruff, mypy over 255 source files, repository validation and diff checks are green. Scoped
+  mutation: application projection 30/30 killed; I/O observation 73/76 killed with three reviewed
+  survivors.
+- Step 2 full gates: `make quality` green -- all nine gates, 3,251 tests, 1 skipped, 85.37% branch
+  coverage -- and `make integration` separately green with 287 E2E tests.
 
 ## Remaining
 
-Steps 2–5 above. In particular, step 1 reports plans but deliberately applies none; a safe repair
+Steps 3–5 above. In particular, Doctor reports plans but deliberately applies none; a safe repair
 entry point remains part of CP-16.
 
 ## Known compromises
@@ -118,7 +151,7 @@ entry point remains part of CP-16.
 
 ## Blockers
 
-None for step 2.
+None for step 3.
 
 ## Legacy removal criteria
 
@@ -126,11 +159,12 @@ This slice adds a public support surface; it authorizes no legacy deletion by it
 
 ## Handoff
 
-- Current working state: step 1 is VERIFIED; CP-16 remains IN PROGRESS.
-- Exact next action: implement step 2 from B-051, beginning with a public-flow RED for each of the
-  three offline capabilities.
+- Current working state: steps 1 and 2 are VERIFIED; CP-16 remains IN PROGRESS.
+- Exact next action: begin step 3 with a public reviewed-repair RED.
 - Do not undo: one observed installation set feeds both `project_doctor` and
-  `prepare_configured_repair`; Doctor is read-only and does not require source content.
-- Tests last run/results: `python -m unittest tests.doctor_command_e2e_test` -- 6 green.
-- Failure evidence: absent parser was the initial RED; healthy-plan and project-only mutations each
-  turn their named E2E assertion RED.
+  `prepare_configured_repair`; offline readiness reuses the installation package verifier but stops
+  before object publication; Doctor remains read-only.
+- Tests last run/results: `make quality` -- 3,251 green, 1 skipped, 85.37%; `make integration` --
+  287 green.
+- Failure evidence: the report's absence was the initial RED; payload, dependency, cold-metadata,
+  source-loop and artifact-loop mutations each turn their named E2E assertion RED.

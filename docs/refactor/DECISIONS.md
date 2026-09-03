@@ -2739,3 +2739,36 @@ repair plans; the existing screen-29 renderer now lists the same artifacts and r
 counts. A later repair entry point must review, re-inspect and re-plan before applying one of these
 plans. It may not treat this report as authorization and may not replace the plans with
 reinstall-all.
+
+## D-140 — Offline readiness reports durable evidence, never a guessed boolean
+
+**Context.** Product Specification 165.11 requires three independently readable capabilities:
+metadata cached, canonical payload cached and runtime dependencies cached. AART durably records a
+configured Source snapshot and a registry's approved object digest, but has no durable package-
+manager cache index. Merely finding an artifact package cannot establish that pip or uv can resolve
+its declared dependencies without a network.
+
+**Decision.** `aart doctor` observes every enabled configured Source once and reports four evidence
+states: `cached`, `missing`, `not-required` and `unverified`. Source metadata is cached only when a
+current Source snapshot exists. An approved registry artifact's canonical payload is cached only
+when its vendored package can be extracted from that same snapshot and re-digested to the approved
+object identity. Runtime dependencies are `not-required` only when that verified package declares
+none; a declared dependency is `unverified` until AART owns durable package-cache evidence. A
+referenced publication therefore has cached metadata and a missing canonical payload, and never
+inherits readiness from some other local copy. The report is informational and does not change an
+installed machine's healthy/attention exit status.
+
+**Why.** Collapsing the observations to one offline boolean recreates the exact defect INV-223
+forbids: synchronizing a registry does not download package-manager dependencies, and possessing a
+payload says nothing about wheel or index availability. Calling declared dependencies `missing`
+would be equally unsupported because the installer may have a usable cache that AART cannot yet
+inventory. `unverified` says exactly what the current evidence permits. Reusing the configured
+installation's package extraction and digest verification keeps install and Doctor from defining
+"canonical payload" differently, while stopping before object publication keeps Doctor read-only.
+
+**Consequence.** The JSON and human outputs keep all three capability names separate before any
+install is attempted. Unsynchronized, referenced, dependency-free and dependency-declaring cases
+are independently reachable in real public-command tests; multiple sources and artifacts are all
+observed, deprecated versions are not advertised as installable, and Doctor writes no target or
+object-store content. B-051 is closed and INV-223 is EVIDENCED. Full offline dependency-cache
+inventory and installation remain the distinct deferred B-010 capability.
