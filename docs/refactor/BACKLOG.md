@@ -1331,3 +1331,31 @@ policy finding would surface.
 
 Evidence/links: `agent_artifacts/commands/marketplace.py`; `agent_artifacts/domain/policies.py`;
 D-136; CP-15 step 6.
+
+## B-057 — `registry promote` and `registry publish` disagree about the registry layout
+
+Found while building CP-15 step 7, by running the two verbs against one checkout.
+
+`registry promote` writes a **versioned** layout: `artifacts/<kind>/<name>/<version>/artifact.json`.
+`registry publish` over the same checkout refuses with `required file is missing: artifact.json` at
+`artifacts/<kind>/<name>/artifact.json` — the **unversioned** path. So the output of the first verb
+is not an input the second accepts, and a maintainer following the obvious sequence gets a refusal
+naming a file they have no reason to think should exist.
+
+The asymmetry has a second half. `registry publish` requires an `aart-registry.json` workspace
+marker and refuses without one (`registry workspace requires aart-registry.json`, remediated by
+`registry init`); `registry promote` requires no such marker and will happily write into a bare
+`git init` directory. The two verbs disagree about what a registry checkout *is*.
+
+A third consequence surfaced in the same probing: promoting into a directory that is simultaneously
+a consumer's `source-local` source leaves that source failing validation with `artifact-invalid`,
+because the versioned layout is not a valid native source tree. That arrangement is not one anybody
+should run — CP-15 step 7 deliberately keeps the maintainer's checkout and the published registry
+separate for exactly this reason — but the diagnostic an operator would get says nothing about the
+cause.
+
+**Not critical path.** No Product Specification invariant requires the two verbs to compose, and
+step 7's boundary claims are unaffected: they are about what promotion does *not* do, and it does
+not do it under either layout. This becomes critical if CP-17's Git-backed acceptance drives
+`promote` and `publish` in sequence over one repository, which is the natural way to write it —
+whoever opens CP-17 should read this first.

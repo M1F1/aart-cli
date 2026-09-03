@@ -15,7 +15,26 @@ carry the same three words in their evidence column -- *scattered source/registr
 safeguards* -- and that phrase is the slice's whole subject. A safeguard at a seam is worth what
 the verb an operator actually runs makes of it.
 
-**Steps 1, 2, 3, 4a, 4b, 5 and 6 are done.** Step 6 is
+**Steps 1 through 7 are done; step 8 is the last one open.** Step 7 is
+`tests/promotion_publication_boundary_e2e_test.py`, and it is the one increment in this slice that
+changed **no production code** — the finding, not a disappointment. `registry promote --yes` already
+honoured 165.28's boundary exactly: it reports `commit: false` and `push: false`, makes no commit,
+creates no branch, adds no remote, and leaves every path it wrote untracked for a person to stage.
+Nothing said so, and the failure that guards against — a promotion quietly becoming visible to
+consumers — is invisible in the maintainer's own terminal, where everything looks like it worked.
+
+The arrangement carries the claim (D-137): the maintainer's checkout and the published registry a
+consumer is subscribed to are two directories, because in production they are two states of one
+repository separated by a push and a merge. The consumer re-synchronizes after the promotion and is
+offered exactly what it was offered before, digest for digest, and still refuses to install the
+promoted coordinate. Two of the nine tests were weaker than their names before their mutations
+caught them: the evidence test omitted both required digests at once (so either could have been made
+optional under a green test), and the install refusal was resting on a stale snapshot rather than on
+the boundary. INV-238, 240, 241 and 242 move to EVIDENCED; the Git hop stays with CP-17, since
+`git_location_parts` admits no `file://` remote. B-057 records that `registry promote` writes a
+layout `registry publish` refuses.
+
+**Step 6 before it** is
 `tests/policy_drift_e2e_test.py`, and it closes two invariants with one fact. `aart marketplace
 status` reported one word per installation and it was about the payload: an artifact installed under
 a permissive policy, on a machine whose administrator later required `registry-reviewed` trust,
@@ -98,23 +117,23 @@ read as "this source is gone" in three places, so one invalid upstream revision 
 
 ## Exact next action
 
-**Continue CP-15 with step 7 of `slices/CP-15-edge-case-hardening.md`**, the last one: promotion
-evidence, audit, and the local-promotion-is-not-publication boundary (INV-238, 240, 241, 242).
-Product Specification 165.24 makes missing required evidence block promotion and keeps warnings in
-the candidate, promotion and provenance records; 165.26 lists the seven fields a promotion record
-must preserve. The scenario map records that D-103--D-107 already built the promotion records and
-the local-commit boundary, and that what is missing is the *consumer-side* claim -- no test anywhere
-shows that a locally promoted artifact is not thereby published, which is the boundary a maintainer
-is most likely to assume the other way. Start from `application/promotion.py`'s audit fields and
-find which verb an operator runs to see them; the same shape as steps 1-6 applies -- name the verb,
-drive it over a real temporary machine, and record the mutation each claim was proven against.
+**Continue CP-15 with step 8 of `slices/CP-15-edge-case-hardening.md`** — the last step in the
+slice: input and credential contract migrations, and unrelated credential ownership (INV-231,
+INV-232). These are the only two invariants in CP-15's declared scope still PARTIAL, and their
+scenario-map row has stood open since slice start with the same gap: *no test that changing one
+artifact's contract leaves another artifact's credential owned*.
 
-This is greenfield, not re-characterization: the coverage sweep found **no test file anywhere
-matching `purge`**. Start by finding what the verb actually is — whether purge exists as a command,
-as a maintainer action, or only as a registry state — and characterize that before changing
-anything, the way step 1 characterized `aart source sync` before touching `could-not-check`. The
-second half is a claim about *wording*: find every place a removal is reported to a person and check
-that none of them says or implies the content is gone.
+Start from CP-08's credential lifecycle, which the scenario map names as the existing evidence, and
+find the public verb that migrates a contract — whether an input-contract change arrives through
+`marketplace update`, through `marketplace setup` re-running a changed recipe, or only through a
+re-scan on the maintainer side. INV-232's claim is a *negative* about a second artifact: A's
+credential contract changes, and B's credential is still owned by B, still resolvable, and not
+re-prompted. That shape wants two artifacts installed against the same profile, which is what makes
+it different from every CP-08 test, and it is the shape a mutation can actually kill.
+
+Note the asymmetry to check first: if an input-contract migration has no public verb at all — the
+way step 5 found no `purge` verb — then say so with the same strength of evidence step 5 used, and
+measure the ordinary path instead. Characterize before changing anything.
 
 The shape steps 1–4b established is the one to repeat — name the verb an operator runs, drive it
 over a real temporary machine, and prove each test red against a real mutation of the code it names,

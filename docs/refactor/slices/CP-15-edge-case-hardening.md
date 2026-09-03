@@ -49,7 +49,7 @@ temporary machine, and (c) records which mutation it was proven against.
 | Input/credential contract changes | INV-231, INV-232 | CP-08 credential lifecycle | No test that changing one artifact's contract leaves another's credential owned |
 | Policy drift contributes to health | INV-233 | `EffectivePolicy` is read at validation time (D-099) | **Closed by increment 6** (D-136). The live policy is `OrganizationPolicy`; the domain `EffectivePolicy` never reaches the consumer path at all (B-056) |
 | Development installs are visibly distinct | INV-237 | none found | **Closed by increment 6.** `marketplace list` always showed `trust`; what is *installed* did not |
-| Promotion evidence, audit, Git authority, publication | INV-238, 240, 241, 242 | D-103–D-107 promotion records and local-commit boundary | No test that *local promotion is not publication* from the consumer side |
+| Promotion evidence, audit, Git authority, publication | INV-238, 240, 241, 242 | D-103–D-107 promotion records and local-commit boundary | **Closed by increment 7**, which changed no production code: the boundary was already right and nothing said so from the consumer's side. The Git hop stays with CP-17 |
 | Exact collection drift | 165.x | none found: no test file matches `collection.*drift` | Waits on the Collection capability B-038 is sequenced behind (D-131) |
 | Manual drift | INV-228 | canonical drift detection exists | No test file matches `manual.*drift` |
 
@@ -67,8 +67,12 @@ temporary machine, and (c) records which mutation it was proven against.
 5. **DONE:** Purge boundaries and the erasure claim AART must not make (INV-221, INV-222).
 6. **DONE:** Policy drift in installed health, and development installs kept visibly distinct
    (INV-233, INV-237).
-7. Promotion evidence, audit and the local-promotion-is-not-publication boundary
+7. **DONE:** Promotion evidence, audit and the local-promotion-is-not-publication boundary
    (INV-238, 240, 241, 242).
+8. Input and credential contract migrations, and unrelated credential ownership
+   (INV-231, INV-232) — the last two invariants in this slice's declared scope. The scenario map
+   row has stood open since slice start: no test shows that changing one artifact's contract leaves
+   another artifact's credential owned.
 
 ## Blockers
 
@@ -398,3 +402,69 @@ slice and stay under B-054.
 The remaining unproven claim is honest to state: that asking about compliance changes nothing on
 disk has no available mutation, because nothing in the code mutates there. It rests on its
 siblings, which drive the same verb over the same machine.
+
+### Step 7 — promotion evidence, and the boundary a maintainer would assume the other way (INV-238, 240, 241, 242)
+
+`tests/promotion_publication_boundary_e2e_test.py`. 165.27 splits the authority: AART owns artifact
+and registry validation and preparation, and existing Git hosting owns branch protection, review and
+merge authorization. 165.28 names what follows — a local promotion or commit is not yet Published;
+publication is presence on the canonical consumer-visible branch, which a person or CI puts it there
+by pushing and merging.
+
+Every claim in this file passed on shipped code, and that is the finding rather than a
+disappointment: D-103–D-107 built the promotion records and the local-commit boundary correctly, and
+what was missing was any test that said so **from the consumer's side**. This increment changes no
+production code. It is the one increment in CP-15 whose value is entirely in what it would catch
+later, because the failure it guards against — a promotion quietly becoming visible to consumers —
+is invisible in the maintainer's own terminal, where everything looks like it worked.
+
+The arrangement is the point. A maintainer's writable registry checkout and the published registry a
+consumer is subscribed to are **two directories**, because in production they are two states of one
+repository separated by a push and a merge. An earlier draft promoted straight into the consumer's
+source and got the right answer for the wrong reason: the consumer stopped seeing anything because
+`registry promote` writes a versioned layout into a tree the source validator then rejects
+(`artifact-invalid`, B-057), so "not published" was indistinguishable from "broken". A test that
+measures a workflow nobody runs is worse than no test.
+
+Nine claims, each proven against a mutation:
+
+| Mutation | Turns red |
+|---|---|
+| The promoted-local payload reports `commit`/`push` as true | the payload claim, only |
+| `promote --yes` also runs `git add -A` and `git commit` | the Git-authority claim, only |
+| A simulated push: the promoted tree copied into the published registry | the three consumer claims, and only those |
+| The review branch applies instead of reviewing | the dry-run claim, only |
+| `--validation-report` made optional | the evidence claim |
+| `--policy-result` made optional | the evidence claim |
+| The two evidence digests written into each other's slot | the audit-record claim |
+| `registry_snapshot_before` recorded as the after-snapshot | the audit-record claim |
+| Provenance records a literal `HEAD` instead of the revision | the audit-record claim |
+| The applied payload reports the snapshot it started from | the transaction-chain claim |
+
+Two of those mutations found gaps in my own tests before they found anything else, which is the
+whole reason for running them.
+
+The evidence test first omitted **both** digests at once. Making either one optional on its own
+survived it: the other was still required, so the CLI still refused, and a test named "promotion
+without its evidence is refused" would have kept passing with half the requirement deleted. It now
+asserts each digest independently, and — this mattered too — in its own workshop, because the first
+subtest's refusal was measured against a checkout the second subtest had already promoted into.
+
+The install-refusal test was resting on a stale snapshot rather than on the boundary. It refused
+because the consumer had not re-synchronized, not because the promotion was unpublished, and the
+simulated-push mutation left it green. It now synchronizes first, so the refusal it asserts is the
+one 165.28 promises.
+
+`make mutants ONLY=agent_artifacts/application/promotion.py TESTS=<this file>` was run per D-134:
+1604 mutants, 388 killed, 842 skipped as uncovered, 374 survived. Read that figure for what it is —
+the run was scoped to *these nine tests alone*, so a survivor means "these nine do not hold it", not
+"nothing holds it", and nine end-to-end tests are not meant to hold a 1600-mutant module. The
+survivors nearest this increment's claims are in `promotion_source_provenance`'s `local:` branch and
+its rejection path, which a Git-revision fixture never reaches; the audit record's own fields are
+held, which is what the three record mutations above measure directly. The rest stay under B-054.
+
+**What stays with CP-17:** the Git hop itself. No test in this repository has a Git host to push to,
+and `git_location_parts` admits no `file://` remote, so branch protection, pull requests and the
+merge that constitutes publication cannot be driven here. This file proves the property that makes
+the hop *necessary* — AART leaves the checkout with nothing committed, no branch and no remote, and
+the consumer's view does not move — rather than the hop's outcome.

@@ -2654,3 +2654,29 @@ the Product Specification first instead of hiding the change here.
   operator something false in the most expensive way. `not-evaluated` is a third value and not a
   pass: where the record resolves to no current item there is no trust to judge, and every such path
   reports it by leaving `PolicyStanding()` alone rather than by answering.
+
+## D-137 — Publication is measured as two directories, not as one directory before and after
+
+**Context.** CP-15 step 7 had to show that a local promotion is not publication (INV-242) without a
+Git host to publish to. The available shortcut was to promote into the consumer's own source and
+watch the consumer not see it.
+
+**Decision.** Model the maintainer's registry checkout and the published registry a consumer is
+subscribed to as two separate directories, and assert that promotion moves neither the published
+tree's bytes nor the consumer's view — after a real re-synchronization, not merely before one.
+
+**Why.** The shortcut gets the right answer for the wrong reason. `registry promote` writes a
+versioned layout that a native source tree does not accept (B-057), so the consumer stops seeing the
+artifact because its source became invalid, not because the promotion was unpublished — and a test
+whose green depends on an unrelated defect turns red the day that defect is fixed. Two directories
+are also what production actually is: two states of one repository separated by a push and a merge.
+
+The cost is that "published" is simulated by a directory rather than performed by a merge, so the
+mutation that must turn these claims red is a simulated push — the tree copied across — rather than
+a code change. That mutation kills exactly the three consumer claims and nothing else, which is the
+evidence that the assertions are not vacuous. The hop itself stays with CP-17, where a real remote
+exists; `git_location_parts` admits no `file://` remote, so it cannot be driven here.
+
+**Consequence.** A test that measures a boundary must be red for the boundary's own reason. Where
+the only available failure mode is an unrelated one, arrange the fixture until the intended failure
+is the one that fires, and record the mutation that proves it.

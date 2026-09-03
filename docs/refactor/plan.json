@@ -157,6 +157,11 @@
         {
           "id": "7",
           "title": "Promotion evidence, audit and the local-promotion-is-not-publication boundary (INV-238, 240, 241, 242)",
+          "status": "done"
+        },
+        {
+          "id": "8",
+          "title": "Input and credential contract migrations, and unrelated credential ownership (INV-231, INV-232)",
           "status": "todo"
         }
       ]
