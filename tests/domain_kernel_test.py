@@ -228,40 +228,6 @@ class DomainOutcomeTest(unittest.TestCase):
             OperationOutcome("install", -1)
 
 
-class DomainCollectionsTest(unittest.TestCase):
-    def test_sorted_upsert_and_remove_return_replacements_without_mutating_input(self):
-        from agent_artifacts.domain.collections import remove_sorted, sorted_values, upsert_sorted
-
-        original = (("b", 2), ("a", 1))
-        ordered = sorted_values(original, key=lambda item: item[0])
-        updated = upsert_sorted(ordered, ("b", 3), key=lambda item: item[0])
-        removed = remove_sorted(updated, "a", key=lambda item: item[0])
-
-        self.assertEqual(original, (("b", 2), ("a", 1)))
-        self.assertEqual(ordered, (("a", 1), ("b", 2)))
-        self.assertEqual(updated, (("a", 1), ("b", 3)))
-        self.assertEqual(removed, (("b", 3),))
-
-
-class DomainPortsTest(unittest.TestCase):
-    def test_ports_are_small_runtime_checkable_callable_protocols(self):
-        from agent_artifacts.domain.ports import CommandPort, QueryPort
-        from agent_artifacts.domain.result import Ok
-
-        class UpperQuery:
-            def __call__(self, request: str):
-                return Ok(request.upper())
-
-        class LengthCommand:
-            def __call__(self, command: str):
-                return Ok(len(command))
-
-        self.assertIsInstance(UpperQuery(), QueryPort)
-        self.assertIsInstance(LengthCommand(), CommandPort)
-        self.assertEqual(UpperQuery()("aart"), Ok("AART"))
-        self.assertEqual(LengthCommand()("aart"), Ok(4))
-
-
 class DomainArchitectureTest(unittest.TestCase):
     def test_domain_modules_do_not_import_io_or_legacy_layers(self):
         domain = ROOT / "agent_artifacts" / "domain"
@@ -284,12 +250,18 @@ class DomainArchitectureTest(unittest.TestCase):
         self.assertEqual(violations, [])
 
     def test_every_domain_dataclass_is_frozen(self):
-        module_names = (
-            "diagnostics",
-            "identifiers",
-            "outcomes",
-            "result",
+        # Derived from the directory rather than listed.  A hand-written list silently stops
+        # covering a module added later, and keeps naming one that is removed -- CP-18 step 3
+        # deleted `ports` and `collections`, and a listed name would have had to be chased.
+        module_names = tuple(
+            sorted(
+                path.stem
+                for path in (ROOT / "agent_artifacts" / "domain").glob("*.py")
+                if path.stem != "__init__"
+            )
         )
+        self.assertIn("result", module_names)
+        self.assertGreater(len(module_names), 2)
         mutable: list[str] = []
         found: list[str] = []
         for name in module_names:

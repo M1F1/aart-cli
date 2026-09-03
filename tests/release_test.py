@@ -94,6 +94,50 @@ def _unsafe_registry_runner(calls, registry, status, head, origin_head):
     return runner
 
 
+class TheDeclaredSchemaInputsExistTest(unittest.TestCase):
+    """`SCHEMA_INPUTS` is a hand-maintained tuple of paths, so a module can leave the tree
+    without the tuple noticing.  Every consumer of it -- the freeze, the checklist, this
+    file's own fixture builder -- then fails deep inside `shutil.copy2` with an errno and no
+    hint that a *release contract* is what broke.  This states the claim where it belongs."""
+
+    def test_every_declared_schema_input_is_a_file_in_the_tree(self) -> None:
+        release = _load_script("release")
+
+        missing = [
+            relative for relative in release.SCHEMA_INPUTS if not (ROOT / relative).is_file()
+        ]
+
+        self.assertEqual(
+            missing,
+            [],
+            "release.SCHEMA_INPUTS names files that no longer exist. A schema input is a "
+            "declared part of the release contract, reachable by path rather than by import, "
+            "so deleting one is a contract change: it needs a new RELEASE_CONTRACT_VERSION "
+            "and its own freeze, not an edit to the frozen one.",
+        )
+
+    def test_the_frozen_document_covers_exactly_the_declared_inputs(self) -> None:
+        # Paths only, deliberately.  The *hashes* in an issued freeze are release-time evidence
+        # and drift the moment a schema file is edited afterwards; `make release-check` is where
+        # that is answered, by re-cutting the freeze.  The *path list* is the declaration itself,
+        # and a freeze that no longer covers it is a bookkeeping error at any point in the cycle.
+        release = _load_script("release")
+        import json
+
+        frozen = json.loads((ROOT / release.SCHEMA_FREEZE_PATH).read_text(encoding="utf-8"))
+
+        self.assertEqual(
+            [entry["path"] for entry in frozen["schema_inputs"]],
+            list(release.SCHEMA_INPUTS),
+        )
+
+    def test_this_guard_is_not_vacuous(self) -> None:
+        release = _load_script("release")
+
+        self.assertTrue(release.SCHEMA_INPUTS)
+        self.assertFalse((ROOT / "agent_artifacts" / "no_such_schema.py").is_file())
+
+
 class ReleaseChecklistTest(unittest.TestCase):
     def test_complete_stable_tree_and_registry_return_deterministic_pass_receipt(self) -> None:
         release = _load_script("release")

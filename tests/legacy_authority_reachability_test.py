@@ -9,12 +9,21 @@ The exception list is a claim about each name in it, so each one states its reas
 * ``_commit`` -- written by the build, which stamps a commit into release artifacts.
 * ``application.credential_lifecycle`` -- retained for the still-incomplete credential lifecycle,
   rather than falsely claiming that capability was replaced.
-* ``domain.collections``, ``domain.outcomes``, ``domain.ports``, ``profiles.loader`` -- **not yet
-  examined.**  Each is a production module no runtime path reaches, imported only by
-  ``domain_kernel_test`` and ``profiles`` tests, which is the definition this docstring opens with.
-  They are listed so the set is exact and this test keeps its teeth, *not* because a decision was
-  made about them.  B-070 carries the decision; do not read their presence here as a judgement
-  that they are load-bearing.
+* ``profiles.loader`` -- reads ``<project>/.agent-artifacts/profiles.json`` over the built-ins.
+  The Product Specification asks for no such overlay and the runtime calls ``builtin()`` directly,
+  so it is an unshipped capability rather than a replaced one.  It is entangled with three test
+  files, one of which reaches install-scope behaviour *through* it, so removing it has to decide
+  what that coverage becomes rather than simply delete it.  B-070 carries that decision.
+
+``domain.collections``, ``domain.outcomes`` and ``domain.ports`` were on this list and are gone:
+each was the unadopted half of a proposed kernel.  Thirty ``Protocol`` classes are defined across
+the shipped subsystems, none of them the generic ``QueryPort``/``CommandPort`` pair; the shipped
+session vocabulary lives in ``reporting/model.py`` and carries a ``no-op`` state the domain enum
+never had; and the sorted-collection helpers had no caller at all.  ``domain/__init__``'s re-export
+of ``.outcomes`` went with them, since nothing anywhere imported from ``agent_artifacts.domain``
+itself.
+
+Reachability follows package ``__init__`` files for the reason the walk itself records.
 """
 
 from __future__ import annotations
@@ -30,9 +39,6 @@ DELIBERATE_NON_RUNTIME_MODULES = frozenset(
     {
         "agent_artifacts._commit",
         "agent_artifacts.application.credential_lifecycle",
-        "agent_artifacts.domain.collections",
-        "agent_artifacts.domain.outcomes",
-        "agent_artifacts.domain.ports",
         "agent_artifacts.profiles.loader",
     }
 )
@@ -79,7 +85,12 @@ def _runtime_unreachable_modules() -> frozenset[str]:
         if module in reachable:
             continue
         reachable.add(module)
-        pending.extend(graph[module] - reachable)
+        # Importing `a.b.c` executes `a/__init__.py` and `a/b/__init__.py` first, so whatever
+        # those re-export is imported too. Walking only the explicit edges misses that entirely:
+        # `domain/__init__.py` re-exported `.outcomes`, so every `domain.*` import loaded it,
+        # while this graph called it unreachable. Ancestors are reached by anything beneath them.
+        ancestors = {module.rsplit(".", index)[0] for index in range(1, module.count(".") + 1)}
+        pending.extend((graph[module] | (ancestors & modules)) - reachable)
     return frozenset(
         module
         for module, path in by_module.items()

@@ -1698,7 +1698,16 @@ Evidence/links: INV-078; INV-074; `.github/actions/cut-release/action.yml`;
 
 ## B-070 — four unreachable production modules are listed as exceptions without a decision
 
-Found: CP-18 step 3 (2026-09-03) · Severity: medium · Status: open
+Found: CP-18 step 3 (2026-09-03) · Severity: medium · Status: three of four decided
+
+**Verdicts so far (D-154).** `domain/ports.py` and `domain/collections.py` are removed: no
+importer, no path-based consumer, and the generic Protocol pair and sorted-collection helpers
+they defined had no caller. `domain/outcomes.py` is **kept** — it is not legacy, it is named by
+`scripts/release.py:SCHEMA_INPUTS` and pinned by sha256 in every issued schema freeze, which the
+import graph cannot see; retiring it is a release-contract change, filed as B-071.
+`profiles/loader.py` remains undecided: the Product Specification asks for no overlay, but
+`profiles_test`, `memory_profiles_test` and `install_scope_test` are entangled with it, and the
+last of those reaches install-scope behaviour *through* it.
 
 `tests/legacy_authority_reachability_test.py` builds the import graph from `agent_artifacts.cli`
 and `agent_artifacts.__main__` and asserts that every shipped module is reachable, or named in an
@@ -1736,3 +1745,27 @@ verdict is the step not finished rather than the step passed.
 
 Evidence/links: CP-18 step 3; B-067 (unrelated despite the name);
 `tests/legacy_authority_reachability_test.py`; `tests/domain_kernel_test.py`.
+
+## B-071 — retire `domain/outcomes.py` from the release contract under a new contract version
+
+Found: CP-18 step 3 (2026-09-03) · Severity: low · Status: open
+
+`agent_artifacts/domain/outcomes.py` is reached by no runtime import. Its live counterpart is
+`reporting/model.py`'s `SessionOutcome`, which carries a `no-op` state the domain enum never had,
+so the shipped session vocabulary is elsewhere and this module is a duplicate nothing serializes.
+
+It cannot simply be deleted. `scripts/release.py:31` declares it in `SCHEMA_INPUTS`, and its
+sha256 is pinned in fifteen issued `docs/release/schema-freeze-v*.json` documents including the
+live v18. Those documents are immutable evidence (`scripts/release.py:22`): a new release series
+adds its own contract beside the frozen ones and never regenerates them. Removing the module is
+therefore a contract change — a new `RELEASE_CONTRACT_VERSION` with its own freeze, compatibility
+document and checklist — and the same cut should be reviewed for whether any *other* entry in
+`SCHEMA_INPUTS` has likewise stopped describing a wire surface.
+
+Not critical: the module costs 104 lines and no behaviour, the reachability test states its
+position honestly, and `TheDeclaredSchemaInputsExistTest` now prevents the deletion being
+attempted by accident. It becomes critical only if a Product Specification invariant turns on the
+release contract naming exactly the wire schema and nothing else.
+
+Evidence/links: D-154; B-070; `scripts/release.py:22-45`; `tests/release_test.py`
+(`TheDeclaredSchemaInputsExistTest`).

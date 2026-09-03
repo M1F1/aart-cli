@@ -3250,3 +3250,43 @@ Evidence/links: INV-077; INV-075; INV-076; INV-080; D-152;
 `tests/aggregate_gate_test.py`; `.github/workflows/pr-check.yml`;
 `agent_artifacts/registry_commands/templates.py`;
 `docs/ci/pr-check-and-release-split-v1.md`.
+
+## D-154 — A path-referenced consumer is authority the import graph cannot see
+
+Date: 2026-09-03 · Slice: CP-18 step 3 · Status: accepted
+
+**Context.** B-070 asks whether four modules listed as reachability exceptions are legacy. Three of
+them — `domain/ports.py`, `domain/collections.py`, `domain/outcomes.py` — looked equally dead:
+`tests/legacy_authority_reachability_test.py` builds an import graph from the two runtime roots and
+reported all three unreachable, and each duplicated a vocabulary the shipped code already had
+elsewhere. `domain/outcomes.py` in particular defines a `TerminalStatus` enum whose live
+counterpart is `reporting/model.py`'s `SessionOutcome`, which carries a `no-op` state the domain
+enum never had. On that evidence all three were removed.
+
+**What the removal ran into.** The unit gate went red in `tests/release_test.py`, ten tests deep
+inside `shutil.copy2`, with a bare `FileNotFoundError`. `scripts/release.py:31` declares
+`SCHEMA_INPUTS`, a hand-maintained tuple of *paths* that the release contract hashes, and
+`agent_artifacts/domain/outcomes.py` is one of them — pinned by sha256 in fifteen issued
+`docs/release/schema-freeze-v*.json` documents including the live v18. Nothing imports the module;
+the release contract reads it by path.
+
+**Decision.** `domain/outcomes.py` stays. `ports.py` and `collections.py`, named by no freeze and
+no importer, are removed. Reachability from the runtime roots is evidence about *imports*, and an
+import graph is silent about every consumer that addresses a file by its path — a schema freeze, a
+packaging manifest, a data file loaded at runtime. Unreachability is therefore a reason to *ask*
+whether a module is legacy, never on its own an answer.
+
+**Consequence.** Retiring `domain/outcomes.py` is a release-contract change, not a cleanup: it
+needs a new `RELEASE_CONTRACT_VERSION` with its own freeze, its own compatibility and checklist
+documents, and it must leave v18's frozen evidence untouched, per the immutability rule at
+`scripts/release.py:22`. Filed as B-071. Two claims now hold the gap that let this happen:
+`TheDeclaredSchemaInputsExistTest` states in the unit gate that every declared input exists — so
+the next such deletion names the release contract instead of surfacing an errno — and asserts the
+issued freeze covers exactly the declared path list. It checks paths and deliberately not hashes;
+hashes are release-time evidence that legitimately drifts mid-cycle (three inputs drift from v18 on
+this branch right now), and `make release-check` is where that is answered.
+
+**Also worth keeping.** The first draft of this decision put an explanatory docstring at the top of
+`domain/outcomes.py`, where someone about to delete it would read it. That edit changed the file's
+sha256 and so broke the very freeze it was describing. A file pinned by content cannot carry the
+note explaining that it is pinned by content; the note lives here and in B-071.
