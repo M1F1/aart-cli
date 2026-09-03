@@ -2,6 +2,34 @@
 
 ## Current objective
 
+**CP-18 Migration and release gate is IN PROGRESS: steps 1-3 done, step 4 active.** The slice
+document is `docs/refactor/slices/CP-18-migration-and-release-gate.md`.
+
+Step 1 (INV-071, zero runtime dependencies) is done: `tests/runtime_purity_test.py` reads the
+dev-group declaration off `pyproject.toml` and the import graph off the source with `ast`, because
+a declaration is not a dependency graph (D-152).
+
+Step 2 (INV-072-080, the CI/release profile contract) is done: `tests/enterprise_ci_template_test.py`
+holds the five variable/secret/egress/thinness claims, and `tests/aggregate_gate_test.py` proves the
+aggregate gate by extracting its shell from the YAML and *running* it (D-153). That found a shipped
+defect -- the registry `aart registry init` emits had no requirable aggregate check name, and GitHub
+counts a skipped required check as satisfied -- so the emitted registry now gets one too.
+
+Step 3 (legacy removal) is done, and B-070's four unreachable modules are all decided.
+`domain/ports.py` and `domain/collections.py` are removed. `domain/outcomes.py` is **kept**: the
+release contract names it in `scripts/release.py:SCHEMA_INPUTS` and pins its sha256 in every issued
+schema freeze, which is authority the import graph is structurally unable to see (D-154).
+`profiles/loader.py` is **kept and is not legacy**: INV-001 requires enterprise profiles to live
+outside the public tool and this is the only mechanism admitting one, so the finding is not a dead
+module but an unwired invariant -- nothing calls it, and a project's `.agent-artifacts/profiles.json`
+is parsed by three test files and ignored by the product (D-155, B-072).
+
+The rule those four decisions produced, which the next agent should carry into steps 4-6: an
+unreachable module is *replaced*, *unadopted*, or *unwired*, and only the middle case is safe to
+delete. Unreachability is a reason to ask, never on its own an answer.
+
+**The narrative below is kept as the record of CP-14 through CP-17.**
+
 **CP-14 Maintainer TUI 30–53 is VERIFIED.** All seven steps are complete: screens 30–53 are live in
 the one shared shell, and step 7's legacy retirement finished with the evidence-led orphan sweep of
 `agent_artifacts/tui.py` (D-129), B-044 closed by D-128 and B-046 closed by D-130. The CP-14
@@ -262,6 +290,24 @@ read as "this source is gone" in three places, so one invalid upstream revision 
 165.11 settles it.
 
 ## Exact next action
+
+**CP-18 step 4 — reconcile the docs with the Product Specification.** Step 3's four decisions each
+turned on reading what a module claims authority over and finding the shipped thing that answers the
+same question; step 4 is that method applied to prose. Two concrete inputs are already on the table:
+
+- `docs/design/DESIGN.md` and `docs/plan/PLAN.md` describe the `.agent-artifacts/profiles.json`
+  overlay as though it ships. It does not reach the product (B-072). Either the docs say so or the
+  wiring lands; they must not keep describing a route no user can take.
+- `tests/legacy_authority_reachability_test.py`'s docstring was itself found stale during step 3 —
+  it stated that `domain.outcomes` was gone while the module was back in the tree. Prose that
+  asserts repository facts is subject to the same staleness as a hardcoded list, so prefer claims a
+  test can hold over claims a reader must re-verify.
+
+Then step 5 (traceability for the remaining PARTIAL rows) and step 6 (full quality, packaging,
+security and deep acceptance gates). Step 5 must not mark INV-001 covered by the existence of
+`profiles/loader.py`; B-072 is the reason.
+
+**The CP-17 narrative below is kept as the record of how that slice got there.**
 
 **Step 2 has been independently reviewed (D-149) and the review added tests only.** D-148's two
 guarantees -- that a revision is a pinned Source revision, and that every added field is optional so

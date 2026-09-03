@@ -276,7 +276,7 @@ low-severity item explicitly *not* filed under INV-078.
 
 ---
 
-## Step 3 — legacy removal (PARTIAL)
+## Step 3 — legacy removal (DONE)
 
 Begun by Codex, which removed seven production modules and the five test files that existed only to
 drive them — `application/compiler.py`, `compatibility.py`, `fp.py`, `hashing.py`, `io/cache.py`,
@@ -305,7 +305,7 @@ Codex hit its weekly limit mid-step and the tree was **not** green when it stopp
   path moves. That is exactly the shape that makes an offline scenario pass for the wrong reason,
   and the plan now says to unset it along with `XDG_CONFIG_HOME` and `XDG_DATA_HOME`.
 
-### The finding that keeps the step open
+### The finding that kept the step open
 
 The exception list holds **six** names while the docstring justified **two**. The other four —
 `domain/ports.py`, `domain/outcomes.py`, `domain/collections.py`, `profiles/loader.py` — are
@@ -331,12 +331,73 @@ capability despite the name.
 The `assertEqual` on an exact set is what makes both directions fire: an unreachable module that
 appears, and an exception that stops being needed, are both drift.
 
+### B-070 decided: the four verdicts, and what they cost to reach
+
+The audit asked one question of each module — *what shipped thing answers the question this module
+claims authority over?* — and got four different answers.
+
+| module | answer | verdict |
+|---|---|---|
+| `domain/ports.py` | thirty other `Protocol` classes, none the generic pair | **removed** |
+| `domain/collections.py` | nothing; the sorted helpers had no caller at all | **removed** |
+| `domain/outcomes.py` | `reporting/model.py`, which has a `no-op` state the enum lacks | **kept** |
+| `profiles/loader.py` | *nothing does* | **kept** |
+
+The two kept modules are the interesting half, because both were removed first and both removals
+were wrong for reasons the reachability graph cannot express.
+
+**`domain/outcomes.py` — authority by path (D-154).** Deleting it turned the unit gate red ten
+tests deep inside `shutil.copy2`, with a bare `FileNotFoundError` and no hint that a *release
+contract* was what broke. `scripts/release.py:31` declares `SCHEMA_INPUTS`, a hand-maintained tuple
+of paths the release contract hashes, and this module is one of them — its sha256 pinned in fifteen
+issued `docs/release/schema-freeze-v*.json` documents including the live v18, which
+`scripts/release.py:22` declares immutable. Retiring it is a new `RELEASE_CONTRACT_VERSION` with its
+own freeze, not a cleanup, so it stays and B-071 carries the retirement.
+
+Two claims now hold that gap in the unit gate, in `tests/release_test.py`: every declared schema
+input exists, and the issued freeze covers exactly the declared path list. Paths only, deliberately
+— freeze *hashes* are release-time evidence and legitimately drift mid-cycle (three inputs drift
+from v18 on this branch right now), which `make release-check` is where to answer.
+
+A third attempt at the same lesson failed instructively: a docstring was added to the top of
+`domain/outcomes.py` warning the next reader not to delete it, and that edit changed the file's
+sha256 and broke the very freeze it described. A file pinned by content cannot carry the note
+saying it is pinned by content. The note lives in D-154 and B-071.
+
+**`profiles/loader.py` — an unwired invariant (D-155).** Every surface signal said legacy: no
+runtime importer, three test-only consumers, and the Product Specification never says the words
+"profiles.json" — the overlay appears only in `docs/design/DESIGN.md` and `docs/plan/PLAN.md`, which
+CLAUDE.md classes as historical evidence rather than authority.
+
+INV-001 reverses it. "Enterprise-specific artifact definitions, policy values, profiles ... live
+outside the public tool", and the private layout the specification draws holds a `profiles/`
+directory of per-tool files. A profile living outside the public tool needs a mechanism to get in;
+`profiles/loader.py` is the only one in the tree, and `profiles/builtin.py` is its opposite. The
+finding is therefore not a dead module but a capability gap worth more than the deletion would have
+been: **nothing calls it**. `consumer/runtime.py:947` passes `builtin()` straight into the
+`ConsumerContext`, so a project's `.agent-artifacts/profiles.json` is parsed by three test files and
+ignored by the product. INV-001 is unsatisfied, not merely untested — B-072, and step 5 must not
+mark that row covered by the module's mere existence.
+
+### Targeted mutations, second round (D-091)
+
+| # | mutation | red |
+|---|---|---|
+| M26 | delete a module named in `SCHEMA_INPUTS` | `test_every_declared_schema_input_is_a_file_in_the_tree`, with the message naming the release contract |
+| M27 | drop one entry from `SCHEMA_INPUTS` | `test_the_frozen_document_covers_exactly_the_declared_inputs` |
+
 ### Status
 
-Step 3 is **PARTIAL**: the removal is real and verified green, and the reachability claim is now
-held by a test with teeth, but four modules sit in the exception list with no verdict. The step's
-own words are "remove only legacy code whose authority has been replaced **and verified**", and four
-undecided entries is the step unfinished rather than passed.
+Step 3 is **DONE**. Seven modules removed by Codex plus two decided here, two kept with recorded
+reasons and backlog items, the reachability exception list carrying a justification per name, and
+two new claims holding the release contract's declared inputs. Full quality suite (nine gates) and
+the integration gate green at `d055796`.
+
+**The rule the step produced, for steps 4–6 and after.** An unreachable module is *replaced*,
+*unadopted*, or *unwired* — and only the middle case is safe to delete. Unreachability is a reason
+to ask whether a module is legacy, never on its own an answer, because the import graph is silent
+about every consumer that addresses a file by path and about every capability an invariant requires
+but nothing has yet wired.
 
 Steps 4–6 remain: docs reconciliation, traceability completion for the other 121 PARTIAL rows, and
 the closing gates.

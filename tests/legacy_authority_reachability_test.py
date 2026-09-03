@@ -4,24 +4,30 @@ The package entry point is the public runtime root.  A production module that ca
 from tests is not evidence of shipped behaviour: it is parallel authority whose callers have
 already disappeared.
 
+Unreachability is a reason to *ask* whether a module is legacy, never on its own an answer.  This
+graph is evidence about imports, and it is silent about every consumer that addresses a file by
+its path.  ``domain/outcomes.py`` was deleted on this test's verdict and took the release contract
+with it: ``scripts/release.py:SCHEMA_INPUTS`` names it, and its sha256 is pinned in every issued
+schema freeze (D-154).
+
 The exception list is a claim about each name in it, so each one states its reason:
 
 * ``_commit`` -- written by the build, which stamps a commit into release artifacts.
 * ``application.credential_lifecycle`` -- retained for the still-incomplete credential lifecycle,
   rather than falsely claiming that capability was replaced.
 * ``profiles.loader`` -- reads ``<project>/.agent-artifacts/profiles.json`` over the built-ins.
-  The Product Specification asks for no such overlay and the runtime calls ``builtin()`` directly,
-  so it is an unshipped capability rather than a replaced one.  It is entangled with three test
-  files, one of which reaches install-scope behaviour *through* it, so removing it has to decide
-  what that coverage becomes rather than simply delete it.  B-070 carries that decision.
+  Kept, and *not* legacy: INV-001 requires enterprise profiles to live outside the public tool, and
+  this is the only mechanism by which a profile defined outside it can get in.  What is wrong is
+  that nothing calls it -- ``consumer/runtime.py`` passes ``builtin()`` straight into the consumer
+  context, so a project's ``profiles.json`` is read by tests and ignored by the product.  That is a
+  capability gap, not dead code; B-072 carries the wiring, D-155 the verdict.
 
-``domain.collections``, ``domain.outcomes`` and ``domain.ports`` were on this list and are gone:
-each was the unadopted half of a proposed kernel.  Thirty ``Protocol`` classes are defined across
-the shipped subsystems, none of them the generic ``QueryPort``/``CommandPort`` pair; the shipped
-session vocabulary lives in ``reporting/model.py`` and carries a ``no-op`` state the domain enum
-never had; and the sorted-collection helpers had no caller at all.  ``domain/__init__``'s re-export
-of ``.outcomes`` went with them, since nothing anywhere imported from ``agent_artifacts.domain``
-itself.
+``domain.collections`` and ``domain.ports`` were on this list and are gone: each was the unadopted
+half of a proposed kernel.  Thirty ``Protocol`` classes are defined across the shipped subsystems,
+none of them the generic ``QueryPort``/``CommandPort`` pair, and the sorted-collection helpers had
+no caller at all.  ``domain.outcomes`` stays for the release-contract reason above, even though the
+shipped session vocabulary really does live in ``reporting/model.py`` and carries a ``no-op`` state
+the domain enum never had; retiring it is B-071, a release-contract change rather than a cleanup.
 
 Reachability follows package ``__init__`` files for the reason the walk itself records.
 """

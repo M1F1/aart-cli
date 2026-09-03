@@ -1698,16 +1698,16 @@ Evidence/links: INV-078; INV-074; `.github/actions/cut-release/action.yml`;
 
 ## B-070 — four unreachable production modules are listed as exceptions without a decision
 
-Found: CP-18 step 3 (2026-09-03) · Severity: medium · Status: three of four decided
+Found: CP-18 step 3 (2026-09-03) · Severity: medium · Status: **closed** — all four decided
 
 **Verdicts so far (D-154).** `domain/ports.py` and `domain/collections.py` are removed: no
 importer, no path-based consumer, and the generic Protocol pair and sorted-collection helpers
 they defined had no caller. `domain/outcomes.py` is **kept** — it is not legacy, it is named by
 `scripts/release.py:SCHEMA_INPUTS` and pinned by sha256 in every issued schema freeze, which the
 import graph cannot see; retiring it is a release-contract change, filed as B-071.
-`profiles/loader.py` remains undecided: the Product Specification asks for no overlay, but
-`profiles_test`, `memory_profiles_test` and `install_scope_test` are entangled with it, and the
-last of those reaches install-scope behaviour *through* it.
+`profiles/loader.py` is **kept and is not legacy** (D-155): INV-001 requires enterprise profiles to
+live outside the public tool, and this is the only mechanism by which an externally-defined profile
+can enter it. The real finding is that nothing calls it — B-072.
 
 `tests/legacy_authority_reachability_test.py` builds the import graph from `agent_artifacts.cli`
 and `agent_artifacts.__main__` and asserts that every shipped module is reachable, or named in an
@@ -1769,3 +1769,33 @@ release contract naming exactly the wire schema and nothing else.
 
 Evidence/links: D-154; B-070; `scripts/release.py:22-45`; `tests/release_test.py`
 (`TheDeclaredSchemaInputsExistTest`).
+
+## B-072 — the only mechanism for externally-defined profiles is never called
+
+Found: CP-18 step 3 (2026-09-04) · Severity: medium · Status: open
+
+INV-001 requires enterprise profiles to live outside the public tool.
+`agent_artifacts/profiles/loader.py` implements that: `load_profiles(project)` overlays
+`<project>/.agent-artifacts/profiles.json` onto the built-ins, validates the records, and rejects
+malformed `unsupported` reasons with a stable user-facing message.
+
+Nothing calls it. `agent_artifacts/consumer/runtime.py:947` passes `builtin()` directly into the
+`ConsumerContext`, and `load_profiles` appears in no other production module. A project that
+writes `.agent-artifacts/profiles.json` today gets silence: the file is parsed only by
+`tests/profiles_test.py`, `tests/memory_profiles_test.py` and `tests/install_scope_test.py`.
+
+So the public tool currently admits no externally-defined profile at all, and the capability that
+INV-001 asks for exists as code with no route from a user to it.
+
+The work is to decide where the overlay is read — the consumer runtime is the obvious place, but
+the enterprise story in the specification is a private *repository* of profile files, not a single
+project-local JSON, so the location and format deserve a deliberate choice rather than wiring
+whatever WP-8 happened to build. It should also decide whether a malformed overlay fails the
+command or degrades to built-ins, since `load_profiles` currently raises `ValueError`.
+
+Not critical to CP-18, whose step 3 is removal rather than construction. It *is* critical to any
+claim that INV-001 is satisfied: the CP-18 step 4 traceability row for INV-001 must not be marked
+covered by the mere existence of `profiles/loader.py`.
+
+Evidence/links: D-155; B-070; INV-001 (`PRODUCT_SPECIFICATION.md:5577`); the private layout at
+`PRODUCT_SPECIFICATION.md:1806`; `agent_artifacts/consumer/runtime.py:947`.

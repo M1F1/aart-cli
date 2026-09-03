@@ -3290,3 +3290,40 @@ this branch right now), and `make release-check` is where that is answered.
 `domain/outcomes.py`, where someone about to delete it would read it. That edit changed the file's
 sha256 and so broke the very freeze it was describing. A file pinned by content cannot carry the
 note explaining that it is pinned by content; the note lives here and in B-071.
+
+## D-155 — `profiles/loader.py` is an unwired invariant, not legacy
+
+Date: 2026-09-04 · Slice: CP-18 step 3 · Status: accepted
+
+**Context.** `profiles/loader.py` was the fourth and last of B-070's unreachable modules. Every
+surface signal said legacy: no runtime importer, only three test files reach it, the Product
+Specification never says the words "profiles.json", and the only documents describing the overlay
+are `docs/design/DESIGN.md` and `docs/plan/PLAN.md` — which CLAUDE.md classes as historical
+evidence rather than authority. Its own docstring dates it to WP-8.
+
+**INV-001 reverses that.** "Enterprise-specific artifact definitions, policy values, profiles,
+internal endpoints, credential references, and trust decisions live outside the public tool", and
+the private-repository layout the specification draws holds a `profiles/` directory of per-tool
+profile files. A profile that lives outside the public tool needs some mechanism to get in.
+`profiles/loader.py` is the only such mechanism in the tree; `profiles/builtin.py` is the opposite,
+a fixed set compiled into the public tool.
+
+**Decision.** Keep it. The absence of the literal string "profiles.json" from the specification is
+not evidence the capability is unwanted — the specification describes *what must be possible*, and
+this module is the only implementation of one of those things.
+
+**What is actually wrong is worth more than the deletion would have been.** Nothing calls it.
+`consumer/runtime.py:947` passes `builtin()` straight into the `ConsumerContext`, so a project's
+`.agent-artifacts/profiles.json` is parsed by three test files and ignored by the product. The
+public tool currently admits no externally-defined profile at all, which is INV-001 unsatisfied,
+not merely untested. Filed as B-072, and the INV-001 traceability row must carry it into CP-18
+step 4 rather than being marked covered by the existence of `profiles/loader.py`.
+
+**Consequence, and the general rule this makes explicit.** Three of B-070's four modules were
+decided by the same question asked four times — *what shipped thing answers the question this
+module claims authority over?* For `ports` and `collections` the answer was "thirty other Protocol
+classes" and "nothing, it has no caller". For `outcomes` it was `reporting/model.py`, and the
+module still stays for a reason outside the import graph entirely (D-154). For `profiles.loader`
+the answer is *nothing does*, and a module that is the sole answer to a question the specification
+requires an answer to is never legacy — however few things import it. An unreachable module is
+either replaced, unadopted, or unwired, and only the middle case is safe to delete.
