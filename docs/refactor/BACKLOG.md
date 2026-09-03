@@ -1571,3 +1571,46 @@ change, and the remaining gap is stated in the component detail rather than clai
 becomes critical if a slice needs an MCP installation's tree to be verifiable.
 
 Evidence/links: D-150; D-029; B-029; CP-17 step 4 probe; `agent_artifacts/application/installed_state.py`.
+
+---
+
+## B-067 — An approved Collection never reaches the configured Marketplace
+
+CP-17 step 5 set out to install a Collection through the public chain and found it cannot be done,
+anywhere, for any registry content.
+
+`io/configured_selection.py::_approved_snapshot` skips every approved version whose
+`coordinate.artifact.kind` is `"collection"`, and constructs `ApprovedRegistrySnapshot` without a
+`collections` argument, so the field keeps its default `()`. That snapshot is what
+`load_configured_approved_marketplace` aggregates and what every public verb reads. The skip carries
+no comment, and nothing else on the configured path populates the field.
+
+The consequence is not a broken Collection but an absent one. The domain models `Collection`,
+`ApprovedRegistrySnapshot` carries a `collections` field, `marketplace_resolution` defines
+`COLLECTION_NOT_FOUND`, and `aart marketplace install <source>/collection/<name>` is a documented
+coordinate form -- and the answer is always `collection-not-found`, regardless of what a maintainer
+approved. Measured against a real Git-backed registry publishing two artifacts:
+`marketplace list` returns `"collections": []` while offering both members.
+
+Two things to fix together when this is picked up:
+
+1. The projection. A collection version has to survive into `ApprovedRegistrySnapshot.collections`,
+   which also means the promotion pipeline has to publish one -- `_promote_one`'s test fixture
+   takes `scanned.value.active[0]` and `compile_author_snapshot` returns artifacts only, so the
+   authoring side of this is unexercised too.
+2. The refusal's remediation, which is empty. `collection-not-found` gives an operator no next
+   step, where the neighbouring `receipt-no-setup` gives three. Even while the capability is
+   absent, a refusal should say what to do.
+
+**Not critical path for CP-17.** The slice's subject is that the chain's stages are real, and its
+bulk-install half is proven over a real commit
+(`tests/git_backed_bulk_install_e2e_test.py`). This is a missing capability rather than a defect in
+the chain, and it is the same Collection work D-131 sequenced B-038 behind. It becomes critical when
+a slice must satisfy INV-186 or INV-213 through a public verb, since neither can be evidenced while
+no Collection is reachable.
+
+`CollectionsAreNotReachableTest` pins the current behaviour so the gap stays an honest refusal: it
+must not become a partial install of some members, and must not silently succeed.
+
+Evidence/links: CP-17 step 5; D-131; B-038; INV-186; INV-213;
+`agent_artifacts/io/configured_selection.py`.

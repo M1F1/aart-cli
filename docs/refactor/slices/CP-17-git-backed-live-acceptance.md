@@ -401,15 +401,56 @@ left the installation half-reversed would be worse than no undo at all. Forcing 
 in `consumer_views.py` makes the receipt claim it can be undone and turns the first of those red,
 while the second stays green, because they are claims about different things.
 
+## Step 5 evidence -- more than one artifact, and the Collection that is not there
+
+**Bulk install, over one real commit.** Every other Git-backed test in this slice installs a single
+artifact, so what was unproven is that a run installing several keeps each one's kind straight. An
+MCP server has to be built into a runtime; a Skill only has to be placed where a harness reads it.
+`git_backed_bulk_install_e2e_test` publishes both into the one repository and installs them in one
+confirmed run: both items `completed`, the server's four effects (`copy-tree`,
+`create-python-environment`, `write-file`, `configure-harness`) against a Skill that gets neither an
+environment nor a launcher, both artifacts carrying the same real commit into one receipt, the
+server started beside the Skill still answering `initialize`, and doctor reporting both `ready`.
+
+Two mutations. Forcing `_is_delivered` false in `installation_offer.py` -- every artifact built as a
+runtime, whatever its kind -- turns all four bulk tests red, and does it honestly:
+`installation-not-described`, because the Skill declares no way to start. Letting only an `mcp`
+member carry the revision it came from turns exactly one test red, the one whose name is that both
+carry the same commit, and leaves the other five green.
+
+**The Collection half is a refusal, and that is the finding.** A Collection cannot be installed
+through the CLI -- not for this fixture, but for any registry content at all.
+`io/configured_selection.py::_approved_snapshot` skips every approved version whose kind is
+`collection` and leaves `ApprovedRegistrySnapshot.collections` at its default, so the configured
+Marketplace every public verb reads carries none. `marketplace list` returns `"collections": []`
+while offering both members, and installing one answers `collection-not-found` with **empty
+remediation**. The domain models Collections, the field exists, the coordinate form is documented,
+and nothing on this path can populate it.
+
+Recorded as B-067 rather than fixed here. This is a missing capability, not a defect in the chain
+CP-17 exists to make real, and it is the same Collection work D-131 already sequenced B-038 behind;
+closing it needs the promotion pipeline to publish a collection version as well as the projection to
+carry it, and the authoring half is unexercised too. `CollectionsAreNotReachableTest` pins the
+current behaviour so the gap stays an honest refusal -- it must not become a partial install of some
+members, and must not silently succeed -- and B-067 also records the empty remediation, which is
+worth fixing even while the capability is absent.
+
+So step 5's bulk half is VERIFIED and its Collection half is BLOCKED on a capability outside this
+slice. The step is not marked done.
+
 ## Handoff
 
 - Current working state: steps 1, 2, 3a, 3b and 4 are VERIFIED. Step 4 is the first step in this
   slice to change production code (D-150), in `domain/reconciliation.py`,
   `application/installed_state.py` and `application/installation_verification.py`.
-- Exact next action: step 5 -- collection and bulk install with one full-chain acceptance proof.
-  The Git-backed fixture already publishes two artifacts into one registry (step 3a re-promotes
-  with both versions), so the shape to add is a Collection over a real commit rather than a second
-  repository.
+- Exact next action: step 5's Collection half, which is blocked on B-067 -- no approved Collection
+  reaches the configured Marketplace, so no public verb can install one. Decide there whether CP-17
+  closes with the bulk half plus a recorded capability gap, or whether B-067 is reclassified as
+  critical and the Collection projection is built first. The bulk half is VERIFIED and needs
+  nothing further.
+- Do not undo, added by step 5: `CollectionsAreNotReachableTest` asserts a refusal, not a
+  behaviour anyone wants. If B-067 is implemented, that class is what should turn red, and it
+  should be replaced by the install it was standing in for -- not deleted to make room.
 - Do not undo, added by step 4: the keep-rule in `_reported` is narrow on both axes on purpose --
   payload only, and `ABSENT`/`DIVERGENT` only. Widening either re-breaks uninstall convergence or
   reports an unhashable tree as broken; both failures are recorded in D-150 with the tests that

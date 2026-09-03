@@ -343,9 +343,28 @@ pinning: building a virtual environment is not reversible by anything retained, 
 red only where claimed -- including the non-recursive tree removal, which fails honestly with
 `Directory not empty` and a `partial` session rather than reporting success over a tree still there.
 
-**Next action: step 5 -- collection and bulk install with one full-chain acceptance proof.** The
-Git-backed fixture already publishes more than one artifact into one registry, so what step 5 adds
-is a Collection carried over a real commit, not a second repository.
+Step 5 split in two. Its **bulk half is VERIFIED**: `git_backed_bulk_install_e2e_test` publishes an
+MCP server and a Skill into the one repository and installs both in one confirmed run, and each gets
+the installation its kind needs -- the server built into a runtime that then starts beside the
+Skill, the Skill placed with neither an environment nor a launcher, both carrying the same real
+commit into one receipt, doctor reporting both `ready`. Forcing `_is_delivered` false turns all four
+red with an honest `installation-not-described`; letting only an `mcp` member carry its revision
+turns exactly the one test that claims it red.
+
+Its **Collection half is blocked**, and that is the finding. A Collection cannot be installed
+through the CLI for any registry content at all: `io/configured_selection.py` skips every approved
+version whose kind is `collection` and leaves `ApprovedRegistrySnapshot.collections` at its default,
+so the configured Marketplace every public verb reads carries none. `marketplace list` returns
+`"collections": []` while offering both members, and installing one answers `collection-not-found`
+with empty remediation. B-067 records it with the two things to fix together, and
+`CollectionsAreNotReachableTest` pins the gap as an honest refusal so it cannot become a partial
+install.
+
+**Next action: decide B-067.** Either CP-17 closes with the bulk half proven and the Collection
+capability recorded as sequenced work -- it is the same Collection capability D-131 already
+sequenced B-038 behind -- or B-067 is reclassified as critical, in which case the projection and
+the promotion of a collection version are built before CP-17 can close. Nothing else in CP-17 is
+outstanding.
 
 Do not widen `_reported`'s keep-rule on either axis. Payload-only and ABSENT/DIVERGENT-only are
 load-bearing, and D-150's mutation 4 is the uninstall and repair tests catching the widening.
