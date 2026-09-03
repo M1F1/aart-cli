@@ -216,7 +216,7 @@
         {
           "id": "3",
           "title": "Runtime launch and explicit update traceable to a new Git commit",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "4",
