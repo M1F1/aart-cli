@@ -232,7 +232,32 @@ class DomainArchitectureTest(unittest.TestCase):
     def test_domain_modules_do_not_import_io_or_legacy_layers(self):
         domain = ROOT / "agent_artifacts" / "domain"
         self.assertTrue(domain.is_dir(), domain)
-        forbidden_roots = {"http", "os", "pathlib", "shutil", "socket", "subprocess", "urllib"}
+        # INV-108 names six things by hand -- filesystem mutation, subprocess execution,
+        # credential-provider access, network I/O, terminal rendering and GitHub-specific
+        # operations -- and this set covered three of them.  A domain module could `import curses`,
+        # or import `agent_artifacts.io` despite this test's own name, and stay green (M43/M44).
+        forbidden_roots = {
+            "curses",  # terminal rendering
+            "ftplib",
+            "http",
+            "keyring",  # credential-provider access
+            "os",
+            "pathlib",
+            "shutil",
+            "socket",
+            "ssl",
+            "subprocess",
+            "termios",
+            "tty",
+            "urllib",
+        }
+        forbidden_prefixes = {
+            "agent_artifacts.io",  # the effect boundary this layer must stay above
+            "agent_artifacts.cli",
+            "agent_artifacts.tui",
+            "agent_artifacts.commands",
+            "agent_artifacts.security",  # GitHub- and provider-specific operations live below here
+        }
         forbidden_modules = {"agent_artifacts.model", "agent_artifacts.outcomes"}
         violations: list[str] = []
         for path in sorted(domain.glob("*.py")):
@@ -245,9 +270,19 @@ class DomainArchitectureTest(unittest.TestCase):
                 else:
                     continue
                 for module in modules:
-                    if module.split(".", 1)[0] in forbidden_roots or module in forbidden_modules:
+                    denied = (
+                        module.split(".", 1)[0] in forbidden_roots
+                        or module in forbidden_modules
+                        or any(
+                            module == prefix or module.startswith(f"{prefix}.")
+                            for prefix in forbidden_prefixes
+                        )
+                    )
+                    if denied:
                         violations.append(f"{path.name}: {module}")
         self.assertEqual(violations, [])
+        # The detector must detect: without this, an empty domain or a broken walk passes.
+        self.assertGreater(len(list(domain.glob("*.py"))), 3)
 
     def test_every_domain_dataclass_is_frozen(self):
         # Derived from the directory rather than listed.  A hand-written list silently stops
