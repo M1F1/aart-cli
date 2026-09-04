@@ -71,6 +71,35 @@ class CandidateHistorySerializationTest(unittest.TestCase):
         )
         self.assertEqual(len(serialized.value.objects), 2)
 
+    def test_a_rescan_of_unchanged_rejected_source_leaves_it_rejected(self) -> None:
+        """INV-239: rescanning is not a way to get a second opinion.
+
+        The candidate id is derived from the artifact's input digest, so identical source produces
+        the identical id and the prior record is kept whole -- rejection and reason included. Only
+        a material change makes a new id, and that is what reopens review, which the test below
+        this one shows from the other side.
+        """
+
+        first = _ready_scan()
+        rejected = dataclasses.replace(
+            first.active[0],
+            candidate=reject_candidate(first.active[0].candidate, "Policy declined"),
+        )
+
+        rescanned = reconcile_source_scan(
+            SourceAlias("authors"),
+            "b" * 40,
+            _compiled(revision="b"),
+            previous=(rejected,),
+            approved=(),
+            target_registry=SourceAlias("company"),
+        )
+
+        assert isinstance(rescanned, Ok), rescanned
+        self.assertEqual(rescanned.value.active, (rejected,))
+        self.assertIs(rescanned.value.active[0].candidate.state, CandidateState.REJECTED)
+        self.assertEqual(rescanned.value.active[0].candidate.id, rejected.candidate.id)
+
     def test_missing_compiled_object_is_a_refusal_not_an_empty_history(self) -> None:
         serialized = serialize_source_scan(_ready_scan())
         assert isinstance(serialized, Ok)
