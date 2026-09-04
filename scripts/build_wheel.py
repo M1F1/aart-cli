@@ -19,7 +19,9 @@ are eight callers who would each have to hold them instead:
 The archive is byte-reproducible (SI-8, design §7.1): see docs/release/wheel-reproducibility-v1.md
 for what that now means and how to verify a published wheel.
 
-Requires Python 3.11+ to build (stdlib ``tomllib``); the built wheel itself runs on Python 3.10+.
+Builds on every supported Python version: Python 3.11+ uses stdlib ``tomllib`` and Python 3.10
+uses the dev-only ``tomli`` compatibility package. The built wheel itself has no runtime
+dependencies.
 The result installs with no index at all:
 
     pip install --no-index dist/aart_cli-<v>-py3-none-any.whl
@@ -52,8 +54,8 @@ def load_project() -> dict:
 def _load_pyproject() -> dict:
     try:
         import tomllib
-    except ModuleNotFoundError:  # pragma: no cover - build host is 3.11+
-        sys.exit("build_wheel.py needs Python 3.11+ (stdlib tomllib).")
+    except ModuleNotFoundError:  # pragma: no cover - exercised by the Python 3.10 CI arm
+        import tomli as tomllib
     with open(ROOT / "pyproject.toml", "rb") as f:
         return tomllib.load(f)
 

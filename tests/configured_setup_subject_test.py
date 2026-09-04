@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pathlib
 import unittest
+from dataclasses import replace
 from unittest import mock
 
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
@@ -156,7 +157,7 @@ class ConfiguredSetupSubjectTest(unittest.TestCase):
                 subject,
                 effective,
                 adapter,
-                production_runtime(),
+                replace(production_runtime(), platform="darwin"),
                 consent=lambda _effect: True,
             )
 
@@ -245,7 +246,7 @@ class ConfiguredSetupSubjectTest(unittest.TestCase):
                     subject,
                     effective,
                     adapter,
-                    production_runtime(),
+                    replace(production_runtime(), platform="darwin"),
                     consent=lambda _effect: True,
                 )
 

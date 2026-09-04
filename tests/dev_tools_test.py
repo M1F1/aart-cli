@@ -118,7 +118,7 @@ class RequirementsTest(unittest.TestCase):
     def test_every_gate_tool_is_pinned_by_the_lock(self) -> None:
         pins = self.tools.requirements("dev")
         names = {pin.split("==", 1)[0] for pin in pins}
-        self.assertLessEqual({"ruff", "mypy", "coverage", "poetry-core"}, names)
+        self.assertLessEqual({"ruff", "mypy", "coverage", "poetry", "poetry-core"}, names)
         for pin in pins:
             self.assertIn("==", pin, "a range reached pip; the lock is meant to pin exactly")
 

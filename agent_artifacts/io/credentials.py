@@ -16,7 +16,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Protocol
 
@@ -243,6 +243,14 @@ def _failure(code: DiagnosticCode, message: str) -> Err:
     return Err((Diagnostic(code, Severity.ERROR, redact_text(message)),))
 
 
+def _macos_keychain_available() -> bool:
+    return (
+        sys.platform == "darwin"
+        and os.path.isfile(SECURITY_TOOL)
+        and os.access(SECURITY_TOOL, os.X_OK)
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class MacOsKeychainProvider:
     """Hold credentials in the macOS Keychain through `security`.
@@ -256,6 +264,7 @@ class MacOsKeychainProvider:
     count: CountedPipeline = field(default=run_counted_pipeline)
     timeout_seconds: float = 60.0
     provider: str = "macos-keychain"
+    available_on_host: Callable[[], bool] = field(default=_macos_keychain_available)
 
     @staticmethod
     def store_exposure(*, interactive: bool) -> BindingExposure:
@@ -295,9 +304,7 @@ class MacOsKeychainProvider:
         return self._locate(reference, "-w")
 
     def available(self) -> ProviderState:
-        if sys.platform != "darwin":
-            return ProviderState.UNAVAILABLE
-        if not os.path.isfile(SECURITY_TOOL) or not os.access(SECURITY_TOOL, os.X_OK):
+        if not self.available_on_host():
             return ProviderState.UNAVAILABLE
         return ProviderState.AVAILABLE
 

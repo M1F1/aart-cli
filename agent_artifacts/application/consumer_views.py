@@ -980,7 +980,12 @@ def _moment(recorded_at: object, label: str) -> datetime:
     if not isinstance(recorded_at, str) or "T" not in recorded_at:
         raise ValueError(f"{label} needs an ISO-8601 date and time")
     try:
-        moment = datetime.fromisoformat(recorded_at)
+        # Python 3.10 does not accept the RFC 3339 UTC designator even though 3.11+ does.
+        # Normalize only that suffix; explicit numeric offsets retain their original meaning.
+        encoded = (
+            recorded_at.removesuffix("Z") + "+00:00" if recorded_at.endswith("Z") else recorded_at
+        )
+        moment = datetime.fromisoformat(encoded)
     except ValueError as error:
         raise ValueError(f"{recorded_at!r} is not an ISO-8601 timestamp") from error
     if moment.tzinfo is None or moment.tzinfo.utcoffset(moment) is None:

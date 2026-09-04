@@ -6,6 +6,16 @@
 complete.**
 The slice document is `docs/refactor/slices/CP-18-migration-and-release-gate.md`.
 
+The first public pull-request run after closure exposed that local macOS verification had not
+actually proved the advertised Linux/Python matrix (D-167). The failure is fixed and reproduced in
+clean read-only Docker copies on Python 3.10, 3.11 and 3.14: all nine gates pass over 3,322 tests on
+each interpreter, including a real Poetry wheel build. The fix locks the Poetry CLI itself in the
+dev group, uses dev-only `tomli` on Python 3.10, accepts RFC 3339 `Z` timestamps there, makes
+scripted Keychain tests inject host availability without changing the production probe, and removes
+developer-machine configuration and platform assumptions from the affected fixtures. PR #1's title
+is now the valid Conventional Commit `refactor(release): adopt Release Please and complete AART
+refactor`.
+
 Step 1 (INV-071, zero runtime dependencies) is done: `tests/runtime_purity_test.py` reads the
 dev-group declaration off `pyproject.toml` and the import graph off the source with `ast`, because
 a declaration is not a dependency graph (D-152).
@@ -69,8 +79,9 @@ mutants are exercised once by the real artifact gate instead of reinstalling a w
 mutation. Three deliberate mutations independently hold SemVer classification, runtime-dependency
 refusal and release-workflow wiring.
 
-Step 6 is verified: all nine quality gates are green over 3,321 tests (one skipped), branch coverage
-is 85.35%, all 343 separate E2E tests pass, `poetry check --lock` passes, and a real built
+Step 6 is verified: all nine quality gates are green over 3,322 tests (one skipped on macOS), branch
+coverage is 85.35% locally and 85.09% in the Linux matrix, all 343 separate E2E tests pass,
+`poetry check --lock` passes, and a real built
 `aart_cli-0.0.1-py3-none-any.whl` passes the artifact verifier against tag `v0.0.1`. B-068 is closed
 on the same critical path: the deep-quality workflow invokes mutmut unattended, so the Poetry lock
 now includes mutmut 3.7 and Textual under a dev-only Python `<4.0` marker.

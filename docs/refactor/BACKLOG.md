@@ -1663,6 +1663,11 @@ are now provisioned by `scripts/dev_tools.py`. Their dev-only marker is `python 
 Textual does not claim Python 4 compatibility while AART's runtime range intentionally remains
 open-ended. The marker changes no production dependency: `[project] dependencies` remains empty.
 
+D-167's later clean-runner audit found the same class one layer earlier: the wheel gate invoked the
+Poetry CLI while the dev lock provisioned only `poetry-core`. The closed remedy is the same — Poetry
+2.4.1 and the Python-3.10-only `tomli` reader are explicit locked dev tools, while the runtime
+dependency list remains empty.
+
 Evidence/links: D-134; D-166; INV-071; INV-080; `pyproject.toml` `[tool.poetry.group.dev.dependencies]`;
 `poetry.lock`; `scripts/dev_tools.py`; `scripts/mutants.py`.
 

@@ -640,3 +640,24 @@ Closing evidence on the finished implementation:
 Step 6 and **CP-18 are VERIFIED**. The mandatory execution plan is complete. The eight remaining
 PARTIAL traceability rows stay honest, explicitly named capability/process gaps in BACKLOG rather
 than hidden release work.
+
+### Post-closure CI correction
+
+The first pull-request run on the closed slice failed every public Linux arm. D-167 records why the
+local green run was insufficient evidence: the clean runner did not install the Poetry CLI; Python
+3.10 could neither import stdlib `tomllib` nor parse the otherwise accepted `Z` UTC designator; and
+three test groups inherited the developer's source configuration, the host platform, or macOS
+Keychain availability. None was a product-policy failure, and no gate or production security check
+was relaxed.
+
+The Poetry CLI and Python-3.10 `tomli` reader are now explicit locked dev tools. The timestamp reader
+normalizes only the RFC 3339 UTC suffix. The Keychain adapter's real platform/tool probe remains its
+default while scripted tests supply an availability probe. Lifecycle request-mapping tests disable
+every configured-routing seam they are not testing, and setup/runtime fixtures state the supported
+interpreter/platform they actually mean to exercise.
+
+The exact GitHub Actions path was then reproduced in fresh read-only Linux copies on Python 3.10,
+3.11 and 3.14. Each installed only `scripts/dev_tools.py`'s locked dev set, ran all nine quality
+gates over 3,322 tests, reached at least 85.09% branch coverage, and built the wheel successfully.
+The focused 88-test failure set and a separate wheel build were also green on every interpreter.
+Step 6 and CP-18 therefore return to **VERIFIED** on matrix evidence rather than one workstation.

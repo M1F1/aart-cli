@@ -17,7 +17,6 @@ import tempfile
 import unittest
 import uuid
 from pathlib import Path
-from unittest import mock
 
 from agent_artifacts.application.credential_lifecycle import (
     CREDENTIAL_STATE_CONFLICT,
@@ -35,7 +34,6 @@ from agent_artifacts.domain.identifiers import InputId
 from agent_artifacts.domain.inputs import BindingExposure
 from agent_artifacts.domain.policies import EffectivePolicy
 from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io import credentials as io_credentials
 from agent_artifacts.io.credentials import (
     ITEM_NOT_FOUND,
     PROMPT_CEILING_BYTES,
@@ -115,12 +113,14 @@ def _provider(
     counter: ScriptedCounter | None = None,
     *,
     keychain: str | None = "/tmp/aart-scripted.keychain",
+    available: bool = True,
 ) -> MacOsKeychainProvider:
     return MacOsKeychainProvider(
         keychain=keychain,
         run=runner,
         count=counter or ScriptedCounter(printed=None),
         timeout_seconds=5.0,
+        available_on_host=lambda: available,
     )
 
 
@@ -154,6 +154,22 @@ class TransientSecretTest(unittest.TestCase):
 
 
 class KeychainInterpreterTest(unittest.TestCase):
+    def test_an_explicit_host_probe_can_exercise_the_adapter_without_weakening_production(
+        self,
+    ) -> None:
+        runner = ScriptedSecurity(find_generic_password=ProcessOutcome(ITEM_NOT_FOUND))
+        provider = MacOsKeychainProvider(
+            keychain="/tmp/aart-scripted.keychain",
+            run=runner,
+            count=ScriptedCounter(printed=None),
+            available_on_host=lambda: True,
+        )
+
+        result = provider.inspect(REFERENCE)
+
+        self.assertIsInstance(result, Ok)
+        self.assertTrue(runner.calls)
+
     def test_a_missing_item_reads_as_absent_not_as_a_failure(self) -> None:
         runner = ScriptedSecurity(find_generic_password=ProcessOutcome(ITEM_NOT_FOUND))
 
@@ -302,10 +318,9 @@ class KeychainInterpreterTest(unittest.TestCase):
 
     def test_an_unavailable_provider_is_an_observation_not_an_invention(self) -> None:
         runner = ScriptedSecurity()
-        with mock.patch.object(io_credentials, "SECURITY_TOOL", "/nonexistent/security"):
-            provider = _provider(runner)
-            observed = provider.inspect(REFERENCE)
-            stored = provider.store(REFERENCE, TransientSecret("unused"))
+        provider = _provider(runner, available=False)
+        observed = provider.inspect(REFERENCE)
+        stored = provider.store(REFERENCE, TransientSecret("unused"))
 
         assert isinstance(observed, Ok), observed
         self.assertEqual(observed.value.provider_state, ProviderState.UNAVAILABLE)

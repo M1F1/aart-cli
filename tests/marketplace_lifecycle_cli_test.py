@@ -201,7 +201,11 @@ def _run(argv, service):
         # These request-mapping tests inject the characterized legacy service. Canonical registry
         # routing has its own disk-backed command E2E; do not let a developer's real configured
         # default registry choose a different seam while this isolated unit test is running.
+        mock.patch("agent_artifacts.commands.marketplace._configured_install", return_value=None),
+        mock.patch("agent_artifacts.commands.marketplace._configured_update", return_value=None),
+        mock.patch("agent_artifacts.commands.marketplace._configured_uninstall", return_value=None),
         mock.patch("agent_artifacts.commands.marketplace._configured_status", return_value=None),
+        mock.patch("agent_artifacts.commands.marketplace._configured_setup", return_value=None),
         contextlib.redirect_stdout(stdout),
     ):
         code = cli.main(argv)

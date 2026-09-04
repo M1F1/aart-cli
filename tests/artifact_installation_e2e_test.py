@@ -122,7 +122,7 @@ MANIFEST = {
     "artifact": {"name": "github", "kind": "mcp", "version": "1.5.0"},
     "payload": {"include": ["server.py", "requirements.txt"]},
     "transport": {"type": "stdio"},
-    "runtime": {"type": "python", "version": ">=3.11"},
+    "runtime": {"type": "python", "version": ">=3.10"},
     "launch": {"type": "python", "entrypoint": "server.py", "arguments": ["--strict"]},
     "inputs": [
         {

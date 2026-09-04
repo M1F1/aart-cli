@@ -3556,3 +3556,27 @@ question, which is critical to CP-18's closing gate rather than a local-tooling 
 **Consequence.** The lock is regenerated and carries mutmut 3.7 plus Textual. The dependency has a
 dev-only `python >=3.10,<4.0` marker: Textual's supported range must not make Poetry reject AART's
 deliberately open-ended runtime range, and no mutation dependency enters the runtime graph.
+
+## D-167 — Release verification includes the clean public matrix, not only the maintainer host
+
+Date: 2026-09-04 · Slice: CP-18 step 6 · Status: accepted
+
+The first pull-request run after CP-18 closed failed on Linux/Python 3.10, 3.11 and 3.14 even though
+all local gates were green. The failures were independent: `scripts/dev_tools.py` installed the
+backend but not the Poetry executable the wheel gate invokes; Python 3.10 lacked stdlib `tomllib`
+and rejected RFC 3339's `Z` suffix; scripted Keychain tests still asked the real host whether macOS
+Keychain existed; configured setup supplied a Darwin request to the Linux runtime; and isolated
+Marketplace request-mapping tests accidentally consulted the maintainer's real configured source.
+
+**Decision.** A release gate is verified only after its supported public OS/interpreter matrix has
+run in clean environments. Poetry itself is a locked dev dependency, with dev-only `tomli` making
+the build script support Python 3.10. Timestamp parsing normalizes only a terminal `Z` to `+00:00`.
+`MacOsKeychainProvider` retains the real platform and executable check as its default but accepts an
+injected host-availability probe for scripted adapter tests. Fixtures must inject their intended
+runtime/configuration rather than inherit the machine running them.
+
+**Evidence.** Before the implementation, the new tool-presence test failed and the Keychain probe
+test could not construct the adapter. Afterward the focused 88-test set and a real wheel build pass
+in clean Linux containers on Python 3.10, 3.11 and 3.14; the complete nine-gate quality runner also
+passes all three arms over 3,322 tests. No runtime dependency, Keychain availability verdict, or
+quality threshold changed.
