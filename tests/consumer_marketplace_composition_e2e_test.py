@@ -29,7 +29,7 @@ from agent_artifacts.application.promotion import (
 )
 from agent_artifacts.configuration.model import SourceKind
 from agent_artifacts.domain.identifiers import SourceId
-from agent_artifacts.domain.registry import RegistryLifecycle
+from agent_artifacts.domain.registry import PromotionMode, RegistryLifecycle
 from agent_artifacts.domain.result import Ok
 from agent_artifacts.io.source_store import publish_source_snapshot
 from agent_artifacts.protocol.native_tree import SnapshotOrigin, SourceSnapshot
@@ -192,6 +192,30 @@ class ComposedMarketplaceTest(unittest.TestCase):
         self.assertEqual(
             offers.declined,
             (f"{APPROVED}: deprecated by the registry, and this view cannot say so on the row",),
+        )
+
+    def test_a_referenced_version_is_declined_because_the_snapshot_holds_no_content(self) -> None:
+        """INV-025: referenced mode is weaker, and the row is where that has to be visible.
+
+        A referenced promotion writes a pointer instead of the payload, so this registry snapshot
+        has nothing verified to install from. Offering the row anyway would advertise an install
+        the seam beneath it refuses -- `configured_installation.py` will not materialise a
+        referenced version -- and dropping it silently would read as a registry that approved
+        nothing.
+        """
+
+        self._publish(
+            self.registry,
+            _published_registry(AUTHORED_SKILL, mode=PromotionMode.REFERENCED),
+            "company-registry",
+        )
+
+        offers = self._offers()
+
+        self.assertEqual(offers.artifacts, ())
+        self.assertEqual(
+            offers.declined,
+            (f"{APPROVED}: referenced, so this registry snapshot holds no verified content",),
         )
 
     def test_a_row_stands_for_the_highest_approved_version_of_its_identity(self) -> None:

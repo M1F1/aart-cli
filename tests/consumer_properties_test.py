@@ -233,6 +233,27 @@ class PresentationProfileIdentityTest(unittest.TestCase):
         self.assertLessEqual(len(fast), len(verbose))
 
 
+class OneCoreTwoSkinsTest(unittest.TestCase):
+    @SETTINGS
+    @given(plans())
+    def test_the_non_interactive_review_and_screen_09_are_the_same_review(
+        self, plan: InstallPlan
+    ) -> None:
+        """INV-061: `install` printing a plan and the shell drawing screen 09 are one operation.
+
+        Not "equivalent" and not "consistent": byte-identical, because both disclose the same
+        projection through the same renderer. Two skins that merely agreed today would be two
+        reviews, and the one somebody confirms from is the one that would drift.
+        """
+
+        view = project_install_plan(plan)
+
+        self.assertEqual(
+            render_install_plan(view, PresentationProfile.VERBOSE),
+            render_ready(view, PresentationProfile.VERBOSE),
+        )
+
+
 class FastHidesNoMaterialRiskTest(unittest.TestCase):
     @SETTINGS
     @given(plans())
