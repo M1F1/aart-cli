@@ -574,9 +574,15 @@ missing tool fails *after* the work is done, which is the most expensive place t
 A third workflow arrived out of this walk rather than out of a defect: `cut-release.yml`. The
 release was eight commands typed in order, and typing them in order was the only thing holding the
 order together -- which is how a run reached `gh release upload` with the checklist never run. It
-is now one dispatch with one input, backed by `scripts/cut_release.py`, and it writes nothing until
-every precondition passes. It reads the same variables as the other two, so a fork configures it by
-configuring nothing extra.
+became one dispatch with one input, backed by `scripts/cut_release.py`, writing nothing until
+every precondition passed.
+
+**Both are gone now**, and the reason is worth keeping: one input still had to be typed, and it was
+the version. A number a person types is a number a person can get wrong, and the eight commands had
+only stopped being eight commands -- they had not stopped being a procedure. `release-please.yml`
+replaced them; see [`release-model-v1.md`](../release/release-model-v1.md). It reads the same
+`AART_RUNNER` variable as the other workflows and needs nothing else, because the action it runs
+brings its own runtime rather than using the repository's interpreter or index.
 
 Its first run failed, and the way it failed is the eighth row above. The action was written by
 copying the sequence a job needs -- trust the workspace, install the tools, run the gates -- and

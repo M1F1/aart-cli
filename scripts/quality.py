@@ -103,10 +103,10 @@ def build_gates(temp_root: Path, python: str = sys.executable) -> tuple[Gate, ..
             "integration",
             ((python, "-m", "unittest", "discover", "-s", "tests", "-p", "*e2e_test.py"),),
         ),
-        Gate(
-            "validate",
-            ((python, "scripts/validate.py"), (python, "scripts/version.py", "check")),
-        ),
+        # `scripts/version.py check` used to run here too: it proved that three hand-maintained
+        # version values agreed.  The release engine writes the one that is left, so there is
+        # nothing left to reconcile and nothing for a gate to say about it (INV-085, INV-098).
+        Gate("validate", ((python, "scripts/validate.py"),)),
         Gate(
             "coverage",
             (

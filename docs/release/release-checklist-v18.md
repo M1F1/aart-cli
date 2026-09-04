@@ -1,5 +1,12 @@
 # AART v18 release checklist and evidence — 2.8.0 through 2.8.5
 
+> **Superseded as a procedure; kept as a record.** The releases below were cut under a model that
+> asked a person to decide the version, write the changelog, and keep six files agreeing with the
+> number. That model is gone -- see [`release-model-v1.md`](release-model-v1.md) -- and the
+> commands in this page name scripts that no longer exist. A dated record is not edited to agree
+> with today, so the sections below are left as they were written.
+
+
 Two releases ship under contract v18. Everything from here to *2.8.1 change gate* is the 2.8.0
 record and is left as written: a dated record is not edited to agree with today. **To verify the
 current release, read the 2.8.1 sections and substitute `v2.8.1` for `v2.8.0` in the commands

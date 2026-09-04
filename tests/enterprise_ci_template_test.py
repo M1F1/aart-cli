@@ -22,11 +22,16 @@ from agent_artifacts.registry_commands.templates import (
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 PAGE = ROOT / "docs" / "ci" / "enterprise-fork-v1.md"
 ACTION = ROOT / ".github" / "actions" / "aart" / "action.yml"
+# The two workflows that run *this repository's* toolchain, and so have to be told where the
+# interpreter, the image and the index are.  `release-please.yml` is deliberately not here: it
+# runs one pinned action on the runner's own Node, touching neither pip nor Python, so every
+# variable below would be a variable it never reads.  `TheReleaseEngineIsPortableToo` states what
+# it must satisfy instead.
 WORKFLOWS = (
     ROOT / ".github" / "workflows" / "pr-check.yml",
     ROOT / ".github" / "workflows" / "release.yml",
-    ROOT / ".github" / "workflows" / "cut-release.yml",
 )
+RELEASE_ENGINE = ROOT / ".github" / "workflows" / "release-please.yml"
 # The workflows are thin by INV-076, so the steps -- and any condition on them -- are here.
 ACTIONS = tuple(sorted((ROOT / ".github" / "actions").rglob("action.yml")))
 # The registry's workflow has one home: the bytes `registry init` writes.  A second copy under
@@ -68,11 +73,18 @@ class TheButtonFinishesTheJobTest(unittest.TestCase):
     def _action(self, name: str) -> str:
         return _read(ROOT / ".github" / "actions" / name / "action.yml")
 
-    def test_the_button_delegates_to_the_one_thing_that_builds_a_release_artifact(self) -> None:
-        body = _uncommented(self._action("cut-release"))
-        self.assertIn("uses: ./.github/actions/release", body)
-        self.assertIn('attach: "true"', body)
-        # Delegating, not repeating: a second builder is a second answer to what the wheel is.
+    def test_the_release_engine_delegates_to_the_one_thing_that_builds_an_artifact(self) -> None:
+        """The button is gone; the wall it hit is not, and the answer it found outlived it.
+
+        `release-please.yml` creates the tag and the release with `GITHUB_TOKEN`, so nothing is
+        set off by either. It therefore calls the release workflow, which is `workflow_call`-able
+        for exactly this reason -- delegating rather than repeating, because a second builder is a
+        second answer to what the wheel is.
+        """
+
+        body = _uncommented(_read(ROOT / ".github" / "workflows" / "release-please.yml"))
+        self.assertIn("uses: ./.github/workflows/release.yml", body)
+        self.assertIn("attach: true", body)
         self.assertNotIn("scripts/build_wheel.py", body)
         self.assertNotIn("scripts/attach_release_asset.py", body)
 
@@ -92,16 +104,44 @@ class TheButtonFinishesTheJobTest(unittest.TestCase):
         self.assertNotIn("upload-artifact", _uncommented(self._action("release")))
 
     def test_every_caller_of_the_release_action_says_whether_to_attach(self) -> None:
-        callers = [
-            ROOT / ".github" / "workflows" / "release.yml",
-            ROOT / ".github" / "actions" / "cut-release" / "action.yml",
-        ]
+        callers = [ROOT / ".github" / "workflows" / "release.yml"]
         for path in callers:
             with self.subTest(caller=str(path.relative_to(ROOT))):
                 body = _uncommented(_read(path))
+                # `attach: ${{` is the caller's form.  The workflow also *declares* an `attach:`
+                # input for its callers, and counting that would make the two sides agree by
+                # accident rather than because every `uses:` said what it wanted.
                 self.assertEqual(
-                    body.count("uses: ./.github/actions/release"), body.count("attach:")
+                    body.count("uses: ./.github/actions/release"), body.count("attach: ${{")
                 )
+
+
+class TheReleaseEngineIsPortableTooTest(unittest.TestCase):
+    """`release-please.yml` reads no interpreter, image or index -- but it still reads the runner.
+
+    It is exempt from the plumbing every other workflow carries because it uses none of it: one
+    pinned action, running on the runner's Node. What it is not exempt from is the one variable
+    that decides *where* a fork's work runs, and from naming its action by an exact tag.
+    """
+
+    def test_the_runner_is_the_one_variable_it_still_reads(self) -> None:
+        body = _uncommented(_read(RELEASE_ENGINE))
+        self.assertIn("runs-on: ${{ fromJSON(vars.AART_RUNNER || '[\"ubuntu-latest\"]') }}", body)
+
+    def test_it_reads_none_of_the_plumbing_it_does_not_use(self) -> None:
+        body = _uncommented(_read(RELEASE_ENGINE))
+        for unused in ("AART_CI_IMAGE", "AART_PYTHON", "AART_PIP_INDEX_URL", "AART_POETRY"):
+            with self.subTest(variable=unused):
+                self.assertNotIn(unused, body)
+
+    def test_the_engine_is_pinned_rather_than_followed(self) -> None:
+        """A release engine tracking a moving reference is a version calculator that can change
+        its mind between two runs of the same repository."""
+
+        body = _uncommented(_read(RELEASE_ENGINE))
+        self.assertIn("uses: googleapis/release-please-action@v4", body)
+        self.assertNotIn("@main", body)
+        self.assertNotIn("@master", body)
 
 
 class PipReachesTheRightIndexTest(unittest.TestCase):
@@ -632,7 +672,10 @@ class VariablesCannotWeakenTheGatesTest(unittest.TestCase):
         self.assertIn("scripts/quality.py", action)
         for condition in self._conditions(action):
             self.assertEqual([], _VARIABLE.findall(condition), condition)
-        gate = action.split("Run canonical quality gates", 1)[1]
+        # The gate *step* itself, not everything after it: the step that follows checks the pull
+        # request's title and is conditioned on there being one, which is a fact about the event
+        # rather than a switch anybody can set.
+        gate = action.split("Run canonical quality gates", 1)[1].split("\n    - name:", 1)[0]
         self.assertNotIn("if:", gate)
 
 
@@ -734,15 +777,24 @@ class NoPublicHostIsReachedThatAVariableCannotRetargetTest(unittest.TestCase):
                 self.assertIn("users.noreply.github.com", line, f"{label}: {line.strip()}")
                 self.assertNotIn("://", line.split("github.com")[0][-8:], f"{label}: {line}")
 
-    def test_the_email_domain_is_the_only_occurrence_so_it_cannot_grow_quietly(self) -> None:
+    def test_github_com_is_named_nowhere_at_all(self) -> None:
+        """It used to be named once, and the once was defensible.
+
+        `cut-release` built the tagger's identity as
+        `$GITHUB_ACTOR_ID+$GITHUB_ACTOR@users.noreply.github.com` -- a committer identity written
+        into a commit, not a host anything connected to. The release engine writes that commit
+        now, with an identity the runner supplies, so the exception went with the button and the
+        claim is simply zero. B-069 records the enterprise wart it was hiding: an instance has its
+        own noreply domain.
+        """
+
         occurrences = [
             (label, line.strip())
             for label, text in self.SOURCES.items()
             for line in _uncommented(text).splitlines()
             if "github.com" in line
         ]
-        self.assertEqual(1, len(occurrences), occurrences)
-        self.assertIn("user.email", occurrences[0][1])
+        self.assertEqual([], occurrences)
 
 
 class ThisRepositorysWorkflowsStayThinTest(unittest.TestCase):
@@ -778,7 +830,7 @@ class ThisRepositorysWorkflowsStayThinTest(unittest.TestCase):
             for path in WORKFLOWS
         }
         self.assertEqual(
-            {"pr-check.yml": 1, "release.yml": 0, "cut-release.yml": 0},
+            {"pr-check.yml": 1, "release.yml": 0},
             {name: len(items) for name, items in inline.items()},
         )
         aggregate = _job_bodies(_read(ROOT / ".github" / "workflows" / "pr-check.yml"))["pr-check"]

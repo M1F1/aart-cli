@@ -23,15 +23,26 @@ returns a sign-in page, and the installer fails on a corrupt archive rather than
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import github_api  # noqa: E402
-import version as versioning  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
+
+
+def released_version(root: Path = ROOT) -> str:
+    """The last released version, read from the release engine's own manifest.
+
+    Not from a source file, and not calculated: the engine decides the number and records it
+    here, so this is a reader of that record rather than a second opinion about it (INV-100).
+    """
+
+    manifest = json.loads((root / ".release-please-manifest.json").read_text(encoding="utf-8"))
+    return str(manifest["."])
 
 
 def lines(url: str, version: str) -> str:
@@ -83,7 +94,7 @@ def main(argv: list[str] | None = None) -> int:
     except github_api.GitHubError as error:
         print(error, file=sys.stderr)
         return 2
-    version = parsed.version or str(versioning.read_version(ROOT))
+    version = parsed.version or released_version()
     print(lines(url, version))
     return 0
 

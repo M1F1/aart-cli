@@ -220,28 +220,33 @@ class ReadmeAdoptionTest(unittest.TestCase):
                 self.assertIn(f"| `{name}` |", _README)
         self.assertIn(f"### The {_SPELLED[len(names)]} gates", _README)
 
-    def test_the_release_section_names_the_commands_a_release_actually_runs(self) -> None:
+    def test_the_release_section_describes_the_release_that_actually_happens(self) -> None:
         """A release page that has drifted is worse than none: it is followed.
 
-        Both callers of the local half have to be on the page -- a person's bare invocation and
-        an agent's, which is the same script with the answers passed in.  So does each spelling of
-        the registry choice: a release that verifies seven checks fewer must be something an
-        operator typed, never something a page implied.
+        There is no local half any more and no button: a person merges a pull request whose title
+        classifies it, and later merges the release pull request. So what has to be on the page is
+        the classification -- which the writer of every pull request needs and no script can
+        supply -- and the two commands that are still commands.
         """
 
         section = _README[_README.index("## Releasing") : _README.index("## License")]
-        for command in (
-            "python scripts/prepare_release.py",
-            '--summary "One line about the release." --json',
-            "python scripts/cut_release.py 2.9.0 --registry",
-            "python scripts/cut_release.py 2.9.0 --without-registry",
+        for phrase in (
+            "fix(tui): preserve selected artifact after refresh",
+            "feat(registry)!: replace legacy source schema",
+            "python scripts/conventional_title.py",
+            "python scripts/release_artifact.py --tag",
+            # Automating the arithmetic is not automating the decision, and a reader has to be
+            # told which half is which.
+            "Nothing merges that pull request for you.",
         ):
-            with self.subTest(command=command):
-                self.assertIn(command, section)
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, section)
         # The one thing this walk proved the hard way, and the reason a re-run looks like a no-op.
         self.assertIn("read from the tag, not from `main`", section)
-        # `3` is separate from `2` on purpose, and a caller only knows that if it is written.
-        self.assertIn("| `3` |", section)
+        # The retired half is gone from the page, not merely unlinked from it.
+        for retired in ("prepare_release", "cut_release", "changelog.py", "scripts/version.py"):
+            with self.subTest(retired=retired):
+                self.assertNotIn(retired, section)
 
     def test_registry_entrance_names_vendoring_and_links_the_walked_tutorial(self) -> None:
         for phrase in (

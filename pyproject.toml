@@ -64,7 +64,10 @@ hypothesis = "^6.165"
 # because mutating 40k statements at ~3 mutants/second is days of compute, and the question is
 # asked of the module a slice just changed. Dev group like the rest: nothing here reaches the
 # zero-dependency runtime.
-mutmut = "^3.7"
+# mutmut's Textual UI supports Python below 4.0.  The project itself deliberately leaves the
+# future major open, so the dev-only tool needs its own bound or Poetry rejects the entire lock
+# as unsatisfiable for Python 4 even though no installed AART runtime imports it.
+mutmut = { version = "^3.7", python = ">=3.10,<4.0" }
 # The build backend, installed rather than merely declared.  Two gates need it present: the
 # offline editable install (`pip install --no-index --no-build-isolation -e .`) has no index to
 # fetch a backend from, and `scripts/build_wheel.py` checks that whatever built the wheel is the

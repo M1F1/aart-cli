@@ -26,14 +26,38 @@ from __future__ import annotations
 import argparse
 import subprocess
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parent.parent
 CONFIG = ROOT / "setup.cfg"
 
 
+def _source_paths(only: list[str]) -> tuple[str, ...]:
+    """Top-level trees mutmut must copy so every requested module is importable.
+
+    The original runner always copied ``agent_artifacts``.  That made a request for a repository
+    script look scoped while generating zero mutants, then fail test collection because the
+    script was absent from mutmut's working copy.  The requested files already name the required
+    roots; derive the copy set from them instead of carrying a package-specific second scope.
+    """
+
+    roots: set[str] = set()
+    for raw in only:
+        path = PurePosixPath(raw)
+        if path.is_absolute() or not path.parts or ".." in path.parts:
+            raise ValueError(f"mutation scope must be a repository-relative path: {raw!r}")
+        roots.add(path.parts[0])
+    return tuple(sorted(roots))
+
+
 def _section(only: list[str], tests: list[str]) -> str:
-    lines = ["[mutmut]", "source_paths = agent_artifacts"]
+    source_paths = _source_paths(only)
+    lines = ["[mutmut]"]
+    if len(source_paths) == 1:
+        lines.append(f"source_paths = {source_paths[0]}")
+    else:
+        lines.append("source_paths =")
+        lines.extend(f"    {path}" for path in source_paths)
     if only:
         lines.append("only_mutate =")
         lines.extend(f"    {path}" for path in only)

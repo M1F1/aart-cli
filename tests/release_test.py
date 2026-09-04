@@ -16,56 +16,42 @@ from pathlib import Path
 from unittest import mock
 
 from tests.credential_fixtures import assignment
-from tests.versioning_test import ROOT, _load_script
+from tests.script_fixtures import ROOT
+from tests.script_fixtures import load_script as _load_script
 
 REFERENCE_ORIGIN = "https://github.com/M1F1/agent-artifacts-registry.git"
 REFERENCE_COMMIT = "a" * 40
 
 
-def _fixture_root(raw: str, release, *, complete: bool = True) -> Path:
+# Any version at all.  The checklist no longer rules on which one -- the release engine decides
+# it and writes it -- so pinning the fixture to a literal the script also holds would be testing
+# that two copies of a constant agree, which is the thing this release model removed.
+FIXTURE_VERSION = "7.3.1"
+
+
+def _fixture_root(raw: str, release, *, version: str = FIXTURE_VERSION) -> Path:
     root = Path(raw)
     for relative in release.SCHEMA_INPUTS:
         source = ROOT / relative
         target = root / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, target)
-    # Build the fixture at the version the release contract governs, so this test keeps asserting
-    # "a complete tree at the declared release version passes" rather than pinning one literal.
-    version = release.EXPECTED_VERSION
-    major, minor, patch = (int(part) for part in version.split("."))
     package = root / "agent_artifacts"
     package.mkdir(exist_ok=True)
     (package / "__init__.py").write_text(f'__version__ = "{version}"\n', encoding="utf-8")
-    (package / "runtime_contract.py").write_text(
-        "from agent_artifacts.protocol.semver import SemVer\n"
-        f"EXECUTABLE_VERSION = SemVer({major}, {minor}, {patch})\n",
-        encoding="utf-8",
-    )
     (root / "pyproject.toml").write_text(
         f'[project]\nname = "aart-cli"\nversion = "{version}"\ndependencies = []\n',
         encoding="utf-8",
     )
-    state = "complete" if complete else "pending"
-    (root / "PROGRESS.md").write_text(
-        "## Task ledger\n\n"
-        "| ID | Task | Depends on | Status | Branch | PR / merge | Gate evidence / notes |\n"
-        "|---|---|---|---|---|---|---|\n"
-        "| P00 | Plan | — | complete | — | — | — |\n"
-        f"| REL01 | Release | all | {state} | — | — | — |\n\n"
-        "## Current-task template\n",
-        encoding="utf-8",
-    )
-    for relative in release.REQUIRED_RELEASE_DOCS:
+    for relative in (*release.REQUIRED_RELEASE_DOCS, *release.REQUIRED_PERSISTENT_DOCS):
         target = root / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(f"# AART {version}\n\nRelease evidence.\n", encoding="utf-8")
-    for relative in release.REQUIRED_PERSISTENT_DOCS:
-        target = root / relative
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text("# Carried forward\n\nEarlier-boundary evidence.\n", encoding="utf-8")
     freeze = root / release.SCHEMA_FREEZE_PATH
     freeze.parent.mkdir(parents=True, exist_ok=True)
-    freeze.write_bytes(release.schema_freeze_bytes(root))
+    # The freeze records the release it was issued for; a fixture has no earlier freeze to read
+    # that back out of, so the fixture states it.
+    freeze.write_bytes(release.schema_freeze_bytes(root, release_version=version))
     return root
 
 
@@ -151,7 +137,7 @@ class ReleaseChecklistTest(unittest.TestCase):
 
         self.assertEqual(first, second)
         self.assertEqual(first["status"], "passed")
-        self.assertEqual(first["version"], release.EXPECTED_VERSION)
+        self.assertEqual(first["version"], FIXTURE_VERSION)
         self.assertEqual(first["registry_commit"], REFERENCE_COMMIT)
         self.assertEqual(first["diagnostics"], [])
         self.assertEqual(
@@ -160,17 +146,23 @@ class ReleaseChecklistTest(unittest.TestCase):
         )
         self.assertTrue(all(item["passed"] for item in first["checks"]))
 
-    def test_incomplete_progress_version_mismatch_stale_schema_and_missing_docs_accumulate(
+    def test_an_undeclarable_version_a_stale_schema_and_a_missing_document_accumulate(
         self,
     ) -> None:
+        """Three unrelated refusals in one run, so the checklist reports all of them.
+
+        Two of the four this used to assert are gone with the bookkeeping they policed: there is
+        no PROGRESS.md ledger to be incomplete and no pinned version for a tree to mismatch. What
+        replaced "the version is not the one we pinned" is "the tree cannot say what version it
+        is at all", which is a real failure rather than a disagreement between copies.
+        """
+
         release = _load_script("release")
         with tempfile.TemporaryDirectory() as raw:
-            root = _fixture_root(raw, release, complete=False)
+            root = _fixture_root(raw, release)
             registry = root / "reference-registry"
             registry.mkdir()
-            (root / "agent_artifacts/__init__.py").write_text(
-                '__version__ = "1.0.0a1"\n', encoding="utf-8"
-            )
+            (root / "agent_artifacts/__init__.py").write_text("# no version\n", encoding="utf-8")
             (root / release.REQUIRED_RELEASE_DOCS[1]).unlink()
             schema = root / release.SCHEMA_INPUTS[0]
             schema.write_bytes(schema.read_bytes() + b"\n# changed after freeze\n")
@@ -184,10 +176,30 @@ class ReleaseChecklistTest(unittest.TestCase):
 
         codes = tuple(item["code"] for item in receipt["diagnostics"])
         self.assertEqual(receipt["status"], "failed")
-        self.assertIn("progress-incomplete", codes)
         self.assertIn("version-invalid", codes)
         self.assertIn("schema-freeze-stale", codes)
         self.assertIn("release-doc-missing", codes)
+        self.assertEqual(receipt["version"], "unknown")
+
+    def test_the_checklist_does_not_rule_on_which_version_it_is_looking_at(self) -> None:
+        """INV-085, INV-098: the release engine decides the number; this reports it.
+
+        A tree at any version passes.  The check that used to be here refused every version but
+        one typed into this script, which meant a release could not happen until somebody edited
+        the checklist to permit it.
+        """
+
+        release = _load_script("release")
+        for version in ("0.0.1", "7.3.1", "41.0.0"):
+            with self.subTest(version=version), tempfile.TemporaryDirectory() as raw:
+                root = _fixture_root(raw, release, version=version)
+                registry = root / "reference-registry"
+                registry.mkdir()
+
+                receipt = release.check_release(root, registry, process_runner=_successful_runner)
+
+                self.assertEqual(receipt["status"], "passed")
+                self.assertEqual(receipt["version"], version)
 
     def test_a_dropped_carried_forward_document_still_blocks_the_release(self) -> None:
         """Migration and tutorial guides survive a release-series bump.
@@ -275,8 +287,19 @@ class ReleaseChecklistTest(unittest.TestCase):
 
             self.assertEqual(release.main(("freeze",), root=root), 1)
             self.assertFalse(freeze.exists())
-            self.assertEqual(release.main(("freeze", "--write"), root=root), 0)
+            # An issued freeze records the release it was taken for and is never rewritten, so a
+            # regeneration reads that release back out of it.  With no freeze to read, the run
+            # has to be told -- it does not invent one, and it does not leave the field out.
+            self.assertEqual(release.main(("freeze", "--write"), root=root), 1)
+            self.assertFalse(freeze.exists())
+            self.assertEqual(
+                release.main(
+                    ("freeze", "--write", "--release-version", FIXTURE_VERSION), root=root
+                ),
+                0,
+            )
             self.assertTrue(freeze.is_file())
+            self.assertEqual(release.frozen_release_version(root), FIXTURE_VERSION)
 
         self.assertIn(
             "repository-dirty",
@@ -558,7 +581,7 @@ class WheelDigestEvidenceTest(unittest.TestCase):
         first_name, first_digest = release.wheel_digest(ROOT)
         second_name, second_digest = release.wheel_digest(ROOT)
 
-        self.assertEqual(first_name, f"aart_cli-{release.EXPECTED_VERSION}-py3-none-any.whl")
+        self.assertEqual(first_name, f"aart_cli-{release.declared_version(ROOT)}-py3-none-any.whl")
         self.assertEqual(first_digest, second_digest)
         self.assertRegex(first_digest, r"^sha256:[0-9a-f]{64}$")
         self.assertEqual(first_name, second_name)

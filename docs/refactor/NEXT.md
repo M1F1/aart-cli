@@ -2,8 +2,9 @@
 
 ## Current objective
 
-**CP-18 Migration and release gate is IN PROGRESS: steps 1-4 done, step 5 active.** The slice
-document is `docs/refactor/slices/CP-18-migration-and-release-gate.md`.
+**CP-18 Migration and release gate is VERIFIED. All six steps and the mandatory execution plan are
+complete.**
+The slice document is `docs/refactor/slices/CP-18-migration-and-release-gate.md`.
 
 Step 1 (INV-071, zero runtime dependencies) is done: `tests/runtime_purity_test.py` reads the
 dev-group declaration off `pyproject.toml` and the import graph off the source with `ast`, because
@@ -33,11 +34,11 @@ remediation is documentation read at the worst possible moment. Four documents c
 verbs, and the three root trackers (`PLAN.md`, `PROGRESS.md`, `TODO.md`) pointed a newcomer at the
 legacy repository's issues as "the source of truth" (D-156).
 
-Step 5 (traceability) has finished its PARTIAL block. The matrix opened this step at 121 PARTIAL
-and stands at **209 EVIDENCED / 8 PARTIAL / 25 CONFLICT**. The method that produced it, and the one
-to keep applying: read the invariant's own words, find the flow that would break it, and only then
-look for a test -- not the reverse. Reading tests first produces rows that cite whatever is nearby,
-which is how the ten TUI rows came to share one copy-pasted verdict between them.
+Step 5 (traceability) is complete. The matrix opened this step at 121 PARTIAL and now stands at
+**234 EVIDENCED / 8 PARTIAL / 0 CONFLICT**. The method that produced it: read the invariant's own
+words, find the flow that would break it, and only then look for a test -- not the reverse. Reading
+tests first produces rows that cite whatever is nearby, which is how the ten TUI rows came to share
+one copy-pasted verdict between them.
 
 Four layer claims came out of it: `tui_boundary_test.py` (a screen module may not be an
 implementation of infrastructure, may not reach `io/` outside the one declared seam at
@@ -55,15 +56,28 @@ rule with no runtime witness), INV-187 (the maintainer catalog is still being ac
 (B-067: no Collection can be installed, updated or repaired). Do not read them as eight pieces of
 missing bookkeeping; every one is a measurement.
 
-**What is left of step 5 is the 25 CONFLICT rows, INV-081 to INV-105 — the release model.** They
-are CONFLICT rather than PARTIAL because the repository contradicts them today: `scripts/version.py`,
-`scripts/cut_release.py`, `scripts/changelog.py` and three independently maintained version values
-(`__init__.__version__`, `pyproject.version`, `runtime_contract.EXECUTABLE_VERSION`, plus
-`scripts/release.py:EXPECTED_VERSION`) are exactly the manual bookkeeping INV-083, INV-084, INV-085
-and INV-101 forbid. Closing them means migrating to Release Please authority and making release
-verification target the produced artifact rather than the bookkeeping. Note before starting:
-`scripts/release.py` pins `RELEASE_CONTRACT_VERSION` and a schema freeze, and issued freezes are
-immutable (D-154) -- the version authority may move, but a freeze may not be rewritten.
+INV-081 through INV-105 are now EVIDENCED. Release Please is the sole version/changelog engine; the
+reviewed squash title is its semantic input; its generated release PR is the explicit release
+boundary; and release CI verifies the built wheel against the tag instead of comparing manually
+maintained source values (D-160 through D-165). Issued schema freezes remain immutable.
+
+The scoped mutmut run found and fixed a runner defect: asking for `scripts/release_artifact.py`
+still copied only `agent_artifacts`, generated no useful mutants and then failed to import the
+target. The runner now derives source roots from `ONLY`. The final run generated 373 mutants,
+killed 174 and left four inspected equivalent/cosmetic survivors; the 195 real-install/entry-point
+mutants are exercised once by the real artifact gate instead of reinstalling a wheel for every
+mutation. Three deliberate mutations independently hold SemVer classification, runtime-dependency
+refusal and release-workflow wiring.
+
+Step 6 is verified: all nine quality gates are green over 3,321 tests (one skipped), branch coverage
+is 85.35%, all 343 separate E2E tests pass, `poetry check --lock` passes, and a real built
+`aart_cli-0.0.1-py3-none-any.whl` passes the artifact verifier against tag `v0.0.1`. B-068 is closed
+on the same critical path: the deep-quality workflow invokes mutmut unattended, so the Poetry lock
+now includes mutmut 3.7 and Textual under a dev-only Python `<4.0` marker.
+
+There is no next mandatory critical-path slice in `EXECUTION_PLAN.md`. Future work starts only by
+deliberately promoting one of the measured BACKLOG capabilities; the eight PARTIAL traceability
+rows are the honest map of those absent flows, not unfinished CP-18 bookkeeping.
 
 The rule those four decisions produced, which the next agent should carry into steps 5-6: an
 unreachable module is *replaced*, *unadopted*, or *unwired*, and only the middle case is safe to
@@ -491,9 +505,8 @@ The first draft read the dev group with `tomllib` and mypy refused it: `requires
 and `tomllib` arrived in 3.11, which `dev_tools_test`'s docstring already records for `poetry.lock`.
 A test for *this* invariant that runs on only some supported interpreters is the wrong shape, so the
 group is read by a flat-table shortcut with a claim of its own. Deriving the set also turned up
-B-068: `mutmut` is declared in the dev group but absent from `poetry.lock`, so the provisioning path
-omits it and `make mutants` cannot run in an environment built that way. Advisory tooling, so it is
-backlog, not a blocker.
+B-068 was found here and later closed by CP-18 step 6. It became critical when the new deep-quality
+workflow started invoking mutmut unattended; the regenerated lock now provisions it explicitly.
 
 **Step 2 is under way, and its first row justified the whole audit.** INV-077 (one stable required
 gate) turned out to be two different situations. This repository's `pr-check` aggregate was already

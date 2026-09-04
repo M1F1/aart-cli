@@ -1,8 +1,16 @@
 # Splitting the PR check from the release check
 
-**Status: built.** `.github/` matches this page. It records what was duplicated, the shape that
-removed it, the two decisions taken, and the three things that are repository settings rather than
-files — those are still Michał's to set, on every instance separately.
+**Status: built, then superseded in part.** The split this page describes is still the shape:
+the pull request proves the source, the release run proves the artifact. What has changed since is
+who decides a version. The release button and everything behind it — `cut-release.yml`,
+`scripts/cut_release.py`, `scripts/version.py`, `scripts/changelog.py` — are gone, replaced by
+Release Please; see [`release-model-v1.md`](../release/release-model-v1.md). The rows below that
+name them are kept as the record of what the split was measured against, and are marked where they
+no longer describe the repository.
+
+It records what was duplicated, the shape that removed it, the two decisions taken, and the three
+things that are repository settings rather than files — those are still Michał's to set, on every
+instance separately.
 
 The whole design rests on one assumption: **`main` is protected and is reached only through a pull
 request.** Everything below follows from that. If direct pushes to `main` are ever allowed again,
@@ -41,17 +49,20 @@ called that any more.
 | What is being proven | Which run proves it |
 |---|---|
 | the source is correct | PR check |
+| the change says what kind of change it is | PR check, on the title |
 | merging is safe | branch protection, not a run |
-| the release may be cut | cut-release preconditions |
+| the release may be cut | merging the release pull request — a person, not a run |
 | the artefact is sound | the release job |
 
 ## The shape
 
 | File | Name | Trigger | What it runs |
 |---|---|---|---|
-| `pr-check.yml` | `pr-check` | `pull_request` | all ten gates, on 3.10, 3.11 and 3.14 |
-| `release.yml` | `release` | tag push, release published | release checks only |
-| `cut-release.yml` | `cut release` | `workflow_dispatch` | gates, checklist, tag, release, wheel, index |
+| `pr-check.yml` | `pr-check` | `pull_request` | all ten gates, on 3.10, 3.11 and 3.14, plus the title check |
+| `release-please.yml` | `release please` | push to `main` | maintains the release pull request; on a release, calls `release.yml` |
+| `release.yml` | `release` | tag push, release published, `workflow_call` | release checks only |
+
+`cut-release.yml` was the third file here and is gone.
 
 `validate.yml` was renamed, not merely retriggered: the file name, the workflow name, the job
 names and the required check are all now one word, so a required status check can be named
@@ -61,28 +72,41 @@ without ambiguity.
 
 Only what has the release as its subject:
 
-* the source version equals the tag (`version.py check-tag`)
 * the tagged commit is an ancestor of `main`
-* reviewed release notes exist and are not empty
 * the eleven-item release checklist (`release.py check`)
 * `packaging-check` — the one quality gate whose subject is the wheel rather than the source
-* build, attach, publish
+* build, then `release_artifact.py --tag` — the wheel's filename, metadata, declared dependencies
+  and installed command, all against the tag it is published under
+* attach, publish
+
+The first two entries this list used to carry were "the source version equals the tag" and
+"reviewed release notes exist". Both were bookkeeping: one compared two numbers a person
+maintained, the other looked for a document a person wrote for that exact tag. The engine writes
+both now, and what replaced them has the artifact as its subject.
 
 Everything else is dropped from the release path. A release is cut from a commit that reached
 `main`, and nothing reaches `main` except through a PR that passed all ten gates.
 
-### What the button stops doing twice
+### What the button stopped doing twice, and where that went
 
-`cut_release.py` keeps the checklist, because it must run **before** the tag exists: the run
-either produces a tag and a release or produces neither. The release action therefore needs a way
-to be told the checklist has already run — an input, not a guess.
+The button ran the checklist as a precondition — it had to pass *before* the tag existed — and the
+release action it called then ran it again, so the action took an input saying it had already run.
+There is no button now: the tag is created by merging the release pull request, and the checklist
+runs once, in the release run. The input is gone with the caller that needed it.
+
+What survived the button is the reason it called the release action directly rather than relying
+on an event. GitHub raises no workflow event for anything done with the repository
+`GITHUB_TOKEN`, so the tag and release Release Please creates start nothing.
+`release-please.yml` therefore *calls* `release.yml`, which is `workflow_call`-able for exactly
+that reason.
 
 ## Three things that are settings, not files
 
 None of these can be committed. Each is set per repository, on every instance separately.
 
 1. **Protect `main`.** Require a pull request; forbid direct pushes. Our own flow never pushes to
-   `main` — the button pushes a *tag*, which branch protection does not block.
+   `main` — the release pull request is merged like any other, and the tag that follows is a *tag*,
+   which branch protection does not block.
 2. **Require the PR check.** Name the check that must pass before merge.
 3. **Decide on "require branches to be up to date".** See the open decision below.
 
@@ -123,13 +147,12 @@ builds a wheel. An image without Poetry fails there. Name it in `AART_POETRY` if
    **This is a setting, not a file.** Turn on "require branches to be up to date before merging"
    next to the required check. Without it there is no post-merge run to catch the pair, because
    `pr-check.yml` triggers on `pull_request` only.
-2. **`cut-release` keeps its own gate run.** It is the second full run of a commit that is
-   already green, and it is also the last check before something irreversible. It stays, and it
-   is the run that covers the release interpreter.
-   Because it runs them, the release action it then calls must not run them again: one input,
-   `preconditions: "false"`, turns off both the eleven-item checklist and the packaging gate for
-   that one caller. The default is `"true"`, so a path that has *not* run them cannot skip them
-   by accident.
+2. ~~**`cut-release` keeps its own gate run.**~~ **Superseded.** The button is gone, and with it
+   the second full run of an already-green commit and the `preconditions` input that stopped the
+   release action repeating it. The release pull request is an ordinary pull request and passes
+   the ordinary `pr-check` contract, which is where the interpreter matrix now lives — 3.11 was
+   moved into that matrix when the release run stopped running the gates, so nothing was retired
+   silently.
 
 ## What to require, exactly
 

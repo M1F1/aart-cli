@@ -3453,3 +3453,106 @@ actually experience as "rescanning gets you a second opinion" — cannot be cons
 refuses the laundering rather than a test noticing it afterwards. Prefer that shape when adding
 lifecycle states: give the state a field only it can carry, and the illegal transition stops being
 a bug to catch.
+
+## D-160 — The version is not a value to reconcile; it is a value to have once
+
+INV-085 forbids "multiple independently maintained version values plus tests whose only purpose is
+synchronizing them". The obvious reading is that the tests are the problem, and the obvious fix is
+to let the release engine write all three values through `extra-files` — one engine, three files,
+no human keeping them in step. That reading is wrong. Three generated values still need a test to
+notice when the generation misses one, and that test has the same only-purpose the invariant names.
+
+**Decision.** There is one literal: `agent_artifacts/__init__.py`. `pyproject.toml` and `README.md`
+are rewritten by the engine on annotated lines, and `runtime_contract.EXECUTABLE_VERSION` *parses*
+`__version__` rather than declaring its own. `scripts/version.py`, its `_MIRRORS` table and the
+`validate` gate's `version.py check` are deleted.
+
+**What replaced the synchronization test is a different claim.** Not "the copies agree" but "no
+file quotes this release that the release engine does not write" — a scan of `pyproject.toml`,
+`agent_artifacts/` and `scripts/` for a version declaration whose value is the released version,
+checked against the `extra-files` list. It fails on a *new* copy appearing, which is the thing that
+actually goes wrong; the old test could only fail after someone had already forgotten to edit one.
+
+## D-161 — An issued freeze's release version is the freeze's data, not a mirror of a version
+
+D-154 established that an issued schema freeze is immutable. It records `release_version`, and
+`schema_freeze_bytes` used to regenerate that field from `scripts/release.py:EXPECTED_VERSION` —
+which meant the pin had to exist for the freeze to be checkable at all, and a version bump made the
+freeze stale for a reason that had nothing to do with schemas.
+
+**Decision.** `schema_freeze_bytes` reads `release_version` back out of the freeze it is being
+compared against. `release.py freeze --write` takes `--release-version` only when issuing a freeze
+that does not yet exist, and refuses rather than inventing one. `schema-freeze-stale` therefore
+means exactly one thing again: a normative schema moved.
+
+## D-162 — A release run's subject is the artifact, and the tag is what it is checked against
+
+The tag pipeline used to prove that a version pinned in a script matched a version written into
+three source files matched the tag somebody pushed. Every one of those is a property of the source
+tree, and the pull request that put the tree on `main` had already proven the tree.
+
+**Decision.** `scripts/release_artifact.py` checks the wheel: its filename, its metadata name and
+version, its `Requires-Dist` lines, and — through a real install into a throwaway environment —
+what `aart --version` says. The metadata and the program are asked separately on purpose: they come
+from different places, so a build that packaged the wrong tree agrees with itself everywhere except
+there.
+
+## D-163 — The engine's event silence is a design constraint, and the answer outlived the button
+
+GitHub raises no workflow event for anything done with the repository `GITHUB_TOKEN`. The retired
+release button hit this and answered it by *calling* the release action rather than waiting for an
+event. Release Please creates its tag and release with the same token and is silent in the same way.
+
+**Decision.** `release.yml` is `workflow_call`-able, and `release-please.yml` calls it when the
+release-please step reports `release_created`. The event triggers stay for a tag a person pushes.
+The alternative — a personal access token so the events fire — buys the same behaviour for the cost
+of a secret every fork has to provision.
+
+## D-164 — The title gate reads its accepted types from the release configuration
+
+`scripts/conventional_title.py` could have carried its own list of Conventional Commit types. Then
+the interesting failure would not be "a title nobody can classify" but "the gate and the engine
+disagree about what `security:` means", which is a bug with no symptom until a release comes out
+wrong.
+
+**Decision.** The accepted types are read out of `release-please-config.json`'s
+`changelog-sections`. One file says which types exist and what each is called; the gate is a reader
+of that policy rather than a second copy of it. A test asserts the two sets are equal, which is
+cheap precisely because it can only fail if someone reintroduces the second list.
+
+## D-165 — Mutation testing gets an explicit workflow and deliberately no schedule
+
+INV-103 asks that expensive verification not lengthen mandatory pull-request feedback. The ten
+gates, including the property suites and the whole end-to-end lifecycle, run in about four minutes
+and fit that budget, so they stay on the pull request. Mutation does not fit it: mutating this
+repository whole is days of compute (D-134).
+
+**Decision.** `.github/workflows/deep-quality.yml` runs `scripts/mutants.py` on
+`workflow_dispatch`, over a module the dispatcher names. There is no schedule. A weekly run would
+have to pick a module, the pick would be arbitrary, and an arbitrary survivor count produced every
+Monday is a number nobody reads. Mutation answers a question about a specific module's tests, and
+it is worth running when somebody has that question.
+
+## D-166 — Mutation scope owns its source roots, and unattended tooling must be locked
+
+Date: 2026-09-04 · Slice: CP-18 steps 5–6 · Status: accepted
+
+The first scoped run against `scripts/release_artifact.py` did not mutate that module. The runner
+still wrote `source_paths = agent_artifacts`, so mutmut copied the runtime package, generated zero
+useful mutants for the requested script and then failed collection because the script was absent.
+`ONLY` looked authoritative while a second hard-coded scope silently overruled it.
+
+**Decision.** `scripts/mutants.py` derives the top-level source roots from every repository-relative
+path in `ONLY`; multiple requested trees become multiple `source_paths`, and absolute or parent-
+traversing paths are refused. Script tests import `scripts.*` by its real package name so the module
+identity is the same in the repository and mutmut's copied tree. The focused release-artifact run
+then generated 373 mutants rather than zero.
+
+The same increment changed B-068's classification. Mutation remains advisory and manually scoped,
+but `.github/workflows/deep-quality.yml` now promises to run it unattended. A dev dependency absent
+from `poetry.lock` would therefore make the published workflow fail before it could answer its own
+question, which is critical to CP-18's closing gate rather than a local-tooling nicety.
+
+**Consequence.** The lock is regenerated and carries mutmut 3.7 plus Textual. The dependency has a
+dev-only `python >=3.10,<4.0` marker: Textual's supported range must not make Poetry reject AART's
+deliberately open-ended runtime range, and no mutation dependency enters the runtime graph.

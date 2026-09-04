@@ -1639,7 +1639,7 @@ Evidence/links: CP-17 step 5; D-131; B-038; INV-186; INV-213;
 
 ## B-068 — `mutmut` is declared in the dev group but absent from `poetry.lock`
 
-Found: CP-18 step 1 (2026-09-03) · Severity: low · Status: open
+Found: CP-18 step 1 (2026-09-03) · Reclassified: CP-18 step 6 (2026-09-04) · Status: **closed**
 
 D-134 added `mutmut` to Poetry's dev group and put `make mutants` behind it. `poetry.lock` was never
 regenerated, so it carries no `mutmut` entry, and `scripts/dev_tools.py::requirements("dev")` --
@@ -1654,19 +1654,16 @@ pathspec, poetry-core, ruff, sortedcontainers, tomli, typing-extensions
 An environment provisioned by that path therefore cannot run `make mutants` at all; it fails on the
 missing module rather than reporting an unadequate suite.
 
-Not critical. `make mutants` is advisory and always scoped by contract (D-134), it is not one of the
-nine quality gates, and no gate command names it -- which is also why
-`dev_tools_test::test_every_gate_tool_is_pinned_by_the_lock` is right to stay green: mutmut is not a
-gate tool. Nothing mandatory is blocked.
+It became critical in CP-18 step 6 when `.github/workflows/deep-quality.yml` made mutation adequacy
+an unattended, explicitly requested CI run. At that point the missing pin was no longer a local
+developer surprise: the shipped workflow could not start the tool it claimed to run.
 
-It becomes critical if mutation adequacy is ever promoted to a gate, or if a CI job is expected to
-run `make mutants` unattended, since either would make the tool's absence a silent skip rather than
-a developer's local surprise -- the shape INV-080 forbids.
+Closed by regenerating the lock, not hand-editing it. `mutmut==3.7.0` and its Textual dependency
+are now provisioned by `scripts/dev_tools.py`. Their dev-only marker is `python >=3.10,<4.0` because
+Textual does not claim Python 4 compatibility while AART's runtime range intentionally remains
+open-ended. The marker changes no production dependency: `[project] dependencies` remains empty.
 
-The fix is to regenerate the lock, not to hand-edit it. Worth doing next time the lock is touched
-for another reason.
-
-Evidence/links: D-134; INV-080; `pyproject.toml` `[tool.poetry.group.dev.dependencies]`;
+Evidence/links: D-134; D-166; INV-071; INV-080; `pyproject.toml` `[tool.poetry.group.dev.dependencies]`;
 `poetry.lock`; `scripts/dev_tools.py`; `scripts/mutants.py`.
 
 ## B-069 — the release tagger's email hardcodes github.com's noreply domain

@@ -1,0 +1,63 @@
+name: release please
+
+# The release, as a pull request nobody has to write.
+#
+# Every squash commit that reaches `main` carries Conventional Commit semantics -- `pr-check.yml`
+# refuses a pull request title that does not -- and this run turns the accumulated ones into a
+# single open release pull request: the next SemVer, the changelog entry, the version written into
+# the two files `release-please-config.json` names. Merging that pull request is the release: the
+# action then creates the tag and the GitHub Release, and `release.yml` builds and verifies the
+# wheel for the tag.
+#
+# The pull request is the boundary on purpose (INV-094). Nothing here merges anything: the
+# arithmetic is automatic, the decision to publish is not. Auto-merge is a policy a repository may
+# adopt later by adding a step that says so (INV-105); it must never arrive as a side effect of
+# automating the version, which is why there is nothing to disable here.
+#
+# Portable to a GitHub Enterprise Server fork the way the other workflows are: by repository
+# variables only. `AART_RUNNER` chooses the runner; the action itself is pinned by tag and is the
+# only thing this workflow needs, because it runs on Node inside the action rather than in the
+# repository's own toolchain -- so no container image, no interpreter and no index are involved.
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write        # creates the release commit's tag and the GitHub Release
+  pull-requests: write   # maintains the one open release pull request
+
+jobs:
+  release-please:
+    runs-on: ${{ fromJSON(vars.AART_RUNNER || '["ubuntu-latest"]') }}
+    outputs:
+      released: ${{ steps.release.outputs.release_created }}
+      tag: ${{ steps.release.outputs.tag_name }}
+    steps:
+      # The version arithmetic and the changelog wording are both decided by the committed
+      # configuration, not by anything set in the repository's Settings pages (INV-086). A fork
+      # that changes where releases run does not change what a `feat` means (INV-104).
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  # The tag and the GitHub Release above are created with the repository `GITHUB_TOKEN`, and
+  # GitHub deliberately raises no workflow event for anything done with that token: neither the
+  # tag push nor the published release starts `release.yml`. So this calls it. `cut-release.yml`
+  # hit the same wall and answered it the same way, and the answer outlived the button.
+  #
+  # Calling rather than duplicating: `release.yml` keeps one definition of what a release run is,
+  # including the two container shapes an Enterprise fork needs.
+  artifact:
+    needs: release-please
+    if: needs.release-please.outputs.released == 'true'
+    uses: ./.github/workflows/release.yml
+    permissions:
+      contents: write
+    secrets: inherit
+    with:
+      tag: ${{ needs.release-please.outputs.tag }}
+      attach: true

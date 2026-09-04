@@ -9,7 +9,7 @@ PYTHON ?= python
 REGISTRY ?=
 QUALITY = $(PYTHON) scripts/quality.py
 
-.PHONY: check test unit integration system-matrix release-freeze release-check wheel validate clean lint format format-check typecheck coverage packaging-check docs-check secret-shape-check quality mutants version-check version-show version-next-alpha version-bump-alpha version-finalize version-set
+.PHONY: check test unit integration system-matrix release-freeze release-check wheel validate clean lint format format-check typecheck coverage packaging-check docs-check secret-shape-check quality mutants
 
 # Aggregate. The Python discovery is the broad unit/regression gate; integration is end to end.
 test: unit integration
@@ -88,24 +88,6 @@ mutants:
 #   make check SINCE=main   the whole branch's diff as well
 check:
 	$(QUALITY) --changed $(if $(SINCE),--since=$(SINCE),)
-
-version-check:
-	$(PYTHON) scripts/version.py check
-
-version-show:
-	$(PYTHON) scripts/version.py show
-
-version-next-alpha:
-	$(PYTHON) scripts/version.py next-alpha
-
-version-bump-alpha:
-	$(PYTHON) scripts/version.py bump-alpha --write
-
-version-finalize:
-	$(PYTHON) scripts/version.py finalize --write
-
-version-set:
-	$(PYTHON) scripts/version.py set "$(VERSION)" --write
 
 # Remove build leftovers (safe: only the dist/ wheels and build/ tree).
 clean:

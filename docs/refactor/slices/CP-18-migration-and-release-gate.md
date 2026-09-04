@@ -1,5 +1,5 @@
 # CP-18 — Migration completion and release gate
-Status: IN PROGRESS (opened 2026-09-03)
+Status: VERIFIED (opened 2026-09-03; closed 2026-09-04)
 
 ## Goal
 
@@ -482,7 +482,7 @@ will say so. The remaining PARTIAL traceability rows are where that gets answere
 
 ---
 
-## Step 5 — traceability complete for all mandatory invariants (IN PROGRESS)
+## Step 5 — traceability complete for all mandatory invariants
 
 The matrix opened this step at 121 PARTIAL. It now stands at **209 EVIDENCED / 8 PARTIAL /
 25 CONFLICT**, and the eight remaining PARTIALs are the honest ones: each names a flow that does not
@@ -568,16 +568,75 @@ a stronger guarantee than a test that notices afterwards.
 
 None of these is a row somebody forgot. Each is a measurement.
 
-### What remains of step 5
+### The release-model block
 
-The 25 CONFLICT rows, INV-081 to INV-105, are one block: the release model. They are CONFLICT rather
-than PARTIAL because the repository currently *contradicts* them — `scripts/version.py`,
-`scripts/cut_release.py`, `scripts/changelog.py` and three independently maintained version values
-are exactly the manual bookkeeping INV-083, INV-084, INV-085 and INV-101 forbid. Closing them is
-CP-18's own remaining clause: migrate to Release Please authority and make release verification
-target the produced artifact rather than the bookkeeping.
+The 25 CONFLICT rows, INV-081 to INV-105, were one block rather than 25 independent fixes. Release
+Please is now the sole version/changelog authority. The retired manual cut workflow and its version,
+changelog and preparation scripts are gone; the reviewed squash title is validated as the semantic
+input; the generated release PR remains the explicit human-controlled boundary; and release CI
+checks the built wheel against the tag instead of reconciling source-tree copies of a version.
+
+Six decisions carry the shape:
+
+- D-160 leaves one version literal and makes every other release mention an engine-written output.
+- D-161 keeps issued schema freezes immutable and reads their release identity as recorded data.
+- D-162 makes the wheel the subject of release verification: filename, metadata, dependency
+  metadata, clean install, `aart --version` and `aart --help` all have to agree with the tag.
+- D-163 calls the release workflow directly after Release Please creates a release, because events
+  produced with `GITHUB_TOKEN` do not recursively start another workflow.
+- D-164 derives the accepted Conventional Commit types from the Release Please configuration.
+- D-165 gives mutation testing an explicit, manually scoped deep-quality workflow rather than an
+  arbitrary schedule or a mandatory fast-PR cost.
+
+The matrix therefore stands at **234 EVIDENCED / 8 PARTIAL / 0 CONFLICT**. The eight PARTIAL rows
+remain the measured absent flows listed above; none is release bookkeeping left unfinished.
+
+### Release-model mutation evidence
+
+Three deliberate mutations held the critical claims independently:
+
+| # | mutation | red |
+|---|---|---|
+| M57 | remove `fix` from the committed patch-type mapping | `test_the_semver_step_is_the_committed_mapping` |
+| M58 | let a wheel carrying `Requires-Dist` pass | `test_a_wheel_that_declares_a_runtime_dependency_is_refused` |
+| M59 | replace the artifact verifier in the release action | `test_the_release_run_proves_only_what_has_the_release_as_its_subject` |
+
+A fresh scoped mutmut run over `scripts/release_artifact.py` generated 373 mutants: 174 were killed,
+four survived and were inspected as equivalent/cosmetic changes (`utf-8`/`UTF-8`, two renderings of
+one diagnostic, and `partition`/`rpartition` on the already selected single-colon header), and 195
+belonged to the real-environment/CLI wrapper deliberately outside the focused unit executor. The
+actual closing artifact gate executes that wrapper against the built wheel.
+
+That run also found a defect in the mutation runner itself: `ONLY=scripts/...` still copied only
+`agent_artifacts`, producing zero mutants and an import failure. `scripts/mutants.py` now derives the
+top-level source roots from the requested repository-relative paths, with tests for single-root,
+multi-root and unsafe scopes. Fully qualified `scripts.*` imports make the original and mutated
+module identities agree.
 
 ### Status
 
-Step 5 is **IN PROGRESS**: the PARTIAL block is finished and the CONFLICT block is the remaining
-work.
+Step 5 is **VERIFIED**. INV-081 through INV-105 move CONFLICT → EVIDENCED.
+
+---
+
+## Step 6 — closing gates
+
+The deep-quality workflow made B-068 critical: an unattended job now invokes mutmut, so declaring
+it without locking it would make the workflow fail before measuring anything. The Poetry lock was
+regenerated rather than edited. mutmut 3.7 and its Textual dependency carry a dev-only
+`python >=3.10,<4.0` marker because Textual does not claim Python 4 support while AART's runtime
+range intentionally leaves that future major open. Nothing enters the zero-dependency runtime.
+
+Closing evidence on the finished implementation:
+
+- `make quality`: all nine gates green; 3,321 tests, one skipped; 85.35% branch coverage; packaging,
+  documentation and secret-shape checks included.
+- `make integration`: all 343 public E2E tests green.
+- `python scripts/build_wheel.py && python scripts/release_artifact.py --tag v0.0.1`: the built
+  `aart_cli-0.0.1-py3-none-any.whl` passed metadata, zero-runtime-dependency and clean-install smoke
+  verification against the tag.
+- `poetry check --lock`: the regenerated dev-tool lock is internally consistent.
+
+Step 6 and **CP-18 are VERIFIED**. The mandatory execution plan is complete. The eight remaining
+PARTIAL traceability rows stay honest, explicitly named capability/process gaps in BACKLOG rather
+than hidden release work.
