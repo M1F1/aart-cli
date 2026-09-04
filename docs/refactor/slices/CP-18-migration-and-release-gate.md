@@ -479,3 +479,105 @@ Step 4 is **DONE**. Nine quality gates green.
 **What this method cannot do, which is step 5's subject.** It compares *names*. A page whose every
 command exists can still describe behaviour those commands do not have, and no parser comparison
 will say so. The remaining PARTIAL traceability rows are where that gets answered.
+
+---
+
+## Step 5 — traceability complete for all mandatory invariants (IN PROGRESS)
+
+The matrix opened this step at 121 PARTIAL. It now stands at **209 EVIDENCED / 8 PARTIAL /
+25 CONFLICT**, and the eight remaining PARTIALs are the honest ones: each names a flow that does not
+exist yet, with a backlog item, rather than a stage of work somebody has not got to.
+
+### The method, which is the reusable part
+
+Read the invariant's own words. Find the flow that would break it. *Then* look for a test. Not the
+reverse. Reading the tests first produces rows that cite whatever is nearby, which is how the ten
+TUI rows came to share one copy-pasted verdict between them.
+
+Roughly half of what looked like missing work was stale bookkeeping — the claim was held, by a test
+nobody had connected to it — and roughly half was a real gap. Both halves matter. Recording the
+first is most of the value; the second is where the tests below came from.
+
+### What the audit was measuring against
+
+Not coverage. A line that ran is not a line whose behaviour anything asserts, and the two gaps that
+mattered most this step were both in code that every suite executed on every run:
+
+- `render_ready(view, VERBOSE)` returns `_verbose_plan(view)`, so `install` printing a plan and the
+  shell drawing screen 09 are the same bytes. That is INV-061 — "one core, multiple skins" — made
+  checkable, and nothing asserted it. Both paths were exercised constantly; nothing compared them.
+- `configured_offers.py` declines a referenced version by name and `configured_installation.py`
+  refuses to materialise one. Both lines ran. Neither refusal was asserted, so the seam that keeps
+  unverifiable content out of the Marketplace could have been deleted in silence (INV-025).
+
+### The four new layer claims
+
+| file | invariant | what it makes impossible |
+|---|---|---|
+| `tui_boundary_test.py` | INV-062, INV-064, INV-066, INV-068 | a screen module that imports infrastructure, reaches `io/` outside the one declared seam, imports dynamically, branches on the host platform, or needs a terminal to import |
+| `presentation_is_not_semantics_test.py` | INV-149, INV-152, INV-158 | any module under `domain/`, `security/`, `configuration/`, `installation/` or `application/` naming a presentation profile at all |
+| `consumer_properties_test.py::OneCoreTwoSkinsTest` | INV-061 | screen 09's Verbose half drifting from the reviewed plan |
+| `traceability_matrix_test.py` (extended) | the matrix itself | a row citing a test case that is not in the file it names |
+
+The first two are reachability claims rather than behavioural ones, and that is the point. The
+behavioural half of INV-158 was already held — switching the profile provably changes nothing — but
+two branches that happen to agree pass every property test there is. What was missing was that the
+preference is not *there* to be consulted.
+
+### Targeted mutations (D-091)
+
+| # | mutation | red |
+|---|---|---|
+| M44 | `import subprocess` in `tui_marketplace.py` | `test_no_screen_module_is_an_implementation_of_infrastructure` |
+| M45 | an undeclared `io` import inside a screen function | `test_the_effect_boundary_is_crossed_only_where_it_is_declared` |
+| M46 | `import curses` in `wizard.py` | the driver claim, and the headless import for `wizard` and `tui_failures` |
+| M47 | `__import__("sys").platform` in a screen | `test_no_screen_module_decides_anything_from_the_platform` **and** the dynamic-import claim |
+| M48 | `importlib.import_module` in a screen | `test_screens_import_statically_so_the_sweep_above_can_be_complete` |
+| M49 | a `"fast"` literal in `domain/policies.py` | `test_no_deciding_module_knows_what_a_presentation_profile_is` |
+| M50 | a `profile` parameter on `project_install_plan` | `test_the_plan_is_built_before_the_profile_is_known` |
+| M51 | the profile toggle restricted to one screen | `test_the_way_back_to_the_detail_exists_on_every_screen` |
+| M52 | the obtain-from route moved behind Verbose | `test_fast_carries_enough_help_to_obtain_or_construct_the_value` |
+| M53 | one line appended to screen 09's Verbose half | `test_the_non_interactive_review_and_screen_09_are_the_same_review` |
+| M54 | the referenced-mode decline deleted from the offer seam | `test_a_referenced_version_is_declined_because_the_snapshot_holds_no_content` |
+| M55 | the unchanged-candidate reuse branch skipped | `test_a_rescan_of_unchanged_rejected_source_leaves_it_rejected` |
+| M56 | a cited test method renamed in the matrix | `test_every_cited_test_case_exists_under_the_name_it_is_cited_by` |
+
+M47 is worth keeping. The first draft of the platform check searched the source text for
+`sys.platform`, and a screen carrying `__import__("sys").platform` survived it — while
+`view.platform`, the platform arriving as data from the core, has to keep passing. The check is read
+off the syntax instead: an attribute on `os`/`sys`/`platform`, or on a dynamic import. Text search
+found a word; the invariant is about a dependency.
+
+M55's second form is the more interesting failure. Re-deriving a rejected candidate as `CHANGED` is
+not merely caught by the test — the domain refuses to construct it, because only a rejected
+candidate may carry a rejection reason. A state that cannot be laundered even by code that tries is
+a stronger guarantee than a test that notices afterwards.
+
+### The eight rows still PARTIAL, and why each one is
+
+| row | the flow that does not exist |
+|---|---|
+| INV-001 | **B-072**: nothing calls `load_profiles`, so no externally-defined profile can enter the tool (D-155) |
+| INV-057 | **B-074**: dependants are computed and reported, but no public verb deletes, replaces or rebinds a credential |
+| INV-067 | **B-075**: `WizardInputKind` is navigation only; no screen collects an input value, so the UI clause has no surface |
+| INV-069 | a process rule with no runtime witness — the evidence is CP-13 and CP-14 having replaced screen structure rather than preserving it |
+| INV-123 | **B-073**: the fast path exists; no live smoke scenario runs in CI and there is no deep-quality workflow |
+| INV-164 | **B-076**: two artifacts declaring one input id project two identical rows, and no input view carries its dependants |
+| INV-187 | CP-14: the catalog sweep is over `ConsumerScreen`; the maintainer catalog is still being accepted |
+| INV-213 | **B-067**: the identity half is closed, but no Collection can be installed, updated or repaired yet |
+
+None of these is a row somebody forgot. Each is a measurement.
+
+### What remains of step 5
+
+The 25 CONFLICT rows, INV-081 to INV-105, are one block: the release model. They are CONFLICT rather
+than PARTIAL because the repository currently *contradicts* them — `scripts/version.py`,
+`scripts/cut_release.py`, `scripts/changelog.py` and three independently maintained version values
+are exactly the manual bookkeeping INV-083, INV-084, INV-085 and INV-101 forbid. Closing them is
+CP-18's own remaining clause: migrate to Release Please authority and make release verification
+target the produced artifact rather than the bookkeeping.
+
+### Status
+
+Step 5 is **IN PROGRESS**: the PARTIAL block is finished and the CONFLICT block is the remaining
+work.

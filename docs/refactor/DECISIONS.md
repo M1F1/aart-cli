@@ -3381,3 +3381,75 @@ first paragraph, since the alternative is that its accuracy depends on the reade
 **What this method cannot do.** It compares names. A page whose every command exists can still
 describe behaviour those commands do not have, and no parser comparison will say so. That is step
 5's subject, and the remaining PARTIAL rows are where it gets answered.
+
+## D-157 — An architectural boundary is a reachability claim, not a behavioural one
+
+CP-18 step 5 audited INV-062/064 (the TUI is a projection and does not implement infrastructure) and
+INV-149/152/158 (presentation detail does not select a planner, a policy path or an effect). Both
+already had behavioural evidence and both were unheld.
+
+The screen tests asserted what a given frame contains. A screen that grew a `subprocess.run` would
+still render correctly and every frame assertion would still pass. The presentation tests asserted
+that switching Fast to Verbose changes neither the selection, the review digest nor the machine
+payload — over generated plans, which is strong — but a policy path that *read* the preference and
+branched on it would satisfy every one of them for as long as the two branches happened to agree.
+
+**Decision.** Where an invariant says a layer must not *be* something, or must not *know* something,
+state it over the layer as reachability and let the behavioural tests keep doing their own job:
+
+- `tui_boundary_test.py`: no screen module imports infrastructure, reaches `agent_artifacts.io`
+  outside the one declared seam, imports dynamically, or branches on the host platform; and the
+  whole layer imports with `curses` absent.
+- `presentation_is_not_semantics_test.py`: no module under `domain/`, `security/`,
+  `configuration/`, `installation/` or `application/` may name a presentation profile at all, the
+  one exception being the module that declares the type.
+
+Both are stated over a directory rather than a list of module names, because a list is a second
+place to forget and goes stale in the same direction as the code it guards. Both carry a positive
+probe — the detector must find the thing where it legitimately appears — so an absence assertion
+cannot pass by matching nothing (D-149).
+
+**The corollary that cost the most to learn.** INV-066 forbids a screen deciding anything from the
+platform. The first draft searched the source text for `sys.platform`, and a screen carrying
+`__import__("sys").platform` survived it, while `view.platform` — the platform arriving as data from
+the core, which is exactly what the invariant wants — had to keep passing. Text search finds a word;
+the invariant is about a dependency. The check is now read off the syntax: an attribute access on
+`os`, `sys` or `platform`, or on a dynamic import, with dynamic imports separately forbidden so the
+static sweep can be complete.
+
+## D-158 — Coverage is not the reason a claim is held, and the two gaps this step found prove it
+
+Both of the sharpest findings in step 5 were in code that every suite executed on every run.
+
+`render_ready(view, VERBOSE)` returns `_verbose_plan(view)` — the same function the non-interactive
+review uses — so `aart install` printing a plan and the shell drawing screen 09 produce the same
+bytes. That *is* INV-061, "one core, multiple skins", in one line of code. Both paths were exercised
+constantly by different tests; nothing compared them, so screen 09 could have drifted from the
+reviewed plan and the drift would have shown up as two green suites.
+
+`configured_offers.py` declines a referenced approved version by name, and
+`configured_installation.py` refuses to materialise one. Both lines ran in the composition E2E.
+Neither refusal was asserted, so the seam that keeps content the registry holds no verified bytes for
+out of the Marketplace could have been deleted in silence (INV-025).
+
+**Decision.** When auditing an invariant, look for the assertion, never for the execution. The
+question is not "does anything run this?" but "what would notice if this stopped being true?" A line
+that ran is not a line whose behaviour anything asserts, and the second question is the only one the
+traceability matrix is allowed to answer with EVIDENCED.
+
+## D-159 — A superseded state is better made unconstructible than merely detected
+
+INV-239 requires that an unchanged rejected candidate stays rejected while a material source change
+reopens review. The mechanism is that `candidate_id_for` derives the id from the artifact's input
+digest, so identical source produces the identical id and `reconcile_source_scan` reuses the prior
+record whole.
+
+Two mutations were run against the new test. Skipping the reuse branch turns it red, as intended.
+The second — re-deriving the rejected candidate as `CHANGED`, which is the defect an operator would
+actually experience as "rescanning gets you a second opinion" — cannot be constructed at all: the
+`Candidate` invariant refuses it, because only a rejected candidate may carry a rejection reason.
+
+**Consequence.** Where a lifecycle state carries evidence that only that state may hold, the type
+refuses the laundering rather than a test noticing it afterwards. Prefer that shape when adding
+lifecycle states: give the state a field only it can carry, and the illegal transition stops being
+a bug to catch.

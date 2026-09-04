@@ -33,6 +33,38 @@ remediation is documentation read at the worst possible moment. Four documents c
 verbs, and the three root trackers (`PLAN.md`, `PROGRESS.md`, `TODO.md`) pointed a newcomer at the
 legacy repository's issues as "the source of truth" (D-156).
 
+Step 5 (traceability) has finished its PARTIAL block. The matrix opened this step at 121 PARTIAL
+and stands at **209 EVIDENCED / 8 PARTIAL / 25 CONFLICT**. The method that produced it, and the one
+to keep applying: read the invariant's own words, find the flow that would break it, and only then
+look for a test -- not the reverse. Reading tests first produces rows that cite whatever is nearby,
+which is how the ten TUI rows came to share one copy-pasted verdict between them.
+
+Four layer claims came out of it: `tui_boundary_test.py` (a screen module may not be an
+implementation of infrastructure, may not reach `io/` outside the one declared seam at
+`read_consumer_offers`, may not import dynamically, may not branch on the host, and must import with
+`curses` absent), `presentation_is_not_semantics_test.py` (no deciding layer may name a presentation
+profile at all -- the behavioural half of INV-158 was held, the reachability half was not),
+`consumer_properties_test.py::OneCoreTwoSkinsTest` (the printed review and screen 09's Verbose half
+are byte-identical, which is INV-061 made checkable), and the matrix guard now resolves cited test
+*cases*, not just file names.
+
+The eight rows still PARTIAL each name a flow that does not exist, with a backlog item: B-072
+(profiles loader unwired), B-073 (no live smoke in CI), B-074 (no destructive credential verb),
+B-075 (no TUI input-entry surface), B-076 (no Collection guidance consolidation), INV-069 (a process
+rule with no runtime witness), INV-187 (the maintainer catalog is still being accepted) and INV-213
+(B-067: no Collection can be installed, updated or repaired). Do not read them as eight pieces of
+missing bookkeeping; every one is a measurement.
+
+**What is left of step 5 is the 25 CONFLICT rows, INV-081 to INV-105 — the release model.** They
+are CONFLICT rather than PARTIAL because the repository contradicts them today: `scripts/version.py`,
+`scripts/cut_release.py`, `scripts/changelog.py` and three independently maintained version values
+(`__init__.__version__`, `pyproject.version`, `runtime_contract.EXECUTABLE_VERSION`, plus
+`scripts/release.py:EXPECTED_VERSION`) are exactly the manual bookkeeping INV-083, INV-084, INV-085
+and INV-101 forbid. Closing them means migrating to Release Please authority and making release
+verification target the produced artifact rather than the bookkeeping. Note before starting:
+`scripts/release.py` pins `RELEASE_CONTRACT_VERSION` and a schema freeze, and issued freezes are
+immutable (D-154) -- the version authority may move, but a freeze may not be rewritten.
+
 The rule those four decisions produced, which the next agent should carry into steps 5-6: an
 unreachable module is *replaced*, *unadopted*, or *unwired*, and only the middle case is safe to
 delete. Unreachability is a reason to ask, never on its own an answer.
