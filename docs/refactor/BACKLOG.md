@@ -1857,3 +1857,26 @@ a credential reference.
 
 Evidence/links: INV-057; `agent_artifacts/application/removal_proposal.py:99-106`;
 `agent_artifacts/application/consumer_session.py:146`; B-070's `credential_lifecycle` exception.
+
+## B-075 — The TUI has no input-entry surface, so INV-067's UI clause has nothing to project
+
+INV-067 says the UI "must not collapse secret inputs and non-secret configuration into one generic
+'variables' concept". The distinction is held where it originates: `authoring_inputs_test.py`
+asserts that a secret input cannot declare a value, a default or an example, that its guidance says
+where to get one rather than what one looks like, and that a config input carries default,
+validation and guidance. That is a type-level separation the compiler enforces, and nothing
+downstream can merge the two without discarding a field.
+
+What does not exist is the projection. `wizard.py`'s `WizardInputKind` is
+`confirm | back | quit | add | sync | resubscribe | remove | retry` — navigation, not data entry —
+and no screen module mentions a secret at all. Secret collection lives in the setup engine and the
+`marketplace` command surface, which the TUI does not drive yet.
+
+So the invariant is not violated; the surface it constrains is not built. When input entry reaches
+the TUI, the UI clause needs its own evidence: a screen catalog in which a secret field and a
+configuration field are visibly different things, not two rows of one list.
+
+Not critical to CP-18. It becomes critical when a TUI screen first collects an input value.
+
+Evidence/links: INV-067; `agent_artifacts/wizard.py:36-38`; `tests/authoring_inputs_test.py:94-146`;
+`tests/tui_boundary_test.py`.
