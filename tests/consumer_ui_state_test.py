@@ -92,6 +92,24 @@ class ConsumerUiStateTest(unittest.TestCase):
         self.assertIs(after, state)
         self.assertEqual(commands, ())
 
+    def test_the_way_back_to_the_detail_exists_on_every_screen(self) -> None:
+        """INV-154: Fast may hide the routine, but never the route to what it hid.
+
+        Stated over the screen enum rather than over a list, because a screen added later is
+        exactly the screen somebody would forget to make switchable, and a list would not notice.
+        """
+
+        for screen in ConsumerScreen:
+            with self.subTest(screen=screen.value):
+                before = ConsumerUiState(ConsumerSession(screen))
+
+                after, commands = reduce_consumer_ui(
+                    before, ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_PROFILE)
+                )
+
+                self.assertIsNot(after.session.profile, before.session.profile)
+                self.assertIs(after.session.screen, before.session.screen)
+
     @given(st.lists(st.sampled_from(tuple(PresentationProfile)), max_size=30))
     def test_profile_changes_never_change_semantic_identity(
         self, profiles: list[PresentationProfile]
