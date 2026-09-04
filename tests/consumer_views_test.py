@@ -35,9 +35,11 @@ from agent_artifacts.domain.identifiers import (
 from agent_artifacts.domain.inputs import (
     BoundInput,
     BoundInputs,
+    CliArgumentBinding,
     ConfigInput,
     EnvironmentBinding,
     InputGuidance,
+    ObtainFrom,
     PersistedConfigValue,
     SecretInput,
     SecretProviderReference,
@@ -297,6 +299,42 @@ class ConsumerPlanProjectionTest(unittest.TestCase):
         self.assertIn("Configured securely", fast)
         self.assertNotIn("macos-keychain:github.com/work", fast)
         self.assertIn("macos-keychain:github.com/work", verbose)
+
+    def test_fast_carries_enough_help_to_obtain_or_construct_the_value(self) -> None:
+        """INV-163 and INV-167: compact, but never so compact the reader has to guess.
+
+        A format hint and a place to get one is what a secret is allowed to say instead of an
+        example (INV-168), so Fast dropping either would leave the reader with a required value and
+        no route to it. The config example is the spec's own (`pl847362`).
+        """
+
+        secret = SecretInput(
+            InputId("forge-credential"),
+            EnvironmentBinding("FORGE_CREDENTIAL"),
+            guidance=InputGuidance(
+                "Forge credential",
+                "Authenticates to the internal forge.",
+                format_hint="prefix followed by opaque characters",
+                obtain_from=ObtainFrom("Create one", "https://forge.example/settings"),
+            ),
+        )
+        config = ConfigInput(
+            InputId("user-id"),
+            CliArgumentBinding("--user-id"),
+            guidance=InputGuidance("User ID", example="pl847362"),
+        )
+
+        fast = "\n".join(
+            render_required_inputs(
+                project_required_inputs((secret, config)), PresentationProfile.FAST
+            )
+        )
+
+        self.assertIn("prefix followed by opaque characters", fast)
+        self.assertIn("https://forge.example/settings", fast)
+        self.assertIn("(e.g. pl847362)", fast)
+        # Compact: the explanatory prose is what Fast leaves out, not the actionable part.
+        self.assertNotIn("Authenticates to the internal forge.", fast)
 
     def test_marketplace_fast_uses_outcome_language_and_verbose_discloses_evidence(self) -> None:
         catalog = marketplace_catalog()

@@ -1880,3 +1880,26 @@ Not critical to CP-18. It becomes critical when a TUI screen first collects an i
 
 Evidence/links: INV-067; `agent_artifacts/wizard.py:36-38`; `tests/authoring_inputs_test.py:94-146`;
 `tests/tui_boundary_test.py`.
+
+## B-076 — Collection input guidance neither consolidates nor names its dependants
+
+INV-164 asks bulk installation to "consolidate equivalent input guidance while preserving which
+artifacts depend on the input". Neither half exists, measured rather than supposed:
+`project_required_inputs` given two artifacts that declare the same `InputId` returns two rows with
+the same id, the same label and the same example, and `ConfigInputView`/`CredentialInputView` have
+no owners field to say which artifacts wanted it.
+
+The consequence is small today and grows with Collections: installing a Collection whose members
+share one `github-org` asks for it once per member, and a reader who wants to know *why* it is being
+asked has nowhere to look. `RequirementView` already carries `owners` and the remediation views
+carry theirs, so the shape to copy is in the same module.
+
+Consolidation must be by identity, not by label: two inputs with the same id but different bindings
+are two different deliveries and must stay two rows, or the projection would merge a stdin secret
+into an environment one.
+
+Not critical to CP-18. It becomes critical when a Collection with shared inputs is first installed
+through the TUI, which is where the duplicate prompts become visible.
+
+Evidence/links: INV-164; `agent_artifacts/application/consumer_views.py:336-353`;
+`agent_artifacts/application/consumer_views.py:279-312`; INV-131's aggregation clause.
