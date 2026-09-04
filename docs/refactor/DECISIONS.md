@@ -3580,3 +3580,27 @@ test could not construct the adapter. Afterward the focused 88-test set and a re
 in clean Linux containers on Python 3.10, 3.11 and 3.14; the complete nine-gate quality runner also
 passes all three arms over 3,322 tests. No runtime dependency, Keychain availability verdict, or
 quality threshold changed.
+
+## D-168 — Global navigation is permanent chrome; contextual keys remain in help
+
+Date: 2026-09-04 · Increment: B-077 manual acceptance · Status: accepted
+
+The canonical shell carried a complete `_HELP_LINES` table behind `?`, but drew no indication that
+help existed. This made the key reference circular: a first-time user had to know the undocumented
+help key in order to discover the keys. Product Specification 161.1 names the global interaction
+vocabulary and INV-187 protects its navigation semantics; discoverability cannot depend on prior
+knowledge of that vocabulary.
+
+**Decision.** Every frame ends with one concise footer naming arrows, Enter, Esc, `?` and `q`.
+Contextual operations such as select, install, sync, repair and search stay in the expanded `?`
+help instead of making the permanent line change unpredictably between screens. The curses adapter
+pins the frame's final line below the body, reserving it before clipping long content. The text
+adapter renders the same frame and may additionally explain how a line-oriented terminal spells
+arrow and escape keys.
+
+**Evidence.** The first-frame test failed with the dashboard's `none yet` line in the footer
+position; the terminal-placement test failed with a clipped body row there. Both were observed red
+before implementation. The focused consumer shell, canonical entry, text-terminal and layout suites
+pass 67 tests without changing key interpretation or application state.
+All nine quality gates then pass over 3,324 tests at 85.35% branch coverage, followed by the
+separate 343-test integration run.

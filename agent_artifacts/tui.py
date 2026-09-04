@@ -719,8 +719,19 @@ class _CursesTerminal:
     def draw(self, lines: Tuple[str, ...]) -> None:
         self._stdscr.clear()
         height, width = self._stdscr.getmaxyx()
-        for row, line in enumerate(lines[: max(height - 1, 0)]):
+        drawable = max(height - 1, 0)
+        if not lines or not drawable:
+            self._stdscr.refresh()
+            return
+
+        # ``frame`` reserves its last line for global navigation. Keep that chrome visible when
+        # a long report has more rows than the terminal: clipping help off screen would recreate
+        # the first-run trap the footer exists to remove. The terminal only places and clips the
+        # already-composed frame; key meaning remains in the pure shell.
+        body = lines[:-1][: max(drawable - 1, 0)]
+        for row, line in enumerate(body):
             self._stdscr.addstr(row, 0, line[: max(width - 1, 0)])
+        self._stdscr.addstr(drawable - 1, 0, lines[-1][: max(width - 1, 0)])
         self._stdscr.refresh()
 
     def key(self) -> int:

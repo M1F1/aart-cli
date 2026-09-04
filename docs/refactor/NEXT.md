@@ -6,6 +6,16 @@
 complete.**
 The slice document is `docs/refactor/slices/CP-18-migration-and-release-gate.md`.
 
+Manual first-run acceptance after closure found and completed B-077 (D-168): bare `aart` exposed its
+complete key vocabulary only after `?`, while its first frame never advertised `?`. Every canonical
+shell frame now ends with a concise navigation legend naming movement, forward navigation, back,
+help and quit. The curses adapter treats that final line as pinned chrome, so a tall body cannot
+clip the instructions away; the text fallback receives the same frame. Both claims were red against
+the shipped behavior before implementation, and the 67 nearest shell/entry/text/layout tests pass.
+No PyPI publication or release was performed; manual CLI/TUI acceptance remains the next operator
+activity before the first GitHub Release. Full verification is green: all nine `make quality` gates
+over 3,324 tests at 85.35% branch coverage, followed by all 343 `make integration` tests.
+
 The first public pull-request run after closure exposed that local macOS verification had not
 actually proved the advertised Linux/Python matrix (D-167). The failure is fixed and reproduced in
 clean read-only Docker copies on Python 3.10, 3.11 and 3.14: all nine gates pass over 3,322 tests on

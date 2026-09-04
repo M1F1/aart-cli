@@ -41,6 +41,32 @@ def _row():
 
 
 class CanonicalConsumerEntryTest(unittest.TestCase):
+    def test_curses_keeps_the_navigation_legend_visible_when_the_body_is_tall(self) -> None:
+        """The legend is chrome, not body text that scrolling or clipping may hide (B-077)."""
+
+        class _Screen:
+            def __init__(self) -> None:
+                self.written: list[tuple[int, int, str]] = []
+
+            def clear(self) -> None:
+                self.written.clear()
+
+            def getmaxyx(self) -> tuple[int, int]:
+                return 6, 80
+
+            def addstr(self, row: int, column: int, value: str) -> None:
+                self.written.append((row, column, value))
+
+            def refresh(self) -> None:
+                pass
+
+        screen = _Screen()
+        terminal = tui._CursesTerminal(screen)
+
+        terminal.draw(("heading", "one", "two", "three", "four", "five", "navigation legend"))
+
+        self.assertEqual(screen.written[-1], (4, 0, "navigation legend"))
+
     def test_a_terminal_gets_the_canonical_application_and_nothing_else(self) -> None:
         """B-025: the default TTY route is the canonical consumer application.
 

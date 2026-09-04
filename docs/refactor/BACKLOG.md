@@ -1905,3 +1905,26 @@ through the TUI, which is where the duplicate prompts become visible.
 
 Evidence/links: INV-164; `agent_artifacts/application/consumer_views.py:336-353`;
 `agent_artifacts/application/consumer_views.py:279-312`; INV-131's aggregation clause.
+
+## B-077 — The canonical TUI hides its navigation instructions behind an undiscoverable `?`
+
+Found: manual first-run acceptance (2026-09-04) · Severity: high · Status: done
+
+Running bare `aart` opens the accepted persistent TUI, but its first frame contains no navigation
+legend. The complete key list exists only after pressing `?`, while nothing on screen advertises
+that `?` opens help. A new user therefore cannot discover how arrows, Enter, Esc or quit work from
+the interface itself. The removed frontend had a bottom status bar, and the pure layout kernel still
+contains its status-bar machinery, but the canonical shell never renders it.
+
+This crosses the accepted screen-01 contract rather than being cosmetic: Product Specification
+161.1 names arrows, Enter, Esc, `/`, `?` and `q` as the global interaction vocabulary, while
+INV-187 protects its navigation semantics. The repair is a permanently visible, concise footer for
+movement, forward navigation, back, full help and quit; `?` retains the contextual list. In curses
+the footer is chrome pinned below a clipped body, not another body line that can disappear on a
+short terminal. The text fallback renders the same shell frame.
+
+Evidence/links: Product Specification 161.1; INV-187; `tests/consumer_shell_test.py`;
+`tests/tui_consumer_entry_test.py`; D-168; manual first-run acceptance. The two regression tests
+were first observed red against the shipped frame/clipping behavior, then passed with the footer.
+All nine quality gates pass over 3,324 tests at 85.35% branch coverage, as do all 343 separate
+integration tests.

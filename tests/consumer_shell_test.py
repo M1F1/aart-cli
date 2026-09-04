@@ -120,6 +120,19 @@ class ConsumerShellTest(unittest.TestCase):
         self.assertIn("AART / Dashboard", terminal.frames[0][0])
         self.assertIn("2 installed", terminal.last)
 
+    def test_the_first_screen_explains_basic_navigation_without_already_knowing_help(self):
+        """Manual acceptance found that `?` was the only place advertising `?` (B-077)."""
+
+        _, terminal = drive()
+
+        first = terminal.frames[0]
+        legend = first[-1]
+        self.assertIn("↑/↓", legend)
+        self.assertIn("Enter", legend)
+        self.assertIn("Esc", legend)
+        self.assertIn("?", legend)
+        self.assertIn("q", legend)
+
     def test_moving_to_a_screen_loads_its_rows_and_draws_the_cursor(self):
         moved, terminal = drive(DOWN, state=_at(ConsumerScreen.INSTALLED))
 

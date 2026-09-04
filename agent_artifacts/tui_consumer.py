@@ -1044,13 +1044,16 @@ _HELP_LINES: tuple[str, ...] = (
     "?  help          q  quit",
 )
 
+_NAVIGATION_LEGEND = "↑/↓ move  Enter open/continue  Esc back  ? keys  q quit"
+"""Always-visible route to the complete help and the keys needed to leave any screen."""
+
 
 def _title(screen: ApplicationScreen) -> str:
     return _human(screen.value.split("-", 1)[1]).title()
 
 
 def frame(source: ConsumerScreenSource, state: ConsumerUiState) -> tuple[str, ...]:
-    """One drawn screen: heading, body, and whichever prompt is currently open."""
+    """One drawn screen: heading, body, prompts, and the persistent navigation footer."""
 
     heading = f"AART / {_title(state.session.screen)}"
     lines = [heading, "", *source.lines(state)]
@@ -1064,6 +1067,7 @@ def frame(source: ConsumerScreenSource, state: ConsumerUiState) -> tuple[str, ..
         lines.append(f"{len(state.selection)} selected")
     if state.quit_pending:
         lines.append(f"Discard {len(state.selection)} selected item(s) and quit? y/n")
+    lines.append(_NAVIGATION_LEGEND)
     return tuple(lines)
 
 
