@@ -496,6 +496,13 @@ _ACTION_REVIEW: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
     ): MaintainerScreen.REGISTRY_VALIDATION,
 }
 
+#: The screens an action can be asked from, which are also the screens a declined preparation
+#: returns to (`QA-018`/`D-184`). Derived from `_ACTION_REVIEW` so that adding an action cannot
+#: leave a refusal with nowhere to be drawn.
+ACTION_REQUEST_SCREENS: frozenset[ApplicationScreen] = frozenset(
+    origin for _action, origin in _ACTION_REVIEW
+)
+
 
 def _request_action(
     state: ConsumerUiState, action: ConsumerActionKind | None
@@ -546,12 +553,38 @@ def _request_action(
     return prepared, (command, *navigation)
 
 
+def _declined_preparation(
+    state: ConsumerUiState,
+) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
+    """`QA-018`: a refusal leaves no screen that still asks to confirm something.
+
+    The review screen is opened before the adapter is asked to prepare, because consent is given on
+    it. When the preparation refuses, that screen is about a plan that does not exist -- it went on
+    saying "press Enter to connect", and Enter reached the execution boundary with nothing pending.
+    The session returns to the screen the review was opened from, which for a form is the form with
+    everything the operator typed still in it, and the pending action is cleared so a later Enter
+    cannot reach a confirmation at all. The refusal itself is already on that screen: the adapter
+    sent it as a notice with this event.
+    """
+
+    cleared = replace(state, action=None, quit_pending=False)
+    session = state.session.back()
+    if session is state.session:
+        return cleared, ()
+    return (
+        replace(cleared, session=session, help_visible=False, search=""),
+        (ConsumerUiCommand(ConsumerUiCommandKind.LOAD_SCREEN, session.screen),),
+    )
+
+
 def _action_prepared(
     state: ConsumerUiState, event: ConsumerUiEvent
 ) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
     action = event.action
-    if action is None or action is not state.action or not event.review_digest:
+    if action is None or action is not state.action:
         return state, ()
+    if not event.review_digest:
+        return _declined_preparation(state)
     if action in (ConsumerActionKind.INSTALL, ConsumerActionKind.UPDATE) and (
         not event.semantic_identity or not event.selection_identity
     ):

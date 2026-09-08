@@ -84,21 +84,6 @@ Each new entry records:
       Evidence: `plan_source_addition` returns CLI command strings as remediation and
       `io/consumer_actions.py::_refusal` copies them verbatim into the TUI notice
       Fix: pending
-- [ ] **QA-018 — A refused Registry connection leaves the user stranded on Review Registry.**
-      Stage: connecting the test Registry
-      Surface: `AART / Review Registry`
-      Severity: high
-      Blocks current stage: yes when the operator cannot identify the hidden way back
-      Reproduction: submit an already configured Registry, then press Enter on the remaining Review
-      screen
-      Expected: the refusal returns to Registries and focuses the existing row, or returns to the
-      editable Add form with an obvious Back action
-      Observed: the screen still says `Review the registry connection ... press Enter to connect`;
-      the prepared action has already been discarded, so Enter answers `nothing was prepared for
-      this action; review it again`
-      Evidence: `_declined` emits `ACTION_PREPARED` without a review digest, while
-      `_action_prepared` leaves the session on `REGISTRY_REVIEW`
-      Fix: pending
 - [ ] **QA-021 — Registry cannot one-off scan YAML manifests and vendor selected artifacts.**
       Stage: optional artifact-scoped onboarding from an external repository
       Surface: Maintainer → Registry
@@ -132,6 +117,11 @@ Each new entry records:
       symbolic link, submodule, unsupported Git mode, unsafe path or excessive depth — and carries
       remediation for each. The link target is never printed. A submodule is also no longer
       reported as a malformed listing. B-093/D-183.
+- [ ] **QA-018 — A refused Registry connection leaves the user stranded on Review Registry.** A
+      declined preparation now returns to the screen the action was asked from — for Add Registry
+      the form, with the typed values intact — and clears the pending action, so a later Enter
+      cannot reach a confirmation. The refusal is drawn on that screen, because `_ANSWERABLE` now
+      derives the request origins from `_ACTION_REVIEW`. B-092/D-184.
 - [ ] **QA-010 — Consumer TUI cannot synchronize a configured Registry.** Screen 21 now routes `s`
       to its own Refresh Registry action with a review (21c) that names the ref to be fetched,
       states that a refresh is not an artifact update, and warns that a failed fetch keeps the

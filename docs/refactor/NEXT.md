@@ -137,6 +137,16 @@ submodule as a malformed listing, since `ls-tree -l` gives a gitlink no size. Ev
 `tests/git_unsafe_entry_diagnostic_test.py` and a real committed symlink driven through the public
 `source add` in `tests/authoring_source_admission_e2e_test.py`; nine targeted mutations, all killed.
 
+B-092/QA-018 is now **fixed and awaiting manual retest** (D-184). A preparation that refuses returns
+the session to the screen the action was asked from and clears the pending action, so no screen goes
+on advertising a confirmation for a plan that does not exist and a later Enter cannot reach the
+execution boundary. For Add Registry that screen is the form, with the operator's values intact. The
+notice is drawn there because `_ANSWERABLE` now includes `ACTION_REQUEST_SCREENS`, derived from
+`_ACTION_REVIEW` rather than hand-listed twice. Two consumer E2Es were corrected to the new landing
+screen — both of their names already described it — keeping every other assertion and gaining a
+check that no action stays pending. Evidence: `tests/consumer_declined_preparation_test.py`,
+`tests/consumer_application_e2e_test.py`; five targeted mutations, all killed.
+
 On top of that, Maintainer screen 31 now offers `a` Add Source: a separate `SourceDraft` form (31a)
 and review (31b) that accept only `source-git`/`source-local`, refuse `registry-git` by name, never
 set a default registry, and execute through the same `add_configured_source` transaction the CLI

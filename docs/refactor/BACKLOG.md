@@ -2227,7 +2227,7 @@ Evidence/links: `tui_sources.py::plan_source_addition`;
 ## B-092 — A declined preparation remains on a confirmation screen with nothing to confirm
 
 Found: whole-product TUI acceptance, duplicate Add Registry (2026-09-08) · Severity: high ·
-Status: open
+Status: resolved (D-184; awaiting manual retest as QA-018)
 
 The Add Registry reducer navigates to Review before asking the action adapter to prepare the exact
 transaction. When preparation refuses a duplicate alias/origin, `_declined` clears the pending

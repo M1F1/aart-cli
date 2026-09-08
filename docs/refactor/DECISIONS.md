@@ -4001,3 +4001,38 @@ holds it through the public `source add` against a real repository with a real c
 Nine targeted mutations are killed — including one that found the E2E asserting less than it said,
 because "symbolic link" appeared in the remediation and the assertion read the whole envelope; it
 now reads the message.
+
+## D-184 — A declined preparation returns to where the action was asked
+
+`QA-018`/`B-092`. Add Registry navigates to Review and *then* asks the adapter to prepare the exact
+transaction, because consent is given on that screen. When preparation refused — a duplicate alias,
+an origin already connected — `_declined` cleared the pending action and reported a decline with no
+review digest, and `_action_prepared` correctly refused to record that as a plan. It then left the
+session on Review, which went on saying "press Enter to connect". Enter reached the execution
+boundary with nothing pending and answered "nothing was prepared for this action".
+
+`_declined_preparation` now pops the session back to the screen the review was opened from and
+clears `state.action`, so a later Enter cannot reach a confirmation at all — the reducer has nothing
+to confirm, and the guard in `_confirm_action` is no longer the only thing standing between a
+refusal and an execute command. For a form this lands on the form, with everything the operator
+typed still in `registry_draft`, which is B-092's "correctable form input" repair; Esc from there
+still returns to Registries.
+
+**The refusal had to become visible where it now lands.** `_ANSWERABLE` listed only the screens
+`_request_action` and `_confirm_action` move *to*, so after this change the notice would have been
+drawn on a screen nobody was on any more. It now also includes `ACTION_REQUEST_SCREENS`, derived
+from `_ACTION_REVIEW`'s own keys rather than hand-listed a second time: a second copy of the same
+set is a set that drifts, and the symptom of that drift is a refusal nobody can see.
+
+**Two E2Es changed, and their names were already on the new side.**
+`test_an_offer_that_is_no_longer_there_is_refused_where_it_was_asked` asserted the session stayed on
+Review Selection — where it was *reviewed*, not where it was asked; it now asserts Artifact Details.
+`test_an_action_on_something_that_is_not_installed_is_drawn_not_raised` asserted Uninstall Review,
+which would have gone on offering to uninstall something that is not there; it now asserts Installed
+Artifact Details. Every other assertion in both — the refusal is drawn, nothing is written, no
+review digest survives — is unchanged, and each gained `self.assertIsNone(finished.action)`.
+
+**Evidence.** `tests/consumer_declined_preparation_test.py` holds both sides of the branch (a
+decline returns and clears; a real digest still records a plan and stays), the negative B-092 asks
+for (Enter after a decline emits no execute command), and the no-history case. Five targeted
+mutations, including the one that proved `ACTION_REQUEST_SCREENS` load-bearing, are each killed.

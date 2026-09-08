@@ -271,12 +271,15 @@ class ConsumerApplicationRefusalTest(unittest.TestCase):
             )
 
             self.assertTrue(finished.exited, "a refusal took the application down")
-            self.assertEqual(finished.session.screen, ConsumerScreen.UNINSTALL_REVIEW)
+            # `QA-018`/`D-184`: the refusal is drawn on the screen the action was asked from, not
+            # on a review that would go on offering to uninstall something that is not there.
+            self.assertEqual(finished.session.screen, ConsumerScreen.INSTALLED_ARTIFACT_DETAILS)
             self.assertTrue(
                 terminal.screen_containing("nothing canonical is installed here"),
                 terminal.last,
             )
             self.assertIsNone(finished.session.review_digest)
+            self.assertIsNone(finished.action)
 
     def test_an_offer_that_is_no_longer_there_is_refused_where_it_was_asked(self) -> None:
         """The registry moved on after the Marketplace was read, and the install is not guessed."""
@@ -290,8 +293,11 @@ class ConsumerApplicationRefusalTest(unittest.TestCase):
             )
 
             self.assertTrue(finished.exited, "a vanished offer took the application down")
-            self.assertEqual(finished.session.screen, ConsumerScreen.REVIEW_SELECTION)
+            # Where it was asked is Artifact Details (`QA-018`/`D-184`) -- the screen the install
+            # was requested from -- not the review of a plan that was never prepared.
+            self.assertEqual(finished.session.screen, ConsumerScreen.ARTIFACT_DETAILS)
             self.assertIsNone(finished.session.review_digest)
+            self.assertIsNone(finished.action)
             self.assertFalse(_delivered(env).exists())
             self.assertTrue(
                 terminal.screen_containing("no approved published version of skill/code-review"),

@@ -14,6 +14,7 @@ from typing import Protocol
 
 from agent_artifacts.application.consumer_session import ConsumerMachine
 from agent_artifacts.application.consumer_ui import (
+    ACTION_REQUEST_SCREENS,
     ConsumerUiCommand,
     ConsumerUiCommandKind,
     ConsumerUiEvent,
@@ -1554,11 +1555,16 @@ _OUTCOME_SCREENS = frozenset(
 
 
 #: Where an action's refusal is worth drawing: the screens `_request_action` and `_confirm_action`
-#: move to. Everywhere else the notice would be an answer to a question nobody asked here.
+#: move to, and -- since `QA-018`/`D-184` -- the screens a declined preparation moves back to.
+#: Those origins are read from `ACTION_REQUEST_SCREENS` rather than listed again here, because a
+#: second hand-maintained list of the same screens is a list that drifts, and the symptom of the
+#: drift is a refusal nobody can see. Everywhere else the notice would answer a question nobody
+#: asked here.
 _ANSWERABLE = (
     _PLAN_SCREENS
     | _LIFECYCLE_SCREENS
     | _OUTCOME_SCREENS
+    | ACTION_REQUEST_SCREENS
     | frozenset(
         {
             ConsumerScreen.REGISTRY_REVIEW,
