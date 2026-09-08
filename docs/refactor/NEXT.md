@@ -176,6 +176,34 @@ prefix of the five, nothing is re-read, and the result says which stage stopped 
 leaves four real files in a project checkout) and `tests/maintainer_navigation_test.py`; eleven
 targeted mutations, all killed, three of which found claims that were not yet held.
 
+B-095/QA-021's **application half is built and green** (D-187); its TUI half is the next piece of
+work. `agent_artifacts/io/registry_adoption.py` gives a maintainer the second onboarding model beside
+the monitored Source: `scan_repository` acquires one credential-free Git URL at one pinned commit,
+compiles only committed `aart.yaml`/`aart.json` manifests through `compile_author_snapshot`,
+reconciles and validates the resulting Candidates entirely in memory, and writes nothing — a test
+compares `git status --porcelain` before and after and asserts no `aart.config.json` appears, because
+looking at a repository once is not subscribing to it (INV-199/INV-200). Compiling needs a Source
+name the repository does not have, so `_scan_alias` invents `scan-<slug>` for the life of the call;
+what the registry publishes carries the registry's own alias, held by a test that reads every written
+file and refuses to find the throwaway name in any of them. `prepare_adoption` turns a selection into
+one atomic `plan_bulk_promotion` in VENDORED mode, so an artifact whose own plan refuses takes the
+whole preparation down by name, and `apply_adoption` re-checks the review digest before
+`finalize_promotion`. Only each manifest's declared `payload.include` is copied, because the compiled
+canonical entries are carried rather than re-derived, and the adopted copy records the upstream URL,
+resolved commit, manifest path and input digest as ordinary native provenance — which is what the
+later explicit `Check upstream` action will compare against. Evidence:
+`tests/registry_repository_scan_test.py` (14 tests over a real Git repository and a real registry
+checkout created through `bootstrap_registry_workspace`); five targeted mutations, all killed, two of
+which found claims that were not yet held.
+
+**Next on QA-021:** the TUI layer. `46c-scan-repository` (a `RepositoryScanDraft(url, ref)` form
+reached with `s` from screen 46), `46d-scan-result` (a selectable list of `ScannedArtifact`s, added
+to `_SELECTABLE`, where `a` requests adoption), `46e-review-adoption` (naming every chosen
+coordinate, the resolved commit and the copied paths), plus `ConsumerActionKind.REPOSITORY_SCAN` and
+`REPOSITORY_ADOPT` wired through `_ACTION_REVIEW`/`_ACTION_RUNNING`/`_ACTION_RESULT` and two ports on
+`LocalConsumerActions`. After that, `Check upstream` and a machine-complete CLI equivalent, both of
+which `B-095` still carries.
+
 On top of that, Maintainer screen 31 now offers `a` Add Source: a separate `SourceDraft` form (31a)
 and review (31b) that accept only `source-git`/`source-local`, refuse `registry-git` by name, never
 set a default registry, and execute through the same `add_configured_source` transaction the CLI

@@ -4113,3 +4113,60 @@ commit choices, the five stages run in order against a real checkout, mid-run fa
 stage and at a gate, the commit's subject and its locality, and one end-to-end confirmation that
 leaves four real files in the project. Eleven targeted mutations, all killed; three of them found
 claims that were not yet held.
+
+## D-187 — Adopting from a repository is a scan, a selection and one atomic registry transaction
+
+`QA-021`/`B-095` asks for a second onboarding model beside the monitored Source: look at a
+credential-free Git URL once, see exactly what its authors declared, choose some of it, and let the
+registry own immutable copies of only those files. `agent_artifacts/io/registry_adoption.py` is that
+path's application half. Four choices carry it and each is a boundary rather than a convenience.
+
+**Nothing is subscribed, so nothing is written to configuration.** `scan_repository` acquires,
+compiles and reconciles entirely in memory; a test compares `git status --porcelain` before and
+after and asserts `aart.config.json` does not appear. INV-199 and INV-200 are the reason: a Source is
+an authoring location AART watches, and looking at a repository once is not that.
+
+**The scan's alias is a mechanism, never an identity.** Compiling a Candidate needs a Source name and
+this repository has none, so `_scan_alias` invents `scan-<slug>` for the life of the call. What the
+registry publishes carries the registry's own alias, read from the checkout's `aart-source.json`, so
+the throwaway name cannot leak into registry identity — held by a test that reads every file the
+adoption wrote and refuses to find `scan-superpowers` in any of them. What *is* recorded about the
+repository is its URL, resolved commit, manifest path and input digest, as ordinary native
+provenance (`origin.url`, `origin.resolved_commit`, `origin.path`, `origin.input_digest`). That is
+what a later explicit upstream check has to compare against, and it is the reason the flow can stay
+one-off without pretending the origin is forgotten.
+
+**Only the declared payload is copied, because nothing here re-derives the payload.** Adoption routes
+through `compile_author_snapshot` → `plan_bulk_promotion(mode=VENDORED)` → `finalize_promotion`,
+exactly as the monitored path does. `CompiledAuthorArtifact.canonical_entries` is already built from
+each manifest's own `payload.include`, so a file that merely sits beside a manifest is not adopted by
+proximity, and INV-201's explicit discovery is inherited rather than reimplemented. A repository that
+declares no manifest is refused by name (`declares no aart.yaml or aart.json artifact at <ref>`), not
+by silently returning an empty scan.
+
+**Validation happens at scan time, not at adoption time.** A Candidate straight out of reconciliation
+is `new`; only assessment makes it `ready`. Validating while building the scan means the state the
+maintainer reads on the scan screen is the state adoption enforces, rather than two answers that can
+disagree — offering an unassessed artifact as adoptable would promise something the plan would then
+refuse. Terminal Candidates (promoted, superseded, source-removed) are carried as found, because the
+registry's own answer is the record and reassessing it is a contradiction the domain already refuses.
+One selection is one transaction: an artifact whose own plan refuses takes the whole preparation down
+by name, and `apply_adoption` re-checks the review digest so a confirmation can only apply the plan
+it was shown.
+
+**Evidence.** `tests/registry_repository_scan_test.py` (14 tests) builds a real Git repository with
+two declared skills and undeclared files beside them, and a real registry checkout created through
+`bootstrap_registry_workspace`. It holds: the scan finds exactly the declared coordinates and pins
+the commit; it names only declared files; it writes nothing and saves no Source; a repository
+declaring nothing is refused by name; only the selected artifact becomes registry content; only
+declared payload files are copied; the adopted copy's provenance records URL, commit, manifest path
+and input digest; the scan alias never reaches registry identity; an artifact that did not validate
+is refused by name; preparing alone writes nothing; an unknown coordinate is refused; a confirmation
+naming another plan is refused and writes nothing; adopting the same version twice is refused as
+immutable. Five targeted mutations, all killed; two of them found claims that were not yet held (the
+scan alias reaching registry identity, and an unvalidated Candidate being adoptable).
+
+**Not yet built.** The TUI half — a Scan Repository form on screen 46, a selectable scan result, an
+adoption review, and the two `ConsumerActionKind` rows behind them — is designed but unwritten, and
+the explicit per-artifact `Check upstream` action that `B-095` describes as its second half remains
+open. `B-095` stays open for both.

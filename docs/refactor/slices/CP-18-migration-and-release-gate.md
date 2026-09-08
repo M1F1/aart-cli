@@ -825,3 +825,20 @@ vendoring from a repository that is not persisted as a Source. Existing scan/dis
 commands stop at separate boundaries, so no TUI or command composes the requested atomic flow.
 Per-artifact provenance may later drive an explicit upstream check, but must not claim continuous
 monitoring. This complements B-094 and does not change CP-18's historical verdict.
+
+B-095/QA-021's application half is now **built and green** (D-187). `io/registry_adoption.py`
+composes what the four registry commands each stopped short of: `scan_repository` →
+`prepare_adoption` → `apply_adoption`. The scan acquires one credential-free URL at one pinned
+commit, compiles only committed `aart.yaml`/`aart.json` manifests through `compile_author_snapshot`,
+validates the resulting Candidates so the state a screen shows is the state adoption enforces, and
+writes nothing at all — no configuration and no Source, held by a `git status --porcelain`
+comparison across the call (INV-199/INV-200). The `scan-<slug>` alias compiling requires is
+in-memory only and cannot reach registry identity, held by a test that reads every file the adoption
+wrote. One selection is one atomic `plan_bulk_promotion` in VENDORED mode, digest-checked before
+`finalize_promotion`, so only declared `payload.include` files are copied and the adopted package
+records the upstream URL, resolved commit, manifest path and input digest as native provenance —
+the comparison basis a later explicit `Check upstream` needs. Evidence:
+`tests/registry_repository_scan_test.py` (14 tests over a real Git repository and a real registry
+checkout); five targeted mutations, all killed, two of which found unheld claims. The TUI screens
+(`46c`/`46d`/`46e`), their two `ConsumerActionKind` rows, a machine-complete CLI equivalent and
+`Check upstream` remain open under B-095. This does not change CP-18's historical verdict.

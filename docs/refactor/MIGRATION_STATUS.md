@@ -208,6 +208,20 @@ payload with pinned provenance. Four existing registry commands hold fragments o
 nothing joins them or exposes it in TUI. Upstream movement would be an explicit per-artifact check,
 not continuous Source monitoring.
 
+Its **application half is now built and green** (D-187): `agent_artifacts/io/registry_adoption.py`
+joins those fragments. `scan_repository` reads one pinned commit of a credential-free Git URL,
+compiles only committed `aart.yaml`/`aart.json` manifests, reconciles and validates in memory, and
+writes nothing — no configuration, no Source (INV-199/INV-200), held by a `git status --porcelain`
+comparison across the call. The `scan-<slug>` alias compiling needs is in-memory only; registry
+content is published under the registry's own alias, held by a test that reads every written file.
+`prepare_adoption` makes one selection one atomic `plan_bulk_promotion` in VENDORED mode and
+`apply_adoption` re-checks the review digest before `finalize_promotion`, so only each manifest's
+declared `payload.include` is copied and the adopted package records the upstream URL, resolved
+commit, manifest path and input digest as native provenance. Evidence:
+`tests/registry_repository_scan_test.py` (14 tests); five targeted mutations, all killed. The TUI
+screens (46c/46d/46e), their two actions, a CLI equivalent and the explicit `Check upstream` action
+remain open under B-095.
+
 ### CP-14 current increment (2026-09-02)
 
 **The wizard front-end is gone, and the stack under it turns out not to be legacy.**

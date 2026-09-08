@@ -71,7 +71,9 @@ Each new entry records:
       for conventional shapes, and `vendor` ignores YAML and requires repeated metadata flags
       Evidence: no public command or TUI action composes author-manifest discovery with selected
       vendoring; existing commands each stop at a different boundary
-      Fix: pending
+      Fix: partial — `io/registry_adoption.py` now composes scan → selection → atomic vendored
+      adoption with pinned provenance and saves no Source (D-187, 14 tests). The TUI screens
+      (46c/46d/46e), their two actions, a CLI equivalent and `Check upstream` remain pending.
 
 ### Fixed — awaiting manual retest
 

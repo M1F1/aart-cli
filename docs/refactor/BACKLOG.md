@@ -2316,7 +2316,8 @@ Evidence/links: Product Specification 72.1 and 164.2; INV-199–INV-201;
 ## B-095 — One-off YAML repository scan cannot feed selective Registry vendoring
 
 Found: whole-product TUI acceptance, external artifact onboarding clarification (2026-09-08) ·
-Severity: high · Status: open
+Severity: high · Status: open — application half built and green (D-187); TUI half and
+`Check upstream` still open
 
 Besides monitored Sources, the operator needs an artifact-scoped adoption path for repositories
 that must not remain configured Sources. Given a credential-free Git URL/ref, AART should discover
@@ -2344,6 +2345,18 @@ a new Registry version and never rewrites the immutable published version; missi
 unchanged remain distinct. This complements rather than replaces critical B-094's monitored Source
 flow.
 
+**Built so far (D-187).** `agent_artifacts/io/registry_adoption.py` is the application half:
+`scan_repository` (in-memory, writes nothing, saves no Source, refuses a repository declaring no
+`aart.yaml`/`aart.json` by name), `prepare_adoption` (one atomic `plan_bulk_promotion` in VENDORED
+mode over the chosen coordinates) and `apply_adoption` (review-digest checked, then
+`finalize_promotion`). `tests/registry_repository_scan_test.py` holds it with 14 tests and five
+killed targeted mutations.
+
+**Still open.** The TUI screens (`46c-scan-repository` form, `46d-scan-result` selectable list,
+`46e-review-adoption`) and their two `ConsumerActionKind` rows (`REPOSITORY_SCAN`,
+`REPOSITORY_ADOPT`) are designed but unwritten; there is no CLI equivalent yet; and the explicit
+per-artifact `Check upstream` action over recorded provenance is untouched.
+
 Evidence/links: `registry scan`, `discover`, `vendor`, `vendor-batch`;
 `protocol/authoring.py::compile_author_snapshot`; `registry_commands/planning.py`;
-`MaintainerScreen.REGISTRY`; QA-021.
+`MaintainerScreen.REGISTRY`; `io/registry_adoption.py`; QA-021; D-187.
