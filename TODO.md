@@ -57,19 +57,6 @@ Each new entry records:
       Evidence: Codex CLI 0.152.0 is installed locally; Codex is absent from every canonical target
       table and from the dormant built-in profile registry
       Fix: pending
-- [ ] **QA-014 — Successful `registry init --yes` output is overwhelming and repetitive.**
-      Stage: initializing the external test Registry
-      Surface: human CLI output from `aart registry init`
-      Severity: medium
-      Blocks current stage: no, but it obscures whether initialization actually succeeded
-      Reproduction: run the confirmed init over an empty Registry and read the complete output
-      Expected: a short success headline, the essential result and one clear next action; detailed
-      paths, digests and additional commands remain available through review, JSON or verbose output
-      Observed: nine path lines, three long warnings printed twice, an `observed` restatement, the
-      same paths repeated inside `git diff`, and five follow-up commands appear after success
-      Evidence: `render_curation_review` and `render_curation_outcome` render the same warnings on
-      the confirmed path; the captured manual output reproduces the duplication
-      Fix: pending
 - [ ] **QA-016 — A new Registry cannot be initialized through Maintainer TUI.**
       Stage: bootstrapping the external test Registry
       Surface: Maintainer → Registry
@@ -148,6 +135,11 @@ Each new entry records:
       holds neither an external reference nor an owned package, and warnings again as soon as
       either exists. `registry init` also stopped warning that the usage-reporting templates were
       inert, because D-180 no longer writes them. B-089/D-181.
+- [ ] **QA-014 — Successful `registry init --yes` output is overwhelming and repetitive.** The
+      outcome no longer repeats the warnings its review just stated, drops the `observed:` line
+      when it equals the headline's own count, and the follow-up commands are the AART pipeline
+      without the `git diff` line that re-listed every reviewed path. `--json` still carries review
+      and outcome in full. B-088/D-182.
 - [ ] **QA-010 — Consumer TUI cannot synchronize a configured Registry.** Screen 21 now routes `s`
       to its own Refresh Registry action with a review (21c) that names the ref to be fetched,
       states that a refresh is not an artifact update, and warns that a failed fetch keeps the

@@ -193,11 +193,12 @@ def _follow_up(
     changes: tuple[CurationChange, ...],
     action: CurationAction,
 ) -> tuple[str, ...]:
+    # `QA-014`: this used to lead with `git -C … diff -- <every reviewed path>`, which repeated the
+    # path list the review had just printed and was the longest line in a successful run.
+    # `render_curation_review` already closes a mutating action with "AART will not commit or push;
+    # review the working-tree diff afterward" — the same instruction, without the repetition and
+    # without a shell command, which is also what keeps screen 46 free of one (`QA-017`).
     quoted = shlex.quote(workspace)
-    changed = tuple(item.path for item in changes if item.status != "unchanged")
-    diff = f"git -C {quoted} diff --"
-    if changed:
-        diff = f"{diff} {' '.join(shlex.quote(path) for path in changed)}"
     if action in {
         CurationAction.INIT,
         CurationAction.SCAFFOLD,
@@ -210,14 +211,12 @@ def _follow_up(
         CurationAction.REVENDOR,
     }:
         return (
-            diff,
             f"aart registry validate --source {quoted}",
             f"aart registry lock --source {quoted}",
             f"aart registry build --source {quoted}",
             f"aart registry audit --source {quoted}",
         )
     return (
-        diff,
         f"aart registry validate --source {quoted} --strict",
         f"aart registry audit --source {quoted}",
     )

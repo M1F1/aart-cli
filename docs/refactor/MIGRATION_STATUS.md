@@ -138,6 +138,18 @@ destination, and the generated README describes the registry that was actually c
 `tests/consumer_registry_refresh_test.py`, `tests/registry_init_scaffold_test.py`; targeted
 mutations killed, focused suites green.
 
+B-089/QA-015 and B-088/QA-014 are now **fixed and awaiting manual retest** (D-181, D-182). An empty
+registry's audit reports the provenance-coverage and installation-risk checks as `info` notes —
+what the audit did rather than what it found — and both become warnings again the moment an
+external reference or an owned package exists. A confirmed Maintainer action states its result
+once: the outcome no longer repeats the warnings its review just stated, drops an `observed:` count
+equal to its own headline, and the follow-up commands are the AART pipeline without the `git diff`
+line that re-listed every reviewed path. `registry init` also stopped warning that the
+usage-reporting templates were inert, because D-180 no longer writes them. `--json` is unchanged
+and still carries review and outcome in full. Evidence: `tests/registry_empty_audit_test.py`,
+`tests/curation_outcome_brevity_test.py`, `tests/registry_cli_integration_test.py`; thirteen
+targeted mutations, all killed; verified through the public CLI.
+
 Two regressions in the uncommitted manual-acceptance work were found and repaired while proving this
 increment (D-178): the first-run welcome panel replaced the Dashboard body on a machine that had no
 configured source but did have an installation, and the deferral of `load_local_reporting_service`

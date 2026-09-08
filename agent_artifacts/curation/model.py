@@ -294,7 +294,19 @@ def render_curation_review(review: CurationReview) -> tuple[str, ...]:
     return tuple(lines)
 
 
-def render_curation_outcome(outcome: CurationOutcome) -> tuple[str, ...]:
+def render_curation_outcome(
+    outcome: CurationOutcome,
+    *,
+    reviewed: CurationReview | None = None,
+) -> tuple[str, ...]:
+    """The result of an action, without repeating the review the same run just printed.
+
+    `QA-014`: a confirmed action renders its review and then its outcome, and every warning the
+    plan carried is carried again by the result. `reviewed` is the review this outcome finalizes
+    when one was shown, and its warnings are then stated once. A warning the review did not carry —
+    something the finalization itself found — is always stated, because that one is news.
+    """
+
     if outcome.status == "failed":
         headline = f"{outcome.action.value}: failed; no managed paths were changed."
     elif outcome.status == "no-op":
@@ -305,12 +317,15 @@ def render_curation_outcome(outcome: CurationOutcome) -> tuple[str, ...]:
         suffix = "path" if outcome.changed_paths == 1 else "paths"
         headline = f"{outcome.action.value}: Changed {outcome.changed_paths} managed {suffix}."
     lines = [headline]
-    if outcome.observed_paths:
+    # An observed count equal to the headline's is the headline again; one that differs is the
+    # finding — a read-only action changes nothing and observes drift.
+    if outcome.observed_paths and outcome.observed_paths != outcome.changed_paths:
         suffix = "path" if outcome.observed_paths == 1 else "paths"
         lines.append(f"  observed: {outcome.observed_paths} review {suffix}")
     for check in outcome.checks:
         lines.append(f"  check {check.name}: {'passed' if check.passed else 'failed'}")
         lines.extend(f"    {detail}" for detail in check.details)
-    lines.extend(f"  warning: {warning}" for warning in outcome.warnings)
+    stated = frozenset(reviewed.warnings) if reviewed is not None else frozenset()
+    lines.extend(f"  warning: {warning}" for warning in outcome.warnings if warning not in stated)
     lines.extend(f"  next: {command}" for command in outcome.follow_up_commands)
     return tuple(lines)

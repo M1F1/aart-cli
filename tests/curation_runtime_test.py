@@ -9,7 +9,11 @@ from pathlib import Path
 from unittest import mock
 
 from agent_artifacts.curation import runtime as curation_runtime
-from agent_artifacts.curation.model import CurationAction, CurationRequest
+from agent_artifacts.curation.model import (
+    CurationAction,
+    CurationRequest,
+    render_curation_review,
+)
 from agent_artifacts.curation.runtime import LocalCurationService
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.identifiers import ObjectDigest, SourceAlias
@@ -315,7 +319,18 @@ class CurationRuntimeTest(unittest.TestCase):
             assert isinstance(result, Ok), result
             self.assertEqual(result.value.changed_paths, 2)
             self.assertTrue(target.is_file())
-            self.assertTrue(any("git -C" in item for item in result.value.follow_up_commands))
+            # `QA-014`/`D-182`: the diff hint is the review's closing prose, not a follow-up
+            # command that re-lists every reviewed path. The claim it held — a mutating action
+            # tells the maintainer to inspect the working tree — is held there instead.
+            self.assertFalse(any("git -C" in item for item in result.value.follow_up_commands))
+            self.assertIn(
+                "review the working-tree diff afterward",
+                " ".join(render_curation_review(scaffold.value.review)),
+            )
+            self.assertTrue(
+                all(item.startswith("aart registry ") for item in result.value.follow_up_commands),
+                result.value.follow_up_commands,
+            )
             duplicate_scaffold = service.prepare(
                 CurationRequest(
                     CurationAction.SCAFFOLD,

@@ -3941,3 +3941,33 @@ removes from the audit, and the init review is read in the TUI, where a flag nam
 not-applicable, keeping either finding a warning, dropping the root filter, and giving `_note` a
 warning severity — are each killed. Verified through the public CLI: `registry init` writes six
 paths and no reporting templates, and `registry audit` prints `passed` with two `info` lines.
+
+## D-182 — A confirmed Maintainer action states its result once
+
+`QA-014`/`B-088`. A confirmed `registry init` printed about twenty lines, most of them said twice.
+The review and the outcome are two renderings of one run, and they overlapped: every warning the
+plan carried was carried again by the result, `observed: 6 review paths` restated the headline that
+had just counted the same six, and the first follow-up command re-listed all six paths a third
+time. The operator's question after a mutation is whether it worked and what to do next, and that
+answer was the hardest thing in the output to find.
+
+**Three removals, no hiding.** `render_curation_outcome` takes the `CurationReview` it finalizes and
+states only the warnings that review did not already state — a warning the finalization itself found
+is always news and always printed. The `observed:` line is suppressed when it equals
+`changed_paths` and kept when it differs, because a read-only action that changes nothing and
+observes drift is exactly what that line exists to report. `_follow_up` no longer leads with
+`git -C … diff -- <every reviewed path>`: `render_curation_review` already closes a mutating action
+with "AART will not commit or push; review the working-tree diff afterward", which is the same
+instruction without the repetition — and without a shell command, which is also what keeps screen 46
+free of one when `QA-017` gets there.
+
+The `--json` envelope is untouched and still carries the review and the outcome in full, so nothing
+left the record; what left is the second printing of it.
+
+**Evidence.** `tests/curation_outcome_brevity_test.py` holds the renderer's claims on both sides —
+a stated warning is not restated, an unstated one is, an equal `observed` is dropped and a differing
+one kept, and the follow-up tuple is the AART pipeline for both branches.
+`tests/registry_cli_integration_test.py` holds the composition through the public CLI: a confirmed
+human init prints no duplicate warning line, no `observed:` line and no `git -C`. Seven targeted
+mutations, including the one that found the composition claim unheld (finalization dropping the
+review it passes to the renderer), are each killed.

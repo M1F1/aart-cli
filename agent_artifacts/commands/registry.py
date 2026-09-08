@@ -170,11 +170,16 @@ def _emit_curation_review(request: Request, review: CurationReview) -> None:
     print("\n".join(render_curation_review(review)))
 
 
-def _emit_curation_outcome(request: Request, outcome: CurationOutcome) -> None:
+def _emit_curation_outcome(
+    request: Request,
+    outcome: CurationOutcome,
+    *,
+    reviewed: CurationReview | None = None,
+) -> None:
     if request.json:
         print(json.dumps(_curation_outcome_data(outcome), indent=2))
         return
-    print("\n".join(render_curation_outcome(outcome)))
+    print("\n".join(render_curation_outcome(outcome, reviewed=reviewed)))
 
 
 def _emit_curation_finalization(
@@ -198,7 +203,7 @@ def _emit_curation_finalization(
         )
         return
     _emit_curation_review(request, review)
-    _emit_curation_outcome(request, outcome)
+    _emit_curation_outcome(request, outcome, reviewed=review)
 
 
 def _curation_request(request: Request, action: CurationAction) -> Result[CurationRequest]:

@@ -2137,7 +2137,7 @@ Evidence/links: `registry_commands/templates.py::REGISTRY_INIT_TEMPLATES`;
 ## B-088 — Confirmed Maintainer commands render review detail again as success output
 
 Found: whole-product TUI acceptance, first real Registry init (2026-09-08) · Severity: medium ·
-Status: open
+Status: resolved (D-182; awaiting manual retest as QA-014)
 
 The successful `registry init --yes` path prints the complete review and then a second outcome. In
 the observed nine-file initialization, three long warnings appeared in both blocks, `observed: 9

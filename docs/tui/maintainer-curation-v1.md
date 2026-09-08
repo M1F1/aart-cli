@@ -82,12 +82,13 @@ Outcomes distinguish:
 Every mutation prints commands equivalent to:
 
 ```sh
-git -C /absolute/registry diff -- <reviewed-paths>
 aart registry validate --source /absolute/registry --strict
 aart registry audit --source /absolute/registry
 ```
 
 Paths are shell-quoted by the runtime. Init, scaffold, and foreign import first suggest non-strict
 validation followed by lock/build; actions that already produce generated evidence suggest strict
-validation. A failed Finalize keeps the remediation visible and directs the maintainer to rerun the
+validation. Inspecting the working tree is the review's closing prose rather than a follow-up
+command that re-lists every reviewed path (`D-182`), and a confirmed action does not repeat the
+warnings its review already stated. A failed Finalize keeps the remediation visible and directs the maintainer to rerun the
 same action; it never substitutes a new unreviewed plan.
