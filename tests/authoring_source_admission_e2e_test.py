@@ -338,6 +338,33 @@ class AuthoringSourceAdmissionTest(unittest.TestCase):
 
             self.assertNotEqual(code, 0, payload)
 
+    def test_a_committed_symlink_is_refused_by_name_with_a_safe_correction(self) -> None:
+        """`QA-019`/`D-183`: the refusal is unchanged; what it says is not.
+
+        The real Superpowers fork had a root `AGENTS.md` committed as a symbolic link, and the
+        public refusal was `Git tree contains an unsafe entry: 'AGENTS.md'` — true, fail-closed and
+        useless, because the operator could not tell a link from a submodule from a bad path and so
+        could not choose a correction. The link target is still never named: it has not passed the
+        repository's path-safety rules.
+        """
+
+        with _environment() as env:
+            (env.author.path / "AGENTS.md").symlink_to("README.md")
+            _git(env.author.path, "add", "-A")
+            _git(env.author.path, "commit", "-m", "link AGENTS.md at CLAUDE.md")
+
+            code, payload = env.add_author_source()
+
+            self.assertNotEqual(code, 0, payload)
+            diagnostic = payload["diagnostics"][0]
+            # The message itself has to name the kind: asserting over the whole envelope would
+            # pass on the word "symlinks" inside the remediation, which is the mutation that
+            # found this test asserting less than it says.
+            self.assertIn("symbolic link", diagnostic["message"])
+            self.assertIn("AGENTS.md", diagnostic["message"])
+            self.assertIn("regular file", " ".join(diagnostic["remediation"]))
+            self.assertNotIn("README.md", json.dumps(payload))
+
     def test_admission_never_weakened_the_transport_it_asked_for(self) -> None:
         with _environment() as env:
             env.add_author_source()

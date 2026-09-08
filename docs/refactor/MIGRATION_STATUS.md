@@ -150,6 +150,15 @@ and still carries review and outcome in full. Evidence: `tests/registry_empty_au
 `tests/curation_outcome_brevity_test.py`, `tests/registry_cli_integration_test.py`; thirteen
 targeted mutations, all killed; verified through the public CLI.
 
+B-093/QA-019 is now **fixed and awaiting manual retest** (D-183). The Git acquisition refusal is
+unchanged and still fail-closed, but each refused entry names the kind that was observed — symbolic
+link, submodule, unsupported Git mode, unsafe path or excessive depth — and carries remediation for
+that case. A symlink's target is never printed, because it has not passed the repository's
+path-safety rules. Deciding the entry kind before reading the size also stopped reporting every
+submodule as a malformed listing, since `ls-tree -l` gives a gitlink no size. Evidence:
+`tests/git_unsafe_entry_diagnostic_test.py` and a real committed symlink driven through the public
+`source add` in `tests/authoring_source_admission_e2e_test.py`; nine targeted mutations, all killed.
+
 Two regressions in the uncommitted manual-acceptance work were found and repaired while proving this
 increment (D-178): the first-run welcome panel replaced the Dashboard body on a machine that had no
 configured source but did have an installation, and the deferral of `load_local_reporting_service`

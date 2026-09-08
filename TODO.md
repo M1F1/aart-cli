@@ -99,19 +99,6 @@ Each new entry records:
       Evidence: `_declined` emits `ACTION_PREPARED` without a review digest, while
       `_action_prepared` leaves the session on `REGISTRY_REVIEW`
       Fix: pending
-- [ ] **QA-019 — Git Source rejects a symlink without naming what is unsafe or how to proceed.**
-      Stage: adding the Superpowers authoring Source
-      Surface: `source add` acquisition diagnostic
-      Severity: medium
-      Blocks current stage: no; the test fork now contains a regular `AGENTS.md`, but the product
-      diagnostic still needs improvement
-      Reproduction: add `M1F1/superpowers-aart-test`, whose root `AGENTS.md` is a Git symlink to
-      `CLAUDE.md`
-      Expected: preserve the symlink security refusal but say `AGENTS.md is a symbolic link`; give
-      safe remediation to replace it with a committed regular file or choose a symlink-free source
-      Observed: `error: Git tree contains an unsafe entry: 'AGENTS.md'`
-      Evidence: `git ls-tree` reports mode `120000` for the repository's only symlink
-      Fix: pending
 - [ ] **QA-021 — Registry cannot one-off scan YAML manifests and vendor selected artifacts.**
       Stage: optional artifact-scoped onboarding from an external repository
       Surface: Maintainer → Registry
@@ -140,6 +127,11 @@ Each new entry records:
       when it equals the headline's own count, and the follow-up commands are the AART pipeline
       without the `git diff` line that re-listed every reviewed path. `--json` still carries review
       and outcome in full. B-088/D-182.
+- [ ] **QA-019 — Git Source rejects a symlink without naming what is unsafe or how to proceed.**
+      The refusal is unchanged and still fail-closed; it now names the entry kind it observed —
+      symbolic link, submodule, unsupported Git mode, unsafe path or excessive depth — and carries
+      remediation for each. The link target is never printed. A submodule is also no longer
+      reported as a malformed listing. B-093/D-183.
 - [ ] **QA-010 — Consumer TUI cannot synchronize a configured Registry.** Screen 21 now routes `s`
       to its own Refresh Registry action with a review (21c) that names the ref to be fetched,
       states that a refresh is not an artifact update, and warns that a failed fetch keeps the

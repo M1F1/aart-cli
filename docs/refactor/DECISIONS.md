@@ -3971,3 +3971,33 @@ one kept, and the follow-up tuple is the AART pipeline for both branches.
 human init prints no duplicate warning line, no `observed:` line and no `git -C`. Seven targeted
 mutations, including the one that found the composition claim unheld (finalization dropping the
 review it passes to the renderer), are each killed.
+
+## D-183 — A refused Git entry names its kind and what to do about it
+
+`QA-019`/`B-093`. The Superpowers fork had a root `AGENTS.md` committed as a symbolic link, and
+`source add` said `Git tree contains an unsafe entry: 'AGENTS.md'`. That is true, correctly
+fail-closed, and unusable: a symlink, a submodule, an unreadable Git mode, an unsafe path and a
+too-deep path all produced the same sentence, so the operator could not tell which correction their
+repository needed.
+
+**The rule did not move.** `_unsafe_entry` refuses exactly what `_tree_listing` refused before —
+anything that is not a `blob` at mode `100644` or `100755`, under a safe relative path, within the
+configured depth. What changed is that each case says which one it is and carries remediation:
+replace the link with a committed regular file, commit the submodule's files or subscribe to that
+repository separately, use a plain relative path, re-commit as an ordinary file, or move the entry
+nearer the root.
+
+**The link target is still never printed.** It has not passed the repository's path-safety rules,
+and reading or echoing an unreviewed path is the thing this boundary exists to prevent. The
+remediation says what to do without naming where the link points.
+
+One real mislabel was fixed on the way: `ls-tree -l` reports `-` rather than a size for a gitlink,
+and the old code parsed the size before deciding the entry kind, so every submodule was reported as
+a malformed listing. The kind is now decided first.
+
+**Evidence.** `tests/git_unsafe_entry_diagnostic_test.py` holds each kind, the "never name the
+target" rule and the two modes that stay accepted; `tests/authoring_source_admission_e2e_test.py`
+holds it through the public `source add` against a real repository with a real committed symlink.
+Nine targeted mutations are killed — including one that found the E2E asserting less than it said,
+because "symbolic link" appeared in the remediation and the assertion read the whole envelope; it
+now reads the message.

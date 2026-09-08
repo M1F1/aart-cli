@@ -2252,7 +2252,7 @@ Evidence/links: `consumer_ui.py::_request_action`, `_action_prepared`, `_confirm
 ## B-093 — Git acquisition calls a symlink unsafe without identifying the file kind
 
 Found: whole-product TUI acceptance, adding the Superpowers Source (2026-09-08) · Severity: medium ·
-Status: open
+Status: resolved (D-183; awaiting manual retest as QA-019)
 
 The Superpowers fork contains one symlink, root `AGENTS.md -> CLAUDE.md` (Git mode `120000`). AART
 correctly refuses it at the Git snapshot boundary, but reports only `Git tree contains an unsafe
