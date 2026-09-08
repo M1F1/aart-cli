@@ -58,6 +58,7 @@ class ConsumerActionKind(str, Enum):
     CANDIDATE_PROMOTION = "candidate-promotion"
     BULK_PROMOTION = "bulk-promotion"
     REGISTRY_ADD = "registry-add"
+    REGISTRY_SYNC = "registry-sync"
     SOURCE_ADD = "source-add"
 
 
@@ -447,6 +448,9 @@ def _toggle_selection(
 
 _ACTION_REVIEW: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationScreen] = {
     (ConsumerActionKind.REGISTRY_ADD, ConsumerScreen.REGISTRY_ADD): ConsumerScreen.REGISTRY_REVIEW,
+    # A refresh is requested from the list, where the row being refreshed is the row under the
+    # cursor; its review is a screen of its own so the fetch is stated before it happens (B-084).
+    (ConsumerActionKind.REGISTRY_SYNC, ConsumerScreen.REGISTRIES): ConsumerScreen.REGISTRY_SYNC,
     (
         ConsumerActionKind.SOURCE_ADD,
         MaintainerScreen.SOURCE_ADD,
@@ -563,6 +567,7 @@ def _action_prepared(
 
 _ACTION_RUNNING: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationScreen | None] = {
     (ConsumerActionKind.REGISTRY_ADD, ConsumerScreen.REGISTRY_REVIEW): None,
+    (ConsumerActionKind.REGISTRY_SYNC, ConsumerScreen.REGISTRY_SYNC): None,
     (ConsumerActionKind.SOURCE_ADD, MaintainerScreen.SOURCE_ADD_REVIEW): None,
     (ConsumerActionKind.INSTALL, ConsumerScreen.READY): ConsumerScreen.INSTALLING,
     (ConsumerActionKind.UPDATE, ConsumerScreen.UPDATE_INPUTS): ConsumerScreen.UPDATING,
@@ -608,6 +613,7 @@ def _confirm_action(
 
 _ACTION_RESULT: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationScreen] = {
     (ConsumerActionKind.REGISTRY_ADD, ConsumerScreen.REGISTRY_REVIEW): ConsumerScreen.REGISTRIES,
+    (ConsumerActionKind.REGISTRY_SYNC, ConsumerScreen.REGISTRY_SYNC): ConsumerScreen.REGISTRIES,
     (
         ConsumerActionKind.SOURCE_ADD,
         MaintainerScreen.SOURCE_ADD_REVIEW,
@@ -646,7 +652,11 @@ def _action_recorded(
     if target is None:
         return state, ()
     moved, commands = _navigate(state, target)
-    focus = state.focus if action is ConsumerActionKind.SOURCE_SYNC else event.text
+    focus = (
+        state.focus
+        if action in (ConsumerActionKind.SOURCE_SYNC, ConsumerActionKind.REGISTRY_SYNC)
+        else event.text
+    )
     return replace(
         moved,
         selection=(),
@@ -1015,6 +1025,18 @@ def key_event(
         return ConsumerUiEvent(
             ConsumerUiEventKind.NAVIGATE, screen=MaintainerScreen.COLLECTION_CANDIDATES
         )
+    # `add-registry` is a button screen 21 draws above its rows, not a subscription, so it is the
+    # one row here that cannot be fetched.  Asking for a refresh with no row under the cursor is
+    # not a request either: there would be nothing to name in the review.
+    if (
+        key == "s"
+        and state.session.screen is ConsumerScreen.REGISTRIES
+        and (state.focus or state.current_row) not in ("", "add-registry")
+    ):
+        return ConsumerUiEvent(
+            ConsumerUiEventKind.REQUEST_ACTION,
+            action=ConsumerActionKind.REGISTRY_SYNC,
+        )
     if key == "s" and state.session.screen in (
         MaintainerScreen.SOURCES,
         MaintainerScreen.SOURCE_DETAILS,
@@ -1047,6 +1069,7 @@ def key_event(
         ConsumerScreen.UNINSTALL_REVIEW,
         ConsumerScreen.VERIFY_REPAIR,
         ConsumerScreen.REGISTRY_REVIEW,
+        ConsumerScreen.REGISTRY_SYNC,
         MaintainerScreen.SOURCE_SYNC,
         MaintainerScreen.REGISTRY_COMMIT,
     ):

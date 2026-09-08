@@ -2038,7 +2038,8 @@ Evidence/links: Product Specification 164.2; `ConsumerScreen.REGISTRY_ADD`;
 
 ## B-084 — A consumer Registry cannot be refreshed from the TUI
 
-Found: whole-product TUI acceptance preparation (2026-09-08) · Severity: high · Status: open
+Found: whole-product TUI acceptance preparation (2026-09-08) · Severity: high · Status: resolved
+(D-179; awaiting manual retest as QA-010)
 
 Add Registry fetches the initial approved snapshot, so the first Marketplace install is complete.
 After maintainers merge a newer registry commit, however, the consumer needs `aart source sync` to
@@ -2115,7 +2116,7 @@ Evidence/links: Product Specification multi-harness contract; `domain/harness.py
 ## B-087 — Registry initialization emits inactive usage-reporting assets without opt-in
 
 Found: whole-product TUI acceptance, first real Registry init (2026-09-08) · Severity: medium ·
-Status: open
+Status: resolved (D-180; awaiting manual retest as QA-013)
 
 Running `aart registry init` without `--usage-reporting-repository` still emits an Issue Form and
 two GitHub Actions workflows for usage validation and dashboard publication. The command immediately

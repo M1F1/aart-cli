@@ -635,6 +635,45 @@ def _selected_sources(
     return Ok(selected)
 
 
+@dataclass(frozen=True, slots=True)
+class SynchronizedSource:
+    """One source's synchronization, as both front ends read it."""
+
+    source: ConfiguredSource
+    outcome: SourceSyncOutcome
+
+
+def sync_configured_sources(request: Request) -> Result[tuple[SynchronizedSource, ...]]:
+    """Refresh the managed snapshots of the requested sources, choosing no output surface.
+
+    This is the transaction behind both `aart source sync` and screen 21's reviewed refresh
+    (B-084).  It never writes user configuration and never changes a source identity: it refreshes
+    the managed snapshot for an already-configured origin and ref, which is exactly why a consumer
+    may run it without any of the authority `add` needs.
+
+    A refusal is returned whole rather than per source, because a partial refresh presented as a
+    success is the shape that lets an unreachable origin look refreshed.  The last known good
+    snapshot of every source stays on disk either way; `sync_configured_source` replaces one only
+    after a fresh snapshot validates.
+    """
+
+    runtime = load_runtime_configuration(request, content_required=False)
+    if isinstance(runtime, Err):
+        return runtime
+    if runtime.value.loaded.recovery is not None:
+        return _recovery_error()
+    selected = _selected_sources(runtime.value, request.source_alias)
+    if isinstance(selected, Err):
+        return selected
+    synchronized: list[SynchronizedSource] = []
+    for source in selected.value:
+        outcome = sync_configured_source(source, data_root=runtime.value.paths.data_root)
+        if isinstance(outcome, Err):
+            return outcome
+        synchronized.append(SynchronizedSource(source, outcome.value))
+    return Ok(tuple(synchronized))
+
+
 def _sync(request: Request) -> int:
     runtime = load_runtime_configuration(request, content_required=False)
     if isinstance(runtime, Err):

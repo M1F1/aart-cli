@@ -921,26 +921,14 @@ def _canonical_consumer_actions(
     if isinstance(maintainer, DomainErr):
         return maintainer
 
-    def registry_connection(draft: RegistryDraft) -> DomainResult[RegistryConnectionSnapshot]:
-        # One authority for both front ends: the TUI supplies a typed draft, while the canonical
-        # source-add transaction retains schema validation, snapshot validation, CAS and policy.
-        from .commands.source import add_configured_source
+    def reread() -> DomainResult[RegistryConnectionSnapshot]:
+        """Re-derive everything a changed subscription changes, in one place.
 
-        added = add_configured_source(
-            Request(
-                "source",
-                project=project_root,
-                user_home=home,
-                source_action="add",
-                source_alias=draft.alias,
-                source_kind="registry-git",
-                source_location=draft.location,
-                source_make_default=draft.make_default,
-                ref=draft.ref or None,
-            )
-        )
-        if isinstance(added, DomainErr):
-            return added
+        Connecting a registry, connecting an authoring Source and refreshing a registry all move
+        the same three derived things.  Reading them back separately in each closure is how two of
+        them would come to disagree about what the third had already been told.
+        """
+
         refreshed = _canonical_consumer_configuration(paths)
         if isinstance(refreshed, DomainErr):
             return refreshed
@@ -961,6 +949,48 @@ def _canonical_consumer_actions(
                 refreshed_maintainer.value,
             )
         )
+
+    def registry_connection(draft: RegistryDraft) -> DomainResult[RegistryConnectionSnapshot]:
+        # One authority for both front ends: the TUI supplies a typed draft, while the canonical
+        # source-add transaction retains schema validation, snapshot validation, CAS and policy.
+        from .commands.source import add_configured_source
+
+        added = add_configured_source(
+            Request(
+                "source",
+                project=project_root,
+                user_home=home,
+                source_action="add",
+                source_alias=draft.alias,
+                source_kind="registry-git",
+                source_location=draft.location,
+                source_make_default=draft.make_default,
+                ref=draft.ref or None,
+            )
+        )
+        if isinstance(added, DomainErr):
+            return added
+        return reread()
+
+    def registry_refresh(alias: str) -> DomainResult[RegistryConnectionSnapshot]:
+        # The same authority once more: `aart source sync` and screen 21c refresh a subscription
+        # through one transaction (B-084).  It writes no configuration, so a consumer may run it
+        # with none of the authority `add` needs, and a failed fetch leaves the last known good
+        # snapshot exactly where it was.
+        from .commands.source import sync_configured_sources
+
+        synchronized = sync_configured_sources(
+            Request(
+                "source",
+                project=project_root,
+                user_home=home,
+                source_action="sync",
+                source_alias=alias,
+            )
+        )
+        if isinstance(synchronized, DomainErr):
+            return synchronized
+        return reread()
 
     def source_connection(draft: SourceDraft) -> DomainResult[RegistryConnectionSnapshot]:
         # The same authority again, with the kind the Maintainer form chose rather than a
@@ -984,26 +1014,7 @@ def _canonical_consumer_actions(
         )
         if isinstance(added, DomainErr):
             return added
-        refreshed = _canonical_consumer_configuration(paths)
-        if isinstance(refreshed, DomainErr):
-            return refreshed
-        refreshed_offers = read_consumer_offers(
-            refreshed.value, data_root=paths.data_root, target=target
-        )
-        if isinstance(refreshed_offers, DomainErr):
-            return refreshed_offers
-        refreshed_maintainer = read_maintainer_views(
-            refreshed.value, data_root=paths.data_root, registry_root=project_root
-        )
-        if isinstance(refreshed_maintainer, DomainErr):
-            return refreshed_maintainer
-        return DomainOk(
-            RegistryConnectionSnapshot(
-                refreshed.value,
-                refreshed_offers.value,
-                refreshed_maintainer.value,
-            )
-        )
+        return reread()
 
     def completion_factory(
         completed: CompletedConfiguredInstallation,
@@ -1063,6 +1074,7 @@ def _canonical_consumer_actions(
             data_root=paths.data_root,
             completion_factory=completion_factory,
             registry_connection=registry_connection,
+            registry_refresh=registry_refresh,
             source_connection=source_connection,
         )
     )

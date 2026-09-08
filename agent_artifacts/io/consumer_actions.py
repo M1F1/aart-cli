@@ -181,6 +181,18 @@ class _PendingRegistryAddition:
 
 
 @dataclass(frozen=True, slots=True)
+class _PendingRegistryRefresh:
+    """One reviewed refresh of an already-connected registry (B-084).
+
+    It holds only the alias, because that is the whole decision: a refresh changes no
+    configuration and asks the origin the configured question again.
+    """
+
+    alias: str
+    review_digest: str
+
+
+@dataclass(frozen=True, slots=True)
 class _PendingSourceAddition:
     draft: SourceDraft
     source: ConfiguredSource
@@ -202,6 +214,7 @@ class RegistryConnectionSnapshot:
 
 
 RegistryConnectionPort = Callable[[RegistryDraft], Result[RegistryConnectionSnapshot]]
+RegistryRefreshPort = Callable[[str], Result[RegistryConnectionSnapshot]]
 SourceConnectionPort = Callable[[SourceDraft], Result[RegistryConnectionSnapshot]]
 
 
@@ -214,6 +227,7 @@ _Pending = (
     | PreparedSourceSync
     | PreparedConfiguredCandidatePromotion
     | _PendingRegistryAddition
+    | _PendingRegistryRefresh
     | _PendingSourceAddition
 )
 
@@ -243,6 +257,7 @@ class LocalConsumerActions:
         data_root: str | None = None,
         completion_factory: ConfiguredCompletionFactory | None = None,
         registry_connection: RegistryConnectionPort | None = None,
+        registry_refresh: RegistryRefreshPort | None = None,
         source_connection: SourceConnectionPort | None = None,
     ) -> None:
         if not isinstance(context, ConsumerActionContext):
@@ -255,6 +270,7 @@ class LocalConsumerActions:
         self._data_root = data_root
         self._completion_factory = completion_factory
         self._registry_connection = registry_connection
+        self._registry_refresh = registry_refresh
         self._source_connection = source_connection
 
     # -- preferences --------------------------------------------------------- #
@@ -360,6 +376,8 @@ class LocalConsumerActions:
             return self._prepare_update(command)
         if action is ConsumerActionKind.VERIFY_REPAIR:
             return self._prepare_repair(command)
+        if action is ConsumerActionKind.REGISTRY_SYNC:
+            return self._prepare_registry_refresh(command)
         if action is ConsumerActionKind.SOURCE_SYNC:
             return self._prepare_source_sync(command)
         if action is ConsumerActionKind.CANDIDATE_PROMOTION:
@@ -895,6 +913,8 @@ class LocalConsumerActions:
             return self._execute_installation(command, pending)
         if isinstance(pending, _PendingRegistryAddition):
             return self._execute_registry_addition(command, pending)
+        if isinstance(pending, _PendingRegistryRefresh):
+            return self._execute_registry_refresh(command, pending)
         if isinstance(pending, _PendingSourceAddition):
             return self._execute_source_addition(command, pending)
         if isinstance(pending, PreparedConfiguredRepair):
@@ -920,6 +940,74 @@ class LocalConsumerActions:
             effective=connected.value.effective,
             offers=connected.value.offers,
             maintainer=connected.value.maintainer,
+        )
+        recorded_at, _today = self._moment()
+        return self._recorded(command, recorded_at)
+
+    def _prepare_registry_refresh(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        """Review refreshing one connected registry: which subscription, and what it is not.
+
+        The row has to be a registry.  An authoring Source holds Candidates that a maintainer
+        promotes, so "refresh what Marketplace can offer" is an effect it cannot have (INV-199),
+        and offering the action there would advertise a result that never arrives.
+        """
+
+        if self._registry_refresh is None:
+            return self._declined(command, _lines("registry refresh is unavailable"))
+        alias = command.focus
+        row = next(
+            (item for item in self._context.offers.registries if item.alias == alias),
+            None,
+        )
+        if row is None:
+            return self._declined(command, _lines(f"no connected registry here is {alias}"))
+        if not row.is_registry:
+            return self._declined(
+                command,
+                _lines(
+                    f"{alias} is an authoring Source, not a registry; "
+                    "its Candidates are promoted in Maintainer Mode"
+                ),
+            )
+        identity = json.dumps(
+            {"alias": alias, "operation": "registry-sync"},
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        review_digest = "sha256:" + hashlib.sha256(identity).hexdigest()
+        self._pending = _PendingRegistryRefresh(alias, review_digest)
+        self._pending_action = command.action
+        return ConsumerActionUpdate(
+            self.source(
+                notice=(
+                    f"Registry refresh review: {alias} from {row.origin}",
+                    f"  branch or tag: {row.ref or 'repository default'}",
+                    "  installed artifacts are not changed by this",
+                )
+            ),
+            ConsumerUiEvent(
+                ConsumerUiEventKind.ACTION_PREPARED,
+                action=command.action,
+                review_digest=review_digest,
+            ),
+        )
+
+    def _execute_registry_refresh(
+        self,
+        command: ConsumerUiCommand,
+        pending: _PendingRegistryRefresh,
+    ) -> ConsumerActionUpdate:
+        assert self._registry_refresh is not None
+        refreshed = self._registry_refresh(pending.alias)
+        if isinstance(refreshed, Err):
+            # Last known good: the fetch failed, so the context keeps the snapshot it already had
+            # and the Marketplace goes on offering what is already approved.
+            return self._failed(command, _refusal(refreshed.diagnostics))
+        self._context = replace(
+            self._context,
+            effective=refreshed.value.effective,
+            offers=refreshed.value.offers,
+            maintainer=refreshed.value.maintainer,
         )
         recorded_at, _today = self._moment()
         return self._recorded(command, recorded_at)

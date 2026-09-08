@@ -127,6 +127,17 @@ and executing through the same `add_configured_source` transaction as the CLI. E
 `mypy` are green; full gates are deferred to the end of this manual-acceptance batch by the
 operator's instruction. CP-18 remains historically VERIFIED.
 
+B-084/QA-010 and B-087/QA-013 are now **fixed and awaiting manual retest** (D-179, D-180). Screen 21
+routes `s` to a distinct `REGISTRY_SYNC` action whose review (21c) names the ref that will be
+fetched, states PS 161.7's rule that a registry refresh is not an artifact update, and says a failed
+fetch keeps the snapshot already held; execution goes through `sync_configured_sources`, the single
+transaction `aart source sync` also uses, and `_prepare_registry_refresh` refuses a row that is not
+a connected registry, so INV-199 stays testable rather than asserted. `registry init` now writes the
+usage-reporting Issue Form and its two workflows only when `--usage-reporting-repository` names a
+destination, and the generated README describes the registry that was actually created. Evidence:
+`tests/consumer_registry_refresh_test.py`, `tests/registry_init_scaffold_test.py`; targeted
+mutations killed, focused suites green.
+
 Two regressions in the uncommitted manual-acceptance work were found and repaired while proving this
 increment (D-178): the first-run welcome panel replaced the Dashboard body on a machine that had no
 configured source but did have an installation, and the deferral of `load_local_reporting_service`

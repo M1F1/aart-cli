@@ -84,6 +84,7 @@ def _source_view(
         state.configured.kind,
         None if current is None else current.declared_source_id,
         _origin(state),
+        state.configured.ref,
         None if current is None else current.candidate.resolved_revision,
         None if current is None else current.candidate.snapshot_digest,
         state.health.status,

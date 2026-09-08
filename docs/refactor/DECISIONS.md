@@ -3857,3 +3857,52 @@ it broke was a test seam: `configured_setup_report_test` substituted the loader 
 composition, so after the move the shell ran against the real service and previewed nothing. The
 substitution now spans the run. No assertion changed, and mutating the resolved service back to
 `None` still turns that test red.
+
+## D-179 — Refreshing a connected Registry is its own action, and it is not an artifact update
+
+`QA-010`/`B-084`. Screen 21 projected `("details", "sync")` for every connected registry row and
+routed neither: `s` was interpreted only on the Maintainer authoring-Source screens, so the one
+CLI fallback (`aart source sync`) was the only way to receive a newly published registry commit.
+
+**A separate action, for the same reason D-177 kept Add Source and Add Registry apart.** Screen 21
+now has `ConsumerScreen.REGISTRY_SYNC = "21c-sync-registry"` and
+`ConsumerActionKind.REGISTRY_SYNC`, distinct from the Maintainer `SOURCE_SYNC`. INV-199 is what
+makes them distinct rather than one parameterised action, and the boundary is testable rather than
+asserted: `_prepare_registry_refresh` declines an alias that is not a connected row *and* declines
+a row whose `is_registry` is false, so an authoring Source reaching screen 21's action is a
+refusal.
+
+**The review says what sync is not.** PS §161.7 is explicit that registry sync is not artifact
+update — a sync may discover `github-mcp 1.6` while an installed `1.5` stays exactly as it is — so
+screen 21c states that in the review the operator confirms, along with which ref will be fetched
+and that a failed fetch keeps the snapshot already held. Naming the ref required threading
+`ConfiguredSource.ref` through `MarketplaceSourceView` and `RegistryView`: `RegistryView.revision`
+is the resolved commit, which answers a different question than "what will be fetched".
+
+**One transaction.** `sync_configured_sources` in `commands/source.py` is now the single
+transaction behind both `aart source sync` and screen 21c, so the TUI re-implements no part of
+fetch, verification or last-known-good retention. On `Err` the action reports the failure and
+leaves the context untouched, which is the last-known-good boundary held at the port rather than
+restated in the renderer.
+
+**Evidence.** `tests/consumer_registry_refresh_test.py` holds the interaction, the review text, the
+composition against the real `tui.py` closure and the navigation. Targeted mutations that had
+survived — no test held the authoring-Source refusal, and the alias was free to be a constant — are
+killed by the refusal test and the two-alias composition loop.
+
+## D-180 — Usage-reporting scaffolding is generated only when a destination is named
+
+`QA-013`/`B-087`. `registry init` always wrote `.github/ISSUE_TEMPLATE/usage-report.yml` and
+`.github/workflows/aart-usage-dashboard.yml`, and the generated README described a reporting
+workflow that the registry had not opted into. The files said they were inert, which is worse than
+absent: a maintainer reading a fresh registry cannot tell a deliberate feature from a default.
+
+`REPORTING_TEMPLATES` is now conditional on `options.usage_reporting_repository is not None`, and
+`render_registry_readme` takes `usage_reporting` so the README describes the registry that was
+actually created. Naming a destination is the opt-in; there is no separate flag to keep in sync
+with it.
+
+`test_init_never_overwrites_an_existing_reporting_template` still holds — it opts in, because
+without an opt-in there is nothing to overwrite — and is joined by
+`test_a_declined_init_leaves_an_unrelated_issue_form_alone`, so the no-clobber claim is held on
+both sides of the choice rather than weakened to fit it.

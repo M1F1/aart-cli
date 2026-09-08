@@ -105,6 +105,17 @@ ordinary upstream commit is not read as an identity transition, and its consumer
 contribution is empty rather than an `Err` — the projection loop returns on the first `Err`, so the
 old refusal would have let one subscribed author repository empty the whole Marketplace.
 
+B-084/QA-010 and B-087/QA-013 are now **fixed and awaiting manual retest** (D-179, D-180). Screen 21
+routes `s` to a distinct `REGISTRY_SYNC` action whose review (21c) names the ref that will be
+fetched, states PS 161.7's rule that a registry refresh is not an artifact update, and says a failed
+fetch keeps the snapshot already held; execution goes through `sync_configured_sources`, the single
+transaction `aart source sync` also uses, and `_prepare_registry_refresh` refuses a row that is not
+a connected registry, so INV-199 stays testable rather than asserted. `registry init` now writes the
+usage-reporting Issue Form and its two workflows only when `--usage-reporting-repository` names a
+destination, and the generated README describes the registry that was actually created. Evidence:
+`tests/consumer_registry_refresh_test.py`, `tests/registry_init_scaffold_test.py`; targeted
+mutations killed, focused suites green.
+
 On top of that, Maintainer screen 31 now offers `a` Add Source: a separate `SourceDraft` form (31a)
 and review (31b) that accept only `source-git`/`source-local`, refuse `registry-git` by name, never
 set a default registry, and execute through the same `add_configured_source` transaction the CLI

@@ -29,16 +29,6 @@ Each new entry records:
 
 ### Open
 
-- [ ] **QA-010 — Consumer TUI cannot synchronize a configured Registry.**
-      Stage: receiving a newly published registry version before Update
-      Surface: Registries / consumer Dashboard
-      Severity: high
-      Blocks current stage: no, with one explicit CLI `source sync` fallback
-      Reproduction: connect a Registry in TUI, publish a newer registry commit, reopen Registries
-      Expected: a visible reviewed Sync action refreshes the configured Registry snapshot
-      Observed: Registries offers Add only; `s` is interpreted only on Maintainer authoring Sources
-      Evidence: `key_event` routes `SOURCE_SYNC` exclusively from Maintainer Sources/Source Details
-      Fix: pending
 - [ ] **QA-011 — Canonical installation cannot target OpenCode.**
       Stage: installing the Skill and MCP into the locally installed OpenCode 1.18.29
       Surface: Marketplace/TUI and `marketplace install --profile opencode`
@@ -66,21 +56,6 @@ Each new entry records:
       the requested placement without writing
       Evidence: Codex CLI 0.152.0 is installed locally; Codex is absent from every canonical target
       table and from the dormant built-in profile registry
-      Fix: pending
-- [ ] **QA-013 — `registry init` generates unused usage-reporting automation by default.**
-      Stage: initializing the external test Registry
-      Surface: `aart registry init`
-      Severity: medium
-      Blocks current stage: no; the generated files say they are inert, but they clutter and
-      misrepresent the minimal Registry
-      Reproduction: run `registry init --yes` without `--usage-reporting-repository`
-      Expected: the default Registry contains only its required validation/publication machinery;
-      optional usage reporting is generated only after an explicit opt-in
-      Observed: init always adds `.github/ISSUE_TEMPLATE/usage-report.yml`,
-      `.github/workflows/aart-usage-dashboard.yml` and
-      `.github/workflows/aart-usage-validate.yml`, then warns that they are inert
-      Evidence: the reported nine-path init plan and `registry_commands/templates.py` include all
-      three files unconditionally
       Fix: pending
 - [ ] **QA-014 — Successful `registry init --yes` output is overwhelming and repetitive.**
       Stage: initializing the external test Registry
@@ -181,6 +156,15 @@ Each new entry records:
 
 ### Fixed — awaiting manual retest
 
+- [ ] **QA-010 — Consumer TUI cannot synchronize a configured Registry.** Screen 21 now routes `s`
+      to its own Refresh Registry action with a review (21c) that names the ref to be fetched,
+      states that a refresh is not an artifact update, and warns that a failed fetch keeps the
+      snapshot already held. Execution goes through `sync_configured_sources`, the same transaction
+      as `aart source sync`. B-084/D-179.
+- [ ] **QA-013 — `registry init` generates unused usage-reporting automation by default.** The
+      usage-reporting Issue Form and its two workflows are now generated only when
+      `--usage-reporting-repository` names a destination, and the generated README describes the
+      registry that was actually created. B-087/D-180.
 - [ ] **QA-020 — A YAML authoring repository cannot enter the monitored Source → Candidate flow.**
       Authoring-Source admission is now manifest discovery rather than native-package validation:
       `source add --kind source-git` admits a repository that declares at least one explicit

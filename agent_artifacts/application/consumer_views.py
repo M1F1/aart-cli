@@ -162,6 +162,11 @@ class ConsumerScreen(str, Enum):
     REGISTRIES = "21-registries"
     REGISTRY_ADD = "21a-add-registry"
     REGISTRY_REVIEW = "21b-review-registry"
+    # 21c is the reviewed refresh of an already-connected registry (B-084).  161.7 draws `[ Sync ]`
+    # on screen 21 itself, and the row projection has always advertised the action; what was
+    # missing was a screen on which to state which registry and which ref are about to be fetched
+    # before anything is.
+    REGISTRY_SYNC = "21c-sync-registry"
     CREDENTIALS = "22-credentials"
     CREDENTIAL_DETAILS = "23-credential-details"
     CREDENTIAL_ACTION = "24-credential-action"
@@ -1536,7 +1541,8 @@ _NAVIGATION: dict[ConsumerScreen, tuple[ConsumerScreen, ...]] = {
     ConsumerScreen.UNINSTALL_REVIEW: (ConsumerScreen.UNINSTALLING,),
     ConsumerScreen.UNINSTALLING: (ConsumerScreen.ACTIVITY_DETAILS,),
     ConsumerScreen.VERIFY_REPAIR: (ConsumerScreen.ACTIVITY_DETAILS,),
-    ConsumerScreen.REGISTRIES: (ConsumerScreen.REGISTRY_ADD,),
+    ConsumerScreen.REGISTRIES: (ConsumerScreen.REGISTRY_ADD, ConsumerScreen.REGISTRY_SYNC),
+    ConsumerScreen.REGISTRY_SYNC: (ConsumerScreen.REGISTRIES,),
     ConsumerScreen.REGISTRY_ADD: (ConsumerScreen.REGISTRY_REVIEW,),
     ConsumerScreen.REGISTRY_REVIEW: (ConsumerScreen.REGISTRIES,),
     ConsumerScreen.CREDENTIALS: (ConsumerScreen.CREDENTIAL_DETAILS,),
@@ -1724,6 +1730,7 @@ class RegistryView:
     last_sync_age_seconds: int | None
     kind: str
     origin: str
+    ref: str | None
     revision: str | None
     snapshot_digest: str | None
     trust: tuple[str, ...]
@@ -1750,6 +1757,7 @@ def project_registries(catalog: MarketplaceCatalog) -> tuple[RegistryView, ...]:
                 source.age_seconds,
                 source.kind.value,
                 source.origin,
+                source.ref,
                 source.resolved_revision,
                 None if source.snapshot_digest is None else str(source.snapshot_digest),
                 tuple(sorted({item.trust.kind.value for item in source_items})),

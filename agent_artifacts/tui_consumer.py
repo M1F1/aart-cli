@@ -2248,6 +2248,26 @@ class CanonicalScreenSource:
             return ("Review the Source connection below, then press Enter to connect.",)
         if screen is ConsumerScreen.REGISTRY_REVIEW:
             return ("Review the registry connection below, then press Enter to connect.",)
+        if screen is ConsumerScreen.REGISTRY_SYNC:
+            connected = next(
+                (item for item in screens.registries if item.alias == state.focus),
+                None,
+            )
+            if connected is None:
+                return ("That registry is not connected here.",)
+            return (
+                f"Refresh {connected.alias} from {connected.origin}",
+                f"Branch or tag: {connected.ref or 'repository default'}",
+                "",
+                "This fetches a fresh approved snapshot and reloads what Marketplace can offer.",
+                # 161.7, stated where the decision is made rather than only in the specification.
+                "It does not update anything installed: a newer version becomes available to",
+                "choose, and every installed artifact stays exactly as it is.",
+                "",
+                "If the fetch fails, the snapshot you already have is kept.",
+                "",
+                "Press Enter to refresh.",
+            )
         if not isinstance(screen, ConsumerScreen):
             return (f"{_title(screen)} is not available yet.",)
         if screen in _PLAN_SCREENS:

@@ -507,10 +507,15 @@ def plan_registry_init(
     # Every registry gets byte-identical files.  Where CI fetches AART from is a repository
     # variable, not something written in here at creation time, so these bytes never have to be
     # regenerated when a company moves the tool.
+    # Usage reporting is an optional service a registry may offer, and the manifest below already
+    # advertises it only when somebody named a destination.  The files were written either way,
+    # so a maintainer who declined the feature still got an Issue Form soliciting reports and two
+    # workflows to process them -- infrastructure for a service the registry does not offer, which
+    # invites contributions nothing will read (B-087).  One condition now governs both.
     templates = (
         (".gitignore", REGISTRY_GITIGNORE),
         (".github/workflows/aart-registry.yml", REGISTRY_CI_WORKFLOW),
-        *REPORTING_TEMPLATES,
+        *(REPORTING_TEMPLATES if options.usage_reporting_repository is not None else ()),
     )
     # The README is the one generated file a maintainer is meant to edit, so it is written when
     # absent and left alone otherwise -- never compared, never overwritten.  Managing it would
@@ -520,7 +525,14 @@ def plan_registry_init(
     written_once = tuple(
         (path, content)
         for path, content in (
-            ("README.md", render_registry_readme(options.registry_id, options.display_name)),
+            (
+                "README.md",
+                render_registry_readme(
+                    options.registry_id,
+                    options.display_name,
+                    usage_reporting=options.usage_reporting_repository is not None,
+                ),
+            ),
             # The pin is the version of the tool creating the registry -- the same number `init`
             # already writes as `requires_aart.min_inclusive`.  No inference is involved: AART
             # knows its own version, which is exactly what the deleted origin stamp did not.

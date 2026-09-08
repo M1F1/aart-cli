@@ -421,7 +421,7 @@ Its registry id is `__REGISTRY_ID__`. Consumers name it when they add this regis
 | `collections/` | Named groups of artifacts installed together |
 | `aart.lock.json` | Resolved, pinned contents. Generated - never edited by hand |
 | `aart.index.json` | The published index consumers read. Generated |
-| `.github/workflows/` | The quality gate, and the usage-reporting pair |
+| `.github/workflows/` | The quality gate, and the usage-reporting pair if this registry offers it |
 
 The JSON files and the workflows are **managed**: AART regenerates them and refuses to run against
 a copy that was hand-edited. This README is not managed. Edit it freely.
@@ -551,17 +551,43 @@ That is a different statement from `.aart-version`. The window says which versio
 claims to work with; the pin says which single version CI actually runs. Keep the pin inside the
 window - a pin outside it is a registry contradicting itself.
 
-## Usage reporting
+__REPORTING__"""
+
+
+#: What the README says about usage reporting when the registry offers it.
+_README_REPORTING = b"""## Usage reporting
 
 The two `aart-usage-*` workflows accept voluntary, redacted usage reports as GitHub Issues and
 build a dashboard from the ones that validate. Reports carry no credentials, paths or repository
 names. Delete both workflows and the issue template if you do not want them.
 """
 
+#: And what it says when nobody asked for it: how to turn it on, not how to delete it.
+_README_NO_REPORTING = b"""## Usage reporting
 
-def render_registry_readme(registry_id: str, display_name: str) -> bytes:
-    """The one generated file a maintainer owns after it is written."""
+This registry does not collect usage reports, so no issue template or reporting workflow was
+generated. To offer the service, re-run `registry init` in a fresh workspace with
+`--usage-reporting-repository owner/name`; reports are voluntary and redacted, and carry no
+credentials, paths or repository names.
+"""
 
-    return _REGISTRY_README.replace(b"__DISPLAY_NAME__", display_name.encode("utf-8")).replace(
+
+def render_registry_readme(
+    registry_id: str,
+    display_name: str,
+    *,
+    usage_reporting: bool = False,
+) -> bytes:
+    """The one generated file a maintainer owns after it is written.
+
+    Its usage-reporting section describes the registry that was actually created (B-087).  A
+    README telling a maintainer to "delete both workflows" that were never written is a document
+    disagreeing with the tree beside it, which is how a generated file stops being read at all.
+    """
+
+    body = _REGISTRY_README.replace(
+        b"__REPORTING__", _README_REPORTING if usage_reporting else _README_NO_REPORTING
+    )
+    return body.replace(b"__DISPLAY_NAME__", display_name.encode("utf-8")).replace(
         b"__REGISTRY_ID__", registry_id.encode("utf-8")
     )
