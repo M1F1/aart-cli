@@ -324,7 +324,7 @@ class SourceSelection:
         object.__setattr__(self, "health_snapshot", snapshot)
 
 
-def _error(message: str, *remediation: str) -> Err:
+def _error(message: str, *remediation: str, interactive: tuple[str, ...] = ()) -> Err:
     return Err(
         (
             Diagnostic(
@@ -332,6 +332,7 @@ def _error(message: str, *remediation: str) -> Err:
                 Severity.ERROR,
                 message,
                 remediation=tuple(remediation),
+                interactive=interactive,
             ),
         )
     )
@@ -553,6 +554,10 @@ def plan_source_addition(
             f"run `aart source sync --alias {source.alias}` to refresh it, "
             f"`aart source resubscribe --alias {source.alias}` if its declared identity changed, "
             f"or `aart source remove --alias {source.alias}` to subscribe to a different origin",
+            interactive=(
+                f"{source.alias} is already connected here.",
+                "Refresh it from its row on Registries, or choose a different alias for this one.",
+            ),
         )
     # SRC02: the store is keyed by (origin, ref), so a second ref of a configured origin is a
     # legitimate new source.  The same origin at the same ref would still resolve to one mirror
@@ -574,6 +579,11 @@ def plan_source_addition(
             f"`aart source resubscribe --alias {same_origin_and_ref[0].value}` if its declared "
             f"identity changed, `aart source remove --alias {same_origin_and_ref[0].value}` to "
             "free the origin, or add this origin at a different ref",
+            interactive=(
+                f"This origin and branch are already connected as {held}.",
+                "Refresh that row from Registries, or connect this origin at a different "
+                "branch or tag.",
+            ),
         )
     if source.kind is not SourceKind.REGISTRY_GIT and not view.allow_direct_sources:
         return _error("direct sources are disabled by organization policy")

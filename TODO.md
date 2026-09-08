@@ -71,19 +71,6 @@ Each new entry records:
       Evidence: screen 46 has inspection only and no init action; the accepted publication boundary
       permits an explicit local commit but never an automatic push
       Fix: pending
-- [ ] **QA-017 — TUI exposes raw CLI remediation commands after adding a Registry.**
-      Stage: connecting the test Registry
-      Surface: Registries → Add Registry result/notice
-      Severity: high
-      Blocks current stage: no, but it sends an interactive user back to a terminal
-      Reproduction: attempt to add the already configured alias/origin `aart-test-registry`
-      Expected: a short TUI-native result such as `Registry “aart-test-registry” is already
-      connected`, with supported next actions represented by screen rows or shortcuts
-      Observed: the TUI prints a long raw instruction containing `aart source sync`, `resubscribe`
-      and `remove`; the final command is clipped at the terminal edge
-      Evidence: `plan_source_addition` returns CLI command strings as remediation and
-      `io/consumer_actions.py::_refusal` copies them verbatim into the TUI notice
-      Fix: pending
 - [ ] **QA-021 — Registry cannot one-off scan YAML manifests and vendor selected artifacts.**
       Stage: optional artifact-scoped onboarding from an external repository
       Surface: Maintainer → Registry
@@ -122,6 +109,12 @@ Each new entry records:
       the form, with the typed values intact — and clears the pending action, so a later Enter
       cannot reach a confirmation. The refusal is drawn on that screen, because `_ANSWERABLE` now
       derives the request origins from `_ACTION_REVIEW`. B-092/D-184.
+- [ ] **QA-017 — TUI exposes raw CLI remediation commands after adding a Registry.** `Diagnostic`
+      gained `interactive`, the same next step written for somebody already inside the application;
+      `_refusal` renders that, or the remediation steps that name no command. The duplicate alias,
+      duplicate origin, changed-identity and unsynchronized-source refusals all carry prose. A
+      sweep over every screen asserts no frame draws an `aart <verb>` command, and a Hypothesis
+      property holds the universal half. CLI and JSON keep their exact remediation. B-091/D-185.
 - [ ] **QA-010 — Consumer TUI cannot synchronize a configured Registry.** Screen 21 now routes `s`
       to its own Refresh Registry action with a review (21c) that names the ref to be fetched,
       states that a refresh is not an artifact update, and warns that a failed fetch keeps the

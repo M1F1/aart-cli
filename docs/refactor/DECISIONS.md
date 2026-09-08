@@ -4036,3 +4036,34 @@ review digest survives — is unchanged, and each gained `self.assertIsNone(fini
 decline returns and clears; a real digest still records a plan and stays), the negative B-092 asks
 for (Enter after a decline emits no execute command), and the no-history case. Five targeted
 mutations, including the one that proved `ACTION_REQUEST_SCREENS` load-bearing, are each killed.
+
+## D-185 — A refusal drawn inside the application is written for somebody who is already in it
+
+`QA-017`/`B-091`. Connecting an already-connected Registry produced diagnostics whose remediation is
+literally `aart source sync …`, `aart source resubscribe …` and `aart source remove …`, and the
+interactive adapter copied them into the notice verbatim. The line was long enough to be clipped
+after `aart source remove`, so the TUI answered a refusal by sending the operator to a terminal and
+then cut the instruction in half.
+
+**Typed projection, not renderer parsing.** `Diagnostic` gained `interactive: tuple[str, ...]` — the
+same next step, in the words of somebody already inside the application. `remediation` is unchanged
+and stays the CLI's and JSON's contract; `diagnostic_to_data` is untouched, so no envelope moved.
+The producers `QA-017` actually hit now carry prose: the duplicate alias, the duplicate origin and
+ref, the changed declared identity, and the two unsynchronized-source refusals in the Marketplace
+catalog. Each names what is true of *this* machine — which alias already holds it, that the snapshot
+already held is kept — and points at a screen rather than a command.
+
+**The net under it.** `_refusal` renders `interactive` when a diagnostic has it, and otherwise the
+remediation steps that name no command, so a producer nobody has converted degrades to saying less
+rather than to printing shell syntax. When every step was withheld it says that the next step is not
+available on this screen yet, because a refusal that names no next step is the dead end `D-183` had
+just removed one boundary over. This is a guarantee, not the mechanism: the mechanism is
+`interactive`, and each new refusal that matters gets prose rather than relying on the net.
+
+**Evidence.** `tests/tui_has_no_cli_commands_test.py` holds the projection, the fallback on both
+sides, `QA-017`'s own two duplicate-connection scenarios, the CLI contract that still carries the
+exact commands, and `B-091`'s audit as a sweep: every `ConsumerScreen` and `MaintainerScreen` drawn
+through `frame` with a command-carrying refusal on it contains no `aart <verb>` — with a
+sensitivity test, because a sweep that stopped reaching the notice would pass by drawing nothing.
+The universal half is a Hypothesis property over generated remediation rather than four chosen
+examples. Seven targeted mutations, all killed; two of them found claims that were not yet held.

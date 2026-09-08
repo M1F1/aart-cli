@@ -134,11 +134,43 @@ def _lines(*messages: str) -> tuple[str, ...]:
     )
 
 
+#: `QA-017`/`B-091`: the net under the typed projection, not the projection itself. A producer that
+#: has not been given `interactive` prose yet degrades to showing the steps that name no command,
+#: rather than to printing shell syntax into a frame that cannot run it.
+_COMMAND_MARKERS = ("aart ", "`", "$ ", "git ")
+
+
+def _names_a_command(step: str) -> bool:
+    return any(marker in step for marker in _COMMAND_MARKERS)
+
+
+_ELSEWHERE = "The next step for this is not available on this screen yet."
+
+
 def _refusal(diagnostics: tuple[Diagnostic, ...]) -> tuple[str, ...]:
-    return _lines(
-        *(item.message for item in diagnostics),
-        *(remediation for item in diagnostics for remediation in item.remediation),
-    )
+    """What a refusal reads like inside the application, never as something to go and type.
+
+    `Diagnostic.interactive` is the projection: prose for somebody already here. Without it the
+    command-free remediation steps are shown, and when a diagnostic had nothing but commands the
+    refusal still says that a next step exists elsewhere -- a refusal that names no next step is
+    the dead end `QA-019` removed one boundary over.
+    """
+
+    lines: list[str] = [item.message for item in diagnostics]
+    steps: list[str] = []
+    withheld = False
+    for item in diagnostics:
+        if item.interactive:
+            steps.extend(item.interactive)
+            continue
+        for step in item.remediation:
+            if _names_a_command(step):
+                withheld = True
+            else:
+                steps.append(step)
+    if withheld and not steps:
+        steps.append(_ELSEWHERE)
+    return _lines(*lines, *steps)
 
 
 @dataclass(frozen=True, slots=True)

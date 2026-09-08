@@ -234,7 +234,7 @@ class SourceFreshnessRequest:
             raise ValueError("source freshness request is invalid")
 
 
-def _failure(code: str, message: str, *remediation: str) -> Err:
+def _failure(code: str, message: str, *remediation: str, interactive: tuple[str, ...] = ()) -> Err:
     return Err(
         (
             Diagnostic(
@@ -242,6 +242,7 @@ def _failure(code: str, message: str, *remediation: str) -> Err:
                 Severity.ERROR,
                 redact_text(message),
                 remediation=tuple(remediation),
+                interactive=tuple(redact_text(item) for item in interactive),
             ),
         )
     )
@@ -336,6 +337,12 @@ def _sync_locked(
             "resolved source changed its declared source identity",
             f"review both identities with `aart source resubscribe --alias "
             f"{request.source.alias.value}`, then re-run it with --yes to adopt the change",
+            interactive=(
+                f"The origin behind {request.source.alias.value} now declares a different "
+                "identity, so this refresh was refused and the snapshot you already have is kept.",
+                "Compare the two identities and re-subscribe deliberately if the change is one "
+                "you meant to accept.",
+            ),
         )
         return _retained(changed_identity, current, request.fallback)
     published = ports.publish(

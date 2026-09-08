@@ -2203,7 +2203,7 @@ transcript; QA-016.
 ## B-091 — Interactive notices leak CLI remediation syntax into the TUI
 
 Found: whole-product TUI acceptance, Add Registry result (2026-09-08) · Severity: high ·
-Status: open
+Status: resolved (D-185; awaiting manual retest as QA-017)
 
 Adding an alias or origin already present in configuration produces domain diagnostics whose
 remediation strings are literal `aart source sync`, `resubscribe` and `remove` commands.

@@ -329,6 +329,14 @@ class SourceRefusalWayOutTests(unittest.TestCase):
                 "review the origin, then run `aart source remove --alias registry` and add "
                 "it again to subscribe to the new identity",
             ),
+            # `QA-017`/`D-185`: the way out is still stated, in the words of somebody who is
+            # inside the application rather than at a shell. The CLI keeps the command above.
+            interactive=(
+                "The origin behind registry now declares a different identity, so this refresh "
+                "was refused and the snapshot you already have is kept.",
+                "Compare the two identities and re-subscribe deliberately if the change is one "
+                "you meant to accept.",
+            ),
         ),
     )
 
@@ -336,8 +344,9 @@ class SourceRefusalWayOutTests(unittest.TestCase):
         lines = _refusal(self.IDENTITY_CHANGE)
 
         self.assertEqual(lines[0], "resolved source changed its declared source identity")
-        self.assertEqual(lines[1:], self.IDENTITY_CHANGE[0].remediation)
+        self.assertEqual(lines[1:], self.IDENTITY_CHANGE[0].interactive)
         self.assertNotIn("\u2026", " ".join(lines))
+        self.assertFalse(any("aart " in line for line in lines), lines)
 
     def test_every_diagnostic_is_drawable_as_one_row_each(self) -> None:
         """A terminal row cannot hold a newline, so a multi-line message becomes several rows."""

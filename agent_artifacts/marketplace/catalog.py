@@ -53,6 +53,7 @@ def _error(
     alias: SourceAlias | None = None,
     remediation: tuple[str, ...] = (),
     details: tuple[tuple[str, str], ...] = (),
+    interactive: tuple[str, ...] = (),
 ) -> Diagnostic:
     return Diagnostic(
         code,
@@ -61,6 +62,7 @@ def _error(
         None if alias is None else SourceLocation(source=alias),
         remediation=remediation,
         details=details,
+        interactive=tuple(redact_text(item) for item in interactive),
     )
 
 
@@ -316,11 +318,19 @@ def _resolution_failure(
                     "re-run without --offline",
                     f"aart source sync --alias {scope[0].alias}, while connected",
                 ),
+                interactive=(
+                    f"Nothing has been downloaded from {aliases} yet, and this session is offline.",
+                    "Reconnect, then refresh that registry from its row on Registries.",
+                ),
             )
         return _error(
             SOURCE_NOT_SYNCHRONIZED,
             f"no snapshot has been synchronized from {aliases}",
             remediation=(f"aart source sync --alias {scope[0].alias}",),
+            interactive=(
+                f"Nothing has been downloaded from {aliases} yet.",
+                "Refresh that registry from its row on Registries to fetch its approved snapshot.",
+            ),
         )
     qualification = "" if query.source is None else f" in source {query.source}"
     listing = "aart marketplace list" + (

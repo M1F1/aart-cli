@@ -147,6 +147,19 @@ screen — both of their names already described it — keeping every other asse
 check that no action stays pending. Evidence: `tests/consumer_declined_preparation_test.py`,
 `tests/consumer_application_e2e_test.py`; five targeted mutations, all killed.
 
+B-091/QA-017 is now **fixed and awaiting manual retest** (D-185). `Diagnostic` carries an
+`interactive` projection beside `remediation`: the same next step written for somebody already
+inside the application. `_refusal` renders that when a diagnostic has it and otherwise only the
+remediation steps that name no command, so an unconverted producer degrades to saying less rather
+than to printing shell syntax, and a refusal whose every step was a command still says that the next
+step lives elsewhere. The duplicate alias, duplicate origin and ref, changed declared identity and
+the two unsynchronized-source catalog refusals now carry prose that names this machine's own state.
+CLI and JSON remediation contracts are untouched. Evidence:
+`tests/tui_has_no_cli_commands_test.py` — the projection, `QA-017`'s own scenarios, a sweep over
+every `ConsumerScreen` and `MaintainerScreen` drawn with a command-carrying refusal on it, a
+sensitivity test for that sweep, and a Hypothesis property for the universal half; seven targeted
+mutations, all killed.
+
 On top of that, Maintainer screen 31 now offers `a` Add Source: a separate `SourceDraft` form (31a)
 and review (31b) that accept only `source-git`/`source-local`, refuse `registry-git` by name, never
 set a default registry, and execute through the same `add_configured_source` transaction the CLI
