@@ -142,6 +142,12 @@ class MaintainerScreen(str, Enum):
 
     DASHBOARD = "30-maintainer-dashboard"
     SOURCES = "31-sources"
+    # 31a/31b are the Add Source form and its review, numbered the way screen 21's own addition
+    # pair is (B-083).  They are Maintainer screens because a Source is an authoring/discovery
+    # location rather than an approved registry (164.2), and screen 21a must not learn to accept
+    # one.
+    SOURCE_ADD = "31a-add-source"
+    SOURCE_ADD_REVIEW = "31b-review-source"
     SOURCE_DETAILS = "32-source-details"
     SOURCE_SYNC = "33-source-sync"
     SOURCE_SYNC_RESULT = "34-source-sync-result"
@@ -2342,9 +2348,12 @@ _NAVIGATION: dict[MaintainerScreen, tuple[MaintainerScreen, ...]] = {
         MaintainerScreen.REGISTRY,
     ),
     MaintainerScreen.SOURCES: (
+        MaintainerScreen.SOURCE_ADD,
         MaintainerScreen.SOURCE_DETAILS,
         MaintainerScreen.SOURCE_SYNC,
     ),
+    MaintainerScreen.SOURCE_ADD: (MaintainerScreen.SOURCE_ADD_REVIEW,),
+    MaintainerScreen.SOURCE_ADD_REVIEW: (MaintainerScreen.SOURCES,),
     MaintainerScreen.SOURCE_DETAILS: (MaintainerScreen.SOURCE_SYNC,),
     MaintainerScreen.SOURCE_SYNC: (MaintainerScreen.SOURCE_SYNC_RESULT,),
     MaintainerScreen.SOURCE_SYNC_RESULT: (MaintainerScreen.CANDIDATES,),

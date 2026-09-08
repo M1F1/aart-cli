@@ -661,3 +661,98 @@ The exact GitHub Actions path was then reproduced in fresh read-only Linux copie
 gates over 3,322 tests, reached at least 85.09% branch coverage, and built the wheel successfully.
 The focused 88-test failure set and a separate wheel build were also green on every interpreter.
 Step 6 and CP-18 therefore return to **VERIFIED** on matrix evidence rather than one workstation.
+
+### Post-refactor manual acceptance
+
+The first operator pass found the persistent shell's navigation undiscoverable; B-077/D-168 added
+permanent key chrome. The next pass completed B-078 through B-082 (D-169–D-171): Esc's terminal
+prefix delay is bounded at 50 ms, Dashboard destinations explain themselves, a zero-source machine
+gets first-run guidance, and screen 21 now owns an exact reviewed Add Registry flow over the same
+canonical transaction as `aart source add`. Local paths remain Maintainer authoring Sources rather
+than approved Marketplace registries. Per operator request these feedback increments use focused
+consumer/source tests before manual acceptance; they do not alter CP-18's already-verified closing
+evidence.
+
+D-172 records the continuation as an operator-owned, whole-product procedure rather than another
+CP-18 implementation step. `docs/testing/END_TO_END_ACCEPTANCE.md` carries a real author Source →
+reviewed registry → isolated consumer chain, and the current section of root `TODO.md` is its one
+finding queue. Both are subordinate to the Product Specification; CP-18 remains VERIFIED.
+
+D-173's TUI-first rendering of that procedure records two post-closure findings without changing
+the slice verdict: B-083 (no Maintainer Add Source) and B-084 (no consumer Registry refresh). Both
+remain explicit CLI fallbacks in the local manual walk and neither weakens the distinction between
+authoring Sources and approved Registries.
+
+D-174 adds B-085 as another post-closure measurement: OpenCode is named by dormant best-effort
+profile data but absent from every canonical placement table and from the TUI target set. Current
+OpenCode uses a native MCP entry shape the generic canonical registration cannot express, so the
+manual pass holds the inert refusal instead of reconnecting unverified legacy data. CP-18 remains
+VERIFIED; an OpenCode harness slice is new product work.
+
+D-175 records the parallel Codex finding as B-086/QA-012 without treating the adapters as
+interchangeable. Codex CLI is installed, but AART has no Codex target or built-in profile; its
+documented `.agents/skills`, layered `AGENTS.md` and TOML `mcp_servers` contracts require their own
+measured vertical slice and TUI selection. The manual pass holds the no-write refusal. CP-18 remains
+VERIFIED; Codex integration is new product work.
+
+The first live Registry initialization then recorded two more post-closure usability findings.
+B-087/QA-013 says optional usage-reporting assets should not be emitted without their explicit
+destination; B-088/QA-014 says confirmed success output must not repeat review warnings and its path
+inventory until the result is buried. These are manual-acceptance backlog, not unfinished CP-18
+release evidence; CP-18 remains VERIFIED.
+
+B-089/QA-015 records the next live observation: audit passes an empty Registry but renders the
+absence of auditable objects as two alarming warnings with contradictory-sounding remediation.
+Future work must model that state as not applicable without suppressing a real evidence gap on a
+populated Registry. It is post-closure usability backlog; CP-18 remains VERIFIED.
+
+B-090/QA-016 records that the complete local Registry bootstrap is absent from Maintainer TUI.
+Screen 46 only reads an existing Registry, while the operator manually sequences init, lock, build,
+validate and audit. A future vertical TUI slice may compose those existing authorities behind one
+review and optionally create the local commit, but 165.27's Git-host publication boundary still
+forbids a silent push or merge. This is post-closure product work; CP-18 remains VERIFIED.
+
+B-091/QA-017 and B-092/QA-018 record that Add Registry exposes raw CLI remediation and leaves a
+declined preparation on an impossible confirmation screen. B-093/QA-019 records an independently
+valid security refusal with unusable wording: Git correctly rejects the Superpowers `AGENTS.md`
+symlink but does not identify it as a symlink or give a safe next step. All are post-closure
+manual-acceptance work; CP-18 remains VERIFIED and the symlink boundary remains closed.
+
+B-094/QA-020 records the clarified accepted model and a critical post-closure gap. Superpowers is a
+monitored authoring Source; Sync should discover explicit YAML, create a Candidate and allow only a
+selected promotion into the Registry. The public add path invokes the canonical native-package
+loader before the YAML compiler and refuses the repository before discovery. Print-only scan and
+direct vendoring do not hold monitoring/TUI lifecycle evidence. CP-18 remains historically VERIFIED,
+but the live mandatory Source → Candidate entrance is blocked until this seam is repaired.
+
+B-094/QA-020 and B-083/QA-009 are now **fixed and awaiting manual retest** (D-176, D-177).
+`validate_authoring_source_candidate` separates authoring-Source admission from consumer
+native-package validation: a tree declaring root `aart-source.json` is still read by
+`load_native_source`, any other tree is admitted when `discover_author_manifests` finds at least one
+explicit `aart.yaml`/`aart.json`, and a tree declaring neither is refused by name. Admission is
+discovery rather than compilation, because 164.2's `3 manifests · 1 invalid` Source row makes an
+invalid manifest a Candidate state, not a subscription refusal. No transport, identity, symlink,
+special-file or last-known-good boundary moved: symlinks and special entries never reach validation
+at all, and the E2E fails itself if the public path requests weakened transport. An authoring
+Source's declared identity is its configured alias, so an upstream commit is not read as an identity
+transition, and its consumer Marketplace contribution is empty rather than an `Err`, which is what
+stops one subscribed author repository from emptying the Marketplace. Maintainer screen 31 gained
+`a` Add Source with its own form (31a) and review (31b), accepting only `source-git`/`source-local`
+and executing through the same `add_configured_source` transaction as the CLI. Evidence:
+`tests/authoring_source_admission_e2e_test.py`, `tests/source_validation_test.py`,
+`tests/consumer_runtime_test.py`, `tests/maintainer_source_addition_test.py`,
+`tests/maintainer_navigation_test.py`; ten targeted mutations, all killed. Focused suites, `ruff` and
+`mypy` are green; full gates are deferred to the end of this manual-acceptance batch by the
+operator's instruction. CP-18 remains historically VERIFIED.
+
+Two regressions in the uncommitted manual-acceptance work were found and repaired while proving this
+increment (D-178): the first-run welcome panel replaced the Dashboard body on a machine that had no
+configured source but did have an installation, and the deferral of `load_local_reporting_service`
+into `completion_factory` outran a test seam that substituted it only around composition. The
+deferral is correct and kept; the panel now also requires nothing installed.
+
+B-095/QA-021 records the separate one-off adoption model: exact author YAML discovery and selective
+vendoring from a repository that is not persisted as a Source. Existing scan/discover/vendor/batch
+commands stop at separate boundaries, so no TUI or command composes the requested atomic flow.
+Per-artifact provenance may later drive an explicit upstream check, but must not claim continuous
+monitoring. This complements B-094 and does not change CP-18's historical verdict.

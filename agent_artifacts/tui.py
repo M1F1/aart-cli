@@ -26,6 +26,8 @@ from . import __version__
 from .application.consumer_ui import (
     ConsumerUiEventKind,
     ConsumerUiState,
+    RegistryDraft,
+    SourceDraft,
     key_event,
     opening_state,
 )
@@ -46,7 +48,11 @@ from .io.configured_installation_action import (
     InstallationHost,
 )
 from .io.configured_setup import ConfiguredSetupService, configured_consumer_completion
-from .io.consumer_actions import ConsumerActionContext, LocalConsumerActions
+from .io.consumer_actions import (
+    ConsumerActionContext,
+    LocalConsumerActions,
+    RegistryConnectionSnapshot,
+)
 from .io.consumer_machine import read_consumer_machine
 from .io.consumer_settings import read_consumer_settings
 from .io.credentials import MacOsKeychainProvider
@@ -734,7 +740,7 @@ class _CursesTerminal:
         self._stdscr.addstr(drawable - 1, 0, lines[-1][: max(width - 1, 0)])
         self._stdscr.refresh()
 
-    def key(self) -> int:
+    def key(self) -> int | str:
         return int(self._stdscr.getch())
 
 
@@ -776,7 +782,7 @@ class _TextTerminal:
         self._write("")
         self._write(_TEXT_KEY_HINT)
 
-    def key(self) -> int:
+    def key(self) -> int | str:
         try:
             raw = self._read("> ")
         except EOFError:
@@ -787,7 +793,8 @@ class _TextTerminal:
             return ord("q") if quitting else ord("y")
         if len(raw) == 1:
             return ord(raw)
-        return _TEXT_KEY_WORDS.get(raw.strip().lower(), 0)
+        named = _TEXT_KEY_WORDS.get(raw.strip().lower())
+        return raw if named is None else named
 
 
 def run_consumer_text(
@@ -824,6 +831,12 @@ def run_consumer(actions: LocalConsumerActions) -> ConsumerUiState:
         import curses  # stdlib; imported lazily so the text path needs no terminal at all.
     except ImportError as error:
         raise CursesUnavailable("the curses application could not start") from error
+
+    # ncurses otherwise waits around a second after a lone Escape byte in case it is the prefix of
+    # a function-key sequence. Esc is the accepted global Back action, so that default makes the
+    # application appear to hang on every return. Fifty milliseconds preserves terminal escape
+    # sequences while keeping a local Back action immediate.
+    curses.set_escdelay(50)
 
     captured: dict = {}
 
@@ -907,20 +920,109 @@ def _canonical_consumer_actions(
     )
     if isinstance(maintainer, DomainErr):
         return maintainer
-    reporting_result = load_local_reporting_service(
-        user_home=home,
-        configuration=loaded.value.configuration,
-    )
-    reporting = reporting_result.value if isinstance(reporting_result, DomainOk) else None
+
+    def registry_connection(draft: RegistryDraft) -> DomainResult[RegistryConnectionSnapshot]:
+        # One authority for both front ends: the TUI supplies a typed draft, while the canonical
+        # source-add transaction retains schema validation, snapshot validation, CAS and policy.
+        from .commands.source import add_configured_source
+
+        added = add_configured_source(
+            Request(
+                "source",
+                project=project_root,
+                user_home=home,
+                source_action="add",
+                source_alias=draft.alias,
+                source_kind="registry-git",
+                source_location=draft.location,
+                source_make_default=draft.make_default,
+                ref=draft.ref or None,
+            )
+        )
+        if isinstance(added, DomainErr):
+            return added
+        refreshed = _canonical_consumer_configuration(paths)
+        if isinstance(refreshed, DomainErr):
+            return refreshed
+        refreshed_offers = read_consumer_offers(
+            refreshed.value, data_root=paths.data_root, target=target
+        )
+        if isinstance(refreshed_offers, DomainErr):
+            return refreshed_offers
+        refreshed_maintainer = read_maintainer_views(
+            refreshed.value, data_root=paths.data_root, registry_root=project_root
+        )
+        if isinstance(refreshed_maintainer, DomainErr):
+            return refreshed_maintainer
+        return DomainOk(
+            RegistryConnectionSnapshot(
+                refreshed.value,
+                refreshed_offers.value,
+                refreshed_maintainer.value,
+            )
+        )
+
+    def source_connection(draft: SourceDraft) -> DomainResult[RegistryConnectionSnapshot]:
+        # The same authority again, with the kind the Maintainer form chose rather than a
+        # hardcoded `registry-git`: 164.2's authoring Sources and approved registries are two
+        # subscriptions through one transaction, not two transactions (B-083).
+        from .commands.source import add_configured_source
+
+        added = add_configured_source(
+            Request(
+                "source",
+                project=project_root,
+                user_home=home,
+                source_action="add",
+                source_alias=draft.alias,
+                source_kind=draft.kind,
+                source_location=draft.location,
+                # An authoring Source is never the default registry; that flag is screen 21a's.
+                source_make_default=False,
+                ref=draft.ref or None,
+            )
+        )
+        if isinstance(added, DomainErr):
+            return added
+        refreshed = _canonical_consumer_configuration(paths)
+        if isinstance(refreshed, DomainErr):
+            return refreshed
+        refreshed_offers = read_consumer_offers(
+            refreshed.value, data_root=paths.data_root, target=target
+        )
+        if isinstance(refreshed_offers, DomainErr):
+            return refreshed_offers
+        refreshed_maintainer = read_maintainer_views(
+            refreshed.value, data_root=paths.data_root, registry_root=project_root
+        )
+        if isinstance(refreshed_maintainer, DomainErr):
+            return refreshed_maintainer
+        return DomainOk(
+            RegistryConnectionSnapshot(
+                refreshed.value,
+                refreshed_offers.value,
+                refreshed_maintainer.value,
+            )
+        )
 
     def completion_factory(
         completed: CompletedConfiguredInstallation,
         action: Literal["install", "update"],
         source: Callable[[tuple[DeclaredArtifactSetup, ...]], ConsumerScreenSource],
     ) -> ConsumerActionCompletion:
+        # A registry can be connected without restarting the shell. Re-read here so setup and
+        # reporting after the next install use the configuration that authorized that install,
+        # never the snapshot from before onboarding.
+        current_configuration = _canonical_consumer_configuration(paths)
+        if isinstance(current_configuration, DomainErr):
+            return _UnavailableTerminalCompletion(
+                "setup/reporting completion is unavailable; the installed payload is unchanged",
+                completed.pending_setup,
+                source,
+            )
         projected = configured_consumer_completion(
             completed,
-            loaded.value,
+            current_configuration.value,
             InstallationHost(paths.data_root, project_root, home, Scope.PROJECT, target.profiles),
             action=action,
         )
@@ -931,6 +1033,11 @@ def _canonical_consumer_actions(
                 source,
             )
         review, outcome, service = projected.value
+        reporting_result = load_local_reporting_service(
+            user_home=home,
+            configuration=current_configuration.value.configuration,
+        )
+        reporting = reporting_result.value if isinstance(reporting_result, DomainOk) else None
         return _CanonicalTerminalCompletion(
             service,
             review,
@@ -955,6 +1062,8 @@ def _canonical_consumer_actions(
             ),
             data_root=paths.data_root,
             completion_factory=completion_factory,
+            registry_connection=registry_connection,
+            source_connection=source_connection,
         )
     )
 

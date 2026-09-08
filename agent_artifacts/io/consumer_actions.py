@@ -24,17 +24,22 @@ reads as "nothing was established", which leaves the session exactly where it wa
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from typing import Callable, Literal
 
 from agent_artifacts.application.consumer_session import ConsumerMachine, InstalledInspection
 from agent_artifacts.application.consumer_ui import (
+    AUTHORING_SOURCE_KINDS,
     ConsumerActionKind,
     ConsumerUiCommand,
     ConsumerUiCommandKind,
     ConsumerUiEvent,
     ConsumerUiEventKind,
+    RegistryDraft,
+    SourceDraft,
 )
 from agent_artifacts.application.consumer_views import (
     ConsumerSettings,
@@ -51,7 +56,9 @@ from agent_artifacts.application.maintainer_views import (
     project_source_sync_result,
     project_source_sync_review,
 )
+from agent_artifacts.configuration.model import ConfiguredSource, SourceKind
 from agent_artifacts.configuration.policy import EffectiveConfiguration
+from agent_artifacts.configuration.schema import configured_source_from_input
 from agent_artifacts.domain.candidates import CandidateId
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.identifiers import ArtifactCoordinate, SourceAlias
@@ -106,6 +113,7 @@ __all__ = [
     "CONSUMER_ACTION_NOT_OFFERED",
     "ConsumerActionContext",
     "LocalConsumerActions",
+    "RegistryConnectionSnapshot",
 ]
 
 #: What a command names is not among the artifacts the configured sources currently offer.
@@ -165,6 +173,38 @@ class _PendingInstall:
     previous_receipts: tuple[tuple[ArtifactCoordinate, ArtifactReceipt], ...] = ()
 
 
+@dataclass(frozen=True, slots=True)
+class _PendingRegistryAddition:
+    draft: RegistryDraft
+    source: ConfiguredSource
+    review_digest: str
+
+
+@dataclass(frozen=True, slots=True)
+class _PendingSourceAddition:
+    draft: SourceDraft
+    source: ConfiguredSource
+    review_digest: str
+
+
+@dataclass(frozen=True, slots=True)
+class RegistryConnectionSnapshot:
+    """Configuration-derived views re-read after a subscription succeeds.
+
+    Both subscriptions land here: connecting an approved registry (screen 21a) and connecting an
+    authoring Source (screen 31a) change the same three derived things, so the value that carries
+    them back is one value rather than two identical ones.
+    """
+
+    effective: EffectiveConfiguration
+    offers: ConsumerOffers
+    maintainer: MaintainerViews | None = None
+
+
+RegistryConnectionPort = Callable[[RegistryDraft], Result[RegistryConnectionSnapshot]]
+SourceConnectionPort = Callable[[SourceDraft], Result[RegistryConnectionSnapshot]]
+
+
 #: What one reviewed-but-unconfirmed action is holding. Each carries the review digest the
 #: confirmation has to name, so nothing runs against a plan nobody read.
 _Pending = (
@@ -173,6 +213,8 @@ _Pending = (
     | PreparedConfiguredUninstall
     | PreparedSourceSync
     | PreparedConfiguredCandidatePromotion
+    | _PendingRegistryAddition
+    | _PendingSourceAddition
 )
 
 ConfiguredCompletionFactory = Callable[
@@ -200,6 +242,8 @@ class LocalConsumerActions:
         now=None,
         data_root: str | None = None,
         completion_factory: ConfiguredCompletionFactory | None = None,
+        registry_connection: RegistryConnectionPort | None = None,
+        source_connection: SourceConnectionPort | None = None,
     ) -> None:
         if not isinstance(context, ConsumerActionContext):
             raise ValueError("consumer actions need a composed action context")
@@ -210,6 +254,8 @@ class LocalConsumerActions:
         self._pending_action: ConsumerActionKind | None = None
         self._data_root = data_root
         self._completion_factory = completion_factory
+        self._registry_connection = registry_connection
+        self._source_connection = source_connection
 
     # -- preferences --------------------------------------------------------- #
 
@@ -306,6 +352,10 @@ class LocalConsumerActions:
         action = command.action
         if action is ConsumerActionKind.INSTALL:
             return self._prepare_install(command)
+        if action is ConsumerActionKind.REGISTRY_ADD:
+            return self._prepare_registry_addition(command)
+        if action is ConsumerActionKind.SOURCE_ADD:
+            return self._prepare_source_addition(command)
         if action is ConsumerActionKind.UPDATE:
             return self._prepare_update(command)
         if action is ConsumerActionKind.VERIFY_REPAIR:
@@ -317,6 +367,112 @@ class LocalConsumerActions:
         if action is ConsumerActionKind.BULK_PROMOTION:
             return self._prepare_bulk_promotion(command)
         return self._prepare_uninstall(command)
+
+    def _prepare_registry_addition(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        draft = command.registry_draft
+        if draft is None or self._registry_connection is None:
+            return self._declined(command, _lines("registry connection is unavailable"))
+        parsed = configured_source_from_input(
+            draft.alias,
+            SourceKind.REGISTRY_GIT,
+            draft.location,
+            draft.ref or None,
+        )
+        if isinstance(parsed, Err):
+            return self._declined(command, _refusal(parsed.diagnostics))
+        identity = json.dumps(
+            {
+                "alias": parsed.value.alias.value,
+                "kind": parsed.value.kind.value,
+                "location": parsed.value.location,
+                "ref": parsed.value.ref,
+                "make_default": draft.make_default,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        review_digest = "sha256:" + hashlib.sha256(identity).hexdigest()
+        self._pending = _PendingRegistryAddition(draft, parsed.value, review_digest)
+        self._pending_action = command.action
+        default = "yes" if draft.make_default else "no"
+        return ConsumerActionUpdate(
+            self.source(
+                notice=(
+                    "Registry connection review:",
+                    f"  alias: {parsed.value.alias.value}",
+                    f"  URL: {parsed.value.location}",
+                    f"  branch or tag: {parsed.value.ref}",
+                    f"  make default: {default}",
+                    "  next: download and validate a fresh snapshot, then save the subscription",
+                )
+            ),
+            ConsumerUiEvent(
+                ConsumerUiEventKind.ACTION_PREPARED,
+                action=command.action,
+                review_digest=review_digest,
+            ),
+        )
+
+    def _prepare_source_addition(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        """Review one authoring Source subscription: screen 31a's confirmable value (B-083).
+
+        The kind is checked here rather than only in the schema because this form's *purpose* is
+        the 164.2 boundary: an approved registry is screen 21a's subject, and a Maintainer form
+        that quietly accepted `registry-git` would be the widening B-083 says must not happen.
+        """
+
+        draft = command.source_draft
+        if draft is None or self._source_connection is None:
+            return self._declined(command, _lines("Source connection is unavailable"))
+        if draft.kind not in AUTHORING_SOURCE_KINDS:
+            return self._declined(
+                command,
+                _lines(
+                    f"{draft.kind} is not an authoring Source kind",
+                    "choose source-git or source-local; an approved registry is connected in "
+                    "Registries",
+                ),
+            )
+        kind = SourceKind(draft.kind)
+        parsed = configured_source_from_input(
+            draft.alias,
+            kind,
+            draft.location,
+            (draft.ref or None) if kind is SourceKind.SOURCE_GIT else None,
+        )
+        if isinstance(parsed, Err):
+            return self._declined(command, _refusal(parsed.diagnostics))
+        identity = json.dumps(
+            {
+                "alias": parsed.value.alias.value,
+                "kind": parsed.value.kind.value,
+                "location": parsed.value.location,
+                "ref": parsed.value.ref,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        review_digest = "sha256:" + hashlib.sha256(identity).hexdigest()
+        self._pending = _PendingSourceAddition(draft, parsed.value, review_digest)
+        self._pending_action = command.action
+        return ConsumerActionUpdate(
+            self.source(
+                notice=(
+                    "Source connection review:",
+                    f"  alias: {parsed.value.alias.value}",
+                    f"  kind: {parsed.value.kind.value}",
+                    f"  location: {parsed.value.location}",
+                    f"  branch or tag: {parsed.value.ref or 'not applicable'}",
+                    "  next: acquire a pinned snapshot, discover declared aart.yaml/aart.json "
+                    "manifests, then save the subscription",
+                )
+            ),
+            ConsumerUiEvent(
+                ConsumerUiEventKind.ACTION_PREPARED,
+                action=command.action,
+                review_digest=review_digest,
+            ),
+        )
 
     def _prepare_candidate_promotion(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
         if self._data_root is None:
@@ -722,11 +878,12 @@ class LocalConsumerActions:
             return self._failed(
                 command, _lines("nothing was prepared for this action; review it again")
             )
-        if isinstance(pending, _PendingInstall):
-            expected = pending.prepared.review_digest
-        else:
-            expected = pending.review_digest
-        if command.review_digest != str(expected):
+        expected = (
+            str(pending.prepared.review_digest)
+            if isinstance(pending, _PendingInstall)
+            else str(pending.review_digest)
+        )
+        if command.review_digest != expected:
             return self._failed(
                 command,
                 _lines(
@@ -736,6 +893,10 @@ class LocalConsumerActions:
             )
         if isinstance(pending, _PendingInstall):
             return self._execute_installation(command, pending)
+        if isinstance(pending, _PendingRegistryAddition):
+            return self._execute_registry_addition(command, pending)
+        if isinstance(pending, _PendingSourceAddition):
+            return self._execute_source_addition(command, pending)
         if isinstance(pending, PreparedConfiguredRepair):
             return self._execute_repair(command, pending)
         if isinstance(pending, PreparedSourceSync):
@@ -744,6 +905,42 @@ class LocalConsumerActions:
             return self._execute_candidate_promotion(command, pending)
         assert isinstance(pending, PreparedConfiguredUninstall)
         return self._execute_uninstall(command, pending)
+
+    def _execute_registry_addition(
+        self,
+        command: ConsumerUiCommand,
+        pending: _PendingRegistryAddition,
+    ) -> ConsumerActionUpdate:
+        assert self._registry_connection is not None
+        connected = self._registry_connection(pending.draft)
+        if isinstance(connected, Err):
+            return self._failed(command, _refusal(connected.diagnostics))
+        self._context = replace(
+            self._context,
+            effective=connected.value.effective,
+            offers=connected.value.offers,
+            maintainer=connected.value.maintainer,
+        )
+        recorded_at, _today = self._moment()
+        return self._recorded(command, recorded_at)
+
+    def _execute_source_addition(
+        self,
+        command: ConsumerUiCommand,
+        pending: _PendingSourceAddition,
+    ) -> ConsumerActionUpdate:
+        assert self._source_connection is not None
+        connected = self._source_connection(pending.draft)
+        if isinstance(connected, Err):
+            return self._failed(command, _refusal(connected.diagnostics))
+        self._context = replace(
+            self._context,
+            effective=connected.value.effective,
+            offers=connected.value.offers,
+            maintainer=connected.value.maintainer,
+        )
+        recorded_at, _today = self._moment()
+        return self._recorded(command, recorded_at)
 
     def _execute_source_sync(
         self,

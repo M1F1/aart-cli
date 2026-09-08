@@ -17,6 +17,8 @@ from unittest import mock
 
 from agent_artifacts import tui
 from agent_artifacts.application.consumer_session import assemble_consumer_machine
+from agent_artifacts.application.consumer_ui import ConsumerUiState
+from agent_artifacts.application.consumer_views import ConsumerSettings
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.harness import MCP_TARGETS
 from agent_artifacts.domain.result import Err, Ok
@@ -41,6 +43,23 @@ def _row():
 
 
 class CanonicalConsumerEntryTest(unittest.TestCase):
+    def test_curses_shortens_the_escape_prefix_delay(self) -> None:
+        """The curses default waits about a second for a possible escape sequence (B-078)."""
+
+        actions = mock.Mock()
+        actions.settings = ConsumerSettings()
+        finished = ConsumerUiState(exited=True)
+        with (
+            mock.patch("curses.set_escdelay") as set_delay,
+            mock.patch("curses.wrapper", side_effect=lambda callback: callback(mock.Mock())),
+            mock.patch.object(tui, "run_consumer_shell", return_value=finished),
+        ):
+            returned = tui.run_consumer(actions)
+
+        self.assertIs(returned, finished)
+        set_delay.assert_called_once()
+        self.assertLessEqual(set_delay.call_args.args[0], 100)
+
     def test_curses_keeps_the_navigation_legend_visible_when_the_body_is_tall(self) -> None:
         """The legend is chrome, not body text that scrolling or clipping may hide (B-077)."""
 

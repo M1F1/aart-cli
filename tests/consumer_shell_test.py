@@ -129,9 +129,74 @@ class ConsumerShellTest(unittest.TestCase):
         legend = first[-1]
         self.assertIn("↑/↓", legend)
         self.assertIn("Enter", legend)
+        self.assertIn("Space", legend)
+        self.assertIn("select/toggle", legend)
         self.assertIn("Esc", legend)
         self.assertIn("?", legend)
         self.assertIn("q", legend)
+
+    def test_dashboard_explains_the_navigation_row_under_the_cursor(self):
+        _, terminal = drive(DOWN)
+
+        marketplace = "\n".join(terminal.frames[0])
+        installed = "\n".join(terminal.frames[1])
+        self.assertIn("Browse and install", marketplace)
+        self.assertIn("Marketplace", marketplace)
+        self.assertIn("See what AART manages", installed)
+        self.assertIn("Installed", installed)
+        self.assertNotEqual(marketplace, installed)
+
+    def test_a_machine_without_sources_opens_with_first_run_guidance(self):
+        source = CanonicalScreenSource(ConsumerScreens(project_dashboard((), registry_count=0)))
+        terminal = FakeTerminal()
+
+        run_consumer_shell(source, terminal, settings_writer=_Preferences())
+
+        first = "\n".join(terminal.frames[0])
+        self.assertIn("Welcome to AART", first)
+        self.assertIn("first run", first)
+        self.assertIn("skills", first)
+        self.assertIn("MCP servers", first)
+        self.assertIn("No sources are configured", first)
+        self.assertIn("SETUP REQUIRED", first)
+        self.assertIn("→ Start here", first)
+        self.assertIn("open Registries", first)
+        self.assertIn("Add Registry", first)
+        self.assertLess(first.index("Welcome to AART"), first.index("Navigation:"))
+
+    def test_a_machine_with_something_installed_is_not_offered_first_run_guidance(self):
+        """No source and one installation is not a first run, and must still count what is there.
+
+        The guidance replaces the Dashboard body rather than joining it, so getting this condition
+        wrong does not merely add a panel -- it takes the installed counts away from the person who
+        has installations to see.
+        """
+
+        source = CanonicalScreenSource(
+            ConsumerScreens(
+                project_dashboard(
+                    (installed("public/mcp/github@1.6.0", "ready"),), registry_count=0
+                )
+            )
+        )
+        terminal = FakeTerminal()
+
+        run_consumer_shell(source, terminal, settings_writer=_Preferences())
+
+        first = "\n".join(terminal.frames[0])
+        self.assertNotIn("Welcome to AART", first)
+        self.assertNotIn("SETUP REQUIRED", first)
+        self.assertIn("1 installed", first)
+
+    def test_the_empty_registries_screen_repeats_the_source_setup_step(self):
+        source = CanonicalScreenSource(ConsumerScreens(project_dashboard((), registry_count=0)))
+
+        lines = frame(source, _at(ConsumerScreen.REGISTRIES))
+
+        rendered = "\n".join(lines)
+        self.assertIn("No sources are configured", rendered)
+        self.assertIn("Add Registry", rendered)
+        self.assertIn("connect the first one", rendered)
 
     def test_moving_to_a_screen_loads_its_rows_and_draws_the_cursor(self):
         moved, terminal = drive(DOWN, state=_at(ConsumerScreen.INSTALLED))

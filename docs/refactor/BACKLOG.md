@@ -1874,11 +1874,15 @@ What does not exist is the projection. `wizard.py`'s `WizardInputKind` is
 and no screen module mentions a secret at all. Secret collection lives in the setup engine and the
 `marketplace` command surface, which the TUI does not drive yet.
 
-So the invariant is not violated; the surface it constrains is not built. When input entry reaches
-the TUI, the UI clause needs its own evidence: a screen catalog in which a secret field and a
-configuration field are visibly different things, not two rows of one list.
+So the invariant is not violated; the artifact-input surface it constrains is not built. The
+registry-onboarding form added by B-082 collects only credential-free source configuration and
+validates it through `configured_source_from_input`; it neither collects nor represents setup
+inputs. When artifact input entry reaches the TUI, the UI clause needs its own evidence: a screen
+catalog in which a secret field and a configuration field are visibly different things, not two
+rows of one list.
 
-Not critical to CP-18. It becomes critical when a TUI screen first collects an input value.
+Not critical to CP-18. It becomes critical when a TUI screen first collects an artifact setup
+input value.
 
 Evidence/links: INV-067; `agent_artifacts/wizard.py:36-38`; `tests/authoring_inputs_test.py:94-146`;
 `tests/tui_boundary_test.py`.
@@ -1919,7 +1923,8 @@ contains its status-bar machinery, but the canonical shell never renders it.
 This crosses the accepted screen-01 contract rather than being cosmetic: Product Specification
 161.1 names arrows, Enter, Esc, `/`, `?` and `q` as the global interaction vocabulary, while
 INV-187 protects its navigation semantics. The repair is a permanently visible, concise footer for
-movement, forward navigation, back, full help and quit; `?` retains the contextual list. In curses
+movement, forward navigation, selection/toggle via Space, back, full help and quit; `?` retains the
+contextual list. In curses
 the footer is chrome pinned below a clipped body, not another body line that can disappear on a
 short terminal. The text fallback renders the same shell frame.
 
@@ -1928,3 +1933,416 @@ Evidence/links: Product Specification 161.1; INV-187; `tests/consumer_shell_test
 were first observed red against the shipped frame/clipping behavior, then passed with the footer.
 All nine quality gates pass over 3,324 tests at 85.35% branch coverage, as do all 343 separate
 integration tests.
+
+## B-078 — Escape inherits curses' long escape-sequence delay
+
+Found: manual TUI acceptance (2026-09-04) · Severity: high · Status: done
+
+Pressing Esc to return from a detail screen pauses noticeably before the prior screen appears.
+The reducer and machine reload are not the source: ncurses holds a lone escape byte while waiting
+to see whether it begins a function-key sequence. The curses entry boundary should set an explicit
+short delay once, before the shell starts, without moving key interpretation out of `key_event`.
+
+Evidence/links: Product Specification 161.1; INV-187; `agent_artifacts/tui.py::run_consumer`;
+`tests/tui_consumer_entry_test.py`; D-169; manual acceptance. Curses now uses a 50 ms escape
+prefix delay; the focused terminal-entry test was red before the setting existed.
+
+## B-079 — Dashboard navigation names destinations without explaining them
+
+Found: manual TUI acceptance (2026-09-04) · Severity: high · Status: done
+
+The first screen lists Marketplace, Installed, Updates, Registries, Credentials, Activity, Doctor
+and Settings, but a first-time user is expected to know the product vocabulary already. Moving the
+cursor should show one stable, short explanation of the highlighted destination. The explanations
+are presentation only and must not derive health, actions or policy decisions.
+
+Evidence/links: Product Specification 161.1 and 161.2–161.11; INV-062; `CanonicalScreenSource`;
+`tests/consumer_shell_test.py`; D-170; manual acceptance. Moving from Marketplace to Installed now
+changes the displayed explanation in the headless public shell test.
+
+## B-080 — An empty first run looks like an already-configured machine with zero results
+
+Found: manual TUI acceptance (2026-09-04) · Severity: high · Status: done
+
+With no configured source, Marketplace cannot offer anything, but the Dashboard only reports zero
+counts. The empty state should briefly explain what AART installs, recognize that no source is
+configured and point to the real setup entry point. It initially named `aart source add --help`;
+B-082 subsequently built the same transaction into screen 21, so the current next step is
+Registries → Add Registry. Manual acceptance places this as a `SETUP REQUIRED` callout before the
+navigation menu, so the prerequisite is read before the unavailable destinations.
+
+Evidence/links: Product Specification 161.1, 161.2 and 161.7; INV-026; B-075;
+`tests/consumer_shell_test.py`; D-170/D-171; manual acceptance. The empty Dashboard and empty
+Registries screen independently name the TUI source-add entry point.
+
+## B-081 — Manual acceptance inherited two old user-level registry subscriptions
+
+Found: manual TUI acceptance (2026-09-04) · Severity: medium · Status: done
+
+The apparent built-in sources are not package defaults. `aart source list --json` found two entries
+persisted in the real macOS user configuration on 2026-08-15: `registry` points at
+`M1F1/agent-artifacts-registry-2`, and `registry-a` points at `M1F1/agent-artifacts-registry`.
+Both currently report `could-not-check`. A clean first-run acceptance session must remove those
+subscriptions through `aart source remove`; future scripted acceptance continues to use isolated
+temporary homes so it cannot seed a developer's configuration.
+
+Evidence/links: the public `aart source list/remove` output; configuration path contract;
+manual acceptance. Both removals were separately reviewed and finalized through the public command;
+the final `aart source list --json` returned an empty `sources` array and both managed snapshots
+were discarded. Installed artifacts and project files were outside the command's effect contract.
+
+## B-082 — Registries can be inspected in the TUI but not connected there
+
+Found: manual TUI acceptance (2026-09-04) · Severity: high · Status: done
+
+Screen 21 explained that Marketplace depends on approved registries, then required a new user to
+leave the application and reconstruct a long `source add` command. It now exposes Add Registry,
+collects alias, credential-free Git URL, branch/tag and default choice, shows an exact review, and
+connects only after Enter confirms it. The operation reuses the CLI's canonical source-add
+transaction rather than duplicating policy, synchronization or compare-and-swap behavior.
+
+A local path remains deliberately unavailable here. Product Specification 164.2 says a Source is
+an authoring/discovery location and not an approved registry; local and direct Sources stay in
+Maintainer Mode. The existing Git-location schema and transport allowlist are unchanged.
+
+Evidence/links: Product Specification 161.7 and 164.2; INV-026; D-171;
+`tests/consumer_registry_addition_test.py`; `tests/source_cli_command_test.py`. The focused 113-test
+consumer/source set and typecheck are green; full quality and integration were intentionally not
+run before the operator's requested manual pass.
+
+## B-083 — Maintainer Sources can be synchronized but not added in the TUI
+
+Found: whole-product TUI acceptance preparation (2026-09-08) · Severity: high · Status: resolved
+(D-177; awaiting manual retest as QA-009)
+
+The requested real chain starts with two external author repositories carrying `aart.yaml`
+manifests. Maintainer → Sources can inspect a configured authoring Source and `s` prepares its
+reviewed synchronization, but there is no Add Source action or form. `key_event` exposes `a` only
+on consumer Registries and the only action reachable from Maintainer Sources is `SOURCE_SYNC`.
+Consequently the TUI cannot create the precondition its own Candidate and Promotion screens need.
+
+This must remain distinct from B-082. Add Registry accepts only an approved remote Git registry;
+widening it to accept `source-git` or local authoring paths would erase the Product Specification
+164.2 trust boundary. The missing surface is a Maintainer form that explicitly chooses
+`source-git` or `source-local`, reviews the identity and uses the same configured-source authority
+as the CLI.
+
+Resolved by `MaintainerScreen.SOURCE_ADD`/`SOURCE_ADD_REVIEW` (31a/31b), `SourceDraft`,
+`ConsumerActionKind.SOURCE_ADD` and the `source_connection` port, which reaches
+`add_configured_source` — the same authority the CLI uses. The form accepts only
+`AUTHORING_SOURCE_KINDS` and refuses `registry-git`, so the 164.2 boundary this entry names is
+held by a test rather than by convention. Evidence: `tests/maintainer_source_addition_test.py`.
+
+Evidence/links: Product Specification 164.2; `ConsumerScreen.REGISTRY_ADD`;
+`MaintainerScreen.SOURCES`; `application/consumer_ui.py::key_event`; QA-009; D-177.
+
+## B-084 — A consumer Registry cannot be refreshed from the TUI
+
+Found: whole-product TUI acceptance preparation (2026-09-08) · Severity: high · Status: open
+
+Add Registry fetches the initial approved snapshot, so the first Marketplace install is complete.
+After maintainers merge a newer registry commit, however, the consumer needs `aart source sync` to
+observe it before Updates can offer the new version. The Registries screen has Add and details but
+no reviewed Sync action; `s` is routed exclusively from Maintainer authoring Sources and does not
+make a configured consumer registry refreshable.
+
+This is a shipped interactive lifecycle gap rather than an automatic-background-sync request.
+The TUI should expose an explicit refresh whose review states which registry and ref are fetched,
+preserves last-known-good state on failure and reloads Marketplace/Updates after success. Until
+then the manual TUI pass uses one named CLI fallback rather than silently claiming the update was
+performed through the interactive application.
+
+Evidence/links: Product Specification 161.7; `ConsumerScreen.REGISTRIES`;
+`ConsumerActionKind.SOURCE_SYNC`; `application/consumer_ui.py::key_event`; QA-010.
+
+## B-085 — OpenCode is named by a dormant profile but absent from canonical installation targets
+
+Found: whole-product TUI acceptance preparation (2026-09-08) · Severity: high · Status: open
+
+OpenCode 1.18.29 is installed on the acceptance Mac, and an artifact may declare `opencode` in its
+compatibility. Nevertheless every canonical placement lookup refuses it: `MCP_TARGETS`,
+`DELIVERY_TARGETS`, `MEMORY_TARGETS` and `HOOK_TARGETS` contain no OpenCode entry at either scope.
+The public CLI therefore accepts `--profile opencode` syntactically and then returns a named
+unmeasured-target refusal without writing. The TUI cannot even request that refusal: its fixed
+`MarketplaceTarget` is derived from the MCP table and contains only Claude and Tabnine, with no
+harness selector.
+
+`profiles/builtin.py` is not an implementation to reconnect. It labels its OpenCode paths
+best-effort/unverified, and its MCP projection is behind the current OpenCode contract: a local
+server in `opencode.json` is an object with `type: "local"` and a `command` array, not the generic
+string `command` plus optional `args` that `registration_entry` writes. The official OpenCode docs
+do confirm the Skill paths and `AGENTS.md` locations represented there, but guidelines and hooks
+need translation decisions rather than blind copies into directories OpenCode does not promise to
+read.
+
+Close this as a vertical harness slice: measure both scopes against a real OpenCode process; add
+Skill and memory targets; extend MCP registration to its native shape; decide guideline and plugin
+semantics honestly; expose harness selection in the TUI; then run the installed Skill and MCP from
+OpenCode itself. Do not add table rows whose only evidence is the old dormant profile.
+
+Evidence/links: Product Specification multi-harness contract; `domain/harness.py` target tables;
+`io/artifact_placement.py::placement_for`; `tui.py::_canonical_marketplace_target`;
+`profiles/builtin.py::_OPENCODE`; official OpenCode Skill, Rules and MCP documentation; QA-011.
+
+## B-086 — Codex is accepted as a compatibility name but has no canonical installation adapter
+
+Found: whole-product TUI acceptance preparation (2026-09-08) · Severity: high · Status: open
+
+Codex CLI 0.152.0 is installed on the acceptance Mac, and authoring already permits `codex` as a
+compatibility string. That declaration does not make it an install target. Codex is absent from
+`MCP_TARGETS`, `DELIVERY_TARGETS`, `MEMORY_TARGETS` and `HOOK_TARGETS`; unlike OpenCode, it is also
+absent from the dormant built-in profile registry. The CLI can therefore carry the name as metadata
+but canonical placement refuses it, while the TUI offers only the Claude/Tabnine set derived from
+the MCP table.
+
+The adapter must be native rather than an alias for Claude. Current Codex documentation discovers
+repository Skills under `.agents/skills` and user Skills under `~/.agents/skills`, layers
+`AGENTS.md` instructions, and represents MCP servers as `mcp_servers.<id>` entries in Codex TOML
+configuration with a command and argument array. Those destinations and merge formats differ from
+the two harnesses AART currently measures. Hook and scope behavior likewise need measurement rather
+than guessed table rows.
+
+Close this as its own vertical harness slice: measure both install scopes against the real Codex
+CLI; implement Skill, instruction, MCP and supported hook projections; expose explicit harness
+selection in the TUI; verify uninstall and reconciliation; then invoke the installed Skill and MCP
+from Codex itself. This may share generic placement primitives with the OpenCode slice, but must not
+share an invented configuration format or one harness's verdict.
+
+Evidence/links: Product Specification multi-harness contract; `domain/harness.py` target tables;
+`io/artifact_placement.py::placement_for`; `tui.py::_canonical_marketplace_target`;
+`profiles/builtin.py`; official Codex Skills, AGENTS.md and configuration documentation; QA-012.
+
+## B-087 — Registry initialization emits inactive usage-reporting assets without opt-in
+
+Found: whole-product TUI acceptance, first real Registry init (2026-09-08) · Severity: medium ·
+Status: open
+
+Running `aart registry init` without `--usage-reporting-repository` still emits an Issue Form and
+two GitHub Actions workflows for usage validation and dashboard publication. The command immediately
+describes those files as inert because no destination was advertised. This makes a minimal new
+Registry carry automation the operator did not request for a capability that is not part of the
+current acceptance pass.
+
+The Product Specification's references to telemetry constrain secret safety; they do not require a
+usage dashboard in every Registry. At minimum, omit the three usage-reporting assets unless the
+operator explicitly supplies the existing opt-in flag. Before removing more authority, characterize
+whether configured reporting still has a supported public flow and preserve its consent, payload
+preview and failure-is-advisory boundaries. Default Registry CI validation remains separate and
+must stay.
+
+Evidence/links: `registry_commands/templates.py::REGISTRY_INIT_TEMPLATES`;
+`curation/runtime.py::_prepare_init`; `tests/registry_init_scaffold_test.py`; QA-013.
+
+## B-088 — Confirmed Maintainer commands render review detail again as success output
+
+Found: whole-product TUI acceptance, first real Registry init (2026-09-08) · Severity: medium ·
+Status: open
+
+The successful `registry init --yes` path prints the complete review and then a second outcome. In
+the observed nine-file initialization, three long warnings appeared in both blocks, `observed: 9
+review paths` repeated the plan count, and the `git diff` follow-up repeated every path already
+listed. Four more follow-up commands followed it. The success signal is present but buried.
+
+Human success output should be progressive: one short result, concise warnings once, and the next
+action the operator normally needs. Exact review detail must remain available before mutation and
+machine-complete JSON must remain complete; additional post-init commands and digests can be exposed
+through an explicit verbose/help route. Apply this consistently to Maintainer actions rather than
+special-casing one printed transcript.
+
+Evidence/links: `curation/model.py::render_curation_review`;
+`curation/model.py::render_curation_outcome`; `commands/registry.py`; QA-014.
+
+## B-089 — Empty Registry audit presents non-applicable checks as alarming warnings
+
+Found: whole-product TUI acceptance, first audit of an initialized Registry (2026-09-08) ·
+Severity: medium · Status: open
+
+`aart registry audit` passes a newly initialized empty Registry, then emits two long warnings. One
+says installation risk is unassessed because `security/index.json` was not supplied. The other says
+provenance coverage is partial because there are no external references, followed by remediation
+that admits there is nothing to correct. For this machine state both mean the same simple fact:
+there are no artifact objects or external references to assess yet.
+
+Do not hide a real unassessed-risk or provenance gap once a Registry contains relevant objects.
+Instead, distinguish `not-applicable` from `warning` in the audit result and render an empty valid
+Registry as one concise success note. Human output should state the consequence in operator terms;
+JSON may retain the complete typed check results. A mutation should prove that adding an auditable
+object restores the warning when its evidence is actually absent.
+
+Evidence/links: Product Specification evidence honesty rules; `registry audit` public output;
+the empty `aart-test-registry` manual transcript; QA-015.
+
+## B-090 — Maintainer TUI cannot bootstrap a Registry workspace
+
+Found: whole-product TUI acceptance, first Registry bootstrap (2026-09-08) · Severity: high ·
+Status: open
+
+The first-run Registry path currently requires the operator to leave the TUI and coordinate
+`registry init`, `lock`, `build`, `validate` and `audit` manually. The acceptance branch then needs a
+Git commit/push and two GitHub repository variables. Screen 46 can inspect an existing Registry but
+offers no initialization action, so the TUI-first procedure begins with its longest CLI detour.
+
+Add a Maintainer Registry bootstrap flow over the existing canonical command/application authority:
+a short form with safe inferred defaults for workspace, source ID and display name; optional
+capabilities off unless explicitly selected; one digest-bound review and confirmation; then a
+fail-fast pipeline through init, lock, build, validate and audit. Render one concise local-ready
+result and keep detailed diagnostics behind the relevant review/detail surface. An explicit final
+action may create the local Git commit, which Product Specification 164.7 permits.
+
+Do not silently push, create a PR, merge or mutate Git-host repository settings. Product
+Specification 165.27 assigns publication authorization to existing Git hosting. The TUI should end
+with a short publication handoff and may provide copyable commands for the current host. The two
+`gh variable set` calls in the local acceptance guide are branch/tool-delivery configuration, not
+universal Registry identity, and must not be baked into the generic form.
+
+Evidence/links: Product Specification 164.7, 164.8 and 165.27–165.28;
+`MaintainerScreen.REGISTRY`; `tui_consumer.py::ConsumerScreenSource`; the manual bootstrap
+transcript; QA-016.
+
+## B-091 — Interactive notices leak CLI remediation syntax into the TUI
+
+Found: whole-product TUI acceptance, Add Registry result (2026-09-08) · Severity: high ·
+Status: open
+
+Adding an alias or origin already present in configuration produces domain diagnostics whose
+remediation strings are literal `aart source sync`, `resubscribe` and `remove` commands.
+`io/consumer_actions.py::_refusal` flattens messages and remediations into one tuple, so the TUI
+draws the CLI instructions verbatim. The observed line was long enough to be clipped after
+`aart source remove`, making both the diagnosis and the next action harder to understand.
+
+Keep domain diagnostics useful to the CLI, but give the interactive adapter a TUI-native
+projection. A duplicate connection should say that the Registry is already connected, focus or
+link to its existing row, and expose supported actions as contextual keys/buttons. If an action is
+not yet present in the TUI, state the limitation plainly and track the missing surface; do not turn
+the interactive application into a list of shell commands. Model typed remediation actions where
+needed instead of parsing command strings in a renderer.
+
+Audit every TUI-visible diagnostic/remediation route and add a property that no rendered TUI frame
+contains an `aart ...` command. CLI and JSON rendering retain their complete remediation contracts.
+
+Evidence/links: `tui_sources.py::plan_source_addition`;
+`io/consumer_actions.py::_refusal`; `tui_consumer.py::ConsumerScreenSource.body`; QA-017.
+
+## B-092 — A declined preparation remains on a confirmation screen with nothing to confirm
+
+Found: whole-product TUI acceptance, duplicate Add Registry (2026-09-08) · Severity: high ·
+Status: open
+
+The Add Registry reducer navigates to Review before asking the action adapter to prepare the exact
+transaction. When preparation refuses a duplicate alias/origin, `_declined` clears the pending
+action and emits `ACTION_PREPARED` with no review digest. `_action_prepared` correctly refuses to
+record that as a valid review, but leaves the session on `REGISTRY_REVIEW`. The screen still tells
+the operator to press Enter to connect; doing so reaches the execution boundary without a pending
+action and prints `nothing was prepared for this action; review it again`.
+
+A declined preparation must leave no confirmable-looking screen. For duplicate Registry identity,
+return to Registries and focus the already connected row. For correctable form input, return to the
+Add form with values preserved and the relevant field identified. Esc/back must remain visible in
+the screen chrome, but it is not the repair for a state machine that advertises an impossible
+confirmation.
+
+Characterize the exact public shell walk first. Its negative should prove that a failed preparation
+cannot emit an execute command on a subsequent Enter and that no failed path silently writes
+configuration.
+
+Evidence/links: `consumer_ui.py::_request_action`, `_action_prepared`, `_confirm_action`;
+`io/consumer_actions.py::_declined`, `_execute`; QA-018.
+
+## B-093 — Git acquisition calls a symlink unsafe without identifying the file kind
+
+Found: whole-product TUI acceptance, adding the Superpowers Source (2026-09-08) · Severity: medium ·
+Status: open
+
+The Superpowers fork contains one symlink, root `AGENTS.md -> CLAUDE.md` (Git mode `120000`). AART
+correctly refuses it at the Git snapshot boundary, but reports only `Git tree contains an unsafe
+entry: 'AGENTS.md'`. The operator cannot tell whether the problem is a symlink, executable, special
+file, path traversal or malformed Git mode, and therefore cannot choose a safe correction.
+
+Keep the fail-closed rule. Make the diagnostic name the observed entry kind and explain the safe
+options without suggesting that AART follow or materialize an unreviewed link: replace it in the
+source repository with a committed regular file, remove it if unused, or choose a source without
+symlinks. Preserve the exact path but never print the link target unless it has separately passed
+the repository path-safety rules.
+
+Evidence/links: `sources/git.py` Git tree parsing; Git mode `120000` in
+`M1F1/superpowers-aart-test`; QA-019.
+
+## B-094 — YAML authoring Sources are refused before Candidate discovery — CRITICAL
+
+Found: whole-product TUI acceptance, Superpowers Source onboarding (2026-09-08) · Severity:
+blocking · Status: resolved (D-176; awaiting manual retest as QA-020)
+
+The intended flow is exactly Product Specification 72.1/164.2: subscribe to an author repository,
+discover only explicit `aart.yaml`/`aart.json`, compile Candidates, promote selected Candidates into
+the Registry, and detect later upstream changes without rewriting the approved version. The
+repository remains a Source of Candidates; only promoted artifact payloads become Registry content.
+
+The public path cannot admit that repository. `source add --kind source-git` validates its acquired
+tree through `validate_source_candidate`, which calls `load_native_source`. That loader requires a
+root `aart-source.json` and canonical native packages under declared roots —
+`<root>/<kind>/<name>/artifact.json` plus `payload/`. An author repository containing the accepted
+YAML manifest shape is rejected before Maintainer Sync reaches `compile_author_source`, the code
+that actually knows how to discover and compile the YAML. Adding only `aart-source.json` changes
+the error but does not bridge the two formats.
+
+`registry scan` is not the public-flow substitute: it can compile YAML from a local checkout, but
+it only prints Candidates and does not persist the Source/Candidate history the Maintainer TUI
+reads. `registry vendor` can copy one subtree into the Registry, but that deliberately bypasses the
+monitoring and Candidate lifecycle being tested. Neither may be credited as evidence for the
+mandatory flow.
+
+Reclassify this as critical because it blocks the accepted Source Repository → Manifest Discovery →
+Candidate → Promotion workflow and INV-201 at its public entrance. Characterize RED with a real
+temporary Git repository containing only a valid `aart.yaml` and payload. Separate authoring-Source
+admission from consumer-native-package validation without weakening symlink, special-file, identity,
+transport or last-known-good checks; then prove initial add/sync, one Candidate, upstream movement,
+selected promotion and unchanged approved history through the shell/TUI.
+
+Resolved by `sources/validation.py::validate_authoring_source_candidate`: a tree declaring
+`aart-source.json` is still read by `load_native_source`, any other tree is admitted when
+`discover_author_manifests` finds at least one explicit manifest, and a tree declaring neither is
+refused by name. Its `declared_source_id` is the configured alias, so an ordinary upstream commit
+is not read as an identity transition. The consumer Marketplace projection for an authoring Source
+is empty rather than an `Err`, which is what stops one subscribed author repository from emptying
+the Marketplace. Evidence: `tests/authoring_source_admission_e2e_test.py` (real temporary Git
+repository, real public command, add → sync → Candidate → upstream movement → promotion),
+`tests/source_validation_test.py`, `tests/consumer_runtime_test.py`.
+
+Evidence/links: Product Specification 72.1 and 164.2; INV-199–INV-201;
+`sources/validation.py::validate_source_candidate`; `protocol/native_tree.py::load_native_source`;
+`io/maintainer_sync.py`; `protocol/authoring.py::compile_author_source`; QA-020; D-176.
+
+## B-095 — One-off YAML repository scan cannot feed selective Registry vendoring
+
+Found: whole-product TUI acceptance, external artifact onboarding clarification (2026-09-08) ·
+Severity: high · Status: open
+
+Besides monitored Sources, the operator needs an artifact-scoped adoption path for repositories
+that must not remain configured Sources. Given a credential-free Git URL/ref, AART should discover
+only explicit `aart.yaml`/`aart.json`, show the resulting artifacts, let the maintainer select one or
+more, and vendor only the files each selected manifest declares in `payload.include`. Registry
+content then owns those immutable bytes and records the upstream URL, resolved commit, manifest
+path/input digest and vendoring provenance.
+
+The component capabilities exist but do not compose. `registry scan` compiles explicit author
+manifests from a clean local checkout and only prints its Candidates. `registry discover` produces
+a vendor-batch manifest from conservative conventional-shape inference rather than consuming author
+YAML. `registry vendor` acquires and copies one path but ignores the manifest and asks the operator
+to repeat its metadata as flags. `vendor-batch` applies a separately authored decision document.
+None is the requested public or TUI flow.
+
+Add `Scan Repository` to Maintainer Registry and a machine-complete CLI equivalent. Acquisition
+remains hardened and read-only; discovery remains exact-manifest-only; selection is explicit; the
+review names every chosen coordinate, resolved commit and copied path; one confirmation applies the
+whole selection atomically. Do not create a configured Source or require root `aart-source.json`.
+The author manifest itself is evidence/provenance, not payload unless it includes itself.
+
+Because the repository is not subscribed, do not imply continuous monitoring. Expose an explicit
+per-artifact `Check upstream` action using recorded provenance. A changed manifest/payload proposes
+a new Registry version and never rewrites the immutable published version; missing/unreachable and
+unchanged remain distinct. This complements rather than replaces critical B-094's monitored Source
+flow.
+
+Evidence/links: `registry scan`, `discover`, `vendor`, `vendor-batch`;
+`protocol/authoring.py::compile_author_snapshot`; `registry_commands/planning.py`;
+`MaintainerScreen.REGISTRY`; QA-021.

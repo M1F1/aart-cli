@@ -160,6 +160,8 @@ class ConsumerScreen(str, Enum):
     UNINSTALLING = "19-uninstalling"
     VERIFY_REPAIR = "20-verify-repair"
     REGISTRIES = "21-registries"
+    REGISTRY_ADD = "21a-add-registry"
+    REGISTRY_REVIEW = "21b-review-registry"
     CREDENTIALS = "22-credentials"
     CREDENTIAL_DETAILS = "23-credential-details"
     CREDENTIAL_ACTION = "24-credential-action"
@@ -1534,7 +1536,9 @@ _NAVIGATION: dict[ConsumerScreen, tuple[ConsumerScreen, ...]] = {
     ConsumerScreen.UNINSTALL_REVIEW: (ConsumerScreen.UNINSTALLING,),
     ConsumerScreen.UNINSTALLING: (ConsumerScreen.ACTIVITY_DETAILS,),
     ConsumerScreen.VERIFY_REPAIR: (ConsumerScreen.ACTIVITY_DETAILS,),
-    ConsumerScreen.REGISTRIES: (),
+    ConsumerScreen.REGISTRIES: (ConsumerScreen.REGISTRY_ADD,),
+    ConsumerScreen.REGISTRY_ADD: (ConsumerScreen.REGISTRY_REVIEW,),
+    ConsumerScreen.REGISTRY_REVIEW: (ConsumerScreen.REGISTRIES,),
     ConsumerScreen.CREDENTIALS: (ConsumerScreen.CREDENTIAL_DETAILS,),
     ConsumerScreen.CREDENTIAL_DETAILS: (ConsumerScreen.CREDENTIAL_ACTION,),
     ConsumerScreen.CREDENTIAL_ACTION: (ConsumerScreen.ACTIVITY_DETAILS,),

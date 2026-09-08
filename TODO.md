@@ -2,9 +2,219 @@
 
 > [!WARNING]
 > Historical record of the completed `M1F1/agent-artifacts` 1.0 program, kept as evidence. It is
-> **not** the source of truth for `aart-cli` and its GitHub issues are not this repository's.
+> preserved below and its GitHub issues are not this repository's. The first section of this file
+> is now the current manual-acceptance list for `aart-cli`; it is a test/fix queue, **not** product
+> authority.
 > Current authority is [`docs/product-specification/PRODUCT_SPECIFICATION.md`](docs/product-specification/PRODUCT_SPECIFICATION.md),
 > and the active work is tracked in [`docs/refactor/NEXT.md`](docs/refactor/NEXT.md).
+
+## Current `aart-cli` manual-acceptance TODO
+
+This is the single list for problems found while walking the real Registry → Marketplace →
+Install → Update → Repair → Uninstall scenario. New findings go into **Open** immediately. A fix
+moves to **Fixed — awaiting manual retest** and is checked only after the operator reproduces the
+original steps and confirms the result.
+
+The repeatable procedure and stage checkpoints are in
+[`docs/testing/END_TO_END_ACCEPTANCE.md`](docs/testing/END_TO_END_ACCEPTANCE.md).
+
+Each new entry records:
+
+- the screen or public command;
+- exact reproduction steps;
+- expected and observed behavior;
+- severity (`blocking`, `high`, `medium`, or `low`);
+- whether it blocks the current end-to-end stage;
+- the fixing commit once accepted.
+
+### Open
+
+- [ ] **QA-010 — Consumer TUI cannot synchronize a configured Registry.**
+      Stage: receiving a newly published registry version before Update
+      Surface: Registries / consumer Dashboard
+      Severity: high
+      Blocks current stage: no, with one explicit CLI `source sync` fallback
+      Reproduction: connect a Registry in TUI, publish a newer registry commit, reopen Registries
+      Expected: a visible reviewed Sync action refreshes the configured Registry snapshot
+      Observed: Registries offers Add only; `s` is interpreted only on Maintainer authoring Sources
+      Evidence: `key_event` routes `SOURCE_SYNC` exclusively from Maintainer Sources/Source Details
+      Fix: pending
+- [ ] **QA-011 — Canonical installation cannot target OpenCode.**
+      Stage: installing the Skill and MCP into the locally installed OpenCode 1.18.29
+      Surface: Marketplace/TUI and `marketplace install --profile opencode`
+      Severity: high
+      Blocks current stage: yes, for OpenCode acceptance; no, for Claude/Tabnine
+      Reproduction: select an artifact declaring OpenCode compatibility or request profile
+      `opencode` explicitly
+      Expected: reviewed effects use OpenCode's measured Skill, AGENTS.md and MCP configuration
+      contracts
+      Observed: TUI targets only Claude/Tabnine; the CLI refuses every canonical target as
+      unmeasured and writes nothing
+      Evidence: OpenCode 1.18.29 is installed locally; all `domain/harness.py` target lookups for
+      OpenCode refuse, while the dormant `profiles/builtin.py` values are not canonical authority
+      Fix: pending
+- [ ] **QA-012 — Canonical installation cannot target Codex.**
+      Stage: installing the Skill and MCP into the locally installed Codex CLI 0.152.0
+      Surface: Marketplace/TUI and `marketplace install --profile codex`
+      Severity: high
+      Blocks current stage: yes, for Codex acceptance; no, for Claude/Tabnine
+      Reproduction: select an artifact declaring Codex compatibility or request profile `codex`
+      explicitly
+      Expected: reviewed effects use Codex's measured `.agents/skills`, layered `AGENTS.md` and
+      native `mcp_servers` configuration contracts
+      Observed: TUI targets only Claude/Tabnine; the CLI has no canonical Codex target and refuses
+      the requested placement without writing
+      Evidence: Codex CLI 0.152.0 is installed locally; Codex is absent from every canonical target
+      table and from the dormant built-in profile registry
+      Fix: pending
+- [ ] **QA-013 — `registry init` generates unused usage-reporting automation by default.**
+      Stage: initializing the external test Registry
+      Surface: `aart registry init`
+      Severity: medium
+      Blocks current stage: no; the generated files say they are inert, but they clutter and
+      misrepresent the minimal Registry
+      Reproduction: run `registry init --yes` without `--usage-reporting-repository`
+      Expected: the default Registry contains only its required validation/publication machinery;
+      optional usage reporting is generated only after an explicit opt-in
+      Observed: init always adds `.github/ISSUE_TEMPLATE/usage-report.yml`,
+      `.github/workflows/aart-usage-dashboard.yml` and
+      `.github/workflows/aart-usage-validate.yml`, then warns that they are inert
+      Evidence: the reported nine-path init plan and `registry_commands/templates.py` include all
+      three files unconditionally
+      Fix: pending
+- [ ] **QA-014 — Successful `registry init --yes` output is overwhelming and repetitive.**
+      Stage: initializing the external test Registry
+      Surface: human CLI output from `aart registry init`
+      Severity: medium
+      Blocks current stage: no, but it obscures whether initialization actually succeeded
+      Reproduction: run the confirmed init over an empty Registry and read the complete output
+      Expected: a short success headline, the essential result and one clear next action; detailed
+      paths, digests and additional commands remain available through review, JSON or verbose output
+      Observed: nine path lines, three long warnings printed twice, an `observed` restatement, the
+      same paths repeated inside `git diff`, and five follow-up commands appear after success
+      Evidence: `render_curation_review` and `render_curation_outcome` render the same warnings on
+      the confirmed path; the captured manual output reproduces the duplication
+      Fix: pending
+- [ ] **QA-015 — Audit of a valid empty Registry reports non-actionable warnings as problems.**
+      Stage: validating the newly initialized empty Registry
+      Surface: human output from `aart registry audit`
+      Severity: medium
+      Blocks current stage: no; audit passes, but the explanation makes the operator think setup is
+      incomplete or broken
+      Reproduction: initialize a Registry with no artifacts and run `registry audit --source ...`
+      Expected: concise success, for example `registry audit: passed — registry is empty; artifact
+      risk and external-provenance checks were not applicable`
+      Observed: two dense warnings demand `security/index.json`, call risk `unassessed`, describe
+      provenance as `partial`, and then say there is nothing to correct
+      Evidence: captured manual output from the freshly initialized `aart-test-registry`
+      Fix: pending
+- [ ] **QA-016 — A new Registry cannot be initialized through Maintainer TUI.**
+      Stage: bootstrapping the external test Registry
+      Surface: Maintainer → Registry
+      Severity: high
+      Blocks current stage: no, with the current CLI sequence; yes, for TUI-first acceptance
+      Reproduction: start AART from a new Git checkout, enable Maintainer Mode and open Registry
+      Expected: `Initialize Registry` opens a short prefilled form, one exact review and one
+      confirmation; AART then runs init → lock → build → validate → audit, reports `Registry ready
+      locally`, and optionally offers an explicit local commit
+      Observed: the TUI only displays already configured Registry state; the operator must run five
+      AART commands, Git commands and two acceptance-specific `gh variable set` commands manually
+      Evidence: screen 46 has inspection only and no init action; the accepted publication boundary
+      permits an explicit local commit but never an automatic push
+      Fix: pending
+- [ ] **QA-017 — TUI exposes raw CLI remediation commands after adding a Registry.**
+      Stage: connecting the test Registry
+      Surface: Registries → Add Registry result/notice
+      Severity: high
+      Blocks current stage: no, but it sends an interactive user back to a terminal
+      Reproduction: attempt to add the already configured alias/origin `aart-test-registry`
+      Expected: a short TUI-native result such as `Registry “aart-test-registry” is already
+      connected`, with supported next actions represented by screen rows or shortcuts
+      Observed: the TUI prints a long raw instruction containing `aart source sync`, `resubscribe`
+      and `remove`; the final command is clipped at the terminal edge
+      Evidence: `plan_source_addition` returns CLI command strings as remediation and
+      `io/consumer_actions.py::_refusal` copies them verbatim into the TUI notice
+      Fix: pending
+- [ ] **QA-018 — A refused Registry connection leaves the user stranded on Review Registry.**
+      Stage: connecting the test Registry
+      Surface: `AART / Review Registry`
+      Severity: high
+      Blocks current stage: yes when the operator cannot identify the hidden way back
+      Reproduction: submit an already configured Registry, then press Enter on the remaining Review
+      screen
+      Expected: the refusal returns to Registries and focuses the existing row, or returns to the
+      editable Add form with an obvious Back action
+      Observed: the screen still says `Review the registry connection ... press Enter to connect`;
+      the prepared action has already been discarded, so Enter answers `nothing was prepared for
+      this action; review it again`
+      Evidence: `_declined` emits `ACTION_PREPARED` without a review digest, while
+      `_action_prepared` leaves the session on `REGISTRY_REVIEW`
+      Fix: pending
+- [ ] **QA-019 — Git Source rejects a symlink without naming what is unsafe or how to proceed.**
+      Stage: adding the Superpowers authoring Source
+      Surface: `source add` acquisition diagnostic
+      Severity: medium
+      Blocks current stage: no; the test fork now contains a regular `AGENTS.md`, but the product
+      diagnostic still needs improvement
+      Reproduction: add `M1F1/superpowers-aart-test`, whose root `AGENTS.md` is a Git symlink to
+      `CLAUDE.md`
+      Expected: preserve the symlink security refusal but say `AGENTS.md is a symbolic link`; give
+      safe remediation to replace it with a committed regular file or choose a symlink-free source
+      Observed: `error: Git tree contains an unsafe entry: 'AGENTS.md'`
+      Evidence: `git ls-tree` reports mode `120000` for the repository's only symlink
+      Fix: pending
+- [ ] **QA-021 — Registry cannot one-off scan YAML manifests and vendor selected artifacts.**
+      Stage: optional artifact-scoped onboarding from an external repository
+      Surface: Maintainer → Registry
+      Severity: high
+      Blocks current monitored-Source stage: no; this is a second required onboarding model
+      Reproduction: provide the Superpowers URL/ref without adding it as a configured Source, then
+      try to discover its `aart.yaml` files and select one Skill for Registry ownership
+      Expected: `Scan Repository` finds only explicit YAML/JSON manifests, presents selectable
+      artifacts, and vendors only each selected manifest's `payload.include` files with pinned
+      provenance; the repository is not saved as a Source
+      Observed: `registry scan` reads YAML but only prints a local-checkout result, `discover` looks
+      for conventional shapes, and `vendor` ignores YAML and requires repeated metadata flags
+      Evidence: no public command or TUI action composes author-manifest discovery with selected
+      vendoring; existing commands each stop at a different boundary
+      Fix: pending
+
+### Fixed — awaiting manual retest
+
+- [ ] **QA-020 — A YAML authoring repository cannot enter the monitored Source → Candidate flow.**
+      Authoring-Source admission is now manifest discovery rather than native-package validation:
+      `source add --kind source-git` admits a repository that declares at least one explicit
+      `aart.yaml`/`aart.json`, keeps the native-package rule for a tree that declares
+      `aart-source.json`, and still refuses a tree that declares neither. Transport, identity,
+      symlink, special-file and last-known-good boundaries are unchanged. An authoring Source
+      contributes no Marketplace offers and cannot empty the consumer's Marketplace. B-094/D-176.
+- [ ] **QA-009 — Maintainer TUI cannot add an authoring Source.** Screen 31 now offers `a` Add
+      Source with its own alias/kind/location/ref form (31a), an exact Review (31b) and confirmed
+      execution through the canonical source-add transaction. It accepts only `source-git` and
+      `source-local`; `registry-git` stays screen 21a's. B-083/D-177.
+- [ ] **QA-001 — The TUI does not advertise its navigation keys.** The permanent footer now names
+      arrows, Enter, Space, Esc, help and quit, and remains pinned below long content. B-077/D-168.
+- [ ] **QA-002 — Esc returns to the previous screen noticeably slowly.** The curses escape-prefix
+      delay is now bounded at 50 ms. B-078/D-169.
+- [ ] **QA-003 — Dashboard destinations do not explain what they mean.** Moving the cursor now
+      shows a short description of the highlighted destination. B-079/D-170.
+- [ ] **QA-004 — An empty first run does not explain AART or what to do next.** A first-run panel
+      now appears above navigation and points to Registry onboarding. B-080/D-170.
+- [ ] **QA-005 — Old user subscriptions look like built-in registries.** The two persisted August
+      subscriptions and their managed snapshots were removed through `aart source remove`; a fresh
+      public list is empty. B-081.
+- [ ] **QA-006 — Registry cannot be added from the TUI.** Screen 21 now provides Add Registry with
+      alias, credential-free Git URL, branch/tag, default choice, exact Review and confirmed
+      connection through the canonical source-add transaction. B-082/D-171.
+- [ ] **QA-007 — The permanent legend omits Space.** It now states `Space select/toggle`.
+- [ ] **QA-008 — First-run setup guidance is visually buried below navigation.** It now appears
+      first as a distinct `SETUP REQUIRED` callout above the menu.
+
+### Confirmed
+
+Move an entry here only after manual retest, preserving its checkbox, result date and fixing commit.
+
+---
 
 Backup implementation tracker for that program. Its GitHub issues were the source of truth for
 discussion and status *there*; in this repository they are neither, and nothing here should be

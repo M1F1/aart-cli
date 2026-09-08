@@ -195,11 +195,24 @@ class ReleaseChecklistTest(unittest.TestCase):
                 root = _fixture_root(raw, release, version=version)
                 registry = root / "reference-registry"
                 registry.mkdir()
+                seen: list[tuple[str, ...]] = []
 
-                receipt = release.check_release(root, registry, process_runner=_successful_runner)
+                def runner(command, cwd, environment, timeout_seconds, seen=seen):
+                    seen.append(command)
+                    return _successful_runner(command, cwd, environment, timeout_seconds)
+
+                receipt = release.check_release(root, registry, process_runner=runner)
 
                 self.assertEqual(receipt["status"], "passed")
                 self.assertEqual(receipt["version"], version)
+                # And the version the tree declares is the version the registry is reconciled
+                # against.  Without this the checklist could pass a constant to the registry and
+                # report a different number in its own receipt -- reconciling a release nobody is
+                # cutting, and saying nothing about having done so.
+                compatibility = [command for command in seen if "--latest-version" in command]
+                self.assertEqual(len(compatibility), 1, seen)
+                command = compatibility[0]
+                self.assertEqual(command[command.index("--latest-version") + 1], version)
 
     def test_a_dropped_carried_forward_document_still_blocks_the_release(self) -> None:
         """Migration and tutorial guides survive a release-series bump.

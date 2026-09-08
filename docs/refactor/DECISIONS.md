@@ -3591,8 +3591,9 @@ help key in order to discover the keys. Product Specification 161.1 names the gl
 vocabulary and INV-187 protects its navigation semantics; discoverability cannot depend on prior
 knowledge of that vocabulary.
 
-**Decision.** Every frame ends with one concise footer naming arrows, Enter, Esc, `?` and `q`.
-Contextual operations such as select, install, sync, repair and search stay in the expanded `?`
+**Decision.** Every frame ends with one concise footer naming arrows, Enter, Space, Esc, `?` and
+`q`. Space belongs there because it is the shared selection/toggle control across lists, settings
+and forms. Contextual operations such as install, sync, repair and search stay in the expanded `?`
 help instead of making the permanent line change unpredictably between screens. The curses adapter
 pins the frame's final line below the body, reserving it before clipping long content. The text
 adapter renders the same frame and may additionally explain how a line-oriented terminal spells
@@ -3604,3 +3605,255 @@ before implementation. The focused consumer shell, canonical entry, text-termina
 pass 67 tests without changing key interpretation or application state.
 All nine quality gates then pass over 3,324 tests at 85.35% branch coverage, followed by the
 separate 343-test integration run.
+
+## D-169 — Esc latency is terminal protocol configuration, not application work
+
+Date: 2026-09-04 · Increment: B-078 manual acceptance · Status: accepted
+
+The reducer turns `escape` into Back immediately, but curses cannot emit that name until it decides
+whether the byte begins a longer terminal key sequence. Inheriting ncurses' long default made every
+Back look like an expensive machine reload even though the application had not received the event.
+
+**Decision.** Configure the curses escape-prefix delay once, at its entry boundary, to 50 ms before
+starting the shared shell. `key_event` remains the only interpreter and text fallback is unchanged.
+The value is short enough for an immediate local Back while leaving a small window for a terminal's
+multi-byte arrow/function-key sequence.
+
+**Evidence.** The focused entry test patched the real curses setting and was red because it was
+never called; it now requires a value no greater than 100 ms. The five related suites pass 53 tests.
+
+## D-170 — First-run guidance names only a setup route that actually exists
+
+Date: 2026-09-04 · Increment: B-079/B-080 manual acceptance · Status: accepted
+
+Dashboard destinations used Product Specification vocabulary without explaining it, and a machine
+with no sources displayed only zero counts. Automatically navigating to empty Registries would not
+solve that: accepted screen 21 supports visibility and synchronization, while the canonical TUI has
+no URL-entry surface (B-075). Advertising an Add button would promise an action the product cannot
+perform there.
+
+**Decision.** The Dashboard projects one short static purpose statement for the row under its
+cursor. When both the configured-source projection and registry count are empty, its normal metrics
+are replaced by a compact first-run panel explaining AART. Manual acceptance subsequently moved
+that panel above navigation and made the missing-source action a `SETUP REQUIRED` callout pointing
+to Registries → Add Registry (D-171). Empty Registries repeats that same honest route. These are
+presentation choices over the
+already-composed screen snapshot; drawing reads no configuration and derives no policy or health.
+
+**Evidence.** Three headless shell tests were red against the previously unexplained/blank surfaces:
+the description changes when the cursor moves, the first frame explains AART and the missing source,
+and Registries names the real command. The five related suites pass 53 tests.
+
+## D-171 — Registry onboarding reuses source-add authority; local paths remain Sources
+
+Date: 2026-09-04 · Increment: B-082 manual acceptance · Status: accepted
+
+Product Specification 161.7 presents connected and not-connected registries as the consumer's
+Marketplace availability surface. Sending a first-time user from that screen to a multi-flag CLI
+command made the persistent application incomplete. At the same time, 164.2 is explicit that a
+Source is an authoring/discovery location rather than an approved registry, and the configuration
+schema intentionally refuses local paths for `registry-git`.
+
+**Decision.** Screen 21 owns Add Registry for approved remote Git registries. Its pure reducer holds
+only alias, credential-free URL, branch/tag and default choice, then binds those exact values to a
+review digest. Confirmation crosses one injected action boundary. Both CLI and TUI call
+`commands.source.add_configured_source`, which retains source-schema validation, policy planning,
+fresh immutable snapshot validation, stale-review detection and the checked configuration write.
+The TUI re-reads effective configuration, Marketplace offers and Maintainer projections after the
+write; draw functions still perform no IO. `source-local` and `source-git` remain Maintainer
+authoring choices and neither security boundary is widened.
+
+**Evidence.** `consumer_registry_addition_test` was first red because no form type or route existed.
+It now holds navigation, exact command values, whole-line text fallback, the shared transaction
+call, refresh after confirmation and refusal of a local path before any connector runs. The CLI's
+source-add suite remains green after extracting its typed surface-independent result.
+
+## D-172 — Whole-product manual acceptance has one procedure and one finding queue
+
+Date: 2026-09-08 · Increment: post-refactor manual acceptance · Status: accepted
+
+The automated acceptance suites prove individual public flows, but an operator now needs to
+exercise one continuous chain across real Git repositories: authoring, source synchronization,
+promotion, reviewed Git publication, consumer installation, update, drift, repair and removal.
+Keeping that procedure in chat would make it neither repeatable nor available to the next agent.
+The root `TODO.md` already exists, but its body is a historical tracker for the old
+`M1F1/agent-artifacts` program and cannot become product authority for this repository.
+
+**Decision.** `docs/testing/END_TO_END_ACCEPTANCE.md` is the repeatable operator procedure for the
+whole-product pass. It isolates maintainer and consumer state, names checkpoints for each stage and
+keeps publication behind Git review and merge. The first section of root `TODO.md` is the single
+current queue for findings from that procedure. Historical content remains below it unchanged as
+evidence. Neither document supersedes the Product Specification or the critical-path tracker in
+`docs/refactor/NEXT.md`.
+
+**Evidence.** The documentation check accepts both documents and every finding already raised in
+the first manual pass is represented once as QA-001 through QA-008, awaiting operator retest.
+
+## D-173 — TUI-first acceptance names its CLI fallbacks instead of hiding missing screens
+
+Date: 2026-09-08 · Increment: post-refactor manual acceptance · Status: accepted
+
+The operator wants the real external-Git acceptance chain to exercise the TUI, with author
+manifests written as `aart.yaml`. Surveying the key and action graph found two preconditions the TUI
+cannot currently produce: adding an authoring Source, and refreshing a consumer Registry after a
+new publication. Substituting an unmentioned CLI call would let the later screen appear while
+falsely claiming the interactive chain was complete.
+
+**Decision.** The machine-specific local walkthrough uses TUI for every implemented product action
+and YAML for both manifests. Each unavailable action is a separately named, minimal CLI bootstrap,
+marked at the exact point it occurs and tracked as B-083/QA-009 or B-084/QA-010. Add Registry is not
+widened to authoring Sources: registry trust and Source discovery remain different concepts.
+
+**Evidence.** `key_event` routes `a` only from Registries, while `SOURCE_SYNC` is reachable only from
+Maintainer Sources and Source Details. No consumer Registry screen produces a sync command. The
+local walkthrough is excluded through `.git/info/exclude`; durable findings remain in repository
+documentation.
+
+## D-174 — A named harness is not supported until its native contract is measured end to end
+
+Date: 2026-09-08 · Increment: post-refactor OpenCode acceptance · Status: accepted
+
+The old built-in profile names plausible OpenCode paths, while the canonical target tables omit
+OpenCode entirely. Treating the old record as ready to copy would appear to close the gap, but the
+current OpenCode MCP schema already proves it is not a faithful adapter: local servers require a
+typed object and command array that the generic canonical registration cannot express. The TUI
+also derives its fixed target set from the MCP table and offers no harness selector.
+
+**Decision.** OpenCode remains an honest, named refusal until a dedicated vertical slice measures
+its current Skill, rule/memory, MCP and plugin contracts against a real installed OpenCode. That
+slice must introduce the native registration shape and TUI harness selection together; dormant
+profile data is evidence for reconnaissance only. The manual acceptance guide declares OpenCode in
+both YAML manifests, proves the present refusal writes nothing and continues Claude/Tabnine testing
+without calling it OpenCode coverage.
+
+**Evidence.** On the acceptance Mac, OpenCode 1.18.29 reports its real config/data paths. Direct
+lookups for project/user MCP, Skill, guideline, memory and hook targets all raise the corresponding
+`no measured ... target` refusal. Official OpenCode source documentation confirms the Skill and
+AGENTS.md locations and the native `mcp` object shape. B-085/QA-011 carry the implementation gap.
+
+## D-175 — Codex support is a native harness slice, not a Claude alias
+
+Date: 2026-09-08 · Increment: post-refactor Codex acceptance · Status: accepted
+
+Codex appears in authoring and test data as a compatibility label, but no canonical target table or
+built-in profile gives that label installation meaning. Reusing Claude paths would make an install
+look successful while writing Skills, instructions or MCP configuration to contracts Codex does not
+own.
+
+**Decision.** Codex is tracked separately from OpenCode as B-086/QA-012. Its implementation must be
+measured against the installed Codex CLI and use Codex-native `.agents/skills`, layered `AGENTS.md`
+and `mcp_servers` TOML contracts. Common effect machinery may be reused, but neither another
+harness's paths nor a generic registration shape is accepted as evidence. TUI harness selection,
+reconciliation, uninstall and a real Codex invocation belong to the same vertical slice.
+
+**Evidence.** The acceptance Mac runs Codex CLI 0.152.0. `codex` is absent from all four canonical
+target tables and from `profiles/builtin.py`, while the TUI derives its two choices from the MCP
+table. Official Codex documentation independently names the Skill, instruction and MCP contracts
+the slice must measure.
+
+## D-176 — Authoring-Source admission is manifest discovery, not native-package validation
+
+Date: 2026-09-08 · Increment: post-refactor manual acceptance, B-094/QA-020 · Status: accepted
+
+`source add --kind source-git` validated every acquired tree through `load_native_source`, which
+is the loader for a *consumer* native package tree: a root `aart-source.json`, then
+`<root>/<kind>/<name>/artifact.json` and `payload/`. A real authoring repository declares none of
+that. It declares an `aart.yaml` beside the files that manifest names, which is exactly what
+Product Specification 72.1 says an author opts in with. The public entrance therefore refused the
+accepted Source → Candidate → Promotion flow before manifest discovery could run at all, and
+adding `aart-source.json` to the author's repository only moved the refusal to the package loader.
+
+**Decision.** Authoring Sources (`source-git`, `source-local`) are admitted by
+`validate_authoring_source_candidate`, which reads the tree as whichever of the two formats it
+declares itself to be. A tree carrying a root `aart-source.json` is still judged by
+`load_native_source`, unchanged — claiming the marker is not a way to skip its loader. Any other
+tree is admitted when `discover_author_manifests` finds at least one explicit `aart.yaml` or
+`aart.json`, and refused with a remediation naming both formats when it finds none.
+
+Admission is deliberately discovery, not compilation. Specification 164.2 shows an admitted Source
+whose list entry reads `3 manifests · 1 invalid`, so an invalid manifest is a Candidate state that
+Source Sync reports, not a subscription this refuses (INV-199). Requiring every manifest to compile
+would move a Candidate verdict into the subscription gate.
+
+No safety boundary moved. Symlinks and special entries cannot reach validation at all:
+`source_snapshot_digest` refuses them and `SourceCandidate` will not construct without that digest.
+Transport, size limits and revision pinning stay the acquisition adapter's, already applied before
+this runs; the E2E fails itself if the production path ever asks for weakened transport. Discovery
+still refuses a manifest that is not a regular file and a boundary declaring both spellings at once.
+
+**Identity.** An authoring repository declares no identity of its own, so its `declared_source_id`
+is its configured alias. Nothing in such a repository has the job of saying "this Source is X", and
+deriving one from the URL or the content would make an ordinary upstream commit look like the
+Source becoming a different Source. The alias is already the identity the Candidate model uses:
+`compile_author_source` stamps candidates with `source_alias` and the Maintainer screens key their
+history by it. Naming the same thing here keeps identity single-valued and leaves the
+identity-transition check inert for a Source that has no declared identity to move.
+
+**Marketplace.** An authoring Source now projects an *empty* contribution to the consumer
+Marketplace rather than refusing. The consumer projection loop returns on the first `Err`, so the
+old refusal meant one subscribed author repository emptied the whole Marketplace of the consumer
+who subscribed to it. A Candidate is not approved content (INV-199); it contributes nothing, and
+"nothing" has to mean an empty projection. A tree that claims `aart-source.json` and is broken
+still fails closed, and `consumer_runtime_test` holds both halves side by side.
+
+**Evidence.** `tests/authoring_source_admission_e2e_test.py` drives a real temporary Git repository
+whose only declaration is `skills/verification-before-completion/aart.yaml` through the real public
+command, then through the same configured composition the Maintainer Source Sync screens call:
+add → sync → one Candidate → durable history → a later upstream commit reported as movement →
+selected promotion written into the local approved registry. `tests/source_validation_test.py`
+states the admission rule as a Hypothesis property over generated trees. Five targeted mutations
+(admit-anything, marker-inverted, projection-always-empty, identity-constant,
+discovery-ignores-yaml) were each killed by the test that names the claim.
+
+## D-177 — Add Source is its own Maintainer form, not a widening of Add Registry
+
+QA-009/B-083. Maintainer → Sources could synchronize and inspect a configured authoring Source but
+could not create one, so the TUI could not build the precondition its own Candidate and Promotion
+screens consume. The obvious economy — teach screen 21a's Add Registry form to also accept
+`source-git` — is refused. A Source is an authoring/discovery location and a Registry is approved
+canonical content (Specification 164.2, INV-199); one form producing either would put the two on the
+same trust footing at the exact place the operator chooses between them.
+
+Add Source is therefore a separate pair of Maintainer screens, `31a-add-source` and
+`31b-review-source`, numbered the way screen 21's own addition pair is, reached with `a` from
+screen 31 and unreachable from consumer Registries. They carry a separate `SourceDraft`
+(alias/kind/location/ref), a separate `ConsumerActionKind.SOURCE_ADD`, and a separate
+`SourceConnectionPort`. Space cycles the kind between exactly the two members of
+`AUTHORING_SOURCE_KINDS`; `_prepare_source_addition` refuses any other kind by name, so a
+`registry-git` value reaching this action is a refusal rather than a second way to add a Registry.
+`ref` is passed only for `source-git` and rendered `not applicable` for `source-local`.
+
+Execution goes through `add_configured_source`, the same transaction the CLI's `source add` uses.
+Nothing about connection, transport or validation is re-implemented for the TUI: the form's only
+job is to build the request and show the exact review before the operator confirms it, which is
+what keeps the widened admission of D-176 single-authority.
+
+**Evidence.** `tests/maintainer_source_addition_test.py` holds the interaction (Space cycles only
+the two kinds, Enter reviews before running, a refusal does not run) and the composition (the real
+`tui.py` closure reaches `add_configured_source` with the form's own alias, kind, location and ref,
+and never sets `source_make_default`). The composition test runs both kinds, because with only
+`source-git` a hardcoded `source_kind` constant is invisible — that survivor is what the fifth
+targeted mutation found. Five targeted mutations (a-key-ignored, registry-git-allowed,
+default-registry-set, kind-hardcoded, space-does-not-cycle) are each killed by the test that names
+the claim.
+
+## D-178 — A first run is a machine with nothing, and reporting is resolved when an install completes
+
+Two regressions the uncommitted manual-acceptance work had left in the tree, found by running the
+suites the changed modules belong to rather than only the suites the new slices added.
+
+**First-run guidance.** B-080 gated the welcome panel on `not screens.registries and
+registry_count == 0`, and the panel *replaces* the Dashboard body rather than joining it. A machine
+with no configured source but an installed artifact — a direct install, or a source since removed —
+therefore lost its own counts to a welcome message. Getting this condition wrong does not merely add
+a panel; it takes away the one thing the Dashboard exists to state. The condition now also requires
+`installed_count == 0`, and `consumer_shell_test` holds the negative case beside the positive one.
+
+**Deferred reporting.** The registry-connection work moved `load_local_reporting_service` out of
+`_canonical_consumer_actions`' body and into `completion_factory`, so that an install authorized by
+a registry connected mid-session is reported under the configuration that authorized it rather than
+the snapshot taken before onboarding. That is the correct production behaviour and it is kept. What
+it broke was a test seam: `configured_setup_report_test` substituted the loader only around
+composition, so after the move the shell ran against the real service and previewed nothing. The
+substitution now spans the run. No assertion changed, and mutating the resolved service back to
+`None` still turns that test red.

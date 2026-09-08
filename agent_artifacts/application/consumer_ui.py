@@ -39,6 +39,8 @@ __all__ = [
     "ConsumerUiEvent",
     "ConsumerUiEventKind",
     "ConsumerUiState",
+    "RegistryDraft",
+    "SourceDraft",
     "key_event",
     "opening_state",
     "reduce_consumer_ui",
@@ -55,6 +57,8 @@ class ConsumerActionKind(str, Enum):
     SOURCE_SYNC = "source-sync"
     CANDIDATE_PROMOTION = "candidate-promotion"
     BULK_PROMOTION = "bulk-promotion"
+    REGISTRY_ADD = "registry-add"
+    SOURCE_ADD = "source-add"
 
 
 class ConsumerUiEventKind(str, Enum):
@@ -79,6 +83,57 @@ class ConsumerUiEventKind(str, Enum):
     ACTION_PREPARED = "action-prepared"
     CONFIRM_ACTION = "confirm-action"
     ACTION_RECORDED = "action-recorded"
+    EDIT_REGISTRY = "edit-registry"
+    EDIT_SOURCE = "edit-source"
+
+
+@dataclass(frozen=True, slots=True)
+class RegistryDraft:
+    """Credential-free input for one approved Git registry subscription."""
+
+    alias: str = ""
+    location: str = ""
+    ref: str = ""
+    make_default: bool = True
+
+    def __post_init__(self) -> None:
+        if any(
+            not isinstance(value, str) or any(char in value for char in "\r\n")
+            for value in (
+                self.alias,
+                self.location,
+                self.ref,
+            )
+        ) or not isinstance(self.make_default, bool):
+            raise ValueError("registry draft is invalid")
+
+
+#: The two authoring kinds screen 31a offers, in the order Space cycles them.  `registry-git` is
+#: deliberately absent: an approved registry is screen 21a's, and 164.2 keeps the two apart.
+AUTHORING_SOURCE_KINDS: tuple[str, ...] = ("source-git", "source-local")
+
+
+@dataclass(frozen=True, slots=True)
+class SourceDraft:
+    """Credential-free input for one authoring Source subscription (`source-git`/`source-local`).
+
+    It is a separate value from `RegistryDraft` rather than a widened one because the two forms
+    collect different things and mean different trust: a registry draft carries `make_default`,
+    which an authoring Source can never be, and a source draft carries the kind, which a registry
+    never chooses.
+    """
+
+    alias: str = ""
+    kind: str = AUTHORING_SOURCE_KINDS[0]
+    location: str = ""
+    ref: str = ""
+
+    def __post_init__(self) -> None:
+        if any(
+            not isinstance(value, str) or any(char in value for char in "\r\n")
+            for value in (self.alias, self.kind, self.location, self.ref)
+        ):
+            raise ValueError("source draft is invalid")
 
 
 class ConsumerUiCommandKind(str, Enum):
@@ -133,6 +188,8 @@ class ConsumerUiCommand:
     focus: str = ""
     review_digest: str = ""
     promotion_mode: PromotionMode | None = None
+    registry_draft: RegistryDraft | None = None
+    source_draft: SourceDraft | None = None
 
     def __post_init__(self) -> None:
         if (
@@ -150,6 +207,11 @@ class ConsumerUiCommand:
                 self.promotion_mode is not None
                 and not isinstance(self.promotion_mode, PromotionMode)
             )
+            or (
+                self.registry_draft is not None
+                and not isinstance(self.registry_draft, RegistryDraft)
+            )
+            or (self.source_draft is not None and not isinstance(self.source_draft, SourceDraft))
         ):
             raise ValueError("consumer UI command is invalid")
         if (
@@ -228,6 +290,8 @@ class ConsumerUiState:
     #: Which promotion the Maintainer is reviewing. Screen 42 chooses it; screens 41 and 43 obey
     #: it. Both modes are composed, so this selects a projection rather than causing one.
     promotion_mode: PromotionMode = PromotionMode.VENDORED
+    registry_draft: RegistryDraft = RegistryDraft()
+    source_draft: SourceDraft = SourceDraft()
 
     def __post_init__(self) -> None:
         if (
@@ -255,6 +319,8 @@ class ConsumerUiState:
             or (self.action is not None and not isinstance(self.action, ConsumerActionKind))
             or not isinstance(self.candidate_filter, MaintainerCandidateFilter)
             or not isinstance(self.file_diff, bool)
+            or not isinstance(self.registry_draft, RegistryDraft)
+            or not isinstance(self.source_draft, SourceDraft)
         ):
             raise ValueError("consumer UI state is invalid")
         if self.session.profile is not self.settings.profile:
@@ -380,6 +446,11 @@ def _toggle_selection(
 
 
 _ACTION_REVIEW: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationScreen] = {
+    (ConsumerActionKind.REGISTRY_ADD, ConsumerScreen.REGISTRY_ADD): ConsumerScreen.REGISTRY_REVIEW,
+    (
+        ConsumerActionKind.SOURCE_ADD,
+        MaintainerScreen.SOURCE_ADD,
+    ): MaintainerScreen.SOURCE_ADD_REVIEW,
     (ConsumerActionKind.INSTALL, ConsumerScreen.MARKETPLACE): ConsumerScreen.REVIEW_SELECTION,
     (ConsumerActionKind.INSTALL, ConsumerScreen.ARTIFACT_DETAILS): ConsumerScreen.REVIEW_SELECTION,
     (
@@ -442,7 +513,9 @@ def _request_action(
             and focus
         ):
             return state, ()
-    elif not focus:
+    elif (
+        action not in (ConsumerActionKind.REGISTRY_ADD, ConsumerActionKind.SOURCE_ADD) and not focus
+    ):
         return state, ()
 
     moved, navigation = _navigate(state, target)
@@ -461,6 +534,10 @@ def _request_action(
             if action in (ConsumerActionKind.CANDIDATE_PROMOTION, ConsumerActionKind.BULK_PROMOTION)
             else None
         ),
+        registry_draft=(
+            state.registry_draft if action is ConsumerActionKind.REGISTRY_ADD else None
+        ),
+        source_draft=(state.source_draft if action is ConsumerActionKind.SOURCE_ADD else None),
     )
     return prepared, (command, *navigation)
 
@@ -485,6 +562,8 @@ def _action_prepared(
 
 
 _ACTION_RUNNING: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationScreen | None] = {
+    (ConsumerActionKind.REGISTRY_ADD, ConsumerScreen.REGISTRY_REVIEW): None,
+    (ConsumerActionKind.SOURCE_ADD, MaintainerScreen.SOURCE_ADD_REVIEW): None,
     (ConsumerActionKind.INSTALL, ConsumerScreen.READY): ConsumerScreen.INSTALLING,
     (ConsumerActionKind.UPDATE, ConsumerScreen.UPDATE_INPUTS): ConsumerScreen.UPDATING,
     (
@@ -528,6 +607,11 @@ def _confirm_action(
 
 
 _ACTION_RESULT: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationScreen] = {
+    (ConsumerActionKind.REGISTRY_ADD, ConsumerScreen.REGISTRY_REVIEW): ConsumerScreen.REGISTRIES,
+    (
+        ConsumerActionKind.SOURCE_ADD,
+        MaintainerScreen.SOURCE_ADD_REVIEW,
+    ): MaintainerScreen.SOURCES,
     (ConsumerActionKind.INSTALL, ConsumerScreen.INSTALLING): ConsumerScreen.SUCCESS,
     (ConsumerActionKind.UPDATE, ConsumerScreen.UPDATING): ConsumerScreen.ACTIVITY_DETAILS,
     (
@@ -624,6 +708,42 @@ def reduce_consumer_ui(
         return _confirm_action(state)
     if event.kind is ConsumerUiEventKind.ACTION_RECORDED:
         return _action_recorded(state, event)
+    if event.kind is ConsumerUiEventKind.EDIT_REGISTRY:
+        if state.session.screen is not ConsumerScreen.REGISTRY_ADD:
+            return state, ()
+        draft = state.registry_draft
+        if event.key == "alias":
+            draft = replace(draft, alias=event.text)
+        elif event.key == "url":
+            draft = replace(draft, location=event.text)
+        elif event.key == "ref":
+            draft = replace(draft, ref=event.text)
+        elif event.key == "default" and event.accepted is not None:
+            draft = replace(draft, make_default=event.accepted)
+        else:
+            return state, ()
+        return replace(state, registry_draft=draft, quit_pending=False), ()
+    if event.kind is ConsumerUiEventKind.EDIT_SOURCE:
+        if state.session.screen is not MaintainerScreen.SOURCE_ADD:
+            return state, ()
+        source_draft = state.source_draft
+        if event.key == "alias":
+            source_draft = replace(source_draft, alias=event.text)
+        elif event.key == "location":
+            source_draft = replace(source_draft, location=event.text)
+        elif event.key == "ref":
+            source_draft = replace(source_draft, ref=event.text)
+        elif event.key == "kind":
+            # Space cycles the two authoring kinds rather than accepting typed text: the set is
+            # closed by 164.2, and a form that let one be typed would let `registry-git` in.
+            offset = AUTHORING_SOURCE_KINDS.index(source_draft.kind)
+            source_draft = replace(
+                source_draft,
+                kind=AUTHORING_SOURCE_KINDS[(offset + 1) % len(AUTHORING_SOURCE_KINDS)],
+            )
+        else:
+            return state, ()
+        return replace(state, source_draft=source_draft, quit_pending=False), ()
     if event.kind is ConsumerUiEventKind.TOGGLE_PROFILE:
         return _apply_setting(state, state.settings.toggled("detail-level"))
     if event.kind is ConsumerUiEventKind.TOGGLE_SETTING:
@@ -711,11 +831,16 @@ def key_event(
     `detail` is what Enter opens from the current row, which only the screen knows.
     """
 
+    if not isinstance(state, ConsumerUiState):
+        raise ValueError("key translation needs a key name and consumer UI state")
     if (
         not isinstance(key, str)
         or not key
-        or (len(key) != 1 and key not in _SPECIAL_KEYS)
-        or not isinstance(state, ConsumerUiState)
+        or (
+            len(key) != 1
+            and key not in _SPECIAL_KEYS
+            and state.session.screen is not ConsumerScreen.REGISTRY_ADD
+        )
         or not (detail is None or isinstance(detail, (ConsumerScreen, MaintainerScreen)))
     ):
         raise ValueError("key translation needs a key name and consumer UI state")
@@ -738,6 +863,70 @@ def key_event(
             return ConsumerUiEvent(ConsumerUiEventKind.SEARCH, text=state.search + key)
         return None
 
+    if state.session.screen is MaintainerScreen.SOURCE_ADD:
+        row = cursor or state.current_row
+        values = {
+            "alias": state.source_draft.alias,
+            "location": state.source_draft.location,
+            "ref": state.source_draft.ref,
+        }
+        if key == "escape":
+            return ConsumerUiEvent(ConsumerUiEventKind.BACK)
+        if key == "up":
+            return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="up")
+        if key == "down":
+            return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="down")
+        if key == " " and row == "kind":
+            return ConsumerUiEvent(ConsumerUiEventKind.EDIT_SOURCE, key="kind")
+        if key == "enter":
+            if row == "connect":
+                return ConsumerUiEvent(
+                    ConsumerUiEventKind.REQUEST_ACTION,
+                    action=ConsumerActionKind.SOURCE_ADD,
+                )
+            return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="down")
+        if row in values and key == "backspace":
+            return ConsumerUiEvent(ConsumerUiEventKind.EDIT_SOURCE, key=row, text=values[row][:-1])
+        if row in values and key.isprintable():
+            text = key if len(key) > 1 else values[row] + key
+            return ConsumerUiEvent(ConsumerUiEventKind.EDIT_SOURCE, key=row, text=text)
+        return None
+
+    if state.session.screen is ConsumerScreen.REGISTRY_ADD:
+        row = cursor or state.current_row
+        values = {
+            "alias": state.registry_draft.alias,
+            "url": state.registry_draft.location,
+            "ref": state.registry_draft.ref,
+        }
+        if key == "escape":
+            return ConsumerUiEvent(ConsumerUiEventKind.BACK)
+        if key == "up":
+            return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="up")
+        if key == "down":
+            return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="down")
+        if key == " " and row == "default":
+            return ConsumerUiEvent(
+                ConsumerUiEventKind.EDIT_REGISTRY,
+                key="default",
+                accepted=not state.registry_draft.make_default,
+            )
+        if key == "enter":
+            if row == "connect":
+                return ConsumerUiEvent(
+                    ConsumerUiEventKind.REQUEST_ACTION,
+                    action=ConsumerActionKind.REGISTRY_ADD,
+                )
+            return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="down")
+        if row in values and key == "backspace":
+            return ConsumerUiEvent(
+                ConsumerUiEventKind.EDIT_REGISTRY, key=row, text=values[row][:-1]
+            )
+        if row in values and key.isprintable():
+            text = key if len(key) > 1 else values[row] + key
+            return ConsumerUiEvent(ConsumerUiEventKind.EDIT_REGISTRY, key=row, text=text)
+        return None
+
     if key == "q":
         return ConsumerUiEvent(ConsumerUiEventKind.QUIT)
     if key == "escape":
@@ -748,6 +937,10 @@ def key_event(
         return ConsumerUiEvent(ConsumerUiEventKind.HELP)
     if key == "v":
         return ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_PROFILE)
+    if key == "a" and state.session.screen is ConsumerScreen.REGISTRIES:
+        return ConsumerUiEvent(ConsumerUiEventKind.NAVIGATE, screen=ConsumerScreen.REGISTRY_ADD)
+    if key == "a" and state.session.screen is MaintainerScreen.SOURCES:
+        return ConsumerUiEvent(ConsumerUiEventKind.NAVIGATE, screen=MaintainerScreen.SOURCE_ADD)
     # Screen 28 is the one screen whose rows are settings rather than artifacts, so space and
     # Enter move a preference here instead of ticking or opening something.
     if key in (" ", "enter") and state.session.screen is ConsumerScreen.SETTINGS:
@@ -853,6 +1046,7 @@ def key_event(
         ConsumerScreen.UPDATE_INPUTS,
         ConsumerScreen.UNINSTALL_REVIEW,
         ConsumerScreen.VERIFY_REPAIR,
+        ConsumerScreen.REGISTRY_REVIEW,
         MaintainerScreen.SOURCE_SYNC,
         MaintainerScreen.REGISTRY_COMMIT,
     ):

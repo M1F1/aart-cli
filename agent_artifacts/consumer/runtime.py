@@ -97,6 +97,7 @@ from agent_artifacts.sources.model import (
     source_store_paths,
 )
 from agent_artifacts.sources.runtime import observe_configured_source, sync_configured_source
+from agent_artifacts.sources.validation import declares_native_source
 from agent_artifacts.store.model import (
     ObjectPublishCommand,
     ObjectReadRequest,
@@ -391,6 +392,15 @@ def _project_graph_source(
 ) -> Result[_GraphProjection]:
     snapshot = current.candidate.snapshot
     if configured.kind is not SourceKind.REGISTRY_GIT:
+        # An authoring Source holds Candidates, and a Candidate is by definition not approved
+        # content (INV-199).  It contributes nothing to the consumer Marketplace -- and, because
+        # the loop that calls this returns on the first Err, "nothing" has to mean an empty
+        # projection rather than a refusal: a subscribed author repository must not be able to
+        # take the whole Marketplace away from the consumer who subscribed to it (B-094).
+        if not declares_native_source(snapshot):
+            return Ok(
+                _GraphProjection(GraphSource(configured.alias, current.declared_source_id, (), ()))
+            )
         native = load_native_source(
             snapshot,
             executable_version=_VERSION,

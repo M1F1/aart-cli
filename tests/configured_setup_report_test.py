@@ -153,6 +153,10 @@ class ConfiguredInstallCommandReportTest(unittest.TestCase):
                 unavailable,
                 lambda _plan: self.fail("automatic provider used in prompt mode"),
             )
+            # The reporting service is resolved when an installation completes, not when the
+            # application is composed, so that a registry connected mid-session is authorized by
+            # the configuration that authorized the install.  The substitution therefore has to
+            # span the run, not just the composition.
             with (
                 mock.patch.dict(os.environ, env.xdg, clear=False),
                 mock.patch.object(tui, "load_local_reporting_service", return_value=Ok(reporting)),
@@ -160,9 +164,8 @@ class ConfiguredInstallCommandReportTest(unittest.TestCase):
                 composed = tui._canonical_consumer_actions(
                     project=str(env.project), user_home=str(env.home), today=TODAY
                 )
-            assert isinstance(composed, Ok)
+                assert isinstance(composed, Ok)
 
-            with mock.patch.dict(os.environ, env.xdg, clear=False):
                 finished = run_consumer_shell(
                     composed.value.source(),
                     terminal,

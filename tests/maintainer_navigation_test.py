@@ -64,11 +64,32 @@ def _reachable(*, maintainer_mode: bool) -> frozenset[ApplicationScreen]:
 
 class MaintainerScreenCatalogTest(unittest.TestCase):
     def test_catalog_names_every_accepted_screen_30_through_53_once(self) -> None:
-        self.assertEqual(len(MAINTAINER_SCREENS), 24)
+        """The 24 accepted screens, plus sub-screens that are numbered inside one of them.
+
+        `31a`/`31b` are the Add Source form and its review (B-083), spelled the way screen 21's
+        own `21a`/`21b` addition pair already is. They extend screen 31 rather than adding a
+        25th destination, so the rule this states is that every catalog entry is one of the 24
+        accepted numbers or a lettered sub-screen of one of them -- never a new number.
+        """
+
+        numbered = tuple(
+            screen for screen in MAINTAINER_SCREENS if screen.value.split("-", 1)[0].isdigit()
+        )
+        lettered = tuple(screen for screen in MAINTAINER_SCREENS if screen not in numbered)
+
+        self.assertEqual(len(numbered), 24)
         self.assertEqual(
-            tuple(int(screen.value.split("-", 1)[0]) for screen in MAINTAINER_SCREENS),
+            tuple(int(screen.value.split("-", 1)[0]) for screen in numbered),
             tuple(range(30, 54)),
         )
+        self.assertEqual(
+            [screen.value for screen in lettered],
+            ["31a-add-source", "31b-review-source"],
+        )
+        for screen in lettered:
+            prefix = screen.value.split("-", 1)[0]
+            self.assertIn(int(prefix[:-1]), range(30, 54))
+            self.assertTrue(prefix[-1].isalpha())
         self.assertEqual(MAINTAINER_SCREENS, tuple(MaintainerScreen))
 
     def test_every_maintainer_screen_is_reachable_only_when_the_mode_is_on(self) -> None:

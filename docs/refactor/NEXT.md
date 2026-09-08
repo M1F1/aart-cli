@@ -8,13 +8,130 @@ The slice document is `docs/refactor/slices/CP-18-migration-and-release-gate.md`
 
 Manual first-run acceptance after closure found and completed B-077 (D-168): bare `aart` exposed its
 complete key vocabulary only after `?`, while its first frame never advertised `?`. Every canonical
-shell frame now ends with a concise navigation legend naming movement, forward navigation, back,
-help and quit. The curses adapter treats that final line as pinned chrome, so a tall body cannot
+shell frame now ends with a concise navigation legend naming movement, forward navigation,
+selection/toggle, back, help and quit. The curses adapter treats that final line as pinned chrome,
+so a tall body cannot
 clip the instructions away; the text fallback receives the same frame. Both claims were red against
 the shipped behavior before implementation, and the 67 nearest shell/entry/text/layout tests pass.
 No PyPI publication or release was performed; manual CLI/TUI acceptance remains the next operator
 activity before the first GitHub Release. Full verification is green: all nine `make quality` gates
 over 3,324 tests at 85.35% branch coverage, followed by all 343 `make integration` tests.
+
+The next manual pass found and completed B-078 through B-082 (D-169–D-171), using focused tests as
+the operator requested rather than repeating the full gates. Curses now resolves a lone Esc after
+50 ms instead of inheriting its roughly one-second prefix wait. The Dashboard shows a short purpose
+statement for the highlighted destination. A machine with no configured sources shows a compact
+first-run explanation of AART before the navigation menu and points to Registries → Add Registry in
+a distinct `SETUP REQUIRED` callout; empty Registries exposes the
+same action rather than drawing a blank screen. Add Registry collects alias, credential-free Git
+URL, branch/tag and default choice, reviews the exact values and executes the same canonical
+source-add transaction as the CLI. Local paths remain authoring Sources in Maintainer Mode. The two
+apparent built-in registries were old entries
+in the real user configuration, not package defaults: both were reviewed and removed through the
+public command, their managed snapshots were discarded, and `source list` is now empty. The nine
+nearest consumer/source suites pass 113 tests and typecheck is green. Await the operator's second
+manual TUI pass before committing this feedback increment.
+
+The complete operator pass is now the repeatable
+`docs/testing/END_TO_END_ACCEPTANCE.md` procedure (D-172). It joins real author Git repositories,
+an independently reviewed registry and an isolated consumer through installation, update, Doctor,
+repair and removal. New observations go into the current section at the top of root `TODO.md` as
+`QA-NNN` items; the older body of that file remains historical evidence only. This manual procedure
+does not reopen CP-18 or replace the Product Specification.
+
+Preparing the operator's TUI-first version of that walk exposed B-083 and B-084 (D-173). The TUI
+can add an approved Registry and can synchronize an already-configured authoring Source, but it
+cannot add that authoring Source; separately, a consumer cannot refresh a connected Registry after
+a newer Git publication. The local walkthrough names one CLI fallback at each missing boundary and
+tracks them as QA-009/QA-010 instead of crediting the later TUI screen with work the CLI performed.
+Both are manual-acceptance follow-ups, not reasons to reopen verified CP-18.
+
+OpenCode acceptance then exposed B-085/QA-011 (D-174). The Mac has OpenCode 1.18.29, but every
+canonical project/user placement table refuses it and the TUI's fixed target set contains only
+Claude and Tabnine. The old best-effort `_OPENCODE` profile is not safe authority: its generic MCP
+entry does not match OpenCode's current typed local-server/command-array contract. The TUI-first
+walk now declares OpenCode compatibility in its YAML fixtures, proves the refusal is inert, and
+does not claim OpenCode coverage until a measured harness slice and TUI selector exist.
+
+Codex has the same user-visible absence but not the same adapter (B-086/QA-012, D-175). Codex CLI
+0.152.0 is installed on the Mac, while `codex` exists only as compatibility metadata: it is absent
+from every canonical target table, the built-in profile registry and the TUI target set. Its
+documented `.agents/skills`, layered `AGENTS.md` and TOML `mcp_servers` contracts require a separate
+measured vertical slice; it must not be implemented as an alias for Claude or OpenCode.
+
+The first real `registry init` added two more manual-acceptance findings. B-087/QA-013 records that
+an init with no usage-reporting destination still generates an Issue Form and two inert workflows;
+the default should require explicit opt-in for those optional assets. B-088/QA-014 records that the
+confirmed human output repeats its warnings and path inventory and buries a successful result under
+five follow-up commands. Neither blocks the current walk, and neither reopens CP-18.
+
+The following audit of that valid empty Registry added B-089/QA-015. Its two warnings both mean
+that there is nothing to assess yet, but terms such as `unassessed`, `partial` and a nonexistent
+`security/index.json` make a passing empty state look broken. The audit model should distinguish
+not-applicable checks from warnings while preserving real evidence gaps once artifacts exist.
+
+B-090/QA-016 records the larger first-run gap around those commands: Maintainer screen 46 inspects
+an existing Registry but cannot initialize one. A future TUI slice should collect the minimal
+identity once, review once and drive init → lock → build → validate → audit as one fail-fast local
+bootstrap, with an optional explicit local commit. Push, PR, merge and Git-host settings remain an
+external publication handoff under 165.27 rather than hidden TUI side effects.
+
+Two following interaction failures are now B-091/QA-017 and B-092/QA-018. Raw CLI remediation is
+copied into Add Registry's TUI notice, and a refused preparation remains on a Review screen whose
+Enter action can no longer succeed. TUI diagnostics need typed in-product actions, and a refusal
+must return to the existing Registry row or editable form rather than advertise an impossible
+confirmation. B-093/QA-019 separately preserves Git's symlink refusal while requiring it to name
+that `AGENTS.md` is a symlink and state safe remediation.
+
+**B-094/QA-020 is now the critical manual-acceptance blocker.** The clarified model is the accepted
+one: Superpowers remains a monitored authoring Source, Sync discovers its explicit `aart.yaml`, a
+Candidate appears, and only the selected promoted artifact becomes Registry content. The public
+entrance refuses that valid shape before discovery because `source add` runs `load_native_source`
+(canonical `artifact.json` packages) before Maintainer Sync can run `compile_author_source` (author
+YAML). `registry scan` does not persist TUI history and direct vendoring skips the claim. Fix this
+format/authority seam before continuing the Source → Candidate portion of the live pass.
+
+**B-094/QA-020 and B-083/QA-009 are now fixed and awaiting manual retest (D-176, D-177).**
+Authoring-Source admission is separated from consumer native-package validation:
+`validate_authoring_source_candidate` still reads a tree that declares root `aart-source.json`
+through `load_native_source`, admits any other tree when `discover_author_manifests` finds at least
+one explicit `aart.yaml`/`aart.json`, and refuses by name a tree that declares neither. Admission is
+discovery, not compilation — 164.2's `3 manifests · 1 invalid` Source row proves an invalid manifest
+is a Candidate state rather than a subscription refusal. No boundary moved: symlinks and special
+entries cannot reach validation because `source_snapshot_digest` refuses them and `SourceCandidate`
+will not construct without that digest, and the E2E fails itself if the public path ever requests
+weakened transport. An authoring Source's `declared_source_id` is its configured alias, so an
+ordinary upstream commit is not read as an identity transition, and its consumer Marketplace
+contribution is empty rather than an `Err` — the projection loop returns on the first `Err`, so the
+old refusal would have let one subscribed author repository empty the whole Marketplace.
+
+On top of that, Maintainer screen 31 now offers `a` Add Source: a separate `SourceDraft` form (31a)
+and review (31b) that accept only `source-git`/`source-local`, refuse `registry-git` by name, never
+set a default registry, and execute through the same `add_configured_source` transaction the CLI
+uses. Add Registry is untouched; the 164.2 trust boundary between an authoring location and approved
+content is held by a test rather than by convention.
+
+Evidence: `tests/authoring_source_admission_e2e_test.py` (real temporary Git repository through the
+real public command: add → sync → one Candidate → durable history → upstream movement → selected
+promotion), `tests/source_validation_test.py` (Hypothesis property over generated trees),
+`tests/consumer_runtime_test.py`, `tests/maintainer_source_addition_test.py`,
+`tests/maintainer_navigation_test.py`. Ten targeted mutations were run across the two slices and all
+are killed; the tenth (`source_kind` hardcoded to `source-git`) survived first and was closed by
+running the composition test over both kinds. Focused suites, `ruff` and `mypy` are green; the full
+`make quality`/`make integration` gates are deliberately deferred to the end of this
+manual-acceptance batch, as the operator requested.
+
+Two regressions in the uncommitted manual-acceptance work were found and repaired while proving this
+increment (D-178): the first-run welcome panel replaced the Dashboard body on a machine that had no
+configured source but did have an installation, and the deferral of `load_local_reporting_service`
+into `completion_factory` outran a test seam that substituted it only around composition. The
+deferral is correct and kept; the panel now also requires nothing installed.
+
+B-095/QA-021 records the separate model the operator also wants: one-off scan of a repository that
+is not saved as a Source, exact YAML/JSON manifest discovery, explicit multi-selection and atomic
+vendoring of only `payload.include` with pinned provenance. Today's `scan`, `discover`, `vendor` and
+`vendor-batch` each provide a piece but no public/TUI flow composes them. Later movement is checked
+explicitly per vendored artifact; it is not described as continuous Source monitoring.
 
 The first public pull-request run after closure exposed that local macOS verification had not
 actually proved the advertised Linux/Python matrix (D-167). The failure is fixed and reproduced in

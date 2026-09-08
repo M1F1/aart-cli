@@ -166,11 +166,15 @@ _KEY_NAMES: dict[int, str] = {
 }
 
 
-def key_name(code: int) -> str:
+def key_name(code: int | str, *, literal: bool = False) -> str:
     """Name one `getch` code for the reducer, or return empty for a key with no meaning here."""
 
+    if isinstance(code, str):
+        if not code or any(character in code for character in "\r\n"):
+            return ""
+        return code if literal or len(code) == 1 else ""
     if not isinstance(code, int) or isinstance(code, bool):
-        raise ValueError("a key code is an integer")
+        raise ValueError("a key code is an integer or literal text")
     if code in _KEY_NAMES:
         return _KEY_NAMES[code]
     return chr(code) if 32 <= code < 127 else ""
@@ -982,7 +986,7 @@ class ConsumerTerminal(Protocol):
 
     def draw(self, lines: tuple[str, ...]) -> None: ...
 
-    def key(self) -> int: ...
+    def key(self) -> int | str: ...
 
 
 class ConsumerScreenSource(Protocol):
@@ -1040,12 +1044,35 @@ _HELP_LINES: tuple[str, ...] = (
     "enter  details   esc  back",
     "i  install/update  r  repair  u  uninstall",
     "s  sync focused Source (Maintainer Mode)",
+    "a  add Registry (Registries)",
     "/  search        v  Fast/Verbose",
     "?  help          q  quit",
 )
 
-_NAVIGATION_LEGEND = "↑/↓ move  Enter open/continue  Esc back  ? keys  q quit"
+_NAVIGATION_LEGEND = "↑/↓ move  Enter open/continue  Space select/toggle  Esc back  ? keys  q quit"
 """Always-visible route to the complete help and the keys needed to leave any screen."""
+
+_DASHBOARD_DESCRIPTIONS: dict[ApplicationScreen, str] = {
+    ConsumerScreen.MARKETPLACE: "Browse and install approved tools from configured registries.",
+    ConsumerScreen.INSTALLED: "See what AART manages in this project and whether it is healthy.",
+    ConsumerScreen.UPDATES: "Review newer approved versions; nothing changes without confirmation.",
+    ConsumerScreen.REGISTRIES: "See which sources determine what Marketplace can offer.",
+    ConsumerScreen.CREDENTIALS: "Check credential references and which installed tools depend on them.",
+    ConsumerScreen.ACTIVITY: "Review recorded changes, results and their receipts.",
+    ConsumerScreen.DOCTOR: "Inspect health and find the smallest safe repair for detected drift.",
+    ConsumerScreen.SETTINGS: "Choose detail, installation scope and optional Maintainer Mode.",
+    MaintainerScreen.DASHBOARD: "Open advanced source, validation and promotion workflows.",
+}
+
+_FIRST_RUN_LINES: tuple[str, ...] = (
+    "Welcome to AART — this looks like your first run.",
+    "AART installs and keeps your team's approved AI tools:",
+    "skills, MCP servers, rules and hooks.",
+    "",
+    "SETUP REQUIRED",
+    "  No sources are configured, so Marketplace has nothing to offer yet.",
+    "  → Start here: open Registries and choose Add Registry.",
+)
 
 
 def _title(screen: ApplicationScreen) -> str:
@@ -1105,7 +1132,11 @@ def run_consumer_shell(
     current = _reload(active_source, current, entering=True)
     while not current.exited:
         terminal.draw(frame(active_source, current))
-        name = key_name(terminal.key())
+        name = key_name(
+            terminal.key(),
+            literal=current.session.screen
+            in (ConsumerScreen.REGISTRY_ADD, MaintainerScreen.SOURCE_ADD),
+        )
         if not name:
             continue
         event = key_event(name, current, detail=active_source.detail(current))
@@ -1530,6 +1561,7 @@ _ANSWERABLE = (
     | _OUTCOME_SCREENS
     | frozenset(
         {
+            ConsumerScreen.REGISTRY_REVIEW,
             MaintainerScreen.SOURCE_SYNC,
             MaintainerScreen.REGISTRY_VALIDATION,
             MaintainerScreen.REGISTRY_COMMIT,
@@ -1659,9 +1691,13 @@ class CanonicalScreenSource:
                 if _matches(query, item.summary, item.intent)
             )
         if screen is ConsumerScreen.REGISTRIES:
-            return tuple(
+            return ("add-registry",) + tuple(
                 item.alias for item in self._screens.registries if _matches(query, item.alias)
             )
+        if screen is ConsumerScreen.REGISTRY_ADD:
+            return ("alias", "url", "ref", "default", "connect")
+        if screen is MaintainerScreen.SOURCE_ADD:
+            return ("alias", "kind", "location", "ref", "connect")
         if screen is ConsumerScreen.SETTINGS:
             return SETTING_ROWS
         return ()
@@ -1834,8 +1870,11 @@ class CanonicalScreenSource:
             ConsumerScreen.CREDENTIALS: ConsumerScreen.CREDENTIAL_DETAILS,
             ConsumerScreen.CREDENTIAL_DETAILS: ConsumerScreen.CREDENTIAL_ACTION,
             ConsumerScreen.UPDATES: ConsumerScreen.UPDATE_INPUTS,
+            ConsumerScreen.REGISTRIES: ConsumerScreen.REGISTRY_ADD,
         }.get(screen)
         if target is None or not row:
+            return None
+        if screen is ConsumerScreen.REGISTRIES and row != "add-registry":
             return None
         return target
 
@@ -1856,15 +1895,42 @@ class CanonicalScreenSource:
         screen, profile = state.session.screen, state.session.profile
         screens = self._screens
         if screen is ConsumerScreen.DASHBOARD:
+            targets = navigation_targets(screen, maintainer_mode=state.settings.maintainer_mode)
             menu = tuple(
                 f"{'>' if row == state.current_row else ' '} {_title(target)}"
                 for row, target in zip(
                     state.rows,
-                    navigation_targets(screen, maintainer_mode=state.settings.maintainer_mode),
+                    targets,
                     strict=False,
                 )
             )
-            return ("Navigation:", *menu, "", *render_dashboard(screens.dashboard))
+            selected = next(
+                (target for target in targets if target.value == state.current_row), None
+            )
+            about = (
+                ()
+                if selected is None
+                else (f"About {_title(selected)}:", _DASHBOARD_DESCRIPTIONS[selected], "")
+            )
+            # A first run is a machine that has nothing, not merely a machine that has no source
+            # configured.  A person who installed an artifact from a source they have since
+            # removed -- or through a direct install -- is not seeing AART for the first time, and
+            # replacing their real counts with the welcome panel hides the one thing the Dashboard
+            # exists to state: what is installed right now (B-080).
+            first_run = (
+                not screens.registries
+                and screens.dashboard.registry_count == 0
+                and screens.dashboard.installed_count == 0
+            )
+            if first_run:
+                return (*_FIRST_RUN_LINES, "", "Navigation:", *menu, "", *about)
+            return (
+                "Navigation:",
+                *menu,
+                "",
+                *about,
+                *render_dashboard(screens.dashboard),
+            )
         if screen is MaintainerScreen.DASHBOARD:
             if screens.maintainer is None:
                 return ("Maintainer state is not available yet.",)
@@ -2103,9 +2169,85 @@ class CanonicalScreenSource:
                 else render_receipt_detail(receipt, profile)
             )
         if screen is ConsumerScreen.REGISTRIES:
-            return tuple(
+            add = (
+                f"{'>' if state.current_row == 'add-registry' else ' '} [ Add Registry ]",
+                "Connect an approved Git registry by URL. Local authoring Sources belong in Maintainer Mode.",
+                "",
+            )
+            if not screens.registries:
+                return (
+                    *add,
+                    "No sources are configured.",
+                    "Marketplace needs an approved registry before it can offer tools.",
+                    "Choose Add Registry above to connect the first one.",
+                )
+            return add + tuple(
                 line for item in screens.registries for line in render_registry(item, profile)
             )
+        if screen is ConsumerScreen.REGISTRY_ADD:
+            draft = state.registry_draft
+            values = {
+                "alias": draft.alias or "<type a short name>",
+                "url": draft.location or "<type an HTTPS or SSH Git URL>",
+                "ref": draft.ref or "<repository default>",
+                "default": "yes" if draft.make_default else "no",
+                "connect": "Validate and review",
+            }
+            labels = {
+                "alias": "Alias",
+                "url": "Registry URL",
+                "ref": "Branch or tag",
+                "default": "Make default registry",
+                "connect": "Continue",
+            }
+            return (
+                "Connect an approved registry. AART validates a fresh snapshot before saving it.",
+                "Local folders are authoring Sources, not Marketplace registries.",
+                "",
+                *(
+                    f"{'>' if row == state.current_row else ' '} {labels[row]}: {values[row]}"
+                    for row in state.rows
+                ),
+                "",
+                "Type to edit; Backspace removes; Space toggles default; Enter advances.",
+            )
+        if screen is MaintainerScreen.SOURCE_ADD:
+            authoring = state.source_draft
+            git = authoring.kind == "source-git"
+            values = {
+                "alias": authoring.alias or "<type a short name>",
+                "kind": authoring.kind,
+                "location": authoring.location
+                or (
+                    "<type a credential-free Git URL>"
+                    if git
+                    else "<type an absolute path to a checkout>"
+                ),
+                "ref": (authoring.ref or "<repository default>") if git else "not applicable",
+                "connect": "Validate and review",
+            }
+            labels = {
+                "alias": "Alias",
+                "kind": "Kind",
+                "location": "Location",
+                "ref": "Branch or tag",
+                "connect": "Continue",
+            }
+            return (
+                "Subscribe to an authoring repository. AART discovers only the aart.yaml and",
+                "aart.json manifests its authors committed; nothing here is approved content yet.",
+                "",
+                *(
+                    f"{'>' if row == state.current_row else ' '} {labels[row]}: {values[row]}"
+                    for row in state.rows
+                ),
+                "",
+                "Type to edit; Backspace removes; Space switches kind; Enter advances.",
+            )
+        if screen is MaintainerScreen.SOURCE_ADD_REVIEW:
+            return ("Review the Source connection below, then press Enter to connect.",)
+        if screen is ConsumerScreen.REGISTRY_REVIEW:
+            return ("Review the registry connection below, then press Enter to connect.",)
         if not isinstance(screen, ConsumerScreen):
             return (f"{_title(screen)} is not available yet.",)
         if screen in _PLAN_SCREENS:

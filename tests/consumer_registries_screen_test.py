@@ -157,7 +157,7 @@ class ConfiguredRegistriesScreenTest(unittest.TestCase):
             source, FakeTerminal(ord("q")), state=_at(ConsumerScreen.REGISTRIES)
         )
 
-        self.assertEqual(state.rows, ("company", "authors"))
+        self.assertEqual(state.rows, ("add-registry", "company", "authors"))
 
     def test_the_dashboard_counts_registries_rather_than_every_configured_source(self) -> None:
         """ "2 registries" over one registry and one authoring Source would be a false count."""
@@ -193,7 +193,7 @@ class ConfiguredRegistriesScreenTest(unittest.TestCase):
                     state=_at(ConsumerScreen.REGISTRIES),
                 )
 
-            self.assertEqual(state.rows, ("company",))
+            self.assertEqual(state.rows, ("add-registry", "company"))
             self.assertEqual(composed.value.source().screens.dashboard.registry_count, 1)
 
     def test_drawing_screen_21_opens_no_file(self) -> None:
