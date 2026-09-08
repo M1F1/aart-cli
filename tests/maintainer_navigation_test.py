@@ -66,10 +66,11 @@ class MaintainerScreenCatalogTest(unittest.TestCase):
     def test_catalog_names_every_accepted_screen_30_through_53_once(self) -> None:
         """The 24 accepted screens, plus sub-screens that are numbered inside one of them.
 
-        `31a`/`31b` are the Add Source form and its review (B-083), spelled the way screen 21's
-        own `21a`/`21b` addition pair already is. They extend screen 31 rather than adding a
-        25th destination, so the rule this states is that every catalog entry is one of the 24
-        accepted numbers or a lettered sub-screen of one of them -- never a new number.
+        `31a`/`31b` are the Add Source form and its review (B-083) and `46a`/`46b` are the
+        Initialize Registry form and its review (B-090), both spelled the way screen 21's own
+        `21a`/`21b` addition pair already is. They extend the screen they belong to rather than
+        adding a 25th destination, so the rule this states is that every catalog entry is one of
+        the 24 accepted numbers or a lettered sub-screen of one of them -- never a new number.
         """
 
         numbered = tuple(
@@ -84,7 +85,7 @@ class MaintainerScreenCatalogTest(unittest.TestCase):
         )
         self.assertEqual(
             [screen.value for screen in lettered],
-            ["31a-add-source", "31b-review-source"],
+            ["31a-add-source", "31b-review-source", "46a-init-registry", "46b-review-init"],
         )
         for screen in lettered:
             prefix = screen.value.split("-", 1)[0]

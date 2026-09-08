@@ -4067,3 +4067,49 @@ through `frame` with a command-carrying refusal on it contains no `aart <verb>` 
 sensitivity test, because a sweep that stopped reaching the notice would pass by drawing nothing.
 The universal half is a Hypothesis property over generated remediation rather than four chosen
 examples. Seven targeted mutations, all killed; two of them found claims that were not yet held.
+
+## D-186 — Creating a registry is one reviewed run of five ordered stages, and it never publishes
+
+`QA-016`/`B-090`. Maintainer Mode could promote into a registry, diff one and audit one, but had no
+way to bring one into existence. The operator opened screen 46, found nothing, left for a terminal,
+ran `aart registry init`, `lock`, `build`, `validate` and `audit` in that order by hand, and came
+back. The order is not a convenience: a lock over an uninitialized workspace has nothing to pin, and
+an index built before the lock describes a registry that was never pinned.
+
+**One decision, not five.** Screens `46a`/`46b` are a form and its review, lettered the way `21a`/
+`21b` and `31a`/`31b` already are, and they extend screen 46 rather than adding a twenty-fifth
+Maintainer destination. The review names all five stages because the maintainer is agreeing to a
+registry existing in this project, not to `init` in isolation; confirming it runs all five,
+fail-fast, and the result says stage by stage what each one did. `n` opens it rather than `a`:
+`a` is the word both subscription forms use, and creating the registry this project publishes is not
+connecting to somebody else's (INV-199).
+
+**The run is local, and that is a product boundary rather than an omission.** `commit` is the one
+effect the operator opts into, and it is part of the review digest — a digest that ignored it would
+let a review of "write the files, make no commit" be confirmed into a run that writes to the
+repository's history. Nothing pushes and nothing merges. Publishing a registry is a decision made
+through the repository's own review process (161.7), so it is stated on the form, stated again in
+the review, and held by a test that records every `git` invocation the run makes and asserts none of
+them is `push` or `merge`.
+
+**No second implementation of what a registry is.** `agent_artifacts/io/registry_bootstrap.py` is
+the ordering and nothing else: the three writing stages go through the same `LocalCurationService`
+prepare/finalize pair the CLI drives, and the two gates are the same `validate_registry_workspace`
+and `audit_registry_workspace` planning functions. What it adds is sequencing, a per-stage record,
+and the commit boundary. `registry_identity_refusal` validates through the very `RegistryInitOptions`
+that `init` builds, so a form cannot accept an identity the canonical action would later refuse.
+
+**A refused stage is a report, not an exception.** `Err` from the port means nothing was attempted;
+`Ok` with a report that has not passed means some of it was, and the report is a prefix of the five
+stages rather than always all five — the screen can only honestly say which stage stopped the run if
+the ones after it really did not run. Nothing is re-read from a partial run, because the screens
+would then describe a registry the operator was simultaneously being told did not finish. Per
+`QA-014` a passing gate contributes no lines of its own, and per `QA-017` the stage detail comes from
+diagnostic messages rather than from the CLI's follow-up commands.
+
+**Evidence.** `tests/maintainer_registry_init_test.py` holds the route and the navigation map, the
+form and its one toggle, the exact draft reaching one review, the digest distinguishing the two
+commit choices, the five stages run in order against a real checkout, mid-run fail-fast at a writing
+stage and at a gate, the commit's subject and its locality, and one end-to-end confirmation that
+leaves four real files in the project. Eleven targeted mutations, all killed; three of them found
+claims that were not yet held.

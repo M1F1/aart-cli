@@ -1136,7 +1136,11 @@ def run_consumer_shell(
         name = key_name(
             terminal.key(),
             literal=current.session.screen
-            in (ConsumerScreen.REGISTRY_ADD, MaintainerScreen.SOURCE_ADD),
+            in (
+                ConsumerScreen.REGISTRY_ADD,
+                MaintainerScreen.SOURCE_ADD,
+                MaintainerScreen.REGISTRY_INIT,
+            ),
         )
         if not name:
             continue
@@ -1704,6 +1708,8 @@ class CanonicalScreenSource:
             return ("alias", "url", "ref", "default", "connect")
         if screen is MaintainerScreen.SOURCE_ADD:
             return ("alias", "kind", "location", "ref", "connect")
+        if screen is MaintainerScreen.REGISTRY_INIT:
+            return ("id", "name", "reporting", "commit", "initialize")
         if screen is ConsumerScreen.SETTINGS:
             return SETTING_ROWS
         return ()
@@ -2250,6 +2256,39 @@ class CanonicalScreenSource:
                 "",
                 "Type to edit; Backspace removes; Space switches kind; Enter advances.",
             )
+        if screen is MaintainerScreen.REGISTRY_INIT:
+            init = state.registry_init_draft
+            values = {
+                "id": init.registry_id or "<type a name like acme-registry>",
+                "name": init.display_name or "<type what people should call it>",
+                "reporting": init.usage_reporting or "not enabled",
+                "commit": "yes, one local commit" if init.commit else "no, leave the files staged",
+                "initialize": "Review the five stages",
+            }
+            labels = {
+                "id": "Registry ID",
+                "name": "Display name",
+                "reporting": "Usage reporting",
+                "commit": "Local commit",
+                "initialize": "Continue",
+            }
+            return (
+                "Create the registry this project publishes. AART writes its skeleton, pins what",
+                "it references, builds its index, then validates and audits the result.",
+                "",
+                *(
+                    f"{'>' if row == state.current_row else ' '} {labels[row]}: {values[row]}"
+                    for row in state.rows
+                ),
+                "",
+                # 161.7, said where the decision is made rather than only in the specification.
+                "Nothing is pushed and nothing is merged. Publishing the registry stays a decision",
+                "you make through this repository's own review.",
+                "",
+                "Type to edit; Backspace removes; Space toggles the commit; Enter advances.",
+            )
+        if screen is MaintainerScreen.REGISTRY_INIT_REVIEW:
+            return ("Review the registry below, then press Enter to create it.",)
         if screen is MaintainerScreen.SOURCE_ADD_REVIEW:
             return ("Review the Source connection below, then press Enter to connect.",)
         if screen is ConsumerScreen.REGISTRY_REVIEW:

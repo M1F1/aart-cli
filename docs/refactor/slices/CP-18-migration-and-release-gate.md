@@ -806,6 +806,20 @@ every `ConsumerScreen` and `MaintainerScreen` drawn with a command-carrying refu
 sensitivity test for that sweep, and a Hypothesis property for the universal half; seven targeted
 mutations, all killed.
 
+B-090/QA-016 is now **fixed and awaiting manual retest** (D-186). Maintainer screen 46 offers `n`
+Initialize Registry: a form (46a) collecting the registry ID, display name, an optional
+usage-reporting destination and the one opt-in local commit, and a review (46b) that names all five
+stages and states that nothing will be pushed or merged. One confirmation runs init → lock → build →
+validate → audit fail-fast through `agent_artifacts/io/registry_bootstrap.py`, which is the ordering
+and nothing else: the three writing stages go through the same `LocalCurationService` prepare/
+finalize pair the CLI drives and the two gates are the same planning functions. The commit is part
+of the review digest, so the two commit choices are two plans, and a test records every `git` call
+the run makes and asserts none is `push` or `merge` — 165.27's publication authority stays with the
+repository. A partial run is a report rather than an exception: the stages are a prefix of the five,
+nothing is re-read, and the result says which stage stopped it. Evidence:
+`tests/maintainer_registry_init_test.py` (19 tests, including one end-to-end confirmation that
+leaves four real files in a project checkout); eleven targeted mutations, all killed.
+
 B-095/QA-021 records the separate one-off adoption model: exact author YAML discovery and selective
 vendoring from a repository that is not persisted as a Source. Existing scan/discover/vendor/batch
 commands stop at separate boundaries, so no TUI or command composes the requested atomic flow.

@@ -2176,7 +2176,7 @@ the empty `aart-test-registry` manual transcript; QA-015.
 ## B-090 — Maintainer TUI cannot bootstrap a Registry workspace
 
 Found: whole-product TUI acceptance, first Registry bootstrap (2026-09-08) · Severity: high ·
-Status: open
+Status: fixed, awaiting manual retest (D-186)
 
 The first-run Registry path currently requires the operator to leave the TUI and coordinate
 `registry init`, `lock`, `build`, `validate` and `audit` manually. The acceptance branch then needs a

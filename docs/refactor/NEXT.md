@@ -160,6 +160,22 @@ every `ConsumerScreen` and `MaintainerScreen` drawn with a command-carrying refu
 sensitivity test for that sweep, and a Hypothesis property for the universal half; seven targeted
 mutations, all killed.
 
+B-090/QA-016 is now **fixed and awaiting manual retest** (D-186). Maintainer screen 46 offers `n`
+Initialize Registry: a form (46a) collecting the registry ID, display name, an optional
+usage-reporting destination and the one opt-in local commit, and a review (46b) that names all five
+stages and states that nothing will be pushed or merged. One confirmation runs init → lock → build →
+validate → audit fail-fast through `agent_artifacts/io/registry_bootstrap.py`, which is the ordering
+and nothing else: the three writing stages go through the same `LocalCurationService` prepare/
+finalize pair the CLI drives and the two gates are the same planning functions, so there is no
+second implementation of what a registry is. `registry_identity_refusal` judges the form's identity
+through the very `RegistryInitOptions` `init` builds. The commit is part of the review digest, so
+the two commit choices are two plans; the run records every `git` call it makes and a test asserts
+none is `push` or `merge`. A partial run is a report rather than an exception — the stages are a
+prefix of the five, nothing is re-read, and the result says which stage stopped it. Evidence:
+`tests/maintainer_registry_init_test.py` (19 tests, including one end-to-end confirmation that
+leaves four real files in a project checkout) and `tests/maintainer_navigation_test.py`; eleven
+targeted mutations, all killed, three of which found claims that were not yet held.
+
 On top of that, Maintainer screen 31 now offers `a` Add Source: a separate `SourceDraft` form (31a)
 and review (31b) that accept only `source-git`/`source-local`, refuse `registry-git` by name, never
 set a default registry, and execute through the same `add_configured_source` transaction the CLI

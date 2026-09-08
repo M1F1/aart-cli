@@ -40,6 +40,7 @@ __all__ = [
     "ConsumerUiEventKind",
     "ConsumerUiState",
     "RegistryDraft",
+    "RegistryInitDraft",
     "SourceDraft",
     "key_event",
     "opening_state",
@@ -60,6 +61,7 @@ class ConsumerActionKind(str, Enum):
     REGISTRY_ADD = "registry-add"
     REGISTRY_SYNC = "registry-sync"
     SOURCE_ADD = "source-add"
+    REGISTRY_INIT = "registry-init"
 
 
 class ConsumerUiEventKind(str, Enum):
@@ -86,6 +88,7 @@ class ConsumerUiEventKind(str, Enum):
     ACTION_RECORDED = "action-recorded"
     EDIT_REGISTRY = "edit-registry"
     EDIT_SOURCE = "edit-source"
+    EDIT_REGISTRY_INIT = "edit-registry-init"
 
 
 @dataclass(frozen=True, slots=True)
@@ -135,6 +138,28 @@ class SourceDraft:
             for value in (self.alias, self.kind, self.location, self.ref)
         ):
             raise ValueError("source draft is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class RegistryInitDraft:
+    """What creating a registry in this project needs, and the one choice it offers (B-090).
+
+    `commit` is the only effect the operator opts into.  The five stages write managed files into
+    the checkout either way; whether that becomes a Git commit is a decision about the repository's
+    own history, and pushing or merging it is a further decision that is never AART's to make.
+    """
+
+    registry_id: str = ""
+    display_name: str = ""
+    usage_reporting: str = ""
+    commit: bool = False
+
+    def __post_init__(self) -> None:
+        if any(
+            not isinstance(value, str) or any(char in value for char in "\r\n")
+            for value in (self.registry_id, self.display_name, self.usage_reporting)
+        ) or not isinstance(self.commit, bool):
+            raise ValueError("registry init draft is invalid")
 
 
 class ConsumerUiCommandKind(str, Enum):
@@ -191,6 +216,7 @@ class ConsumerUiCommand:
     promotion_mode: PromotionMode | None = None
     registry_draft: RegistryDraft | None = None
     source_draft: SourceDraft | None = None
+    registry_init_draft: RegistryInitDraft | None = None
 
     def __post_init__(self) -> None:
         if (
@@ -213,6 +239,10 @@ class ConsumerUiCommand:
                 and not isinstance(self.registry_draft, RegistryDraft)
             )
             or (self.source_draft is not None and not isinstance(self.source_draft, SourceDraft))
+            or (
+                self.registry_init_draft is not None
+                and not isinstance(self.registry_init_draft, RegistryInitDraft)
+            )
         ):
             raise ValueError("consumer UI command is invalid")
         if (
@@ -293,6 +323,7 @@ class ConsumerUiState:
     promotion_mode: PromotionMode = PromotionMode.VENDORED
     registry_draft: RegistryDraft = RegistryDraft()
     source_draft: SourceDraft = SourceDraft()
+    registry_init_draft: RegistryInitDraft = RegistryInitDraft()
 
     def __post_init__(self) -> None:
         if (
@@ -322,6 +353,7 @@ class ConsumerUiState:
             or not isinstance(self.file_diff, bool)
             or not isinstance(self.registry_draft, RegistryDraft)
             or not isinstance(self.source_draft, SourceDraft)
+            or not isinstance(self.registry_init_draft, RegistryInitDraft)
         ):
             raise ValueError("consumer UI state is invalid")
         if self.session.profile is not self.settings.profile:
@@ -455,6 +487,10 @@ _ACTION_REVIEW: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
         ConsumerActionKind.SOURCE_ADD,
         MaintainerScreen.SOURCE_ADD,
     ): MaintainerScreen.SOURCE_ADD_REVIEW,
+    (
+        ConsumerActionKind.REGISTRY_INIT,
+        MaintainerScreen.REGISTRY_INIT,
+    ): MaintainerScreen.REGISTRY_INIT_REVIEW,
     (ConsumerActionKind.INSTALL, ConsumerScreen.MARKETPLACE): ConsumerScreen.REVIEW_SELECTION,
     (ConsumerActionKind.INSTALL, ConsumerScreen.ARTIFACT_DETAILS): ConsumerScreen.REVIEW_SELECTION,
     (
@@ -525,7 +561,13 @@ def _request_action(
         ):
             return state, ()
     elif (
-        action not in (ConsumerActionKind.REGISTRY_ADD, ConsumerActionKind.SOURCE_ADD) and not focus
+        action
+        not in (
+            ConsumerActionKind.REGISTRY_ADD,
+            ConsumerActionKind.SOURCE_ADD,
+            ConsumerActionKind.REGISTRY_INIT,
+        )
+        and not focus
     ):
         return state, ()
 
@@ -549,6 +591,9 @@ def _request_action(
             state.registry_draft if action is ConsumerActionKind.REGISTRY_ADD else None
         ),
         source_draft=(state.source_draft if action is ConsumerActionKind.SOURCE_ADD else None),
+        registry_init_draft=(
+            state.registry_init_draft if action is ConsumerActionKind.REGISTRY_INIT else None
+        ),
     )
     return prepared, (command, *navigation)
 
@@ -602,6 +647,7 @@ _ACTION_RUNNING: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationS
     (ConsumerActionKind.REGISTRY_ADD, ConsumerScreen.REGISTRY_REVIEW): None,
     (ConsumerActionKind.REGISTRY_SYNC, ConsumerScreen.REGISTRY_SYNC): None,
     (ConsumerActionKind.SOURCE_ADD, MaintainerScreen.SOURCE_ADD_REVIEW): None,
+    (ConsumerActionKind.REGISTRY_INIT, MaintainerScreen.REGISTRY_INIT_REVIEW): None,
     (ConsumerActionKind.INSTALL, ConsumerScreen.READY): ConsumerScreen.INSTALLING,
     (ConsumerActionKind.UPDATE, ConsumerScreen.UPDATE_INPUTS): ConsumerScreen.UPDATING,
     (
@@ -651,6 +697,10 @@ _ACTION_RESULT: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
         ConsumerActionKind.SOURCE_ADD,
         MaintainerScreen.SOURCE_ADD_REVIEW,
     ): MaintainerScreen.SOURCES,
+    (
+        ConsumerActionKind.REGISTRY_INIT,
+        MaintainerScreen.REGISTRY_INIT_REVIEW,
+    ): MaintainerScreen.REGISTRY,
     (ConsumerActionKind.INSTALL, ConsumerScreen.INSTALLING): ConsumerScreen.SUCCESS,
     (ConsumerActionKind.UPDATE, ConsumerScreen.UPDATING): ConsumerScreen.ACTIVITY_DETAILS,
     (
@@ -787,6 +837,21 @@ def reduce_consumer_ui(
         else:
             return state, ()
         return replace(state, source_draft=source_draft, quit_pending=False), ()
+    if event.kind is ConsumerUiEventKind.EDIT_REGISTRY_INIT:
+        if state.session.screen is not MaintainerScreen.REGISTRY_INIT:
+            return state, ()
+        init_draft = state.registry_init_draft
+        if event.key == "id":
+            init_draft = replace(init_draft, registry_id=event.text)
+        elif event.key == "name":
+            init_draft = replace(init_draft, display_name=event.text)
+        elif event.key == "reporting":
+            init_draft = replace(init_draft, usage_reporting=event.text)
+        elif event.key == "commit" and event.accepted is not None:
+            init_draft = replace(init_draft, commit=event.accepted)
+        else:
+            return state, ()
+        return replace(state, registry_init_draft=init_draft, quit_pending=False), ()
     if event.kind is ConsumerUiEventKind.TOGGLE_PROFILE:
         return _apply_setting(state, state.settings.toggled("detail-level"))
     if event.kind is ConsumerUiEventKind.TOGGLE_SETTING:
@@ -882,7 +947,8 @@ def key_event(
         or (
             len(key) != 1
             and key not in _SPECIAL_KEYS
-            and state.session.screen is not ConsumerScreen.REGISTRY_ADD
+            and state.session.screen
+            not in (ConsumerScreen.REGISTRY_ADD, MaintainerScreen.REGISTRY_INIT)
         )
         or not (detail is None or isinstance(detail, (ConsumerScreen, MaintainerScreen)))
     ):
@@ -904,6 +970,41 @@ def key_event(
             return ConsumerUiEvent(ConsumerUiEventKind.SEARCH, text=state.search[:-1])
         if len(key) == 1 and key.isprintable():
             return ConsumerUiEvent(ConsumerUiEventKind.SEARCH, text=state.search + key)
+        return None
+
+    if state.session.screen is MaintainerScreen.REGISTRY_INIT:
+        row = cursor or state.current_row
+        values = {
+            "id": state.registry_init_draft.registry_id,
+            "name": state.registry_init_draft.display_name,
+            "reporting": state.registry_init_draft.usage_reporting,
+        }
+        if key == "escape":
+            return ConsumerUiEvent(ConsumerUiEventKind.BACK)
+        if key == "up":
+            return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="up")
+        if key == "down":
+            return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="down")
+        if key == " " and row == "commit":
+            return ConsumerUiEvent(
+                ConsumerUiEventKind.EDIT_REGISTRY_INIT,
+                key="commit",
+                accepted=not state.registry_init_draft.commit,
+            )
+        if key == "enter":
+            if row == "initialize":
+                return ConsumerUiEvent(
+                    ConsumerUiEventKind.REQUEST_ACTION,
+                    action=ConsumerActionKind.REGISTRY_INIT,
+                )
+            return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="down")
+        if row in values and key == "backspace":
+            return ConsumerUiEvent(
+                ConsumerUiEventKind.EDIT_REGISTRY_INIT, key=row, text=values[row][:-1]
+            )
+        if row in values and key.isprintable():
+            text = key if len(key) > 1 else values[row] + key
+            return ConsumerUiEvent(ConsumerUiEventKind.EDIT_REGISTRY_INIT, key=row, text=text)
         return None
 
     if state.session.screen is MaintainerScreen.SOURCE_ADD:
@@ -984,6 +1085,11 @@ def key_event(
         return ConsumerUiEvent(ConsumerUiEventKind.NAVIGATE, screen=ConsumerScreen.REGISTRY_ADD)
     if key == "a" and state.session.screen is MaintainerScreen.SOURCES:
         return ConsumerUiEvent(ConsumerUiEventKind.NAVIGATE, screen=MaintainerScreen.SOURCE_ADD)
+    # `n` for a registry that does not exist yet.  `a` on screen 46 would read as "add" -- the word
+    # both subscription forms use -- and creating the registry this project publishes is not
+    # connecting to somebody else's (INV-199).
+    if key == "n" and state.session.screen is MaintainerScreen.REGISTRY:
+        return ConsumerUiEvent(ConsumerUiEventKind.NAVIGATE, screen=MaintainerScreen.REGISTRY_INIT)
     # Screen 28 is the one screen whose rows are settings rather than artifacts, so space and
     # Enter move a preference here instead of ticking or opening something.
     if key in (" ", "enter") and state.session.screen is ConsumerScreen.SETTINGS:

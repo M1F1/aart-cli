@@ -57,20 +57,6 @@ Each new entry records:
       Evidence: Codex CLI 0.152.0 is installed locally; Codex is absent from every canonical target
       table and from the dormant built-in profile registry
       Fix: pending
-- [ ] **QA-016 — A new Registry cannot be initialized through Maintainer TUI.**
-      Stage: bootstrapping the external test Registry
-      Surface: Maintainer → Registry
-      Severity: high
-      Blocks current stage: no, with the current CLI sequence; yes, for TUI-first acceptance
-      Reproduction: start AART from a new Git checkout, enable Maintainer Mode and open Registry
-      Expected: `Initialize Registry` opens a short prefilled form, one exact review and one
-      confirmation; AART then runs init → lock → build → validate → audit, reports `Registry ready
-      locally`, and optionally offers an explicit local commit
-      Observed: the TUI only displays already configured Registry state; the operator must run five
-      AART commands, Git commands and two acceptance-specific `gh variable set` commands manually
-      Evidence: screen 46 has inspection only and no init action; the accepted publication boundary
-      permits an explicit local commit but never an automatic push
-      Fix: pending
 - [ ] **QA-021 — Registry cannot one-off scan YAML manifests and vendor selected artifacts.**
       Stage: optional artifact-scoped onboarding from an external repository
       Surface: Maintainer → Registry
@@ -89,6 +75,12 @@ Each new entry records:
 
 ### Fixed — awaiting manual retest
 
+- [ ] **QA-016 — A new Registry cannot be initialized through Maintainer TUI.** Screen 46 now
+      offers `n` Initialize Registry with its own id/name/reporting/commit form (46a) and an exact
+      review (46b) that names all five stages. One confirmation runs init → lock → build → validate
+      → audit, fail-fast, through the same curation service and planning gates the CLI drives, and
+      draws stage by stage what each did. The local commit is opt-in and part of the review digest;
+      nothing is ever pushed or merged. B-090/D-186.
 - [ ] **QA-015 — Audit of a valid empty Registry reports non-actionable warnings as problems.** The
       provenance-coverage and installation-risk findings are now `info` notes when the registry
       holds neither an external reference nor an owned package, and warnings again as soon as

@@ -27,6 +27,7 @@ from .application.consumer_ui import (
     ConsumerUiEventKind,
     ConsumerUiState,
     RegistryDraft,
+    RegistryInitDraft,
     SourceDraft,
     key_event,
     opening_state,
@@ -51,6 +52,7 @@ from .io.configured_setup import ConfiguredSetupService, configured_consumer_com
 from .io.consumer_actions import (
     ConsumerActionContext,
     LocalConsumerActions,
+    RegistryBootstrapCompletion,
     RegistryConnectionSnapshot,
 )
 from .io.consumer_machine import read_consumer_machine
@@ -1016,6 +1018,32 @@ def _canonical_consumer_actions(
             return added
         return reread()
 
+    def registry_bootstrap(
+        draft: RegistryInitDraft,
+    ) -> DomainResult[RegistryBootstrapCompletion]:
+        # The five canonical stages in their one meaningful order, run against this project's own
+        # checkout (B-090). The re-read afterwards is the same one every subscription change uses:
+        # a registry that has just come into existence is a thing screen 46 can now draw.
+        from .io.registry_bootstrap import bootstrap_registry_workspace
+
+        report = bootstrap_registry_workspace(
+            root=project_root,
+            registry_id=draft.registry_id,
+            display_name=draft.display_name,
+            usage_reporting_repository=draft.usage_reporting or None,
+            commit=draft.commit,
+        )
+        if isinstance(report, DomainErr):
+            return report
+        if not report.value.passed:
+            # Nothing is re-read from a run that stopped part way: the screens would then be
+            # describing a registry the operator was simultaneously being told did not finish.
+            return DomainOk(RegistryBootstrapCompletion(report.value))
+        refreshed = reread()
+        if isinstance(refreshed, DomainErr):
+            return refreshed
+        return DomainOk(RegistryBootstrapCompletion(report.value, refreshed.value))
+
     def completion_factory(
         completed: CompletedConfiguredInstallation,
         action: Literal["install", "update"],
@@ -1076,6 +1104,7 @@ def _canonical_consumer_actions(
             registry_connection=registry_connection,
             registry_refresh=registry_refresh,
             source_connection=source_connection,
+            registry_bootstrap=registry_bootstrap,
         )
     )
 

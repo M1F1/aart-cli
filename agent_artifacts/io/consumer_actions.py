@@ -39,6 +39,7 @@ from agent_artifacts.application.consumer_ui import (
     ConsumerUiEvent,
     ConsumerUiEventKind,
     RegistryDraft,
+    RegistryInitDraft,
     SourceDraft,
 )
 from agent_artifacts.application.consumer_views import (
@@ -107,12 +108,14 @@ from .maintainer_sync import (
     prepare_configured_source_sync,
 )
 from .maintainer_views import read_maintainer_views
+from .registry_bootstrap import RegistryBootstrapReport, registry_identity_refusal
 
 __all__ = [
     "CONSUMER_ACTION_NOT_INSTALLED",
     "CONSUMER_ACTION_NOT_OFFERED",
     "ConsumerActionContext",
     "LocalConsumerActions",
+    "RegistryBootstrapCompletion",
     "RegistryConnectionSnapshot",
 ]
 
@@ -232,6 +235,15 @@ class _PendingSourceAddition:
 
 
 @dataclass(frozen=True, slots=True)
+class _PendingRegistryInit:
+    """One reviewed run of init -> lock -> build -> validate -> audit (B-090)."""
+
+    draft: RegistryInitDraft
+    workspace: str
+    review_digest: str
+
+
+@dataclass(frozen=True, slots=True)
 class RegistryConnectionSnapshot:
     """Configuration-derived views re-read after a subscription succeeds.
 
@@ -245,9 +257,23 @@ class RegistryConnectionSnapshot:
     maintainer: MaintainerViews | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class RegistryBootstrapCompletion:
+    """What one bootstrap run established: the stages it ran, and what they changed here.
+
+    The connection is separate and optional because the two are not the same claim.  The stages are
+    what happened in the checkout; the snapshot is what this machine can now see, which only exists
+    when the run got far enough for there to be a registry to re-read.
+    """
+
+    report: RegistryBootstrapReport
+    connection: RegistryConnectionSnapshot | None = None
+
+
 RegistryConnectionPort = Callable[[RegistryDraft], Result[RegistryConnectionSnapshot]]
 RegistryRefreshPort = Callable[[str], Result[RegistryConnectionSnapshot]]
 SourceConnectionPort = Callable[[SourceDraft], Result[RegistryConnectionSnapshot]]
+RegistryBootstrapPort = Callable[[RegistryInitDraft], Result[RegistryBootstrapCompletion]]
 
 
 #: What one reviewed-but-unconfirmed action is holding. Each carries the review digest the
@@ -261,6 +287,7 @@ _Pending = (
     | _PendingRegistryAddition
     | _PendingRegistryRefresh
     | _PendingSourceAddition
+    | _PendingRegistryInit
 )
 
 ConfiguredCompletionFactory = Callable[
@@ -291,6 +318,7 @@ class LocalConsumerActions:
         registry_connection: RegistryConnectionPort | None = None,
         registry_refresh: RegistryRefreshPort | None = None,
         source_connection: SourceConnectionPort | None = None,
+        registry_bootstrap: RegistryBootstrapPort | None = None,
     ) -> None:
         if not isinstance(context, ConsumerActionContext):
             raise ValueError("consumer actions need a composed action context")
@@ -304,6 +332,7 @@ class LocalConsumerActions:
         self._registry_connection = registry_connection
         self._registry_refresh = registry_refresh
         self._source_connection = source_connection
+        self._registry_bootstrap = registry_bootstrap
 
     # -- preferences --------------------------------------------------------- #
 
@@ -404,6 +433,8 @@ class LocalConsumerActions:
             return self._prepare_registry_addition(command)
         if action is ConsumerActionKind.SOURCE_ADD:
             return self._prepare_source_addition(command)
+        if action is ConsumerActionKind.REGISTRY_INIT:
+            return self._prepare_registry_init(command)
         if action is ConsumerActionKind.UPDATE:
             return self._prepare_update(command)
         if action is ConsumerActionKind.VERIFY_REPAIR:
@@ -515,6 +546,62 @@ class LocalConsumerActions:
                     f"  branch or tag: {parsed.value.ref or 'not applicable'}",
                     "  next: acquire a pinned snapshot, discover declared aart.yaml/aart.json "
                     "manifests, then save the subscription",
+                )
+            ),
+            ConsumerUiEvent(
+                ConsumerUiEventKind.ACTION_PREPARED,
+                action=command.action,
+                review_digest=review_digest,
+            ),
+        )
+
+    def _prepare_registry_init(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        """Review creating this project's registry: what it will be, and what it will not do.
+
+        The review names all five stages because they are one decision rather than five: the
+        operator is agreeing to a registry existing here, not to `init` in isolation. It also
+        states the two things the run will never do, since a maintainer reading a screen has no
+        other way to know that confirming it cannot publish anything (B-090).
+        """
+
+        draft = command.registry_init_draft
+        if draft is None or self._registry_bootstrap is None:
+            return self._declined(command, _lines("registry initialization is unavailable"))
+        refused = registry_identity_refusal(
+            registry_id=draft.registry_id,
+            display_name=draft.display_name,
+            usage_reporting_repository=draft.usage_reporting or None,
+        )
+        if refused is not None:
+            return self._declined(command, _refusal(refused.diagnostics))
+        workspace = self._context.host.project_root
+        identity = json.dumps(
+            {
+                "workspace": workspace,
+                "registry_id": draft.registry_id,
+                "display_name": draft.display_name,
+                "usage_reporting": draft.usage_reporting,
+                "commit": draft.commit,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        review_digest = "sha256:" + hashlib.sha256(identity).hexdigest()
+        self._pending = _PendingRegistryInit(draft, workspace, review_digest)
+        self._pending_action = command.action
+        return ConsumerActionUpdate(
+            self.source(
+                notice=(
+                    "Registry initialization review:",
+                    f"  project: {workspace}",
+                    f"  registry ID: {draft.registry_id}",
+                    f"  display name: {draft.display_name}",
+                    f"  usage reporting: {draft.usage_reporting or 'not enabled'}",
+                    f"  local commit: {'yes' if draft.commit else 'no'}",
+                    "  next: init writes the registry skeleton, lock pins what it references,",
+                    "        build writes its index, then validate and audit check the result",
+                    "  nothing is pushed and nothing is merged: publishing this registry stays a "
+                    "decision you make in the repository",
                 )
             ),
             ConsumerUiEvent(
@@ -949,6 +1036,8 @@ class LocalConsumerActions:
             return self._execute_registry_refresh(command, pending)
         if isinstance(pending, _PendingSourceAddition):
             return self._execute_source_addition(command, pending)
+        if isinstance(pending, _PendingRegistryInit):
+            return self._execute_registry_init(command, pending)
         if isinstance(pending, PreparedConfiguredRepair):
             return self._execute_repair(command, pending)
         if isinstance(pending, PreparedSourceSync):
@@ -1061,6 +1150,42 @@ class LocalConsumerActions:
         )
         recorded_at, _today = self._moment()
         return self._recorded(command, recorded_at)
+
+    def _execute_registry_init(
+        self,
+        command: ConsumerUiCommand,
+        pending: _PendingRegistryInit,
+    ) -> ConsumerActionUpdate:
+        """Run the five stages and draw what each one did, including the one that stopped it.
+
+        A refused stage is not a silent failure and not an exception: the stages before it really
+        did write to the checkout, so the result says how far the run got rather than only that it
+        failed. Nothing is recorded in that case, which leaves the session on the review.
+        """
+
+        assert self._registry_bootstrap is not None
+        completed = self._registry_bootstrap(pending.draft)
+        if isinstance(completed, Err):
+            return self._failed(command, _refusal(completed.diagnostics))
+        report = completed.value.report
+        if completed.value.connection is not None:
+            self._context = replace(
+                self._context,
+                effective=completed.value.connection.effective,
+                offers=completed.value.connection.offers,
+                maintainer=completed.value.connection.maintainer,
+            )
+        lines: list[str] = ["Registry initialization:"]
+        for stage in report.stages:
+            lines.append(f"  {stage.name}: {'done' if stage.passed else 'refused'}")
+            lines.extend(f"    {line}" for line in stage.lines)
+        if not report.passed:
+            lines.append("  the run stopped there; the stages after it did not run")
+            # Not through `_lines`: the indentation is what makes a stage's own detail read as
+            # belonging to that stage rather than as another stage.
+            return self._failed(command, tuple(lines))
+        recorded_at, _today = self._moment()
+        return self._recorded(command, recorded_at, notice=tuple(lines))
 
     def _execute_source_sync(
         self,

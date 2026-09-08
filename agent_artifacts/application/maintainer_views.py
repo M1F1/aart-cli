@@ -163,6 +163,12 @@ class MaintainerScreen(str, Enum):
     REGISTRY_VALIDATION = "44-registry-validation"
     REGISTRY_COMMIT = "45-registry-commit"
     REGISTRY = "46-registry-maintainer"
+    # 46a/46b are the Initialize Registry form and its review, lettered the way 21a/21b and 31a/31b
+    # are (B-090).  Screen 46 is where a maintainer looks at the registry this project publishes, so
+    # it is where the registry that does not exist yet is created; the run is local, and 161.7's
+    # separation of publication from approval is why it never pushes or merges.
+    REGISTRY_INIT = "46a-init-registry"
+    REGISTRY_INIT_REVIEW = "46b-review-init"
     BULK_PROMOTION = "47-bulk-promotion"
     CANDIDATE_LIFECYCLE = "48-candidate-lifecycle"
     PROVENANCE = "49-provenance"
@@ -2382,7 +2388,12 @@ _NAVIGATION: dict[MaintainerScreen, tuple[MaintainerScreen, ...]] = {
     MaintainerScreen.REGISTRY_DIFF: (MaintainerScreen.REGISTRY_VALIDATION,),
     MaintainerScreen.REGISTRY_VALIDATION: (MaintainerScreen.REGISTRY_COMMIT,),
     MaintainerScreen.REGISTRY_COMMIT: (MaintainerScreen.REGISTRY,),
-    MaintainerScreen.REGISTRY: (MaintainerScreen.BULK_PROMOTION,),
+    MaintainerScreen.REGISTRY: (
+        MaintainerScreen.BULK_PROMOTION,
+        MaintainerScreen.REGISTRY_INIT,
+    ),
+    MaintainerScreen.REGISTRY_INIT: (MaintainerScreen.REGISTRY_INIT_REVIEW,),
+    MaintainerScreen.REGISTRY_INIT_REVIEW: (MaintainerScreen.REGISTRY,),
     # A bulk selection has no single-Candidate diff to open, so screen 47 assembles its
     # transaction and hands it to the same validation screen a single promotion is reviewed on.
     MaintainerScreen.BULK_PROMOTION: (MaintainerScreen.REGISTRY_VALIDATION,),
