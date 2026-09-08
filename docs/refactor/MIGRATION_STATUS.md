@@ -218,9 +218,15 @@ content is published under the registry's own alias, held by a test that reads e
 `apply_adoption` re-checks the review digest before `finalize_promotion`, so only each manifest's
 declared `payload.include` is copied and the adopted package records the upstream URL, resolved
 commit, manifest path and input digest as native provenance. Evidence:
-`tests/registry_repository_scan_test.py` (14 tests); five targeted mutations, all killed. The TUI
-screens (46c/46d/46e), their two actions, a CLI equivalent and the explicit `Check upstream` action
-remain open under B-095.
+`tests/registry_repository_scan_test.py` (14 tests); five targeted mutations, all killed.
+
+The **TUI half is also built and green** (D-188): Maintainer Registry exposes `s` Scan Repository,
+46c collects one URL/ref without subscribing, 46d lists every explicit manifest but makes only
+validation-cleared rows selectable, and 46e names the complete local registry transaction before
+Enter applies its review digest. The production composition binds scan and adoption to the current
+project checkout; an E2E test substitutes only Git transport and proves the real ports write only
+the selected declared payload while saving no Source. The machine-complete CLI equivalent and
+explicit per-artifact `Check upstream` remain open under B-095.
 
 ### CP-14 current increment (2026-09-02)
 

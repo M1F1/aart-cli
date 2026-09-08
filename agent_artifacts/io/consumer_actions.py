@@ -28,7 +28,7 @@ import hashlib
 import json
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
-from typing import Callable, Literal
+from typing import Callable, Literal, Protocol
 
 from agent_artifacts.application.consumer_session import ConsumerMachine, InstalledInspection
 from agent_artifacts.application.consumer_ui import (
@@ -40,6 +40,7 @@ from agent_artifacts.application.consumer_ui import (
     ConsumerUiEventKind,
     RegistryDraft,
     RegistryInitDraft,
+    RepositoryScanDraft,
     SourceDraft,
 )
 from agent_artifacts.application.consumer_views import (
@@ -50,6 +51,9 @@ from agent_artifacts.application.consumer_views import (
 from agent_artifacts.application.installed_setup import DeclaredArtifactSetup
 from agent_artifacts.application.maintainer_sync import PreparedSourceSync
 from agent_artifacts.application.maintainer_views import (
+    MaintainerAdoptionReviewView,
+    MaintainerRepositoryArtifactView,
+    MaintainerRepositoryScanView,
     MaintainerViews,
     parse_validation_row,
     project_maintainer_registry_commit,
@@ -108,6 +112,7 @@ from .maintainer_sync import (
     prepare_configured_source_sync,
 )
 from .maintainer_views import read_maintainer_views
+from .registry_adoption import PreparedAdoption, RepositoryScan
 from .registry_bootstrap import RegistryBootstrapReport, registry_identity_refusal
 
 __all__ = [
@@ -117,6 +122,7 @@ __all__ = [
     "LocalConsumerActions",
     "RegistryBootstrapCompletion",
     "RegistryConnectionSnapshot",
+    "RepositoryAdoptionPort",
 ]
 
 #: What a command names is not among the artifacts the configured sources currently offer.
@@ -174,6 +180,31 @@ def _refusal(diagnostics: tuple[Diagnostic, ...]) -> tuple[str, ...]:
     if withheld and not steps:
         steps.append(_ELSEWHERE)
     return _lines(*lines, *steps)
+
+
+def _project_repository_scan(scan: RepositoryScan) -> MaintainerRepositoryScanView:
+    """Cross the I/O-to-view boundary once; renderers never receive the acquired snapshot."""
+
+    return MaintainerRepositoryScanView(
+        scan.url,
+        scan.ref,
+        scan.commit,
+        scan.manifest_count,
+        tuple(
+            MaintainerRepositoryArtifactView(
+                item.coordinate,
+                item.kind,
+                item.name,
+                item.version,
+                item.summary,
+                item.manifest_path,
+                item.state,
+                item.payload_paths,
+                item.adoptable,
+            )
+            for item in scan.artifacts
+        ),
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -274,6 +305,17 @@ RegistryConnectionPort = Callable[[RegistryDraft], Result[RegistryConnectionSnap
 RegistryRefreshPort = Callable[[str], Result[RegistryConnectionSnapshot]]
 SourceConnectionPort = Callable[[SourceDraft], Result[RegistryConnectionSnapshot]]
 RegistryBootstrapPort = Callable[[RegistryInitDraft], Result[RegistryBootstrapCompletion]]
+RepositoryScanPort = Callable[[RepositoryScanDraft], Result[RepositoryScan]]
+
+
+class RepositoryAdoptionPort(Protocol):
+    """The two halves of one reviewed adoption, already bound to a registry checkout."""
+
+    def prepare(
+        self, scan: RepositoryScan, selected: tuple[str, ...]
+    ) -> Result[PreparedAdoption]: ...
+
+    def apply(self, prepared: PreparedAdoption, review_digest: str) -> Result[PreparedAdoption]: ...
 
 
 #: What one reviewed-but-unconfirmed action is holding. Each carries the review digest the
@@ -288,6 +330,7 @@ _Pending = (
     | _PendingRegistryRefresh
     | _PendingSourceAddition
     | _PendingRegistryInit
+    | PreparedAdoption
 )
 
 ConfiguredCompletionFactory = Callable[
@@ -319,6 +362,8 @@ class LocalConsumerActions:
         registry_refresh: RegistryRefreshPort | None = None,
         source_connection: SourceConnectionPort | None = None,
         registry_bootstrap: RegistryBootstrapPort | None = None,
+        repository_scan: RepositoryScanPort | None = None,
+        repository_adoption: RepositoryAdoptionPort | None = None,
     ) -> None:
         if not isinstance(context, ConsumerActionContext):
             raise ValueError("consumer actions need a composed action context")
@@ -333,6 +378,10 @@ class LocalConsumerActions:
         self._registry_refresh = registry_refresh
         self._source_connection = source_connection
         self._registry_bootstrap = registry_bootstrap
+        self._repository_scan = repository_scan
+        self._repository_adoption = repository_adoption
+        self._scanned_repository: RepositoryScan | None = None
+        self._adoption_review: MaintainerAdoptionReviewView | None = None
 
     # -- preferences --------------------------------------------------------- #
 
@@ -392,6 +441,12 @@ class LocalConsumerActions:
                 promotion_commit=promotion_commit,
                 notice=notice,
                 pending_setup=pending_setup,
+                repository_scan=(
+                    None
+                    if self._scanned_repository is None
+                    else _project_repository_scan(self._scanned_repository)
+                ),
+                adoption_review=self._adoption_review,
             )
         )
 
@@ -435,6 +490,10 @@ class LocalConsumerActions:
             return self._prepare_source_addition(command)
         if action is ConsumerActionKind.REGISTRY_INIT:
             return self._prepare_registry_init(command)
+        if action is ConsumerActionKind.REPOSITORY_SCAN:
+            return self._prepare_repository_scan(command)
+        if action is ConsumerActionKind.REPOSITORY_ADOPT:
+            return self._prepare_repository_adoption(command)
         if action is ConsumerActionKind.UPDATE:
             return self._prepare_update(command)
         if action is ConsumerActionKind.VERIFY_REPAIR:
@@ -448,6 +507,62 @@ class LocalConsumerActions:
         if action is ConsumerActionKind.BULK_PROMOTION:
             return self._prepare_bulk_promotion(command)
         return self._prepare_uninstall(command)
+
+    def _prepare_repository_scan(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        draft = command.repository_scan_draft
+        if draft is None or self._repository_scan is None:
+            return self._declined(command, _lines("repository scan is unavailable"))
+        scanned = self._repository_scan(draft)
+        if isinstance(scanned, Err):
+            return self._declined(command, _refusal(scanned.diagnostics))
+        self._scanned_repository = scanned.value
+        self._adoption_review = None
+        identity = json.dumps(
+            {
+                "url": scanned.value.url,
+                "ref": scanned.value.ref,
+                "commit": scanned.value.commit,
+                "artifacts": [item.coordinate for item in scanned.value.artifacts],
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        scan_digest = "sha256:" + hashlib.sha256(identity).hexdigest()
+        return ConsumerActionUpdate(
+            self.source(),
+            ConsumerUiEvent(
+                ConsumerUiEventKind.ACTION_PREPARED,
+                action=command.action,
+                review_digest=scan_digest,
+            ),
+        )
+
+    def _prepare_repository_adoption(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        if self._scanned_repository is None or self._repository_adoption is None:
+            return self._declined(
+                command,
+                _lines("scan a repository before choosing artifacts to adopt"),
+            )
+        prepared = self._repository_adoption.prepare(self._scanned_repository, command.selection)
+        if isinstance(prepared, Err):
+            return self._declined(command, _refusal(prepared.diagnostics))
+        self._pending = prepared.value
+        self._pending_action = command.action
+        self._adoption_review = MaintainerAdoptionReviewView(
+            prepared.value.url,
+            prepared.value.commit,
+            prepared.value.selected,
+            prepared.value.changed_paths,
+            prepared.value.review_digest,
+        )
+        return ConsumerActionUpdate(
+            self.source(),
+            ConsumerUiEvent(
+                ConsumerUiEventKind.ACTION_PREPARED,
+                action=command.action,
+                review_digest=prepared.value.review_digest,
+            ),
+        )
 
     def _prepare_registry_addition(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
         draft = command.registry_draft
@@ -1038,6 +1153,8 @@ class LocalConsumerActions:
             return self._execute_source_addition(command, pending)
         if isinstance(pending, _PendingRegistryInit):
             return self._execute_registry_init(command, pending)
+        if isinstance(pending, PreparedAdoption):
+            return self._execute_repository_adoption(command, pending)
         if isinstance(pending, PreparedConfiguredRepair):
             return self._execute_repair(command, pending)
         if isinstance(pending, PreparedSourceSync):
@@ -1046,6 +1163,27 @@ class LocalConsumerActions:
             return self._execute_candidate_promotion(command, pending)
         assert isinstance(pending, PreparedConfiguredUninstall)
         return self._execute_uninstall(command, pending)
+
+    def _execute_repository_adoption(
+        self,
+        command: ConsumerUiCommand,
+        pending: PreparedAdoption,
+    ) -> ConsumerActionUpdate:
+        assert self._repository_adoption is not None
+        applied = self._repository_adoption.apply(pending, command.review_digest)
+        if isinstance(applied, Err):
+            return self._failed(command, _refusal(applied.diagnostics))
+        if self._data_root is not None:
+            refreshed = read_maintainer_views(
+                self._context.effective,
+                data_root=self._data_root,
+                observed_at_epoch_seconds=int(self._now().timestamp()),
+                registry_root=self._context.host.harness_root,
+            )
+            if isinstance(refreshed, Ok):
+                self._context = replace(self._context, maintainer=refreshed.value)
+        recorded_at, _today = self._moment()
+        return self._recorded(command, recorded_at)
 
     def _execute_registry_addition(
         self,

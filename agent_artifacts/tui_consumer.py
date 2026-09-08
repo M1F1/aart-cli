@@ -51,6 +51,7 @@ from agent_artifacts.application.consumer_views import (
 )
 from agent_artifacts.application.installed_setup import DeclaredArtifactSetup
 from agent_artifacts.application.maintainer_views import (
+    MaintainerAdoptionReviewView,
     MaintainerBulkPromotionView,
     MaintainerCandidateFilter,
     MaintainerCandidateLifecycleView,
@@ -63,6 +64,7 @@ from agent_artifacts.application.maintainer_views import (
     MaintainerRegistryDiffView,
     MaintainerRegistryValidationView,
     MaintainerRegistryView,
+    MaintainerRepositoryScanView,
     MaintainerScreen,
     MaintainerSourceSyncResultView,
     MaintainerSourceSyncReviewView,
@@ -98,6 +100,8 @@ from agent_artifacts.tui_maintainer import (
     render_maintainer_validation,
     render_maintainer_validation_check,
     render_maintainer_version_conflict,
+    render_repository_adoption_review,
+    render_repository_scan,
     render_source_sync_result,
     render_source_sync_review,
 )
@@ -1044,7 +1048,7 @@ _HELP_LINES: tuple[str, ...] = (
     "↑ ↓  move        space  select",
     "enter  details   esc  back",
     "i  install/update  r  repair  u  uninstall",
-    "s  sync focused Source (Maintainer Mode)",
+    "s  sync focused Source / scan repository from Registry",
     "a  add Registry (Registries)",
     "/  search        v  Fast/Verbose",
     "?  help          q  quit",
@@ -1140,6 +1144,7 @@ def run_consumer_shell(
                 ConsumerScreen.REGISTRY_ADD,
                 MaintainerScreen.SOURCE_ADD,
                 MaintainerScreen.REGISTRY_INIT,
+                MaintainerScreen.REPOSITORY_SCAN,
             ),
         )
         if not name:
@@ -1289,6 +1294,8 @@ class ConsumerScreens:
     #: the outcome rather than to the notice channel: a notice is why something was refused, and
     #: this is part of what happened.
     pending_setup: tuple[DeclaredArtifactSetup, ...] = ()
+    repository_scan: MaintainerRepositoryScanView | None = None
+    adoption_review: MaintainerAdoptionReviewView | None = None
 
     def offered(self, key: str) -> MarketplaceEntry | None:
         return next((item for item in self.marketplace if item.key == key), None)
@@ -1479,6 +1486,8 @@ def screens_from(
     transaction: ReceiptDetailView | None = None,
     notice: tuple[str, ...] = (),
     pending_setup: tuple[DeclaredArtifactSetup, ...] = (),
+    repository_scan: MaintainerRepositoryScanView | None = None,
+    adoption_review: MaintainerAdoptionReviewView | None = None,
 ) -> ConsumerScreens:
     """The screens for one assembled machine, plus whatever the current flow is holding.
 
@@ -1523,6 +1532,8 @@ def screens_from(
         promotion_validation,
         promotion_commit,
         pending_setup,
+        repository_scan,
+        adoption_review,
     )
 
 
@@ -1575,6 +1586,7 @@ _ANSWERABLE = (
             MaintainerScreen.SOURCE_SYNC,
             MaintainerScreen.REGISTRY_VALIDATION,
             MaintainerScreen.REGISTRY_COMMIT,
+            MaintainerScreen.ADOPTION_REVIEW,
         }
     )
 )
@@ -1641,6 +1653,13 @@ class CanonicalScreenSource:
             )
         if screen is MaintainerScreen.REGISTRY:
             return tuple(item.alias for item in self._screens.maintainer_registries())
+        if screen is MaintainerScreen.SCAN_RESULT:
+            scan = self._screens.repository_scan
+            return (
+                ()
+                if scan is None
+                else tuple(item.coordinate for item in scan.artifacts if item.adoptable)
+            )
         if screen is MaintainerScreen.BULK_PROMOTION:
             return tuple(
                 candidate.candidate_id
@@ -1710,6 +1729,8 @@ class CanonicalScreenSource:
             return ("alias", "kind", "location", "ref", "connect")
         if screen is MaintainerScreen.REGISTRY_INIT:
             return ("id", "name", "reporting", "commit", "initialize")
+        if screen is MaintainerScreen.REPOSITORY_SCAN:
+            return ("url", "ref", "scan")
         if screen is ConsumerScreen.SETTINGS:
             return SETTING_ROWS
         return ()
@@ -1734,6 +1755,8 @@ class CanonicalScreenSource:
     def selected(self, state: ConsumerUiState) -> tuple[str, ...] | None:
         """A Collection opens with every member ticked; nothing else has an opinion."""
 
+        if state.session.screen is MaintainerScreen.SCAN_RESULT:
+            return ()
         if state.session.screen is not ConsumerScreen.COLLECTION_PREVIEW:
             return None
         entry = self._screens.offered_collection(state.focus)
@@ -1846,6 +1869,8 @@ class CanonicalScreenSource:
                 if self._screens.promotion_validation is not None
                 else None
             )
+        if screen is MaintainerScreen.SCAN_RESULT:
+            return None
         if screen is ConsumerScreen.MARKETPLACE:
             if self._screens.offered_collection(state.current_row) is not None:
                 return ConsumerScreen.COLLECTION_PREVIEW
@@ -2089,7 +2114,28 @@ class CanonicalScreenSource:
                 else render_maintainer_registry_diff(registry_diff, profile)
             )
         if screen is MaintainerScreen.REGISTRY:
-            return render_maintainer_registries(screens.maintainer_registries(), profile)
+            return (
+                "Actions: n Initialize Registry   s Scan Repository once",
+                "",
+                *render_maintainer_registries(screens.maintainer_registries(), profile),
+            )
+        if screen is MaintainerScreen.SCAN_RESULT:
+            return (
+                ("No repository has been scanned yet.",)
+                if screens.repository_scan is None
+                else render_repository_scan(
+                    screens.repository_scan,
+                    state.selection,
+                    cursor=state.current_row,
+                    profile=profile,
+                )
+            )
+        if screen is MaintainerScreen.ADOPTION_REVIEW:
+            return (
+                ("No repository adoption has been prepared.",)
+                if screens.adoption_review is None
+                else render_repository_adoption_review(screens.adoption_review, profile)
+            )
         if screen is MaintainerScreen.BULK_PROMOTION:
             return render_maintainer_bulk_promotion(
                 screens.bulk_promotions(), state.selection, profile
@@ -2286,6 +2332,29 @@ class CanonicalScreenSource:
                 "you make through this repository's own review.",
                 "",
                 "Type to edit; Backspace removes; Space toggles the commit; Enter advances.",
+            )
+        if screen is MaintainerScreen.REPOSITORY_SCAN:
+            scan = state.repository_scan_draft
+            values = {
+                "url": scan.url or "<type a credential-free HTTPS or SSH Git URL>",
+                "ref": scan.ref or "<type a branch or tag>",
+                "scan": "Read the declared manifests",
+            }
+            labels = {
+                "url": "Repository URL",
+                "ref": "Branch or tag",
+                "scan": "Continue",
+            }
+            return (
+                "Look at one repository for explicit aart.yaml and aart.json manifests.",
+                "This is a one-off read: the repository is not saved as a Source or monitored.",
+                "",
+                *(
+                    f"{'>' if row == state.current_row else ' '} {labels[row]}: {values[row]}"
+                    for row in state.rows
+                ),
+                "",
+                "Type to edit; Backspace removes; Enter advances.",
             )
         if screen is MaintainerScreen.REGISTRY_INIT_REVIEW:
             return ("Review the registry below, then press Enter to create it.",)

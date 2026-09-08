@@ -2316,8 +2316,8 @@ Evidence/links: Product Specification 72.1 and 164.2; INV-199–INV-201;
 ## B-095 — One-off YAML repository scan cannot feed selective Registry vendoring
 
 Found: whole-product TUI acceptance, external artifact onboarding clarification (2026-09-08) ·
-Severity: high · Status: open — application half built and green (D-187); TUI half and
-`Check upstream` still open
+Severity: high · Status: open — application and TUI adoption path built and green (D-187/D-188);
+CLI equivalent and `Check upstream` still open
 
 Besides monitored Sources, the operator needs an artifact-scoped adoption path for repositories
 that must not remain configured Sources. Given a credential-free Git URL/ref, AART should discover
@@ -2352,10 +2352,16 @@ mode over the chosen coordinates) and `apply_adoption` (review-digest checked, t
 `finalize_promotion`). `tests/registry_repository_scan_test.py` holds it with 14 tests and five
 killed targeted mutations.
 
-**Still open.** The TUI screens (`46c-scan-repository` form, `46d-scan-result` selectable list,
-`46e-review-adoption`) and their two `ConsumerActionKind` rows (`REPOSITORY_SCAN`,
-`REPOSITORY_ADOPT`) are designed but unwritten; there is no CLI equivalent yet; and the explicit
-per-artifact `Check upstream` action over recorded provenance is untouched.
+**TUI built (D-188).** Screen 46 advertises `s` Scan Repository; 46c collects the credential-free
+URL/ref and states that this is not a subscription; 46d renders every explicit manifest and makes
+only validation-cleared rows selectable; `a` prepares one transaction for the selection; and 46e
+names every coordinate, the resolved commit and every changed path before Enter applies the exact
+review digest. The scan completes as a read-only preparation and deliberately leaves no pending
+mutation; adoption is a separate prepare/confirm action. One composition test substitutes only the
+Git transport and drives the production ports over a real repository and registry checkout.
+
+**Still open.** There is no machine-complete CLI equivalent yet, and the explicit per-artifact
+`Check upstream` action over recorded provenance is untouched.
 
 Evidence/links: `registry scan`, `discover`, `vendor`, `vendor-batch`;
 `protocol/authoring.py::compile_author_snapshot`; `registry_commands/planning.py`;

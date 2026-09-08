@@ -28,6 +28,7 @@ from .application.consumer_ui import (
     ConsumerUiState,
     RegistryDraft,
     RegistryInitDraft,
+    RepositoryScanDraft,
     SourceDraft,
     key_event,
     opening_state,
@@ -1044,6 +1045,36 @@ def _canonical_consumer_actions(
             return refreshed
         return DomainOk(RegistryBootstrapCompletion(report.value, refreshed.value))
 
+    def repository_scan(draft: RepositoryScanDraft):
+        """Read one remote authoring repository without adding it to configuration (B-095)."""
+
+        from .io.registry_adoption import scan_repository
+
+        return scan_repository(
+            url=draft.url,
+            ref=draft.ref,
+            registry_root=project_root,
+        )
+
+    class RepositoryAdoption:
+        """Bind both review halves to this project registry; neither publishes it."""
+
+        @staticmethod
+        def prepare(scan, selected):
+            from .io.registry_adoption import prepare_adoption
+
+            return prepare_adoption(scan, selected, registry_root=project_root)
+
+        @staticmethod
+        def apply(prepared, review_digest):
+            from .io.registry_adoption import apply_adoption
+
+            return apply_adoption(
+                prepared,
+                review_digest,
+                registry_root=project_root,
+            )
+
     def completion_factory(
         completed: CompletedConfiguredInstallation,
         action: Literal["install", "update"],
@@ -1105,6 +1136,8 @@ def _canonical_consumer_actions(
             registry_refresh=registry_refresh,
             source_connection=source_connection,
             registry_bootstrap=registry_bootstrap,
+            repository_scan=repository_scan,
+            repository_adoption=RepositoryAdoption(),
         )
     )
 

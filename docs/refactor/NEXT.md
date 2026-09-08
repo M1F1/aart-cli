@@ -196,13 +196,23 @@ later explicit `Check upstream` action will compare against. Evidence:
 checkout created through `bootstrap_registry_workspace`); five targeted mutations, all killed, two of
 which found claims that were not yet held.
 
-**Next on QA-021:** the TUI layer. `46c-scan-repository` (a `RepositoryScanDraft(url, ref)` form
-reached with `s` from screen 46), `46d-scan-result` (a selectable list of `ScannedArtifact`s, added
-to `_SELECTABLE`, where `a` requests adoption), `46e-review-adoption` (naming every chosen
-coordinate, the resolved commit and the copied paths), plus `ConsumerActionKind.REPOSITORY_SCAN` and
-`REPOSITORY_ADOPT` wired through `_ACTION_REVIEW`/`_ACTION_RUNNING`/`_ACTION_RESULT` and two ports on
-`LocalConsumerActions`. After that, `Check upstream` and a machine-complete CLI equivalent, both of
-which `B-095` still carries.
+QA-021's **TUI layer is now built and green** (D-188). Screen 46 advertises `s` Scan Repository;
+`46c-scan-repository` collects a `RepositoryScanDraft(url, ref)` and states that the repository will
+not become a Source; `46d-scan-result` renders every explicit manifest while admitting only
+validation-cleared coordinates to `_SELECTABLE`; and `a` prepares `46e-review-adoption`, which names
+every selected coordinate, the resolved commit and every path the local transaction will change.
+The scan is a completed read-only preparation and clears its action rather than leaving a fake
+confirmation pending; adoption is the separate review-digest checked mutation. The production
+composition binds the two ports to the current project registry, and an E2E test substitutes only
+Git transport while driving a real author repository and real registry checkout. Evidence:
+`tests/maintainer_repository_adoption_test.py` (8 tests); three targeted mutations killed (route,
+adoptability filter, exact selection crossing the port).
+
+**Next on QA-021:** build the explicit per-artifact `Check upstream` action over the provenance the
+adopted package already records. Unchanged, changed, unreachable and missing must remain distinct;
+a change proposes a new version and never rewrites a published one. Then expose the same complete
+scan/select/review/apply contract as a machine-complete CLI surface. B-095 remains open for those
+two pieces.
 
 On top of that, Maintainer screen 31 now offers `a` Add Source: a separate `SourceDraft` form (31a)
 and review (31b) that accept only `source-git`/`source-local`, refuse `registry-git` by name, never

@@ -4166,7 +4166,40 @@ naming another plan is refused and writes nothing; adopting the same version twi
 immutable. Five targeted mutations, all killed; two of them found claims that were not yet held (the
 scan alias reaching registry identity, and an unvalidated Candidate being adoptable).
 
-**Not yet built.** The TUI half — a Scan Repository form on screen 46, a selectable scan result, an
-adoption review, and the two `ConsumerActionKind` rows behind them — is designed but unwritten, and
-the explicit per-artifact `Check upstream` action that `B-095` describes as its second half remains
-open. `B-095` stays open for both.
+**Built next.** D-188 records the TUI projection over this application service. The explicit
+per-artifact `Check upstream` action that `B-095` describes, and a machine-complete CLI equivalent,
+remain open.
+
+## D-188 — A repository scan is a completed read; adoption is the separately confirmed mutation
+
+The one-off adoption flow has two different operations and the TUI must not make them look like one
+large mutation. `REPOSITORY_SCAN` acquires a credential-free URL/ref and produces a pinned immutable
+observation. It changes neither configuration nor the registry, so its `PREPARE_ACTION` is the
+completed read: screen 46d receives the result and the reducer clears the action immediately. There
+is no fake Enter confirmation for a read that has already happened and no pending mutation an
+accidental Enter could execute.
+
+`REPOSITORY_ADOPT` starts separately from the selected rows of that observation. It prepares one
+`PreparedAdoption`, screen 46e names every selected coordinate, the resolved commit and every path
+that will change, and Enter applies only the review digest on that exact value. The shell holds the
+scan object rather than reacquiring the repository between selection and review, so the maintainer
+cannot select from one commit and adopt another.
+
+The screen catalog extends 46 rather than inventing a 54th destination: 46c is the URL/ref form,
+46d is the scan result, and 46e is the adoption review. `s` is contextual: on Sources it synchronizes
+a subscribed Source; on Registry it scans a repository once. The form and result say explicitly
+that the repository is not saved or monitored. Invalid artifacts remain visible with their state
+and declared payload but do not become selectable rows, so the UI cannot promise an adoption the
+application service will refuse.
+
+The terminal layer receives immutable application views, not the acquired Git snapshot. Two ports
+are composed in `tui.py`: the scan callable and an adoption boundary with prepare/apply halves, both
+bound to the current project registry. A production-composition test substitutes only transport,
+then drives real Git acquisition and real registry writes. It proves the chosen canonical package
+is written, an undeclared adjacent file is not, and no Source configuration is created.
+
+**Evidence.** `tests/maintainer_repository_adoption_test.py` (8 tests), the existing
+`tests/registry_repository_scan_test.py` (14 application tests), and the screen-catalog/no-command
+sweeps. Three targeted mutations were killed: moving the `s` route, admitting an invalid artifact
+to the selectable rows, and replacing the selected coordinates at the adoption port with an empty
+tuple. A machine-complete CLI equivalent and explicit per-artifact `Check upstream` remain B-095.

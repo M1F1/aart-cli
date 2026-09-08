@@ -41,6 +41,7 @@ __all__ = [
     "ConsumerUiState",
     "RegistryDraft",
     "RegistryInitDraft",
+    "RepositoryScanDraft",
     "SourceDraft",
     "key_event",
     "opening_state",
@@ -62,6 +63,8 @@ class ConsumerActionKind(str, Enum):
     REGISTRY_SYNC = "registry-sync"
     SOURCE_ADD = "source-add"
     REGISTRY_INIT = "registry-init"
+    REPOSITORY_SCAN = "repository-scan"
+    REPOSITORY_ADOPT = "repository-adopt"
 
 
 class ConsumerUiEventKind(str, Enum):
@@ -89,6 +92,7 @@ class ConsumerUiEventKind(str, Enum):
     EDIT_REGISTRY = "edit-registry"
     EDIT_SOURCE = "edit-source"
     EDIT_REGISTRY_INIT = "edit-registry-init"
+    EDIT_REPOSITORY_SCAN = "edit-repository-scan"
 
 
 @dataclass(frozen=True, slots=True)
@@ -162,6 +166,21 @@ class RegistryInitDraft:
             raise ValueError("registry init draft is invalid")
 
 
+@dataclass(frozen=True, slots=True)
+class RepositoryScanDraft:
+    """The credential-free remote identity read once for artifact-scoped adoption."""
+
+    url: str = ""
+    ref: str = ""
+
+    def __post_init__(self) -> None:
+        if any(
+            not isinstance(value, str) or any(char in value for char in "\r\n")
+            for value in (self.url, self.ref)
+        ):
+            raise ValueError("repository scan draft is invalid")
+
+
 class ConsumerUiCommandKind(str, Enum):
     LOAD_SCREEN = "load-screen"
     CONFIRM_QUIT = "confirm-quit"
@@ -217,6 +236,7 @@ class ConsumerUiCommand:
     registry_draft: RegistryDraft | None = None
     source_draft: SourceDraft | None = None
     registry_init_draft: RegistryInitDraft | None = None
+    repository_scan_draft: RepositoryScanDraft | None = None
 
     def __post_init__(self) -> None:
         if (
@@ -242,6 +262,10 @@ class ConsumerUiCommand:
             or (
                 self.registry_init_draft is not None
                 and not isinstance(self.registry_init_draft, RegistryInitDraft)
+            )
+            or (
+                self.repository_scan_draft is not None
+                and not isinstance(self.repository_scan_draft, RepositoryScanDraft)
             )
         ):
             raise ValueError("consumer UI command is invalid")
@@ -281,6 +305,7 @@ _SELECTABLE = frozenset(
         ConsumerScreen.UPDATES,
         # Screen 47 assembles one registry transaction, so selecting rows is what it is for.
         MaintainerScreen.BULK_PROMOTION,
+        MaintainerScreen.SCAN_RESULT,
     }
 )
 
@@ -324,6 +349,7 @@ class ConsumerUiState:
     registry_draft: RegistryDraft = RegistryDraft()
     source_draft: SourceDraft = SourceDraft()
     registry_init_draft: RegistryInitDraft = RegistryInitDraft()
+    repository_scan_draft: RepositoryScanDraft = RepositoryScanDraft()
 
     def __post_init__(self) -> None:
         if (
@@ -354,6 +380,7 @@ class ConsumerUiState:
             or not isinstance(self.registry_draft, RegistryDraft)
             or not isinstance(self.source_draft, SourceDraft)
             or not isinstance(self.registry_init_draft, RegistryInitDraft)
+            or not isinstance(self.repository_scan_draft, RepositoryScanDraft)
         ):
             raise ValueError("consumer UI state is invalid")
         if self.session.profile is not self.settings.profile:
@@ -491,6 +518,14 @@ _ACTION_REVIEW: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
         ConsumerActionKind.REGISTRY_INIT,
         MaintainerScreen.REGISTRY_INIT,
     ): MaintainerScreen.REGISTRY_INIT_REVIEW,
+    (
+        ConsumerActionKind.REPOSITORY_SCAN,
+        MaintainerScreen.REPOSITORY_SCAN,
+    ): MaintainerScreen.SCAN_RESULT,
+    (
+        ConsumerActionKind.REPOSITORY_ADOPT,
+        MaintainerScreen.SCAN_RESULT,
+    ): MaintainerScreen.ADOPTION_REVIEW,
     (ConsumerActionKind.INSTALL, ConsumerScreen.MARKETPLACE): ConsumerScreen.REVIEW_SELECTION,
     (ConsumerActionKind.INSTALL, ConsumerScreen.ARTIFACT_DETAILS): ConsumerScreen.REVIEW_SELECTION,
     (
@@ -550,7 +585,7 @@ def _request_action(
     if target is None:
         return state, ()
     # A bulk promotion is defined by what was selected, so an empty selection is not a request.
-    if action is ConsumerActionKind.BULK_PROMOTION:
+    if action in (ConsumerActionKind.BULK_PROMOTION, ConsumerActionKind.REPOSITORY_ADOPT):
         if not state.selection:
             return state, ()
     elif action in (ConsumerActionKind.INSTALL, ConsumerActionKind.UPDATE):
@@ -566,6 +601,7 @@ def _request_action(
             ConsumerActionKind.REGISTRY_ADD,
             ConsumerActionKind.SOURCE_ADD,
             ConsumerActionKind.REGISTRY_INIT,
+            ConsumerActionKind.REPOSITORY_SCAN,
         )
         and not focus
     ):
@@ -593,6 +629,9 @@ def _request_action(
         source_draft=(state.source_draft if action is ConsumerActionKind.SOURCE_ADD else None),
         registry_init_draft=(
             state.registry_init_draft if action is ConsumerActionKind.REGISTRY_INIT else None
+        ),
+        repository_scan_draft=(
+            state.repository_scan_draft if action is ConsumerActionKind.REPOSITORY_SCAN else None
         ),
     )
     return prepared, (command, *navigation)
@@ -630,6 +669,10 @@ def _action_prepared(
         return state, ()
     if not event.review_digest:
         return _declined_preparation(state)
+    # Scanning is the completed read-only action: the result is now on screen and there is no
+    # mutation waiting for confirmation.  Adoption starts a separate reviewed action from it.
+    if action is ConsumerActionKind.REPOSITORY_SCAN:
+        return replace(state, action=None, quit_pending=False), ()
     if action in (ConsumerActionKind.INSTALL, ConsumerActionKind.UPDATE) and (
         not event.semantic_identity or not event.selection_identity
     ):
@@ -648,6 +691,7 @@ _ACTION_RUNNING: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationS
     (ConsumerActionKind.REGISTRY_SYNC, ConsumerScreen.REGISTRY_SYNC): None,
     (ConsumerActionKind.SOURCE_ADD, MaintainerScreen.SOURCE_ADD_REVIEW): None,
     (ConsumerActionKind.REGISTRY_INIT, MaintainerScreen.REGISTRY_INIT_REVIEW): None,
+    (ConsumerActionKind.REPOSITORY_ADOPT, MaintainerScreen.ADOPTION_REVIEW): None,
     (ConsumerActionKind.INSTALL, ConsumerScreen.READY): ConsumerScreen.INSTALLING,
     (ConsumerActionKind.UPDATE, ConsumerScreen.UPDATE_INPUTS): ConsumerScreen.UPDATING,
     (
@@ -712,6 +756,10 @@ _ACTION_RESULT: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
         ConsumerActionKind.SOURCE_SYNC,
         MaintainerScreen.SOURCE_SYNC,
     ): MaintainerScreen.SOURCE_SYNC_RESULT,
+    (
+        ConsumerActionKind.REPOSITORY_ADOPT,
+        MaintainerScreen.ADOPTION_REVIEW,
+    ): MaintainerScreen.REGISTRY,
 }
 
 
@@ -852,6 +900,17 @@ def reduce_consumer_ui(
         else:
             return state, ()
         return replace(state, registry_init_draft=init_draft, quit_pending=False), ()
+    if event.kind is ConsumerUiEventKind.EDIT_REPOSITORY_SCAN:
+        if state.session.screen is not MaintainerScreen.REPOSITORY_SCAN:
+            return state, ()
+        scan_draft = state.repository_scan_draft
+        if event.key == "url":
+            scan_draft = replace(scan_draft, url=event.text)
+        elif event.key == "ref":
+            scan_draft = replace(scan_draft, ref=event.text)
+        else:
+            return state, ()
+        return replace(state, repository_scan_draft=scan_draft, quit_pending=False), ()
     if event.kind is ConsumerUiEventKind.TOGGLE_PROFILE:
         return _apply_setting(state, state.settings.toggled("detail-level"))
     if event.kind is ConsumerUiEventKind.TOGGLE_SETTING:
@@ -948,7 +1007,11 @@ def key_event(
             len(key) != 1
             and key not in _SPECIAL_KEYS
             and state.session.screen
-            not in (ConsumerScreen.REGISTRY_ADD, MaintainerScreen.REGISTRY_INIT)
+            not in (
+                ConsumerScreen.REGISTRY_ADD,
+                MaintainerScreen.REGISTRY_INIT,
+                MaintainerScreen.REPOSITORY_SCAN,
+            )
         )
         or not (detail is None or isinstance(detail, (ConsumerScreen, MaintainerScreen)))
     ):
@@ -1005,6 +1068,40 @@ def key_event(
         if row in values and key.isprintable():
             text = key if len(key) > 1 else values[row] + key
             return ConsumerUiEvent(ConsumerUiEventKind.EDIT_REGISTRY_INIT, key=row, text=text)
+        return None
+
+    if state.session.screen is MaintainerScreen.REPOSITORY_SCAN:
+        row = cursor or state.current_row
+        values = {
+            "url": state.repository_scan_draft.url,
+            "ref": state.repository_scan_draft.ref,
+        }
+        if key == "escape":
+            return ConsumerUiEvent(ConsumerUiEventKind.BACK)
+        if key == "up":
+            return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="up")
+        if key == "down":
+            return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="down")
+        if key == "enter":
+            if row == "scan":
+                return ConsumerUiEvent(
+                    ConsumerUiEventKind.REQUEST_ACTION,
+                    action=ConsumerActionKind.REPOSITORY_SCAN,
+                )
+            return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="down")
+        if row in values and key == "backspace":
+            return ConsumerUiEvent(
+                ConsumerUiEventKind.EDIT_REPOSITORY_SCAN,
+                key=row,
+                text=values[row][:-1],
+            )
+        if row in values and key.isprintable():
+            text = key if len(key) > 1 else values[row] + key
+            return ConsumerUiEvent(
+                ConsumerUiEventKind.EDIT_REPOSITORY_SCAN,
+                key=row,
+                text=text,
+            )
         return None
 
     if state.session.screen is MaintainerScreen.SOURCE_ADD:
@@ -1090,6 +1187,11 @@ def key_event(
     # connecting to somebody else's (INV-199).
     if key == "n" and state.session.screen is MaintainerScreen.REGISTRY:
         return ConsumerUiEvent(ConsumerUiEventKind.NAVIGATE, screen=MaintainerScreen.REGISTRY_INIT)
+    if key == "s" and state.session.screen is MaintainerScreen.REGISTRY:
+        return ConsumerUiEvent(
+            ConsumerUiEventKind.NAVIGATE,
+            screen=MaintainerScreen.REPOSITORY_SCAN,
+        )
     # Screen 28 is the one screen whose rows are settings rather than artifacts, so space and
     # Enter move a preference here instead of ticking or opening something.
     if key in (" ", "enter") and state.session.screen is ConsumerScreen.SETTINGS:
@@ -1103,6 +1205,11 @@ def key_event(
             None
             if not row
             else ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_CANDIDATE_FILTER, key=row)
+        )
+    if key == "a" and state.session.screen is MaintainerScreen.SCAN_RESULT:
+        return ConsumerUiEvent(
+            ConsumerUiEventKind.REQUEST_ACTION,
+            action=ConsumerActionKind.REPOSITORY_ADOPT,
         )
     if key == " ":
         return ConsumerUiEvent(
@@ -1211,6 +1318,7 @@ def key_event(
         ConsumerScreen.REGISTRY_SYNC,
         MaintainerScreen.SOURCE_SYNC,
         MaintainerScreen.REGISTRY_COMMIT,
+        MaintainerScreen.ADOPTION_REVIEW,
     ):
         return ConsumerUiEvent(ConsumerUiEventKind.CONFIRM_ACTION)
     if key == "enter" and detail is not None:

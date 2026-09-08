@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from agent_artifacts.application.consumer_views import PresentationProfile
 from agent_artifacts.application.maintainer_views import (
+    MaintainerAdoptionReviewView,
     MaintainerBulkPromotionView,
     MaintainerCandidateFilterView,
     MaintainerCandidateLifecycleView,
@@ -18,6 +19,7 @@ from agent_artifacts.application.maintainer_views import (
     MaintainerRegistryDiffView,
     MaintainerRegistryValidationView,
     MaintainerRegistryView,
+    MaintainerRepositoryScanView,
     MaintainerSourceSyncResultView,
     MaintainerSourceSyncReviewView,
     MaintainerSourceView,
@@ -51,6 +53,8 @@ __all__ = [
     "render_maintainer_registry_diff",
     "render_maintainer_registry_commit",
     "render_maintainer_registry_validation",
+    "render_repository_adoption_review",
+    "render_repository_scan",
     "render_maintainer_validation",
     "render_maintainer_validation_check",
 ]
@@ -820,6 +824,72 @@ def render_maintainer_registries(
         if index:
             lines.append("")
         lines.extend(render_maintainer_registry(view, profile))
+    return tuple(lines)
+
+
+def render_repository_scan(
+    view: MaintainerRepositoryScanView,
+    selection: tuple[str, ...],
+    *,
+    cursor: str = "",
+    profile: PresentationProfile,
+) -> tuple[str, ...]:
+    """Screen 46d: exact manifests from one pinned read, with adoption eligibility visible."""
+
+    if (
+        not isinstance(view, MaintainerRepositoryScanView)
+        or not isinstance(selection, tuple)
+        or not isinstance(cursor, str)
+        or not isinstance(profile, PresentationProfile)
+    ):
+        raise ValueError("repository scan rendering needs a view, selection, cursor and profile")
+    lines = [
+        f"Repository scan: {view.url}",
+        f"Resolved commit: {view.commit}",
+        f"{view.manifest_count} explicit manifest(s) found; this repository was not saved as a Source.",
+        "",
+    ]
+    selected = frozenset(selection)
+    for item in view.artifacts:
+        mark = "x" if item.coordinate in selected else (" " if item.adoptable else "-")
+        lines.append(
+            f"{'>' if item.coordinate == cursor else ' '} [{mark}] {item.coordinate}  {item.state}"
+        )
+        lines.append(f"    {item.summary}")
+        lines.append(f"    manifest: {item.manifest_path}")
+        lines.append("    declared payload:")
+        lines.extend(f"      {path}" for path in item.payload_paths)
+        if not item.adoptable:
+            lines.append("    cannot be adopted until its manifest passes validation")
+        if profile is PresentationProfile.VERBOSE:
+            lines.append(f"    kind: {item.kind}; name: {item.name}; version: {item.version}")
+    lines.extend(("", "Space selects an adoptable artifact; a reviews the selected copies."))
+    return tuple(lines)
+
+
+def render_repository_adoption_review(
+    view: MaintainerAdoptionReviewView,
+    profile: PresentationProfile,
+) -> tuple[str, ...]:
+    """Screen 46e: the immutable copies and local paths one confirmation will write."""
+
+    if not isinstance(view, MaintainerAdoptionReviewView) or not isinstance(
+        profile, PresentationProfile
+    ):
+        raise ValueError("repository adoption review rendering needs a view and profile")
+    lines = [
+        f"Adopt {len(view.selected)} artifact(s) from {view.url}",
+        f"Resolved commit: {view.commit}",
+        "Selected artifacts:",
+        *(f"  {coordinate}" for coordinate in view.selected),
+        "Registry paths that will change:",
+        *(f"  {path}" for path in view.changed_paths),
+        "",
+        "The repository will not be saved as a Source. Nothing is pushed or merged.",
+        "Press Enter to write this exact transaction into the local registry checkout.",
+    ]
+    if profile is PresentationProfile.VERBOSE:
+        lines.append(f"Review identity: {view.review_digest}")
     return tuple(lines)
 
 

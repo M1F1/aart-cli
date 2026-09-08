@@ -72,8 +72,10 @@ Each new entry records:
       Evidence: no public command or TUI action composes author-manifest discovery with selected
       vendoring; existing commands each stop at a different boundary
       Fix: partial — `io/registry_adoption.py` now composes scan → selection → atomic vendored
-      adoption with pinned provenance and saves no Source (D-187, 14 tests). The TUI screens
-      (46c/46d/46e), their two actions, a CLI equivalent and `Check upstream` remain pending.
+      adoption with pinned provenance and saves no Source (D-187, 14 tests). Maintainer Registry
+      now exposes that flow as `s` Scan Repository: form 46c, selectable result 46d and exact local
+      adoption review 46e (D-188, 8 tests). A machine-complete CLI equivalent and explicit
+      per-artifact `Check upstream` remain pending.
 
 ### Fixed — awaiting manual retest
 

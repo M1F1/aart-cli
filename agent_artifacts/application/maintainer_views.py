@@ -107,6 +107,9 @@ __all__ = [
     "MaintainerWorkingTreeState",
     "MaintainerRegistryTransactionView",
     "MaintainerRegistryView",
+    "MaintainerRepositoryArtifactView",
+    "MaintainerRepositoryScanView",
+    "MaintainerAdoptionReviewView",
     "MaintainerRegistryValidationView",
     "MaintainerValidationCheckView",
     "MaintainerValidationDetailView",
@@ -169,6 +172,12 @@ class MaintainerScreen(str, Enum):
     # separation of publication from approval is why it never pushes or merges.
     REGISTRY_INIT = "46a-init-registry"
     REGISTRY_INIT_REVIEW = "46b-review-init"
+    # A repository scan is artifact-scoped adoption, not another Source subscription.  Keeping its
+    # form, result and mutation review under screen 46 makes that distinction visible in the
+    # navigation model instead of inventing a second Maintainer destination (B-095).
+    REPOSITORY_SCAN = "46c-scan-repository"
+    SCAN_RESULT = "46d-scan-result"
+    ADOPTION_REVIEW = "46e-review-adoption"
     BULK_PROMOTION = "47-bulk-promotion"
     CANDIDATE_LIFECYCLE = "48-candidate-lifecycle"
     PROVENANCE = "49-provenance"
@@ -179,6 +188,104 @@ class MaintainerScreen(str, Enum):
 
 
 MAINTAINER_SCREENS: tuple[MaintainerScreen, ...] = tuple(MaintainerScreen)
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerRepositoryArtifactView:
+    """One explicit author manifest found during a one-off repository scan."""
+
+    coordinate: str
+    kind: str
+    name: str
+    version: str
+    summary: str
+    manifest_path: str
+    state: str
+    payload_paths: tuple[str, ...]
+    adoptable: bool
+
+    def __post_init__(self) -> None:
+        values = (
+            self.coordinate,
+            self.kind,
+            self.name,
+            self.version,
+            self.summary,
+            self.manifest_path,
+            self.state,
+            *self.payload_paths,
+        )
+        if (
+            any(
+                not isinstance(item, str)
+                or not item
+                or any(character in item for character in "\r\n")
+                for item in values
+            )
+            or not isinstance(self.payload_paths, tuple)
+            or not isinstance(self.adoptable, bool)
+        ):
+            raise ValueError("repository scan artifact view is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerRepositoryScanView:
+    """The immutable, read-only observation screen 46d renders."""
+
+    url: str
+    ref: str
+    commit: str
+    manifest_count: int
+    artifacts: tuple[MaintainerRepositoryArtifactView, ...]
+
+    def __post_init__(self) -> None:
+        if (
+            any(
+                not isinstance(item, str)
+                or not item
+                or any(character in item for character in "\r\n")
+                for item in (self.url, self.ref, self.commit)
+            )
+            or not isinstance(self.manifest_count, int)
+            or isinstance(self.manifest_count, bool)
+            or self.manifest_count < 0
+            or any(
+                not isinstance(item, MaintainerRepositoryArtifactView) for item in self.artifacts
+            )
+            or self.manifest_count != len(self.artifacts)
+            or len({item.coordinate for item in self.artifacts}) != len(self.artifacts)
+        ):
+            raise ValueError("repository scan view is invalid")
+
+    def artifact(self, coordinate: str) -> MaintainerRepositoryArtifactView | None:
+        return next((item for item in self.artifacts if item.coordinate == coordinate), None)
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerAdoptionReviewView:
+    """The exact local registry transaction screen 46e asks somebody to confirm."""
+
+    url: str
+    commit: str
+    selected: tuple[str, ...]
+    changed_paths: tuple[str, ...]
+    review_digest: str
+
+    def __post_init__(self) -> None:
+        values = (self.url, self.commit, *self.selected, *self.changed_paths, self.review_digest)
+        if (
+            any(
+                not isinstance(item, str)
+                or not item
+                or any(character in item for character in "\r\n")
+                for item in values
+            )
+            or not self.selected
+            or not self.changed_paths
+            or len(set(self.selected)) != len(self.selected)
+            or len(set(self.changed_paths)) != len(self.changed_paths)
+        ):
+            raise ValueError("repository adoption review view is invalid")
 
 
 class MaintainerSourceStatus(str, Enum):
@@ -2391,9 +2498,13 @@ _NAVIGATION: dict[MaintainerScreen, tuple[MaintainerScreen, ...]] = {
     MaintainerScreen.REGISTRY: (
         MaintainerScreen.BULK_PROMOTION,
         MaintainerScreen.REGISTRY_INIT,
+        MaintainerScreen.REPOSITORY_SCAN,
     ),
     MaintainerScreen.REGISTRY_INIT: (MaintainerScreen.REGISTRY_INIT_REVIEW,),
     MaintainerScreen.REGISTRY_INIT_REVIEW: (MaintainerScreen.REGISTRY,),
+    MaintainerScreen.REPOSITORY_SCAN: (MaintainerScreen.SCAN_RESULT,),
+    MaintainerScreen.SCAN_RESULT: (MaintainerScreen.ADOPTION_REVIEW,),
+    MaintainerScreen.ADOPTION_REVIEW: (MaintainerScreen.REGISTRY,),
     # A bulk selection has no single-Candidate diff to open, so screen 47 assembles its
     # transaction and hands it to the same validation screen a single promotion is reviewed on.
     MaintainerScreen.BULK_PROMOTION: (MaintainerScreen.REGISTRY_VALIDATION,),

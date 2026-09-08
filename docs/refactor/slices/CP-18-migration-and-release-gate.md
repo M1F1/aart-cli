@@ -839,6 +839,16 @@ wrote. One selection is one atomic `plan_bulk_promotion` in VENDORED mode, diges
 records the upstream URL, resolved commit, manifest path and input digest as native provenance —
 the comparison basis a later explicit `Check upstream` needs. Evidence:
 `tests/registry_repository_scan_test.py` (14 tests over a real Git repository and a real registry
-checkout); five targeted mutations, all killed, two of which found unheld claims. The TUI screens
-(`46c`/`46d`/`46e`), their two `ConsumerActionKind` rows, a machine-complete CLI equivalent and
-`Check upstream` remain open under B-095. This does not change CP-18's historical verdict.
+checkout); five targeted mutations, all killed, two of which found unheld claims.
+
+The TUI half is now **built and green** too (D-188). Screen 46 advertises `s` Scan Repository;
+46c collects one credential-free URL/ref and states that nothing is subscribed; 46d renders every
+explicit manifest while only validation-cleared artifacts become selectable rows; `a` prepares the
+selection; and 46e names every coordinate, the resolved commit and every changed path before Enter
+applies the exact review digest. The scan completes at the read-only preparation boundary and
+clears its action, so it cannot masquerade as a mutation waiting for confirmation; adoption is a
+separate two-phase action. `tests/maintainer_repository_adoption_test.py` has 8 tests, including a
+production-composition E2E over real Git and a real registry with only transport substituted; three
+targeted mutations (route, adoptability filter, selected coordinates crossing the port) were all
+killed. A machine-complete CLI equivalent and `Check upstream` remain open under B-095. This does
+not change CP-18's historical verdict.
