@@ -50,13 +50,19 @@ Each new entry records:
       Blocks current stage: yes, for Codex acceptance; no, for Claude/Tabnine
       Reproduction: select an artifact declaring Codex compatibility or request profile `codex`
       explicitly
-      Expected: reviewed effects use Codex's measured `.agents/skills`, layered `AGENTS.md` and
+      Expected: reviewed effects use Codex's measured Skill roots, layered `AGENTS.md` and
       native `mcp_servers` configuration contracts
       Observed: TUI targets only Claude/Tabnine; the CLI has no canonical Codex target and refuses
       the requested placement without writing
       Evidence: Codex CLI 0.152.0 is installed locally; Codex is absent from every canonical target
       table and from the dormant built-in profile registry
-      Fix: pending
+      Fix: partial — Skills and instructions are measured and installable at both scopes
+      (`.codex/skills/<name>`, `AGENTS.md`, `.codex/AGENTS.md`), and harness selection now derives
+      from every measured table rather than from `MCP_TARGETS` alone, so Codex is selectable
+      (D-193, 10 tests, two of which run the installed Codex). The expectation above named
+      `.agents/skills`; measurement found that is the cross-vendor interop root Codex also migrates
+      other agents from, and `.codex/skills` is its own. MCP stays refused by name because Codex
+      keeps servers in TOML (B-096); hooks are unmeasured.
 
 ### Fixed — awaiting manual retest
 

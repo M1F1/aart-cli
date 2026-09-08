@@ -20,7 +20,12 @@ from agent_artifacts.application.consumer_session import assemble_consumer_machi
 from agent_artifacts.application.consumer_ui import ConsumerUiState
 from agent_artifacts.application.consumer_views import ConsumerSettings
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.harness import MCP_TARGETS
+from agent_artifacts.domain.harness import (
+    DELIVERY_TARGETS,
+    HOOK_TARGETS,
+    MCP_TARGETS,
+    MEMORY_TARGETS,
+)
 from agent_artifacts.domain.result import Err, Ok
 from agent_artifacts.tui_consumer import (
     ConsumerOffers,
@@ -209,11 +214,14 @@ class CanonicalConsumerEntryTest(unittest.TestCase):
         self.assertIsInstance(composed, Ok, composed)
         self.assertEqual(composed.value.source().screens.marketplace, offers.artifacts)
         # Measured harnesses only: an offer marked compatible with one nobody measured is a claim
-        # AART cannot keep.
-        self.assertEqual(
-            read.call_args.kwargs["target"].profiles,
-            tuple(sorted({harness for harness, _ in MCP_TARGETS})),
-        )
+        # AART cannot keep. Every measured table counts, not only the MCP one -- a harness this
+        # machine can deliver Skills and instructions to is one it accepts, whether or not it also
+        # starts a server (B-086).
+        measured = {harness for harness, _ in MCP_TARGETS}
+        measured.update(harness for harness, _ in MEMORY_TARGETS)
+        measured.update(harness for harness, _ in HOOK_TARGETS)
+        measured.update(harness for harness, _, _ in DELIVERY_TARGETS)
+        self.assertEqual(read.call_args.kwargs["target"].profiles, tuple(sorted(measured)))
 
     def test_an_unreadable_configuration_refuses_rather_than_offering_nothing(self) -> None:
         """An empty Marketplace and an unreadable one are different facts.

@@ -231,6 +231,26 @@ DELIVERY_TARGETS: dict[tuple[str, Scope, ArtifactKind], DeliveryTarget] = {
         ".tabnine/guidelines/<name>.md",
         DeliveryKind.FILE,
     ),
+    # Codex CLI 0.152.0, measured with `codex debug prompt-input`, which prints the skill roots it
+    # is about to read. That build names four, in this order: `<project>/.codex/skills`,
+    # `$CODEX_HOME/skills`, `$CODEX_HOME/skills/.system` (its own bundled skills) and
+    # `<project>/.agents/skills`.
+    #
+    # Two of those are ours to write and two are not. `.system` belongs to the build. `.agents` is
+    # the cross-vendor interop directory Codex also migrates other agents' installations from, so
+    # an artifact placed there would be claimed by whichever harness looked at it last -- and this
+    # is an installation the operator asked for by harness name. `.codex/skills` is Codex's own
+    # first root, and it is the one measured here at both scopes: user scope resolves against the
+    # home directory, which is what `$CODEX_HOME` defaults to.
+    ("codex", Scope.PROJECT, ArtifactKind.SKILL): DeliveryTarget(
+        "codex", Scope.PROJECT, ArtifactKind.SKILL, ".codex/skills/<name>", DeliveryKind.TREE
+    ),
+    ("codex", Scope.USER, ArtifactKind.SKILL): DeliveryTarget(
+        "codex", Scope.USER, ArtifactKind.SKILL, ".codex/skills/<name>", DeliveryKind.TREE
+    ),
+    # There is deliberately no Codex guideline row. That build reads skills and `AGENTS.md` and
+    # documents no separate guidelines directory, so a guideline delivered anywhere would be a file
+    # nothing opens.
 }
 
 
@@ -281,6 +301,13 @@ MEMORY_TARGETS: dict[tuple[str, Scope], MemoryTarget] = {
     ("claude", Scope.USER): MemoryTarget("claude", Scope.USER, ".claude/CLAUDE.md"),
     # Tabnine: project-root `TABNINE.md`.
     ("tabnine", Scope.PROJECT): MemoryTarget("tabnine", Scope.PROJECT, "TABNINE.md"),
+    # Codex CLI 0.152.0: `AGENTS.md` at the repository root and `$CODEX_HOME/AGENTS.md` for the
+    # user, both measured by writing a marker into each and finding it in `codex debug
+    # prompt-input`. The same measurement found that `$CODEX_HOME/instructions.md` -- the location
+    # older Codex documentation names -- is *not* read by this build, which is why it is absent
+    # here rather than listed as a second user file.
+    ("codex", Scope.PROJECT): MemoryTarget("codex", Scope.PROJECT, "AGENTS.md"),
+    ("codex", Scope.USER): MemoryTarget("codex", Scope.USER, ".codex/AGENTS.md"),
 }
 
 

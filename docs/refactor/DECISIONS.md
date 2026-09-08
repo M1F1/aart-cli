@@ -4320,3 +4320,59 @@ found claims that were not yet held — both `--expect` checks and the listing o
 
 With this, `B-095` is complete: application (D-187), TUI adoption (D-188/D-189), upstream check
 (D-190/D-191) and the CLI projection.
+
+## D-193 — Codex is measured against the installed Codex, and what was not measured stays absent
+
+`QA-012`/`B-086` asks for a native Codex adapter rather than an alias for Claude. `domain/harness.py`
+exists precisely to make that distinction enforceable — its opening line is that a target is
+measured, not derived — so the work was measurement first and table rows second.
+
+**How it was measured.** `codex debug prompt-input` renders the model-visible prompt as JSON,
+including the skill roots Codex is about to read and the instruction files it has already loaded.
+It reads configuration and contacts no network, which makes it a repeatable observation rather than
+a documentation claim. Against Codex CLI 0.152.0 it named four skill roots in order:
+`<project>/.codex/skills`, `$CODEX_HOME/skills`, `$CODEX_HOME/skills/.system` and
+`<project>/.agents/skills`. Writing a marker into candidate instruction files and looking for it in
+the same output established that `AGENTS.md` at the repository root and `$CODEX_HOME/AGENTS.md` are
+both read, and that `$CODEX_HOME/instructions.md` — the location older Codex documentation names —
+is not.
+
+**Why `.codex/skills` and not `.agents/skills`.** Both are real roots that build reads. `.agents` is
+the cross-vendor interop directory, and the same binary carries an external-agent migration that
+detects and adopts other agents' installations from it; an artifact placed there is claimed by
+whichever harness looked at it last. An installation the operator asked for by harness name should
+land in that harness's own first root, which is `.codex/skills` at both scopes — user scope resolves
+against the home directory, and `~/.codex` is exactly what `$CODEX_HOME` defaults to.
+
+**What is deliberately absent.** No guideline row: that build reads Skills and `AGENTS.md` and
+documents no separate guidelines directory, so a delivered guideline would be a file nothing opens.
+No hook row: Codex has a hook system with `hooks.json` and twelve event names, but none of it was
+measured here and a guessed slot is worse than none. No MCP row: Codex keeps servers as TOML tables,
+which `LocalHarnessRegistry` cannot edit without risking the keys around them, and INV-071 leaves no
+room for a TOML dependency — `B-096` carries the full finding, including that a project-scope
+registration is inert until the operator trusts the project, and that `codex mcp add` is the
+harness's own editor for that file. Until then `mcp_target("codex", …)` raises the ordinary
+unmeasured-harness `KeyError` and an MCP artifact is refused by name.
+
+**Harness selection stopped being an MCP question.** `_canonical_marketplace_target` derived the
+machine's harness set from `MCP_TARGETS` alone, so a harness AART can install Skills and instructions
+into was invisible until it also started a server. Codex is measured exactly that way. The set is now
+the union of every measured table — MCP, delivery, memory and hooks — which is what "harnesses this
+machine has measured" always meant. Nothing is widened past measurement: an artifact this machine
+cannot actually place for a harness is still refused by name at installation, which is where that
+refusal belongs.
+
+**Evidence.** `tests/codex_harness_test.py` (10 tests). Four are ordinary table assertions, one is
+the measured absence of a guideline location, one is the named MCP refusal, one is the TUI harness
+set, and two are the observation itself: they build a temporary project and a temporary
+`CODEX_HOME`, write a Skill and an instruction file into the destinations the table names, run the
+installed `codex debug prompt-input`, and assert Codex found them. Those two skip when no Codex is
+installed, which keeps the suite portable without weakening the claim where it can be checked. Five
+targeted mutations, all killed — aliasing the Skill destination to Claude's, aliasing project
+instructions to `CLAUDE.md`, moving user instructions to the home root, moving the user Skill root to
+`.agents/skills`, and reverting harness selection to MCP-only. The live observation killed three of
+them on its own.
+
+`QA-012` is therefore partially closed: Skills and instructions install natively at both scopes and
+Codex is selectable, while MCP (`B-096`) and hooks remain unmeasured and refuse by name. `QA-011`
+(OpenCode) is untouched and still open.

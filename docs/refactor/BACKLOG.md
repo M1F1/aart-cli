@@ -2087,7 +2087,9 @@ Evidence/links: Product Specification multi-harness contract; `domain/harness.py
 
 ## B-086 — Codex is accepted as a compatibility name but has no canonical installation adapter
 
-Found: whole-product TUI acceptance preparation (2026-09-08) · Severity: high · Status: open
+Found: whole-product TUI acceptance preparation (2026-09-08) · Severity: high · Status: open —
+Skills, instructions and harness selection are measured, built and green (D-193); MCP (B-096) and
+hooks remain unmeasured and refuse by name
 
 Codex CLI 0.152.0 is installed on the acceptance Mac, and authoring already permits `codex` as a
 compatibility string. That declaration does not make it an install target. Codex is absent from
@@ -2384,3 +2386,34 @@ projection.
 Evidence/links: `registry scan`, `discover`, `vendor`, `vendor-batch`;
 `protocol/authoring.py::compile_author_snapshot`; `registry_commands/planning.py`;
 `MaintainerScreen.REGISTRY`; `io/registry_adoption.py`; QA-021; D-187.
+
+## B-096 — Codex keeps its MCP servers in TOML, which AART cannot edit safely yet
+
+Found: QA-012 harness measurement (2026-09-08) · Severity: medium · Status: open
+
+`LocalHarnessRegistry` is a JSON interpreter. Its whole contract is that the file belongs to the
+harness and the person using it, so unrelated keys survive, permissions survive, and a file it
+cannot parse is reported rather than replaced. Codex CLI 0.152.0 keeps servers as
+`[mcp_servers.<id>]` tables in TOML — measured with `codex mcp add` against an isolated
+`CODEX_HOME`, which wrote `command = "..."`, `args = [...]` and a nested `[mcp_servers.<id>.env]`
+table — and there is no way to honour that contract with the standard library. `tomllib` reads TOML
+but only from 3.11, while `requires-python` is `>=3.10`; nothing in the standard library writes it
+at any version; and INV-071 forbids a runtime dependency. Hand-rolling a TOML editor that preserves
+comments, ordering and unrelated tables is the kind of thing that silently destroys a person's
+configuration, which is exactly what the JSON interpreter refuses to risk.
+
+Until that is resolved, `mcp_target("codex", …)` raises the ordinary "nobody has measured this"
+`KeyError` and Skills and instructions install normally. A Codex MCP artifact is therefore refused
+by name rather than written to a file Codex does not read.
+
+Two further facts were measured and belong to whoever picks this up. Codex reads
+`[mcp_servers.…]` from a project `.codex/config.toml` **only when that project is trusted** in
+`~/.codex/config.toml` (`[projects."<path>"] trust_level = "trusted"`) — verified by listing with
+and without the trust entry — so a project-scope registration AART writes is inert until a decision
+that is the operator's to make. And Codex ships `codex mcp add`/`codex mcp remove`, the harness's
+own supported editor for that file; delegating to it would avoid hand-rolling a TOML writer
+entirely, at the cost of making an installation depend on the harness binary being present and on
+its CLI contract. Neither option should be chosen without measuring it.
+
+Evidence/links: `domain/harness.py::MCP_TARGETS`; `io/harness.py::LocalHarnessRegistry`;
+`tests/codex_harness_test.py`; QA-012; B-086; D-193.

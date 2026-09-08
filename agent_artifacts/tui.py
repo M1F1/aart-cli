@@ -1187,15 +1187,25 @@ def _canonical_consumer_configuration(paths) -> DomainResult:
 def _canonical_marketplace_target() -> MarketplaceTarget:
     """What this machine can actually accept.
 
-    The harnesses come from the measured `MCP_TARGETS`, never from a list written beside them: an
+    The harnesses come from the measured target tables, never from a list written beside them: an
     offer marked compatible with a harness nobody has measured is a compatibility claim AART cannot
     keep.
+
+    All four tables, not only `MCP_TARGETS`. A harness that starts no MCP server can still be one
+    this machine installs Skills and instructions into -- Codex is measured that way (`B-086`) --
+    and deriving the set from the MCP table alone hid it behind a capability it does not need. An
+    artifact this machine cannot actually place for a harness is still refused by name at
+    installation, which is where that refusal belongs.
     """
 
-    from .domain.harness import MCP_TARGETS
+    from .domain.harness import DELIVERY_TARGETS, HOOK_TARGETS, MCP_TARGETS, MEMORY_TARGETS
 
+    measured = {harness for harness, _ in MCP_TARGETS}
+    measured.update(harness for harness, _ in MEMORY_TARGETS)
+    measured.update(harness for harness, _ in HOOK_TARGETS)
+    measured.update(harness for harness, _, _ in DELIVERY_TARGETS)
     return MarketplaceTarget(
-        tuple(sorted({harness for harness, _ in MCP_TARGETS})),
+        tuple(sorted(measured)),
         "darwin" if sys.platform == "darwin" else "linux",
         "project",
         "copy",

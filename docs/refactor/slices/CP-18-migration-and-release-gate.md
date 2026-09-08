@@ -877,3 +877,29 @@ call the same application functions the TUI does, name their phase in the payloa
 reorder itself between runs. Eight CLI tests over the real public entry point, a real Git repository
 and a real Registry checkout; five targeted mutations, all killed. QA-021 moves to *fixed, awaiting
 manual retest*; CP-18 is unchanged.
+
+B-086/QA-012's **Skills and instructions half is measured, built and green** (D-193). Codex CLI
+0.152.0 was measured with `codex debug prompt-input`, which renders the model-visible prompt
+including the skill roots it is about to read and the instruction files it has loaded, and which
+contacts no network. That observation put four rows in `domain/harness.py`: Skills at
+`.codex/skills/<name>` at both scopes, `AGENTS.md` at the repository root and `$CODEX_HOME/AGENTS.md`
+for the user. `.agents/skills` is a real Codex root but is the cross-vendor interop directory the
+same binary migrates other agents' installations from, so an installation asked for by harness name
+lands in Codex's own first root instead. `$CODEX_HOME/instructions.md` is measured *not* read by
+this build and is absent rather than listed. There is no guideline row (that build documents no
+guidelines directory), no hook row (unmeasured), and no MCP row: Codex keeps servers as TOML tables
+that `LocalHarnessRegistry` cannot edit without risking the keys around them, and INV-071 leaves no
+room for a TOML dependency — `B-096` carries that finding, including that a project-scope
+registration is inert until the operator trusts the project.
+
+Harness selection stopped being an MCP question at the same time. `_canonical_marketplace_target`
+derived the machine's harness set from `MCP_TARGETS` alone, so a harness AART can install Skills and
+instructions into stayed invisible until it also started a server; it is now the union of every
+measured table, which is what "harnesses this machine has measured" always meant. Evidence:
+`tests/codex_harness_test.py` (10 tests, two of which build a temporary project and `CODEX_HOME`,
+write into the destinations the table names and assert the installed Codex finds them); five
+targeted mutations, all killed, three by the live observation alone.
+
+**Next:** QA-011/B-085 (native OpenCode) is untouched, and QA-012's own MCP (B-096) and hook halves
+remain. After those, the manual-acceptance batch is handed back for retest and the full
+`make quality` and `make integration` gates run.

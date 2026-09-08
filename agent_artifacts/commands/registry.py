@@ -1098,8 +1098,9 @@ _NAME_THE_SCAN = (
     "name the repository to look at: `aart registry adopt --source DIR --url URL --ref REF`",
 )
 _NAME_THE_ADOPTED = (
-    "name one adopted artifact, as `KIND/NAME@VERSION`; `aart registry adopt` without "
-    "`--artifact` lists what a repository declares",
+    "name one adopted artifact, as `KIND/NAME@VERSION`; "
+    "`aart registry adopt --source DIR --url URL --ref REF` without `--artifact` lists what a "
+    "repository declares",
 )
 
 
