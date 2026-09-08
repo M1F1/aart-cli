@@ -65,6 +65,8 @@ class ConsumerActionKind(str, Enum):
     REGISTRY_INIT = "registry-init"
     REPOSITORY_SCAN = "repository-scan"
     REPOSITORY_ADOPT = "repository-adopt"
+    REPOSITORY_UPSTREAM_CHECK = "repository-upstream-check"
+    REPOSITORY_ADOPT_UPDATE = "repository-adopt-update"
 
 
 class ConsumerUiEventKind(str, Enum):
@@ -526,6 +528,14 @@ _ACTION_REVIEW: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
         ConsumerActionKind.REPOSITORY_ADOPT,
         MaintainerScreen.SCAN_RESULT,
     ): MaintainerScreen.ADOPTION_REVIEW,
+    (
+        ConsumerActionKind.REPOSITORY_UPSTREAM_CHECK,
+        MaintainerScreen.ADOPTED_ARTIFACTS,
+    ): MaintainerScreen.UPSTREAM_CHECK,
+    (
+        ConsumerActionKind.REPOSITORY_ADOPT_UPDATE,
+        MaintainerScreen.UPSTREAM_CHECK,
+    ): MaintainerScreen.ADOPTION_REVIEW,
     (ConsumerActionKind.INSTALL, ConsumerScreen.MARKETPLACE): ConsumerScreen.REVIEW_SELECTION,
     (ConsumerActionKind.INSTALL, ConsumerScreen.ARTIFACT_DETAILS): ConsumerScreen.REVIEW_SELECTION,
     (
@@ -671,7 +681,10 @@ def _action_prepared(
         return _declined_preparation(state)
     # Scanning is the completed read-only action: the result is now on screen and there is no
     # mutation waiting for confirmation.  Adoption starts a separate reviewed action from it.
-    if action is ConsumerActionKind.REPOSITORY_SCAN:
+    if action in (
+        ConsumerActionKind.REPOSITORY_SCAN,
+        ConsumerActionKind.REPOSITORY_UPSTREAM_CHECK,
+    ):
         return replace(state, action=None, quit_pending=False), ()
     if action in (ConsumerActionKind.INSTALL, ConsumerActionKind.UPDATE) and (
         not event.semantic_identity or not event.selection_identity
@@ -692,6 +705,7 @@ _ACTION_RUNNING: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationS
     (ConsumerActionKind.SOURCE_ADD, MaintainerScreen.SOURCE_ADD_REVIEW): None,
     (ConsumerActionKind.REGISTRY_INIT, MaintainerScreen.REGISTRY_INIT_REVIEW): None,
     (ConsumerActionKind.REPOSITORY_ADOPT, MaintainerScreen.ADOPTION_REVIEW): None,
+    (ConsumerActionKind.REPOSITORY_ADOPT_UPDATE, MaintainerScreen.ADOPTION_REVIEW): None,
     (ConsumerActionKind.INSTALL, ConsumerScreen.READY): ConsumerScreen.INSTALLING,
     (ConsumerActionKind.UPDATE, ConsumerScreen.UPDATE_INPUTS): ConsumerScreen.UPDATING,
     (
@@ -758,6 +772,10 @@ _ACTION_RESULT: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
     ): MaintainerScreen.SOURCE_SYNC_RESULT,
     (
         ConsumerActionKind.REPOSITORY_ADOPT,
+        MaintainerScreen.ADOPTION_REVIEW,
+    ): MaintainerScreen.REGISTRY,
+    (
+        ConsumerActionKind.REPOSITORY_ADOPT_UPDATE,
         MaintainerScreen.ADOPTION_REVIEW,
     ): MaintainerScreen.REGISTRY,
 }
@@ -1192,6 +1210,11 @@ def key_event(
             ConsumerUiEventKind.NAVIGATE,
             screen=MaintainerScreen.REPOSITORY_SCAN,
         )
+    if key == "u" and state.session.screen is MaintainerScreen.REGISTRY:
+        return ConsumerUiEvent(
+            ConsumerUiEventKind.NAVIGATE,
+            screen=MaintainerScreen.ADOPTED_ARTIFACTS,
+        )
     # Screen 28 is the one screen whose rows are settings rather than artifacts, so space and
     # Enter move a preference here instead of ticking or opening something.
     if key in (" ", "enter") and state.session.screen is ConsumerScreen.SETTINGS:
@@ -1210,6 +1233,11 @@ def key_event(
         return ConsumerUiEvent(
             ConsumerUiEventKind.REQUEST_ACTION,
             action=ConsumerActionKind.REPOSITORY_ADOPT,
+        )
+    if key == "a" and state.session.screen is MaintainerScreen.UPSTREAM_CHECK:
+        return ConsumerUiEvent(
+            ConsumerUiEventKind.REQUEST_ACTION,
+            action=ConsumerActionKind.REPOSITORY_ADOPT_UPDATE,
         )
     if key == " ":
         return ConsumerUiEvent(
@@ -1300,6 +1328,11 @@ def key_event(
         return ConsumerUiEvent(
             ConsumerUiEventKind.REQUEST_ACTION,
             action=ConsumerActionKind.CANDIDATE_PROMOTION,
+        )
+    if key == "enter" and state.session.screen is MaintainerScreen.ADOPTED_ARTIFACTS:
+        return ConsumerUiEvent(
+            ConsumerUiEventKind.REQUEST_ACTION,
+            action=ConsumerActionKind.REPOSITORY_UPSTREAM_CHECK,
         )
     # Screen 45 keeps its receipt on screen after the commit, so Enter means "confirm" only while
     # there is something to confirm; once the write happened it means "go on to the registry".

@@ -2372,7 +2372,14 @@ unchanged. Changed, missing, unreachable and invalid-manifest are distinct. A ch
 at the published version carries no plan and says a new version is required; a validated version
 bump carries an ordinary `PreparedAdoption`, still behind its review digest.
 
-**Still open.** The application check and scan/select/adopt flow need TUI/CLI public projections.
+**TUI check built (D-191).** Registry action `u` opens screen 46f over only repository-adopted
+packages; Enter performs the explicit check and screen 46g preserves every typed disposition. A
+proposal is still a read until `a` opens the existing exact adoption review and Enter confirms its
+digest. The production-composition E2E adopts 2.1.0, moves real Git `main` to 2.2.0, then adds the
+new immutable package while retaining 2.1.0.
+
+**Still open.** The complete scan/select/adopt/check contract needs a machine-complete CLI
+projection.
 
 Evidence/links: `registry scan`, `discover`, `vendor`, `vendor-batch`;
 `protocol/authoring.py::compile_author_snapshot`; `registry_commands/planning.py`;

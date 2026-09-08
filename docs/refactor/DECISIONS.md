@@ -4248,3 +4248,27 @@ review digest as initial adoption. No path rewrites the published version. Evide
 scenarios in `tests/registry_repository_scan_test.py`, including real Git ref movement, unrelated
 commit churn, versioned and unversioned payload movement, deletion, invalid YAML and an unreachable
 origin. TUI and CLI projections remain B-095.
+
+## D-191 — Checking upstream is a completed TUI read; adopting its proposal is a new action
+
+The TUI follows the same separation D-188 established for initial scanning. Registry key `u` opens
+46f, a list composed only from immutable packages that carry `aart.repository-adoption`. Enter on a
+row requests `REPOSITORY_UPSTREAM_CHECK`; screen 46g receives the typed D-190 result, and the reducer
+immediately clears the action because the check is complete and has written nothing. Missing,
+unreachable and invalid are rendered as different operator situations, not flattened into one
+failure notice.
+
+A changed result may contain a prepared plan, but that does not make the read a mutation. Only then
+does `a` request the separate `REPOSITORY_ADOPT_UPDATE` action, enter the existing 46e adoption
+review and bind the exact `PreparedAdoption.review_digest`. Enter applies through the same adoption
+port as an initial copy. Pressing `a` on any result without a proposal is refused and returns to the
+result; no same-version overwrite path exists.
+
+Machine state is composed outside renderers. `LocalConsumerActions` holds the adoption records and
+last check, projects immutable views, and refreshes the records after a confirmed adoption. The
+production E2E uses real Git and real Registry writes: adopt 2.1.0, move `main` to a declared 2.2.0,
+check, review, apply, then assert both immutable package directories exist and no Source was saved.
+Focused evidence is 51 tests across adoption, navigation and the no-command-in-TUI property. Three
+targeted mutations were killed: moving the Registry key, dropping the focused coordinate at the
+check port, and binding the proposal to the wrong action so confirmation cannot execute. The
+machine-complete CLI remains B-095.

@@ -1075,6 +1075,19 @@ def _canonical_consumer_actions(
                 registry_root=project_root,
             )
 
+    def adopted_artifacts():
+        from .io.registry_adoption import list_adopted_artifacts
+
+        return list_adopted_artifacts(registry_root=project_root)
+
+    def repository_upstream_check(coordinate: str):
+        from .io.registry_adoption import check_adopted_upstream
+
+        return check_adopted_upstream(coordinate, registry_root=project_root)
+
+    listed_adoptions = adopted_artifacts()
+    initial_adoptions = listed_adoptions.value if isinstance(listed_adoptions, DomainOk) else ()
+
     def completion_factory(
         completed: CompletedConfiguredInstallation,
         action: Literal["install", "update"],
@@ -1138,6 +1151,9 @@ def _canonical_consumer_actions(
             registry_bootstrap=registry_bootstrap,
             repository_scan=repository_scan,
             repository_adoption=RepositoryAdoption(),
+            adopted_artifacts=initial_adoptions,
+            repository_upstream_check=repository_upstream_check,
+            repository_adopted_list=adopted_artifacts,
         )
     )
 

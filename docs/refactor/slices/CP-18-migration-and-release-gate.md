@@ -863,4 +863,10 @@ D-190 adds the read-only application check. It validates the Registry record, re
 ref, recompiles the explicit manifest, and compares its exact input digest. Commit-only churn stays
 unchanged; missing, unreachable and invalid declarations cannot collapse into that answer. A
 same-version change has no plan, while a validated new version carries the existing atomic adoption
-plan behind its digest. Public TUI/CLI projections remain B-095; CP-18 stays historically VERIFIED.
+plan behind its digest. CP-18 stays historically VERIFIED.
+
+D-191 supplies the TUI projection. Registry `u` opens adopted-package screen 46f, Enter checks only
+the focused coordinate, and 46g keeps all five application dispositions visible. A proposal does
+not become a write on that result screen: `a` enters the existing 46e transaction review and Enter
+must confirm its digest. A production-composition E2E performs the full real-Git 2.1.0 → 2.2.0
+sequence without rewriting 2.1.0. Only B-095's CLI projection remains; CP-18 is unchanged.

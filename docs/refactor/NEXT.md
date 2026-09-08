@@ -208,13 +208,13 @@ Git transport while driving a real author repository and real registry checkout.
 `tests/maintainer_repository_adoption_test.py` (8 tests); three targeted mutations killed (route,
 adoptability filter, exact selection crossing the port).
 
-**Next on QA-021:** project the application-level `Check upstream` from D-190 into the Maintainer
-TUI. It already follows D-189's recorded ref, compares exact declared input rather than commit
-churn, distinguishes unchanged/changed/missing/unreachable/invalid-manifest, and prepares an
-ordinary adoption plan only when upstream declares a new version. The TUI must preserve those
-answers and keep application of a proposal behind the exact review digest. Then expose the complete
-scan/select/review/apply/check contract as a machine-complete CLI surface. B-095 remains open for
-those two public projections.
+**Next on QA-021:** expose the complete scan/select/review/apply/check contract as a
+machine-complete CLI surface. D-191 finished the TUI: `u` on Registry opens adopted packages,
+Enter checks the focused origin, and screen 46g preserves D-190's five dispositions. Only a
+validated new version offers `a`, which enters the same exact adoption review and confirmation used
+by initial adoption. The CLI must call the same application functions, provide stable JSON for
+every state, preserve review-before-write, and never create a Source. B-095 remains open for this
+last public projection.
 
 On top of that, Maintainer screen 31 now offers `a` Add Source: a separate `SourceDraft` form (31a)
 and review (31b) that accept only `source-git`/`source-local`, refuse `registry-git` by name, never

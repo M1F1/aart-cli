@@ -51,7 +51,9 @@ from agent_artifacts.application.consumer_views import (
 )
 from agent_artifacts.application.installed_setup import DeclaredArtifactSetup
 from agent_artifacts.application.maintainer_views import (
+    MaintainerAdoptedArtifactView,
     MaintainerAdoptionReviewView,
+    MaintainerAdoptionUpstreamView,
     MaintainerBulkPromotionView,
     MaintainerCandidateFilter,
     MaintainerCandidateLifecycleView,
@@ -79,6 +81,8 @@ from agent_artifacts.domain.registry import PromotionMode
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.domain.selection import Collection
 from agent_artifacts.tui_maintainer import (
+    render_adopted_artifacts,
+    render_adoption_upstream_check,
     render_maintainer_bulk_promotion,
     render_maintainer_candidate,
     render_maintainer_candidate_diff,
@@ -1047,7 +1051,7 @@ class ConsumerActionHandler(Protocol):
 _HELP_LINES: tuple[str, ...] = (
     "↑ ↓  move        space  select",
     "enter  details   esc  back",
-    "i  install/update  r  repair  u  uninstall",
+    "i  install/update  r  repair  u  uninstall / check adopted upstream",
     "s  sync focused Source / scan repository from Registry",
     "a  add Registry (Registries)",
     "/  search        v  Fast/Verbose",
@@ -1296,6 +1300,8 @@ class ConsumerScreens:
     pending_setup: tuple[DeclaredArtifactSetup, ...] = ()
     repository_scan: MaintainerRepositoryScanView | None = None
     adoption_review: MaintainerAdoptionReviewView | None = None
+    adopted_artifacts: tuple[MaintainerAdoptedArtifactView, ...] = ()
+    adoption_upstream: MaintainerAdoptionUpstreamView | None = None
 
     def offered(self, key: str) -> MarketplaceEntry | None:
         return next((item for item in self.marketplace if item.key == key), None)
@@ -1488,6 +1494,8 @@ def screens_from(
     pending_setup: tuple[DeclaredArtifactSetup, ...] = (),
     repository_scan: MaintainerRepositoryScanView | None = None,
     adoption_review: MaintainerAdoptionReviewView | None = None,
+    adopted_artifacts: tuple[MaintainerAdoptedArtifactView, ...] = (),
+    adoption_upstream: MaintainerAdoptionUpstreamView | None = None,
 ) -> ConsumerScreens:
     """The screens for one assembled machine, plus whatever the current flow is holding.
 
@@ -1534,6 +1542,8 @@ def screens_from(
         pending_setup,
         repository_scan,
         adoption_review,
+        adopted_artifacts,
+        adoption_upstream,
     )
 
 
@@ -1660,6 +1670,8 @@ class CanonicalScreenSource:
                 if scan is None
                 else tuple(item.coordinate for item in scan.artifacts if item.adoptable)
             )
+        if screen is MaintainerScreen.ADOPTED_ARTIFACTS:
+            return tuple(item.coordinate for item in self._screens.adopted_artifacts)
         if screen is MaintainerScreen.BULK_PROMOTION:
             return tuple(
                 candidate.candidate_id
@@ -2115,7 +2127,7 @@ class CanonicalScreenSource:
             )
         if screen is MaintainerScreen.REGISTRY:
             return (
-                "Actions: n Initialize Registry   s Scan Repository once",
+                "Actions: n Initialize Registry   s Scan Repository once   u Check upstream",
                 "",
                 *render_maintainer_registries(screens.maintainer_registries(), profile),
             )
@@ -2135,6 +2147,18 @@ class CanonicalScreenSource:
                 ("No repository adoption has been prepared.",)
                 if screens.adoption_review is None
                 else render_repository_adoption_review(screens.adoption_review, profile)
+            )
+        if screen is MaintainerScreen.ADOPTED_ARTIFACTS:
+            return render_adopted_artifacts(
+                screens.adopted_artifacts,
+                cursor=state.current_row,
+                profile=profile,
+            )
+        if screen is MaintainerScreen.UPSTREAM_CHECK:
+            return (
+                ("No adopted artifact has been checked yet.",)
+                if screens.adoption_upstream is None
+                else render_adoption_upstream_check(screens.adoption_upstream, profile)
             )
         if screen is MaintainerScreen.BULK_PROMOTION:
             return render_maintainer_bulk_promotion(

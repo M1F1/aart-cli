@@ -77,8 +77,9 @@ Each new entry records:
       adoption review 46e (D-188, 8 tests). Adopted packages now also retain the moving branch/tag
       as immutable namespaced provenance (D-189). The read-only application check now distinguishes
       unchanged, changed, missing, unreachable and invalid manifests, and prepares a new immutable
-      version only after an upstream version bump (D-190, 8 tests). Its TUI and machine-complete CLI
-      projections remain pending.
+      version only after an upstream version bump (D-190, 8 tests). Maintainer Registry now exposes
+      `u` Check upstream as screens 46f/46g and reuses the exact adoption review for a proposal
+      (D-191). Only the machine-complete CLI projection remains pending.
 
 ### Fixed — awaiting manual retest
 

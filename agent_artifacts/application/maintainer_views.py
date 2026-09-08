@@ -110,6 +110,8 @@ __all__ = [
     "MaintainerRepositoryArtifactView",
     "MaintainerRepositoryScanView",
     "MaintainerAdoptionReviewView",
+    "MaintainerAdoptedArtifactView",
+    "MaintainerAdoptionUpstreamView",
     "MaintainerRegistryValidationView",
     "MaintainerValidationCheckView",
     "MaintainerValidationDetailView",
@@ -178,6 +180,8 @@ class MaintainerScreen(str, Enum):
     REPOSITORY_SCAN = "46c-scan-repository"
     SCAN_RESULT = "46d-scan-result"
     ADOPTION_REVIEW = "46e-review-adoption"
+    ADOPTED_ARTIFACTS = "46f-adopted-artifacts"
+    UPSTREAM_CHECK = "46g-check-upstream"
     BULK_PROMOTION = "47-bulk-promotion"
     CANDIDATE_LIFECYCLE = "48-candidate-lifecycle"
     PROVENANCE = "49-provenance"
@@ -286,6 +290,71 @@ class MaintainerAdoptionReviewView:
             or len(set(self.changed_paths)) != len(self.changed_paths)
         ):
             raise ValueError("repository adoption review view is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerAdoptedArtifactView:
+    """One immutable adopted package offered for an explicit check on screen 46f."""
+
+    coordinate: str
+    url: str
+    ref: str
+    recorded_commit: str
+    manifest_path: str
+    input_digest: str
+
+    def __post_init__(self) -> None:
+        if any(
+            not isinstance(item, str) or not item or any(character in item for character in "\r\n")
+            for item in (
+                self.coordinate,
+                self.url,
+                self.ref,
+                self.recorded_commit,
+                self.manifest_path,
+                self.input_digest,
+            )
+        ):
+            raise ValueError("adopted artifact view is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerAdoptionUpstreamView:
+    """Screen 46g's complete read-only answer and whether a new-version review exists."""
+
+    artifact: MaintainerAdoptedArtifactView
+    disposition: str
+    resolved_commit: str | None
+    observed_coordinate: str | None
+    new_version_required: bool
+    proposal_available: bool
+    details: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        optional = (self.resolved_commit, self.observed_coordinate)
+        if (
+            not isinstance(self.artifact, MaintainerAdoptedArtifactView)
+            or not self.disposition
+            or any(
+                item is not None
+                and (
+                    not isinstance(item, str)
+                    or not item
+                    or any(character in item for character in "\r\n")
+                )
+                for item in optional
+            )
+            or any(
+                not isinstance(item, str)
+                or not item
+                or any(character in item for character in "\r\n")
+                for item in self.details
+            )
+            or not isinstance(self.new_version_required, bool)
+            or not isinstance(self.proposal_available, bool)
+            or (self.proposal_available and self.observed_coordinate is None)
+        ):
+            raise ValueError("adoption upstream view is invalid")
 
 
 class MaintainerSourceStatus(str, Enum):
@@ -2499,12 +2568,15 @@ _NAVIGATION: dict[MaintainerScreen, tuple[MaintainerScreen, ...]] = {
         MaintainerScreen.BULK_PROMOTION,
         MaintainerScreen.REGISTRY_INIT,
         MaintainerScreen.REPOSITORY_SCAN,
+        MaintainerScreen.ADOPTED_ARTIFACTS,
     ),
     MaintainerScreen.REGISTRY_INIT: (MaintainerScreen.REGISTRY_INIT_REVIEW,),
     MaintainerScreen.REGISTRY_INIT_REVIEW: (MaintainerScreen.REGISTRY,),
     MaintainerScreen.REPOSITORY_SCAN: (MaintainerScreen.SCAN_RESULT,),
     MaintainerScreen.SCAN_RESULT: (MaintainerScreen.ADOPTION_REVIEW,),
     MaintainerScreen.ADOPTION_REVIEW: (MaintainerScreen.REGISTRY,),
+    MaintainerScreen.ADOPTED_ARTIFACTS: (MaintainerScreen.UPSTREAM_CHECK,),
+    MaintainerScreen.UPSTREAM_CHECK: (MaintainerScreen.ADOPTION_REVIEW,),
     # A bulk selection has no single-Candidate diff to open, so screen 47 assembles its
     # transaction and hands it to the same validation screen a single promotion is reviewed on.
     MaintainerScreen.BULK_PROMOTION: (MaintainerScreen.REGISTRY_VALIDATION,),

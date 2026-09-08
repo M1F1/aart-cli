@@ -30,11 +30,18 @@ from agent_artifacts.application.maintainer_views import (
     maintainer_navigation_targets,
 )
 from agent_artifacts.domain.result import Ok
-from agent_artifacts.io.registry_adoption import PreparedAdoption, RepositoryScan, ScannedArtifact
+from agent_artifacts.io.registry_adoption import (
+    AdoptedArtifact,
+    AdoptionUpstreamCheck,
+    AdoptionUpstreamDisposition,
+    PreparedAdoption,
+    RepositoryScan,
+    ScannedArtifact,
+)
 from agent_artifacts.sources.git import acquire_git_snapshot
 from agent_artifacts.tui_consumer import CanonicalScreenSource, frame
 from tests.consumer_shell_test import screens
-from tests.registry_repository_scan_test import _Lab
+from tests.registry_repository_scan_test import OTHER_MANIFEST, _git, _Lab
 
 
 def _state(screen: MaintainerScreen, **changes) -> ConsumerUiState:
@@ -47,6 +54,15 @@ def _state(screen: MaintainerScreen, **changes) -> ConsumerUiState:
 
 _FORM_ROWS = ("url", "ref", "scan")
 _COMMIT = "8bf8bac" + "0" * 33
+_MOVED_COMMIT = "9bf8bac" + "0" * 33
+_ADOPTED = AdoptedArtifact(
+    "skill/brainstorming@2.1.0",
+    "https://github.com/M1F1/superpowers-aart-test.git",
+    "main",
+    _COMMIT,
+    "skills/brainstorming/aart.yaml",
+    "sha256:" + "1" * 64,
+)
 
 
 def _scan() -> RepositoryScan:
@@ -200,6 +216,85 @@ class RepositoryAdoptionInteractionTest(unittest.TestCase):
         self.assertIsNone(completed.action)
         self.assertIs(completed.session.screen, MaintainerScreen.SCAN_RESULT)
 
+    def test_registry_opens_the_adopted_artifact_list_and_enter_requests_one_check(self) -> None:
+        from agent_artifacts.io.consumer_actions import _project_adopted_artifact
+        from agent_artifacts.tui_consumer import ConsumerScreens
+
+        registry = _state(MaintainerScreen.REGISTRY)
+        event = key_event("u", registry)
+        self.assertIsNotNone(event)
+        assert event is not None
+        self.assertIs(event.screen, MaintainerScreen.ADOPTED_ARTIFACTS)
+
+        source = CanonicalScreenSource(
+            ConsumerScreens(
+                screens().dashboard,
+                adopted_artifacts=(_project_adopted_artifact(_ADOPTED),),
+            )
+        )
+        listed = _state(MaintainerScreen.ADOPTED_ARTIFACTS)
+        listed, _ = reduce_consumer_ui(
+            listed,
+            ConsumerUiEvent(ConsumerUiEventKind.SET_ROWS, rows=source.rows(listed)),
+        )
+        drawn = "\n".join(frame(source, listed))
+        self.assertEqual(listed.current_row, _ADOPTED.coordinate)
+        self.assertIn(_ADOPTED.coordinate, drawn)
+        self.assertIn(_ADOPTED.ref, drawn)
+        self.assertNotIn("aart ", drawn)
+
+        request = key_event("enter", listed)
+        self.assertIsNotNone(request)
+        assert request is not None
+        self.assertIs(request.action, ConsumerActionKind.REPOSITORY_UPSTREAM_CHECK)
+        checking, commands = reduce_consumer_ui(listed, request)
+        self.assertIs(checking.session.screen, MaintainerScreen.UPSTREAM_CHECK)
+        self.assertEqual(commands[0].focus, _ADOPTED.coordinate)
+
+    def test_an_upstream_check_completion_leaves_no_mutation_waiting(self) -> None:
+        requested = _state(
+            MaintainerScreen.UPSTREAM_CHECK,
+            action=ConsumerActionKind.REPOSITORY_UPSTREAM_CHECK,
+        )
+
+        completed, _ = reduce_consumer_ui(
+            requested,
+            ConsumerUiEvent(
+                ConsumerUiEventKind.ACTION_PREPARED,
+                action=ConsumerActionKind.REPOSITORY_UPSTREAM_CHECK,
+                review_digest="sha256:" + "5" * 64,
+            ),
+        )
+
+        self.assertIsNone(completed.action)
+        self.assertIs(completed.session.screen, MaintainerScreen.UPSTREAM_CHECK)
+
+    def test_a_changed_upstream_proposal_enters_the_existing_adoption_review(self) -> None:
+        state = _state(MaintainerScreen.UPSTREAM_CHECK, focus=_ADOPTED.coordinate)
+
+        request = key_event("a", state)
+        self.assertIsNotNone(request)
+        assert request is not None
+        self.assertIs(request.action, ConsumerActionKind.REPOSITORY_ADOPT_UPDATE)
+        reviewed, commands = reduce_consumer_ui(state, request)
+
+        self.assertIs(reviewed.session.screen, MaintainerScreen.ADOPTION_REVIEW)
+        self.assertIs(reviewed.action, ConsumerActionKind.REPOSITORY_ADOPT_UPDATE)
+        self.assertEqual(commands[0].focus, _ADOPTED.coordinate)
+
+        prepared, _ = reduce_consumer_ui(
+            reviewed,
+            ConsumerUiEvent(
+                ConsumerUiEventKind.ACTION_PREPARED,
+                action=ConsumerActionKind.REPOSITORY_ADOPT_UPDATE,
+                review_digest="sha256:" + "6" * 64,
+            ),
+        )
+        confirmation = key_event("enter", prepared)
+        self.assertIsNotNone(confirmation)
+        assert confirmation is not None
+        self.assertIs(confirmation.kind, ConsumerUiEventKind.CONFIRM_ACTION)
+
 
 class RepositoryAdoptionActionTest(unittest.TestCase):
     def _composed(self, env):
@@ -292,6 +387,81 @@ class RepositoryAdoptionActionTest(unittest.TestCase):
         )
         self.assertEqual(calls[2], ("apply", prepared, prepared.review_digest))
 
+    def test_check_result_is_drawn_and_its_new_version_uses_a_separate_reviewed_action(
+        self,
+    ) -> None:
+        from tests.configured_install_command_e2e_test import _environment
+
+        scan = _scan()
+        plan = mock.Mock(review_digest="sha256:" + "6" * 64)
+        proposal = PreparedAdoption(
+            scan.url,
+            scan.ref,
+            _MOVED_COMMIT,
+            ("skill/brainstorming@2.2.0",),
+            ("artifacts/skill/brainstorming/2.2.0/artifact.json",),
+            plan,
+        )
+        check = AdoptionUpstreamCheck(
+            _ADOPTED,
+            AdoptionUpstreamDisposition.CHANGED,
+            _MOVED_COMMIT,
+            "skill/brainstorming@2.2.0",
+            "sha256:" + "2" * 64,
+            proposal=proposal,
+        )
+        calls: list[tuple[object, ...]] = []
+
+        class Adoption:
+            def prepare(self, _observed, _selected):
+                raise AssertionError("an upstream proposal is already prepared")
+
+            def apply(self, reviewed, digest):
+                calls.append((reviewed, digest))
+                return Ok(reviewed)
+
+        with _environment() as env, mock.patch.dict(env.xdg, clear=False):
+            actions = self._composed(env)
+            actions._adopted_artifacts = (_ADOPTED,)  # type: ignore[attr-defined]
+            actions._repository_upstream_check = lambda coordinate: (  # type: ignore[attr-defined]
+                calls.append((coordinate,)) or Ok(check)
+            )
+            actions._repository_adoption = Adoption()  # type: ignore[assignment]
+
+            checked = actions.handle(
+                ConsumerUiCommand(
+                    ConsumerUiCommandKind.PREPARE_ACTION,
+                    action=ConsumerActionKind.REPOSITORY_UPSTREAM_CHECK,
+                    focus=_ADOPTED.coordinate,
+                )
+            )
+            rendered = "\n".join(frame(checked.source, _state(MaintainerScreen.UPSTREAM_CHECK)))
+            self.assertIn("Changed", rendered)
+            self.assertIn("skill/brainstorming@2.2.0", rendered)
+            self.assertIn("New immutable version", rendered)
+            self.assertNotIn("aart ", rendered)
+
+            proposed = actions.handle(
+                ConsumerUiCommand(
+                    ConsumerUiCommandKind.PREPARE_ACTION,
+                    action=ConsumerActionKind.REPOSITORY_ADOPT_UPDATE,
+                    focus=_ADOPTED.coordinate,
+                )
+            )
+            self.assertEqual(proposed.event.review_digest, proposal.review_digest)
+            self.assertEqual(proposed.source.screens.adoption_review.selected, proposal.selected)
+
+            applied = actions.handle(
+                ConsumerUiCommand(
+                    ConsumerUiCommandKind.EXECUTE_ACTION,
+                    action=ConsumerActionKind.REPOSITORY_ADOPT_UPDATE,
+                    review_digest=proposal.review_digest,
+                )
+            )
+
+        self.assertEqual(applied.event.kind, ConsumerUiEventKind.ACTION_RECORDED)
+        self.assertEqual(calls, [(_ADOPTED.coordinate,), (proposal, proposal.review_digest)])
+
 
 class RepositoryAdoptionCompositionTest(_Lab):
     def test_the_canonical_tui_ports_scan_real_git_and_write_the_reviewed_copy(self) -> None:
@@ -354,12 +524,57 @@ class RepositoryAdoptionCompositionTest(_Lab):
                     review_digest=prepared.event.review_digest,
                 )
             )
+            self.assertEqual(
+                tuple(item.coordinate for item in actions.source().screens.adopted_artifacts),
+                ("skill/brainstorming@2.1.0",),
+            )
+
+            manifest = self.author.path / "skills" / "brainstorming" / "aart.yaml"
+            manifest.write_text(OTHER_MANIFEST.replace("2.1.0", "2.2.0"), encoding="utf-8")
+            (manifest.parent / "SKILL.md").write_text("# brainstorming 2.2\n", encoding="utf-8")
+            _git(self.author.path, "add", "-A")
+            _git(self.author.path, "commit", "-m", "release brainstorming 2.2")
+
+            checked = actions.handle(
+                ConsumerUiCommand(
+                    ConsumerUiCommandKind.PREPARE_ACTION,
+                    action=ConsumerActionKind.REPOSITORY_UPSTREAM_CHECK,
+                    focus="skill/brainstorming@2.1.0",
+                )
+            )
+            self.assertEqual(checked.source.screens.adoption_upstream.disposition, "changed")
+            self.assertTrue(checked.source.screens.adoption_upstream.proposal_available)
+            update = actions.handle(
+                ConsumerUiCommand(
+                    ConsumerUiCommandKind.PREPARE_ACTION,
+                    action=ConsumerActionKind.REPOSITORY_ADOPT_UPDATE,
+                    focus="skill/brainstorming@2.1.0",
+                )
+            )
+            actions.handle(
+                ConsumerUiCommand(
+                    ConsumerUiCommandKind.EXECUTE_ACTION,
+                    action=ConsumerActionKind.REPOSITORY_ADOPT_UPDATE,
+                    review_digest=update.event.review_digest,
+                )
+            )
 
         adopted = self.registry / "artifacts" / "skill" / "brainstorming" / "2.1.0"
         self.assertTrue((adopted / "artifact.json").is_file())
         self.assertTrue((adopted / "payload" / "SKILL.md").is_file())
         self.assertFalse((adopted / "payload" / "NOTES.md").exists())
         self.assertFalse((self.registry / "aart.config.json").exists())
+        self.assertTrue(
+            (
+                self.registry
+                / "artifacts"
+                / "skill"
+                / "brainstorming"
+                / "2.2.0"
+                / "payload"
+                / "SKILL.md"
+            ).is_file()
+        )
 
 
 if __name__ == "__main__":

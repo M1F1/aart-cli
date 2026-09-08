@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from agent_artifacts.application.consumer_views import PresentationProfile
 from agent_artifacts.application.maintainer_views import (
+    MaintainerAdoptedArtifactView,
     MaintainerAdoptionReviewView,
+    MaintainerAdoptionUpstreamView,
     MaintainerBulkPromotionView,
     MaintainerCandidateFilterView,
     MaintainerCandidateLifecycleView,
@@ -54,6 +56,8 @@ __all__ = [
     "render_maintainer_registry_commit",
     "render_maintainer_registry_validation",
     "render_repository_adoption_review",
+    "render_adopted_artifacts",
+    "render_adoption_upstream_check",
     "render_repository_scan",
     "render_maintainer_validation",
     "render_maintainer_validation_check",
@@ -890,6 +894,83 @@ def render_repository_adoption_review(
     ]
     if profile is PresentationProfile.VERBOSE:
         lines.append(f"Review identity: {view.review_digest}")
+    return tuple(lines)
+
+
+def render_adopted_artifacts(
+    artifacts: tuple[MaintainerAdoptedArtifactView, ...],
+    *,
+    cursor: str = "",
+    profile: PresentationProfile,
+) -> tuple[str, ...]:
+    """Screen 46f: packages with enough immutable provenance for an on-demand check."""
+
+    if (
+        any(not isinstance(item, MaintainerAdoptedArtifactView) for item in artifacts)
+        or not isinstance(cursor, str)
+        or not isinstance(profile, PresentationProfile)
+    ):
+        raise ValueError("adopted artifact rendering needs typed views, cursor and profile")
+    if not artifacts:
+        return (
+            "No repository-adopted artifacts are in this Registry yet.",
+            "Scan a repository first, then adopt one of its explicit manifests.",
+        )
+    lines = ["Repository-adopted artifacts", ""]
+    for item in artifacts:
+        lines.append(f"{'>' if item.coordinate == cursor else ' '} {item.coordinate}")
+        lines.append(f"    {item.url} at {item.ref}")
+        lines.append(f"    adopted commit: {_short(item.recorded_commit, profile)}")
+        if profile is PresentationProfile.VERBOSE:
+            lines.append(f"    manifest: {item.manifest_path}")
+            lines.append(f"    recorded input: {item.input_digest}")
+    lines.extend(("", "Enter checks the focused artifact's upstream now."))
+    return tuple(lines)
+
+
+def render_adoption_upstream_check(
+    view: MaintainerAdoptionUpstreamView,
+    profile: PresentationProfile,
+) -> tuple[str, ...]:
+    """Screen 46g: one explicit comparison, never continuous monitoring."""
+
+    if not isinstance(view, MaintainerAdoptionUpstreamView) or not isinstance(
+        profile, PresentationProfile
+    ):
+        raise ValueError("adoption upstream rendering needs a typed view and profile")
+    artifact = view.artifact
+    lines = [
+        f"Upstream check: {artifact.coordinate}",
+        f"Result: {_human(view.disposition)}",
+        f"Upstream: {artifact.url} at {artifact.ref}",
+        f"Adopted commit: {_short(artifact.recorded_commit, profile)}",
+    ]
+    if view.resolved_commit is not None:
+        lines.append(f"Resolved now: {_short(view.resolved_commit, profile)}")
+    if view.disposition == "unchanged":
+        lines.append("The declared manifest and payload are unchanged.")
+    elif view.disposition == "changed" and view.proposal_available:
+        lines.extend(
+            (
+                f"New immutable version proposed: {view.observed_coordinate}",
+                "Press a to review the exact local Registry transaction.",
+            )
+        )
+    elif view.disposition == "changed" and view.new_version_required:
+        lines.extend(
+            (
+                "The declared manifest or payload changed at the published version.",
+                "The upstream author must declare a new version before AART can propose a copy.",
+            )
+        )
+    elif view.disposition == "missing":
+        lines.append("The recorded manifest is no longer present at this branch or tag.")
+    elif view.disposition == "unreachable":
+        lines.append("The upstream could not be read, so its current state is unknown.")
+    else:
+        lines.append("The upstream declaration is invalid and cannot become a proposal.")
+    lines.extend(f"  {detail}" for detail in view.details)
+    lines.append("This check saved no Source and changed no Registry files.")
     return tuple(lines)
 
 

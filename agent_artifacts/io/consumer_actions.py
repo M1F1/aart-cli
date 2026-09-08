@@ -51,7 +51,9 @@ from agent_artifacts.application.consumer_views import (
 from agent_artifacts.application.installed_setup import DeclaredArtifactSetup
 from agent_artifacts.application.maintainer_sync import PreparedSourceSync
 from agent_artifacts.application.maintainer_views import (
+    MaintainerAdoptedArtifactView,
     MaintainerAdoptionReviewView,
+    MaintainerAdoptionUpstreamView,
     MaintainerRepositoryArtifactView,
     MaintainerRepositoryScanView,
     MaintainerViews,
@@ -112,7 +114,12 @@ from .maintainer_sync import (
     prepare_configured_source_sync,
 )
 from .maintainer_views import read_maintainer_views
-from .registry_adoption import PreparedAdoption, RepositoryScan
+from .registry_adoption import (
+    AdoptedArtifact,
+    AdoptionUpstreamCheck,
+    PreparedAdoption,
+    RepositoryScan,
+)
 from .registry_bootstrap import RegistryBootstrapReport, registry_identity_refusal
 
 __all__ = [
@@ -204,6 +211,29 @@ def _project_repository_scan(scan: RepositoryScan) -> MaintainerRepositoryScanVi
             )
             for item in scan.artifacts
         ),
+    )
+
+
+def _project_adopted_artifact(artifact: AdoptedArtifact) -> MaintainerAdoptedArtifactView:
+    return MaintainerAdoptedArtifactView(
+        artifact.coordinate,
+        artifact.url,
+        artifact.ref,
+        artifact.recorded_commit,
+        artifact.manifest_path,
+        artifact.input_digest,
+    )
+
+
+def _project_adoption_upstream(check: AdoptionUpstreamCheck) -> MaintainerAdoptionUpstreamView:
+    return MaintainerAdoptionUpstreamView(
+        _project_adopted_artifact(check.adopted),
+        check.disposition.value,
+        check.resolved_commit,
+        check.observed_coordinate,
+        check.new_version_required,
+        check.proposal is not None,
+        check.details,
     )
 
 
@@ -306,6 +336,8 @@ RegistryRefreshPort = Callable[[str], Result[RegistryConnectionSnapshot]]
 SourceConnectionPort = Callable[[SourceDraft], Result[RegistryConnectionSnapshot]]
 RegistryBootstrapPort = Callable[[RegistryInitDraft], Result[RegistryBootstrapCompletion]]
 RepositoryScanPort = Callable[[RepositoryScanDraft], Result[RepositoryScan]]
+RepositoryUpstreamCheckPort = Callable[[str], Result[AdoptionUpstreamCheck]]
+RepositoryAdoptedListPort = Callable[[], Result[tuple[AdoptedArtifact, ...]]]
 
 
 class RepositoryAdoptionPort(Protocol):
@@ -364,6 +396,9 @@ class LocalConsumerActions:
         registry_bootstrap: RegistryBootstrapPort | None = None,
         repository_scan: RepositoryScanPort | None = None,
         repository_adoption: RepositoryAdoptionPort | None = None,
+        adopted_artifacts: tuple[AdoptedArtifact, ...] = (),
+        repository_upstream_check: RepositoryUpstreamCheckPort | None = None,
+        repository_adopted_list: RepositoryAdoptedListPort | None = None,
     ) -> None:
         if not isinstance(context, ConsumerActionContext):
             raise ValueError("consumer actions need a composed action context")
@@ -380,8 +415,12 @@ class LocalConsumerActions:
         self._registry_bootstrap = registry_bootstrap
         self._repository_scan = repository_scan
         self._repository_adoption = repository_adoption
+        self._adopted_artifacts = adopted_artifacts
+        self._repository_upstream_check = repository_upstream_check
+        self._repository_adopted_list = repository_adopted_list
         self._scanned_repository: RepositoryScan | None = None
         self._adoption_review: MaintainerAdoptionReviewView | None = None
+        self._adoption_upstream: AdoptionUpstreamCheck | None = None
 
     # -- preferences --------------------------------------------------------- #
 
@@ -447,6 +486,14 @@ class LocalConsumerActions:
                     else _project_repository_scan(self._scanned_repository)
                 ),
                 adoption_review=self._adoption_review,
+                adopted_artifacts=tuple(
+                    _project_adopted_artifact(item) for item in self._adopted_artifacts
+                ),
+                adoption_upstream=(
+                    None
+                    if self._adoption_upstream is None
+                    else _project_adoption_upstream(self._adoption_upstream)
+                ),
             )
         )
 
@@ -494,6 +541,10 @@ class LocalConsumerActions:
             return self._prepare_repository_scan(command)
         if action is ConsumerActionKind.REPOSITORY_ADOPT:
             return self._prepare_repository_adoption(command)
+        if action is ConsumerActionKind.REPOSITORY_UPSTREAM_CHECK:
+            return self._prepare_repository_upstream_check(command)
+        if action is ConsumerActionKind.REPOSITORY_ADOPT_UPDATE:
+            return self._prepare_repository_adoption_update(command)
         if action is ConsumerActionKind.UPDATE:
             return self._prepare_update(command)
         if action is ConsumerActionKind.VERIFY_REPAIR:
@@ -561,6 +612,64 @@ class LocalConsumerActions:
                 ConsumerUiEventKind.ACTION_PREPARED,
                 action=command.action,
                 review_digest=prepared.value.review_digest,
+            ),
+        )
+
+    def _prepare_repository_upstream_check(
+        self, command: ConsumerUiCommand
+    ) -> ConsumerActionUpdate:
+        if self._repository_upstream_check is None:
+            return self._declined(command, _lines("upstream checking is unavailable"))
+        checked = self._repository_upstream_check(command.focus)
+        if isinstance(checked, Err):
+            return self._declined(command, _refusal(checked.diagnostics))
+        self._adoption_upstream = checked.value
+        identity = json.dumps(
+            {
+                "coordinate": checked.value.adopted.coordinate,
+                "disposition": checked.value.disposition.value,
+                "recorded_commit": checked.value.recorded_commit,
+                "resolved_commit": checked.value.resolved_commit,
+                "observed_coordinate": checked.value.observed_coordinate,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        check_digest = "sha256:" + hashlib.sha256(identity).hexdigest()
+        return ConsumerActionUpdate(
+            self.source(),
+            ConsumerUiEvent(
+                ConsumerUiEventKind.ACTION_PREPARED,
+                action=command.action,
+                review_digest=check_digest,
+            ),
+        )
+
+    def _prepare_repository_adoption_update(
+        self, command: ConsumerUiCommand
+    ) -> ConsumerActionUpdate:
+        check = self._adoption_upstream
+        if check is None or check.adopted.coordinate != command.focus or check.proposal is None:
+            return self._declined(
+                command,
+                _lines("this upstream check has no new version ready to review"),
+            )
+        prepared = check.proposal
+        self._pending = prepared
+        self._pending_action = command.action
+        self._adoption_review = MaintainerAdoptionReviewView(
+            prepared.url,
+            prepared.commit,
+            prepared.selected,
+            prepared.changed_paths,
+            prepared.review_digest,
+        )
+        return ConsumerActionUpdate(
+            self.source(),
+            ConsumerUiEvent(
+                ConsumerUiEventKind.ACTION_PREPARED,
+                action=command.action,
+                review_digest=prepared.review_digest,
             ),
         )
 
@@ -1173,6 +1282,10 @@ class LocalConsumerActions:
         applied = self._repository_adoption.apply(pending, command.review_digest)
         if isinstance(applied, Err):
             return self._failed(command, _refusal(applied.diagnostics))
+        if self._repository_adopted_list is not None:
+            listed = self._repository_adopted_list()
+            if isinstance(listed, Ok):
+                self._adopted_artifacts = listed.value
         if self._data_root is not None:
             refreshed = read_maintainer_views(
                 self._context.effective,

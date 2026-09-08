@@ -239,8 +239,14 @@ validating the Registry's immutable version/object bindings, reacquires the reco
 compares the explicit manifest input digest rather than commit movement. Unchanged, changed,
 missing, unreachable and invalid-manifest are separate results. Same-version movement cannot carry
 an overwrite plan; a validated upstream version bump carries a normal `PreparedAdoption` and still
-needs its separate digest confirmation. Eight real-Git scenarios hold it. TUI and CLI projections
-remain open.
+needs its separate digest confirmation. Eight real-Git scenarios hold it.
+
+The **TUI projection is built and green** (D-191). Screen 46's `u` action opens 46f over only
+packages carrying adoption provenance; Enter runs the one focused check and 46g renders the exact
+typed answer. A validated new version alone offers `a`, which enters the existing 46e review and
+cannot apply without its digest. The production composition test adopts 2.1.0, commits 2.2.0 to a
+real Git `main`, checks it and adds 2.2.0 without removing or rewriting 2.1.0. Three TUI mutations
+were killed. The machine-complete CLI projection remains open.
 
 ### CP-14 current increment (2026-09-02)
 
