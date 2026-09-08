@@ -2156,7 +2156,7 @@ Evidence/links: `curation/model.py::render_curation_review`;
 ## B-089 — Empty Registry audit presents non-applicable checks as alarming warnings
 
 Found: whole-product TUI acceptance, first audit of an initialized Registry (2026-09-08) ·
-Severity: medium · Status: open
+Severity: medium · Status: resolved (D-181; awaiting manual retest as QA-015)
 
 `aart registry audit` passes a newly initialized empty Registry, then emits two long warnings. One
 says installation risk is unassessed because `security/index.json` was not supplied. The other says

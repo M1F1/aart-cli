@@ -3906,3 +3906,38 @@ with it.
 without an opt-in there is nothing to overwrite — and is joined by
 `test_a_declined_init_leaves_an_unrelated_issue_form_alone`, so the no-clobber claim is held on
 both sides of the choice rather than weakened to fit it.
+
+## D-181 — An empty registry's audit reports what does not apply, and init stops warning about what it no longer writes
+
+`QA-015`/`B-089`. `aart registry audit` on a freshly initialized registry passed and then printed
+two warnings: that provenance coverage was partial, and that no per-object installation-risk
+evidence had been supplied. Both are true of a registry with nothing in it, and neither is a defect
+of one — the first thing an operator sees after creating a registry should not read as two problems
+they cannot fix.
+
+`REGISTRY_AUDIT_NOTE` already existed for exactly this distinction: a report of what the audit did
+rather than what it found, carrying no remediation because there is nothing to remedy. It is what
+`_upstream_check_note` already used to say there were no vendored artifacts to check. Both findings
+now use it when the registry holds neither an external reference nor an owned package, and stay
+warnings the moment either exists — with one package present there really is an object whose risk
+nobody assessed.
+
+Deciding this required knowing whether the registry owns any packages before the first finding is
+emitted, so the artifact-root scan moved above it into one `owned` tuple that the per-package loop
+then consumes. That made the root filter load-bearing for the empty/occupied distinction, and
+`test_a_manifest_outside_the_declared_roots_is_not_a_package_of_this_registry` holds it: a valid
+`artifact.json` outside the roots `aart-source.json` declares belongs to something else and must not
+make an empty registry look occupied. The neighbouring symlink test records the stronger boundary it
+sits behind — a workspace containing any symlink is refused whole, before any per-file check runs.
+
+`registry init` also stopped warning that the usage-reporting templates were inert. After D-180 it
+does not write them unless a destination is named, so the warning described files that no longer
+exist; warning that an unchosen optional feature was not chosen is the same non-finding this entry
+removes from the audit, and the init review is read in the TUI, where a flag name is not an action.
+`docs/reporting/usage-reporting-v1.md` and `LA-R-01` are corrected to the behaviour.
+
+**Evidence.** `tests/registry_empty_audit_test.py` (7 tests) and the amended
+`tests/curation_runtime_test.py`. Six targeted mutations — ignoring `owned`, never reporting
+not-applicable, keeping either finding a warning, dropping the root filter, and giving `_note` a
+warning severity — are each killed. Verified through the public CLI: `registry init` writes six
+paths and no reporting templates, and `registry audit` prints `passed` with two `info` lines.

@@ -70,19 +70,6 @@ Each new entry records:
       Evidence: `render_curation_review` and `render_curation_outcome` render the same warnings on
       the confirmed path; the captured manual output reproduces the duplication
       Fix: pending
-- [ ] **QA-015 — Audit of a valid empty Registry reports non-actionable warnings as problems.**
-      Stage: validating the newly initialized empty Registry
-      Surface: human output from `aart registry audit`
-      Severity: medium
-      Blocks current stage: no; audit passes, but the explanation makes the operator think setup is
-      incomplete or broken
-      Reproduction: initialize a Registry with no artifacts and run `registry audit --source ...`
-      Expected: concise success, for example `registry audit: passed — registry is empty; artifact
-      risk and external-provenance checks were not applicable`
-      Observed: two dense warnings demand `security/index.json`, call risk `unassessed`, describe
-      provenance as `partial`, and then say there is nothing to correct
-      Evidence: captured manual output from the freshly initialized `aart-test-registry`
-      Fix: pending
 - [ ] **QA-016 — A new Registry cannot be initialized through Maintainer TUI.**
       Stage: bootstrapping the external test Registry
       Surface: Maintainer → Registry
@@ -156,6 +143,11 @@ Each new entry records:
 
 ### Fixed — awaiting manual retest
 
+- [ ] **QA-015 — Audit of a valid empty Registry reports non-actionable warnings as problems.** The
+      provenance-coverage and installation-risk findings are now `info` notes when the registry
+      holds neither an external reference nor an owned package, and warnings again as soon as
+      either exists. `registry init` also stopped warning that the usage-reporting templates were
+      inert, because D-180 no longer writes them. B-089/D-181.
 - [ ] **QA-010 — Consumer TUI cannot synchronize a configured Registry.** Screen 21 now routes `s`
       to its own Refresh Registry action with a review (21c) that names the ref to be fetched,
       states that a refresh is not an artifact update, and warns that a failed fetch keeps the

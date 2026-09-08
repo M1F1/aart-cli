@@ -116,7 +116,7 @@ highest id in use anywhere, not at the next number after the table above. That t
 
 | ID | Title | Mode | By | Invocation | Expected |
 |---|---|---|---|---|---|
-| `LA-R-01` | Init from empty | flag | D | `aart registry init --source $RA --source-id la-registry-a --display-name "…"` | protocol markers + CI + inert reporting templates written; no commit, no push |
+| `LA-R-01` | Init from empty | flag | D | `aart registry init --source $RA --source-id la-registry-a --display-name "…"` | protocol markers + CI written and no reporting templates, since none was requested; no commit, no push |
 | `LA-R-02` | Scaffold one artifact | flag | D | `aart registry scaffold --source $RA --profile claude --install-mode copy --install-scope project` | one manifest + starter payload |
 | `LA-R-03` | Format is idempotent | flag | D | `registry format` twice, then `--check` | second run changes nothing; `--check` exits `0` |
 | `LA-R-04` | Check detects drift | flag | D | perturb a managed JSON; `registry format --check` | exits `1`, names the path, writes nothing |

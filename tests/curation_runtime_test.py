@@ -243,9 +243,15 @@ class CurationRuntimeTest(unittest.TestCase):
                 )
             )
             assert isinstance(initialized, Ok), initialized
-            self.assertIn(
-                "--usage-reporting-repository OWNER/REPOSITORY",
+            # `QA-013`/`D-180`: nothing inert is written, so nothing warns that it is. An
+            # unrequested optional feature is not a finding about the registry that was created.
+            self.assertNotIn(
+                "usage-reporting",
                 " ".join(initialized.value.review.warnings),
+            )
+            self.assertFalse(
+                any("inert" in warning for warning in initialized.value.review.warnings),
+                initialized.value.review.warnings,
             )
             self.assertIn(
                 f"aart registry validate --source {root}",

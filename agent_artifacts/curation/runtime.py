@@ -434,15 +434,11 @@ class LocalCurationService:
         planned = prepare_registry_init(options, output=self.workspace)
         if isinstance(planned, Err):
             return planned
-        warnings: tuple[str, ...] = (
-            ()
-            if request.usage_reporting_repository is not None
-            else (
-                "usage reporting templates are inert because no destination was advertised; "
-                "re-run init with --usage-reporting-repository OWNER/REPOSITORY to enable "
-                "prompt-only registry routing",
-            )
-        )
+        # `QA-013`/`D-180`: init no longer writes the usage-reporting templates unless a
+        # destination is named, so there is nothing inert left to warn about. Warning that an
+        # unchosen optional feature was not chosen is the same non-finding `QA-015` removed from
+        # the audit, and the review is read in the TUI where a flag name is not an action.
+        warnings: tuple[str, ...] = ()
         # Two questions, two homes, and `init` owes the reader both.  *Which* AART is the
         # registry's own decision and is now pinned in a file it can review and revert; *where
         # this deployment gets it from* is a fact about the instance and stays in settings.

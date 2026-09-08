@@ -1816,9 +1816,25 @@ def audit_registry_workspace(
     )
     if isinstance(native, Err):
         diagnostics.extend(native.diagnostics)
+    roots = tuple(f"{root}/" for root in source.artifact_roots)
+    owned = tuple(
+        (path, item)
+        for path, item in sorted(files.value.items())
+        if item.kind is SnapshotEntryKind.FILE
+        and path.endswith("/artifact.json")
+        and any(path.startswith(root) for root in roots)
+    )
+    # `QA-015`: a registry holding nothing has nothing to be partial about. The two findings below
+    # describe a limit rather than a defect, and on an empty registry the limit is the whole state
+    # of it, so they are reported as notes — what the audit did — exactly as `_upstream_check_note`
+    # reports having no vendored artifacts to check. One owned package or one external reference is
+    # enough to make them warnings again, because then an object exists that nobody assessed.
+    nothing_to_assess = not entries and not owned
     if not entries:
         diagnostics.append(
-            _diagnostic(
+            _note("registry contains no artifacts, so there is no provenance to check")
+            if nothing_to_assess
+            else _diagnostic(
                 "registry contains no external references; provenance coverage is partial",
                 _COVERAGE_LIMIT,
                 warning=True,
@@ -1858,14 +1874,7 @@ def audit_registry_workspace(
                             warning=True,
                         )
                     )
-    roots = tuple(f"{root}/" for root in source.artifact_roots)
-    for path, item in sorted(files.value.items()):
-        if (
-            item.kind is not SnapshotEntryKind.FILE
-            or not path.endswith("/artifact.json")
-            or not any(path.startswith(root) for root in roots)
-        ):
-            continue
+    for path, item in owned:
         manifest = parse_artifact_manifest(item.content, path=path)
         if isinstance(manifest, Err):
             diagnostics.extend(manifest.diagnostics)
@@ -1939,7 +1948,9 @@ def audit_registry_workspace(
     security_file = files.value.get("security/index.json")
     if security_file is None:
         diagnostics.append(
-            _diagnostic(
+            _note("registry contains no artifacts, so there is no installation risk to assess")
+            if nothing_to_assess
+            else _diagnostic(
                 "no per-object installation-risk evidence was supplied to registry audit",
                 _SECURITY_EVIDENCE,
                 warning=True,
