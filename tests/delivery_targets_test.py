@@ -52,8 +52,9 @@ class DeliveryTargetTest(unittest.TestCase):
         )
 
     def test_a_harness_nobody_measured_is_named_rather_than_guessed(self) -> None:
+        # Cursor is a real harness this repository has never measured, so it has no row.
         with self.assertRaises(KeyError):
-            delivery_target("opencode", Scope.PROJECT, ArtifactKind.SKILL)
+            delivery_target("cursor", Scope.PROJECT, ArtifactKind.SKILL)
 
     def test_a_kind_this_harness_documents_no_location_for_is_refused(self) -> None:
         # Tabnine documents no user-global Agent Skills discovery location.
@@ -125,7 +126,7 @@ class MemoryTargetTest(unittest.TestCase):
 
     def test_a_harness_nobody_measured_is_named_rather_than_guessed(self) -> None:
         with self.assertRaises(KeyError):
-            memory_target("opencode", Scope.PROJECT)
+            memory_target("cursor", Scope.PROJECT)
 
     def test_a_block_is_appended_by_default_so_what_the_user_wrote_stays_on_top(self) -> None:
         self.assertEqual(BlockPosition.BOTTOM, memory_target("claude", Scope.PROJECT).position)
@@ -186,6 +187,12 @@ class HookTargetTest(unittest.TestCase):
             hook_target("tabnine", Scope.USER)
 
     def test_a_harness_nobody_measured_is_named_rather_than_guessed(self) -> None:
+        with self.assertRaises(KeyError):
+            hook_target("cursor", Scope.PROJECT)
+
+    def test_a_measured_harness_whose_hooks_are_unmeasured_gets_no_hook_row(self) -> None:
+        # OpenCode's skills, memory and MCP were measured; its hook event model was not, and a
+        # harness being present in one table is not permission to guess it into another.
         with self.assertRaises(KeyError):
             hook_target("opencode", Scope.PROJECT)
 

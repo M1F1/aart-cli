@@ -24,6 +24,7 @@ from .managed_blocks import BlockPosition
 
 __all__ = [
     "DELIVERY_TARGETS",
+    "McpEntryShape",
     "HOOK_TARGETS",
     "MCP_TARGETS",
     "MEMORY_TARGETS",
@@ -58,6 +59,22 @@ class Scope(str, Enum):
     USER = "user"
 
 
+class McpEntryShape(str, Enum):
+    """How one harness spells the server it was given.
+
+    Every harness here is told the same two things -- one absolute command and its literal
+    arguments -- and disagrees only about how to write them down. That disagreement is not a
+    detail: a registration written in another harness's shape parses and is then ignored, which
+    looks installed and never starts. So the shape is measured beside the file it goes in, and a
+    harness that spells it differently gets a member here rather than a translation somewhere else.
+    """
+
+    #: `{"command": "/path", "args": ["--flag"]}` -- Claude Code and Tabnine.
+    COMMAND_WITH_ARGS = "command-with-args"
+    #: `{"type": "local", "command": ["/path", "--flag"]}` -- OpenCode 1.18.29.
+    TYPED_COMMAND_VECTOR = "typed-command-vector"
+
+
 @dataclass(frozen=True, slots=True)
 class McpTarget:
     """One harness's MCP registration slot, relative to that scope's root."""
@@ -67,6 +84,7 @@ class McpTarget:
     settings_file: str
     server_map: str
     transports: frozenset[Transport] = _STDIO
+    entry_shape: McpEntryShape = McpEntryShape.COMMAND_WITH_ARGS
 
     def __post_init__(self) -> None:
         if not isinstance(self.harness, str) or _SLUG_RE.fullmatch(self.harness) is None:
@@ -85,6 +103,8 @@ class McpTarget:
             raise ValueError("harness server map key is invalid")
         if not isinstance(self.transports, frozenset) or not self.transports:
             raise ValueError("a harness target names at least one measured transport")
+        if not isinstance(self.entry_shape, McpEntryShape):
+            raise ValueError("a harness target names one measured entry shape")
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,6 +152,33 @@ MCP_TARGETS: dict[tuple[str, Scope], McpTarget] = {
     ("tabnine", Scope.USER): McpTarget("tabnine", Scope.USER, "agent/settings.json", "mcpServers"),
     ("claude", Scope.PROJECT): McpTarget("claude", Scope.PROJECT, ".mcp.json", "mcpServers"),
     ("claude", Scope.USER): McpTarget("claude", Scope.USER, ".claude.json", "mcpServers"),
+    # OpenCode 1.18.29, measured with `opencode debug config`, which prints the merged
+    # configuration: a server written into the project's `opencode.json` and one written into
+    # `~/.config/opencode/opencode.json` both come back under `mcp`, unchanged.
+    #
+    # That build reads `~/.opencode/opencode.json` too -- measured, and contradicting its own
+    # shipped documentation, which says global config is "NOT `~/.opencode/`". Two paths work, so
+    # the row is a choice rather than a discovery: it is the one `opencode debug paths` reports as
+    # the config root and the one the build documents, which is the one that will still be read
+    # when the undocumented path stops being.
+    #
+    # The entry shape is the reason this harness could not be copied from the dormant profile
+    # registry (`B-085`): a local server here is an object with `type` and one `command` array, not
+    # a command string beside `args`.
+    ("opencode", Scope.PROJECT): McpTarget(
+        "opencode",
+        Scope.PROJECT,
+        "opencode.json",
+        "mcp",
+        entry_shape=McpEntryShape.TYPED_COMMAND_VECTOR,
+    ),
+    ("opencode", Scope.USER): McpTarget(
+        "opencode",
+        Scope.USER,
+        ".config/opencode/opencode.json",
+        "mcp",
+        entry_shape=McpEntryShape.TYPED_COMMAND_VECTOR,
+    ),
 }
 
 
@@ -248,6 +295,24 @@ DELIVERY_TARGETS: dict[tuple[str, Scope, ArtifactKind], DeliveryTarget] = {
     ("codex", Scope.USER, ArtifactKind.SKILL): DeliveryTarget(
         "codex", Scope.USER, ArtifactKind.SKILL, ".codex/skills/<name>", DeliveryKind.TREE
     ),
+    # OpenCode 1.18.29, measured with `opencode debug skill`, which lists every skill it found and
+    # the file each came from. Project skills are `.opencode/skills/<name>/SKILL.md` and user skills
+    # are `<config>/skills/<name>/SKILL.md`. That build also auto-loads `~/.claude/skills` and
+    # `~/.agents/skills`, and both were observed working -- but those belong to other harnesses and
+    # to the cross-vendor interop directory, and an installation asked for by harness name goes in
+    # that harness's own directory.
+    ("opencode", Scope.PROJECT, ArtifactKind.SKILL): DeliveryTarget(
+        "opencode", Scope.PROJECT, ArtifactKind.SKILL, ".opencode/skills/<name>", DeliveryKind.TREE
+    ),
+    ("opencode", Scope.USER, ArtifactKind.SKILL): DeliveryTarget(
+        "opencode",
+        Scope.USER,
+        ArtifactKind.SKILL,
+        ".config/opencode/skills/<name>",
+        DeliveryKind.TREE,
+    ),
+    # There is deliberately no OpenCode guideline row either: that build reads skills, agents,
+    # commands and `AGENTS.md`, and documents no guidelines directory of its own.
     # There is deliberately no Codex guideline row. That build reads skills and `AGENTS.md` and
     # documents no separate guidelines directory, so a guideline delivered anywhere would be a file
     # nothing opens.
@@ -308,6 +373,11 @@ MEMORY_TARGETS: dict[tuple[str, Scope], MemoryTarget] = {
     # here rather than listed as a second user file.
     ("codex", Scope.PROJECT): MemoryTarget("codex", Scope.PROJECT, "AGENTS.md"),
     ("codex", Scope.USER): MemoryTarget("codex", Scope.USER, ".codex/AGENTS.md"),
+    # OpenCode 1.18.29: the shipped build walks up from the working directory to the worktree root
+    # collecting `AGENTS.md`, and reads one more from its config root -- `<config>/AGENTS.md`, which
+    # `opencode debug paths` reports as `~/.config/opencode`.
+    ("opencode", Scope.PROJECT): MemoryTarget("opencode", Scope.PROJECT, "AGENTS.md"),
+    ("opencode", Scope.USER): MemoryTarget("opencode", Scope.USER, ".config/opencode/AGENTS.md"),
 }
 
 
@@ -482,9 +552,17 @@ def delivery_destination(target: DeliveryTarget, name: str) -> str:
 
 
 def registration_entry(registration: McpRegistration) -> dict[str, object]:
-    """The object a harness stores under its server name."""
+    """The object a harness stores under its server name, spelled the way that harness spells it."""
 
-    entry: dict[str, object] = {"command": registration.command}
+    if registration.target.entry_shape is McpEntryShape.TYPED_COMMAND_VECTOR:
+        # One vector, command first. `type` is required by this shape, and `local` is the only
+        # member of it a stdio registration can be.
+        entry: dict[str, object] = {
+            "command": [registration.command, *registration.arguments],
+            "type": "local",
+        }
+        return dict(sorted(entry.items()))
+    entry = {"command": registration.command}
     if registration.arguments:
         entry["args"] = list(registration.arguments)
     return dict(sorted(entry.items()))

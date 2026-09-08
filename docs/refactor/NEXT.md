@@ -248,9 +248,30 @@ measured table, which is what "harnesses this machine has measured" always meant
 write into the destinations the table names and assert the installed Codex finds them); five
 targeted mutations, all killed, three by the live observation alone.
 
-**Next:** QA-011/B-085 (native OpenCode) is untouched, and QA-012's own MCP (B-096) and hook halves
-remain. After those, the manual-acceptance batch is handed back for retest and the full
-`make quality` and `make integration` gates run.
+B-085/QA-011's **Skills, instructions and MCP are measured, built and green** (D-194), by the same
+method. OpenCode 1.18.29 ships `opencode debug skill`, `debug config` and `debug paths`, which name
+the skills it found and the file each came from, print the merged configuration, and print the
+roots; the runs used a temporary `HOME` with the XDG variables cleared. Six rows followed: Skills at
+`.opencode/skills/<name>` and `.config/opencode/skills/<name>`, `AGENTS.md` at the repository root
+and `.config/opencode/AGENTS.md`, and MCP under the `mcp` key of `opencode.json` and
+`.config/opencode/opencode.json`. As with Codex, the roots belonging to other harnesses
+(`~/.claude/skills`, `~/.agents/skills`) were observed working and deliberately not used.
+
+The MCP half needed a contract change rather than a row: a local server in `opencode.json` is
+`{"type": "local", "command": ["/path", "--flag"]}`, not a command string beside `args`. That
+difference is the target's, so `McpTarget` gained an `entry_shape` (`McpEntryShape`, defaulting to
+the shape already written) and `registration_entry` switches on it; nothing else in the pipeline
+learned that harnesses differ. One measured contradiction is recorded rather than smoothed: this
+build also reads `~/.opencode/opencode.json`, which its own shipped documentation denies, so the
+user-scope row is a deliberate choice of the documented config root and a test says so. No guideline
+row (no documented directory) and no hook row (unmeasured). Three tests that had used `"opencode"`
+as the name of an unmeasured harness now name `cursor`, which genuinely is one. Evidence:
+`tests/opencode_harness_test.py` (9 tests, two of which run the installed OpenCode); six targeted
+mutations, all killed.
+
+**Next:** QA-012's own MCP (B-096) and hook halves remain, as do OpenCode's guidelines and hooks.
+After those, the manual-acceptance batch is handed back for retest and the full `make quality` and
+`make integration` gates run.
 
 On top of that, Maintainer screen 31 now offers `a` Add Source: a separate `SourceDraft` form (31a)
 and review (31b) that accept only `source-git`/`source-local`, refuse `registry-git` by name, never

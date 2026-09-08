@@ -42,7 +42,14 @@ Each new entry records:
       unmeasured and writes nothing
       Evidence: OpenCode 1.18.29 is installed locally; all `domain/harness.py` target lookups for
       OpenCode refuse, while the dormant `profiles/builtin.py` values are not canonical authority
-      Fix: pending
+      Fix: partial — Skills, instructions and MCP are measured and installable at both scopes
+      (`.opencode/skills/<name>`, `.config/opencode/skills/<name>`, `AGENTS.md`,
+      `.config/opencode/AGENTS.md`, the `mcp` key of `opencode.json` and
+      `.config/opencode/opencode.json`), and OpenCode is selectable in the TUI through the union
+      harness set (D-194, 9 tests, two of which run the installed OpenCode). MCP needed a new
+      `McpEntryShape` because a local server here is `{"type": "local", "command": [...]}` rather
+      than a command string beside `args`. Guidelines and hooks stay refused by name because that
+      build documents no guidelines directory and its event model was not measured.
 - [ ] **QA-012 — Canonical installation cannot target Codex.**
       Stage: installing the Skill and MCP into the locally installed Codex CLI 0.152.0
       Surface: Marketplace/TUI and `marketplace install --profile codex`

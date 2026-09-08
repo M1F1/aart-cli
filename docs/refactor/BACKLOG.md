@@ -2058,7 +2058,9 @@ Evidence/links: Product Specification 161.7; `ConsumerScreen.REGISTRIES`;
 
 ## B-085 — OpenCode is named by a dormant profile but absent from canonical installation targets
 
-Found: whole-product TUI acceptance preparation (2026-09-08) · Severity: high · Status: open
+Found: whole-product TUI acceptance preparation (2026-09-08) · Severity: high · Status: open —
+Skills, instructions, MCP and harness selection are measured, built and green (D-194); guidelines
+and hooks remain unmeasured and refuse by name
 
 OpenCode 1.18.29 is installed on the acceptance Mac, and an artifact may declare `opencode` in its
 compatibility. Nevertheless every canonical placement lookup refuses it: `MCP_TARGETS`,
@@ -2083,7 +2085,15 @@ OpenCode itself. Do not add table rows whose only evidence is the old dormant pr
 
 Evidence/links: Product Specification multi-harness contract; `domain/harness.py` target tables;
 `io/artifact_placement.py::placement_for`; `tui.py::_canonical_marketplace_target`;
-`profiles/builtin.py::_OPENCODE`; official OpenCode Skill, Rules and MCP documentation; QA-011.
+`profiles/builtin.py::_OPENCODE`; official OpenCode Skill, Rules and MCP documentation; QA-011;
+`D-194`; `tests/opencode_harness_test.py`.
+
+Measured and closed (2026-09-08): `opencode debug skill`, `debug config` and `debug paths` against
+OpenCode 1.18.29 gave both scopes for Skills, `AGENTS.md` and MCP. The entry-shape suspicion in this
+entry was correct and is now `McpEntryShape.TYPED_COMMAND_VECTOR` on the target itself. Still open
+in this entry's original scope: a guideline decision — that build documents no guidelines directory,
+so the honest answer so far is refusal rather than a translation — and the plugin/event model, which
+nothing here measured.
 
 ## B-086 — Codex is accepted as a compatibility name but has no canonical installation adapter
 

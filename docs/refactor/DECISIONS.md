@@ -4376,3 +4376,60 @@ them on its own.
 `QA-012` is therefore partially closed: Skills and instructions install natively at both scopes and
 Codex is selectable, while MCP (`B-096`) and hooks remain unmeasured and refuse by name. `QA-011`
 (OpenCode) is untouched and still open.
+
+## D-194 — OpenCode's MCP entry has its own shape, so the shape became part of the target
+
+`QA-011`/`B-085` asks for a native OpenCode adapter. The dormant `profiles/builtin.py` already names
+OpenCode, and `B-085` recorded why that is not an implementation to reconnect: its own labels say
+best-effort, and its MCP projection writes a `command` string beside `args`, which is not what this
+build reads. Measurement first, table rows second, as with Codex (`D-193`).
+
+**How it was measured.** OpenCode 1.18.29 ships three read-only debug subcommands that answer
+exactly the questions the tables ask. `opencode debug skill` lists every skill it found and the file
+each came from; `opencode debug config` prints the merged configuration; `opencode debug paths`
+prints the roots. Runs used a temporary `HOME` with the XDG variables cleared, so user scope was a
+directory this repository created rather than the operator's own.
+
+**The rows.** Skills at `.opencode/skills/<name>` for the project and `.config/opencode/skills/<name>`
+for the user; `AGENTS.md` at the repository root and `.config/opencode/AGENTS.md` for the user; MCP
+under the `mcp` key of `opencode.json` at the project and `.config/opencode/opencode.json` for the
+user. That build also auto-loads `~/.claude/skills` and `~/.agents/skills`, and both were observed
+working — they are another harness's directory and the cross-vendor interop root, and an installation
+asked for by harness name goes in that harness's own directory, which is the same reasoning `D-193`
+applied to `.agents/skills` for Codex.
+
+**A measured contradiction, kept rather than smoothed.** That build also reads
+`~/.opencode/opencode.json`, which its own shipped `customize-opencode` skill says it does not
+("NOT `~/.opencode/`"). Two paths work, so the user-scope row is a choice and not a discovery: it is
+the config root `opencode debug paths` reports and the one the build documents, which is the one
+that will still be read when the undocumented path stops being. The comment in `MCP_TARGETS` and a
+test record both halves, because a later reader finding two working paths deserves the reason for
+the one chosen rather than a guess that the other was never noticed.
+
+**`McpEntryShape`.** A local server in `opencode.json` is `{"type": "local", "command": ["/path",
+"--flag"]}` — one vector, no `args`. Claude and Tabnine take `{"command": "/path", "args":
+["--flag"]}`. Both are correct for their harness, so the difference belongs to the target and not to
+the caller: `McpTarget` gained an `entry_shape`, defaulting to the shape already written, and
+`registration_entry` switches on it. Nothing else in the pipeline learned that harnesses differ.
+
+**What is deliberately absent.** No guideline row: that build reads skills, agents, commands and
+`AGENTS.md`, and documents no guidelines directory, so a delivered guideline would be a file nothing
+opens. No hook row: OpenCode has a plugin/event model, none of it was measured here, and a harness
+being present in one table is not permission to guess it into another —
+`tests/delivery_targets_test.py` now holds that as its own claim.
+
+**A stand-in that stopped standing in.** Three tests used `"opencode"` as the name of a harness
+nobody measured. Measuring it made them pass for the wrong reason, and they now name `cursor`, which
+this repository genuinely has never measured.
+
+**Evidence.** `tests/opencode_harness_test.py` (9 tests): table rows, the entry shape at both ends
+(including that Claude keeps the shape Claude reads), the documented-config-root choice, and two
+live observations that write a Skill, an `AGENTS.md` and a server into the destinations the table
+names and assert the installed OpenCode reports them back. The live tests skip when no OpenCode is
+installed. Six targeted mutations, all killed: OpenCode MCP written in Claude's shape, the vector
+dropping its arguments, user config at `.opencode`, the user Skill root inside Claude's directory,
+user memory at the home root, and the typed shape leaking into Claude.
+
+`QA-011` is therefore closed for Skills, instructions and MCP at both scopes, with OpenCode
+selectable in the TUI through the union harness set `D-193` introduced. Guidelines and hooks stay
+refused by name until someone measures them.
