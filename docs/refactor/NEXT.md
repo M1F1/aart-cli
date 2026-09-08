@@ -208,13 +208,13 @@ Git transport while driving a real author repository and real registry checkout.
 `tests/maintainer_repository_adoption_test.py` (8 tests); three targeted mutations killed (route,
 adoptability filter, exact selection crossing the port).
 
-**Next on QA-021:** build the explicit per-artifact `Check upstream` action over the provenance the
-adopted package records. D-189 closed the prerequisite the first implementation attempt exposed:
-native provenance pinned a commit but forgot the moving branch/tag. New adoptions retain that ref
-in the immutable namespaced `aart.repository-adoption` record without becoming a Source. Unchanged,
-changed, unreachable and missing must remain distinct; a change proposes a new version and never
-rewrites a published one. Then expose the same complete scan/select/review/apply contract as a
-machine-complete CLI surface. B-095 remains open for those two pieces.
+**Next on QA-021:** project the application-level `Check upstream` from D-190 into the Maintainer
+TUI. It already follows D-189's recorded ref, compares exact declared input rather than commit
+churn, distinguishes unchanged/changed/missing/unreachable/invalid-manifest, and prepares an
+ordinary adoption plan only when upstream declares a new version. The TUI must preserve those
+answers and keep application of a proposal behind the exact review digest. Then expose the complete
+scan/select/review/apply/check contract as a machine-complete CLI surface. B-095 remains open for
+those two public projections.
 
 On top of that, Maintainer screen 31 now offers `a` Add Source: a separate `SourceDraft` form (31a)
 and review (31b) that accept only `source-git`/`source-local`, refuse `registry-git` by name, never

@@ -75,9 +75,10 @@ Each new entry records:
       adoption with pinned provenance and saves no Source (D-187, 14 tests). Maintainer Registry
       now exposes that flow as `s` Scan Repository: form 46c, selectable result 46d and exact local
       adoption review 46e (D-188, 8 tests). Adopted packages now also retain the moving branch/tag
-      as immutable namespaced provenance (D-189), so `Check upstream` can re-resolve it rather than
-      repeatedly checking the old commit. A machine-complete CLI equivalent and the check itself
-      remain pending.
+      as immutable namespaced provenance (D-189). The read-only application check now distinguishes
+      unchanged, changed, missing, unreachable and invalid manifests, and prepares a new immutable
+      version only after an upstream version bump (D-190, 8 tests). Its TUI and machine-complete CLI
+      projections remain pending.
 
 ### Fixed — awaiting manual retest
 

@@ -28,6 +28,7 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Callable
 
 from agent_artifacts.application.candidate_validation import (
@@ -45,29 +46,35 @@ from agent_artifacts.application.promotion import (
     finalize_promotion,
     load_registry_versions,
     plan_bulk_promotion,
+    validate_promoted_registry,
 )
 from agent_artifacts.curation.runtime import default_native_acquirer
 from agent_artifacts.domain.candidates import CandidateState
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.identifiers import SourceAlias
 from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.registry import PromotionMode
+from agent_artifacts.domain.registry import PromotionMode, RegistryArtifactVersion
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.io.registry_promotion import FilesystemPromotionOutput
 from agent_artifacts.io.registry_workspace import FilesystemRegistryWorkspace
 from agent_artifacts.protocol.authoring import compile_author_snapshot
 from agent_artifacts.protocol.json import JsonObject
-from agent_artifacts.protocol.native_schema import parse_source_manifest
-from agent_artifacts.protocol.native_tree import SnapshotEntryKind
+from agent_artifacts.protocol.native_schema import parse_provenance, parse_source_manifest
+from agent_artifacts.protocol.native_tree import SnapshotEntry, SnapshotEntryKind
 from agent_artifacts.registry_maintenance.model import NativeReferenceAcquisition
 
 __all__ = [
     "REPOSITORY_ADOPTION_REFUSED",
     "REPOSITORY_ADOPTION_RECORD",
+    "AdoptedArtifact",
+    "AdoptionUpstreamCheck",
+    "AdoptionUpstreamDisposition",
     "PreparedAdoption",
     "RepositoryScan",
     "ScannedArtifact",
     "apply_adoption",
+    "check_adopted_upstream",
+    "list_adopted_artifacts",
     "prepare_adoption",
     "scan_repository",
 ]
@@ -133,6 +140,46 @@ class ScannedArtifact:
 
 
 @dataclass(frozen=True, slots=True)
+class AdoptedArtifact:
+    """One immutable Registry copy whose explicit upstream can be checked on demand."""
+
+    coordinate: str
+    url: str
+    ref: str
+    recorded_commit: str
+    manifest_path: str
+    input_digest: str
+
+
+class AdoptionUpstreamDisposition(str, Enum):
+    """The complete answer to one explicit repository-adoption upstream check."""
+
+    UNCHANGED = "unchanged"
+    CHANGED = "changed"
+    MISSING = "missing"
+    UNREACHABLE = "unreachable"
+    INVALID_MANIFEST = "invalid-manifest"
+
+
+@dataclass(frozen=True, slots=True)
+class AdoptionUpstreamCheck:
+    """A read-only comparison, optionally carrying one separately confirmable new-version plan."""
+
+    adopted: AdoptedArtifact
+    disposition: AdoptionUpstreamDisposition
+    resolved_commit: str | None
+    observed_coordinate: str | None = None
+    observed_input_digest: str | None = None
+    new_version_required: bool = False
+    details: tuple[str, ...] = ()
+    proposal: PreparedAdoption | None = field(default=None, repr=False, compare=False)
+
+    @property
+    def recorded_commit(self) -> str:
+        return self.adopted.recorded_commit
+
+
+@dataclass(frozen=True, slots=True)
 class RepositoryScan:
     """One pinned read-only observation of a repository that is not a Source."""
 
@@ -195,6 +242,86 @@ def _registry_alias(registry_root: str) -> Result[SourceAlias]:
         return Ok(SourceAlias(str(parsed.value.source_id)))
     except ValueError as error:
         return _error(str(error))
+
+
+def _version_coordinate(version: RegistryArtifactVersion) -> str:
+    coordinate = version.coordinate
+    return f"{coordinate.artifact}@{coordinate.version}"
+
+
+def _adoption_record(
+    version: RegistryArtifactVersion,
+    files: dict[str, SnapshotEntry],
+) -> Result[AdoptedArtifact | None]:
+    identity = version.coordinate.artifact
+    base = f"artifacts/{identity.kind}/{identity.name}/{version.coordinate.version}"
+    entry = files.get(f"{base}/provenance.json")
+    if entry is None:
+        return _error(f"adopted package has no provenance: {_version_coordinate(version)}")
+    if entry.kind is not SnapshotEntryKind.FILE:
+        return _error(f"adopted package provenance is not a file: {_version_coordinate(version)}")
+    parsed = parse_provenance(entry.content, path=f"{base}/provenance.json")
+    if isinstance(parsed, Err):
+        return parsed
+    raw = dict(parsed.value.extensions).get(REPOSITORY_ADOPTION_RECORD)
+    if raw is None:
+        return Ok(None)
+    ref = raw.get("ref") if isinstance(raw, JsonObject) else None
+    if (
+        not isinstance(ref, str)
+        or not ref
+        or ref != ref.strip()
+        or any(character in ref for character in "\r\n")
+    ):
+        return _error(
+            f"{REPOSITORY_ADOPTION_RECORD} has no valid branch or tag: "
+            f"{_version_coordinate(version)}"
+        )
+    origin = parsed.value.origin
+    if str(origin.input_digest) != str(version.input_digest):
+        return _error(
+            f"adopted package provenance disagrees with its Registry version: "
+            f"{_version_coordinate(version)}"
+        )
+    return Ok(
+        AdoptedArtifact(
+            _version_coordinate(version),
+            origin.url,
+            ref,
+            origin.resolved_commit,
+            str(origin.path),
+            str(origin.input_digest),
+        )
+    )
+
+
+def list_adopted_artifacts(*, registry_root: str) -> Result[tuple[AdoptedArtifact, ...]]:
+    """Read only packages created by repository adoption from one valid Registry checkout."""
+
+    workspace = FilesystemRegistryWorkspace(registry_root).snapshot()
+    if isinstance(workspace, Err):
+        return workspace
+    versions = load_registry_versions(workspace.value)
+    if isinstance(versions, Err):
+        return versions
+    validated = validate_promoted_registry(workspace.value, versions.value)
+    if isinstance(validated, Err):
+        return validated
+    files = {
+        str(entry.path): entry
+        for entry in workspace.value.entries
+        if entry.kind is SnapshotEntryKind.FILE
+    }
+    adopted = []
+    for version in versions.value:
+        if version.mode is not PromotionMode.VENDORED:
+            continue
+        record = _adoption_record(version, files)
+        if isinstance(record, Err):
+            return record
+        if record.value is not None:
+            adopted.append(record.value)
+    return Ok(tuple(sorted(adopted, key=lambda item: item.coordinate)))
 
 
 def scan_repository(
@@ -302,6 +429,125 @@ def _scanned(bundle: CandidateBundle) -> ScannedArtifact:
             if str(entry.path).startswith("payload/")
         ),
         candidate.state in _ADOPTABLE,
+    )
+
+
+def check_adopted_upstream(
+    coordinate: str,
+    *,
+    registry_root: str,
+    acquire: RepositoryAcquirer = default_native_acquirer,
+    policy: EffectivePolicy = _DEFAULT_POLICY,
+) -> Result[AdoptionUpstreamCheck]:
+    """Re-resolve one adopted package's recorded ref and compare its declared artifact input.
+
+    This is deliberately not a Source sync: it saves no observation and changes no Candidate
+    history. A validated new upstream version may carry an ordinary adoption plan, but applying
+    that plan remains a separate review-digest confirmation.
+    """
+
+    listed = list_adopted_artifacts(registry_root=registry_root)
+    if isinstance(listed, Err):
+        return listed
+    adopted = next((item for item in listed.value if item.coordinate == coordinate), None)
+    if adopted is None:
+        return _error(
+            f"the Registry has no repository-adopted artifact named {coordinate}",
+            "Choose an adopted artifact from the Registry, then check it again.",
+        )
+    acquired = acquire(adopted.url, adopted.ref)
+    if isinstance(acquired, Err):
+        return Ok(
+            AdoptionUpstreamCheck(
+                adopted,
+                AdoptionUpstreamDisposition.UNREACHABLE,
+                None,
+                details=tuple(item.message for item in acquired.diagnostics),
+            )
+        )
+    if acquired.value.url != adopted.url or acquired.value.requested_ref != adopted.ref:
+        return _error("the upstream acquisition does not match the adopted URL and ref")
+    compiled = compile_author_snapshot(
+        acquired.value.snapshot,
+        source_alias=_scan_alias(adopted.url),
+        source=adopted.url,
+        revision=acquired.value.resolved_commit,
+        provenance_extensions=((REPOSITORY_ADOPTION_RECORD, JsonObject((("ref", adopted.ref),))),),
+    )
+    if isinstance(compiled, Err):
+        return Ok(
+            AdoptionUpstreamCheck(
+                adopted,
+                AdoptionUpstreamDisposition.INVALID_MANIFEST,
+                acquired.value.resolved_commit,
+                details=tuple(item.message for item in compiled.diagnostics),
+            )
+        )
+    observed = next(
+        (item for item in compiled.value if str(item.manifest_path) == adopted.manifest_path),
+        None,
+    )
+    if observed is None:
+        return Ok(
+            AdoptionUpstreamCheck(
+                adopted,
+                AdoptionUpstreamDisposition.MISSING,
+                acquired.value.resolved_commit,
+            )
+        )
+    identity = observed.package.coordinate.artifact
+    observed_coordinate = f"{identity}@{observed.package.coordinate.version}"
+    if str(observed.input_digest) == adopted.input_digest:
+        return Ok(
+            AdoptionUpstreamCheck(
+                adopted,
+                AdoptionUpstreamDisposition.UNCHANGED,
+                acquired.value.resolved_commit,
+                observed_coordinate,
+                str(observed.input_digest),
+            )
+        )
+
+    new_version_required = observed_coordinate == adopted.coordinate
+    proposal = None
+    if not new_version_required:
+        rescanned = scan_repository(
+            url=adopted.url,
+            ref=adopted.ref,
+            registry_root=registry_root,
+            acquire=lambda _url, _ref: acquired,
+            policy=policy,
+        )
+        if isinstance(rescanned, Err):
+            return rescanned
+        scanned = next(
+            (
+                item
+                for item in rescanned.value.artifacts
+                if item.manifest_path == adopted.manifest_path
+            ),
+            None,
+        )
+        if scanned is not None and scanned.adoptable:
+            prepared = prepare_adoption(
+                rescanned.value,
+                (scanned.coordinate,),
+                registry_root=registry_root,
+                policy=policy,
+            )
+            if isinstance(prepared, Err):
+                return prepared
+            proposal = prepared.value
+    return Ok(
+        AdoptionUpstreamCheck(
+            adopted,
+            AdoptionUpstreamDisposition.CHANGED,
+            acquired.value.resolved_commit,
+            observed_coordinate,
+            str(observed.input_digest),
+            new_version_required,
+            proposal=proposal,
+        )
     )
 
 

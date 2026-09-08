@@ -30,9 +30,13 @@ from agent_artifacts.domain.candidates import (
     FindingSeverity,
     assess_candidate,
 )
+from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.result import Err, Ok
 from agent_artifacts.io.registry_adoption import (
+    AdoptionUpstreamDisposition,
     apply_adoption,
+    check_adopted_upstream,
+    list_adopted_artifacts,
     prepare_adoption,
     scan_repository,
 )
@@ -352,6 +356,160 @@ class SelectiveAdoptionTest(_Lab):
 
         self.assertIsInstance(refused, Err)
         self.assertFalse(self._package("skill", "brainstorming", "2.1.0").exists())
+
+
+class AdoptedUpstreamCheckTest(_Lab):
+    """The explicit check follows the recorded ref without turning it into a subscription."""
+
+    coordinate = "skill/brainstorming@2.1.0"
+
+    def setUp(self) -> None:
+        super().setUp()
+        scanned = self._scan()
+        assert isinstance(scanned, Ok), scanned
+        prepared = prepare_adoption(
+            scanned.value, (self.coordinate,), registry_root=str(self.registry)
+        )
+        assert isinstance(prepared, Ok), prepared
+        applied = apply_adoption(
+            prepared.value, prepared.value.review_digest, registry_root=str(self.registry)
+        )
+        assert isinstance(applied, Ok), applied
+
+    def _check(self):
+        return check_adopted_upstream(
+            self.coordinate,
+            registry_root=str(self.registry),
+            acquire=self._acquire,
+        )
+
+    def _commit(self, message: str) -> str:
+        _git(self.author.path, "add", "-A")
+        _git(self.author.path, "commit", "-m", message)
+        return _git(self.author.path, "rev-parse", "HEAD")
+
+    def test_the_registry_lists_only_packages_that_record_repository_adoption(self) -> None:
+        listed = list_adopted_artifacts(registry_root=str(self.registry))
+
+        self.assertIsInstance(listed, Ok, listed)
+        assert isinstance(listed, Ok)
+        by_coordinate = {item.coordinate: item for item in listed.value}
+        self.assertEqual(tuple(by_coordinate), (self.coordinate,))
+        self.assertEqual(by_coordinate[self.coordinate].url, self.url)
+        self.assertEqual(by_coordinate[self.coordinate].ref, "main")
+        self.assertEqual(by_coordinate[self.coordinate].recorded_commit, self.author.head)
+
+    def test_an_unchanged_upstream_is_reported_and_the_check_writes_nothing(self) -> None:
+        before = _git(self.registry, "status", "--porcelain=v1", "--untracked-files=all")
+
+        checked = self._check()
+
+        self.assertIsInstance(checked, Ok, checked)
+        assert isinstance(checked, Ok)
+        self.assertEqual(checked.value.disposition, AdoptionUpstreamDisposition.UNCHANGED)
+        self.assertEqual(checked.value.resolved_commit, self.author.head)
+        self.assertIsNone(checked.value.proposal)
+        self.assertEqual(
+            _git(self.registry, "status", "--porcelain=v1", "--untracked-files=all"), before
+        )
+
+    def test_an_unrelated_commit_does_not_make_the_adopted_input_look_changed(self) -> None:
+        (self.author.path / "README.md").write_text(
+            "# Superpowers\n\nMore prose.\n", encoding="utf-8"
+        )
+        moved = self._commit("change unrelated prose")
+
+        checked = self._check()
+
+        assert isinstance(checked, Ok), checked
+        self.assertEqual(checked.value.disposition, AdoptionUpstreamDisposition.UNCHANGED)
+        self.assertEqual(checked.value.resolved_commit, moved)
+        self.assertNotEqual(checked.value.recorded_commit, moved)
+
+    def test_changed_payload_without_a_new_version_is_not_given_an_overwrite_plan(self) -> None:
+        skill = self.author.path / "skills" / "brainstorming" / "SKILL.md"
+        skill.write_text("# brainstorming changed\n", encoding="utf-8")
+        self._commit("change payload without version")
+
+        checked = self._check()
+
+        assert isinstance(checked, Ok), checked
+        self.assertEqual(checked.value.disposition, AdoptionUpstreamDisposition.CHANGED)
+        self.assertEqual(checked.value.observed_coordinate, self.coordinate)
+        self.assertTrue(checked.value.new_version_required)
+        self.assertIsNone(checked.value.proposal)
+
+    def test_a_changed_manifest_with_a_new_version_proposes_one_new_immutable_copy(self) -> None:
+        manifest = self.author.path / "skills" / "brainstorming" / "aart.yaml"
+        manifest.write_text(OTHER_MANIFEST.replace("2.1.0", "2.2.0"), encoding="utf-8")
+        skill = self.author.path / "skills" / "brainstorming" / "SKILL.md"
+        skill.write_text("# brainstorming 2.2\n", encoding="utf-8")
+        self._commit("release brainstorming 2.2")
+
+        checked = self._check()
+
+        assert isinstance(checked, Ok), checked
+        self.assertEqual(checked.value.disposition, AdoptionUpstreamDisposition.CHANGED)
+        self.assertEqual(checked.value.observed_coordinate, "skill/brainstorming@2.2.0")
+        self.assertFalse(checked.value.new_version_required)
+        self.assertIsNotNone(checked.value.proposal)
+        assert checked.value.proposal is not None
+        self.assertEqual(checked.value.proposal.selected, ("skill/brainstorming@2.2.0",))
+        self.assertTrue(
+            any("/2.2.0/" in path for path in checked.value.proposal.changed_paths),
+            checked.value.proposal.changed_paths,
+        )
+
+    def test_a_removed_manifest_is_missing_not_unreachable(self) -> None:
+        manifest = self.author.path / "skills" / "brainstorming" / "aart.yaml"
+        manifest.unlink()
+        self._commit("remove brainstorming manifest")
+
+        checked = self._check()
+
+        assert isinstance(checked, Ok), checked
+        self.assertEqual(checked.value.disposition, AdoptionUpstreamDisposition.MISSING)
+        self.assertIsNotNone(checked.value.resolved_commit)
+
+    def test_an_upstream_that_cannot_be_read_is_unreachable_not_unchanged(self) -> None:
+        refused = Err(
+            (
+                Diagnostic(
+                    DiagnosticCode("source-unreachable"),
+                    Severity.ERROR,
+                    "the upstream host did not answer",
+                ),
+            )
+        )
+
+        checked = check_adopted_upstream(
+            self.coordinate,
+            registry_root=str(self.registry),
+            acquire=lambda _url, _ref: refused,
+        )
+
+        assert isinstance(checked, Ok), checked
+        self.assertEqual(checked.value.disposition, AdoptionUpstreamDisposition.UNREACHABLE)
+        self.assertIsNone(checked.value.resolved_commit)
+        self.assertIn("did not answer", "\n".join(checked.value.details))
+
+    def test_an_invalid_current_manifest_is_neither_missing_nor_unreachable(self) -> None:
+        manifest = self.author.path / "skills" / "brainstorming" / "aart.yaml"
+        manifest.write_text("schema: aart.dev/skill/v1\npayload: []\n", encoding="utf-8")
+        self._commit("break brainstorming declaration")
+
+        checked = self._check()
+
+        assert isinstance(checked, Ok), checked
+        self.assertEqual(checked.value.disposition, AdoptionUpstreamDisposition.INVALID_MANIFEST)
+        self.assertIsNotNone(checked.value.resolved_commit)
+
+
+class SelectiveAdoptionInvariantTest(_Lab):
+    """The adoption invariants whose checks need an otherwise untouched Registry."""
+
+    def _package(self, kind: str, name: str, version: str) -> Path:
+        return self.registry / "artifacts" / kind / name / version
 
     def test_adopting_the_same_version_twice_is_refused_as_immutable(self) -> None:
         scanned = self._scan()

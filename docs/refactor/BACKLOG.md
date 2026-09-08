@@ -2365,8 +2365,14 @@ manifest path and input digest, but not the branch/tag whose movement must be ch
 adoption now adds immutable `aart.repository-adoption: {ref: ...}` provenance. It is package
 metadata rather than Source configuration and does not change the author's canonical input digest.
 
-**Still open.** There is no machine-complete CLI equivalent yet, and the explicit per-artifact
-`Check upstream` action over that record is not built.
+**Application check built (D-190).** `list_adopted_artifacts` reads only packages carrying the
+adoption record from a validated Registry snapshot. `check_adopted_upstream` resolves the recorded
+ref once and compares the manifest's exact input digest, so unrelated commit movement stays
+unchanged. Changed, missing, unreachable and invalid-manifest are distinct. A changed declaration
+at the published version carries no plan and says a new version is required; a validated version
+bump carries an ordinary `PreparedAdoption`, still behind its review digest.
+
+**Still open.** The application check and scan/select/adopt flow need TUI/CLI public projections.
 
 Evidence/links: `registry scan`, `discover`, `vendor`, `vendor-batch`;
 `protocol/authoring.py::compile_author_snapshot`; `registry_commands/planning.py`;

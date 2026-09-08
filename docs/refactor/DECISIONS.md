@@ -4225,3 +4225,26 @@ manifest and selected payload still determine `origin.input_digest`. Thus the re
 alter an existing published package, but adding acquisition metadata does not invent a content
 change. The RED read the real adopted `provenance.json` and failed because the key was absent;
 `tests/registry_repository_scan_test.py` now holds the ref as `main` over a real Git repository.
+
+## D-190 — An upstream check compares declared input, and only a new version can become a proposal
+
+`check_adopted_upstream` is an explicit read, not a miniature Source sync. It validates the current
+Registry version/object binding, reads the adoption record, acquires that URL/ref once, and saves no
+snapshot or Candidate history. The comparison is `origin.input_digest` against a freshly compiled
+manifest input digest. A branch may move because README or other undeclared files changed; treating
+commit inequality as artifact drift would be a false positive, and a targeted mutation replacing
+the input comparison with commit comparison is killed by the real-Git unrelated-change test.
+
+The answer is a typed five-way disposition: unchanged, changed, missing, unreachable or
+invalid-manifest. In particular an acquisition failure cannot be presented as missing or current,
+and a removed declaration cannot be presented as a network failure. Diagnostics from unreachable
+and invalid observations are retained as data on the read-only result.
+
+Immutable publication decides proposal shape. Changed bytes at the already published coordinate
+set `new_version_required` and carry no plan. If the manifest declares a different version and the
+ordinary validation pipeline clears it, the result carries the existing `PreparedAdoption` for
+that one version. It is still only a prepared transaction: applying it requires the same exact
+review digest as initial adoption. No path rewrites the published version. Evidence is eight
+scenarios in `tests/registry_repository_scan_test.py`, including real Git ref movement, unrelated
+commit churn, versioned and unversioned payload movement, deletion, invalid YAML and an unreachable
+origin. TUI and CLI projections remain B-095.

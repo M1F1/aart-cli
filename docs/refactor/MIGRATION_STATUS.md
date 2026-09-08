@@ -232,7 +232,15 @@ The first `Check upstream` RED exposed one missing input and D-189 records the c
 adopted package pinned the commit it observed but did not retain the branch/tag that can move. New
 adoptions add `aart.repository-adoption: {ref: ...}` to the package's immutable native provenance.
 It writes no Source and does not enter the author's canonical input digest; it only gives the
-explicit check an honest acquisition target. The check and CLI equivalent remain open.
+explicit check an honest acquisition target.
+
+The **application check is built and green** (D-190). It reads adoption records only after
+validating the Registry's immutable version/object bindings, reacquires the recorded ref once, and
+compares the explicit manifest input digest rather than commit movement. Unchanged, changed,
+missing, unreachable and invalid-manifest are separate results. Same-version movement cannot carry
+an overwrite plan; a validated upstream version bump carries a normal `PreparedAdoption` and still
+needs its separate digest confirmation. Eight real-Git scenarios hold it. TUI and CLI projections
+remain open.
 
 ### CP-14 current increment (2026-09-02)
 

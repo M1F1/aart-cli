@@ -857,5 +857,10 @@ D-189 closes the first prerequisite found while starting that check. The adopted
 the URL and a pinned commit but not the moving branch/tag, so reacquisition could only prove that an
 old commit still equalled itself. New adoptions carry the ref in immutable namespaced provenance;
 this remains package metadata, creates no Source and leaves the author's canonical input digest
-unchanged. The check itself and CLI equivalent remain open, and CP-18's historical verdict is still
-unchanged.
+unchanged. CP-18's historical verdict is still unchanged.
+
+D-190 adds the read-only application check. It validates the Registry record, resolves the stored
+ref, recompiles the explicit manifest, and compares its exact input digest. Commit-only churn stays
+unchanged; missing, unreachable and invalid declarations cannot collapse into that answer. A
+same-version change has no plan, while a validated new version carries the existing atomic adoption
+plan behind its digest. Public TUI/CLI projections remain B-095; CP-18 stays historically VERIFIED.
