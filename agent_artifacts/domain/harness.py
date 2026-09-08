@@ -446,6 +446,13 @@ _CLAUDE_EVENTS = (
 
 #: Measured hook locations. Tabnine has no user-scope entry on purpose: that build documents no
 #: user-global hook discovery target, and inventing one would install a hook nothing ever runs.
+#:
+#: Codex and OpenCode are absent for reasons of their own. OpenCode's event model was not measured.
+#: Codex's was, and the absence is the stronger for it (`B-097`): `codex features list` reports
+#: `hooks` stable and enabled, but the configuration is reached through a path in `config.toml`
+#: (the TOML problem of `B-096`), project-local hooks stay disabled until the operator trusts the
+#: project, and every new or changed hook is held for interactive review before it runs. A file
+#: written here would not run, and a receipt saying it was installed would be false.
 HOOK_TARGETS: dict[tuple[str, Scope], HookTarget] = {
     ("claude", Scope.PROJECT): HookTarget(
         "claude",

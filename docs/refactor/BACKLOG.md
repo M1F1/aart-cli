@@ -2427,3 +2427,43 @@ its CLI contract. Neither option should be chosen without measuring it.
 
 Evidence/links: `domain/harness.py::MCP_TARGETS`; `io/harness.py::LocalHarnessRegistry`;
 `tests/codex_harness_test.py`; QA-012; B-086; D-193.
+
+## B-097 — Codex hooks exist and are enabled, but a written file cannot make one run
+
+Found: QA-012 harness measurement (2026-09-08) · Severity: medium · Status: open
+
+`D-193` left the Codex hook row absent on the grounds that nothing had been measured. Measuring it
+changes the reason rather than the answer, so this entry records what was found so that the absence
+is a decision and not an omission.
+
+`codex features list` reports `hooks` as `stable` and enabled, and `plugin_hooks` as `removed` —
+hooks are a first-class configured capability of Codex CLI 0.152.0, not a plugin extension. The
+shipped binary names twelve events (`PreToolUse`, `PermissionRequest`, `PostToolUse`, `PreCompact`,
+`PostCompact`, `SessionStart`, `SessionEnd`, `SubagentStart`, `SubagentStop`, `Stop`,
+`UserPromptSubmit`, `Interrupt`) and four handler kinds (command, async, MCP server, managed).
+
+Three properties, read out of that build, are why no row was added:
+
+1. The hook configuration is reached through a `hooks` key in `config.toml` whose value is a path.
+   That is the same TOML editing problem `B-096` documents, with the same `tomllib`/INV-071 answer.
+2. Project-local hooks are disabled until the project is trusted: "Project-local config, hooks, and
+   exec policies are disabled in the following folders until the project is trusted, but skills
+   still load." The same trust decision `B-096` measured for MCP applies here and is the operator's.
+3. Every new or changed hook is held for interactive review before it can run — the build carries
+   "New hook - review required", "*n* hooks need review before they can run" and a
+   `--dangerously-bypass-hook-trust` escape hatch that exists precisely to skip it.
+
+So even with a valid file in the right place, an AART-written Codex hook would not run until a human
+opened Codex and trusted it. Writing one and reporting success would be a receipt for something that
+did not happen. A future slice should decide whether AART installs a hook and tells the operator
+plainly that Codex will ask them to review it, which is a defensible product answer, but it is a
+product decision and not a table row.
+
+Not measured, and the first thing to measure next: whether the hooks file has a default location
+(`$CODEX_HOME/hooks.json` was written into an isolated `CODEX_HOME` and neither confirmed nor
+refused, because the `hooks/list` app-server method did not answer the probe's request shape), and
+whether that file is JSON or TOML — the binary contains both "failed to serialize hooks.json" and
+"failed to parse TOML hooks in", so it may accept either or the pointer and the file may differ.
+
+Evidence/links: `codex features list`; strings measured from Codex CLI 0.152.0;
+`domain/harness.py::HOOK_TARGETS`; `tests/delivery_targets_test.py`; QA-012; B-086; B-096; D-193.

@@ -269,9 +269,20 @@ as the name of an unmeasured harness now name `cursor`, which genuinely is one. 
 `tests/opencode_harness_test.py` (9 tests, two of which run the installed OpenCode); six targeted
 mutations, all killed.
 
-**Next:** QA-012's own MCP (B-096) and hook halves remain, as do OpenCode's guidelines and hooks.
-After those, the manual-acceptance batch is handed back for retest and the full `make quality` and
-`make integration` gates run.
+Codex hooks were then measured, and the measurement kept the row out rather than putting one in
+(D-195, B-097). `codex features list` reports `hooks` stable and enabled — a first-class configured
+capability, not a plugin extension, with twelve events and four handler kinds. What refuses it is
+that the configuration is reached through a path key in `config.toml` (B-096's TOML problem
+unchanged), that project-local hooks stay disabled until the operator trusts the project, and that
+every new or changed hook is held for interactive review before it runs. AART could write the file
+and report success, and the hook still would not run; a receipt for something that did not happen is
+worse than a refusal by name, so `hook_target("codex", …)` keeps raising.
+
+**Next:** QA-012's MCP half stays blocked on B-096 — the two measured leads are a TOML editor that
+preserves what it did not write, or delegating to `codex mcp add` — and its hook half is now a
+product question (B-097) rather than a measurement one. OpenCode's guidelines and hooks are
+unmeasured. Nothing else in the QA-001–QA-021 batch is open, so the batch is handed back for manual
+retest with the full `make quality` and `make integration` gates run.
 
 On top of that, Maintainer screen 31 now offers `a` Add Source: a separate `SourceDraft` form (31a)
 and review (31b) that accept only `source-git`/`source-local`, refuse `registry-git` by name, never

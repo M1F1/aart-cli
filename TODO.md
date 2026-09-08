@@ -69,7 +69,10 @@ Each new entry records:
       (D-193, 10 tests, two of which run the installed Codex). The expectation above named
       `.agents/skills`; measurement found that is the cross-vendor interop root Codex also migrates
       other agents from, and `.codex/skills` is its own. MCP stays refused by name because Codex
-      keeps servers in TOML (B-096); hooks are unmeasured.
+      keeps servers in TOML (B-096). Hooks are now measured and still refused (B-097): `codex
+      features list` reports them stable and enabled, but they are configured through a path in
+      `config.toml`, project-local hooks are disabled until the operator trusts the project, and
+      every new or changed hook is held for interactive review — a file AART wrote would not run.
 
 ### Fixed — awaiting manual retest
 

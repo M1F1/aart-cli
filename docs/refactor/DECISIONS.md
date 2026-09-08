@@ -4433,3 +4433,29 @@ user memory at the home root, and the typed shape leaking into Claude.
 `QA-011` is therefore closed for Skills, instructions and MCP at both scopes, with OpenCode
 selectable in the TUI through the union harness set `D-193` introduced. Guidelines and hooks stay
 refused by name until someone measures them.
+
+## D-195 — Codex hooks stay absent because they were measured, not because they were not
+
+`D-193` left `HOOK_TARGETS` without a Codex row and said so honestly: nothing had been measured, and
+a guessed slot is worse than none. Measuring it now does not add the row, and the reason is worth
+recording, because "we did not look" and "we looked and a written file cannot work" are different
+claims and only the second is durable.
+
+`codex features list` reports `hooks` as `stable` and enabled and `plugin_hooks` as `removed`, so
+hooks in Codex CLI 0.152.0 are a first-class configured capability rather than a plugin extension.
+The build names twelve events and four handler kinds. What stops the row is not absence but three
+measured properties: the configuration is reached through a `hooks` path key in `config.toml`, which
+is `B-096`'s TOML problem unchanged; project-local hooks stay disabled until the operator trusts the
+project, which is the same trust decision `B-096` measured for MCP and is not AART's to make; and
+every new or changed hook is held for interactive review before it runs, which the build's own
+`--dangerously-bypass-hook-trust` flag exists to skip.
+
+The consequence is a receipt question, not a plumbing question. AART could write a file and report a
+hook installed, and the hook would not run until a person opened Codex and trusted it. A receipt for
+something that did not happen is worse than a refusal by name, so the refusal stands. `B-097` carries
+the finding, including the two things deliberately left unmeasured — whether the hooks file has a
+default location and whether it is JSON or TOML, since the binary carries error strings for both.
+
+Whether AART should install a hook and tell the operator plainly that Codex will ask them to review
+it is a defensible product answer and a reasonable future slice. It is a product decision about what
+a receipt means, and it does not belong in a target table.
