@@ -869,4 +869,11 @@ D-191 supplies the TUI projection. Registry `u` opens adopted-package screen 46f
 the focused coordinate, and 46g keeps all five application dispositions visible. A proposal does
 not become a write on that result screen: `a` enters the existing 46e transaction review and Enter
 must confirm its digest. A production-composition E2E performs the full real-Git 2.1.0 → 2.2.0
-sequence without rewriting 2.1.0. Only B-095's CLI projection remains; CP-18 is unchanged.
+sequence without rewriting 2.1.0.
+
+D-192 closes B-095 with the CLI projection. `aart registry adopt` and `aart registry check-upstream`
+call the same application functions the TUI does, name their phase in the payload, write only under
+`--yes`, verify `--expect` whenever it is given, and sort the machine-readable listing so it does not
+reorder itself between runs. Eight CLI tests over the real public entry point, a real Git repository
+and a real Registry checkout; five targeted mutations, all killed. QA-021 moves to *fixed, awaiting
+manual retest*; CP-18 is unchanged.

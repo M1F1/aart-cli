@@ -4272,3 +4272,51 @@ Focused evidence is 51 tests across adoption, navigation and the no-command-in-T
 targeted mutations were killed: moving the Registry key, dropping the focused coordinate at the
 check port, and binding the proposal to the wrong action so confirmation cannot execute. The
 machine-complete CLI remains B-095.
+
+## D-192 — The adoption CLI is one command per question, and `--yes` is the only thing that writes
+
+`B-095` requires the one-off adoption path to be machine-complete on the public CLI, not only in the
+TUI. `aart registry adopt` and `aart registry check-upstream` are that projection, and they are a
+skin over `io/registry_adoption.py`: no planning, no discovery and no provenance logic lives in
+`commands/registry.py`, so the CLI and the TUI cannot drift into two different answers about what
+adopting means.
+
+**Selection is what turns looking into a transaction.** `registry adopt --url URL --ref REF` with no
+`--artifact` is a complete answer on its own: it reports every coordinate the repository declares and
+writes nothing, because an operator has to be able to see what is there before naming any of it.
+Repeating `--artifact KIND/NAME@VERSION` prepares exactly that selection and reports the review
+digest and the paths that would change, still writing nothing. `--yes` is the only thing that
+applies, and it applies the transaction the same invocation just prepared. Three phases —
+`scan`, `review`, `adopted-local` — are named in the payload rather than inferred from which keys are
+present, and `applied` is stated explicitly in all three.
+
+**`--expect` binds a finalization to the review that produced it.** It is optional, because a single
+`--yes` invocation reviews and applies the same plan; it is verified whenever given, because the
+repository can move between two invocations, and the digest is the only thing that can notice. On
+`check-upstream` the review and the finalization are necessarily two acquisitions, so a stale
+`--expect` there refuses rather than adopting whatever upstream happens to declare now.
+
+**Checking upstream never rewrites a published version.** The command reports the D-190 disposition
+as it is — unchanged, changed, missing, unreachable, invalid-manifest are five different operator
+situations, not one failure — and carries the proposal only when upstream released a new version.
+`--yes` applies that proposal as an ordinary adoption, so the old package's bytes are untouched and
+the new version appears beside it. When upstream changed without versioning, the command says so and
+proposes nothing, because INV-203 makes the published coordinate immutable and there is nothing
+honest to offer.
+
+**The machine-readable listing is sorted.** The compiler's order is an implementation detail of how a
+snapshot was walked; a listing that reorders itself between runs is not machine-readable. The command
+sorts by coordinate, and a test reverses what the scan hands over to prove the sort belongs to the
+command rather than to this repository's layout.
+
+**Evidence.** `tests/registry_adoption_cli_test.py` (8 tests) drives the real public CLI over a real
+Git repository and a real Registry checkout, substituting only transport: the scan lists every
+manifest and leaves `git status` unchanged; a selection is reviewed before any write; `--yes` copies
+only the declared payload and saves no Source; an unchanged check writes nothing and offers no
+proposal; a released upstream version is reviewed and then added without touching the old package's
+bytes; and a stale `--expect` refuses on both commands. `tests/registry_cli_test.py`'s action-set
+contract now names `adopt` and `check-upstream`. Five targeted mutations, all killed; three of them
+found claims that were not yet held — both `--expect` checks and the listing order.
+
+With this, `B-095` is complete: application (D-187), TUI adoption (D-188/D-189), upstream check
+(D-190/D-191) and the CLI projection.

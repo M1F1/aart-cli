@@ -899,6 +899,72 @@ def build_parser() -> argparse.ArgumentParser:
     _add_registry_finalize(p_candidate_promote)
     _add_json(p_candidate_promote)
 
+    p_adopt = registry_sub.add_parser(
+        "adopt",
+        help="scan explicit manifests and adopt selected artifacts without subscribing",
+        description=(
+            "Acquire one credential-free Git URL/ref without saving it as a Source, compile only "
+            "explicit aart.yaml/aart.json manifests, and report them. Repeat --artifact to prepare "
+            "selected immutable Registry copies. Without --yes this is review-only; with --yes it "
+            "writes the reviewed local transaction and never commits, pushes or merges."
+        ),
+    )
+    p_adopt.add_argument(
+        "--source",
+        dest="source_dir",
+        required=True,
+        metavar="DIR",
+        help="writable local registry Git checkout",
+    )
+    p_adopt.add_argument(
+        "--url",
+        dest="native_url",
+        required=True,
+        metavar="URL",
+        help="credential-free Git repository URL",
+    )
+    p_adopt.add_argument("--ref", required=True, metavar="REF", help="branch or tag to inspect")
+    p_adopt.add_argument(
+        "--artifact",
+        action="append",
+        dest="names",
+        metavar="KIND/NAME@VERSION",
+        help="exact scanned coordinate to adopt (repeatable; omit to scan only)",
+    )
+    _add_registry_finalize(p_adopt)
+    p_adopt.add_argument(
+        "--expect",
+        metavar="DIGEST",
+        help="also require the freshly prepared transaction to match this review digest",
+    )
+    _add_json(p_adopt)
+
+    p_check_adoption = registry_sub.add_parser(
+        "check-upstream",
+        help="compare one adopted artifact with its recorded upstream branch or tag",
+        description=(
+            "Read one repository-adopted Registry package, resolve its recorded branch or tag, "
+            "and distinguish unchanged, changed, missing, unreachable and invalid declarations. "
+            "A validated new version is review-only unless --yes is present; --expect can bind "
+            "finalization to a digest returned by a prior JSON review."
+        ),
+    )
+    p_check_adoption.add_argument(
+        "--source",
+        dest="source_dir",
+        required=True,
+        metavar="DIR",
+        help="writable local registry Git checkout",
+    )
+    p_check_adoption.add_argument("names", nargs=1, metavar="KIND/NAME@VERSION")
+    _add_registry_finalize(p_check_adoption)
+    p_check_adoption.add_argument(
+        "--expect",
+        metavar="DIGEST",
+        help="require the proposed transaction to match this prior review digest",
+    )
+    _add_json(p_check_adoption)
+
     p_discover = registry_sub.add_parser(
         "discover",
         help="scan a foreign checkout and emit a reviewable vendoring manifest",

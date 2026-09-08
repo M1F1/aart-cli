@@ -57,6 +57,9 @@ Each new entry records:
       Evidence: Codex CLI 0.152.0 is installed locally; Codex is absent from every canonical target
       table and from the dormant built-in profile registry
       Fix: pending
+
+### Fixed — awaiting manual retest
+
 - [ ] **QA-021 — Registry cannot one-off scan YAML manifests and vendor selected artifacts.**
       Stage: optional artifact-scoped onboarding from an external repository
       Surface: Maintainer → Registry
@@ -71,17 +74,16 @@ Each new entry records:
       for conventional shapes, and `vendor` ignores YAML and requires repeated metadata flags
       Evidence: no public command or TUI action composes author-manifest discovery with selected
       vendoring; existing commands each stop at a different boundary
-      Fix: partial — `io/registry_adoption.py` now composes scan → selection → atomic vendored
+      Fix: complete — `io/registry_adoption.py` composes scan → selection → atomic vendored
       adoption with pinned provenance and saves no Source (D-187, 14 tests). Maintainer Registry
-      now exposes that flow as `s` Scan Repository: form 46c, selectable result 46d and exact local
-      adoption review 46e (D-188, 8 tests). Adopted packages now also retain the moving branch/tag
-      as immutable namespaced provenance (D-189). The read-only application check now distinguishes
-      unchanged, changed, missing, unreachable and invalid manifests, and prepares a new immutable
-      version only after an upstream version bump (D-190, 8 tests). Maintainer Registry now exposes
-      `u` Check upstream as screens 46f/46g and reuses the exact adoption review for a proposal
-      (D-191). Only the machine-complete CLI projection remains pending.
-
-### Fixed — awaiting manual retest
+      exposes that flow as `s` Scan Repository: form 46c, selectable result 46d and exact local
+      adoption review 46e (D-188, 8 tests). Adopted packages retain the moving branch/tag as
+      immutable namespaced provenance (D-189). The read-only check distinguishes unchanged,
+      changed, missing, unreachable and invalid manifests, and prepares a new immutable version
+      only after an upstream version bump (D-190, 8 tests), reached as `u` Check upstream on
+      screens 46f/46g (D-191). `aart registry adopt` and `aart registry check-upstream` are the
+      machine-complete CLI projection: scan/review/apply phases, `--expect` verified whenever
+      given, sorted listings (D-192, 8 tests).
 
 - [ ] **QA-016 — A new Registry cannot be initialized through Maintainer TUI.** Screen 46 now
       offers `n` Initialize Registry with its own id/name/reporting/commit form (46a) and an exact

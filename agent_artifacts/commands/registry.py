@@ -40,6 +40,16 @@ from agent_artifacts.domain.diagnostics import (
 from agent_artifacts.domain.identifiers import SourceAlias
 from agent_artifacts.domain.registry import PromotionMode, RegistryArtifactVersion
 from agent_artifacts.domain.result import Err, Ok, Result
+from agent_artifacts.io.registry_adoption import (
+    AdoptionUpstreamCheck,
+    PreparedAdoption,
+    RepositoryScan,
+    ScannedArtifact,
+    apply_adoption,
+    check_adopted_upstream,
+    prepare_adoption,
+    scan_repository,
+)
 from agent_artifacts.io.registry_promotion import FilesystemPromotionOutput
 from agent_artifacts.io.registry_workspace import FilesystemRegistryWorkspace
 from agent_artifacts.model import Request
@@ -1084,6 +1094,236 @@ def _run_publish(request: Request) -> int:
     return _common.OK
 
 
+_NAME_THE_SCAN = (
+    "name the repository to look at: `aart registry adopt --source DIR --url URL --ref REF`",
+)
+_NAME_THE_ADOPTED = (
+    "name one adopted artifact, as `KIND/NAME@VERSION`; `aart registry adopt` without "
+    "`--artifact` lists what a repository declares",
+)
+
+
+def _scanned_artifact_data(item: ScannedArtifact) -> dict[str, object]:
+    return {
+        "coordinate": item.coordinate,
+        "kind": item.kind,
+        "name": item.name,
+        "version": item.version,
+        "summary": item.summary,
+        "manifest_path": item.manifest_path,
+        "input_digest": item.input_digest,
+        "state": item.state,
+        "adoptable": item.adoptable,
+        "payload_paths": list(item.payload_paths),
+    }
+
+
+def _prepared_adoption_data(prepared: PreparedAdoption) -> dict[str, object]:
+    return {
+        "url": prepared.url,
+        "ref": prepared.ref,
+        "resolved_commit": prepared.commit,
+        "selected": list(prepared.selected),
+        "review_digest": prepared.review_digest,
+        "changes": list(prepared.changed_paths),
+    }
+
+
+def _scan_data(scan: RepositoryScan) -> dict[str, object]:
+    return {
+        "url": scan.url,
+        "ref": scan.ref,
+        "resolved_commit": scan.commit,
+        "registry_alias": scan.registry_alias,
+        "manifest_count": scan.manifest_count,
+        "artifacts": [
+            _scanned_artifact_data(item)
+            for item in sorted(scan.artifacts, key=lambda item: item.coordinate)
+        ],
+    }
+
+
+def _print_scan(scan: RepositoryScan) -> None:
+    print(f"{scan.url} at {scan.ref} ({scan.commit})")
+    print(f"{scan.manifest_count} declared manifest(s); nothing was written and no Source saved")
+    for item in sorted(scan.artifacts, key=lambda entry: entry.coordinate):
+        mark = " " if item.adoptable else "!"
+        print(f"  {mark} {item.state:>8}  {item.coordinate}  {item.manifest_path}")
+
+
+def _print_adoption(prepared: PreparedAdoption, *, applied: bool) -> None:
+    print(f"{prepared.url} at {prepared.ref} ({prepared.commit})")
+    for coordinate in prepared.selected:
+        print(f"  adopt  {coordinate}")
+    print(f"review digest: {prepared.review_digest}")
+    for path in prepared.changed_paths:
+        print(f"  {path}")
+    if applied:
+        print("Written to the registry checkout. Not committed, not pushed, not merged.")
+    else:
+        print("Review only; nothing was written. Add `--yes` to apply exactly this transaction.")
+
+
+def _run_adopt(request: Request) -> int:
+    """Scan one repository that is not a Source, then review or apply a selection (`B-095`)."""
+
+    if request.source_dir is None or request.native_url is None or request.ref is None:
+        return _emit_error(
+            request, "adopt", _error("adoption needs a registry, a URL and a ref", _NAME_THE_SCAN)
+        )
+    scanned = scan_repository(url=request.native_url, ref=request.ref, registry_root=_root(request))
+    if isinstance(scanned, Err):
+        return _emit_error(request, "adopt", scanned)
+    selected = tuple(request.names)
+    if not selected:
+        # Scanning is the whole command when nothing is selected: an operator has to be able to see
+        # what a repository declares before naming any of it, and looking is not adopting.
+        if request.json:
+            print(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "ok": True,
+                        "operation": "registry.adopt",
+                        "phase": "scan",
+                        "applied": False,
+                        **_scan_data(scanned.value),
+                        "selected": [],
+                    },
+                    indent=2,
+                )
+            )
+        else:
+            _print_scan(scanned.value)
+        return _common.OK
+    prepared = prepare_adoption(scanned.value, selected, registry_root=_root(request))
+    if isinstance(prepared, Err):
+        return _emit_error(request, "adopt", prepared)
+    digest = prepared.value.review_digest
+    if request.expect is not None and request.expect != digest:
+        return _emit_error(
+            request,
+            "adopt",
+            _error(
+                f"the adoption changed since it was reviewed: expected {request.expect}, "
+                f"recomputed {digest}",
+                ("review the repository again, then finalize the digest that review reports",),
+            ),
+        )
+    if not request.yes:
+        if request.json:
+            print(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "ok": True,
+                        "operation": "registry.adopt",
+                        "phase": "review",
+                        "applied": False,
+                        **_prepared_adoption_data(prepared.value),
+                    },
+                    indent=2,
+                )
+            )
+        else:
+            _print_adoption(prepared.value, applied=False)
+        return _common.OK
+    applied = apply_adoption(prepared.value, digest, registry_root=_root(request))
+    if isinstance(applied, Err):
+        return _emit_error(request, "adopt", applied)
+    if request.json:
+        print(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "ok": True,
+                    "operation": "registry.adopt",
+                    "phase": "adopted-local",
+                    "applied": True,
+                    **_prepared_adoption_data(prepared.value),
+                },
+                indent=2,
+            )
+        )
+    else:
+        _print_adoption(prepared.value, applied=True)
+    return _common.OK
+
+
+def _upstream_check_data(check: AdoptionUpstreamCheck, *, applied: bool) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "ok": True,
+        "operation": "registry.check-upstream",
+        "coordinate": check.adopted.coordinate,
+        "url": check.adopted.url,
+        "ref": check.adopted.ref,
+        "recorded_commit": check.recorded_commit,
+        "resolved_commit": check.resolved_commit,
+        "disposition": check.disposition.value,
+        "observed_coordinate": check.observed_coordinate,
+        "observed_input_digest": check.observed_input_digest,
+        "new_version_required": check.new_version_required,
+        "details": list(check.details),
+        "applied": applied,
+        "proposal": (None if check.proposal is None else _prepared_adoption_data(check.proposal)),
+    }
+
+
+def _print_upstream_check(check: AdoptionUpstreamCheck, *, applied: bool) -> None:
+    print(f"{check.adopted.coordinate}: {check.disposition.value}")
+    print(f"  upstream: {check.adopted.url} at {check.adopted.ref}")
+    print(f"  adopted at {check.recorded_commit}; now {check.resolved_commit or 'unresolved'}")
+    for detail in check.details:
+        print(f"  {detail}")
+    if check.new_version_required:
+        # The published coordinate is immutable (INV-203). Upstream moved without releasing, so
+        # there is nothing to propose: the authors have to version the change themselves.
+        print("  upstream changed without a new version; the published copy stays as it is")
+    if check.proposal is not None:
+        _print_adoption(check.proposal, applied=applied)
+
+
+def _run_check_upstream(request: Request) -> int:
+    """Compare one adopted package with the ref it recorded, and never rewrite it (`B-095`)."""
+
+    if request.source_dir is None or len(request.names) != 1:
+        return _emit_error(
+            request,
+            "check-upstream",
+            _error(
+                "checking upstream needs a registry and one adopted artifact", _NAME_THE_ADOPTED
+            ),
+        )
+    checked = check_adopted_upstream(request.names[0], registry_root=_root(request))
+    if isinstance(checked, Err):
+        return _emit_error(request, "check-upstream", checked)
+    check = checked.value
+    proposal = check.proposal
+    if request.expect is not None and (
+        proposal is None or request.expect != proposal.review_digest
+    ):
+        return _emit_error(
+            request,
+            "check-upstream",
+            _error(
+                f"upstream no longer proposes the reviewed transaction {request.expect}",
+                ("check the artifact upstream again, then finalize the digest it reports",),
+            ),
+        )
+    applied = False
+    if request.yes and proposal is not None:
+        finalized = apply_adoption(proposal, proposal.review_digest, registry_root=_root(request))
+        if isinstance(finalized, Err):
+            return _emit_error(request, "check-upstream", finalized)
+        applied = True
+    if request.json:
+        print(json.dumps(_upstream_check_data(check, applied=applied), indent=2))
+    else:
+        _print_upstream_check(check, applied=applied)
+    return _common.OK
+
+
 def run(request: Request) -> int:
     action = request.registry_action or "unknown"
     workspace = FilesystemRegistryWorkspace(_root(request))
@@ -1095,6 +1335,10 @@ def run(request: Request) -> int:
         return _run_curation(request, CurationAction.COLLECTION)
     if action == "scan":
         return _run_scan(request)
+    if action == "adopt":
+        return _run_adopt(request)
+    if action == "check-upstream":
+        return _run_check_upstream(request)
     if action == "promote":
         return _run_candidate_promotion(request)
     if action == "discover":

@@ -208,13 +208,28 @@ Git transport while driving a real author repository and real registry checkout.
 `tests/maintainer_repository_adoption_test.py` (8 tests); three targeted mutations killed (route,
 adoptability filter, exact selection crossing the port).
 
-**Next on QA-021:** expose the complete scan/select/review/apply/check contract as a
-machine-complete CLI surface. D-191 finished the TUI: `u` on Registry opens adopted packages,
-Enter checks the focused origin, and screen 46g preserves D-190's five dispositions. Only a
-validated new version offers `a`, which enters the same exact adoption review and confirmation used
-by initial adoption. The CLI must call the same application functions, provide stable JSON for
-every state, preserve review-before-write, and never create a Source. B-095 remains open for this
-last public projection.
+B-095/QA-021 is now **complete and awaiting manual retest** (D-192). `aart registry adopt` and
+`aart registry check-upstream` are the machine-complete CLI projection, and they are a skin over
+`io/registry_adoption.py` rather than a second implementation: no planning, discovery or provenance
+logic lives in `commands/registry.py`, so the CLI and the TUI cannot drift into two answers about
+what adopting means. `adopt` with no `--artifact` is a complete answer on its own — it lists every
+declared coordinate and writes nothing — because an operator has to see what a repository declares
+before naming any of it; repeating `--artifact KIND/NAME@VERSION` reviews exactly that selection and
+reports the digest and the paths it would change; `--yes` is the only thing that writes. The three
+phases (`scan`, `review`, `adopted-local`) are named in the payload rather than inferred from which
+keys are present, and `applied` is stated in all three. `--expect` is optional but verified whenever
+given, which is what makes `check-upstream`'s two acquisitions safe: a stale digest refuses instead
+of adopting whatever upstream declares now. Upstream that changed without releasing proposes nothing
+and says so, because INV-203 makes the published coordinate immutable. Evidence:
+`tests/registry_adoption_cli_test.py` (8 tests over the real public CLI, a real Git repository and a
+real Registry checkout, substituting only transport) and the action-set contract in
+`tests/registry_cli_test.py`; five targeted mutations, all killed, three of which found unheld claims
+— both `--expect` checks and the listing order.
+
+**Next:** QA-011/B-085 (native OpenCode) and QA-012/B-086 (native Codex). Both need measured native
+paths and formats plus TUI harness selection, and neither may be aliased to Claude. After them, the
+manual-acceptance batch is handed back for retest and the full `make quality` and `make integration`
+gates run.
 
 On top of that, Maintainer screen 31 now offers `a` Add Source: a separate `SourceDraft` form (31a)
 and review (31b) that accept only `source-git`/`source-local`, refuse `registry-git` by name, never

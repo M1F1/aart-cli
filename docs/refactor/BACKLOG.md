@@ -2316,8 +2316,8 @@ Evidence/links: Product Specification 72.1 and 164.2; INV-199–INV-201;
 ## B-095 — One-off YAML repository scan cannot feed selective Registry vendoring
 
 Found: whole-product TUI acceptance, external artifact onboarding clarification (2026-09-08) ·
-Severity: high · Status: open — application and TUI adoption path built and green (D-187/D-188);
-CLI equivalent and `Check upstream` still open
+Severity: high · Status: fixed, awaiting manual retest — application (D-187), TUI adoption
+(D-188/D-189), upstream check (D-190/D-191) and the CLI projection (D-192) are all built and green
 
 Besides monitored Sources, the operator needs an artifact-scoped adoption path for repositories
 that must not remain configured Sources. Given a credential-free Git URL/ref, AART should discover

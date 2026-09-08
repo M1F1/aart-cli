@@ -246,7 +246,25 @@ packages carrying adoption provenance; Enter runs the one focused check and 46g 
 typed answer. A validated new version alone offers `a`, which enters the existing 46e review and
 cannot apply without its digest. The production composition test adopts 2.1.0, commits 2.2.0 to a
 real Git `main`, checks it and adds 2.2.0 without removing or rewriting 2.1.0. Three TUI mutations
-were killed. The machine-complete CLI projection remains open.
+were killed.
+
+B-095/QA-021 is now **complete and awaiting manual retest** (D-192). `aart registry adopt` and
+`aart registry check-upstream` are the machine-complete CLI projection, and they are a skin over
+`io/registry_adoption.py` rather than a second implementation: no planning, discovery or provenance
+logic lives in `commands/registry.py`, so the CLI and the TUI cannot drift into two answers about
+what adopting means. `adopt` with no `--artifact` is a complete answer on its own — it lists every
+declared coordinate and writes nothing — because an operator has to see what a repository declares
+before naming any of it; repeating `--artifact KIND/NAME@VERSION` reviews exactly that selection and
+reports the digest and the paths it would change; `--yes` is the only thing that writes. The three
+phases (`scan`, `review`, `adopted-local`) are named in the payload rather than inferred from which
+keys are present, and `applied` is stated in all three. `--expect` is optional but verified whenever
+given, which is what makes `check-upstream`'s two acquisitions safe: a stale digest refuses instead
+of adopting whatever upstream declares now. Upstream that changed without releasing proposes nothing
+and says so, because INV-203 makes the published coordinate immutable. Evidence:
+`tests/registry_adoption_cli_test.py` (8 tests over the real public CLI, a real Git repository and a
+real Registry checkout, substituting only transport) and the action-set contract in
+`tests/registry_cli_test.py`; five targeted mutations, all killed, three of which found unheld claims
+— both `--expect` checks and the listing order.
 
 ### CP-14 current increment (2026-09-02)
 

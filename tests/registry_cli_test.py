@@ -33,6 +33,8 @@ class RegistryCliTest(unittest.TestCase):
             "scaffold",
             "collection",
             "scan",
+            "adopt",
+            "check-upstream",
             "promote",
             "discover",
             "format",
