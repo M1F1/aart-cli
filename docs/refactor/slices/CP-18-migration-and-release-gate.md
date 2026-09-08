@@ -935,3 +935,11 @@ preserves what it did not write, or delegating to `codex mcp add` — and its ho
 product question (B-097) rather than a measurement one. OpenCode's guidelines and hooks are
 unmeasured. Nothing else in the QA-001–QA-021 batch is open, so the batch is handed back for manual
 retest with the full `make quality` and `make integration` gates run.
+
+**Batch verified (2026-09-08).** With QA-011 and QA-012 landed, every QA-001–QA-021 finding has a
+fix or a recorded, named refusal, so the full gates were run rather than the focused suites this
+manual-acceptance batch had been using: `make quality` green (format-check, lint, typecheck, unit
+— 3503 tests, validate, coverage 85.18%, packaging-check, docs-check, secret-shape-check) and
+`make integration` green (357 tests). The batch is handed back for manual retest; TODO.md's Open
+section is empty and its Fixed section is the retest list.
+

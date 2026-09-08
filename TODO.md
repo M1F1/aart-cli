@@ -29,6 +29,10 @@ Each new entry records:
 
 ### Open
 
+Nothing open. Every QA-001–QA-021 finding has a fix awaiting the operator's retest below.
+
+### Fixed — awaiting manual retest
+
 - [ ] **QA-011 — Canonical installation cannot target OpenCode.**
       Stage: installing the Skill and MCP into the locally installed OpenCode 1.18.29
       Surface: Marketplace/TUI and `marketplace install --profile opencode`
@@ -73,8 +77,6 @@ Each new entry records:
       features list` reports them stable and enabled, but they are configured through a path in
       `config.toml`, project-local hooks are disabled until the operator trusts the project, and
       every new or changed hook is held for interactive review — a file AART wrote would not run.
-
-### Fixed — awaiting manual retest
 
 - [ ] **QA-021 — Registry cannot one-off scan YAML manifests and vendor selected artifacts.**
       Stage: optional artifact-scoped onboarding from an external repository
