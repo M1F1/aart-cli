@@ -852,3 +852,10 @@ production-composition E2E over real Git and a real registry with only transport
 targeted mutations (route, adoptability filter, selected coordinates crossing the port) were all
 killed. A machine-complete CLI equivalent and `Check upstream` remain open under B-095. This does
 not change CP-18's historical verdict.
+
+D-189 closes the first prerequisite found while starting that check. The adopted package recorded
+the URL and a pinned commit but not the moving branch/tag, so reacquisition could only prove that an
+old commit still equalled itself. New adoptions carry the ref in immutable namespaced provenance;
+this remains package metadata, creates no Source and leaves the author's canonical input digest
+unchanged. The check itself and CLI equivalent remain open, and CP-18's historical verdict is still
+unchanged.

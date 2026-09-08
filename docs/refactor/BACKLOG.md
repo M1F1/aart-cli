@@ -2360,8 +2360,13 @@ review digest. The scan completes as a read-only preparation and deliberately le
 mutation; adoption is a separate prepare/confirm action. One composition test substitutes only the
 Git transport and drives the production ports over a real repository and registry checkout.
 
+**Upstream identity recorded (D-189).** Native provenance already held the URL, resolved commit,
+manifest path and input digest, but not the branch/tag whose movement must be checked. Each new
+adoption now adds immutable `aart.repository-adoption: {ref: ...}` provenance. It is package
+metadata rather than Source configuration and does not change the author's canonical input digest.
+
 **Still open.** There is no machine-complete CLI equivalent yet, and the explicit per-artifact
-`Check upstream` action over recorded provenance is untouched.
+`Check upstream` action over that record is not built.
 
 Evidence/links: `registry scan`, `discover`, `vendor`, `vendor-batch`;
 `protocol/authoring.py::compile_author_snapshot`; `registry_commands/planning.py`;

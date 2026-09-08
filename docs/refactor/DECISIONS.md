@@ -4203,3 +4203,25 @@ is written, an undeclared adjacent file is not, and no Source configuration is c
 sweeps. Three targeted mutations were killed: moving the `s` route, admitting an invalid artifact
 to the selectable rows, and replacing the selected coordinates at the adoption port with an empty
 tuple. A machine-complete CLI equivalent and explicit per-artifact `Check upstream` remain B-095.
+
+## D-189 — A pinned commit proves what was adopted; a recorded ref says what to check next
+
+The first implementation pass over B-095's explicit `Check upstream` found that the adopted native
+provenance was necessary but insufficient. `origin.resolved_commit` is immutable. Reacquiring that
+value will always look unchanged, even after the branch or tag the maintainer selected moves. The
+requested ref therefore has to survive adoption too.
+
+New adoptions add one namespaced native-provenance extension:
+`aart.repository-adoption: {"ref": <branch-or-tag>}`. This is deliberately not the legacy
+`aart.vendor` record: that format describes a conventionally taken subtree and authored overlay,
+whereas repository adoption recompiles an explicit author manifest and copies only its declared
+payload. It is also not Source configuration. The repository remains unsubscribed and nothing is
+watched automatically.
+
+`compile_author_snapshot` accepts optional namespaced provenance metadata so the record is present
+before candidate validation and promotion; its default is empty, preserving every monitored Source
+caller. Provenance is part of the immutable stored object and registry snapshot, while the author's
+manifest and selected payload still determine `origin.input_digest`. Thus the ref cannot silently
+alter an existing published package, but adding acquisition metadata does not invent a content
+change. The RED read the real adopted `provenance.json` and failed because the key was absent;
+`tests/registry_repository_scan_test.py` now holds the ref as `main` over a real Git repository.

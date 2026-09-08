@@ -209,10 +209,12 @@ Git transport while driving a real author repository and real registry checkout.
 adoptability filter, exact selection crossing the port).
 
 **Next on QA-021:** build the explicit per-artifact `Check upstream` action over the provenance the
-adopted package already records. Unchanged, changed, unreachable and missing must remain distinct;
-a change proposes a new version and never rewrites a published one. Then expose the same complete
-scan/select/review/apply contract as a machine-complete CLI surface. B-095 remains open for those
-two pieces.
+adopted package records. D-189 closed the prerequisite the first implementation attempt exposed:
+native provenance pinned a commit but forgot the moving branch/tag. New adoptions retain that ref
+in the immutable namespaced `aart.repository-adoption` record without becoming a Source. Unchanged,
+changed, unreachable and missing must remain distinct; a change proposes a new version and never
+rewrites a published one. Then expose the same complete scan/select/review/apply contract as a
+machine-complete CLI surface. B-095 remains open for those two pieces.
 
 On top of that, Maintainer screen 31 now offers `a` Add Source: a separate `SourceDraft` form (31a)
 and review (31b) that accept only `source-git`/`source-local`, refuse `registry-git` by name, never

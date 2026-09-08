@@ -74,8 +74,10 @@ Each new entry records:
       Fix: partial — `io/registry_adoption.py` now composes scan → selection → atomic vendored
       adoption with pinned provenance and saves no Source (D-187, 14 tests). Maintainer Registry
       now exposes that flow as `s` Scan Repository: form 46c, selectable result 46d and exact local
-      adoption review 46e (D-188, 8 tests). A machine-complete CLI equivalent and explicit
-      per-artifact `Check upstream` remain pending.
+      adoption review 46e (D-188, 8 tests). Adopted packages now also retain the moving branch/tag
+      as immutable namespaced provenance (D-189), so `Check upstream` can re-resolve it rather than
+      repeatedly checking the old commit. A machine-complete CLI equivalent and the check itself
+      remain pending.
 
 ### Fixed — awaiting manual retest
 

@@ -228,6 +228,12 @@ project checkout; an E2E test substitutes only Git transport and proves the real
 the selected declared payload while saving no Source. The machine-complete CLI equivalent and
 explicit per-artifact `Check upstream` remain open under B-095.
 
+The first `Check upstream` RED exposed one missing input and D-189 records the correction: an
+adopted package pinned the commit it observed but did not retain the branch/tag that can move. New
+adoptions add `aart.repository-adoption: {ref: ...}` to the package's immutable native provenance.
+It writes no Source and does not enter the author's canonical input digest; it only gives the
+explicit check an honest acquisition target. The check and CLI equivalent remain open.
+
 ### CP-14 current increment (2026-09-02)
 
 **The wizard front-end is gone, and the stack under it turns out not to be legacy.**

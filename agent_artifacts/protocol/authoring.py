@@ -1905,6 +1905,7 @@ def _compile_one(
     source_alias: SourceAlias,
     source: str,
     revision: str,
+    provenance_extensions: tuple[tuple[str, JsonValue], ...],
 ) -> Result[CompiledAuthorArtifact]:
     digest = _input_digest(source_manifest, selected)
     if isinstance(digest, Err):
@@ -1949,6 +1950,7 @@ def _compile_one(
             _COMPILER_OPTIONS_DIGEST,
         ),
         (),
+        provenance_extensions,
     )
     manifest_path = parse_relative_path(PACKAGE_MANIFEST_FILENAME)
     provenance_path = parse_relative_path("provenance.json")
@@ -2017,8 +2019,14 @@ def compile_author_snapshot(
     source_alias: SourceAlias,
     source: str,
     revision: str,
+    provenance_extensions: tuple[tuple[str, JsonValue], ...] = (),
 ) -> Result[tuple[CompiledAuthorArtifact, ...]]:
-    """Discover and compile every explicit authoring manifest in one acquired source."""
+    """Discover and compile every explicit authoring manifest in one acquired source.
+
+    A caller may add namespaced provenance metadata about the acquisition boundary. It becomes
+    part of the immutable package but not the author's canonical input digest; the manifest and
+    selected payload still decide artifact identity.
+    """
 
     if (
         not isinstance(source_alias, SourceAlias)
@@ -2067,6 +2075,7 @@ def compile_author_snapshot(
             source_alias=source_alias,
             source=source,
             revision=revision,
+            provenance_extensions=provenance_extensions,
         )
         if isinstance(artifact, Err):
             diagnostics.extend(artifact.diagnostics)

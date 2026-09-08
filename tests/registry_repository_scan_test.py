@@ -284,6 +284,11 @@ class SelectiveAdoptionTest(_Lab):
         self.assertEqual(origin["resolved_commit"], self.author.head)
         self.assertEqual(origin["path"], "skills/brainstorming/aart.yaml")
         self.assertTrue(origin["input_digest"].startswith("sha256:"))
+        self.assertEqual(
+            provenance["aart.repository-adoption"],
+            {"ref": "main"},
+            "an explicit upstream check needs the moving ref, not only this pinned commit",
+        )
 
     def test_the_review_names_every_chosen_coordinate_and_the_resolved_commit(self) -> None:
         scanned = self._scan()

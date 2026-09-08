@@ -56,12 +56,14 @@ from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.io.registry_promotion import FilesystemPromotionOutput
 from agent_artifacts.io.registry_workspace import FilesystemRegistryWorkspace
 from agent_artifacts.protocol.authoring import compile_author_snapshot
+from agent_artifacts.protocol.json import JsonObject
 from agent_artifacts.protocol.native_schema import parse_source_manifest
 from agent_artifacts.protocol.native_tree import SnapshotEntryKind
 from agent_artifacts.registry_maintenance.model import NativeReferenceAcquisition
 
 __all__ = [
     "REPOSITORY_ADOPTION_REFUSED",
+    "REPOSITORY_ADOPTION_RECORD",
     "PreparedAdoption",
     "RepositoryScan",
     "ScannedArtifact",
@@ -72,6 +74,11 @@ __all__ = [
 
 #: A one-off scan or adoption that will not proceed.
 REPOSITORY_ADOPTION_REFUSED = DiagnosticCode("repository-adoption-refused")
+
+#: Namespaced immutable provenance metadata that distinguishes the moving upstream name from the
+#: pinned commit observed during adoption. A later check must acquire the former and compare the
+#: latter's declared artifact input, rather than repeatedly acquiring an already-pinned commit.
+REPOSITORY_ADOPTION_RECORD = "aart.repository-adoption"
 
 RepositoryAcquirer = Callable[[str, str], Result[NativeReferenceAcquisition]]
 
@@ -224,6 +231,7 @@ def scan_repository(
         source_alias=_scan_alias(url),
         source=url,
         revision=acquired.value.resolved_commit,
+        provenance_extensions=((REPOSITORY_ADOPTION_RECORD, JsonObject((("ref", ref),))),),
     )
     if isinstance(compiled, Err):
         return compiled
