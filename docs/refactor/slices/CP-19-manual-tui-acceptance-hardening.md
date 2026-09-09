@@ -49,12 +49,15 @@ internal state model.
    `tests/git_publication_transition_e2e_test.py` drives the real sequence — promotion transaction,
    review branch, `git merge --no-ff`, public sync, Marketplace, install receipt — and asserts the
    merged records on disk still read `promoted-local`.
-9. **Canonical Registry maintenance and CI (QA-025/QA-032/B-057/B-099) — TODO, CRITICAL.** Provide
-   public read-only validation and appropriate deterministic maintenance for the checked-out
-   versioned Registry representation. Make both TUI Rebuild and the generated workflow use the
-   authority paired with promotion's output. Keep compatibility/audit coverage explicit. Do not
-   make promotion emit the legacy authoring workspace as a second truth merely to satisfy old
-   commands.
+9. **Canonical Registry maintenance and CI (QA-025/QA-032/B-057/B-099) — DONE.** The six generated
+   verbs dispatch on the representation they are handed instead of assuming the authoring workspace
+   (D-208). `is_promoted_registry` recognizes the approved shape by `registry/versions/`; `validate`
+   drops the compiled-lock requirement, because `validate_promoted_registry` is the stricter check;
+   `build` derives exactly `registry/index.json` and `registry/snapshot.json`; `lock` is a read-only
+   prepared curation; `publish` chains build, validate and audit with no lock half. Screen 46's
+   Rebuild reaches the same authority through `refresh_registry_workspace`, so it is repaired at the
+   same seam. Nothing writes a second legacy representation, and the generated workflow is unchanged
+   so already-scaffolded registries keep working.
 10. **Failed-action terminal state (QA-033/B-101) — TODO.** Once an attempted action refuses, replace
    its review/confirmation state with an explicit failed result. The pending plan is already gone,
    so the footer may not advertise confirmation; offer the owning list or a freshly prepared retry.
@@ -95,9 +98,9 @@ That run was the procedure's required QA-025 retest, not an operator detour: QA-
 because its real canonical input fails even though its route and ordering passed focused tests.
 
 Step 8 has since closed QA-034, so the Marketplace-to-lifecycle half of discovery can resume: a
-merged promotion is offered and installable without anything editing Registry JSON. Do not run
-Rebuild again until step 9 is implemented, and do not discard the local MCP promotion or adoption
-transaction.
+merged promotion is offered and installable without anything editing Registry JSON. Step 9 has since
+closed QA-025 and QA-032, so Rebuild and the Registry PR gate are retestable again. Do not discard
+the local MCP promotion or adoption transaction.
 
 ## Evidence and gates
 
@@ -108,6 +111,13 @@ loader so an install refuses the exact version Marketplace just offered. One old
 replaced belief and was rewritten rather than deleted: `configured_selection_resolution_e2e_test`
 now holds that the configured branch publishes what it carries without rewriting it, plus a
 separate claim that an artifact the branch does not carry is still not found.
+
+Step 9 was RED through the public chain rather than a fixture: `registry init` → `registry scan` →
+`registry promote --yes`, then the six verbs the generated workflow runs, in its order. Four
+targeted mutations were killed — removing the promoted exemption from `validate`, disabling the
+promoted `lock` so it falls back to the authoring lock, disabling the approved reader in
+`registry_maintenance.planning`, and disabling the promoted `build` dispatch. Each turned the
+acceptance tests red, including the screen-46 rebuild claim.
 
 QA-026 was RED against the fixed footer. A semantic mutation routing advertised `b Rebuild` to the
 initialization screen was killed by the headless shell walk. The focused 238-test interaction and
@@ -121,10 +131,12 @@ green. Full repository gates are intentionally deferred until step 15 at the ope
 - Do not reset a refused form on leave; reset a fresh form on entry.
 - Keep `key_event` as the only key interpreter and keep application code free of IO.
 - Never commit the embedded `superpowers-aart-test/` lab repository.
+- Do not make promotion write the authoring workspace as a second representation, and do not
+  weaken `validate_promoted_registry` to accept a registry missing its derived catalogs.
 
 ## Exact next implementation action
 
-Step 8 is closed. Execute step 9 next, so the canonical promoted representation passes both local
-TUI Rebuild and the generated workflow (QA-025/QA-032/B-057/B-099) — that is the remaining blocking
-pair, and it is what still fails on the operator's real Registry. The UX batch (steps 3–7, 10–14)
-follows; step 15 runs the full gates once the operator hands the batch back.
+Both blocking steps are closed. Execute the UX batch next, starting with step 10
+(QA-033/B-101, failed-action terminal state), because it is the one QA-025's own retest run exposed
+and it must hold for every action kind, not only Registry rebuild. Steps 3–7 and 11–14 follow; step
+15 runs the full gates once the operator hands the batch back.

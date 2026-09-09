@@ -6,6 +6,10 @@ from collections import Counter
 from dataclasses import dataclass, replace
 from typing import cast
 
+from agent_artifacts.application.promotion import (
+    read_registry_version_records,
+    registry_catalog_entries,
+)
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.identifiers import ArtifactIdentity, ObjectDigest, SourceId
 from agent_artifacts.domain.result import Err, Ok, Result
@@ -79,6 +83,7 @@ from agent_artifacts.registry_maintenance.planning import (
     registry_native_content,
     resolve_native_acquisition,
 )
+from agent_artifacts.registry_maintenance.promoted import is_promoted_registry
 from agent_artifacts.registry_maintenance.vendoring import (
     VENDOR_IMPORTER_ID,
     CopyIntegrity,
@@ -1349,6 +1354,27 @@ def plan_registry_lock(
     )
 
 
+def plan_promoted_registry_build(snapshot: SourceSnapshot) -> Result[RegistryWorkspacePlan]:
+    """Rebuild what the approved representation derives, which is its two catalogs and nothing else.
+
+    Version records, promotion records and package bytes are decisions somebody reviewed; a rebuild
+    that rewrote them would be inventing approvals. The catalogs are computed from those decisions,
+    so they are the only thing here that can be restored rather than re-decided (`B-057`).
+    """
+
+    records = read_registry_version_records(snapshot)
+    if isinstance(records, Err):
+        return records
+    catalogs = registry_catalog_entries(snapshot, records.value)
+    if isinstance(catalogs, Err):
+        return catalogs
+    return _plan(
+        RegistryOperation.BUILD,
+        snapshot,
+        tuple((path, content, False) for path, content in catalogs.value),
+    )
+
+
 def plan_registry_build(
     snapshot: SourceSnapshot,
     acquisitions: tuple[NativeReferenceAcquisition, ...],
@@ -1359,6 +1385,8 @@ def plan_registry_build(
     parsed = _registry_inputs(snapshot)
     if isinstance(parsed, Err):
         return parsed
+    if is_promoted_registry(snapshot):
+        return plan_promoted_registry_build(snapshot)
     registry, _source, entries = parsed.value
     files = _files(snapshot)
     assert isinstance(files, Ok)
@@ -1475,8 +1503,13 @@ def validate_registry_workspace(
         diagnostics.append(_diagnostic("aart.lock.json must be a regular file", _RELOCK))
     if index_file is not None and not valid_index_file:
         diagnostics.append(_diagnostic("aart.index.json must be a regular file", _RELOCK))
-    if require_compiled and (not valid_lock_file or not valid_index_file):
-        diagnostics.append(_diagnostic("compiled registry requires lock and index", _RELOCK))
+    if require_compiled and not is_promoted_registry(snapshot):
+        # The approved representation compiles nothing: its version records carry the digests the
+        # older workspace kept in `aart.lock.json`, and `registry_native_content` has already held
+        # the registry to them through `validate_promoted_registry`. Requiring the older files here
+        # would be requiring a second representation of the same approvals (`B-057`).
+        if not valid_lock_file or not valid_index_file:
+            diagnostics.append(_diagnostic("compiled registry requires lock and index", _RELOCK))
     parsed_lock = None
     if lock_file is not None and lock_file.kind is SnapshotEntryKind.FILE:
         lock = parse_registry_lock(lock_file.content)

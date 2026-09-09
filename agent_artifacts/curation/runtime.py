@@ -76,6 +76,7 @@ from agent_artifacts.registry_maintenance.planning import (
     plan_native_promotion,
     project_registry_mutation,
 )
+from agent_artifacts.registry_maintenance.promoted import is_promoted_registry
 from agent_artifacts.registry_maintenance.vendoring import (
     DeliveryFinding,
     LicenseFinding,
@@ -1250,10 +1251,52 @@ class LocalCurationService:
             acquired.append(result.value)
         return Ok(tuple(acquired))
 
+    def _prepare_promoted_lock(
+        self,
+        request: CurationRequest,
+        snapshot: SourceSnapshot,
+    ) -> Result[PreparedCuration]:
+        """Lock over the approved representation, which has nothing left to resolve.
+
+        A lock pins what authored entries point at, and the approved representation has no authored
+        entries: every approval already carries the input, payload, canonical and object digests it
+        was reviewed against, and `validate` holds the registry to them. So this reports that and
+        writes nothing, rather than manufacturing the older workspace's lock file beside approvals
+        that never needed one (`B-057`).
+        """
+
+        digest = _snapshot_digest(snapshot)
+        if isinstance(digest, Err):
+            return digest
+        checks = (
+            CurationCheck(
+                "lock",
+                True,
+                ("approved versions are pinned by their own records; nothing to resolve",),
+            ),
+        )
+        review_digest = curation_review_digest(request.action, digest.value, (), checks, ())
+        return Ok(
+            PreparedCuration(
+                CurationReview(
+                    request.action,
+                    self.root,
+                    False,
+                    review_digest,
+                    digest.value,
+                    (),
+                    checks,
+                ),
+                _ReadOnlyPrepared(snapshot, checks),
+            )
+        )
+
     def _prepare_generated(self, request: CurationRequest) -> Result[PreparedCuration]:
         current = self._current()
         if isinstance(current, Err):
             return current
+        if request.action is CurationAction.LOCK and is_promoted_registry(current.value):
+            return self._prepare_promoted_lock(request, current.value)
         acquired = self._acquire_entries(current.value)
         if isinstance(acquired, Err):
             return acquired
@@ -1284,26 +1327,31 @@ class LocalCurationService:
         acquired = self._acquire_entries(current.value)
         if isinstance(acquired, Err):
             return acquired
-        locked = plan_registry_lock(
-            current.value,
-            acquired.value,
-            executable_version=_VERSION,
-            available_capabilities=_CAPABILITIES,
-        )
-        if isinstance(locked, Err):
-            return locked
-        locked_snapshot = project_registry_workspace_plan(current.value, locked.value)
-        if isinstance(locked_snapshot, Err):
-            return locked_snapshot
+        lock_plans: tuple[RegistryWorkspacePlan, ...] = ()
+        locked_snapshot_value = current.value
+        if not is_promoted_registry(current.value):
+            locked = plan_registry_lock(
+                current.value,
+                acquired.value,
+                executable_version=_VERSION,
+                available_capabilities=_CAPABILITIES,
+            )
+            if isinstance(locked, Err):
+                return locked
+            locked_snapshot = project_registry_workspace_plan(current.value, locked.value)
+            if isinstance(locked_snapshot, Err):
+                return locked_snapshot
+            lock_plans = (locked.value,)
+            locked_snapshot_value = locked_snapshot.value
         built = plan_registry_build(
-            locked_snapshot.value,
+            locked_snapshot_value,
             acquired.value,
             executable_version=_VERSION,
             available_capabilities=_CAPABILITIES,
         )
         if isinstance(built, Err):
             return built
-        published_snapshot = project_registry_workspace_plan(locked_snapshot.value, built.value)
+        published_snapshot = project_registry_workspace_plan(locked_snapshot_value, built.value)
         if isinstance(published_snapshot, Err):
             return published_snapshot
         validated = validate_registry_workspace(
@@ -1331,7 +1379,7 @@ class LocalCurationService:
         if failed:
             return _error("registry publish gate failed: " + "; ".join(failed))
         touched = {
-            str(change.path) for plan in (locked.value, built.value) for change in plan.changes
+            str(change.path) for plan in (*lock_plans, built.value) for change in plan.changes
         }
         files = {
             str(entry.path): entry
@@ -1355,7 +1403,9 @@ class LocalCurationService:
                 aggregate.value,
                 checks=(*_checks(validated.value), *_checks(audited.value)),
                 warnings=(
-                    "Publish runs lock, build, validate, and audit in that order over one reviewed snapshot.",
+                    "Publish runs lock, build, validate, and audit in that order over one reviewed snapshot."
+                    if lock_plans
+                    else "Publish builds, validates, and audits one reviewed snapshot; the approved records need no lock.",
                     "Finalizing commits every listed Git change in the registry checkout and never pushes.",
                 ),
             )

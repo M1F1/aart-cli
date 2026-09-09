@@ -4798,3 +4798,49 @@ Consequence: the publication test disappears from `configured_offers`, `configur
 condition is a claim no test can hold. A branch cannot express "merged but deliberately held back"
 either; if a registry ever needs to stage a version publicly without offering it, that is a
 lifecycle statement (`RegistryLifecycle`), which those seams still check.
+
+## D-208 — Registry maintenance dispatches on the representation, and the approved one derives only its catalogs
+
+Date: 2026-09-09 · Increment: CP-19 step 9, QA-025/QA-032/B-057/B-099 · Status: accepted
+
+Two registry representations exist (`B-057`). The authoring workspace keeps `entries/*.json` and one
+unversioned `artifacts/<kind>/<name>/artifact.json`, compiled into `aart.lock.json` and
+`aart.index.json`. Promotion writes the approved representation the Product Specification names and
+a public consumer acquires: one version record per `registry/versions/<kind>/<name>/<version>.json`,
+a promotion receipt, one package per version at `artifacts/<kind>/<name>/<version>/`, and the two
+derived catalogs `registry/index.json` and `registry/snapshot.json`. `registry init` generates a
+workflow that gates every pull request with `format`, `validate`, `lock`, `build`, `audit` and
+`test`, and screen 46's Rebuild runs four of the same verbs through the same authority. Both ran the
+authoring workspace's reader, so the first real promoted artifact was refused by a message naming a
+path nothing writes any more.
+
+The verbs are not wrong; the reader they reached was. So each dispatches on the representation it is
+handed, following the precedent already set for source validation (`D-147`): `is_promoted_registry`
+answers it from the presence of `registry/versions/`.
+
+- `validate` drops the compiled-lock-and-index requirement for the approved shape. Nothing is lost:
+  `validate_promoted_registry` is the stricter check, verifying canonical version records, the exact
+  expected set of version paths, vendored package canonical and object digests, referenced records,
+  and byte-exact catalogs. It subsumes what the lock and index meant.
+- `build` derives exactly the two catalogs. That is well defined and non-circular because
+  `registry_state_digest` covers only `artifacts/` and `references/`, so the catalogs are a pure
+  function of the version records and package bytes. It reads those records with a parse-only
+  `read_registry_version_records`, because `load_registry_versions` would refuse the very stale
+  catalog a rebuild exists to repair.
+- `lock` becomes a read-only prepared curation reporting that approved versions are pinned by their
+  own records. It cannot be an empty plan: `RegistryWorkspacePlan` requires at least one change.
+- `publish` chains the same build, validate and audit, and simply has no lock half.
+
+Three alternatives were rejected. Renaming or removing the verbs would break every registry already
+scaffolded with the generated workflow, which is exactly the population this defect is in. Teaching
+promotion to write a second, legacy representation alongside the approved one would leave two
+sources of truth for the same versions and re-open `B-057` as a synchronization problem. Weakening
+`validate_promoted_registry` to accept a workspace missing its catalogs would remove the check that
+makes the approved representation trustworthy to a consumer.
+
+Consequence: an approved registry is maintained by the authority that already understands it, and
+the older workspace path is untouched. `tests/promoted_registry_maintenance_e2e_test.py` builds its
+workspace through the public `registry init` → `registry scan` → `registry promote --yes` chain, not
+a fixture's idea of a registry, and holds that maintenance never writes `aart.lock.json` or
+`aart.index.json`, that a damaged catalog is rebuilt, and that a damaged version record is still
+refused.

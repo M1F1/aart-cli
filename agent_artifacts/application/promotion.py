@@ -673,6 +673,13 @@ def _version_content(version: RegistryArtifactVersion) -> bytes:
     )
 
 
+#: The derived files of the approved representation: everything else in it is decided, not computed.
+REGISTRY_CATALOGS: tuple[tuple[str, str], ...] = (
+    ("registry/index.json", "aart.dev/registry-index/v1"),
+    ("registry/snapshot.json", "aart.dev/registry-snapshot/v1"),
+)
+
+
 def _registry_catalog_content(
     versions: tuple[RegistryArtifactVersion, ...],
     registry_snapshot: ObjectDigest,
@@ -912,10 +919,7 @@ def plan_bulk_promotion(
         if isinstance(version_change, Err):
             return version_change
         metadata_changes.append(version_change.value)
-    for raw_path, schema in (
-        ("registry/index.json", "aart.dev/registry-index/v1"),
-        ("registry/snapshot.json", "aart.dev/registry-snapshot/v1"),
-    ):
+    for raw_path, schema in REGISTRY_CATALOGS:
         catalog_path = _path(raw_path)
         if isinstance(catalog_path, Err):
             return catalog_path
@@ -1079,10 +1083,7 @@ def plan_registry_lifecycle(
         if isinstance(version_change, Err):
             return version_change
         changes.append(version_change.value)
-    for raw_path, schema in (
-        ("registry/index.json", "aart.dev/registry-index/v1"),
-        ("registry/snapshot.json", "aart.dev/registry-snapshot/v1"),
-    ):
+    for raw_path, schema in REGISTRY_CATALOGS:
         catalog_path = _path(raw_path)
         if isinstance(catalog_path, Err):
             return catalog_path
@@ -1247,10 +1248,7 @@ def validate_promoted_registry(
     }
     if actual_version_paths != expected_version_paths:
         return _error("registry version record set does not match approved versions")
-    for raw_path, schema in (
-        ("registry/index.json", "aart.dev/registry-index/v1"),
-        ("registry/snapshot.json", "aart.dev/registry-snapshot/v1"),
-    ):
+    for raw_path, schema in REGISTRY_CATALOGS:
         catalog_entry = files.value.get(raw_path)
         if (
             catalog_entry is None
@@ -1414,10 +1412,16 @@ def load_registry_promotions(snapshot: SourceSnapshot) -> Result[tuple[Promotion
     return Ok(ordered)
 
 
-def load_registry_versions(
+def read_registry_version_records(
     snapshot: SourceSnapshot,
 ) -> Result[tuple[RegistryArtifactVersion, ...]]:
-    """Load and validate the approved version projection from one inert registry snapshot."""
+    """Parse the approved version records without holding the snapshot to them.
+
+    `load_registry_versions` is the reading almost everything wants, because an approval that the
+    content does not match is not an approval.  This one exists for the single case that cannot use
+    it: rebuilding a derived catalog, where refusing on the stale catalog would refuse exactly the
+    repair being asked for.  It still refuses a record that is not a well-formed approval.
+    """
 
     files = _files(snapshot)
     if isinstance(files, Err):
@@ -1437,11 +1441,45 @@ def load_registry_versions(
     ordered = tuple(sorted(versions, key=lambda item: str(item.coordinate)))
     if len({str(item.coordinate) for item in ordered}) != len(ordered):
         return _error("registry contains duplicate approved coordinate versions")
-    if ordered:
-        validated = validate_promoted_registry(snapshot, ordered)
+    return Ok(ordered)
+
+
+def registry_catalog_entries(
+    snapshot: SourceSnapshot,
+    versions: tuple[RegistryArtifactVersion, ...],
+) -> Result[tuple[tuple[str, bytes], ...]]:
+    """The two derived catalogs, exactly as this registry's approvals require them to be.
+
+    They are the only files in the approved representation that are derived rather than decided, so
+    they are the only thing a rebuild of it can honestly write.  The content is the same function
+    promotion applies, and `validate_promoted_registry` checks a registry against it byte for byte,
+    so the rebuild and the gate cannot mean different things.
+    """
+
+    registry_snapshot = registry_state_digest(snapshot)
+    if isinstance(registry_snapshot, Err):
+        return registry_snapshot
+    return Ok(
+        tuple(
+            (path, _registry_catalog_content(versions, registry_snapshot.value, schema=schema))
+            for path, schema in REGISTRY_CATALOGS
+        )
+    )
+
+
+def load_registry_versions(
+    snapshot: SourceSnapshot,
+) -> Result[tuple[RegistryArtifactVersion, ...]]:
+    """Load and validate the approved version projection from one inert registry snapshot."""
+
+    ordered = read_registry_version_records(snapshot)
+    if isinstance(ordered, Err):
+        return ordered
+    if ordered.value:
+        validated = validate_promoted_registry(snapshot, ordered.value)
         if isinstance(validated, Err):
             return validated
-    return Ok(ordered)
+    return ordered
 
 
 def load_published_registry_versions(

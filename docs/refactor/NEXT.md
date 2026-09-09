@@ -1326,13 +1326,26 @@ that need a registry which already crossed the boundary.
 asserted the replaced belief. It was rewritten, not deleted: the branch a consumer reads publishes
 what it carries without rewriting it, and an artifact the branch does not carry is still not found.
 
-**Exact next action for Claude:** CP-19 step 9 — QA-025/QA-032/B-057/B-099. Local TUI Rebuild and
-the generated GitHub workflow both drive the legacy authoring-workspace authority over the
-canonical versioned representation promotion writes, so `lock` refuses a missing `artifact.json`
-and Registry PR CI fails a healthy branch. Give the checked-out versioned representation its own
-public read-only validation and deterministic maintenance, keep compatibility/audit coverage
-explicit, and do not make promotion emit the legacy workspace as a second truth. Focused gates
-only; the operator deferred the full suites to step 15.
+**CP-19 step 9 is DONE — QA-025/QA-032/B-057/B-099 closed (2026-09-09).** The promoted registry was
+never corrupt; maintenance reached the authoring workspace's reader over the approved
+representation, so `lock` refused a path nothing writes any more and the Registry PR gate failed a
+healthy branch. Every generated verb now dispatches on the representation it is handed (D-208):
+`validate` drops the compiled-lock requirement, because `validate_promoted_registry` is the stricter
+check; `build` derives exactly `registry/index.json` and `registry/snapshot.json`; `lock` is a
+read-only prepared curation, since approved versions are pinned by their own records; `publish`
+chains build, validate and audit with no lock half. Screen 46's Rebuild reaches the same authority
+through `refresh_registry_workspace`, so it is repaired at the same seam.
+`tests/promoted_registry_maintenance_e2e_test.py` drives the public `registry init` → `scan` →
+`promote --yes` chain and then the six verbs in the generated workflow's order, and holds that
+maintenance never writes `aart.lock.json` or `aart.index.json`. Four targeted mutations were killed.
+
+**Exact next action for Claude:** CP-19 step 10 — QA-033/B-101. A refused run clears its pending
+plan but leaves the reducer on the review screen, whose header still says to press Enter to start
+and whose footer still advertises `Enter Confirm`, so a second Enter can only be rejected as
+`nothing was prepared for this action`. Characterize a failed run as a terminal state distinct from
+an unexecuted review across action kinds, not only Registry rebuild, and give it one honest route to
+the owning list or a freshly prepared retry. Then the rest of the UX batch (steps 3–7, 11–14).
+Focused gates only; the operator deferred the full suites to step 15.
 
 ## Critical boundaries for this slice
 

@@ -63,6 +63,11 @@ from .model import (
     RegistryMutationPlan,
     registry_mutation_review_digest,
 )
+from .promoted import (
+    is_promoted_registry,
+    promoted_registry_artifacts,
+    promoted_registry_versions,
+)
 
 REGISTRY_MAINTENANCE_INVALID = DiagnosticCode("registry-maintenance-invalid")
 REGISTRY_MAINTENANCE_STALE = DiagnosticCode("registry-maintenance-stale")
@@ -450,6 +455,20 @@ def _native_registry_content(
         )
         for path, item in files.items()
     )
+    if is_promoted_registry(snapshot):
+        # The approved representation keeps one package per *version*, so the native-source loader
+        # -- which is the authoring workspace's reader -- would refuse it by naming a path nothing
+        # writes any more.  Its approvals are read by the authority a public consumer uses.
+        collections = _collections_without_index(files)
+        if isinstance(collections, Err):
+            return collections
+        versions = promoted_registry_versions(snapshot)
+        if isinstance(versions, Err):
+            return versions
+        owned = promoted_registry_artifacts(snapshot, manifest, versions.value)
+        if isinstance(owned, Err):
+            return owned
+        return Ok((owned.value, collections.value))
     if not has_owned_files:
         collections = _collections_without_index(files)
         if isinstance(collections, Err):

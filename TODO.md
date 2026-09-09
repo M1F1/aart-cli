@@ -143,6 +143,21 @@ Each new entry records:
       Note: the fix belongs in the generated workflow/template and its public validation command,
       not in weakening promoted-Registry validation or teaching promotion to write a second legacy
       representation.
+      Fix: the six generated verbs now dispatch on the representation they are given instead of
+      assuming the authoring workspace (`D-208`). `is_promoted_registry` recognizes the approved
+      shape by `registry/versions/`; `validate` drops the compiled-lock requirement for it because
+      its version records already carry those digests; `build` rebuilds exactly the two derived
+      catalogs; `lock` becomes a read-only prepared curation, because approved versions are pinned
+      by their own records; and `publish` chains the same build, validate and audit without a lock
+      half. The generated workflow and its verbs are unchanged, so registries already scaffolded
+      keep working.
+      Evidence: `tests/promoted_registry_maintenance_e2e_test.py` builds the workspace through the
+      public `registry init` → `registry scan` → `registry promote --yes` chain and runs the six
+      verbs the generated workflow runs, in its order. It also holds that maintenance never writes
+      `aart.lock.json` or `aart.index.json` (`B-057`: one representation, not both), that `build`
+      restores a damaged catalog, and that a damaged version record is still refused.
+      Retest: promote through the TUI, push the resulting commit and open the Registry PR; both
+      `registry-quality` jobs must pass over the promoted representation.
 
 - [ ] **QA-025 — Re-running a registry's generated files exists in the TUI but rejects its output.**
       Stage: after promoting, adopting or editing anything in the registry checkout
@@ -159,6 +174,13 @@ Each new entry records:
       Retest outcome: FAILED on the real promoted Registry. The earlier focused fixture proved the
       route and ordering but never supplied canonical promotion output. Reopened under B-099 and
       joined to QA-032/B-057 in CP-19 step 9.
+      Fix: Rebuild's port is `refresh_registry_workspace`, which runs the same four verbs through
+      the same curation authority the CLI uses, so the representation dispatch of `QA-032` repairs
+      it at the same seam rather than in a second place (`D-208`).
+      Evidence: `test_screen_46_rebuilds_the_registry_a_promotion_left_behind` calls that port over
+      a really promoted checkout and holds that all four stages pass in canonical order.
+      Retest: promote a Candidate through the TUI, then `b` → `Everything, in order` → Enter →
+      Enter, and confirm the run completes.
 
 - [ ] **QA-033 — A refused run remains on a stale confirmation screen.**
       Stage: Registry maintenance after a canonical promotion

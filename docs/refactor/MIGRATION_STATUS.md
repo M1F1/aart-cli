@@ -873,7 +873,7 @@ the operator during the manual batch.
 **Next:** QA-027, Enter from completed result screens back to the list that began their sequence.
 
 **CP-19 planning checkpoint (2026-09-09).** The operator separated post-refactor manual acceptance
-from the closed refactor by opening CP-19 (D-203). QA-026 and QA-034 are its completed steps 1 and 8; QA-027 through
+from the closed refactor by opening CP-19 (D-203). QA-026, QA-034 and QA-025/QA-032 are its completed steps 1, 8 and 9; QA-027 through
 QA-030 are scoped, unimplemented interaction/layout steps. QA-031/B-100 records the blocking second
 promotion: local `cc7c01d` contains an unpublished Skill promotion while synchronized remote `main`
 is `027ba7f`, so exact baseline equality correctly refuses the MCP transaction. The gap is the
@@ -941,3 +941,33 @@ records still read `promoted-local` on disk. It was RED with the operator's exac
 stops. One test asserting the replaced belief was rewritten rather than removed. Focused suites,
 changed-module `mypy`, `ruff check` and `ruff format --check` are green; full gates stay deferred to
 CP-19 step 15. QA-025/QA-032 (step 9) is now the blocking pair.
+
+**CP-19 step 9 complete — QA-025/QA-032/B-057/B-099 closed (2026-09-09).** The promoted registry was
+never corrupt; maintenance was reaching the wrong reader. Two representations exist (`B-057`): the
+authoring workspace with its unversioned `artifacts/<kind>/<name>/artifact.json` compiled into
+`aart.lock.json` and `aart.index.json`, and the approved representation promotion writes — one
+version record per `registry/versions/<kind>/<name>/<version>.json`, one package per version, and
+the two derived catalogs. Both the generated `.github/workflows/aart-registry.yml` and screen 46's
+Rebuild ran the first reader over the second shape, so `lock` refused a path nothing writes any
+more and Registry PR CI failed a healthy branch.
+
+Each verb now dispatches on the representation it is handed (`D-208`), following `D-147`'s precedent
+for source validation: `is_promoted_registry` answers from the presence of `registry/versions/`.
+`validate` drops the compiled-lock requirement because `validate_promoted_registry` is the stricter
+check and subsumes it; `build` derives exactly `registry/index.json` and `registry/snapshot.json`,
+reading version records with a parse-only `read_registry_version_records` so a stale catalog can be
+repaired rather than refused; `lock` becomes a read-only prepared curation, since approved versions
+are pinned by their own records and `RegistryWorkspacePlan` cannot be empty; `publish` chains the
+same build, validate and audit with no lock half. Screen 46 reaches the same authority through
+`refresh_registry_workspace`, so it is repaired at the same seam rather than a second one. The verb
+names and the generated workflow are unchanged, so registries already scaffolded keep working, and
+nothing writes a second legacy representation.
+
+`tests/promoted_registry_maintenance_e2e_test.py` builds its workspace through the public `registry
+init` → `registry scan` → `registry promote --yes` chain, not a fixture, and runs the six generated
+verbs in the workflow's own order. It also holds that maintenance never writes `aart.lock.json` or
+`aart.index.json`, that `build` restores a damaged catalog, that a damaged version record is still
+refused, that `publish` gates without locking, and that screen 46's port passes all four stages.
+Four targeted mutations were killed. Focused suites, changed-module `mypy`, `ruff check` and `ruff
+format --check` are green; full gates stay deferred to CP-19 step 15. Both blocking findings are now
+awaiting the operator's manual retest, and the remaining CP-19 work is the UX batch.

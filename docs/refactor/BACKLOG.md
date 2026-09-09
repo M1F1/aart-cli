@@ -1396,6 +1396,19 @@ representation or weakening either validator.
 Evidence/links: QA-025; QA-032; GitHub Actions run `34341007222`; D-147; D-204; D-205;
 CP-19 step 9.
 
+**CLOSED by CP-19 step 9 (2026-09-09).** Maintenance now dispatches on the representation it is
+handed rather than assuming the authoring workspace (`D-208`). `is_promoted_registry` recognizes the
+approved shape; `validate` stops requiring a compiled lock and index for it; `build` derives exactly
+`registry/index.json` and `registry/snapshot.json`; `lock` is a read-only prepared curation, since
+the approved version records already pin what `aart.lock.json` used to; `publish` runs the same
+build, validate and audit without the lock half. The verbs' names and the generated workflow are
+unchanged, so registries already scaffolded keep working, and the authoring workspace keeps its
+existing path untouched. `tests/promoted_registry_maintenance_e2e_test.py` runs all six generated
+verbs over a workspace built by the public `init → scan → promote` chain and holds that maintenance
+never writes the older representation. The third consequence above -- a checkout that is also a
+consumer `source-local` source -- stays out of scope: that arrangement is the one CP-15 step 7
+deliberately does not support.
+
 ## B-058 — Scoped mutmut can reuse stale outcomes after test-only changes
 
 Found in CP-16 step 1. After adding assertions to `tests/doctor_command_e2e_test.py`, rerunning the
@@ -2539,7 +2552,15 @@ Evidence/links: `D-197`; `tests/harness_registration_roundtrip_test.py`;
 `tests/opencode_installation_e2e_test.py`; `tests/codex_installation_e2e_test.py`;
 `tests/artifact_installation_e2e_test.py`.
 
-## B-099 — Whether a TUI promotion leaves generated registry files complete — REOPENED, CRITICAL
+## B-099 — Whether a TUI promotion leaves generated registry files complete — CLOSED
+
+**Closed by CP-19 step 9 (2026-09-09).** Screen 46's Rebuild reaches the same curation authority the
+CLI does, through `refresh_registry_workspace`, so the representation dispatch that closed `B-057`
+repairs it at that one seam rather than in a second place (`D-208`).
+`test_screen_46_rebuilds_the_registry_a_promotion_left_behind` calls that port over a really
+promoted checkout and holds that lock, build, validate and audit all pass in canonical order. The
+original question this item asked -- whether a promotion alone leaves the generated files complete
+-- is answered on screen 46h by a rebuild reporting that nothing needed changing.
 
 **Reopened by real manual retest (`D-205`).** D-200 supplied the missing route, but its focused
 fixture never fed it the Registry that canonical promotion actually writes. The first real run
