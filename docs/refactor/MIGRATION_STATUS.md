@@ -871,3 +871,14 @@ the changed modules, and `ruff check`/`ruff format --check` are green; full gate
 the operator during the manual batch.
 
 **Next:** QA-027, Enter from completed result screens back to the list that began their sequence.
+
+**CP-19 planning checkpoint (2026-09-09).** The operator separated post-refactor manual acceptance
+from the closed refactor by opening CP-19 (D-203). QA-026 is its completed first step; QA-027 through
+QA-030 are scoped, unimplemented interaction/layout steps. QA-031/B-100 records the blocking second
+promotion: local `cc7c01d` contains an unpublished Skill promotion while synchronized remote `main`
+is `027ba7f`, so exact baseline equality correctly refuses the MCP transaction. The gap is the
+generic diagnosis, not the guard. Implementation is paused while manual discovery continues; the
+unfinished QA-027 RED file was removed.
+
+**Next:** publish the existing Registry branch through Git review, update local `main`, synchronize
+the Registry in the TUI and resume the walkthrough at the MCP Candidate. Record findings only.

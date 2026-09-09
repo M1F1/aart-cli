@@ -4685,3 +4685,24 @@ This also settles where action instructions belong. Screen 46's `Actions:` body 
 copy of its keyboard contract and is removed; the body describes Registry state, while the chrome
 describes how to act on that state. A headless test presses advertised `b Rebuild` and reaches 46h,
 so the claim is not held by matching label text alone.
+
+## D-203 — Post-refactor manual acceptance is a new slice, not a reopened refactor
+
+Date: 2026-09-09 · Increment: CP-19 planning · Status: accepted
+
+CP-13, CP-14 and CP-18 are verified statements about the accepted implementation and its release
+gate. Real operator use after closure is now finding usability and recovery work that matters, but
+retroactively reopening those slices would make their recorded evidence ambiguous: it would no
+longer be clear whether the original contract failed or a later acceptance improvement is pending.
+
+The work therefore continues as CP-19, with one plan step per bounded QA claim and a dedicated slice
+document. Root `TODO.md` remains the operator-facing reproduction/retest queue; BACKLOG carries the
+implementation context; `plan.json` now answers how much post-refactor work remains. A discovery
+pass records findings but does not start their implementation. The only step already done at slice
+creation is QA-026, because it was committed before the operator asked to pause.
+
+The Registry baseline refusal found at the next checkpoint is scoped as QA-031/B-100, not weakened
+to keep the walkthrough moving. The measured state is an intentional local promotion not yet on the
+synchronized remote branch. Publication and synchronization complete that state transition; the
+future implementation owes the operator an exact diagnosis and recovery, while the equality guard
+continues to protect the reviewed transaction.

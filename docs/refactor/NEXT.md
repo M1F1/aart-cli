@@ -1247,6 +1247,21 @@ the advertised Registry key through the real shell.
 terminal result screen, beginning with Source Sync Result (34). Continue with focused gates only;
 the operator deferred the full suites until this manual-acceptance batch is handed back.
 
+**CP-19 opened by operator direction (2026-09-09).** Post-refactor manual findings now have their
+own execution slice and plan steps rather than living only in TODO/BACKLOG (D-203). Implementation
+is paused while the operator continues discovery. QA-027's uncommitted RED draft was removed; no
+production change for QA-027–QA-031 exists.
+
+The current blocking checkpoint is QA-031/B-100. The local Registry is clean at `cc7c01d` on
+`qa/publish-v1`, containing the first Skill promotion; remote `main` and the synchronized approved
+Registry are still at `027ba7f`. The exact-baseline refusal is correct. To continue the manual run,
+publish and merge that existing branch, update the local `main`, restart the TUI, synchronize
+`aart-test-registry` on screen 21 and retry the MCP Candidate. The later implementation task is to
+make that state and recovery explicit in the TUI without weakening the comparison.
+
+**Next action:** continue manual discovery from the recorded CP-19 checkpoint and append new QA
+findings. Do not implement the open steps until the operator starts the next work session.
+
 ## Critical boundaries for this slice
 
 - Product Specification is the sole product authority.

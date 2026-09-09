@@ -99,6 +99,28 @@ Each new entry records:
         New                skill/verification-before-completion 1.0.0         superpowers-test
       ```
 
+- [ ] **QA-031 — Promotion baseline refusal does not explain the unpublished Registry change.**
+      Stage: promoting the second Candidate during the real Registry walkthrough
+      Surface: Registry Diff (43)
+      Severity: high
+      Blocks current stage: yes, until the preceding Registry commit is published and synchronized
+      Reproduction: promote `skill/verification-before-completion@1.0.0` into the local Registry,
+      leave that commit on `qa/publish-v1` without publishing it, then review promotion of
+      `mcp/aart-e2e-mcp@1.0.0` against the Registry still synchronized from remote `main`
+      Expected: the safety refusal remains, but it identifies the local unpublished Registry
+      change and explains the sequence in product terms: publish/review the prior change, update
+      the checkout, synchronize the Registry, then review this promotion again
+      Observed: screen 43 first shows a complete five-path transaction, then says only `registry
+      workspace does not match the synchronized approved baseline` and `synchronize or restore the
+      registry checkout`. It does not say what differs or that the preceding promotion is the
+      difference, so the operator cannot tell whether to publish, discard, rebuild or synchronize
+      Evidence: the lab checkout is clean at local `cc7c01d` on `qa/publish-v1`, containing the
+      Skill promotion; `origin/main` and the synchronized Registry are still at `027ba7f`. The
+      refusal is therefore correct, but its diagnosis and TUI recovery are not actionable.
+      Note: do not weaken the baseline equality check. The future increment must first distinguish
+      an unpublished local promotion, a stale checkout, the wrong workspace root and unrelated
+      drift; no `aart ...` command text may enter the TUI.
+
 ### Fixed — awaiting manual retest
 
 - [ ] **QA-026 — The footer does not name the keys the current screen actually has.**

@@ -2539,3 +2539,29 @@ commit, so those four commands may be writing nothing at all. The manual pass wi
 If they change nothing, the walkthrough should drop them and the TUI is complete for that boundary.
 If they do change something, the gap is real and this becomes a QA finding rather than a backlog
 note. Not on the critical path either way — the Git publication boundary is deliberately manual.
+
+## B-100 — A safe Registry baseline refusal does not identify the state that caused it
+
+Found: manual TUI acceptance, QA-031 (2026-09-09) · Severity: high · Status: open
+
+The second real promotion stopped at screen 43 with `registry workspace does not match the
+synchronized approved baseline`. The check is load-bearing and must remain exact: preparing another
+transaction on top of Registry bytes consumers have never synchronized would make its reviewed
+baseline false. The lab established the specific, legitimate mismatch. The writable checkout is
+clean at local commit `cc7c01d` on `qa/publish-v1`, containing the first Skill promotion, while
+`origin/main` and the approved Registry observation remain at `027ba7f`.
+
+The defect is diagnosis and recovery, not the refusal. The screen shows a complete transaction and
+then offers one generic sentence that cannot distinguish an unpublished prior promotion, a stale
+local checkout, an accidentally selected workspace root or unrelated local drift. Those cases need
+different operator choices; saying only “synchronize or restore” leaves the operator guessing which
+state is authoritative and risks discarding an intentional promotion.
+
+The future CP-19 increment must begin with characterization over the four states above and keep the
+baseline equality check intact. For the measured unpublished-commit case, the TUI should explain in
+product terms that the prior Registry change must complete Git review/publication, the checkout must
+observe that published state, and the Registry subscription must synchronize before another
+promotion can be reviewed. Interactive guidance must contain no `aart ...` command text (D-185).
+
+Evidence/links: QA-031; `application/maintainer_promotion.py::prepare_promotion_transaction`;
+Product Specification 161.7 and 165.28; D-103; D-137; CP-19 step 7.

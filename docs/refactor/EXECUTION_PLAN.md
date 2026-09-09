@@ -12,6 +12,9 @@ flows are implemented, the MCP vertical slice works end-to-end, desired-state re
 lifecycle operations, Git-backed live acceptance passes, legacy paths no longer hold product
 authority, and the repository's full quality/release gates are green.
 
+That definition was met by CP-18. CP-19 is the follow-on post-refactor manual acceptance program;
+its open status does not retroactively reopen the verified refactor or its invariant evidence.
+
 ## Non-negotiable execution rules
 
 1. Do not refactor old AART repositories. They are read-only reference material.
@@ -134,6 +137,13 @@ Specification, complete traceability for all mandatory invariants, run full qual
 security + mutation/deep acceptance gates, confirm zero runtime deps, and prepare
 Release Please/release workflow according to the accepted release model.
 
+### CP-19 — Manual TUI acceptance hardening
+Convert findings from the real post-refactor Registry → Marketplace → lifecycle walkthrough into
+bounded work without reopening the verified refactor slices. Complete the contextual keyboard
+footer, result-screen exits, fresh-form lifecycle, review layout and stable tables; preserve the
+Registry baseline safety check while making each mismatch and recovery actionable; then resume the
+walkthrough from its recorded checkpoint and run the full batch gates before handback.
+
 ## Dependency order
 
 ```text
@@ -141,7 +151,7 @@ CP-00 → CP-01 → CP-02 → CP-03 → CP-04 → CP-05 → CP-06 → CP-07
                                                 ↓
 CP-08 → CP-09 → CP-10 → CP-11 → CP-12 → CP-13 → CP-14 → CP-15
                                                           ↓
-                                           CP-16 → CP-17 → CP-18
+                                           CP-16 → CP-17 → CP-18 → CP-19
 ```
 
 Parallelism is allowed only when slices do not share unsettled domain contracts and neither depends

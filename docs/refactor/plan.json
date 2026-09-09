@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "title": "AART refactor",
+  "title": "AART refactor and post-refactor acceptance",
   "epics": [
     {
       "id": "CP-00",
@@ -264,6 +264,53 @@
           "id": "6",
           "title": "Full quality, packaging, security and deep acceptance gates",
           "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "CP-19",
+      "title": "Manual TUI acceptance hardening",
+      "status": "in_progress",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Contextual footer derived from the active key bindings (QA-026)",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Complete the manual Registry-to-lifecycle discovery run and capture every finding",
+          "status": "in_progress"
+        },
+        {
+          "id": "3",
+          "title": "Enter returns completed sequences to their owning list (QA-027)",
+          "status": "todo"
+        },
+        {
+          "id": "4",
+          "title": "New forms open empty while refused forms retain their draft (QA-028)",
+          "status": "todo"
+        },
+        {
+          "id": "5",
+          "title": "Review screens separate facts, decisions and action prompts (QA-029)",
+          "status": "todo"
+        },
+        {
+          "id": "6",
+          "title": "Stable table columns with the focused value shown in full (QA-030)",
+          "status": "todo"
+        },
+        {
+          "id": "7",
+          "title": "Diagnose registry baseline mismatch and provide an honest TUI recovery (QA-031)",
+          "status": "todo"
+        },
+        {
+          "id": "8",
+          "title": "Focused evidence per increment and full batch verification before handback",
+          "status": "todo"
         }
       ]
     }
