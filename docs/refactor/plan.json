@@ -315,12 +315,12 @@
         {
           "id": "9",
           "title": "TUI maintenance and generated Registry CI validate canonical promotion output (QA-025/QA-032/B-057/B-099)",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "10",
           "title": "Failed actions leave review state without retaining a stale confirmation (QA-033/B-101)",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "11",

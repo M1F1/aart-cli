@@ -198,6 +198,18 @@ Each new entry records:
       `nothing was prepared for this action; review it again`.
       Note: QA-032 explains this particular lock refusal, but the stale terminal state is a
       separate reducer/result-screen defect and must hold for every failed action.
+      Fix: a refused run now says so. `_failed` emits `ACTION_FAILED` instead of an empty
+      `ACTION_RECORDED`, which the reducer could only read as no transition at all; the reducer
+      clears the plan and records `failed_action`, so the review it was confirmed from becomes that
+      attempt's terminal result without moving off the refusal (`D-209`). The footer offers
+      `Enter Back to list` instead of `Enter Confirm`, Enter navigates to the screen that owns the
+      run, and the heading says the run did not happen. Leaving the screen ends the terminal state,
+      so the next review is a review again.
+      Evidence: `tests/failed_action_terminal_state_test.py` holds all of it across four confirmed
+      action kinds, not Registry rebuild alone, plus the frame the operator actually read and the
+      `QA-024` claim that an unconfirmed review still asks for its confirmation.
+      Retest: run a Registry action that refuses, and confirm the screen becomes a result with one
+      route back and no confirmation prompt.
 
 - [ ] **QA-035 — Dashboard sections have no visual hierarchy.**
       Stage: reading the main Dashboard

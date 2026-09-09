@@ -873,7 +873,7 @@ the operator during the manual batch.
 **Next:** QA-027, Enter from completed result screens back to the list that began their sequence.
 
 **CP-19 planning checkpoint (2026-09-09).** The operator separated post-refactor manual acceptance
-from the closed refactor by opening CP-19 (D-203). QA-026, QA-034 and QA-025/QA-032 are its completed steps 1, 8 and 9; QA-027 through
+from the closed refactor by opening CP-19 (D-203). QA-026, QA-034, QA-025/QA-032 and QA-033 are its completed steps 1, 8, 9 and 10; QA-027 through
 QA-030 are scoped, unimplemented interaction/layout steps. QA-031/B-100 records the blocking second
 promotion: local `cc7c01d` contains an unpublished Skill promotion while synchronized remote `main`
 is `027ba7f`, so exact baseline equality correctly refuses the MCP transaction. The gap is the
@@ -971,3 +971,21 @@ refused, that `publish` gates without locking, and that screen 46's port passes 
 Four targeted mutations were killed. Focused suites, changed-module `mypy`, `ruff check` and `ruff
 format --check` are green; full gates stay deferred to CP-19 step 15. Both blocking findings are now
 awaiting the operator's manual retest, and the remaining CP-19 work is the UX batch.
+
+**CP-19 step 10 complete — QA-033/B-101 closed (2026-09-09).** A confirmed run that refused left the
+session on its own review screen, still advertising `Enter Confirm` over a plan the action adapter
+had already discarded, so the advertised key could only answer `nothing was prepared for this
+action`. The cause was one event carrying two facts: `_failed` emitted an empty `ACTION_RECORDED`,
+which the reducer reads as nothing recorded and therefore as no transition. `ACTION_FAILED` splits
+them (`D-209`). The reducer clears `action`, sets `failed_action`, and leaves the screen where it is
+so the refusal stays drawn; the footer offers `Enter Back to list`, `key_event` navigates through
+the same `_ACTION_RESULT` table a recorded run uses, the review's prompt is replaced by what
+happened, and the heading gains `- did not run`. State validation refuses `action` and
+`failed_action` both being set, because a plan cannot be awaiting confirmation and finished with at
+once. Navigating away clears it: the terminal state belongs to one attempt.
+
+`tests/failed_action_terminal_state_test.py` holds the claims over four confirmed action kinds as
+subtests -- Registry rebuild, Registry init, Source add and Registry add -- plus the frame the
+operator actually read, and the `QA-024` claim that a review nobody has confirmed still asks for its
+confirmation. `_owning_screen` is the shared mechanism `QA-027` (step 3) extends rather than
+duplicating.

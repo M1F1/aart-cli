@@ -4844,3 +4844,39 @@ workspace through the public `registry init` → `registry scan` → `registry p
 a fixture's idea of a registry, and holds that maintenance never writes `aart.lock.json` or
 `aart.index.json`, that a damaged catalog is rebuilt, and that a damaged version record is still
 refused.
+
+## D-209 — A run that stopped is a result, not a review still waiting
+
+Date: 2026-09-09 · Increment: CP-19 step 10, QA-033/B-101 · Status: accepted
+
+Every confirmed action that could not run reached one place, `_failed`, which discarded the pending
+plan and then emitted `ACTION_RECORDED` with empty text. `_action_recorded` reads empty text as
+nothing having been recorded and returns the state unchanged — deliberately, because there is no
+result screen for a run that produced nothing and moving away would take the refusal with it. The
+consequence was that two different facts arrived as the same event: a confirmation that never
+happened, and an attempt that is over. The screen could only assume the first. It kept `action`
+set, kept its `press Enter to start it` prompt, kept `Enter Confirm` in the footer, and answered
+that key with `nothing was prepared for this action; review it again` — true, and useless, because
+the plan is gone precisely because the run happened.
+
+So the two facts become two events. `ACTION_FAILED` clears `action` and sets `failed_action`, a
+separate field for the run this screen is now the end of; state validation refuses both being set
+at once, because a plan cannot be simultaneously awaiting confirmation and finished with. The screen
+does not move — the refusal answers a question asked here — but nothing on it offers a confirmation
+any more: the footer says `Enter Back to list`, `key_event` turns Enter into navigation to the
+screen that owns the run (`_ACTION_RESULT`, the same table a recorded run uses, so a refused run and
+a successful one leave for the same place), and the review's prompt is replaced by what happened.
+The heading gains `- did not run`, because the screen's name still says "review". Navigating away
+clears `failed_action`: the terminal state belongs to one attempt, not to the screen.
+
+Two alternatives were rejected. Moving to the owning screen automatically on failure would discard
+the only place the refusal is drawn, which is the defect `_ANSWERABLE` exists to prevent. Making the
+existing empty `ACTION_RECORDED` mean "failed" would leave one event carrying two meanings, and
+`_action_recorded`'s empty-text guard is also what protects a genuinely empty result from
+navigating; splitting the event is what lets each rule say one thing.
+
+Consequence: this is the general mechanism `QA-027` needs as well — Enter on a terminal result
+returning to the list that owns it — so step 3 extends `_owning_screen` rather than adding a second
+route. The claims are held across four confirmed action kinds in
+`tests/failed_action_terminal_state_test.py`, including the `QA-024` claim that a review nobody has
+confirmed still asks for its confirmation.

@@ -2614,7 +2614,15 @@ Product Specification 161.7 and 165.28; D-103; D-137; CP-19 step 7.
 
 ## B-101 — A failed TUI action retains a confirmation for a plan that no longer exists
 
-Found: manual TUI acceptance, QA-033 (2026-09-09) · Severity: high · Status: open
+Found: manual TUI acceptance, QA-033 (2026-09-09) · Severity: high · Status: CLOSED by CP-19 step 10
+
+**Closed (2026-09-09).** The two facts a review needed to tell apart -- a confirmation that never
+happened and an attempt that is over -- arrived as the same event, so the reducer could only treat
+both as nothing. `ACTION_FAILED` separates them, `failed_action` records which run this screen is
+now the end of, and the confirmation disappears from the footer, from `key_event` and from the
+review's own prompt (`D-209`). Held across four confirmed action kinds in
+`tests/failed_action_terminal_state_test.py`, which also holds `QA-024`: an unconfirmed review
+still asks for its confirmation.
 
 The real Registry rebuild ran `lock`, received the known QA-032/B-057 representation refusal and
 stopped. Its adapter correctly cleared `_pending` and `_pending_action`, but `_failed` emitted an

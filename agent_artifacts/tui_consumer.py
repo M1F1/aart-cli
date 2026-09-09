@@ -1042,8 +1042,11 @@ class ConsumerActionUpdate:
         if not isinstance(self.event, ConsumerUiEvent) or self.event.kind not in (
             ConsumerUiEventKind.ACTION_PREPARED,
             ConsumerUiEventKind.ACTION_RECORDED,
+            # An attempt that stopped is a third thing an action establishes, and the one it used
+            # to have to disguise as an empty recording (`QA-033`).
+            ConsumerUiEventKind.ACTION_FAILED,
         ):
-            raise ValueError("a consumer action update needs a prepared or recorded event")
+            raise ValueError("a consumer action update needs a prepared, recorded or failed event")
         if self.completion is not None and not callable(getattr(self.completion, "complete", None)):
             raise ValueError("a consumer action completion needs a terminal boundary")
 
@@ -1091,6 +1094,24 @@ def _title(screen: ApplicationScreen) -> str:
     return _human(screen.value.split("-", 1)[1]).title()
 
 
+def _review_prompt(state: ConsumerUiState, prompt: str) -> tuple[str, ...]:
+    """A review's own instruction, or -- once its confirmed run stopped -- what happened instead.
+
+    The screen keeps its name and its place, because the refusal below answers a question asked
+    here. What it may not keep is the instruction to press a key that would start the run: the run
+    was already attempted, its plan was discarded when it stopped, and the only thing that key can
+    do now is leave (`QA-033`).
+    """
+
+    if state.failed_action is None:
+        return (prompt,)
+    return (
+        "This run stopped, so nothing here was changed. Why it stopped is below.",
+        "",
+        "Enter returns to the list.",
+    )
+
+
 def _binding_text(binding: KeyBinding) -> str:
     return f"{binding.key} {binding.label}"
 
@@ -1113,6 +1134,10 @@ def frame(source: ConsumerScreenSource, state: ConsumerUiState) -> tuple[str, ..
     """One drawn screen: heading, body, prompts, and the persistent navigation footer."""
 
     heading = f"AART / {_title(state.session.screen)}"
+    if state.failed_action is not None:
+        # The screen's name still says "review", and it is now the result of an attempt. Saying so
+        # here is what stops the plan below reading as something still about to happen (`QA-033`).
+        heading += " - did not run"
     lines = [heading, "", *source.lines(state)]
     if state.help_visible:
         lines.extend(("", *_HELP_LINES))
@@ -1202,12 +1227,15 @@ def run_consumer_shell(
             update = action_handler.handle(command)
             if not isinstance(update, ConsumerActionUpdate):
                 raise ValueError("a consumer action handler returned an invalid update")
+            # An execution answers with what it established: a recording, or the fact that the
+            # attempt stopped. Both are answers to the same command, and the second is the one
+            # that used to have to arrive disguised as an empty recording (`QA-033`).
             expected = (
-                ConsumerUiEventKind.ACTION_PREPARED
+                (ConsumerUiEventKind.ACTION_PREPARED,)
                 if command.kind is ConsumerUiCommandKind.PREPARE_ACTION
-                else ConsumerUiEventKind.ACTION_RECORDED
+                else (ConsumerUiEventKind.ACTION_RECORDED, ConsumerUiEventKind.ACTION_FAILED)
             )
-            if update.event.kind is not expected or update.event.action is not command.action:
+            if update.event.kind not in expected or update.event.action is not command.action:
                 raise ValueError("a consumer action handler returned the wrong action update")
             active_source = (
                 update.source if update.completion is None else update.completion.complete(terminal)
@@ -2414,13 +2442,19 @@ class CanonicalScreenSource:
                 "Enter reviews the run under the cursor.",
             )
         if screen is MaintainerScreen.REGISTRY_REBUILD_REVIEW:
-            return ("Review the run below, then press Enter to start it.",)
+            return _review_prompt(state, "Review the run below, then press Enter to start it.")
         if screen is MaintainerScreen.REGISTRY_INIT_REVIEW:
-            return ("Review the registry below, then press Enter to create it.",)
+            return _review_prompt(
+                state, "Review the registry below, then press Enter to create it."
+            )
         if screen is MaintainerScreen.SOURCE_ADD_REVIEW:
-            return ("Review the Source connection below, then press Enter to connect.",)
+            return _review_prompt(
+                state, "Review the Source connection below, then press Enter to connect."
+            )
         if screen is ConsumerScreen.REGISTRY_REVIEW:
-            return ("Review the registry connection below, then press Enter to connect.",)
+            return _review_prompt(
+                state, "Review the registry connection below, then press Enter to connect."
+            )
         if screen is ConsumerScreen.REGISTRY_SYNC:
             connected = next(
                 (item for item in screens.registries if item.alias == state.focus),

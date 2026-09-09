@@ -58,10 +58,13 @@ internal state model.
    Rebuild reaches the same authority through `refresh_registry_workspace`, so it is repaired at the
    same seam. Nothing writes a second legacy representation, and the generated workflow is unchanged
    so already-scaffolded registries keep working.
-10. **Failed-action terminal state (QA-033/B-101) — TODO.** Once an attempted action refuses, replace
-   its review/confirmation state with an explicit failed result. The pending plan is already gone,
-   so the footer may not advertise confirmation; offer the owning list or a freshly prepared retry.
-   Characterize this across action kinds rather than special-casing Registry rebuild.
+10. **Failed-action terminal state (QA-033/B-101) — DONE.** A confirmation that never happened and
+   an attempt that is over arrived as the same event, so the reducer could only treat both as
+   nothing. `ACTION_FAILED` separates them: `action` clears, `failed_action` records which run this
+   screen is the end of, the footer offers `Enter Back to list`, Enter navigates through the same
+   `_ACTION_RESULT` table a recorded run uses, and the review's prompt and heading say the run did
+   not happen (D-209). The screen does not move, because the refusal is drawn here. Held across four
+   confirmed action kinds, with `QA-024` preserved.
 11. **Workflow progress and back context (QA-036/QA-037) — TODO.** Give every multi-step sequence a
    compact completed/current/upcoming trail derived from its real navigation graph. Back restores
    the same stable subject and read model; it may not return to a screen that says its Candidate is
@@ -119,6 +122,12 @@ promoted `lock` so it falls back to the authoring lock, disabling the approved r
 `registry_maintenance.planning`, and disabling the promoted `build` dispatch. Each turned the
 acceptance tests red, including the screen-46 rebuild claim.
 
+Step 10 was RED against the shipped reducer with the operator's own symptom: `Enter Confirm` still
+advertised over a discarded plan, and `key_event` still returning `CONFIRM_ACTION`. The claims are
+stated over four confirmed action kinds as subtests rather than over Registry rebuild alone, and the
+frame test asserts what the operator actually read — heading, prompt and footer — with the refusal
+still on screen, because losing the refusal would be the worse defect.
+
 QA-026 was RED against the fixed footer. A semantic mutation routing advertised `b Rebuild` to the
 initialization screen was killed by the headless shell walk. The focused 238-test interaction and
 boundary set, changed-module `mypy`, `ruff check`, `ruff format --check` and `make docs-check` were
@@ -136,7 +145,7 @@ green. Full repository gates are intentionally deferred until step 15 at the ope
 
 ## Exact next implementation action
 
-Both blocking steps are closed. Execute the UX batch next, starting with step 10
-(QA-033/B-101, failed-action terminal state), because it is the one QA-025's own retest run exposed
-and it must hold for every action kind, not only Registry rebuild. Steps 3–7 and 11–14 follow; step
-15 runs the full gates once the operator hands the batch back.
+Execute step 3 (QA-027) next. It is the same mechanism step 10 just built seen from the successful
+side — Enter on a terminal result returns to the list that owns it — so it extends `_owning_screen`
+rather than adding a second route. Steps 4–7 and 11–14 follow; step 15 runs the full gates once the
+operator hands the batch back.

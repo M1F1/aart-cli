@@ -1339,13 +1339,19 @@ through `refresh_registry_workspace`, so it is repaired at the same seam.
 `promote --yes` chain and then the six verbs in the generated workflow's order, and holds that
 maintenance never writes `aart.lock.json` or `aart.index.json`. Four targeted mutations were killed.
 
-**Exact next action for Claude:** CP-19 step 10 — QA-033/B-101. A refused run clears its pending
-plan but leaves the reducer on the review screen, whose header still says to press Enter to start
-and whose footer still advertises `Enter Confirm`, so a second Enter can only be rejected as
-`nothing was prepared for this action`. Characterize a failed run as a terminal state distinct from
-an unexecuted review across action kinds, not only Registry rebuild, and give it one honest route to
-the owning list or a freshly prepared retry. Then the rest of the UX batch (steps 3–7, 11–14).
-Focused gates only; the operator deferred the full suites to step 15.
+**CP-19 step 10 is DONE — QA-033/B-101 closed (2026-09-09).** A refused run and a confirmation that
+never happened arrived at the reducer as the same event, so it could only treat both as nothing.
+`ACTION_FAILED` separates them: `action` clears, `failed_action` records which run this screen is
+now the end of, the footer offers `Enter Back to list`, Enter navigates through the same
+`_ACTION_RESULT` table a recorded run uses, and the prompt and heading say the run did not happen
+(D-209). The screen deliberately does not move, because the refusal is drawn there. Held over four
+confirmed action kinds in `tests/failed_action_terminal_state_test.py`, with `QA-024` preserved.
+
+**Exact next action for Claude:** CP-19 step 3 — QA-027. Enter on a terminal result must return to
+the list that owns it. That is step 10's mechanism seen from the successful side, so extend
+`_owning_screen` and the `ACTION_RECORDED` rule rather than adding a second route, and use the
+completed Candidate flow as its evidence. Then steps 4–7 and 11–14. Focused gates only; the operator
+deferred the full suites to step 15.
 
 ## Critical boundaries for this slice
 

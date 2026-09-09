@@ -1344,14 +1344,18 @@ class LocalConsumerActions:
     def _failed(self, command: ConsumerUiCommand, notice: tuple[str, ...]) -> ConsumerActionUpdate:
         """An execution that did not record anything, drawn on the screen it was run from.
 
-        `text` is empty, which `_action_recorded` reads as nothing having been recorded, so the
-        session stays on the running screen instead of opening a result that does not exist.
+        The screen stays where it is: the refusal answers a question asked here, and no result
+        screen exists for a run that produced nothing. But the attempt is over -- the pending plan
+        is discarded on the line above -- so this says the run failed rather than saying nothing
+        was recorded. The two used to be one event, and a review told it "nothing was recorded"
+        cannot tell an attempt that stopped from a confirmation that never happened, so it went on
+        advertising a key whose only answer was that nothing was prepared (`QA-033`).
         """
 
         self._pending, self._pending_action = None, None
         return ConsumerActionUpdate(
             self.source(notice=notice),
-            ConsumerUiEvent(ConsumerUiEventKind.ACTION_RECORDED, action=command.action),
+            ConsumerUiEvent(ConsumerUiEventKind.ACTION_FAILED, action=command.action),
         )
 
     def _execute(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:

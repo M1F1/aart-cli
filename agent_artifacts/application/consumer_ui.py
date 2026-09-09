@@ -94,6 +94,7 @@ class ConsumerUiEventKind(str, Enum):
     ACTION_PREPARED = "action-prepared"
     CONFIRM_ACTION = "confirm-action"
     ACTION_RECORDED = "action-recorded"
+    ACTION_FAILED = "action-failed"
     EDIT_REGISTRY = "edit-registry"
     EDIT_SOURCE = "edit-source"
     EDIT_REGISTRY_INIT = "edit-registry-init"
@@ -361,6 +362,10 @@ class ConsumerUiState:
     quit_pending: bool = False
     exited: bool = False
     action: ConsumerActionKind | None = None
+    #: The action whose attempted run stopped on this screen. It is not `action`: that plan is
+    #: gone, so there is nothing left to confirm, and a review still advertising a confirmation is
+    #: offering a key whose only possible answer is that nothing was prepared (`QA-033`).
+    failed_action: ConsumerActionKind | None = None
     #: What the Candidate list is narrowed to. Screen 53 edits it; screen 35 obeys it.
     candidate_filter: MaintainerCandidateFilter = MaintainerCandidateFilter()
     #: Whether the Candidate diff is also showing raw canonical file changes (INV-202).
@@ -397,6 +402,12 @@ class ConsumerUiState:
             or not isinstance(self.quit_pending, bool)
             or not isinstance(self.exited, bool)
             or (self.action is not None and not isinstance(self.action, ConsumerActionKind))
+            or (
+                self.failed_action is not None
+                and not isinstance(self.failed_action, ConsumerActionKind)
+            )
+            # A plan cannot be both awaiting confirmation and already finished with.
+            or (self.action is not None and self.failed_action is not None)
             or not isinstance(self.candidate_filter, MaintainerCandidateFilter)
             or not isinstance(self.file_diff, bool)
             or not isinstance(self.registry_draft, RegistryDraft)
@@ -458,6 +469,7 @@ def _navigate(
         help_visible=False,
         quit_pending=False,
         file_diff=False,
+        failed_action=None,
     )
     return updated, (ConsumerUiCommand(ConsumerUiCommandKind.LOAD_SCREEN, screen),)
 
@@ -474,6 +486,7 @@ def _back(state: ConsumerUiState) -> tuple[ConsumerUiState, tuple[ConsumerUiComm
         help_visible=False,
         quit_pending=False,
         file_diff=False,
+        failed_action=None,
     )
     return updated, (ConsumerUiCommand(ConsumerUiCommandKind.LOAD_SCREEN, session.screen),)
 
@@ -830,6 +843,34 @@ ACTION_ANSWER_SCREENS: frozenset[ApplicationScreen] = frozenset(
 ) | frozenset(_ACTION_RESULT.values())
 
 
+def _owning_screen(
+    action: ConsumerActionKind, screen: ApplicationScreen
+) -> ApplicationScreen | None:
+    """Where a run confirmed on this screen belongs once it is over, however it ended.
+
+    A refused run and a recorded one leave for the same place, because the operator was never
+    asking to be on a review screen: they were asking for the run, and the run is finished.
+    """
+
+    return _ACTION_RESULT.get((action, screen))
+
+
+def _action_failed(
+    state: ConsumerUiState, event: ConsumerUiEvent
+) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
+    """An attempted run stopped, so its review becomes the finished result of that attempt.
+
+    The screen does not move. The refusal is drawn where it was caused, and moving away from it
+    would take the explanation with it. What changes is that there is no plan left to confirm:
+    `action` clears, and `failed_action` says which run this screen is now the end of (`QA-033`).
+    """
+
+    action = event.action
+    if action is None or action is not state.action:
+        return state, ()
+    return replace(state, action=None, failed_action=action, quit_pending=False), ()
+
+
 def _action_recorded(
     state: ConsumerUiState, event: ConsumerUiEvent
 ) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
@@ -846,7 +887,7 @@ def _action_recorded(
             quit_pending=False,
             action=None,
         ), ()
-    target = _ACTION_RESULT.get((action, state.session.screen))
+    target = _owning_screen(action, state.session.screen)
     if target is None:
         return state, ()
     moved, commands = _navigate(state, target)
@@ -916,6 +957,8 @@ def reduce_consumer_ui(
         return _confirm_action(state)
     if event.kind is ConsumerUiEventKind.ACTION_RECORDED:
         return _action_recorded(state, event)
+    if event.kind is ConsumerUiEventKind.ACTION_FAILED:
+        return _action_failed(state, event)
     if event.kind is ConsumerUiEventKind.EDIT_REGISTRY:
         if state.session.screen is not ConsumerScreen.REGISTRY_ADD:
             return state, ()
@@ -1239,7 +1282,10 @@ def key_bindings(
     else:
         if state.session.screen in _SELECTABLE and " " not in keys:
             bindings.append(KeyBinding("Space", "Select"))
-        if state.session.screen in _CONFIRM_SCREENS and "enter" not in keys:
+        if state.failed_action is not None and "enter" not in keys:
+            # The run is over. The only thing Enter can honestly do here is leave.
+            bindings.append(KeyBinding("Enter", "Back to list"))
+        elif state.session.screen in _CONFIRM_SCREENS and "enter" not in keys:
             label = "Continue" if state.action is None else "Confirm"
             bindings.append(KeyBinding("Enter", label))
         elif detail is not None and "enter" not in keys:
@@ -1493,6 +1539,13 @@ def key_event(
         and state.session.screen is MaintainerScreen.REGISTRY_COMMIT
     ):
         return ConsumerUiEvent(ConsumerUiEventKind.NAVIGATE, screen=MaintainerScreen.REGISTRY)
+    # A run that stopped leaves the same way a run that finished does, for the screen that owns
+    # it -- the review it was confirmed from is now that attempt's result (`QA-033`).
+    if key == "enter" and state.failed_action is not None:
+        owner = _owning_screen(state.failed_action, state.session.screen)
+        if owner is not None:
+            return ConsumerUiEvent(ConsumerUiEventKind.NAVIGATE, screen=owner)
+        return ConsumerUiEvent(ConsumerUiEventKind.BACK)
     if key == "enter" and state.session.screen in _CONFIRM_SCREENS:
         return ConsumerUiEvent(ConsumerUiEventKind.CONFIRM_ACTION)
     if key == "enter" and detail is not None:
