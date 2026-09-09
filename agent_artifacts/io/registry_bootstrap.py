@@ -21,6 +21,11 @@ import os
 import subprocess
 from dataclasses import dataclass
 
+from agent_artifacts.application.maintainer_views import (
+    REGISTRY_MAINTENANCE_STAGES,
+    REGISTRY_REBUILD_EVERYTHING,
+    REGISTRY_STAGE_PURPOSE,
+)
 from agent_artifacts.curation.model import (
     DEFAULT_MAXIMUM_AART,
     DEFAULT_MINIMUM_AART,
@@ -43,9 +48,14 @@ from agent_artifacts.runtime_contract import EXECUTABLE_CAPABILITIES, EXECUTABLE
 __all__ = [
     "REGISTRY_BOOTSTRAP_REFUSED",
     "REGISTRY_BOOTSTRAP_STAGES",
+    "REGISTRY_MAINTENANCE_STAGES",
+    "REGISTRY_REBUILD_EVERYTHING",
+    "REGISTRY_STAGE_PURPOSE",
     "RegistryBootstrapReport",
     "RegistryBootstrapStage",
     "bootstrap_registry_workspace",
+    "refresh_registry_workspace",
+    "registry_absent_refusal",
     "registry_identity_refusal",
 ]
 
@@ -55,7 +65,15 @@ REGISTRY_BOOTSTRAP_REFUSED = DiagnosticCode("registry-bootstrap-refused")
 #: The order, which is the whole product decision this module encodes.
 REGISTRY_BOOTSTRAP_STAGES: tuple[str, ...] = ("init", "lock", "build", "validate", "audit")
 
-_WRITING = (CurationAction.INIT, CurationAction.LOCK, CurationAction.BUILD)
+#: Which stage names are canonical mutations rather than reading gates.
+_WRITING_ACTIONS = {
+    "init": CurationAction.INIT,
+    "lock": CurationAction.LOCK,
+    "build": CurationAction.BUILD,
+}
+
+#: What makes a directory a registry rather than a project that could hold one.
+_REGISTRY_MARKER = "aart-registry.json"
 
 
 @dataclass(frozen=True, slots=True)
@@ -183,6 +201,176 @@ def _report_lines(report: RegistryQualityReport) -> tuple[str, ...]:
     )
 
 
+def _writing_stage(
+    service,
+    root: str,
+    action: CurationAction,
+    *,
+    registry_id: str = "",
+    display_name: str = "",
+    usage_reporting_repository: str | None = None,
+) -> RegistryBootstrapStage:
+    """One canonical mutation, prepared and finalized the way the CLI runs it.
+
+    The identity arguments belong to `init` alone: `lock` and `build` describe a registry that
+    already says what it is, and passing them a name would let a rebuild rename the thing it is
+    rebuilding.
+    """
+
+    initializing = action is CurationAction.INIT
+    try:
+        request = CurationRequest(
+            action,
+            root,
+            source_id=registry_id if initializing else None,
+            display_name=display_name if initializing else None,
+            usage_reporting_repository=(usage_reporting_repository if initializing else None),
+        )
+    except ValueError as error:
+        return RegistryBootstrapStage(action.value, False, (str(error),))
+    prepared = service.prepare(request)
+    if isinstance(prepared, Err):
+        return RegistryBootstrapStage(
+            action.value, False, tuple(item.message for item in prepared.diagnostics)
+        )
+    finalized = service.finalize(prepared.value, prepared.value.review.review_digest)
+    if isinstance(finalized, Err):
+        return RegistryBootstrapStage(
+            action.value, False, tuple(item.message for item in finalized.diagnostics)
+        )
+    if finalized.value.status == "failed":
+        return RegistryBootstrapStage(action.value, False, ("the stage did not apply",))
+    return RegistryBootstrapStage(action.value, True, _outcome_lines(finalized.value))
+
+
+def _gate_stage(workspace: FilesystemRegistryWorkspace, name: str) -> RegistryBootstrapStage:
+    """One reading gate over a freshly re-read snapshot of what the writing stages just left.
+
+    The snapshot is taken per gate rather than once: `validate` is answered about the checkout as
+    it is now, and a gate that judged a snapshot from before the last write would be reporting on
+    a registry that no longer exists.
+    """
+
+    snapshot = workspace.snapshot()
+    if isinstance(snapshot, Err):
+        return RegistryBootstrapStage(
+            name, False, tuple(item.message for item in snapshot.diagnostics)
+        )
+    checked = (
+        validate_registry_workspace(
+            snapshot.value,
+            executable_version=EXECUTABLE_VERSION,
+            available_capabilities=EXECUTABLE_CAPABILITIES,
+        )
+        if name == "validate"
+        else audit_registry_workspace(
+            snapshot.value,
+            executable_version=EXECUTABLE_VERSION,
+            available_capabilities=EXECUTABLE_CAPABILITIES,
+        )
+    )
+    if isinstance(checked, Err):
+        return RegistryBootstrapStage(
+            name, False, tuple(item.message for item in checked.diagnostics)
+        )
+    return RegistryBootstrapStage(name, checked.value.passed, _report_lines(checked.value))
+
+
+def _run_stages(
+    root: str,
+    names: tuple[str, ...],
+    *,
+    registry_id: str = "",
+    display_name: str = "",
+    usage_reporting_repository: str | None = None,
+) -> Result[tuple[RegistryBootstrapStage, ...]]:
+    """Run these stages in the given order, stopping at the first one that does not pass.
+
+    `Err` is reserved for never starting at all -- a checkout with no curation authority to run
+    anything through. Everything else is a stage record, because a run that got three stages in
+    and refused has to be able to say so.
+    """
+
+    workspace = FilesystemRegistryWorkspace(root)
+    service = None
+    stages: list[RegistryBootstrapStage] = []
+    for name in names:
+        action = _WRITING_ACTIONS.get(name)
+        if action is None:
+            stage = _gate_stage(workspace, name)
+        else:
+            if service is None:
+                loaded = load_local_curation_service(root)
+                if isinstance(loaded, Err):
+                    return loaded
+                service = loaded.value
+            stage = _writing_stage(
+                service,
+                root,
+                action,
+                registry_id=registry_id,
+                display_name=display_name,
+                usage_reporting_repository=usage_reporting_repository,
+            )
+        stages.append(stage)
+        if not stage.passed:
+            break
+    return Ok(tuple(stages))
+
+
+def registry_absent_refusal(root: str) -> Err | None:
+    """Whether there is a registry here at all, asked before a run that assumes there is.
+
+    A rebuild over an uninitialized workspace is the mirror of `B-090`'s original defect: `lock`
+    would have nothing to lock. Saying so on the review is what keeps the answer from being four
+    confusing stage refusals (`QA-017`).
+    """
+
+    if os.path.isfile(os.path.join(root, _REGISTRY_MARKER)):
+        return None
+    return _refusal(
+        "this project does not contain a registry to rebuild",
+        "Screen 46 offers Initialize Registry; a registry has to exist before it can be rebuilt.",
+    )
+
+
+def refresh_registry_workspace(
+    *,
+    root: str,
+    stages: tuple[str, ...] = REGISTRY_MAINTENANCE_STAGES,
+) -> Result[RegistryBootstrapReport]:
+    """Re-run some or all of lock, build, validate and audit over an existing registry (`B-099`).
+
+    This is `bootstrap_registry_workspace` minus the one stage that may only happen once. It is
+    what the Maintainer needs after every change to the checkout -- a promotion, an adoption, a
+    hand edit -- and it is the run that had no home in the TUI, so the operator typed four
+    commands and had to remember both their order and their flags.
+
+    The named stages always run in canonical order however they arrive, because the order is the
+    knowledge this module exists to hold: an index built before the lock describes a registry that
+    was never pinned. Like `init`, the run is local: it writes generated files into the checkout
+    the maintainer is already curating, and pushing or merging them stays a separate decision made
+    through the repository's own review (161.7).
+    """
+
+    if not os.path.isabs(root) or os.path.normpath(root) != root:
+        return _refusal("a registry is rebuilt in an absolute project path")
+    unknown = tuple(name for name in stages if name not in REGISTRY_MAINTENANCE_STAGES)
+    if unknown or not stages:
+        return _refusal(
+            "a rebuild runs the whole sequence or one of its stages",
+            "Choose everything, or lock, build, validate or audit on its own.",
+        )
+    absent = registry_absent_refusal(root)
+    if absent is not None:
+        return absent
+    named = tuple(name for name in REGISTRY_MAINTENANCE_STAGES if name in stages)
+    ran = _run_stages(root, named)
+    if isinstance(ran, Err):
+        return ran
+    return Ok(RegistryBootstrapReport(ran.value))
+
+
 def bootstrap_registry_workspace(
     *,
     root: str,
@@ -223,83 +411,17 @@ def bootstrap_registry_workspace(
                 )
             )
         )
-    service = load_local_curation_service(root)
-    if isinstance(service, Err):
-        return service
-
-    stages: list[RegistryBootstrapStage] = []
-    for action in _WRITING:
-        try:
-            request = CurationRequest(
-                action,
-                root,
-                source_id=registry_id if action is CurationAction.INIT else None,
-                display_name=display_name if action is CurationAction.INIT else None,
-                usage_reporting_repository=(
-                    usage_reporting_repository if action is CurationAction.INIT else None
-                ),
-            )
-        except ValueError as error:
-            stages.append(RegistryBootstrapStage(action.value, False, (str(error),)))
-            return Ok(RegistryBootstrapReport(tuple(stages)))
-        prepared = service.value.prepare(request)
-        if isinstance(prepared, Err):
-            stages.append(
-                RegistryBootstrapStage(
-                    action.value, False, tuple(item.message for item in prepared.diagnostics)
-                )
-            )
-            return Ok(RegistryBootstrapReport(tuple(stages)))
-        finalized = service.value.finalize(prepared.value, prepared.value.review.review_digest)
-        if isinstance(finalized, Err):
-            stages.append(
-                RegistryBootstrapStage(
-                    action.value, False, tuple(item.message for item in finalized.diagnostics)
-                )
-            )
-            return Ok(RegistryBootstrapReport(tuple(stages)))
-        if finalized.value.status == "failed":
-            stages.append(RegistryBootstrapStage(action.value, False, ("the stage did not apply",)))
-            return Ok(RegistryBootstrapReport(tuple(stages)))
-        stages.append(RegistryBootstrapStage(action.value, True, _outcome_lines(finalized.value)))
-
-    workspace = FilesystemRegistryWorkspace(root)
-    for name in ("validate", "audit"):
-        snapshot = workspace.snapshot()
-        if isinstance(snapshot, Err):
-            stages.append(
-                RegistryBootstrapStage(
-                    name, False, tuple(item.message for item in snapshot.diagnostics)
-                )
-            )
-            return Ok(RegistryBootstrapReport(tuple(stages)))
-        checked = (
-            validate_registry_workspace(
-                snapshot.value,
-                executable_version=EXECUTABLE_VERSION,
-                available_capabilities=EXECUTABLE_CAPABILITIES,
-            )
-            if name == "validate"
-            else audit_registry_workspace(
-                snapshot.value,
-                executable_version=EXECUTABLE_VERSION,
-                available_capabilities=EXECUTABLE_CAPABILITIES,
-            )
-        )
-        if isinstance(checked, Err):
-            stages.append(
-                RegistryBootstrapStage(
-                    name, False, tuple(item.message for item in checked.diagnostics)
-                )
-            )
-            return Ok(RegistryBootstrapReport(tuple(stages)))
-        stages.append(
-            RegistryBootstrapStage(name, checked.value.passed, _report_lines(checked.value))
-        )
-        if not checked.value.passed:
-            return Ok(RegistryBootstrapReport(tuple(stages)))
-
-    if not commit:
+    ran = _run_stages(
+        root,
+        REGISTRY_BOOTSTRAP_STAGES,
+        registry_id=registry_id,
+        display_name=display_name,
+        usage_reporting_repository=usage_reporting_repository,
+    )
+    if isinstance(ran, Err):
+        return ran
+    stages = list(ran.value)
+    if not commit or not RegistryBootstrapReport(ran.value).passed:
         return Ok(RegistryBootstrapReport(tuple(stages)))
     added = _git(root, "add", "-A")
     if added.returncode != 0:

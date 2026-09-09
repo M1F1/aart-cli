@@ -1046,6 +1046,23 @@ def _canonical_consumer_actions(
             return refreshed
         return DomainOk(RegistryBootstrapCompletion(report.value, refreshed.value))
 
+    def registry_rebuild(stages: tuple[str, ...]) -> DomainResult[RegistryBootstrapCompletion]:
+        # The same stages as `init`, minus the one that may only happen once, over the registry
+        # this project already publishes (B-099).  The re-read afterwards is the same one: lock and
+        # build change what the registry offers, so screens 21 and 46 are describing a different
+        # registry once the run passes.
+        from .io.registry_bootstrap import refresh_registry_workspace
+
+        report = refresh_registry_workspace(root=project_root, stages=stages)
+        if isinstance(report, DomainErr):
+            return report
+        if not report.value.passed:
+            return DomainOk(RegistryBootstrapCompletion(report.value))
+        refreshed = reread()
+        if isinstance(refreshed, DomainErr):
+            return refreshed
+        return DomainOk(RegistryBootstrapCompletion(report.value, refreshed.value))
+
     def repository_scan(draft: RepositoryScanDraft):
         """Read one remote authoring repository without adding it to configuration (B-095)."""
 
@@ -1149,6 +1166,7 @@ def _canonical_consumer_actions(
             registry_refresh=registry_refresh,
             source_connection=source_connection,
             registry_bootstrap=registry_bootstrap,
+            registry_rebuild=registry_rebuild,
             repository_scan=repository_scan,
             repository_adoption=RepositoryAdoption(),
             adopted_artifacts=initial_adoptions,

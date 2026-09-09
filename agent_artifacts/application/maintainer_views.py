@@ -137,9 +137,34 @@ __all__ = [
     "project_maintainer_registry_validation",
     "project_maintainer_source",
     "project_maintainer_validation",
+    "REGISTRY_MAINTENANCE_STAGES",
+    "REGISTRY_REBUILD_EVERYTHING",
+    "REGISTRY_STAGE_PURPOSE",
     "project_source_sync_result",
     "project_source_sync_review",
 ]
+
+
+#: The stages a rebuild may re-run over a registry that already exists (`B-099`), in the only
+#: order that means anything: an index built before the lock describes a registry that was never
+#: pinned. `init` is deliberately absent -- a registry is created once, and re-creating one is not
+#: maintenance. The sequence lives here rather than at the effect boundary that runs it because
+#: screen 46h offers it and screen 46i reviews it: the words on the screen and the stages of the
+#: run are one piece of product knowledge, and two copies of it would drift.
+REGISTRY_MAINTENANCE_STAGES: tuple[str, ...] = ("lock", "build", "validate", "audit")
+
+#: Screen 46h's row for the whole sequence, kept apart from the stage names so that "everything"
+#: cannot be mistaken for a stage the registry commands themselves know about.
+REGISTRY_REBUILD_EVERYTHING = "all"
+
+#: What each stage is for, in words somebody who has never run the CLI can act on (`QA-017`).
+REGISTRY_STAGE_PURPOSE: dict[str, str] = {
+    "init": "write the registry skeleton",
+    "lock": "pin everything the registry references",
+    "build": "write the registry index from what is pinned",
+    "validate": "check the registry strictly against that lock",
+    "audit": "report the registry's security evidence",
+}
 
 
 class MaintainerScreen(str, Enum):
@@ -182,6 +207,13 @@ class MaintainerScreen(str, Enum):
     ADOPTION_REVIEW = "46e-review-adoption"
     ADOPTED_ARTIFACTS = "46f-adopted-artifacts"
     UPSTREAM_CHECK = "46g-check-upstream"
+    # 46h/46i are the rest of that same run, for a registry that already exists (B-099).  Every
+    # change to the checkout leaves the generated files behind it, and re-running lock, build,
+    # validate and audit was four commands the Maintainer had to remember in order.  The picker
+    # exists because the whole sequence and one stage on its own are different jobs: after a
+    # promotion the maintainer wants all four, and while fixing one refusal they want validate.
+    REGISTRY_REBUILD = "46h-rebuild-registry"
+    REGISTRY_REBUILD_REVIEW = "46i-review-rebuild"
     BULK_PROMOTION = "47-bulk-promotion"
     CANDIDATE_LIFECYCLE = "48-candidate-lifecycle"
     PROVENANCE = "49-provenance"
@@ -2567,11 +2599,14 @@ _NAVIGATION: dict[MaintainerScreen, tuple[MaintainerScreen, ...]] = {
     MaintainerScreen.REGISTRY: (
         MaintainerScreen.BULK_PROMOTION,
         MaintainerScreen.REGISTRY_INIT,
+        MaintainerScreen.REGISTRY_REBUILD,
         MaintainerScreen.REPOSITORY_SCAN,
         MaintainerScreen.ADOPTED_ARTIFACTS,
     ),
     MaintainerScreen.REGISTRY_INIT: (MaintainerScreen.REGISTRY_INIT_REVIEW,),
     MaintainerScreen.REGISTRY_INIT_REVIEW: (MaintainerScreen.REGISTRY,),
+    MaintainerScreen.REGISTRY_REBUILD: (MaintainerScreen.REGISTRY_REBUILD_REVIEW,),
+    MaintainerScreen.REGISTRY_REBUILD_REVIEW: (MaintainerScreen.REGISTRY,),
     MaintainerScreen.REPOSITORY_SCAN: (MaintainerScreen.SCAN_RESULT,),
     MaintainerScreen.SCAN_RESULT: (MaintainerScreen.ADOPTION_REVIEW,),
     MaintainerScreen.ADOPTION_REVIEW: (MaintainerScreen.REGISTRY,),

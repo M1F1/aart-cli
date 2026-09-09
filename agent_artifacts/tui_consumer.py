@@ -14,6 +14,7 @@ from typing import Protocol
 
 from agent_artifacts.application.consumer_session import ConsumerMachine
 from agent_artifacts.application.consumer_ui import (
+    ACTION_ANSWER_SCREENS,
     ACTION_REQUEST_SCREENS,
     ConsumerUiCommand,
     ConsumerUiCommandKind,
@@ -51,6 +52,9 @@ from agent_artifacts.application.consumer_views import (
 )
 from agent_artifacts.application.installed_setup import DeclaredArtifactSetup
 from agent_artifacts.application.maintainer_views import (
+    REGISTRY_MAINTENANCE_STAGES,
+    REGISTRY_REBUILD_EVERYTHING,
+    REGISTRY_STAGE_PURPOSE,
     MaintainerAdoptedArtifactView,
     MaintainerAdoptionReviewView,
     MaintainerAdoptionUpstreamView,
@@ -1581,25 +1585,13 @@ _OUTCOME_SCREENS = frozenset(
 
 #: Where an action's refusal is worth drawing: the screens `_request_action` and `_confirm_action`
 #: move to, and -- since `QA-018`/`D-184` -- the screens a declined preparation moves back to.
-#: Those origins are read from `ACTION_REQUEST_SCREENS` rather than listed again here, because a
-#: second hand-maintained list of the same screens is a list that drifts, and the symptom of the
-#: drift is a refusal nobody can see. Everywhere else the notice would answer a question nobody
-#: asked here.
+#: Both sets are read from the action tables rather than listed again here, because a second
+#: hand-maintained list of the same screens is a list that drifts, and the symptom of the drift is
+#: an answer nobody can see: a review with no plan under it, or a run whose stages are never drawn
+#: (`QA-024`). Everywhere else the notice would answer a question nobody asked here.
 _ANSWERABLE = (
-    _PLAN_SCREENS
-    | _LIFECYCLE_SCREENS
-    | _OUTCOME_SCREENS
-    | ACTION_REQUEST_SCREENS
-    | frozenset(
-        {
-            ConsumerScreen.REGISTRY_REVIEW,
-            MaintainerScreen.SOURCE_SYNC,
-            MaintainerScreen.REGISTRY_VALIDATION,
-            MaintainerScreen.REGISTRY_COMMIT,
-            MaintainerScreen.ADOPTION_REVIEW,
-        }
-    )
-)
+    _PLAN_SCREENS | _LIFECYCLE_SCREENS | _OUTCOME_SCREENS | ACTION_REQUEST_SCREENS
+) | ACTION_ANSWER_SCREENS
 
 
 def _candidate_filter(state: ConsumerUiState) -> MaintainerCandidateFilter:
@@ -1741,6 +1733,9 @@ class CanonicalScreenSource:
             return ("alias", "kind", "location", "ref", "connect")
         if screen is MaintainerScreen.REGISTRY_INIT:
             return ("id", "name", "reporting", "commit", "initialize")
+        if screen is MaintainerScreen.REGISTRY_REBUILD:
+            # Derived from the sequence itself: a stage the run gains is a row the picker offers.
+            return (REGISTRY_REBUILD_EVERYTHING, *REGISTRY_MAINTENANCE_STAGES)
         if screen is MaintainerScreen.REPOSITORY_SCAN:
             return ("url", "ref", "scan")
         if screen is ConsumerScreen.SETTINGS:
@@ -2127,7 +2122,8 @@ class CanonicalScreenSource:
             )
         if screen is MaintainerScreen.REGISTRY:
             return (
-                "Actions: n Initialize Registry   s Scan Repository once   u Check upstream",
+                "Actions: n Initialize Registry   b Rebuild generated files",
+                "         s Scan Repository once   u Check upstream",
                 "",
                 *render_maintainer_registries(screens.maintainer_registries(), profile),
             )
@@ -2380,6 +2376,33 @@ class CanonicalScreenSource:
                 "",
                 "Type to edit; Backspace removes; Enter advances.",
             )
+        if screen is MaintainerScreen.REGISTRY_REBUILD:
+            rows = (REGISTRY_REBUILD_EVERYTHING, *REGISTRY_MAINTENANCE_STAGES)
+            labels = {
+                REGISTRY_REBUILD_EVERYTHING: "Everything, in order: "
+                + ", ".join(REGISTRY_MAINTENANCE_STAGES),
+                **{
+                    stage: f"{stage.title()} only: {REGISTRY_STAGE_PURPOSE[stage]}"
+                    for stage in REGISTRY_MAINTENANCE_STAGES
+                },
+            }
+            return (
+                "Re-run this registry's generated files. Promoting, adopting or editing anything",
+                "leaves the lock and the index describing the registry as it was.",
+                "",
+                *(
+                    f"{'>' if row == (state.current_row or rows[0]) else ' '} {labels[row]}"
+                    for row in rows
+                ),
+                "",
+                # 161.7 again: the run writes into the checkout and stops there.
+                "Nothing is pushed and nothing is merged. What this writes is reviewed in the",
+                "repository like any other change.",
+                "",
+                "Enter reviews the run under the cursor.",
+            )
+        if screen is MaintainerScreen.REGISTRY_REBUILD_REVIEW:
+            return ("Review the run below, then press Enter to start it.",)
         if screen is MaintainerScreen.REGISTRY_INIT_REVIEW:
             return ("Review the registry below, then press Enter to create it.",)
         if screen is MaintainerScreen.SOURCE_ADD_REVIEW:

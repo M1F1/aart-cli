@@ -63,6 +63,7 @@ class ConsumerActionKind(str, Enum):
     REGISTRY_SYNC = "registry-sync"
     SOURCE_ADD = "source-add"
     REGISTRY_INIT = "registry-init"
+    REGISTRY_REBUILD = "registry-rebuild"
     REPOSITORY_SCAN = "repository-scan"
     REPOSITORY_ADOPT = "repository-adopt"
     REPOSITORY_UPSTREAM_CHECK = "repository-upstream-check"
@@ -521,6 +522,10 @@ _ACTION_REVIEW: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
         MaintainerScreen.REGISTRY_INIT,
     ): MaintainerScreen.REGISTRY_INIT_REVIEW,
     (
+        ConsumerActionKind.REGISTRY_REBUILD,
+        MaintainerScreen.REGISTRY_REBUILD,
+    ): MaintainerScreen.REGISTRY_REBUILD_REVIEW,
+    (
         ConsumerActionKind.REPOSITORY_SCAN,
         MaintainerScreen.REPOSITORY_SCAN,
     ): MaintainerScreen.SCAN_RESULT,
@@ -585,13 +590,24 @@ ACTION_REQUEST_SCREENS: frozenset[ApplicationScreen] = frozenset(
 )
 
 
+#: Actions whose subject is the row under the cursor right now, rather than the row that opened
+#: the screen they are requested from. Screen 46h's rows are stages of one run, and the registry
+#: alias focused back on screen 46 is not one of them: inheriting it would ask for a run nobody
+#: chose, which is what a shell walk-through of the keys found it doing (`QA-025`).
+_ROW_IS_THE_REQUEST = frozenset({ConsumerActionKind.REGISTRY_REBUILD})
+
+
 def _request_action(
     state: ConsumerUiState, action: ConsumerActionKind | None
 ) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
     if action is None:
         return state, ()
     target = _ACTION_REVIEW.get((action, state.session.screen))
-    focus = state.focus or state.current_row
+    focus = (
+        state.current_row or state.focus
+        if action in _ROW_IS_THE_REQUEST
+        else state.focus or state.current_row
+    )
     if target is None:
         return state, ()
     # A bulk promotion is defined by what was selected, so an empty selection is not a request.
@@ -704,6 +720,7 @@ _ACTION_RUNNING: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationS
     (ConsumerActionKind.REGISTRY_SYNC, ConsumerScreen.REGISTRY_SYNC): None,
     (ConsumerActionKind.SOURCE_ADD, MaintainerScreen.SOURCE_ADD_REVIEW): None,
     (ConsumerActionKind.REGISTRY_INIT, MaintainerScreen.REGISTRY_INIT_REVIEW): None,
+    (ConsumerActionKind.REGISTRY_REBUILD, MaintainerScreen.REGISTRY_REBUILD_REVIEW): None,
     (ConsumerActionKind.REPOSITORY_ADOPT, MaintainerScreen.ADOPTION_REVIEW): None,
     (ConsumerActionKind.REPOSITORY_ADOPT_UPDATE, MaintainerScreen.ADOPTION_REVIEW): None,
     (ConsumerActionKind.INSTALL, ConsumerScreen.READY): ConsumerScreen.INSTALLING,
@@ -759,6 +776,10 @@ _ACTION_RESULT: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
         ConsumerActionKind.REGISTRY_INIT,
         MaintainerScreen.REGISTRY_INIT_REVIEW,
     ): MaintainerScreen.REGISTRY,
+    (
+        ConsumerActionKind.REGISTRY_REBUILD,
+        MaintainerScreen.REGISTRY_REBUILD_REVIEW,
+    ): MaintainerScreen.REGISTRY,
     (ConsumerActionKind.INSTALL, ConsumerScreen.INSTALLING): ConsumerScreen.SUCCESS,
     (ConsumerActionKind.UPDATE, ConsumerScreen.UPDATING): ConsumerScreen.ACTIVITY_DETAILS,
     (
@@ -779,6 +800,15 @@ _ACTION_RESULT: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
         MaintainerScreen.ADOPTION_REVIEW,
     ): MaintainerScreen.REGISTRY,
 }
+
+
+#: The screens an action states itself on: the review it opens before running, and the screen the
+#: run lands on afterwards. Derived for the same reason the request screens are -- a review whose
+#: plan is not drawn is a screen asking somebody to confirm nothing, and a result whose stages are
+#: not drawn is a run that reports only that it happened (`QA-024`).
+ACTION_ANSWER_SCREENS: frozenset[ApplicationScreen] = frozenset(
+    _ACTION_REVIEW.values()
+) | frozenset(_ACTION_RESULT.values())
 
 
 def _action_recorded(
@@ -1205,6 +1235,14 @@ def key_event(
     # connecting to somebody else's (INV-199).
     if key == "n" and state.session.screen is MaintainerScreen.REGISTRY:
         return ConsumerUiEvent(ConsumerUiEventKind.NAVIGATE, screen=MaintainerScreen.REGISTRY_INIT)
+    # `b` for the run that follows every later change to the checkout (B-099).  It is deliberately
+    # not `r`: `r` already means repair on the Consumer screens that have it, and one letter that
+    # meant "repair here, rebuild there" is how an operator confirms the wrong thing.
+    if key == "b" and state.session.screen is MaintainerScreen.REGISTRY:
+        return ConsumerUiEvent(
+            ConsumerUiEventKind.NAVIGATE,
+            screen=MaintainerScreen.REGISTRY_REBUILD,
+        )
     if key == "s" and state.session.screen is MaintainerScreen.REGISTRY:
         return ConsumerUiEvent(
             ConsumerUiEventKind.NAVIGATE,
@@ -1329,6 +1367,13 @@ def key_event(
             ConsumerUiEventKind.REQUEST_ACTION,
             action=ConsumerActionKind.CANDIDATE_PROMOTION,
         )
+    # Screen 46h's rows are stages of one run rather than artifacts, so Enter asks for the run the
+    # row under the cursor names instead of opening anything.
+    if key == "enter" and state.session.screen is MaintainerScreen.REGISTRY_REBUILD:
+        return ConsumerUiEvent(
+            ConsumerUiEventKind.REQUEST_ACTION,
+            action=ConsumerActionKind.REGISTRY_REBUILD,
+        )
     if key == "enter" and state.session.screen is MaintainerScreen.ADOPTED_ARTIFACTS:
         return ConsumerUiEvent(
             ConsumerUiEventKind.REQUEST_ACTION,
@@ -1352,6 +1397,11 @@ def key_event(
         MaintainerScreen.SOURCE_SYNC,
         MaintainerScreen.REGISTRY_COMMIT,
         MaintainerScreen.ADOPTION_REVIEW,
+        # QA-024: these three reviews reach the execution boundary the same way every other one
+        # does.  Leaving them out made Enter mean nothing on the screen that says to press it.
+        MaintainerScreen.SOURCE_ADD_REVIEW,
+        MaintainerScreen.REGISTRY_INIT_REVIEW,
+        MaintainerScreen.REGISTRY_REBUILD_REVIEW,
     ):
         return ConsumerUiEvent(ConsumerUiEventKind.CONFIRM_ACTION)
     if key == "enter" and detail is not None:

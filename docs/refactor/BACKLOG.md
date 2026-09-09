@@ -2514,7 +2514,15 @@ Evidence/links: `D-197`; `tests/harness_registration_roundtrip_test.py`;
 `tests/opencode_installation_e2e_test.py`; `tests/codex_installation_e2e_test.py`;
 `tests/artifact_installation_e2e_test.py`.
 
-## B-099 — Whether a TUI promotion leaves generated registry files complete
+## B-099 — Whether a TUI promotion leaves generated registry files complete — CLOSED
+
+**Closed as done (`D-200`).** Superseded rather than answered: screens 46h/46i now run lock, build,
+validate and audit over the registry from the TUI, so the walkthrough no longer ends in four typed
+commands whether or not they would have changed anything. Whether a promotion alone leaves the
+generated files complete is now the maintainer's own observation on screen 46h — a rebuild that
+reports "nothing needed changing" for every stage says so directly.
+
+The original note follows.
 
 The operator's walkthrough runs `registry lock`, `build`, `validate` and `audit` from the CLI after
 promoting through the TUI, inherited from the pre-TUI version of that procedure. The promotion

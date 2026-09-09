@@ -29,10 +29,41 @@ Each new entry records:
 
 ### Open
 
-Nothing open. Every QA-001–QA-023 finding has a fix awaiting the operator's retest below.
+Nothing open. Every QA-001–QA-025 finding has a fix awaiting the operator's retest below.
 
 ### Fixed — awaiting manual retest
 
+- [ ] **QA-025 — Re-running a registry's generated files had no home in the TUI.**
+      Stage: after promoting, adopting or editing anything in the registry checkout
+      Surface: Registry (screen 46)
+      Severity: high
+      Blocks current stage: yes, for a TUI-only walkthrough
+      Reproduction: promote a Candidate through the TUI, then try to lock, build, validate and
+      audit the registry without leaving the shell
+      Expected: the run the maintainer needs after every change is on the screen that owns the
+      registry
+      Observed: nothing offered it. The procedure was four `aart_maintainer registry ...` commands
+      typed by hand, in an order and with flags (`--strict --frozen`) no screen ever named
+      Evidence: `B-090` had already established that ordering is the knowledge a screen must hold;
+      this is the same defect one step further along the maintainer's day (`B-099`)
+      Fix: yes — screen 46 gained `b Rebuild generated files`. Screen 46h offers the whole
+      sequence and each stage on its own, 46i reviews the named stages, and the run goes through
+      the same authority `init` uses. `init` is not offered: a registry is created once (`D-200`).
+- [ ] **QA-024 — Two review screens could not be confirmed, and no review drew its plan.**
+      Stage: adding a Source and initializing a registry from the TUI
+      Surface: Add Source review (31b), Initialize Registry review (46b)
+      Severity: blocking
+      Blocks current stage: yes
+      Reproduction: fill in Add Source or Initialize Registry, continue to the review, press Enter
+      Expected: the review shows the plan, and Enter runs it
+      Observed: the review showed its prompt with nothing under it, and Enter did nothing at all —
+      the flows could be typed and reviewed but never confirmed
+      Evidence: `key_event`'s confirmation list never named those two screens, and `_ANSWERABLE`
+      hand-listed five review screens while deriving the request screens, so any review or result
+      screen off that list drew no notice
+      Fix: yes — both screens confirm, and the notice set is now derived from both action tables
+      instead of hand-listed. Found by walking the keys in a headless shell rather than by another
+      adapter test, which is also how the wrong row reached the first rebuild request (`D-201`).
 - [ ] **QA-022 — The TUI could not install any MCP artifact once Codex was measured.**
       Stage: installing the MCP from Marketplace in the persistent shell
       Surface: Marketplace → Install (screens 05–10)

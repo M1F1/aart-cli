@@ -51,6 +51,9 @@ from agent_artifacts.application.consumer_views import (
 from agent_artifacts.application.installed_setup import DeclaredArtifactSetup
 from agent_artifacts.application.maintainer_sync import PreparedSourceSync
 from agent_artifacts.application.maintainer_views import (
+    REGISTRY_MAINTENANCE_STAGES,
+    REGISTRY_REBUILD_EVERYTHING,
+    REGISTRY_STAGE_PURPOSE,
     MaintainerAdoptedArtifactView,
     MaintainerAdoptionReviewView,
     MaintainerAdoptionUpstreamView,
@@ -121,7 +124,11 @@ from .registry_adoption import (
     PreparedAdoption,
     RepositoryScan,
 )
-from .registry_bootstrap import RegistryBootstrapReport, registry_identity_refusal
+from .registry_bootstrap import (
+    RegistryBootstrapReport,
+    registry_absent_refusal,
+    registry_identity_refusal,
+)
 
 __all__ = [
     "CONSUMER_ACTION_NOT_INSTALLED",
@@ -188,6 +195,18 @@ def _refusal(diagnostics: tuple[Diagnostic, ...]) -> tuple[str, ...]:
     if withheld and not steps:
         steps.append(_ELSEWHERE)
     return _lines(*lines, *steps)
+
+
+def _rebuild_stages(focus: str) -> tuple[str, ...]:
+    """Which stages the chosen row means, or none at all when the row names no run.
+
+    Deriving both answers from `REGISTRY_MAINTENANCE_STAGES` is what keeps "everything" honest: a
+    stage added to the sequence is in the whole run without anybody remembering to add it here.
+    """
+
+    if focus == REGISTRY_REBUILD_EVERYTHING:
+        return REGISTRY_MAINTENANCE_STAGES
+    return (focus,) if focus in REGISTRY_MAINTENANCE_STAGES else ()
 
 
 def _project_repository_scan(scan: RepositoryScan) -> MaintainerRepositoryScanView:
@@ -306,6 +325,15 @@ class _PendingRegistryInit:
 
 
 @dataclass(frozen=True, slots=True)
+class _PendingRegistryRebuild:
+    """One reviewed re-run of some or all of lock -> build -> validate -> audit (`B-099`)."""
+
+    stages: tuple[str, ...]
+    workspace: str
+    review_digest: str
+
+
+@dataclass(frozen=True, slots=True)
 class RegistryConnectionSnapshot:
     """Configuration-derived views re-read after a subscription succeeds.
 
@@ -336,6 +364,7 @@ RegistryConnectionPort = Callable[[RegistryDraft], Result[RegistryConnectionSnap
 RegistryRefreshPort = Callable[[str], Result[RegistryConnectionSnapshot]]
 SourceConnectionPort = Callable[[SourceDraft], Result[RegistryConnectionSnapshot]]
 RegistryBootstrapPort = Callable[[RegistryInitDraft], Result[RegistryBootstrapCompletion]]
+RegistryRebuildPort = Callable[[tuple[str, ...]], Result[RegistryBootstrapCompletion]]
 RepositoryScanPort = Callable[[RepositoryScanDraft], Result[RepositoryScan]]
 RepositoryUpstreamCheckPort = Callable[[str], Result[AdoptionUpstreamCheck]]
 RepositoryAdoptedListPort = Callable[[], Result[tuple[AdoptedArtifact, ...]]]
@@ -363,6 +392,7 @@ _Pending = (
     | _PendingRegistryRefresh
     | _PendingSourceAddition
     | _PendingRegistryInit
+    | _PendingRegistryRebuild
     | PreparedAdoption
 )
 
@@ -398,6 +428,7 @@ class LocalConsumerActions:
         registry_refresh: RegistryRefreshPort | None = None,
         source_connection: SourceConnectionPort | None = None,
         registry_bootstrap: RegistryBootstrapPort | None = None,
+        registry_rebuild: RegistryRebuildPort | None = None,
         repository_scan: RepositoryScanPort | None = None,
         repository_adoption: RepositoryAdoptionPort | None = None,
         adopted_artifacts: tuple[AdoptedArtifact, ...] = (),
@@ -420,6 +451,7 @@ class LocalConsumerActions:
         self._registry_refresh = registry_refresh
         self._source_connection = source_connection
         self._registry_bootstrap = registry_bootstrap
+        self._registry_rebuild = registry_rebuild
         self._repository_scan = repository_scan
         self._repository_adoption = repository_adoption
         self._adopted_artifacts = adopted_artifacts
@@ -573,6 +605,8 @@ class LocalConsumerActions:
             return self._prepare_source_addition(command)
         if action is ConsumerActionKind.REGISTRY_INIT:
             return self._prepare_registry_init(command)
+        if action is ConsumerActionKind.REGISTRY_REBUILD:
+            return self._prepare_registry_rebuild(command)
         if action is ConsumerActionKind.REPOSITORY_SCAN:
             return self._prepare_repository_scan(command)
         if action is ConsumerActionKind.REPOSITORY_ADOPT:
@@ -862,6 +896,52 @@ class LocalConsumerActions:
                     "        build writes its index, then validate and audit check the result",
                     "  nothing is pushed and nothing is merged: publishing this registry stays a "
                     "decision you make in the repository",
+                )
+            ),
+            ConsumerUiEvent(
+                ConsumerUiEventKind.ACTION_PREPARED,
+                action=command.action,
+                review_digest=review_digest,
+            ),
+        )
+
+    def _prepare_registry_rebuild(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        """Review re-running the generated files of the registry that is already here (`B-099`).
+
+        The stages are named because they are the plan: confirming "everything" and confirming
+        "validate" are two different runs over the same checkout, and a review that said only
+        "rebuild" would let one be confirmed into the other (`D-069`).
+        """
+
+        if self._registry_rebuild is None:
+            return self._declined(command, _lines("registry rebuilding is unavailable"))
+        stages = _rebuild_stages(command.focus)
+        if not stages:
+            return self._declined(
+                command,
+                _lines("a rebuild runs the whole sequence or one of its stages"),
+            )
+        workspace = self._context.host.project_root
+        absent = registry_absent_refusal(workspace)
+        if absent is not None:
+            return self._declined(command, _refusal(absent.diagnostics))
+        identity = json.dumps(
+            {"workspace": workspace, "stages": list(stages)},
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        review_digest = "sha256:" + hashlib.sha256(identity).hexdigest()
+        self._pending = _PendingRegistryRebuild(stages, workspace, review_digest)
+        self._pending_action = command.action
+        return ConsumerActionUpdate(
+            self.source(
+                notice=(
+                    "Registry rebuild review:",
+                    f"  registry: {workspace}",
+                    f"  stages: {', '.join(stages)}",
+                    *(f"    {stage} will {REGISTRY_STAGE_PURPOSE[stage]}" for stage in stages),
+                    "  nothing is pushed and nothing is merged: what this writes is reviewed in "
+                    "the repository like any other change",
                 )
             ),
             ConsumerUiEvent(
@@ -1303,6 +1383,8 @@ class LocalConsumerActions:
             return self._execute_source_addition(command, pending)
         if isinstance(pending, _PendingRegistryInit):
             return self._execute_registry_init(command, pending)
+        if isinstance(pending, _PendingRegistryRebuild):
+            return self._execute_registry_rebuild(command, pending)
         if isinstance(pending, PreparedAdoption):
             return self._execute_repository_adoption(command, pending)
         if isinstance(pending, PreparedConfiguredRepair):
@@ -1475,6 +1557,37 @@ class LocalConsumerActions:
             lines.append("  the run stopped there; the stages after it did not run")
             # Not through `_lines`: the indentation is what makes a stage's own detail read as
             # belonging to that stage rather than as another stage.
+            return self._failed(command, tuple(lines))
+        recorded_at, _today = self._moment()
+        return self._recorded(command, recorded_at, notice=tuple(lines))
+
+    def _execute_registry_rebuild(
+        self,
+        command: ConsumerUiCommand,
+        pending: _PendingRegistryRebuild,
+    ) -> ConsumerActionUpdate:
+        """Run the reviewed stages and draw what each one did, including the one that stopped it."""
+
+        assert self._registry_rebuild is not None
+        completed = self._registry_rebuild(pending.stages)
+        if isinstance(completed, Err):
+            return self._failed(command, _refusal(completed.diagnostics))
+        report = completed.value.report
+        if completed.value.connection is not None:
+            self._context = replace(
+                self._context,
+                effective=completed.value.connection.effective,
+                offers=completed.value.connection.offers,
+                maintainer=completed.value.connection.maintainer,
+            )
+        lines: list[str] = ["Registry rebuild:"]
+        for stage in report.stages:
+            lines.append(f"  {stage.name}: {'done' if stage.passed else 'refused'}")
+            lines.extend(f"    {line}" for line in stage.lines)
+        if not report.passed:
+            lines.append("  the run stopped there; the stages after it did not run")
+            # Not through `_lines`, for the same reason the initialization result is not: the
+            # indentation is what makes a stage's detail read as belonging to that stage.
             return self._failed(command, tuple(lines))
         recorded_at, _today = self._moment()
         return self._recorded(command, recorded_at, notice=tuple(lines))

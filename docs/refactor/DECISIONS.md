@@ -4603,3 +4603,64 @@ each confirmation acts on that one, so a scope toggled between a review and its 
 record a project plan as a user installation. The completion factory is handed that host too, for
 the same reason: setup and usage reporting describe the installation that happened, at the scope it
 happened at.
+
+## D-200 — The registry run the TUI never owned, minus the stage that happens once
+
+`B-090` gave screen 46 the run that brings a registry into existence: init, lock, build, validate,
+audit, in the one order that means anything. Everything afterwards was still typed. A maintainer who
+promoted a Candidate, adopted an artifact or edited the checkout had to leave for a terminal and run
+four commands — with flags no screen had ever named — in an order held in their head. That is the
+same product defect `B-090` described, one step further along the maintainer's day.
+
+Screen 46h re-runs those four stages and 46i reviews them, through the same authority `init` uses:
+`_run_stages` is shared, so there is one implementation of what a stage is and one place the order
+lives. `init` is deliberately not offered. A registry is created once; re-creating one is not
+maintenance, and a picker that offered it would let a rebuild rename the registry it was rebuilding.
+
+Three narrower choices are worth stating.
+
+**The whole sequence and one stage are both offered**, because they are different jobs. After a
+promotion the maintainer wants all four; while fixing one refusal they want `validate` and nothing
+else, and a rebuild that silently rewrote the index while they were reading a validation failure
+would be answering a question they did not ask. The stages always run in canonical order however the
+choice arrives, because the order is the knowledge the module exists to hold.
+
+**There is no commit toggle**, unlike `init`'s. Initialization creates a tree that did not exist, and
+a commit is how that tree becomes reviewable at all. A rebuild writes generated files into a checkout
+the maintainer is already curating, and those changes belong to whatever caused them — the promotion,
+the adoption — rather than to a separate "rebuild" commit that would split one change across two.
+Publication stays where 161.7 puts it: the repository's own review.
+
+**The stage vocabulary lives in `application/maintainer_views.py`**, not at the effect boundary that
+runs it. Screen 46h offers the stages, 46i reviews them and the run executes them; those are one
+piece of product knowledge, and two copies of it drift in the direction where the screen describes a
+run the code no longer performs.
+
+## D-201 — A review that draws no plan, and a request that inherits the wrong row
+
+Two defects surfaced while walking screen 46h's keys in a headless shell, and neither was visible
+from the adapter tests that covered the same flow.
+
+`Enter` did nothing on screens 31b and 46b. Both reviews said "press Enter", and the key translated
+to no event at all, so the Add Source and Initialize Registry flows could be typed, reviewed and
+never confirmed. The confirmation list in `key_event` is hand-written; those two were simply never
+added. They are now, together with 46i.
+
+Worse, neither review drew what it was asking about. `_ANSWERABLE` — the screens a notice may be
+drawn on — derived the *request* screens from `_ACTION_REVIEW`'s keys and then hand-listed five of
+its values, so every review screen not on that hand-list showed its prompt with nothing under it,
+and every result screen not on it reported that a run had happened without saying what it did. The
+set is now derived from both tables: a screen an action moves to, or lands on, can draw that
+action's answer. The hand-list is gone, which is the point — it was a second copy of the same
+knowledge, and the symptom of its drift was an answer nobody could see.
+
+The third finding is why `_ROW_IS_THE_REQUEST` exists. `_request_action` reads `state.focus or
+state.current_row`, and `focus` is the row that opened the current screen — on 46h that is the
+registry alias focused back on screen 46, which is not a stage. The first confirmed run therefore
+asked to rebuild `company`. For screen 46h the rows *are* the choice, so the action reads the cursor
+first. Stated as a set of actions rather than a special case in the key handler, because the question
+"is this screen's row the subject, or the thing that opened it" is a property of the action.
+
+These are recorded together because they share a cause: every piece was tested where it was written,
+and nothing had pressed the keys in order. The shell walk-through in
+`tests/maintainer_registry_rebuild_test.py` is the test that would have caught all three.

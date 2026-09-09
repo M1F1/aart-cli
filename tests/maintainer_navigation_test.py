@@ -66,8 +66,9 @@ class MaintainerScreenCatalogTest(unittest.TestCase):
     def test_catalog_names_every_accepted_screen_30_through_53_once(self) -> None:
         """The 24 accepted screens, plus sub-screens that are numbered inside one of them.
 
-        `31a`/`31b` are the Add Source form and its review (B-083). `46a` through `46g` hold
-        initialization and one-off repository adoption (B-090/B-095), spelled the way screen 21's
+        `31a`/`31b` are the Add Source form and its review (B-083). `46a` through `46i` hold
+        initialization, one-off repository adoption and the rebuild of the registry's generated
+        files (B-090/B-095/B-099), spelled the way screen 21's
         own `21a`/`21b` addition pair already is. They extend the screen they belong to rather than
         adding a 25th destination, so the rule this states is that every catalog entry is one of
         the 24 accepted numbers or a lettered sub-screen of one of them -- never a new number.
@@ -95,6 +96,8 @@ class MaintainerScreenCatalogTest(unittest.TestCase):
                 "46e-review-adoption",
                 "46f-adopted-artifacts",
                 "46g-check-upstream",
+                "46h-rebuild-registry",
+                "46i-review-rebuild",
             ],
         )
         for screen in lettered:
