@@ -4999,3 +4999,27 @@ rather than tables and were left alone — putting them on a grid would be a red
 `B-107` recorded that the kernel's width arithmetic was unheld by its own tests. This slice states
 the claims it depends on — a bounded row, a cut cell, and a column whose position is the same on
 every row including the header — as a property over generated names rather than assuming them.
+
+## D-214 — Git diagnoses an exact Registry snapshot refusal; it does not replace it
+
+Date: 2026-09-09 · Increment: CP-19 step 7, QA-031/B-100 · Status: accepted
+
+The promotion guard remains equality between the local Registry snapshot and the synchronized
+approved snapshot. Git evidence cannot make unequal bytes acceptable: ignored files, filters and
+repository configuration make Git cleanliness a different statement from AART's registry model.
+
+Git instead answers the operator's next question after equality has refused. The configured IO seam
+observes the repository top level, normalized configured origin, worktree status, HEAD and merge
+base and passes one typed cause into the pure application seam. A clean descendant is unpublished
+Registry work, a clean ancestor is a stale checkout, changes at the approved HEAD are uncommitted
+drift and a different origin/top level is the wrong workspace. Missing or divergent Git evidence
+falls back to an honest unknown mismatch; observation failure never weakens or replaces the refusal.
+
+The unpublished recovery follows Product Specification 165.27/165.28 in product order: complete Git
+review and merge, update the local checkout to the published branch, then synchronize the Registry
+connection before reviewing another promotion. It does not print a command and does not tell the
+operator to restore intentional work. The other states omit steps that do not apply.
+
+Four tests create those states in real temporary repositories and drive the configured promotion
+seam. Removing the context passed at that seam turns all four red, proving the diagnosis is on the
+shipped path rather than a helper tested beside it.

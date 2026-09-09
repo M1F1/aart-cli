@@ -1393,6 +1393,20 @@ measured cases, and explain the Git publication → local update → Registry sy
 in product terms. No `aart ...` command text may reach a TUI frame. Then steps 11–14; step 15 runs
 the full suites once the batch is handed back.
 
+**CP-19 step 7 is DONE — QA-031/B-100 closed (2026-09-09).** The exact Registry snapshot equality
+still decides whether promotion is safe. When it refuses, the configured seam now classifies the
+real Git checkout as a clean unpublished descendant, a clean stale ancestor, uncommitted
+managed-path drift or a different configured origin, and the pure application seam gives each a
+different product-language recovery. Unpublished work names Git review/merge, local checkout update
+and Registry synchronization in order, with no CLI command in the TUI (D-214). Four real-repository
+tests were RED against the former generic answer; removing the observed context from the configured
+call kills all four. The whole focused set is green at 1612 tests plus 639 subtests.
+
+**Exact next action:** CP-19 step 11 — QA-036/QA-037. Add compact workflow progress derived from
+the navigation state and make Back retain the stable Candidate/subject and already-observed model.
+Cover Candidate promotion, Registry initialization/rebuild, Source add/sync and consumer install;
+do not build a breadcrumb for one hard-coded route. Then steps 12–14 and the full gates at step 15.
+
 ## Critical boundaries for this slice
 
 - Product Specification is the sole product authority.

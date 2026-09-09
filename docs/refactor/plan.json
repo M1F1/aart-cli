@@ -305,7 +305,7 @@
         {
           "id": "7",
           "title": "Diagnose registry baseline mismatch and provide an honest TUI recovery (QA-031)",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "8",

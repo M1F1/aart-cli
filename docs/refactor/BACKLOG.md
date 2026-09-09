@@ -2588,7 +2588,15 @@ note. Not on the critical path either way — the Git publication boundary is de
 
 ## B-100 — A safe Registry baseline refusal does not identify the state that caused it
 
-Found: manual TUI acceptance, QA-031 (2026-09-09) · Severity: high · Status: open
+Found: manual TUI acceptance, QA-031 (2026-09-09) · Severity: high · Status: CLOSED by CP-19 step 7
+
+**Closed (2026-09-09).** The baseline comparison remains byte-for-byte exact. The configured IO
+seam now observes the checkout's Git top level, configured origin, worktree status, HEAD and merge
+base only to classify a mismatch; the pure application seam owns the corresponding product-language
+refusal. A clean descendant is unpublished work awaiting Git review/merge, a clean ancestor is a
+stale checkout, managed-path changes are uncommitted drift, and a mismatched origin is the wrong
+workspace. The first case explicitly orders publication, local update and Registry synchronization
+without putting an `aart ...` command into the TUI (`D-214`).
 
 The second real promotion stopped at screen 43 with `registry workspace does not match the
 synchronized approved baseline`. The check is load-bearing and must remain exact: preparing another
@@ -2603,13 +2611,14 @@ local checkout, an accidentally selected workspace root or unrelated local drift
 different operator choices; saying only “synchronize or restore” leaves the operator guessing which
 state is authoritative and risks discarding an intentional promotion.
 
-The future CP-19 increment must begin with characterization over the four states above and keep the
+The CP-19 increment began with characterization over the four states above and kept the
 baseline equality check intact. For the measured unpublished-commit case, the TUI should explain in
 product terms that the prior Registry change must complete Git review/publication, the checkout must
 observe that published state, and the Registry subscription must synchronize before another
 promotion can be reviewed. Interactive guidance must contain no `aart ...` command text (D-185).
 
-Evidence/links: QA-031; `application/maintainer_promotion.py::prepare_promotion_transaction`;
+Evidence/links: QA-031; `tests/registry_baseline_diagnosis_test.py`;
+`application/maintainer_promotion.py::prepare_promotion_transaction`;
 Product Specification 161.7 and 165.28; D-103; D-137; CP-19 step 7.
 
 ## B-101 — A failed TUI action retains a confirmation for a plan that no longer exists

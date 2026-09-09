@@ -14,6 +14,7 @@ and has no push capability.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Callable
 
 from agent_artifacts.application.candidate_validation import (
@@ -57,6 +58,7 @@ __all__ = [
     "MaintainerCandidatePromotionPorts",
     "PreparedCandidatePromotion",
     "PreparedCandidatePromotionTransaction",
+    "RegistryBaselineMismatch",
     "execute_candidate_promotion",
     "plan_candidate_promotion",
     "effective_policy_digest",
@@ -74,6 +76,16 @@ MAINTAINER_PROMOTION_INVALID = DiagnosticCode("maintainer-promotion-invalid")
 _PROMOTABLE = frozenset({CandidateState.READY, CandidateState.WARNING})
 
 
+class RegistryBaselineMismatch(Enum):
+    """What the local Git checkout says about an exact Registry snapshot mismatch."""
+
+    UNKNOWN = "unknown"
+    UNPUBLISHED_LOCAL_COMMIT = "unpublished-local-commit"
+    STALE_CHECKOUT = "stale-checkout"
+    UNCOMMITTED_DRIFT = "uncommitted-drift"
+    WRONG_WORKSPACE = "wrong-workspace"
+
+
 def _error(message: str, *remediation: str) -> Err:
     return Err(
         (
@@ -84,6 +96,38 @@ def _error(message: str, *remediation: str) -> Err:
                 remediation=tuple(redact_text(item) for item in remediation),
             ),
         )
+    )
+
+
+def _registry_baseline_error(mismatch: RegistryBaselineMismatch) -> Err:
+    """Explain an exact baseline refusal without telling Git which state should win."""
+
+    if mismatch is RegistryBaselineMismatch.UNPUBLISHED_LOCAL_COMMIT:
+        return _error(
+            "the local Registry contains an unpublished commit after the synchronized baseline",
+            "complete Git review and merge for the earlier Registry change",
+            "update this checkout to the published Registry branch",
+            "synchronize the Registry connection before reviewing another promotion",
+        )
+    if mismatch is RegistryBaselineMismatch.STALE_CHECKOUT:
+        return _error(
+            "the local Registry checkout is behind the synchronized published baseline",
+            "update this checkout to the published Registry revision, then review promotion again",
+        )
+    if mismatch is RegistryBaselineMismatch.UNCOMMITTED_DRIFT:
+        return _error(
+            "the local Registry checkout contains uncommitted changes outside the synchronized baseline",
+            "review the local changes and either publish intentional Registry work or restore it",
+            "review promotion again only after the checkout matches the synchronized Registry",
+        )
+    if mismatch is RegistryBaselineMismatch.WRONG_WORKSPACE:
+        return _error(
+            "the selected workspace is a different Git repository from the configured Registry",
+            "open the configured Registry checkout and review promotion there",
+        )
+    return _error(
+        "registry workspace does not match the synchronized approved baseline",
+        "inspect the local Registry checkout and its published revision, then review promotion again",
     )
 
 
@@ -469,6 +513,7 @@ def prepare_candidate_promotion_transaction(
     registry_workspace: SourceSnapshot,
     *,
     mode: PromotionMode = PromotionMode.VENDORED,
+    baseline_mismatch: RegistryBaselineMismatch = RegistryBaselineMismatch.UNKNOWN,
 ) -> Result[PreparedCandidatePromotionTransaction]:
     """Plan and validate the exact inert registry state screens 43–45 will review.
 
@@ -482,6 +527,7 @@ def prepare_candidate_promotion_transaction(
         approved,
         registry_workspace,
         mode=mode,
+        baseline_mismatch=baseline_mismatch,
     )
 
 
@@ -493,6 +539,7 @@ def prepare_promotion_transaction(
     registry_workspace: SourceSnapshot,
     *,
     mode: PromotionMode = PromotionMode.VENDORED,
+    baseline_mismatch: RegistryBaselineMismatch = RegistryBaselineMismatch.UNKNOWN,
 ) -> Result[PreparedCandidatePromotionTransaction]:
     """Plan and validate the exact inert registry state one transaction would leave behind.
 
@@ -506,6 +553,7 @@ def prepare_promotion_transaction(
         or not isinstance(validations, tuple)
         or len(bundles) != len(validations)
         or not bundles
+        or not isinstance(baseline_mismatch, RegistryBaselineMismatch)
     ):
         return _error("preparing a promotion transaction needs one validation run per Candidate")
     if not isinstance(registry_workspace, SourceSnapshot):
@@ -514,10 +562,7 @@ def prepare_promotion_transaction(
     if isinstance(workspace_digest, Err):
         return workspace_digest
     if workspace_digest.value != approved.snapshot_digest:
-        return _error(
-            "registry workspace does not match the synchronized approved baseline",
-            "synchronize or restore the registry checkout, then review promotion again",
-        )
+        return _registry_baseline_error(baseline_mismatch)
     promotions: list[PreparedCandidatePromotion] = []
     for bundle, validation in zip(bundles, validations, strict=True):
         prepared = prepare_candidate_promotion(bundle, validation, policy, approved, mode=mode)

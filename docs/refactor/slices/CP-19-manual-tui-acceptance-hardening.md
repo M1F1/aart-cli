@@ -53,10 +53,12 @@ internal state model.
    a detail under every row was part of the reported density. Screen 47's selectable rows are the
    same table without a header and were moved onto the grid too; the other Maintainer lists are
    label/indent blocks, not tables, and putting them on a grid would be a redesign (D-213).
-7. **Registry baseline diagnosis and recovery (QA-031/B-100) — TODO.** Preserve exact baseline
-   equality. Characterize unpublished prior promotion, stale checkout, wrong workspace root and
-   unrelated drift separately. The measured first case must explain the Git publication → local
-   update → Registry synchronization sequence in product terms without embedding CLI commands.
+7. **Registry baseline diagnosis and recovery (QA-031/B-100) — DONE.** The exact snapshot equality
+   remains the refusal. Only after a mismatch, the configured IO seam observes Git top level,
+   configured origin, worktree status, HEAD and merge base and passes a typed cause to the pure
+   application seam. A clean descendant is unpublished work and explains Git review/merge → local
+   checkout update → Registry synchronization; a clean ancestor, uncommitted managed-path drift and
+   a different origin are separately named, all without embedding CLI commands (D-214).
 8. **Git publication transition (QA-034/B-102) — DONE.** Publication is presence on the canonical
    consumer-visible branch (INV-242), so it is a property of the reading and not a field anything
    in the accepted workflow writes. `load_published_registry_versions` applies the transition once,
@@ -172,6 +174,13 @@ instead of the focused one, and double-space concatenation on screen 47. The col
 depends on are stated as a Hypothesis property over generated names rather than assumed from
 `B-107`'s kernel, which the scoped advisory run still reports as largely unheld elsewhere.
 
+Step 7 was RED through configured promotion over four real temporary Git repositories: every case
+initially returned the same `synchronize or restore` sentence. The fix does not let Git decide the
+verdict and does not replace the snapshot check; it supplies context only when that exact check
+fails. Removing the context at the configured call site turns all four tests red. The whole focused
+TUI/consumer/maintainer/source/registry/setup/promotion/candidate set is green at 1612 tests plus
+639 subtests.
+
 ## Do not undo
 
 - Do not weaken the exact synchronized-baseline comparison to pass QA-031.
@@ -188,12 +197,9 @@ depends on are stated as a Hypothesis property over generated names rather than 
 
 ## Exact next implementation action
 
-Execute step 7 (QA-031/B-100) next: an honest Registry baseline-refusal diagnosis and a recovery
-path. Preserve the exact baseline equality — do not weaken the comparison to make the refusal go
-away. Characterize unpublished prior promotion, stale checkout, wrong workspace root and unrelated
-drift as separate measured cases, and explain the Git publication → local update → Registry
-synchronization sequence in product terms, with no `aart ...` command text in any TUI frame. Then
-steps 11–14. The operator has asked for targeted tests and quality gates only until the batch is
+Execute step 11 (QA-036/QA-037) next: workflow progress chrome derived from real navigation state,
+and Back preserving the stable subject/read model. Then steps 12–14. The operator has asked for
+targeted tests and quality gates only until the batch is
 finished; run the whole `tui`/`consumer`/`maintainer`/`source`/`registry`/`setup`/`promotion`/
 `candidate` test file set after each step, not only the files it edits, and step 15 runs the full
 suites once the batch is handed back.

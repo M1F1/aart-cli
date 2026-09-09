@@ -13,11 +13,12 @@ from agent_artifacts.application.maintainer_promotion import (
     CandidatePromotionExecutionResult,
     MaintainerCandidatePromotionPorts,
     PreparedCandidatePromotionTransaction,
+    RegistryBaselineMismatch,
     execute_candidate_promotion,
     prepare_candidate_promotion_transaction,
     prepare_promotion_transaction,
 )
-from agent_artifacts.configuration.model import ConfiguredSource, SourceKind
+from agent_artifacts.configuration.model import ConfiguredSource, SourceKind, git_origin_key
 from agent_artifacts.configuration.policy import EffectiveConfiguration, redact_text
 from agent_artifacts.domain.candidates import CandidateId
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
@@ -29,6 +30,7 @@ from agent_artifacts.io.git import GitProcessRequest, run_git_process
 from agent_artifacts.sources.model import (
     CurrentSourceRequest,
     source_instance_id,
+    source_snapshot_digest,
     source_store_paths,
 )
 
@@ -87,6 +89,65 @@ def _git(root: str, *arguments: str, max_output_bytes: int = 1024 * 1024):
             max_output_bytes=max_output_bytes,
         )
     )
+
+
+def _git_text(root: str, *arguments: str) -> str | None:
+    observed = _git(root, *arguments, max_output_bytes=4096)
+    if isinstance(observed, Err):
+        return None
+    try:
+        return observed.value.stdout.decode("utf-8", errors="strict").strip()
+    except UnicodeDecodeError:
+        return None
+
+
+def _registry_baseline_mismatch(
+    root: str,
+    registry: ConfiguredSource,
+    approved_revision: str,
+) -> RegistryBaselineMismatch:
+    """Classify Git evidence for a snapshot mismatch without changing the verdict."""
+
+    top_level = _git_text(root, "rev-parse", "--show-toplevel")
+    if top_level is None or os.path.realpath(top_level) != os.path.realpath(root):
+        return RegistryBaselineMismatch.WRONG_WORKSPACE
+
+    origin = _git_text(root, "remote", "get-url", "origin")
+    if origin is not None and git_origin_key(registry.kind, origin) != git_origin_key(
+        registry.kind, registry.location
+    ):
+        return RegistryBaselineMismatch.WRONG_WORKSPACE
+
+    status = _git_text(root, "status", "--porcelain", "--untracked-files=all")
+    if status:
+        return RegistryBaselineMismatch.UNCOMMITTED_DRIFT
+
+    head = _git_text(root, "rev-parse", "--verify", "HEAD")
+    if head is None:
+        return RegistryBaselineMismatch.UNKNOWN
+    if head == approved_revision:
+        return RegistryBaselineMismatch.UNCOMMITTED_DRIFT
+    common = _git_text(root, "merge-base", head, approved_revision)
+    if common == approved_revision:
+        return RegistryBaselineMismatch.UNPUBLISHED_LOCAL_COMMIT
+    if common == head:
+        return RegistryBaselineMismatch.STALE_CHECKOUT
+    return RegistryBaselineMismatch.UNKNOWN
+
+
+def _baseline_context(
+    root: str,
+    registry: ConfiguredSource,
+    approved_snapshot,
+    workspace,
+) -> RegistryBaselineMismatch:
+    workspace_digest = source_snapshot_digest(workspace)
+    if (
+        isinstance(workspace_digest, Ok)
+        and workspace_digest.value == approved_snapshot.snapshot_digest
+    ):
+        return RegistryBaselineMismatch.UNKNOWN
+    return _registry_baseline_mismatch(root, registry, approved_snapshot.revision)
 
 
 def _staged_paths(root: str) -> Result[tuple[str, ...]]:
@@ -271,6 +332,7 @@ def prepare_configured_candidate_promotion(
         approved.value,
         workspace.value,
         mode=mode,
+        baseline_mismatch=_baseline_context(root.value, registry, approved.value, workspace.value),
     )
     if isinstance(transaction, Err):
         return transaction
@@ -340,6 +402,7 @@ def prepare_configured_bulk_promotion(
         approved.value,
         workspace.value,
         mode=mode,
+        baseline_mismatch=_baseline_context(root.value, registry, approved.value, workspace.value),
     )
     if isinstance(transaction, Err):
         return transaction

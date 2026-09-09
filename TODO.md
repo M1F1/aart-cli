@@ -160,7 +160,7 @@ Each new entry records:
       Retest: sync both Sources, open Candidates (35), and move the cursor. Every column reads down;
       a long name ends in `…` and appears in full under `Under the cursor:`.
 
-- [ ] **QA-031 — Promotion baseline refusal does not explain the unpublished Registry change.**
+- [x] **QA-031 — Promotion baseline refusal does not explain the unpublished Registry change.**
       Stage: promoting the second Candidate during the real Registry walkthrough
       Surface: Registry Diff (43)
       Severity: high
@@ -181,6 +181,13 @@ Each new entry records:
       Note: do not weaken the baseline equality check. The future increment must first distinguish
       an unpublished local promotion, a stale checkout, the wrong workspace root and unrelated
       drift; no `aart ...` command text may enter the TUI.
+      Fix: `D-214`. The configured promotion seam now observes the real Git checkout only when the
+      exact snapshot comparison refuses. A clean descendant is named as unpublished work and gives
+      the Git review/merge → local update → Registry synchronization sequence; a clean ancestor,
+      uncommitted managed-path drift and a different Git origin each receive their own diagnosis.
+      Evidence: `tests/registry_baseline_diagnosis_test.py` builds all four states in temporary Git
+      repositories. Removing the observed diagnosis from the configured promotion call turns all
+      four red; the 1612-test focused set plus 639 subtests is green.
 
 - [ ] **QA-032 — A Registry produced by TUI promotion fails its generated GitHub Actions.**
       Stage: publishing the first promoted artifact through Registry PR #1

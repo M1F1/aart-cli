@@ -1046,3 +1046,13 @@ be cut, the focused row in full, an unfocused one that must not be, and a proper
 holds for any names inside the content measure; five targeted mutations killed. The scoped advisory
 run over the kernel moved from 70 survivors to 67 — `B-107` stays open for what these claims do not
 reach.
+
+**CP-19 step 7 complete — QA-031/B-100 closed (2026-09-09).** The exact Registry snapshot
+comparison remains unchanged and authoritative. On a mismatch, the configured adapter now observes
+the real Git top level, configured origin, worktree status, HEAD and merge base and supplies a typed
+cause to the pure application refusal. A clean descendant is named as unpublished work awaiting Git
+review/merge, a clean ancestor as a stale checkout, managed-path changes as uncommitted drift and a
+different origin as the wrong workspace. The unpublished case orders publication, local update and
+Registry synchronization without exposing CLI commands (`D-214`). Four real temporary repository
+tests were RED against the generic prior answer; the configured-seam mutation kills all four. The
+whole focused set is green at 1612 tests plus 639 subtests. Step 11 is next.
