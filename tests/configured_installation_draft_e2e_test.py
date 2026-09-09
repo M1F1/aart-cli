@@ -131,7 +131,7 @@ def _packaged(path: str, content: bytes) -> SnapshotEntry:
     return SnapshotEntry(parsed.value, SnapshotEntryKind.FILE, content)
 
 
-def _promote_one(
+def _promote_one_locally(
     authored: tuple[tuple[str, str] | tuple[str, str, bool], ...],
     *,
     onto: SourceSnapshot,
@@ -139,7 +139,12 @@ def _promote_one(
     setup: AuthoredSetup | None = None,
     mode: PromotionMode = PromotionMode.VENDORED,
 ) -> SourceSnapshot:
-    """One author tree through one real promote-and-publish transaction onto `onto`."""
+    """One author tree through one real promotion transaction onto `onto`, and no further.
+
+    This is everything a maintainer's own machine can do: the version record it writes says
+    `promoted-local`, because publication is a Git review and merge nothing here performs
+    (INV-242).
+    """
 
     approved = load_registry_versions(onto)
     assert isinstance(approved, Ok), approved
@@ -178,18 +183,53 @@ def _promote_one(
     assert isinstance(promoted, Ok), promoted
     projected = project_promotion(onto, promoted.value)
     assert isinstance(projected, Ok), projected
-    local = promoted.value.versions[0]
-    public = publish_registry_version(local, local.registry_snapshot)
-    reloaded = load_registry_versions(projected.value)
+    return SourceSnapshot(SnapshotOrigin.IMMUTABLE_GIT, projected.value.entries)
+
+
+def _promote_one(
+    authored: tuple[tuple[str, str] | tuple[str, str, bool], ...],
+    *,
+    onto: SourceSnapshot,
+    revision: str,
+    setup: AuthoredSetup | None = None,
+    mode: PromotionMode = PromotionMode.VENDORED,
+) -> SourceSnapshot:
+    """One author tree promoted onto `onto`, then recorded as published.
+
+    The publication half is written directly because these fixtures need a registry that already
+    crossed the boundary, not one that is about to. What the boundary itself does with a
+    promoted-local snapshot is `git_publication_transition_e2e_test`'s subject, and that test may
+    not use this shortcut.
+    """
+
+    projected = _promote_one_locally(authored, onto=onto, revision=revision, setup=setup, mode=mode)
+    reloaded = load_registry_versions(projected)
     assert isinstance(reloaded, Ok), reloaded
-    after = tuple(
-        public if item.coordinate == local.coordinate else item for item in reloaded.value
-    )
-    lifecycle = plan_registry_lifecycle(projected.value, reloaded.value, after)
+    after = tuple(publish_registry_version(item, item.registry_snapshot) for item in reloaded.value)
+    lifecycle = plan_registry_lifecycle(projected, reloaded.value, after)
     assert isinstance(lifecycle, Ok), lifecycle
-    published = project_lifecycle_update(projected.value, lifecycle.value)
+    published = project_lifecycle_update(projected, lifecycle.value)
     assert isinstance(published, Ok), published
     return SourceSnapshot(SnapshotOrigin.IMMUTABLE_GIT, published.value.entries)
+
+
+def _promoted_local_registries(
+    *authored: tuple[tuple[str, str] | tuple[str, str, bool], ...],
+    setup: AuthoredSetup | None = None,
+    mode: PromotionMode = PromotionMode.VENDORED,
+) -> SourceSnapshot:
+    """Several author trees promoted into one registry, stopping where a maintainer stops."""
+
+    snapshot = SourceSnapshot(SnapshotOrigin.LOCAL, ())
+    for index, tree in enumerate(authored):
+        snapshot = _promote_one_locally(
+            tree,
+            onto=snapshot,
+            revision=f"{index:x}" * 40,
+            setup=setup,
+            mode=mode,
+        )
+    return snapshot
 
 
 def _published_registries(

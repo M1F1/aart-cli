@@ -17,7 +17,7 @@ from agent_artifacts.application.installation_inputs import (
 )
 from agent_artifacts.application.installation_offer import ArtifactPlacement
 from agent_artifacts.application.marketplace_resolution import ResolutionPolicy
-from agent_artifacts.application.promotion import load_registry_versions
+from agent_artifacts.application.promotion import load_published_registry_versions
 from agent_artifacts.configuration.policy import EffectiveConfiguration
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.harness import Scope
@@ -133,7 +133,7 @@ def _configured_snapshot(
             CONFIGURED_INSTALLATION_INVALID,
             f"configured registry {alias} has no synchronized current snapshot",
         )
-    loaded = load_registry_versions(current.value.candidate.snapshot)
+    loaded = load_published_registry_versions(current.value.candidate.snapshot)
     if isinstance(loaded, Err):
         return loaded
     exact = next(

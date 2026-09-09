@@ -41,11 +41,14 @@ internal state model.
    equality. Characterize unpublished prior promotion, stale checkout, wrong workspace root and
    unrelated drift separately. The measured first case must explain the Git publication → local
    update → Registry synchronization sequence in product terms without embedding CLI commands.
-8. **Git publication transition (QA-034/B-102) — TODO, CRITICAL.** Characterize the real sequence
-   promotion → local commit → Git review/merge → configured Registry sync. Preserve
-   `promoted-local` before publication, but make a version read from the configured published Git
-   boundary available to Marketplace. No fixture may call `publish_registry_version` on behalf of
-   a public flow; the test must prove the actual boundary performs the transition.
+8. **Git publication transition (QA-034/B-102) — DONE.** Publication is presence on the canonical
+   consumer-visible branch (INV-242), so it is a property of the reading and not a field anything
+   in the accepted workflow writes. `load_published_registry_versions` applies the transition once,
+   at the consumer seams (`configured_offers`, `configured_selection`, `configured_installation`,
+   `offline_readiness`); maintainer-side readers keep the record as written (D-207).
+   `tests/git_publication_transition_e2e_test.py` drives the real sequence — promotion transaction,
+   review branch, `git merge --no-ff`, public sync, Marketplace, install receipt — and asserts the
+   merged records on disk still read `promoted-local`.
 9. **Canonical Registry maintenance and CI (QA-025/QA-032/B-057/B-099) — TODO, CRITICAL.** Provide
    public read-only validation and appropriate deterministic maintenance for the checked-out
    versioned Registry representation. Make both TUI Rebuild and the generated workflow use the
@@ -91,13 +94,20 @@ the TUI remained on Review Rebuild and continued to advertise confirmation for a
 That run was the procedure's required QA-025 retest, not an operator detour: QA-025 is reopened
 because its real canonical input fails even though its route and ordering passed focused tests.
 
-The Marketplace-to-lifecycle half of discovery cannot continue honestly until step 8 closes
-QA-034. The operator may keep collecting navigation and layout observations, but must not treat an
-empty Marketplace as the expected result or synthesize an offer by editing Registry JSON. Do not
-run Rebuild again until step 9 is implemented, and do not discard the local MCP promotion or
-adoption transaction.
+Step 8 has since closed QA-034, so the Marketplace-to-lifecycle half of discovery can resume: a
+merged promotion is offered and installable without anything editing Registry JSON. Do not run
+Rebuild again until step 9 is implemented, and do not discard the local MCP promotion or adoption
+transaction.
 
 ## Evidence and gates
+
+Step 8 was RED against the shipped behaviour with the reported symptom itself: Marketplace listed
+`[]` where the merged branch's promotion belonged. Two targeted mutations were killed — removing the
+transition from `load_published_registry_versions`, and leaving the installation re-read on the raw
+loader so an install refuses the exact version Marketplace just offered. One older test asserted the
+replaced belief and was rewritten rather than deleted: `configured_selection_resolution_e2e_test`
+now holds that the configured branch publishes what it carries without rewriting it, plus a
+separate claim that an artifact the branch does not carry is still not found.
 
 QA-026 was RED against the fixed footer. A semantic mutation routing advertised `b Rebuild` to the
 initialization screen was killed by the headless shell walk. The focused 238-test interaction and
@@ -114,7 +124,7 @@ green. Full repository gates are intentionally deferred until step 15 at the ope
 
 ## Exact next implementation action
 
-The discovery pass is now blocked at Marketplace by QA-034. When Claude resumes implementation,
-start with CP-19 step 8 and prove the defect over an actual Git merge/sync boundary. Do not use the
-fixture shortcut that calls `publish_registry_version` before the repository exists. Then execute
-step 9 so the same canonical representation passes local TUI maintenance and generated CI.
+Step 8 is closed. Execute step 9 next, so the canonical promoted representation passes both local
+TUI Rebuild and the generated workflow (QA-025/QA-032/B-057/B-099) — that is the remaining blocking
+pair, and it is what still fails on the operator's real Registry. The UX batch (steps 3–7, 10–14)
+follows; step 15 runs the full gates once the operator hands the batch back.

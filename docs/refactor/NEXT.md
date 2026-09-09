@@ -1303,11 +1303,36 @@ on connected Registry rows (QA-042); and authoring Sources advertising an Enter/
 does not exist and leaks `no connected registry here is 21-registries` (QA-043). QA-027 also gains
 the completed Candidate flow as evidence for returning directly to its owning list.
 
-**Exact next action for Claude:** implement CP-19 step 8 with TDD over a real promoted-local Git
-branch merged into the configured publication branch, then public sync and Marketplace. Do not use
-the `_published_registries` fixture shortcut. Step 9 then aligns TUI Rebuild and generated CI with
-the canonical representation. The operator explicitly ended this discovery session and asked for
-the repository handoff to be committed and pushed.
+**CP-19 step 8 is DONE — QA-034/B-102 closed (2026-09-09).** There was no missing write. INV-242
+defines published as presence on the canonical consumer-visible branch, which is a property of the
+reading: the maintainer writes `promoted-local` before any review, and the merge that publishes it
+moves a commit without editing a byte inside it. `load_published_registry_versions` now applies the
+transition once, at the four consumer seams (`configured_offers`, `configured_selection`,
+`configured_installation`, `offline_readiness`); the maintainer's workspace projection, source
+validation, promotion planning and Candidate reconciliation keep the durable record as written
+(D-207). `configured_offers` no longer declines anything for being unpublished, because nothing
+reachable there can be.
+
+`tests/git_publication_transition_e2e_test.py` is the evidence: one real promotion transaction on
+`main`, a second committed to a review branch, `git merge --no-ff`, public `source sync`,
+`marketplace list`, and an install whose receipt names the merged revision — plus the assertion
+that the merged version records on disk still read `promoted-local`. It was RED with exactly the
+reported symptom (`[] != ['company/skill/code-review@1.2.0']`). The fixture split that made this
+possible lives in `configured_installation_draft_e2e_test`: `_promoted_local_registries` stops
+where a maintainer stops, and `_published_registries` writes the publication half for the fixtures
+that need a registry which already crossed the boundary.
+
+`configured_selection_resolution_e2e_test.test_a_local_promotion_is_not_invented_into_a_published_offer`
+asserted the replaced belief. It was rewritten, not deleted: the branch a consumer reads publishes
+what it carries without rewriting it, and an artifact the branch does not carry is still not found.
+
+**Exact next action for Claude:** CP-19 step 9 — QA-025/QA-032/B-057/B-099. Local TUI Rebuild and
+the generated GitHub workflow both drive the legacy authoring-workspace authority over the
+canonical versioned representation promotion writes, so `lock` refuses a missing `artifact.json`
+and Registry PR CI fails a healthy branch. Give the checked-out versioned representation its own
+public read-only validation and deterministic maintenance, keep compatibility/audit coverage
+explicit, and do not make promotion emit the legacy workspace as a second truth. Focused gates
+only; the operator deferred the full suites to step 15.
 
 ## Critical boundaries for this slice
 

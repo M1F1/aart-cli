@@ -33,6 +33,7 @@ from agent_artifacts.domain.registry import (
     PublicationStage,
     RegistryArtifactVersion,
     RegistryLifecycle,
+    publish_registry_version,
     registry_version_from_candidate,
 )
 from agent_artifacts.domain.result import Err, Ok, Result
@@ -1441,3 +1442,35 @@ def load_registry_versions(
         if isinstance(validated, Err):
             return validated
     return Ok(ordered)
+
+
+def load_published_registry_versions(
+    snapshot: SourceSnapshot,
+) -> Result[tuple[RegistryArtifactVersion, ...]]:
+    """The same approved versions, read the way a consumer's configured registry branch means them.
+
+    INV-242 settles what published means: present on the canonical consumer-visible registry
+    branch, not merely prepared or committed locally.  That is a fact about *where the record was
+    read from*, and it cannot be a fact about the record: the maintainer writes `promoted-local`
+    before anyone has reviewed anything, and the Git merge that publishes it moves a commit without
+    touching a byte inside it (INV-241).  A consumer that insisted on a stored `published` flag
+    would therefore be waiting for a write no accepted workflow performs -- which is exactly what
+    left the first real merged promotion invisible in Marketplace (`QA-034`).
+
+    So the transition is applied here, once, at the boundary that can honestly observe it, and only
+    for the branch the consumer configured.  Every other reading -- the maintainer's own workspace,
+    source validation, promotion planning -- keeps the durable record as written, because from
+    there the promotion genuinely is still local.
+    """
+
+    loaded = load_registry_versions(snapshot)
+    if isinstance(loaded, Err):
+        return loaded
+    return Ok(
+        tuple(
+            publish_registry_version(version, version.registry_snapshot)
+            if version.publication is PublicationStage.PROMOTED_LOCAL
+            else version
+            for version in loaded.value
+        )
+    )

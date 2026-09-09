@@ -177,23 +177,6 @@ Each new entry records:
       Note: QA-032 explains this particular lock refusal, but the stale terminal state is a
       separate reducer/result-screen defect and must hold for every failed action.
 
-- [ ] **QA-034 — A Git-merged promotion never becomes visible in Marketplace.**
-      Stage: first clean Consumer after Registry PR #1 was merged and synchronized
-      Surface: Marketplace in TUI and `marketplace list --json`
-      Severity: blocking
-      Blocks current stage: yes; install/update/repair acceptance cannot start
-      Reproduction: merge the TUI promotion commit into the configured Registry's `main`, connect
-      a clean consumer to that branch, then open Marketplace
-      Expected: merging into the configured approved branch is the publication boundary, so the
-      promoted artifact becomes an approved Marketplace offer
-      Observed: Source health is `healthy` at merged commit `f37d182`, and the synchronized tree
-      contains the version, manifest and payload, but Marketplace returns `artifacts: []`. The
-      durable record still says `publication: promoted-local`; the consumer admits only
-      `PublicationStage.PUBLISHED`, and no public Git publication path changes that field.
-      Evidence: even the first merged Skill is absent, independently of the not-yet-published MCP
-      and adopted Skill. CP-17's Git-backed fixture called `publish_registry_version` internally
-      before materializing its repository, so it never exercised this missing public transition.
-
 - [ ] **QA-035 — Dashboard sections have no visual hierarchy.**
       Stage: reading the main Dashboard
       Surface: Dashboard navigation, focused-option explanation and status summary
@@ -293,6 +276,34 @@ Each new entry records:
       `no connected registry here is 21-registries`.
 
 ### Fixed — awaiting manual retest
+
+- [ ] **QA-034 — A Git-merged promotion never becomes visible in Marketplace.**
+      Stage: first clean Consumer after Registry PR #1 was merged and synchronized
+      Surface: Marketplace in TUI and `marketplace list --json`
+      Severity: blocking
+      Blocks current stage: yes; install/update/repair acceptance cannot start
+      Reproduction: merge the TUI promotion commit into the configured Registry's `main`, connect
+      a clean consumer to that branch, then open Marketplace
+      Expected: merging into the configured approved branch is the publication boundary, so the
+      promoted artifact becomes an approved Marketplace offer
+      Observed: Source health is `healthy` at merged commit `f37d182`, and the synchronized tree
+      contains the version, manifest and payload, but Marketplace returns `artifacts: []`. The
+      durable record still says `publication: promoted-local`; the consumer admits only
+      `PublicationStage.PUBLISHED`, and no public Git publication path changes that field.
+      Evidence: even the first merged Skill is absent, independently of the not-yet-published MCP
+      and adopted Skill. CP-17's Git-backed fixture called `publish_registry_version` internally
+      before materializing its repository, so it never exercised this missing public transition.
+      Fix: publication is now read where INV-242 puts it — presence on the branch the consumer
+      configured — instead of waiting for a durable field no public workflow writes.
+      `load_published_registry_versions` applies the transition once, at the four consumer read
+      seams (offers, selection, installation re-read, offline readiness); the maintainer's own
+      workspace, source validation and promotion planning keep the record as written (`D-207`).
+      Evidence: `tests/git_publication_transition_e2e_test.py` promotes with the real transaction,
+      commits the second promotion to a review branch, merges it with `git merge --no-ff`,
+      synchronizes and reads Marketplace and an install receipt. It was RED at
+      `[] != ['company/skill/code-review@1.2.0']`, the exact symptom reported here.
+      Retest: connect the clean Consumer to the merged Registry `main`, `source sync`, open
+      Marketplace, and confirm the promoted Skill is offered and installable.
 
 - [ ] **QA-026 — The footer does not name the keys the current screen actually has.**
       Stage: every screen; found while walking Maintainer Mode

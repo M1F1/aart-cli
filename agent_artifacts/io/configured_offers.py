@@ -21,8 +21,8 @@ import dataclasses
 import time
 
 from agent_artifacts.application.promotion import (
+    load_published_registry_versions,
     load_registry_promotions,
-    load_registry_versions,
 )
 from agent_artifacts.application.sources import SourceStatusRequest, source_status
 from agent_artifacts.compiler.graph import GraphSource, compile_marketplace_graph
@@ -32,7 +32,6 @@ from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Sever
 from agent_artifacts.domain.identifiers import ArtifactIdentity
 from agent_artifacts.domain.registry import (
     PromotionMode,
-    PublicationStage,
     RegistryArtifactVersion,
     RegistryLifecycle,
 )
@@ -88,13 +87,14 @@ def _declined(version: RegistryArtifactVersion) -> str | None:
     deprecated one carries a warning the row has nowhere to render yet, and offering it silently
     would be the Fast projection hiding material risk (B-037).  Collections are versioned and
     nothing downstream carries that version yet (B-031).
+
+    Publication is not one of these reasons: everything reachable here was read from the branch
+    this consumer configured, which is what published means (INV-242, D-207).
     """
 
     coordinate = version.coordinate
     if coordinate.artifact.kind == "collection":
         return f"{coordinate}: a Collection is offered by version, and nothing here carries one yet"
-    if version.publication is not PublicationStage.PUBLISHED:
-        return f"{coordinate}: promoted in this registry but not published"
     if version.mode is not PromotionMode.VENDORED:
         return f"{coordinate}: referenced, so this registry snapshot holds no verified content"
     if version.lifecycle is RegistryLifecycle.REVOKED:
@@ -156,7 +156,7 @@ def project_configured_registry(
     """Every artifact this registry currently offers, compiled from what it published."""
 
     snapshot = current.candidate.snapshot
-    loaded = load_registry_versions(snapshot)
+    loaded = load_published_registry_versions(snapshot)
     if isinstance(loaded, Err):
         return loaded
     promotions = load_registry_promotions(snapshot)

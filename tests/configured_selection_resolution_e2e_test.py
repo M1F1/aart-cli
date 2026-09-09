@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from dataclasses import replace
 from typing import cast
 
 from agent_artifacts.application.promotion import (
@@ -123,7 +124,16 @@ class ConfiguredSelectionResolutionTest(unittest.TestCase):
         self.assertEqual(actual.registry_snapshot, version.registry_snapshot)
         self.assertEqual(actual.canonical_digest, version.canonical_digest)
 
-    def test_a_local_promotion_is_not_invented_into_a_published_offer(self) -> None:
+    def test_the_branch_the_consumer_reads_publishes_what_it_carries_without_rewriting_it(
+        self,
+    ) -> None:
+        """The record a maintainer wrote stays as written; the reading is what changed (D-207).
+
+        Publication is presence on the canonical consumer-visible branch (INV-242), and this
+        snapshot is the one this consumer synchronized. Refusing it would be waiting for a write
+        that the accepted promote → commit → review → merge workflow never performs (`QA-034`).
+        """
+
         snapshot, version = _approved_snapshot(published=False)
         self._publish(snapshot)
 
@@ -133,9 +143,36 @@ class ConfiguredSelectionResolutionTest(unittest.TestCase):
             data_root=self.data_root,
         )
 
+        self.assertIsInstance(resolved, Ok, getattr(resolved, "diagnostics", ()))
+        assert isinstance(resolved, Ok)
+        self.assertEqual(version.publication, PublicationStage.PROMOTED_LOCAL)
+        self.assertEqual(
+            resolved.value.artifacts[0].version,
+            replace(version, publication=PublicationStage.PUBLISHED),
+        )
+
+    def test_an_artifact_the_branch_does_not_carry_is_still_not_found(self) -> None:
+        """Nothing about publication loosens what a snapshot has to actually contain."""
+
+        snapshot, _ = _approved_snapshot(published=False)
+        self._publish(snapshot)
+
+        resolved = resolve_configured_selection(
+            self.effective,
+            ArtifactSelection(
+                (
+                    ArtifactRequest(
+                        ArtifactIdentity("mcp", "absent-mcp"),
+                        VersionConstraint("*"),
+                        self.source.alias,
+                    ),
+                )
+            ),
+            data_root=self.data_root,
+        )
+
         self.assertIsInstance(resolved, Err)
         assert isinstance(resolved, Err)
-        self.assertEqual(version.publication, PublicationStage.PROMOTED_LOCAL)
         self.assertEqual(resolved.diagnostics[0].code.value, "artifact-not-found")
 
 

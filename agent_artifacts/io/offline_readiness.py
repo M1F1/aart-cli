@@ -8,10 +8,10 @@ from agent_artifacts.application.offline_readiness import (
     OfflineSourceReadiness,
     artifact_readiness,
 )
-from agent_artifacts.application.promotion import load_registry_versions
+from agent_artifacts.application.promotion import load_published_registry_versions
 from agent_artifacts.configuration.model import SourceKind
 from agent_artifacts.configuration.policy import EffectiveConfiguration
-from agent_artifacts.domain.registry import PublicationStage, RegistryLifecycle
+from agent_artifacts.domain.registry import RegistryLifecycle
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.protocol.authoring import read_package_description
 from agent_artifacts.sources.model import (
@@ -57,14 +57,15 @@ def read_offline_readiness(
             continue
 
         snapshot = current.value.candidate.snapshot
-        loaded = load_registry_versions(snapshot)
+        loaded = load_published_registry_versions(snapshot)
         if isinstance(loaded, Err):
             return loaded
         artifacts = []
         for version in loaded.value:
+            # Everything read here is on the branch this consumer configured, which is what
+            # published means (INV-242, D-207); what a registry withdrew still has to be skipped.
             if (
-                version.publication is not PublicationStage.PUBLISHED
-                or version.lifecycle is not RegistryLifecycle.PUBLISHED
+                version.lifecycle is not RegistryLifecycle.PUBLISHED
                 or version.coordinate.artifact.kind == "collection"
             ):
                 continue

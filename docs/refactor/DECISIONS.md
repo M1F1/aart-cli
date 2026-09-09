@@ -4766,3 +4766,35 @@ preserve INV-242 — a local promotion is not publication — and must not relab
 make the test pass. The configured approved Git boundary is where publication evidence must enter
 the read model or an explicit reviewed transition; the slice decides the smallest compliant form
 from the Product Specification and measured public behavior.
+
+## D-207 — Publication is where a record was read from, not a field somebody writes
+
+Date: 2026-09-09 · Increment: CP-19 step 8, QA-034/B-102 · Status: accepted
+
+INV-242 defines published as *present on the canonical consumer-visible registry branch or
+snapshot*. That is a property of the reading, not of the bytes. The maintainer writes
+`promoted-local` before any review has happened, and the merge that publishes it moves a commit
+without editing a byte inside it — AART does not perform that merge and INV-241 says it must not
+try to own it. A consumer that waited for a stored `published` flag was therefore waiting for a
+write no accepted workflow performs, which is exactly why the first real merged promotion left
+Marketplace empty.
+
+Two alternatives were rejected. Making promotion write `published` would have the local machine
+assert something only the Git host can know, breaking INV-242 outright. Adding a post-merge
+`publish` command that rewrites and re-commits the record would put a second, later, human-run
+mutation between review and availability, would change bytes that reviewers already approved, and
+would still be unverifiable — nothing stops it from being run before the merge.
+
+So the transition is applied once, in `load_published_registry_versions`, at the consumer seam that
+reads a configured registry's synchronized snapshot: `configured_offers`, `configured_selection`,
+`configured_installation` and `offline_readiness`. Every other reader — the maintainer's own
+workspace projection, source validation, promotion planning, candidate reconciliation — keeps the
+durable record as written, because from there the promotion genuinely is still local. Selection and
+the installation re-read must use the same loader or an install would refuse the exact version
+Marketplace just offered, the two records differing only in a field neither is authoritative about.
+
+Consequence: the publication test disappears from `configured_offers`, `configured_selection` and
+`offline_readiness`, because nothing reachable at those seams can fail it and an unreachable
+condition is a claim no test can hold. A branch cannot express "merged but deliberately held back"
+either; if a registry ever needs to stage a version publicly without offering it, that is a
+lifecycle statement (`RegistryLifecycle`), which those seams still check.

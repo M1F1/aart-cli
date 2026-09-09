@@ -873,7 +873,7 @@ the operator during the manual batch.
 **Next:** QA-027, Enter from completed result screens back to the list that began their sequence.
 
 **CP-19 planning checkpoint (2026-09-09).** The operator separated post-refactor manual acceptance
-from the closed refactor by opening CP-19 (D-203). QA-026 is its completed first step; QA-027 through
+from the closed refactor by opening CP-19 (D-203). QA-026 and QA-034 are its completed steps 1 and 8; QA-027 through
 QA-030 are scoped, unimplemented interaction/layout steps. QA-031/B-100 records the blocking second
 promotion: local `cc7c01d` contains an unpublished Skill promotion while synchronized remote `main`
 is `027ba7f`, so exact baseline equality correctly refuses the MCP transaction. The gap is the
@@ -921,3 +921,23 @@ Vendored/Referenced explanation, Registry row grouping, compact keycap footer la
 focus and the dishonest authoring-Source details route/internal diagnostic on Registries. They are
 bounded as CP-19 steps 11–14 with B-103–B-106. No implementation was started. Full gates remain
 deferred until the implementation batch is handed back.
+
+**CP-19 step 8 complete — QA-034/B-102 closed (2026-09-09).** The missing transition was a missing
+*reading*, not a missing write. INV-242 makes published mean present on the canonical
+consumer-visible branch; the maintainer necessarily writes `promoted-local` before review exists,
+and the merge that publishes it moves a commit without editing a byte inside it (INV-241). A
+consumer that waited for a stored flag was waiting for a write no accepted workflow performs.
+`load_published_registry_versions` now applies the transition at the four consumer read seams —
+configured offers, Selection resolution, the installation re-read and offline readiness — while the
+maintainer workspace projection, source validation, promotion planning and Candidate reconciliation
+keep the record exactly as written (D-207). Selection and the installation re-read had to move
+together or an install would refuse the version Marketplace had just offered.
+
+Evidence is `tests/git_publication_transition_e2e_test.py`: a real promotion transaction on `main`,
+a second promotion committed to a review branch, `git merge --no-ff`, public sync, `marketplace
+list`, an install receipt naming the merged revision, and the assertion that the merged version
+records still read `promoted-local` on disk. It was RED with the operator's exact symptom. The
+`_published_registries` fixture was split so `_promoted_local_registries` stops where a maintainer
+stops. One test asserting the replaced belief was rewritten rather than removed. Focused suites,
+changed-module `mypy`, `ruff check` and `ruff format --check` are green; full gates stay deferred to
+CP-19 step 15. QA-025/QA-032 (step 9) is now the blocking pair.

@@ -16,11 +16,11 @@ from agent_artifacts.application.marketplace_resolution import (
     aggregate_approved_marketplace,
     resolve_selection,
 )
-from agent_artifacts.application.promotion import load_registry_versions
+from agent_artifacts.application.promotion import load_published_registry_versions
 from agent_artifacts.configuration.model import SourceKind
 from agent_artifacts.configuration.policy import EffectiveConfiguration
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.registry import PromotionMode, PublicationStage, RegistryArtifactVersion
+from agent_artifacts.domain.registry import PromotionMode, RegistryArtifactVersion
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.domain.selection import (
     ArtifactRequest,
@@ -112,7 +112,7 @@ def _approved_snapshot(
     snapshot: SourceSnapshot,
     resolved_revision: str | None = None,
 ) -> Result[ApprovedRegistrySnapshot | None]:
-    loaded = load_registry_versions(snapshot)
+    loaded = load_published_registry_versions(snapshot)
     if isinstance(loaded, Err):
         return loaded
     versions = loaded.value
@@ -123,10 +123,9 @@ def _approved_snapshot(
         return _error(f"configured registry {alias} has inconsistent approved version identity")
     artifacts: list[ApprovedMarketplaceArtifact] = []
     for version in versions:
-        if (
-            version.publication is not PublicationStage.PUBLISHED
-            or version.coordinate.artifact.kind == "collection"
-        ):
+        # Publication is not a test here: this snapshot is the branch the consumer configured, and
+        # that is what published means (INV-242, D-207).
+        if version.coordinate.artifact.kind == "collection":
             continue
         artifact = _approved_artifact(snapshot, version)
         if isinstance(artifact, Err):

@@ -2611,9 +2611,17 @@ but one must not be implemented as though the other had succeeded.
 Evidence/links: QA-033; `io/consumer_actions.py::_failed`;
 `application/consumer_ui.py::_action_recorded`; CP-19 step 10.
 
-## B-102 — Git publication has no public transition from promoted-local to published — CRITICAL
+## B-102 — Git publication has no public transition from promoted-local to published — CLOSED
 
-Found: manual TUI acceptance, QA-034 (2026-09-09) · Severity: blocking · Status: open
+Closed by CP-19 step 8 (2026-09-09): there is no missing write. Publication is presence on the
+canonical consumer-visible branch (INV-242), so it is a fact about the reading, and
+`load_published_registry_versions` now applies it at the four consumer seams while every
+maintainer-side reader keeps the durable record as written (D-207).
+`tests/git_publication_transition_e2e_test.py` proves it across a real branch, `git merge --no-ff`,
+public sync, Marketplace and an install receipt, and asserts the merged version records still say
+`promoted-local` on disk. The original note follows.
+
+Found: manual TUI acceptance, QA-034 (2026-09-09) · Severity: blocking · Status: closed
 
 Registry PR #1 merged the real TUI promotion into `main`, the clean Consumer synchronized exact Git
 revision `f37d182`, and source health is `healthy`. The synchronized snapshot contains the version
