@@ -833,6 +833,31 @@ green at 3,606 tests, and `make typecheck`, `ruff check` and `ruff format --chec
 walkthrough at `.local/END_TO_END_ACCEPTANCE_M1F1_TUI.md` now drives every product operation from
 the screens and uses the terminal only for Git/GitHub work and for reading back what the TUI wrote.
 
-**Next:** the operator's manual retest of QA-001–QA-023. `registry lock/build/validate/audit` after
-a promotion is still a CLI step in that walkthrough; whether the TUI's promotion already writes the
-complete generated set is an observation for that pass, recorded as `B-099`.
+**QA-024 / QA-025 (2026-09-09).** The operator asked for the four registry commands the walkthrough
+still ran after a TUI promotion — `lock`, `build`, `validate`, `audit` — to stop being something a
+maintainer types from memory. Screen 46 gained `b`: 46h offers the whole sequence and each stage on
+its own, 46i reviews the named stages, and both run through the same `_run_stages` authority `init`
+uses, so there is one implementation of a stage and one place the canonical order lives. `init` is
+not offered; a registry is created once, and a picker that offered it would let a rebuild rename the
+registry it was rebuilding. No commit toggle either: initialization creates a tree that a commit
+makes reviewable, while a rebuild writes generated files into a checkout whose changes belong to
+whatever caused them (D-200). `B-099` closes as done rather than answered.
+
+Walking the new keys in a headless shell then found three defects nothing had caught, all sharing a
+cause — every piece was tested where it was written, and no test had pressed the keys in order.
+`Enter` translated to no event at all on screens 31b and 46b, so Add Source and Initialize Registry
+could be typed and reviewed but never confirmed. `_ANSWERABLE` derived its request screens from the
+action table and then hand-listed five of its values, so those reviews drew their prompt with no
+plan under it and results reported that a run happened without saying what it did; it is now derived
+from both tables. And `_request_action` reads `state.focus or state.current_row`, so the first
+confirmed rebuild asked to rebuild the registry alias focused back on screen 46 rather than the
+stage under the cursor — an action whose subject is its screen's own row now says so (D-201).
+
+Red before implementation, four targeted mutations each red only where claimed, and the full unit
+suite green at 3,623 tests with `make typecheck`, `ruff check`, `ruff format --check` and
+`make docs-check` clean.
+
+**Next:** the operator's manual retest of QA-001–QA-025. The walkthrough at
+`.local/END_TO_END_ACCEPTANCE_M1F1_TUI.md` now drives the generated-file run from screen 46 in both
+places it used to shell out; the only remaining CLI `registry validate` is over a *fresh clone*
+after the merge, which is a different checkout than the maintainer session.

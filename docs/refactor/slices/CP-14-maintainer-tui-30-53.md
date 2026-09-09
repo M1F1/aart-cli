@@ -1184,3 +1184,23 @@ scope checked rather than rebound, profile taken from the record, and the manife
 installation state in this scope" kept only when the canonical store is empty too.
 
 Checkpoint gates on 2026-09-03: `make quality` and `make integration` are both green.
+
+**Screen 46 gained the run that follows every change to a registry (D-200/D-201, 2026-09-09).**
+`B-090` gave the screen the run that creates a registry; everything after it was still four
+`aart_maintainer registry ...` commands typed from memory. `b` opens screen 46h, which offers the
+whole `lock → build → validate → audit` sequence and each stage on its own; 46i reviews the named
+stages; `_run_stages` is shared with initialization, so a stage has one implementation and the
+canonical order has one home. `init` is deliberately not on the picker, and there is no commit
+toggle: a rebuild's changes belong to the promotion or adoption that caused them.
+
+Walking those keys headlessly is what proved the slice, and it found three defects in already-tested
+code. Enter confirmed nothing on 31b and 46b; every review or result screen off `_ANSWERABLE`'s
+hand-written list drew no plan and no stage report; and `_request_action`'s inherited focus made the
+first rebuild ask for the registry alias on screen 46 rather than the stage under the cursor. The
+notice set is now derived from `_ACTION_REVIEW` and `_ACTION_RESULT`, and `_ROW_IS_THE_REQUEST`
+states which actions read the cursor first. `tests/maintainer_registry_rebuild_test.py` holds all of
+it, including the shell walk-through that would have caught the three.
+
+Gates on 2026-09-09: full unit suite green at 3,623 tests, `make typecheck`, `ruff check`,
+`ruff format --check` and `make docs-check` clean. `make quality`/`make integration` deferred at the
+operator's instruction while manual acceptance iterates.

@@ -1223,6 +1223,18 @@ own and once from the shell chrome, so the count appears twice. Recorded in `BAC
 sweep's three further presentation findings — no match count on a filtered list (B-047), unwrapped
 refusal lines (B-048), and the dot separator enforced on some projections but not others (B-049).
 
+**QA-024/QA-025 (2026-09-09).** Screen 46's `b` now runs `lock`, `build`, `validate` and `audit` over
+the registry — the whole sequence or one stage — through the same authority `init` uses (D-200), so
+the walkthrough no longer ends in four typed commands and `B-099` is closed. Walking those keys in a
+headless shell found that Enter confirmed nothing on screens 31b and 46b, that no review or result
+screen off a hand-written list drew what it was asking about or reporting, and that the first
+rebuild request inherited screen 46's focused registry alias instead of the stage under the cursor
+(D-201). All three are fixed; the notice set and the request row are now derived rather than listed.
+
+**Next executable work:** the operator's manual retest of QA-001–QA-025 against
+`.local/END_TO_END_ACCEPTANCE_M1F1_TUI.md`. Nothing in this batch is on CP-14's critical path; new
+findings go to root `TODO.md` as `QA-NNN`.
+
 ## Critical boundaries for this slice
 
 - Product Specification is the sole product authority.
