@@ -1375,21 +1375,26 @@ maintainer-workspace shape. CP-17 follows the accepted 165.27/165.28 boundary in
 prepares local state and Git review/merge publishes it -- so making that legacy verb compose is not
 required to continue the live chain.
 
-**CP-19/QA-032 reclassification — CRITICAL (2026-09-09).** The real Registry PR reached exactly the
-deferred boundary. `registry init` generated `.github/workflows/aart-registry.yml`, and both of its
+**CP-19/QA-025/QA-032 reclassification — CRITICAL (2026-09-09).** The real local Rebuild and
+Registry PR reached both deferred boundaries. `registry init` generated
+`.github/workflows/aart-registry.yml`, and both of its
 matrix jobs validate every PR with the legacy `registry format/validate/lock/build/audit/test`
 sequence. A TUI promotion writes the accepted versioned representation, so the first real promoted
 artifact fails both jobs with the missing unversioned `artifact.json` and mismatched legacy lock and
-index. The generated publication gate therefore rejects the output of the canonical promotion path.
+index. Screen 46's Rebuild sends the same canonical output through the same legacy maintenance
+authority and stops at `lock` for the same reason. Both the local TUI maintenance path and generated
+publication gate therefore reject the output of canonical promotion.
 
 This is not evidence that the promoted Registry is corrupt. The public `source add --kind
 registry-git` path acquired remote branch `qa/publish-v1` at exact revision `cc7c01d` and reported
 it healthy, exercising `load_registry_versions` and `validate_promoted_registry`. It is evidence
-that the generated CI invokes the wrong authority. CP-19 must provide a public, read-only validation
-of the checked-out promoted representation and have the generated workflow use it. Do not restore
-green by emitting a second legacy representation or weakening either validator.
+that maintenance invokes the wrong authority. CP-19 must provide representation-appropriate
+deterministic maintenance and public read-only validation of the checked-out promoted Registry,
+then have the TUI and generated workflow use them. Do not restore green by emitting a second legacy
+representation or weakening either validator.
 
-Evidence/links: QA-032; GitHub Actions run `34341007222`; D-147; D-204; CP-19 step 8.
+Evidence/links: QA-025; QA-032; GitHub Actions run `34341007222`; D-147; D-204; D-205;
+CP-19 step 8.
 
 ## B-058 — Scoped mutmut can reuse stale outcomes after test-only changes
 
@@ -2534,9 +2539,15 @@ Evidence/links: `D-197`; `tests/harness_registration_roundtrip_test.py`;
 `tests/opencode_installation_e2e_test.py`; `tests/codex_installation_e2e_test.py`;
 `tests/artifact_installation_e2e_test.py`.
 
-## B-099 — Whether a TUI promotion leaves generated registry files complete — CLOSED
+## B-099 — Whether a TUI promotion leaves generated registry files complete — REOPENED, CRITICAL
 
-**Closed as done (`D-200`).** Superseded rather than answered: screens 46h/46i now run lock, build,
+**Reopened by real manual retest (`D-205`).** D-200 supplied the missing route, but its focused
+fixture never fed it the Registry that canonical promotion actually writes. The first real run
+reached legacy `lock`, refused the missing unversioned `artifact.json` and stopped. Screens 46h/46i
+exist and preserve ordering, but cannot maintain their own preceding workflow's output. QA-025 is
+open again and this item joins B-057 in CP-19 step 8.
+
+**Earlier closure (`D-200`).** Superseded rather than answered: screens 46h/46i now run lock, build,
 validate and audit over the registry from the TUI, so the walkthrough no longer ends in four typed
 commands whether or not they would have changed anything. Whether a promotion alone leaves the
 generated files complete is now the maintainer's own observation on screen 46h — a rebuild that

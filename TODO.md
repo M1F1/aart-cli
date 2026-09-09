@@ -141,6 +141,22 @@ Each new entry records:
       not in weakening promoted-Registry validation or teaching promotion to write a second legacy
       representation.
 
+- [ ] **QA-025 — Re-running a registry's generated files exists in the TUI but rejects its output.**
+      Stage: after promoting, adopting or editing anything in the registry checkout
+      Surface: Registry Maintainer → Rebuild (46h/46i)
+      Severity: blocking
+      Blocks current stage: yes; skip Rebuild during discovery
+      Reproduction: promote a Candidate through the TUI, then choose `b`, `Everything, in order`,
+      Enter to review and Enter to run
+      Expected: the canonical `lock → build → validate → audit` maintenance sequence accepts the
+      same versioned Registry representation the TUI promotion writes
+      Observed: `lock` immediately refuses because legacy `artifact.json` is missing, so no later
+      stage runs. The action has a TUI home, but the underlying authority is incompatible with the
+      Registry it is supposed to maintain.
+      Retest outcome: FAILED on the real promoted Registry. The earlier focused fixture proved the
+      route and ordering but never supplied canonical promotion output. Reopened under B-099 and
+      joined to QA-032/B-057 in CP-19 step 8.
+
 - [ ] **QA-033 — A refused run remains on a stale confirmation screen.**
       Stage: Registry maintenance after a canonical promotion
       Surface: Review Rebuild (46i) after execution has already stopped
@@ -177,22 +193,6 @@ Each new entry records:
       global movement/back/help/quit second; a screen no longer advertises Space when it cannot
       select anything. Screen 46's duplicate body-level `Actions:` header is gone (D-202).
 
-- [ ] **QA-025 — Re-running a registry's generated files had no home in the TUI.**
-      Stage: after promoting, adopting or editing anything in the registry checkout
-      Surface: Registry (screen 46)
-      Severity: high
-      Blocks current stage: yes, for a TUI-only walkthrough
-      Reproduction: promote a Candidate through the TUI, then try to lock, build, validate and
-      audit the registry without leaving the shell
-      Expected: the run the maintainer needs after every change is on the screen that owns the
-      registry
-      Observed: nothing offered it. The procedure was four `aart_maintainer registry ...` commands
-      typed by hand, in an order and with flags (`--strict --frozen`) no screen ever named
-      Evidence: `B-090` had already established that ordering is the knowledge a screen must hold;
-      this is the same defect one step further along the maintainer's day (`B-099`)
-      Fix: yes — screen 46 gained `b Rebuild generated files`. Screen 46h offers the whole
-      sequence and each stage on its own, 46i reviews the named stages, and the run goes through
-      the same authority `init` uses. `init` is not offered: a registry is created once (`D-200`).
 - [ ] **QA-024 — Two review screens could not be confirmed, and no review drew its plan.**
       Stage: adding a Source and initializing a registry from the TUI
       Surface: Add Source review (31b), Initialize Registry review (46b)

@@ -4729,3 +4729,19 @@ and two layout authorities, recreating the disagreement instead of resolving it.
 validation be weakened. During the disposable manual run, PR #1 may be merged despite its known
 false-negative check because the exact remote head was independently accepted through the public
 consumer path; that is a continuation technique, not the eventual CI contract.
+
+## D-205 — A TUI route is not complete when its real canonical input reaches the wrong authority
+
+Date: 2026-09-09 · Increment: CP-19 manual QA-025 retest · Status: accepted
+
+QA-025 was called fixed after screens 46h/46i exposed the maintenance stages, preserved their
+order and ran the same implementation as Registry initialization. The real walkthrough disproved
+that conclusion: after a canonical TUI promotion, `lock` refuses immediately because that shared
+implementation is the legacy authored-workspace compiler and requires an unversioned
+`artifact.json`. The route is present, but it cannot maintain the output of the route before it.
+
+QA-025 and B-099 therefore reopen. This is the local half of QA-032/B-057, not a reason to invent a
+second Registry layout. CP-19 step 8 owns one representation-aligned boundary used by both TUI
+maintenance and generated CI, while retaining each explicit deterministic, validation,
+compatibility and audit claim. During continued discovery, Rebuild is skipped rather than reported
+as passed or repeatedly retried.

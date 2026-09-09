@@ -899,3 +899,9 @@ CP-19 step 9/B-101 owns the action-agnostic failed-result transition. Implementa
 The lab's local `main` has the MCP promotion at `259af24`, one commit ahead of `origin/main`, plus
 the uncommitted adopted `skill/commit-message-discipline@1.0.0` transaction. Resume from Registry
 Maintainer → `u` Check upstream; the mistaken Rebuild needs only Escape twice and must not be rerun.
+
+**QA-025 retest correction (2026-09-09).** Rebuild was not accidental; the manual procedure
+required it. Its real promoted input immediately disproved the earlier route-level conclusion:
+screens 46h/46i exist and order stages, but the stages use the legacy authored-workspace authority
+and reject canonical promotion output. QA-025/B-099 reopen and join QA-032/B-057 in CP-19 step 8
+(D-205). Skip that broken checkpoint while discovery continues.

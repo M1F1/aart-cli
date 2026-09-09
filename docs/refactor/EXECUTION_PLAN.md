@@ -142,9 +142,10 @@ Convert findings from the real post-refactor Registry → Marketplace → lifecy
 bounded work without reopening the verified refactor slices. Complete the contextual keyboard
 footer, result-screen exits, fresh-form lifecycle, review layout and stable tables; preserve the
 Registry baseline safety check while making each mismatch and recovery actionable; then resume the
-walkthrough from its recorded checkpoint. The generated Registry CI must validate the canonical
-versioned representation produced by promotion. A refused run must terminate as a result rather
-than retain a confirmation for a discarded plan. Run the full batch gates before handback.
+walkthrough from its recorded checkpoint. Both TUI maintenance and generated Registry CI must
+operate on the canonical versioned representation produced by promotion. A refused run must
+terminate as a result rather than retain a confirmation for a discarded plan. Run the full batch
+gates before handback.
 
 ## Dependency order
 

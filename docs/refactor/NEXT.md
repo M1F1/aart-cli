@@ -1272,12 +1272,19 @@ The disposable manual run consciously merged PR #1 after independent consumer va
 CP-19 verification may not pass until the generated gate validates the canonical representation
 without dropping its compatibility/audit claims.
 
-**QA-033 / B-101 (2026-09-09).** The operator accidentally ran Rebuild while looking for Check
-upstream, and its known legacy `lock` refusal exposed a separate state-machine defect. Execution
+**QA-033 / B-101 (2026-09-09).** The operator ran the Rebuild required by the acceptance procedure,
+and its known legacy `lock` refusal exposed a separate state-machine defect. Execution
 had ended and the adapter had discarded its pending plan, but the TUI remained on Review Rebuild,
 said `press Enter to start it` and advertised `Enter Confirm`; another Enter can only report that
 nothing was prepared. CP-19 step 9 must make a failed action an explicit terminal result across
 action kinds. Do not implement it during the active discovery pass.
+
+**QA-025 manual retest FAILED (2026-09-09).** The operator was not detouring: the acceptance
+procedure explicitly required `b → Everything → review → run`. The focused increment proved that
+screens 46h/46i route and preserve stage order, but the first real canonical promotion output made
+`lock` refuse the missing legacy `artifact.json`. B-099 is reopened. CP-19 step 8 now owns both
+local TUI maintenance and generated CI because each currently invokes the same wrong workspace
+authority. Skip Rebuild and continue with Check upstream during discovery (D-205).
 
 ## Critical boundaries for this slice
 

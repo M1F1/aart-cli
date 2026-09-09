@@ -41,10 +41,12 @@ internal state model.
    equality. Characterize unpublished prior promotion, stale checkout, wrong workspace root and
    unrelated drift separately. The measured first case must explain the Git publication → local
    update → Registry synchronization sequence in product terms without embedding CLI commands.
-8. **Generated Registry CI (QA-032/B-057) — TODO, CRITICAL.** Provide a public read-only validator
-   for the checked-out versioned Registry representation and make the generated workflow use the
-   same authority as consumers. Keep compatibility/audit coverage explicit. Do not make promotion
-   emit the legacy authoring workspace as a second truth merely to satisfy old commands.
+8. **Canonical Registry maintenance and CI (QA-025/QA-032/B-057/B-099) — TODO, CRITICAL.** Provide
+   public read-only validation and appropriate deterministic maintenance for the checked-out
+   versioned Registry representation. Make both TUI Rebuild and the generated workflow use the
+   authority paired with promotion's output. Keep compatibility/audit coverage explicit. Do not
+   make promotion emit the legacy authoring workspace as a second truth merely to satisfy old
+   commands.
 9. **Failed-action terminal state (QA-033/B-101) — TODO.** Once an attempted action refuses, replace
    its review/confirmation state with an explicit failed result. The pending plan is already gone,
    so the footer may not advertise confirmation; offer the owning list or a freshly prepared retry.
@@ -61,10 +63,13 @@ negative. Local `main` now holds the second promotion at
 `skill/commit-message-discipline@1.0.0` transaction is present as an uncommitted working-tree
 change. A mistaken Rebuild run exposed QA-033: after `lock` refused on the legacy representation,
 the TUI remained on Review Rebuild and continued to advertise confirmation for a cleared plan.
+That run was the procedure's required QA-025 retest, not an operator detour: QA-025 is reopened
+because its real canonical input fails even though its route and ordering passed focused tests.
 
 To resume discovery, press Escape twice from Review Rebuild to reach Registry Maintainer, press `u`
 for Check upstream, focus `skill/commit-message-discipline@1.0.0` and press Enter. Do not run Rebuild
-again and do not discard the local MCP promotion or adoption transaction.
+again until CP-19 step 8 is implemented, and do not discard the local MCP promotion or adoption
+transaction.
 
 ## Evidence and gates
 

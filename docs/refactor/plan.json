@@ -309,7 +309,7 @@
         },
         {
           "id": "8",
-          "title": "Generated Registry CI validates the canonical promoted representation (QA-032/B-057)",
+          "title": "TUI maintenance and generated Registry CI validate canonical promotion output (QA-025/QA-032/B-057/B-099)",
           "status": "todo"
         },
         {
