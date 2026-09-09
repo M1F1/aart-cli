@@ -1034,3 +1034,15 @@ regression in `consumer_declined_preparation_test`, whose fixture planted a draf
 into the form; the claim is unchanged and the fixture now types on the form, as the shell does.
 The scoped advisory `make mutants` over the kernel recorded pre-existing width-arithmetic survivors
 as `B-107`, which CP-19 step 6 must address before building the Candidates columns on them.
+
+**CP-19 step 6 (QA-030) — tabular lists hold their columns.** Screen 35 drew a hand-spaced header
+and fixed-width rows, so a name wider than its literal pushed every later column right while the
+header stayed put. The header is now a row of the same grid and `tui_layout.columns` lays them out
+together; the cursor mark is its own column; a cut cell is repeated in full in a `field_block` under
+`Under the cursor:`, which is also where the verbose per-row detail line went. Screen 47's
+selectable rows were moved onto the grid for the same reason (`D-213`).
+`tests/tabular_list_columns_test.py` holds the operator's own two rows, an oversized name that must
+be cut, the focused row in full, an unfocused one that must not be, and a property that the grid
+holds for any names inside the content measure; five targeted mutations killed. The scoped advisory
+run over the kernel moved from 70 survivors to 67 — `B-107` stays open for what these claims do not
+reach.

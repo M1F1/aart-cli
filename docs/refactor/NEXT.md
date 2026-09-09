@@ -1368,7 +1368,15 @@ plan that is now above them; the two Source Sync screens were regrouped. Held as
 Consumer and Maintainer screen with and without a notice, plus the three typed-view maintainer
 reviews in every profile; six targeted mutations killed. B-048's refusal wrapping stays separate.
 
-**Exact next action for Claude:** CP-19 step 6 — QA-030. The Candidates list holds its columns:
+**CP-19 step 6 is DONE — QA-030 closed (2026-09-09).** The header is a row of the same grid rather
+than a hand-spaced string, so `tui_layout.columns` lays it out with the rows it names and a long
+name is cut in its own column instead of pushing the columns after it right. The row under the
+cursor is repeated in full below the list, which is what makes cutting honest, and the verbose
+per-row detail line was folded into that block. Screen 47's selectable rows moved onto the same grid
+(D-213). Five targeted mutations killed; `B-107` updated with what the new property does and does
+not hold.
+
+**Superseded next action:** CP-19 step 6 — QA-030. The Candidates list holds its columns:
 bound each column, truncate only the list row, and show the focused value in full below the list.
 Survey the other Maintainer tables before choosing the shared projection boundary. `tui_layout`
 already owns `columns`/`_column_widths`, and the scoped advisory mutation run found its width
@@ -1377,6 +1385,13 @@ kernel holds them. Then steps 7 and 11–14. Targeted tests and quality gates on
 handed back — and run the whole `tui`/`consumer`/`maintainer`/`source`/`registry`/`setup` test file
 set, not only the files a step edits: step 5 found a step-4 fixture regression that way. Step 15
 runs the full suites.
+
+**Exact next action for Claude:** CP-19 step 7 — QA-031/B-100. Give the Registry baseline refusal an
+honest diagnosis and a recovery path without weakening the exact equality check. Characterize
+unpublished prior promotion, stale checkout, wrong workspace root and unrelated drift as separate
+measured cases, and explain the Git publication → local update → Registry synchronization sequence
+in product terms. No `aart ...` command text may reach a TUI frame. Then steps 11–14; step 15 runs
+the full suites once the batch is handed back.
 
 ## Critical boundaries for this slice
 

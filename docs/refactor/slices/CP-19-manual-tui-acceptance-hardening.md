@@ -45,9 +45,14 @@ internal state model.
    review prompts stopped saying "below" about a plan that is now above them. The two Source Sync
    screens were regrouped into what it is / where it stands / what it will do / the evidence. B-048
    (refusal wrapping) stays separate: wrapping is a width decision, this is an ordering one (D-212).
-6. **Stable tabular projections (QA-030) — TODO.** Bound each column, truncate only the list row and
-   show the focused value in full below it. Survey the other Maintainer tables before choosing the
-   shared projection boundary.
+6. **Stable tabular projections (QA-030) — DONE.** The header is a row of the same grid rather than
+   a hand-spaced string, and `tui_layout.columns` lays the header and every row out together, so a
+   name wider than its column is cut there instead of pushing the columns after it right. The cursor
+   mark is its own column. Cutting is honest because the row under the cursor is repeated in full in
+   a `field_block` below the list — which is also where the verbose per-row detail line went, since
+   a detail under every row was part of the reported density. Screen 47's selectable rows are the
+   same table without a header and were moved onto the grid too; the other Maintainer lists are
+   label/indent blocks, not tables, and putting them on a grid would be a redesign (D-213).
 7. **Registry baseline diagnosis and recovery (QA-031/B-100) — TODO.** Preserve exact baseline
    equality. Characterize unpublished prior promotion, stale checkout, wrong workspace root and
    unrelated drift separately. The measured first case must explain the Git publication → local
@@ -161,6 +166,12 @@ recorded rather than the fix alone: a targeted set chosen per-module misses redu
 under other names, so each remaining CP-19 step runs the whole `tui`/`consumer`/`maintainer`/
 `source`/`registry`/`setup` file set, not only the files it edited.
 
+Step 6 was RED on both screens with the operator's own two rows. Five targeted mutations were
+killed: hand-spaced padding, a header outside the grid, no focused block, the first row expanded
+instead of the focused one, and double-space concatenation on screen 47. The column claims the step
+depends on are stated as a Hypothesis property over generated names rather than assumed from
+`B-107`'s kernel, which the scoped advisory run still reports as largely unheld elsewhere.
+
 ## Do not undo
 
 - Do not weaken the exact synchronized-baseline comparison to pass QA-031.
@@ -168,6 +179,8 @@ under other names, so each remaining CP-19 step runs the whole `tui`/`consumer`/
 - Do not reset a refused form on leave; reset a fresh form on entry.
 - Do not put an action prompt anywhere but last, and do not reintroduce `(*body, "", *notice)`:
   the notice is what the reader is being asked about, so it belongs above the ask.
+- Do not re-widen a column literal to make a name fit. A list with a header puts the header on the
+  same grid as its rows, and a cut cell is repeated in full under the cursor.
 - Keep `key_event` as the only key interpreter and keep application code free of IO.
 - Never commit the embedded `superpowers-aart-test/` lab repository.
 - Do not make promotion write the authoring workspace as a second representation, and do not
@@ -175,11 +188,12 @@ under other names, so each remaining CP-19 step runs the whole `tui`/`consumer`/
 
 ## Exact next implementation action
 
-Execute step 6 (QA-030) next: the Candidates list holds its columns. Bound each column, truncate
-only the list row, and show the focused value in full below the list. Survey the other Maintainer
-tables before choosing the shared projection boundary — `tui_layout.columns` already exists and is
-the natural home, and the scoped `make mutants` run over that module reports pre-existing survivors
-in `_column_widths`, `columns` and `field_block` (B-103), so state the claims that step needs rather
-than assuming the kernel is already held. Then steps 7 and 11–14. The operator has asked for
-targeted tests and quality gates only until the batch is finished; step 15 runs the full suites once
-it is handed back.
+Execute step 7 (QA-031/B-100) next: an honest Registry baseline-refusal diagnosis and a recovery
+path. Preserve the exact baseline equality — do not weaken the comparison to make the refusal go
+away. Characterize unpublished prior promotion, stale checkout, wrong workspace root and unrelated
+drift as separate measured cases, and explain the Git publication → local update → Registry
+synchronization sequence in product terms, with no `aart ...` command text in any TUI frame. Then
+steps 11–14. The operator has asked for targeted tests and quality gates only until the batch is
+finished; run the whole `tui`/`consumer`/`maintainer`/`source`/`registry`/`setup`/`promotion`/
+`candidate` test file set after each step, not only the files it edits, and step 15 runs the full
+suites once the batch is handed back.

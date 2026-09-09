@@ -2734,9 +2734,13 @@ slice: `_ellipsize`, `wrap`, `measure`, `_column_widths`, `columns`, `field_bloc
 means the module's bounds are asserted at a few chosen widths rather than as claims. Nothing is
 known to be wrong: a survivor is an unheld claim, not a defect.
 
-This is load-bearing for CP-19 step 6 (QA-030), which will place the Candidates list on `columns`
-and `_column_widths`. That step must state the column claims it depends on — a bounded column, a
-truncated cell, a total that fits the measure — rather than assume the kernel already holds them.
+CP-19 step 6 (QA-030) put the Candidates list and screen 47 on `columns`/`_column_widths` and
+stated the claims it depends on — a bounded row, a cut cell, and a column whose position is the same
+on every row including the header — as a property over generated names (D-213). That moved the
+scoped run from 70 survivors to 67. What remains is everything those claims do not reach: the
+shrink order in `_column_widths` when several columns compete, `_ellipsize` at width 1 and 2,
+`wrap`'s break behaviour, `field_block`'s continuation column, `status_bar`'s hint dropping and
+`pane_budget`'s floors. Any later slice that depends on one of those must state it first.
 The ordering and grouping functions added by step 5 (`separate`, `action_prompt`,
 `is_action_prompt`) are held; the survivors remaining in them are exact `ValueError` message texts,
 which is `make mutants` noise rather than a finding (D-134).

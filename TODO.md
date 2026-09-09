@@ -125,7 +125,7 @@ Each new entry records:
       Then open Registry → Rebuild → pick a stage → Enter: the plan comes first and the prompt is
       the last line under it.
 
-- [ ] **QA-030 — The Candidates list does not hold its columns.**
+- [x] **QA-030 — The Candidates list does not hold its columns.**
       Stage: reviewing Candidates after a sync
       Surface: Candidates (35); check the other tabular lists for the same defect
       Severity: medium
@@ -144,6 +144,21 @@ Each new entry records:
       > New                mcp/aart-e2e-mcp         1.0.0         aart-test-mcp
         New                skill/verification-before-completion 1.0.0         superpowers-test
       ```
+      Fix: `D-213`. The header is now a row of the same grid rather than a hand-spaced string, and
+      every row is laid out by `tui_layout.columns`, so a name longer than its column is cut there
+      instead of pushing the columns after it out of line. Cutting is honest because the row under
+      the cursor is repeated in full underneath, in a `field_block`; that block is also where the
+      verbose per-row evidence line went, since a detail line under every row was part of the
+      density being reported. Screen 47's selectable rows had the same defect without a header and
+      were put on the same grid.
+      Evidence: `tests/tabular_list_columns_test.py` — the operator's own two rows, an oversized
+      name that must be cut, the focused row repeated in full, an unfocused one that must not be,
+      and a Hypothesis property that the grid holds for any set of names within the content measure.
+      Mutation (`D-091`): hand-spaced padding, a header outside the grid, no focused block, the
+      first row expanded instead of the focused one, and double-space concatenation on screen 47
+      each turn the suite red.
+      Retest: sync both Sources, open Candidates (35), and move the cursor. Every column reads down;
+      a long name ends in `…` and appears in full under `Under the cursor:`.
 
 - [ ] **QA-031 — Promotion baseline refusal does not explain the unpublished Registry change.**
       Stage: promoting the second Candidate during the real Registry walkthrough

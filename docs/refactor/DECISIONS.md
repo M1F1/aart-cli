@@ -4971,3 +4971,31 @@ is also shorter — the review is the screen, and it does not need to announce i
 `B-048` (refusal lines are not wrapped) stays separate. Wrapping is a width decision and this is an
 ordering decision; nothing here needed the wrap to hold, and doing both at once would have made
 neither testable on its own.
+
+## D-213 — A list with a header puts the header on the same grid as its rows
+
+Date: 2026-09-09 · Increment: CP-19 step 6, QA-030 · Status: accepted
+
+Screen 35 drew a hand-spaced header string and then formatted each row with fixed `:<18`/`:<24`
+widths. A name wider than its literal pushed every later column right, so the header stayed aligned
+while the rows underneath it did not: the table's columns could no longer be read down.
+
+The header is now a row of the same grid, and `tui_layout.columns` lays all of them out together.
+That makes the alignment a property of the layout rather than of two numbers agreeing with a string
+literal, and it is why the header could drift in the first place. The cursor mark is its own column
+for the same reason: it was previously two characters spent inside the status column's padding.
+
+Truncation is the trade the operator asked for — "powinno najwyżej ucinać nazwy, ale jak się
+najedzie kursorem, to pod spodem jest całość" — and it is only honest with the second half. The row
+under the cursor is repeated in full in a `field_block` below the list, so nothing the grid cut is
+actually hidden. The verbose per-row detail line was folded into that block: a detail line under
+every row was itself part of the density being reported, and the focused row is the one anybody is
+reading.
+
+Screen 47's selectable rows are the same table without a header and were ragged for the same
+reason, so they were moved onto the grid too. The other Maintainer lists are label/indent blocks
+rather than tables and were left alone — putting them on a grid would be a redesign, not this fix.
+
+`B-107` recorded that the kernel's width arithmetic was unheld by its own tests. This slice states
+the claims it depends on — a bounded row, a cut cell, and a column whose position is the same on
+every row including the header — as a property over generated names rather than assuming them.

@@ -31,7 +31,20 @@ from agent_artifacts.application.maintainer_views import (
     MaintainerVersionConflictView,
     MaintainerWorkingTreeState,
 )
-from agent_artifacts.tui_layout import action_prompt, separate
+from agent_artifacts.tui_layout import (
+    CONTENT_MEASURE,
+    action_prompt,
+    columns,
+    field_block,
+    separate,
+)
+
+#: Screen 35's column headings. They are part of the grid rather than a hand-spaced string, so the
+#: header cannot drift away from the rows it names (`QA-030`).
+_CANDIDATE_HEADINGS = ("STATUS", "ARTIFACT", "VERSION", "SOURCE")
+
+#: Screen 47 nests its selectable rows under a registry, and the grid gets the remaining measure.
+_BULK_INDENT = 2
 
 __all__ = [
     "render_maintainer_dashboard",
@@ -244,16 +257,42 @@ def render_maintainer_candidates(
         raise ValueError("Maintainer Candidates rendering needs typed views, cursor and profile")
     if not candidates:
         return ("No active Candidates have been discovered.",)
-    lines = ["STATUS               ARTIFACT                 VERSION       SOURCE"]
-    for item in candidates:
-        prefix = ">" if item.id == cursor else " "
-        lines.append(
-            f"{prefix} {_human(item.state.value):<18} {item.artifact:<24} "
-            f"{item.version:<13} {item.source_alias}"
+    # `QA-030`: the header and every row are laid out on one shared grid, so a name longer than its
+    # column is cut there instead of pushing the columns after it out of line. Cutting is only
+    # honest because the row under the cursor is repeated in full underneath, which is also where
+    # the per-row evidence went: a detail line under every row was the density being complained of.
+    rows = [("", *_CANDIDATE_HEADINGS)]
+    rows.extend(
+        (
+            ">" if item.id == cursor else "",
+            _human(item.state.value),
+            item.artifact,
+            item.version,
+            item.source_alias,
         )
-        if profile is PresentationProfile.VERBOSE:
-            lines.append(f"    Candidate {item.id} · target {item.target_registry}")
-    return tuple(lines)
+        for item in candidates
+    )
+    listed = columns(rows, width=CONTENT_MEASURE)
+    focused = next((item for item in candidates if item.id == cursor), None)
+    if focused is None:
+        return listed
+    fields = [
+        ("Artifact", focused.artifact),
+        ("Version", focused.version),
+        ("Source", focused.source_alias),
+        ("Status", _human(focused.state.value)),
+    ]
+    if profile is PresentationProfile.VERBOSE:
+        fields.extend(
+            (("Candidate", focused.id), ("Target registry", focused.target_registry)),
+        )
+    return separate(
+        listed,
+        (
+            "Under the cursor:",
+            *field_block(fields, indent=2, width=CONTENT_MEASURE),
+        ),
+    )
 
 
 def _short(value: str, profile: PresentationProfile) -> str:
@@ -1007,10 +1046,16 @@ def render_maintainer_bulk_promotion(
             lines.append("")
         lines.append(f"{view.target_registry}")
         lines.extend(f"  - {item}" for item in view.refusals)
+        # `QA-030` again: these rows are a table without a header, and were ragged for the same
+        # reason. Two spaces of indent are spent on the nesting, so the grid gets what is left.
+        selectable: list[tuple[str, ...]] = []
         for item in view.candidates:
             mark = "[x]" if item.candidate_id in selection else "[ ]"
             chosen += 1 if item.candidate_id in selection else 0
-            lines.append(f"  {mark} {item.artifact}  {item.version}  {_human(item.state.value)}")
+            selectable.append((mark, item.artifact, item.version, _human(item.state.value)))
+        lines.extend(
+            f"  {line}" for line in columns(selectable, width=CONTENT_MEASURE - _BULK_INDENT)
+        )
         if not view.candidates and not view.refusals:
             lines.append("  No Candidate of this registry can be promoted right now.")
         for blocked in view.excluded:
