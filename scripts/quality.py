@@ -103,10 +103,10 @@ def build_gates(temp_root: Path, python: str = sys.executable) -> tuple[Gate, ..
             "integration",
             ((python, "-m", "unittest", "discover", "-s", "tests", "-p", "*e2e_test.py"),),
         ),
-        Gate(
-            "validate",
-            ((python, "scripts/validate.py"), (python, "scripts/version.py", "check")),
-        ),
+        # `scripts/version.py check` used to run here too: it proved that three hand-maintained
+        # version values agreed.  The release engine writes the one that is left, so there is
+        # nothing left to reconcile and nothing for a gate to say about it (INV-085, INV-098).
+        Gate("validate", ((python, "scripts/validate.py"),)),
         Gate(
             "coverage",
             (
@@ -190,7 +190,130 @@ def _report_tool_versions(absent: tuple[str, ...], selected: tuple[str, ...], te
         print(f"{tool} {found}", flush=True)
 
 
-def _run(selected: tuple[str, ...], temp_root: Path) -> int:
+def _discovered(pattern: str) -> frozenset[str] | None:
+    """Every test id `pattern` would run, or ``None`` if discovery cannot say.
+
+    Used to *prove* one gate's tests are a subset of another's before skipping it.  An import
+    error during discovery makes this return ``None``, and an unprovable subset is never skipped.
+    """
+
+    import unittest
+
+    def identifiers(suite) -> list[str]:
+        found: list[str] = []
+        for item in suite:
+            if isinstance(item, unittest.TestSuite):
+                found.extend(identifiers(item))
+            else:
+                found.append(item.id())
+        return found
+
+    try:
+        names = identifiers(unittest.defaultTestLoader.discover(str(ROOT / "tests"), pattern))
+    except Exception:  # pragma: no cover - a broken discovery is the gate's job to report
+        return None
+    if any(name.startswith(("unittest.loader._FailedTest", "_FailedTest")) for name in names):
+        return None
+    return frozenset(names)
+
+
+def redundant_gates(selected: tuple[str, ...]) -> dict[str, str]:
+    """Which selected gates would re-run tests another selected gate already runs.
+
+    `integration` discovers `*e2e_test.py`; `unit` discovers `*_test.py`, which matches those same
+    files.  That containment is checked here rather than assumed, so changing either pattern makes
+    the runner stop skipping instead of silently dropping a gate.
+    """
+
+    if "integration" not in selected or "unit" not in selected:
+        return {}
+    every, subset = _discovered("*_test.py"), _discovered("*e2e_test.py")
+    if every is None or subset is None or not subset or not subset <= every:
+        return {}
+    return {
+        "integration": (
+            f"all {len(subset)} of its tests are among the {len(every)} the unit gate runs"
+        )
+    }
+
+
+def changed_paths(root: Path, base: str | None = None) -> tuple[str, ...]:
+    """Every tracked path this working tree has changed, including untracked new files.
+
+    When `base` is given, changes against it are included, so a branch's whole diff is considered
+    rather than only what is currently uncommitted.
+    """
+
+    found: set[str] = set()
+    commands = [
+        ("git", "diff", "--name-only", "HEAD"),
+        ("git", "ls-files", "--others", "--exclude-standard"),
+    ]
+    if base:
+        commands.append(("git", "diff", "--name-only", f"{base}...HEAD"))
+    for command in commands:
+        for line in git_listing(command, root).decode("utf-8").splitlines():
+            if line.strip():
+                found.add(line.strip())
+    return tuple(sorted(found))
+
+
+def _affected_gates(
+    selected: tuple[str, ...], temp_root: Path, root: Path, base: str | None
+) -> tuple[tuple[Gate, ...], dict[str, str], str]:
+    """Rewrite the test gates to run only what the change could have reached.
+
+    Returns the gates to run, the gates to skip with their reason, and a line explaining the
+    narrowing.  When the analysis declines, nothing is rewritten and every gate runs.
+    """
+
+    import importlib.util as _util
+
+    specification = _util.spec_from_file_location("_affected", root / "scripts" / "affected.py")
+    if specification is None or specification.loader is None:  # pragma: no cover - shipped file
+        return build_gates(temp_root), {}, "affected-test analysis is unavailable"
+    affected = _util.module_from_spec(specification)
+    sys.modules[specification.name] = affected
+    specification.loader.exec_module(affected)
+
+    changed = changed_paths(root, base)
+    selection = affected.select(changed, root=root)
+    if not selection.complete:
+        return build_gates(temp_root), {}, f"running every test: {selection.reason}"
+    if not selection.tests:
+        return (
+            build_gates(temp_root),
+            {name: "nothing changed that any test reaches" for name in ("unit", "integration")},
+            "no test reaches what changed",
+        )
+
+    python = sys.executable
+    rewritten = tuple(
+        Gate("unit", ((python, "-m", "unittest", *selection.tests),))
+        if gate.name == "unit"
+        else gate
+        for gate in build_gates(temp_root)
+    )
+    return (
+        rewritten,
+        {
+            "integration": "its tests are among the affected ones the unit gate just ran",
+            # A percentage measured over part of a suite is not this repository's percentage, and
+            # a threshold read off one would be meaningless in both directions.
+            "coverage": "coverage is measured over the whole suite, so it belongs to `make quality`",
+        },
+        f"{selection.reason}; {len(changed)} path(s) changed",
+    )
+
+
+def _run(
+    selected: tuple[str, ...],
+    temp_root: Path,
+    *,
+    changed_only: bool = False,
+    base: str | None = None,
+    executed: list[str] | None = None,
+) -> int:
     absent = missing_tools(selected, temp_root)
     if absent:
         # Named before anything runs, with the fix.  Otherwise the first gate exits on
@@ -219,8 +342,23 @@ def _run(selected: tuple[str, ...], temp_root: Path) -> int:
             "RUFF_CACHE_DIR": str(temp_root / "ruff"),
         }
     )
-    by_name = {gate.name: gate for gate in build_gates(temp_root)}
+    gates = build_gates(temp_root)
+    redundant = redundant_gates(selected)
+    if changed_only:
+        gates, redundant, narrowing = _affected_gates(selected, temp_root, ROOT, base)
+        print(
+            f"\n== changed-only run: {narrowing}\n"
+            "== this is the developer loop, not the release gate; run `make quality` before "
+            "calling work verified.",
+            flush=True,
+        )
+    by_name = {gate.name: gate for gate in gates}
+    ran = [] if executed is None else executed
     for name in selected:
+        if name in redundant:
+            # Named, never silent: a gate that vanishes from a log reads as a gate nobody runs.
+            print(f"\n==> quality gate: {name} -- skipped, {redundant[name]}", flush=True)
+            continue
         print(f"\n==> quality gate: {name}", flush=True)
         for command in by_name[name].commands:
             print("+ " + " ".join(command), flush=True)
@@ -228,19 +366,30 @@ def _run(selected: tuple[str, ...], temp_root: Path) -> int:
             if result.returncode:
                 print(f"quality gate FAILED: {name} ({result.returncode})", file=sys.stderr)
                 return result.returncode
+        ran.append(name)
     return 0
 
 
 def main(argv: tuple[str, ...] | None = None) -> int:
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    changed_only = "--changed" in arguments
+    base = next(
+        (item.split("=", 1)[1] for item in arguments if item.startswith("--since=")),
+        None,
+    )
+    arguments = [
+        item for item in arguments if item != "--changed" and not item.startswith("--since=")
+    ]
     try:
-        selected = select_gates(tuple(sys.argv[1:]) if argv is None else argv)
+        selected = select_gates(tuple(arguments))
     except ValueError as error:
         print(error, file=sys.stderr)
         return 2
     before_paths = workspace_paths(ROOT)
     before = snapshot_paths(before_paths)
+    executed: list[str] = []
     with tempfile.TemporaryDirectory(prefix="aart-quality-") as raw:
-        result = _run(selected, Path(raw))
+        result = _run(selected, Path(raw), changed_only=changed_only, base=base, executed=executed)
     after_paths = workspace_paths(ROOT)
     after = snapshot_paths(after_paths)
     if before_paths != after_paths or before != after:
@@ -248,7 +397,11 @@ def main(argv: tuple[str, ...] | None = None) -> int:
         return 3
     if result:
         return result
-    print("\nquality gates OK: " + ", ".join(selected))
+    # What ran, never what was asked for: a gate named on this line has actually passed.
+    print("\nquality gates OK: " + ", ".join(executed))
+    skipped = tuple(name for name in selected if name not in executed)
+    if skipped:
+        print("skipped as redundant or out of scope: " + ", ".join(skipped))
     return 0
 
 

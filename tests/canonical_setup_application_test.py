@@ -53,12 +53,16 @@ from agent_artifacts.protocol.semver import SemVer
 from agent_artifacts.receipt_service import load_receipt
 from agent_artifacts.setup import dump_setup_state, project_setup_review
 from agent_artifacts.setup_engine import (
+    ApprovedObjectIdentity,
+    IndexedSetupDeclaration,
     LocalSetupAdapter,
     PayloadStatus,
     SetupExecutionStatus,
     SetupRequest,
+    SetupSubjectPort,
     execute_setup_queue,
     finalize_setup,
+    install_state_subject,
     prepare_setup,
     prepare_setup_attempt,
     retryable_plans,
@@ -295,10 +299,26 @@ class Fixture:
             platform="linux" if changes.get("linux", False) else "darwin",
         )
 
+    def subject(self, catalog=None, effective=None):
+        """The port the engine takes: which store says this is installed, and what vouches for it.
+
+        Built from whatever catalogue and configuration the fixture currently holds, so a test that
+        downgrades a source, or removes it from the configuration, between the review and the run
+        passes the changed one here. Both are the subject's business rather than the plan's: they
+        decide whether this artifact may still be set up at all.
+        """
+
+        return install_state_subject(
+            self.catalog if catalog is None else catalog,
+            self.effective if effective is None else effective,
+            self.location,
+            self.adapter,
+        )
+
     def plan(self, profile: str = "claude", **changes: bool):
         return prepare_setup(
             self.request(profile, **changes),
-            self.catalog,
+            self.subject(),
             self.effective,
             self.location,
             self.paths,
@@ -308,7 +328,7 @@ class Fixture:
     def attempt(self, profile: str = "claude", **changes: bool):
         return prepare_setup_attempt(
             self.request(profile, **changes),
-            self.catalog,
+            self.subject(),
             self.effective,
             self.location,
             self.paths,
@@ -523,7 +543,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
             fixture = Fixture(Path(raw))
             missing_object = prepare_setup(
                 fixture.request(authorize_untrusted_source=True),
-                fixture.catalog,
+                fixture.subject(),
                 fixture.effective,
                 fixture.location,
                 fixture.paths,
@@ -542,7 +562,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
             )
             mismatched = prepare_setup(
                 fixture.request(authorize_untrusted_source=True),
-                fixture._catalog(mismatched_index),
+                fixture.subject(fixture._catalog(mismatched_index)),
                 fixture.effective,
                 fixture.location,
                 fixture.paths,
@@ -578,7 +598,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
 
             result = prepare_setup(
                 fixture.request(authorize_untrusted_source=True),
-                fixture.catalog,
+                fixture.subject(effective=without_source),
                 without_source,
                 fixture.location,
                 fixture.paths,
@@ -608,7 +628,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
             outcome = finalize_setup(
                 planned.value,
                 planned.value.review_digest,
-                downgraded,
+                fixture.subject(downgraded),
                 fixture.effective,
                 fixture.adapter,
                 _runtime(process),
@@ -635,7 +655,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
             outcome = finalize_setup(
                 planned.value,
                 planned.value.review_digest,
-                fixture.catalog,
+                fixture.subject(),
                 fixture.effective,
                 fixture.adapter,
                 replace(_runtime(), platform="linux"),
@@ -656,7 +676,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
             outcome = finalize_setup(
                 planned.value,
                 planned.value.review_digest,
-                fixture.catalog,
+                fixture.subject(),
                 fixture.effective,
                 fixture.adapter,
                 _runtime(),
@@ -703,7 +723,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
             first = finalize_setup(
                 first_plan.value,
                 first_plan.value.review_digest,
-                fixture.catalog,
+                fixture.subject(),
                 fixture.effective,
                 fixture.adapter,
                 _runtime(),
@@ -763,7 +783,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
             second = finalize_setup(
                 second_plan.value,
                 second_plan.value.review_digest,
-                fixture.catalog,
+                fixture.subject(),
                 fixture.effective,
                 fixture.adapter,
                 _runtime(),
@@ -780,7 +800,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
             third = finalize_setup(
                 third_plan.value,
                 third_plan.value.review_digest,
-                fixture.catalog,
+                fixture.subject(),
                 fixture.effective,
                 fixture.adapter,
                 _runtime(),
@@ -810,7 +830,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
             wrong_review = finalize_setup(
                 planned.value,
                 sha256_bytes(b"wrong review"),
-                fixture.catalog,
+                fixture.subject(),
                 fixture.effective,
                 fixture.adapter,
                 _runtime(),
@@ -835,7 +855,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
                 outcome = finalize_setup(
                     planned.value,
                     planned.value.review_digest,
-                    fixture.catalog,
+                    fixture.subject(),
                     fixture.effective,
                     fixture.adapter,
                     _runtime(),
@@ -861,7 +881,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
             outcome = finalize_setup(
                 planned.value,
                 planned.value.review_digest,
-                fixture.catalog,
+                fixture.subject(),
                 fixture.effective,
                 fixture.adapter,
                 _runtime(),
@@ -906,7 +926,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
             outcome = finalize_setup(
                 planned.value,
                 planned.value.review_digest,
-                fixture.catalog,
+                fixture.subject(),
                 fixture.effective,
                 fixture.adapter,
                 _runtime(process),
@@ -937,7 +957,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
             stopped = execute_setup_queue(
                 (first.value, second.value),
                 (first.value.review_digest, second.value.review_digest),
-                fixture.catalog,
+                fixture.subject(),
                 fixture.effective,
                 fixture.adapter,
                 _runtime(),
@@ -959,7 +979,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
             retried = execute_setup_queue(
                 (retried_first.value,),
                 (retried_first.value.review_digest,),
-                fixture.catalog,
+                fixture.subject(),
                 fixture.effective,
                 fixture.adapter,
                 _runtime(),
@@ -997,7 +1017,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
             configured = finalize_setup(
                 planned.value,
                 planned.value.review_digest,
-                fixture.catalog,
+                fixture.subject(),
                 fixture.effective,
                 fixture.adapter,
                 _runtime(),
@@ -1044,7 +1064,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
             outcome = execute_setup_queue(
                 (first.value, second.value),
                 (first.value.review_digest, second.value.review_digest),
-                fixture.catalog,
+                fixture.subject(),
                 fixture.effective,
                 fixture.adapter,
                 _runtime(),
@@ -1072,7 +1092,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
                 execute_setup_queue(
                     (planned.value,),
                     (),
-                    fixture.catalog,
+                    fixture.subject(),
                     fixture.effective,
                     fixture.adapter,
                     _runtime(),
@@ -1081,7 +1101,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
             failed = execute_setup_queue(
                 (planned.value,),
                 (sha256_bytes(b"wrong review"),),
-                fixture.catalog,
+                fixture.subject(),
                 fixture.effective,
                 fixture.adapter,
                 _runtime(),
@@ -1099,7 +1119,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
             outcome = finalize_setup(
                 planned.value,
                 planned.value.review_digest,
-                fixture.catalog,
+                fixture.subject(),
                 fixture.effective,
                 fixture.adapter,
                 _runtime(RecordingProcess(failure=True)),
@@ -1114,6 +1134,79 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
             self.assertNotIn("synthetic-canary", repr(event))
             self.assertNotIn(b"synthetic-canary", state_bytes)
             self.assertNotIn("receipt", event)
+
+
+class ApprovedObjectIdentityTest(unittest.TestCase):
+    """What vouches for an installation whose index and package are the same bytes.
+
+    The legacy catalogue indexes root manifests a source publishes separately from the package, so
+    the compiled recipe can be cross-checked against what the index advertised. A promoted registry
+    snapshot has no such second document: there the index *is* the package, and cross-checking the
+    object against a declaration read out of that same object compares a value to itself.
+
+    What stays independent is which object the registry publishes for the coordinate. These tests
+    prove the engine accepts that as the alternative evidence, and that it is a real check --
+    an installation whose recorded object is not the one the registry approves is refused.
+    """
+
+    def _subject(self, fixture: Fixture, approved) -> SetupSubjectPort:
+        resolved = fixture.subject()(fixture.request(authorize_untrusted_source=True))
+        assert isinstance(resolved, Ok), resolved
+        vouched = replace(resolved.value, declaration=ApprovedObjectIdentity(approved))
+        return lambda _request: Ok(vouched)
+
+    def test_the_object_the_registry_publishes_vouches_for_the_installation(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = Fixture(Path(raw))
+
+            planned = prepare_setup(
+                fixture.request(authorize_untrusted_source=True),
+                self._subject(fixture, fixture.indexed.object_digest),
+                fixture.effective,
+                fixture.location,
+                fixture.paths,
+                fixture.adapter,
+            )
+
+            assert isinstance(planned, Ok), planned
+            self.assertEqual(planned.value.object_digest, fixture.indexed.object_digest)
+
+    def test_an_installation_of_another_object_than_the_registry_publishes_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = Fixture(Path(raw))
+
+            refused = prepare_setup(
+                fixture.request(authorize_untrusted_source=True),
+                self._subject(fixture, sha256_bytes(b"another-object")),
+                fixture.effective,
+                fixture.location,
+                fixture.paths,
+                fixture.adapter,
+            )
+
+            self.assertIsInstance(refused, Err)
+            self.assertIn("registry publishes", refused.diagnostics[0].message)
+
+    def test_an_index_that_declares_no_setup_is_still_refused(self) -> None:
+        """The legacy arm keeps its own meaning: no declaration is not the same as another one."""
+
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = Fixture(Path(raw))
+            resolved = fixture.subject()(fixture.request(authorize_untrusted_source=True))
+            assert isinstance(resolved, Ok), resolved
+            undeclared = replace(resolved.value, declaration=IndexedSetupDeclaration(None))
+
+            refused = prepare_setup(
+                fixture.request(authorize_untrusted_source=True),
+                lambda _request: Ok(undeclared),
+                fixture.effective,
+                fixture.location,
+                fixture.paths,
+                fixture.adapter,
+            )
+
+            self.assertIsInstance(refused, Err)
+            self.assertIn("does not match the object", refused.diagnostics[0].message)
 
 
 if __name__ == "__main__":

@@ -57,6 +57,12 @@ def _run_marketplace(request: Request) -> int:
     return marketplace.run(request)
 
 
+def _run_doctor(request: Request) -> int:
+    from .commands import doctor
+
+    return doctor.run(request)
+
+
 # Command name -> handler. Value-keyed dispatch, not a class hierarchy (docs/design/DESIGN.md §14).
 DISPATCH: dict[str, Callable[[Request], int]] = {
     "upgrade": upgrade.run,
@@ -65,6 +71,7 @@ DISPATCH: dict[str, Callable[[Request], int]] = {
     "reporting": _run_reporting,
     "source": _run_source,
     "marketplace": _run_marketplace,
+    "doctor": _run_doctor,
 }
 
 # Structured results used by interactive frontends. Flag mode retains ``DISPATCH`` and its
@@ -121,6 +128,44 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--source", dest="source_dir", metavar="DIR", help=help_text)
 
     sub = parser.add_subparsers(dest="command", metavar="COMMAND")
+
+    # doctor ------------------------------------------------------------------ #
+    p = sub.add_parser(
+        "doctor",
+        formatter_class=_HELP_FORMATTER,
+        help="report installed health, offline readiness, activity, credentials and configuration",
+        description=(
+            "Inspect the installed environment and report it in one place: measured drift with the "
+            "smallest policy-permitted reconciliation plans; offline readiness for each enabled "
+            "source, as metadata, canonical payload and runtime dependencies separately; any "
+            "working copy an interrupted run left behind; the recorded activity trail and what "
+            "each action can undo; credential health and which installations depend on it; and the "
+            "configuration this machine is ignoring, meaning disabled sources and fields your "
+            "organization's policy has locked. On its own the report changes nothing. With "
+            "--repair, review one exact installed artifact's plan; applying it requires both --yes "
+            "and the prior review's --expect digest. This command never reinstalls everything."
+        ),
+    )
+    p.add_argument(
+        "--repair",
+        dest="names",
+        nargs=1,
+        metavar="COORDINATE",
+        help="review one installed artifact's minimal repair plan",
+    )
+    _add_scope(p)
+    p.add_argument(
+        "--yes",
+        action="store_true",
+        help="apply the selected repair; requires --expect from a prior review",
+    )
+    p.add_argument(
+        "--expect",
+        metavar="DIGEST",
+        help="review digest returned by the prior --repair review",
+    )
+    _add_project(p)
+    _add_json(p)
 
     # upgrade ----------------------------------------------------------------- #
     p = sub.add_parser(
@@ -458,13 +503,13 @@ def build_parser() -> argparse.ArgumentParser:
         _add_json(lifecycle)
         return lifecycle
 
-    _add_lifecycle(
+    p_marketplace_install = _add_lifecycle(
         "install",
         "install configured-source artifacts for the selected harness profiles",
         coordinates="artifact or collection coordinate(s) to install",
         memory_mode=True,
     )
-    _add_lifecycle(
+    p_marketplace_update = _add_lifecycle(
         "update",
         "update installed artifacts against their configured sources",
         coordinates="artifact or collection coordinate(s) to update; omit for all installed",
@@ -488,21 +533,26 @@ def build_parser() -> argparse.ArgumentParser:
         coordinates="artifact or collection coordinate(s) whose setup should run",
         placement=False,
     )
-    p_marketplace_setup.add_argument(
-        "--authorize-untrusted-source",
-        action="store_true",
-        help="authorize setup declared by a source that is not company-reviewed",
-    )
-    p_marketplace_setup.add_argument(
-        "--authorize-custom-entrypoint",
-        action="store_true",
-        help="authorize a setup recipe that declares a non-standard entrypoint",
-    )
-    p_marketplace_setup.add_argument(
-        "--approve-setup-effects",
-        action="store_true",
-        help="approve every reviewed setup effect; without it each effect is declined",
-    )
+
+    def _add_setup_controls(parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            "--authorize-untrusted-source",
+            action="store_true",
+            help="authorize setup declared by a source that is not company-reviewed",
+        )
+        parser.add_argument(
+            "--authorize-custom-entrypoint",
+            action="store_true",
+            help="authorize a setup recipe that declares a non-standard entrypoint",
+        )
+        parser.add_argument(
+            "--approve-setup-effects",
+            action="store_true",
+            help="approve every reviewed setup effect; without it each effect is declined",
+        )
+
+    for setup_capable in (p_marketplace_install, p_marketplace_update, p_marketplace_setup):
+        _add_setup_controls(setup_capable)
 
     # `receipt` lives under `marketplace` rather than under a top-level `setup` group, because
     # `marketplace setup` already owns that word: a second `aart setup` would name two different
@@ -732,6 +782,188 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_registry_finalize(p_collection)
     _add_json(p_collection)
+
+    p_scan = registry_sub.add_parser(
+        "scan",
+        help="discover native Candidates in one pinned author checkout",
+        description=(
+            "Read a clean Git author checkout at its exact HEAD, compile only explicit aart.json "
+            "or aart.yaml manifests, and report Candidate state. Source Scan never changes the "
+            "target registry and never promotes a Candidate."
+        ),
+    )
+    _add_registry_source(p_scan)
+    p_scan.add_argument(
+        "--checkout",
+        required=True,
+        dest="candidate_checkout",
+        metavar="DIR",
+        help="clean local Git checkout of the author source",
+    )
+    p_scan.add_argument(
+        "--source-alias",
+        required=True,
+        dest="candidate_source_alias",
+        metavar="ALIAS",
+        help="stable alias for the author source",
+    )
+    p_scan.add_argument(
+        "--source-url",
+        required=True,
+        dest="candidate_source_url",
+        metavar="URL",
+        help="credential-free provenance URL for the author source",
+    )
+    p_scan.add_argument(
+        "--target-registry",
+        required=True,
+        dest="target_registry_alias",
+        metavar="ALIAS",
+        help="trust-domain registry that may later review the Candidates",
+    )
+    _add_json(p_scan)
+
+    p_candidate_promote = registry_sub.add_parser(
+        "promote",
+        help="review or locally promote exact Candidate IDs as one registry transaction",
+        description=(
+            "Re-observe a clean pinned author checkout, select exact Candidate IDs, and plan one "
+            "atomic registry promotion. Without --yes this only reviews. With --yes it writes the "
+            "local registry checkout but never commits, pushes, merges, or publishes it."
+        ),
+    )
+    p_candidate_promote.add_argument(
+        "--source",
+        dest="source_dir",
+        required=True,
+        metavar="DIR",
+        help="writable local registry Git checkout",
+    )
+    p_candidate_promote.add_argument(
+        "--checkout",
+        required=True,
+        dest="candidate_checkout",
+        metavar="DIR",
+        help="clean local Git checkout of the author source",
+    )
+    p_candidate_promote.add_argument(
+        "--source-alias",
+        required=True,
+        dest="candidate_source_alias",
+        metavar="ALIAS",
+        help="stable alias for the author source",
+    )
+    p_candidate_promote.add_argument(
+        "--source-url",
+        required=True,
+        dest="candidate_source_url",
+        metavar="URL",
+        help="credential-free provenance URL for the author source",
+    )
+    p_candidate_promote.add_argument(
+        "--target-registry",
+        required=True,
+        dest="target_registry_alias",
+        metavar="ALIAS",
+        help="trust-domain registry receiving the promotion",
+    )
+    p_candidate_promote.add_argument(
+        "--candidate",
+        required=True,
+        action="append",
+        dest="promotion_candidate_ids",
+        metavar="SHA256",
+        help="exact Candidate ID selected during registry scan (repeatable)",
+    )
+    p_candidate_promote.add_argument(
+        "--validation-report",
+        required=True,
+        dest="promotion_validation_report",
+        metavar="DIGEST",
+        help="canonical SHA-256 digest of validation evidence",
+    )
+    p_candidate_promote.add_argument(
+        "--policy-result",
+        required=True,
+        dest="promotion_policy_result",
+        metavar="DIGEST",
+        help="canonical SHA-256 digest of the effective policy result",
+    )
+    p_candidate_promote.add_argument(
+        "--mode",
+        choices=("vendored", "referenced"),
+        default="vendored",
+        dest="promotion_mode",
+        help="enterprise default vendored, or explicit weaker referenced mode",
+    )
+    _add_registry_finalize(p_candidate_promote)
+    _add_json(p_candidate_promote)
+
+    p_adopt = registry_sub.add_parser(
+        "adopt",
+        help="scan explicit manifests and adopt selected artifacts without subscribing",
+        description=(
+            "Acquire one credential-free Git URL/ref without saving it as a Source, compile only "
+            "explicit aart.yaml/aart.json manifests, and report them. Repeat --artifact to prepare "
+            "selected immutable Registry copies. Without --yes this is review-only; with --yes it "
+            "writes the reviewed local transaction and never commits, pushes or merges."
+        ),
+    )
+    p_adopt.add_argument(
+        "--source",
+        dest="source_dir",
+        required=True,
+        metavar="DIR",
+        help="writable local registry Git checkout",
+    )
+    p_adopt.add_argument(
+        "--url",
+        dest="native_url",
+        required=True,
+        metavar="URL",
+        help="credential-free Git repository URL",
+    )
+    p_adopt.add_argument("--ref", required=True, metavar="REF", help="branch or tag to inspect")
+    p_adopt.add_argument(
+        "--artifact",
+        action="append",
+        dest="names",
+        metavar="KIND/NAME@VERSION",
+        help="exact scanned coordinate to adopt (repeatable; omit to scan only)",
+    )
+    _add_registry_finalize(p_adopt)
+    p_adopt.add_argument(
+        "--expect",
+        metavar="DIGEST",
+        help="also require the freshly prepared transaction to match this review digest",
+    )
+    _add_json(p_adopt)
+
+    p_check_adoption = registry_sub.add_parser(
+        "check-upstream",
+        help="compare one adopted artifact with its recorded upstream branch or tag",
+        description=(
+            "Read one repository-adopted Registry package, resolve its recorded branch or tag, "
+            "and distinguish unchanged, changed, missing, unreachable and invalid declarations. "
+            "A validated new version is review-only unless --yes is present; --expect can bind "
+            "finalization to a digest returned by a prior JSON review."
+        ),
+    )
+    p_check_adoption.add_argument(
+        "--source",
+        dest="source_dir",
+        required=True,
+        metavar="DIR",
+        help="writable local registry Git checkout",
+    )
+    p_check_adoption.add_argument("names", nargs=1, metavar="KIND/NAME@VERSION")
+    _add_registry_finalize(p_check_adoption)
+    p_check_adoption.add_argument(
+        "--expect",
+        metavar="DIGEST",
+        help="require the proposed transaction to match this prior review digest",
+    )
+    _add_json(p_check_adoption)
 
     p_discover = registry_sub.add_parser(
         "discover",
@@ -1250,6 +1482,14 @@ def _to_request(args: argparse.Namespace) -> Request:
         setup_recipe=getattr(args, "setup_recipe", None),
         review_policy=getattr(args, "review_policy", None),
         registry_action=getattr(args, "registry_action", None),
+        candidate_checkout=getattr(args, "candidate_checkout", None),
+        candidate_source_alias=getattr(args, "candidate_source_alias", None),
+        candidate_source_url=getattr(args, "candidate_source_url", None),
+        target_registry_alias=getattr(args, "target_registry_alias", None),
+        promotion_candidate_ids=tuple(getattr(args, "promotion_candidate_ids", ()) or ()),
+        promotion_validation_report=getattr(args, "promotion_validation_report", None),
+        promotion_policy_result=getattr(args, "promotion_policy_result", None),
+        promotion_mode=getattr(args, "promotion_mode", "vendored"),
         check=bool(getattr(args, "check", False)),
         check_upstream=bool(getattr(args, "check_upstream", False)),
         strict=bool(getattr(args, "strict", False)),

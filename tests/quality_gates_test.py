@@ -367,6 +367,76 @@ class RepositoryRelativeLinkTest(unittest.TestCase):
             self.assertEqual([item.code for item in found], ["DOC002"])
 
 
+class GateReportingTest(unittest.TestCase):
+    """What the last line of a run claims passed."""
+
+    def _run_reporting(self, *, skip: str) -> str:
+        quality = _load_script("quality")
+        recorded: list[str] = []
+
+        def fake_run(selected, temp_root, *, changed_only=False, base=None, executed=None):
+            assert executed is not None
+            executed.extend(name for name in selected if name != skip)
+            recorded.extend(executed)
+            return 0
+
+        captured = io.StringIO()
+        with (
+            unittest.mock.patch.object(quality, "_run", fake_run),
+            contextlib.redirect_stdout(captured),
+        ):
+            code = quality.main(("unit", "integration", "docs-check"))
+
+        self.assertEqual(code, 0)
+        return captured.getvalue()
+
+    def test_the_summary_names_the_gates_that_ran_rather_than_the_ones_requested(self) -> None:
+        """A gate named on the OK line has passed; a skipped one saying OK reads as green."""
+
+        printed = self._run_reporting(skip="integration")
+
+        self.assertIn("quality gates OK: unit, docs-check", printed)
+        self.assertNotIn("quality gates OK: unit, integration", printed)
+
+    def test_a_skipped_gate_is_still_named_so_it_cannot_disappear(self) -> None:
+        printed = self._run_reporting(skip="integration")
+
+        self.assertIn("skipped as redundant or out of scope: integration", printed)
+
+    def test_a_run_that_skips_nothing_says_nothing_about_skipping(self) -> None:
+        printed = self._run_reporting(skip="")
+
+        self.assertIn("quality gates OK: unit, integration, docs-check", printed)
+        self.assertNotIn("skipped", printed)
+
+
+class RedundantGateTest(unittest.TestCase):
+    def test_the_e2e_gate_is_recognised_as_a_subset_of_the_unit_gate(self) -> None:
+        quality = _load_script("quality")
+
+        redundant = quality.redundant_gates(("unit", "integration"))
+
+        self.assertEqual(tuple(redundant), ("integration",))
+        self.assertIn("unit gate", redundant["integration"])
+
+    def test_the_subset_is_proven_rather_than_assumed(self) -> None:
+        """Change either discovery pattern and the runner must stop skipping, not skip blindly."""
+
+        quality = _load_script("quality")
+        with unittest.mock.patch.object(quality, "_discovered", return_value=None):
+            self.assertEqual(quality.redundant_gates(("unit", "integration")), {})
+
+        with unittest.mock.patch.object(
+            quality, "_discovered", side_effect=[frozenset({"a"}), frozenset({"b"})]
+        ):
+            self.assertEqual(quality.redundant_gates(("unit", "integration")), {})
+
+    def test_a_gate_selected_alone_is_never_skipped(self) -> None:
+        quality = _load_script("quality")
+
+        self.assertEqual(quality.redundant_gates(("integration",)), {})
+
+
 class PackagingCheckTest(unittest.TestCase):
     def test_packaging_smoke_does_not_mutate_tracked_source(self):
         packaging_check = _load_script("packaging_check")

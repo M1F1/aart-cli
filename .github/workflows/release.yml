@@ -5,9 +5,13 @@ name: release
 # Triggers:
 #   * a stable vX.Y.Z tag push          -> build + upload as a workflow artifact
 #   * a published GitHub release        -> additionally attach the wheel to the release
-# `scripts/version.py check-tag` is the real gate: it rejects any tag that does not match the
-# source version the release contract governs, so the pattern below stays deliberately broad
-# rather than pinning one release and silently building nothing for the next.
+# `scripts/release_artifact.py` is the real gate: it rejects any wheel whose filename, metadata or
+# installed command disagrees with the tag it is being published under, so the pattern below stays
+# deliberately broad rather than pinning one release and silently building nothing for the next.
+#
+# It is also callable. GitHub raises no workflow event for anything done with the repository
+# `GITHUB_TOKEN`, so the tag and release that `release-please.yml` creates set nothing off -- that
+# workflow calls this one instead. The two event triggers stay for a tag pushed by a person.
 #
 # Portable to a GitHub Enterprise Server fork by setting repository variables only.  Every default
 # reproduces the public github.com run except one: `AART_REFERENCE_REGISTRY_URL` has no default,
@@ -23,6 +27,17 @@ on:
       - "v[0-9]+.[0-9]+.[0-9]+"
   release:
     types: [published]
+  workflow_call:
+    inputs:
+      tag:
+        description: The release tag to build and verify.
+        required: true
+        type: string
+      attach:
+        description: Whether the wheel should be attached to the release at that tag.
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: write  # required to attach assets to the release
@@ -73,15 +88,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          # Empty when this run was triggered by an event rather than called, and an empty `ref`
+          # is the default one -- which for a tag push is the tag.
+          ref: ${{ inputs.tag }}
           fetch-depth: 0
       - uses: ./.github/actions/release
         with:
           python: ${{ vars.AART_PYTHON || 'python' }}
           python-version: ${{ vars.AART_RELEASE_PYTHON_VERSION || '3.11' }}
           setup-python: ${{ vars.AART_CI_IMAGE == '' }}
-          tag: ${{ github.event.release.tag_name || github.ref_name }}
-          # A tag push builds and keeps the wheel; a published release also attaches it.
-          attach: ${{ github.event_name == 'release' }}
+          tag: ${{ inputs.tag || github.event.release.tag_name || github.ref_name }}
+          # A tag push builds and keeps the wheel; a published release also attaches it, and so
+          # does the release-please run that created the release the event never announced.
+          attach: ${{ inputs.attach || github.event_name == 'release' }}
 
   release-private-image:
     if: vars.AART_IMAGE_USERNAME_SECRET != ''
@@ -105,12 +124,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          # Empty when this run was triggered by an event rather than called, and an empty `ref`
+          # is the default one -- which for a tag push is the tag.
+          ref: ${{ inputs.tag }}
           fetch-depth: 0
       - uses: ./.github/actions/release
         with:
           python: ${{ vars.AART_PYTHON || 'python' }}
           python-version: ${{ vars.AART_RELEASE_PYTHON_VERSION || '3.11' }}
           setup-python: ${{ vars.AART_CI_IMAGE == '' }}
-          tag: ${{ github.event.release.tag_name || github.ref_name }}
-          # A tag push builds and keeps the wheel; a published release also attaches it.
-          attach: ${{ github.event_name == 'release' }}
+          tag: ${{ inputs.tag || github.event.release.tag_name || github.ref_name }}
+          # A tag push builds and keeps the wheel; a published release also attaches it, and so
+          # does the release-please run that created the release the event never announced.
+          attach: ${{ inputs.attach || github.event_name == 'release' }}

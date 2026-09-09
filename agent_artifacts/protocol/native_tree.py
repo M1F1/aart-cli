@@ -294,12 +294,21 @@ def _validate_primary_payload(
                 ARTIFACT_INVALID, f"{primary_path} must be a strict JSON object", primary_path
             )
         if artifact_type == "hook":
-            name = parsed.value.get("name")
-            command = parsed.value.get("command")
-            if not isinstance(name, str) or not name or not isinstance(command, str) or not command:
+            # Everything installing one needs, checked where an author still sees it. A hook that
+            # names no event and no matcher compiles into a package nothing can place: there is no
+            # slot to write the entry into and nothing for the harness to match it against, and
+            # discovering that on somebody else's machine is a worse place to discover it.
+            missing = [
+                field
+                for field in ("name", "command", "event", "matcher")
+                if not isinstance(parsed.value.get(field), str) or not parsed.value.get(field)
+            ]
+            if missing:
                 return _error(
                     ARTIFACT_INVALID,
-                    "payload/hook.json requires non-empty string name and command fields",
+                    "payload/hook.json requires non-empty string "
+                    + ", ".join(missing)
+                    + (" fields" if len(missing) > 1 else " field"),
                     primary_path,
                 )
         text_files = ()

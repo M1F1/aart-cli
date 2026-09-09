@@ -1,0 +1,318 @@
+"""A configured approved artifact becomes a placed screen-07 draft from durable source state."""
+
+from __future__ import annotations
+
+import dataclasses
+import json
+import pathlib
+import tempfile
+import unittest
+from typing import cast
+
+from agent_artifacts.application.maintainer import reconcile_source_scan
+from agent_artifacts.application.promotion import (
+    PromotionEvidence,
+    load_registry_versions,
+    plan_bulk_promotion,
+    plan_registry_lifecycle,
+    project_lifecycle_update,
+    project_promotion,
+)
+from agent_artifacts.configuration.model import SourceKind
+from agent_artifacts.domain.candidates import CandidateId, assess_candidate
+from agent_artifacts.domain.credentials import CredentialProviderRef
+from agent_artifacts.domain.harness import Scope
+from agent_artifacts.domain.identifiers import ArtifactIdentity, SourceAlias, SourceId
+from agent_artifacts.domain.inputs import PromptedConfigValue, SecretProviderReference
+from agent_artifacts.domain.policies import EffectivePolicy
+from agent_artifacts.domain.registry import PromotionMode, publish_registry_version
+from agent_artifacts.domain.result import Ok
+from agent_artifacts.domain.selection import (
+    ArtifactRequest,
+    ArtifactSelection,
+    VersionConstraint,
+)
+from agent_artifacts.io.configured_installation import prepare_configured_installation_draft
+from agent_artifacts.io.object_store import read_object
+from agent_artifacts.io.source_store import publish_source_snapshot
+from agent_artifacts.protocol.authoring import CompiledAuthorArtifact, compile_author_snapshot
+from agent_artifacts.protocol.json import canonical_json_bytes
+from agent_artifacts.protocol.native_tree import (
+    SnapshotEntry,
+    SnapshotEntryKind,
+    SnapshotOrigin,
+    SourceSnapshot,
+    compile_native_package,
+)
+from agent_artifacts.protocol.paths import parse_relative_path
+from agent_artifacts.sources.model import (
+    SourcePublishCommand,
+    ValidatedSourceCandidate,
+    make_source_candidate,
+    source_instance_id,
+    source_store_paths,
+)
+from agent_artifacts.store.model import ObjectReadRequest, object_store_paths
+from tests.artifact_installation_e2e_test import MANIFEST, ORG, SERVER_SOURCE, TOKEN
+from tests.marketplace_fixtures import configured_source, effective_configuration
+from tests.promotion_planning_test import _evidence
+
+KEYCHAIN = CredentialProviderRef("macos-keychain", "aart/mcp/github", "default")
+
+
+#: One file as its author wrote it: a path, its text, and optionally whether it is executable. The
+#: bit travels with the content because a hook's script has to arrive executable or the harness
+#: cannot run what was installed.
+def _authored(item: tuple[str, str] | tuple[str, str, bool]) -> SnapshotEntry:
+    parsed = parse_relative_path(item[0])
+    assert isinstance(parsed, Ok), parsed
+    return SnapshotEntry(
+        parsed.value,
+        SnapshotEntryKind.FILE,
+        item[1].encode(),
+        len(item) == 3 and bool(item[2]),
+    )
+
+
+#: One MCP server, as an author's repository holds it before anything compiles it.
+AUTHORED_MCP: tuple[tuple[str, str] | tuple[str, str, bool], ...] = (
+    ("github/aart.json", json.dumps(MANIFEST)),
+    ("github/server.py", SERVER_SOURCE),
+    ("github/requirements.txt", "# no third-party packages\n"),
+)
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class AuthoredSetup:
+    """The setup an artifact declares, as the three files a native package carries it in.
+
+    The authoring format has no setup section -- `aart.json` cannot declare one -- so an artifact
+    that needs configuring after placement acquires its declaration when it is packaged, not when
+    it is written. Modelling that here as an injection into the compiled package rather than as a
+    field on the author manifest is not a shortcut around the compiler; it is where the declaration
+    actually enters, and the recipe still goes through the same strict parse every other one does.
+    """
+
+    #: The declarative installer, exactly as `setup/installer.json` holds it.
+    recipe: dict
+    #: The package-root document a person follows when the recipe cannot be run for them.
+    manual: str = "Configure it by hand.\n"
+
+
+def _with_setup(artifact: CompiledAuthorArtifact, setup: AuthoredSetup) -> CompiledAuthorArtifact:
+    """Recompile one compiled artifact with its setup declaration added.
+
+    Only the canonical entries change: the payload is untouched, so the payload digest the package
+    was built around still describes it, and the recompile is what proves the declaration is valid
+    rather than merely well-formed JSON sitting beside a manifest.
+    """
+
+    entries = {str(entry.path): entry for entry in artifact.canonical_entries}
+    manifest = json.loads(entries["artifact.json"].content)
+    manifest["setup"] = {"recipe": "setup/installer.json", "platforms": ["darwin"]}
+    entries["artifact.json"] = _packaged("artifact.json", canonical_json_bytes(manifest))
+    entries["setup/installer.json"] = _packaged(
+        "setup/installer.json", canonical_json_bytes(setup.recipe)
+    )
+    entries["SETUP.md"] = _packaged("SETUP.md", setup.manual.encode())
+    canonical = tuple(entries[key] for key in sorted(entries))
+    native = compile_native_package(
+        canonical, expected_identity=artifact.package.coordinate.artifact
+    )
+    assert isinstance(native, Ok), getattr(native, "diagnostics", ())
+    return dataclasses.replace(artifact, canonical_entries=canonical, native_package=native.value)
+
+
+def _packaged(path: str, content: bytes) -> SnapshotEntry:
+    """One file as a packager writes it into the compiled tree."""
+
+    parsed = parse_relative_path(path)
+    assert isinstance(parsed, Ok), parsed
+    return SnapshotEntry(parsed.value, SnapshotEntryKind.FILE, content)
+
+
+def _promote_one(
+    authored: tuple[tuple[str, str] | tuple[str, str, bool], ...],
+    *,
+    onto: SourceSnapshot,
+    revision: str,
+    setup: AuthoredSetup | None = None,
+    mode: PromotionMode = PromotionMode.VENDORED,
+) -> SourceSnapshot:
+    """One author tree through one real promote-and-publish transaction onto `onto`."""
+
+    approved = load_registry_versions(onto)
+    assert isinstance(approved, Ok), approved
+    compiled = compile_author_snapshot(
+        SourceSnapshot(
+            SnapshotOrigin.IMMUTABLE_GIT,
+            tuple(_authored(item) for item in authored),
+        ),
+        source_alias=SourceAlias("authors"),
+        source="https://git.example/servers.git",
+        revision=revision,
+    )
+    assert isinstance(compiled, Ok), compiled
+    artifacts = compiled.value
+    if setup is not None:
+        artifacts = tuple(_with_setup(artifact, setup) for artifact in artifacts)
+    scanned = reconcile_source_scan(
+        SourceAlias("authors"),
+        revision,
+        artifacts,
+        previous=(),
+        approved=approved.value,
+        target_registry=SourceAlias("company"),
+    )
+    assert isinstance(scanned, Ok), scanned
+    bundle = scanned.value.active[0]
+    bundle = dataclasses.replace(bundle, candidate=assess_candidate(bundle.candidate))
+    evidence = cast(tuple[tuple[CandidateId, PromotionEvidence], ...], _evidence(bundle))
+    promoted = plan_bulk_promotion(
+        onto,
+        (bundle,),
+        evidence=evidence,
+        approved=approved.value,
+        mode=mode,
+    )
+    assert isinstance(promoted, Ok), promoted
+    projected = project_promotion(onto, promoted.value)
+    assert isinstance(projected, Ok), projected
+    local = promoted.value.versions[0]
+    public = publish_registry_version(local, local.registry_snapshot)
+    reloaded = load_registry_versions(projected.value)
+    assert isinstance(reloaded, Ok), reloaded
+    after = tuple(
+        public if item.coordinate == local.coordinate else item for item in reloaded.value
+    )
+    lifecycle = plan_registry_lifecycle(projected.value, reloaded.value, after)
+    assert isinstance(lifecycle, Ok), lifecycle
+    published = project_lifecycle_update(projected.value, lifecycle.value)
+    assert isinstance(published, Ok), published
+    return SourceSnapshot(SnapshotOrigin.IMMUTABLE_GIT, published.value.entries)
+
+
+def _published_registries(
+    *authored: tuple[tuple[str, str] | tuple[str, str, bool], ...],
+    setup: AuthoredSetup | None = None,
+    mode: PromotionMode = PromotionMode.VENDORED,
+) -> SourceSnapshot:
+    """Several author trees taken to a published registry, one promotion transaction each.
+
+    A registry is not written in one transaction: artifacts and versions arrive over time, and each
+    promotion rebinds every retained approval to the registry's new content snapshot. Promoting one
+    at a time is therefore the realistic shape, not a slower version of the same thing.
+    """
+
+    snapshot = SourceSnapshot(SnapshotOrigin.LOCAL, ())
+    for index, tree in enumerate(authored):
+        snapshot = _promote_one(
+            tree,
+            onto=snapshot,
+            revision=f"{index:x}" * 40,
+            setup=setup,
+            mode=mode,
+        )
+    return snapshot
+
+
+def _published_registry(
+    authored: tuple[tuple[str, str] | tuple[str, str, bool], ...] = AUTHORED_MCP,
+    *,
+    setup: AuthoredSetup | None = None,
+    mode: PromotionMode = PromotionMode.VENDORED,
+) -> SourceSnapshot:
+    """Take an author's files all the way to a published registry snapshot.
+
+    Every step is the real one -- compile, scan, assess, promote, publish -- because the point of
+    the fixture is that what an install resolves is what a registry approved, not a value this test
+    handed it. `authored` is a parameter so the same path can carry an artifact a harness reads;
+    nothing else about the pipeline changes for one.
+    """
+
+    return _published_registries(authored, setup=setup, mode=mode)
+
+
+class ConfiguredInstallationDraftTest(unittest.TestCase):
+    def setUp(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = pathlib.Path(temporary.name).resolve()
+        self.data_root = str(self.root / "data")
+        self.project_root = str(self.root / "project")
+        self.source = configured_source("company", SourceKind.REGISTRY_GIT)
+        self.effective = effective_configuration((self.source,), default_registry="company")
+        snapshot = _published_registry()
+        candidate = make_source_candidate(
+            source_instance_id(self.source), self.source.alias, "a" * 40, snapshot
+        )
+        assert isinstance(candidate, Ok), candidate
+        written = publish_source_snapshot(
+            SourcePublishCommand(
+                source_store_paths(self.data_root, source_instance_id(self.source)),
+                ValidatedSourceCandidate(candidate.value, SourceId("company-registry")),
+                90,
+            )
+        )
+        self.assertIsInstance(written, Ok, getattr(written, "diagnostics", ()))
+        self.selection = ArtifactSelection(
+            (
+                ArtifactRequest(
+                    ArtifactIdentity("mcp", "github"),
+                    VersionConstraint("*"),
+                    self.source.alias,
+                ),
+            )
+        )
+
+    def _draft(self, sources=()):
+        return prepare_configured_installation_draft(
+            self.effective,
+            self.selection,
+            data_root=self.data_root,
+            project_root=self.project_root,
+            scope=Scope.PROJECT,
+            profiles=("tabnine",),
+            sources=sources,
+            policy=EffectivePolicy(),
+        )
+
+    def test_verified_registry_content_is_materialized_and_exposes_pending_inputs(self) -> None:
+        drafted = self._draft()
+
+        self.assertIsInstance(drafted, Ok, getattr(drafted, "diagnostics", ()))
+        assert isinstance(drafted, Ok)
+        self.assertFalse(drafted.value.ready)
+        self.assertEqual(
+            tuple(field.input.id for field in drafted.value.inputs.unanswered),
+            (ORG, TOKEN),
+        )
+        self.assertEqual(drafted.value.inputs.views()[0].default, "acme")
+        version = drafted.value.selection.artifacts[0].version
+        stored = read_object(
+            ObjectReadRequest(object_store_paths(self.data_root), version.object_digest)
+        )
+        self.assertIsInstance(stored, Ok)
+        assert isinstance(stored, Ok)
+        self.assertIsNotNone(stored.value)
+
+    def test_submitted_config_and_provider_reference_make_placements_ready(self) -> None:
+        drafted = self._draft(
+            (
+                PromptedConfigValue(ORG, "acme"),
+                SecretProviderReference(TOKEN, KEYCHAIN),
+            )
+        )
+
+        self.assertIsInstance(drafted, Ok, getattr(drafted, "diagnostics", ()))
+        assert isinstance(drafted, Ok)
+        self.assertTrue(drafted.value.ready)
+        placed = drafted.value.prepared_placements()
+        self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
+        assert isinstance(placed, Ok)
+        self.assertEqual(placed.value[0].sources, drafted.value.inputs.sources)
+        self.assertFalse(any(hasattr(source, "secret") for source in placed.value[0].sources))
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -47,8 +47,8 @@ repository you are reading this in; the command above prints it filled in.
 
 | Source | `pip` (inside your environment) | `pipx` | `uv` |
 |---|---|---|---|
-| Tagged Git repository, no clone | `python -m pip install --no-deps "git+<repository>.git@v0.0.1"` | `pipx install "git+<repository>.git@v0.0.1"` | `uv tool install "git+<repository>.git@v0.0.1"` |
-| Downloaded wheel | `python -m pip install --no-deps ./aart_cli-0.0.1-py3-none-any.whl` | `pipx install ./aart_cli-0.0.1-py3-none-any.whl` | `uv tool install ./aart_cli-0.0.1-py3-none-any.whl` |
+| Tagged Git repository, no clone | `python -m pip install --no-deps "git+<repository>.git@v0.0.1"` | `pipx install "git+<repository>.git@v0.0.1"` | `uv tool install "git+<repository>.git@v0.0.1"` <!-- x-release-please-version --> |
+| Downloaded wheel | `python -m pip install --no-deps ./aart_cli-0.0.1-py3-none-any.whl` | `pipx install ./aart_cli-0.0.1-py3-none-any.whl` | `uv tool install ./aart_cli-0.0.1-py3-none-any.whl` <!-- x-release-please-version --> |
 | Release wheel by URL | `python -m pip install --no-deps <the wheel's address on the release>` | `pipx install <the wheel's address on the release>` | `uv tool install <the wheel's address on the release>` |
 
 The Git row leads because it is the only one that needs nothing arranged first: `git+https://` goes
@@ -66,7 +66,7 @@ sources work at all.
 |---|---|
 | Tagged Git repository, no clone | **Yes.** git authenticates, so this row needs nothing set up |
 | Downloaded wheel | Yes, once the file is on disk -- see below for getting it there |
-| Internal index, once the wheel is published to it | Yes. Add `--index-url <your index>` (`--default-index` for `uv`) and ask for `"aart-cli==0.0.1"` |
+| Internal index, once the wheel is published to it | Yes. Add `--index-url <your index>` (`--default-index` for `uv`) and ask for `"aart-cli==0.0.1"` <!-- x-release-please-version --> |
 | Release wheel by URL | **No.** See below |
 
 The last row is the one that surprises people. `pip`, `pipx` and `uv` send no token when they fetch
@@ -225,6 +225,42 @@ partial success the record is written back as `rollback_incomplete`.
 
 All three are also reachable from `aart` with no arguments, under **Action → receipt**.
 
+### One report for the whole machine
+
+The three commands above each answer a question about one installation. `aart doctor` answers them
+for everything at once, and reads only — it resolves no marketplace content and applies nothing.
+
+```sh
+# What is the state of everything installed here?
+aart doctor
+aart doctor --json
+```
+
+One run reports measured drift with the smallest policy-permitted repair plan for each item; offline
+readiness for every enabled source, as three separate answers — cached metadata, cached canonical
+payload, cached runtime dependencies — because `--offline` is one flag and those are three different
+reasons it can fail; any working copy an interrupted run left behind; the activity trail and what
+each entry can still undo; credential health and which installations depend on it; and the
+configuration this machine is ignoring, meaning disabled sources and fields your organization's
+policy has locked.
+
+Repair follows the same review-then-confirm boundary as everything else, one artifact at a time:
+
+```sh
+# Review one artifact's minimal plan — applies nothing
+aart doctor --repair company/mcp/github
+
+# Apply exactly the plan that review returned
+aart doctor --repair company/mcp/github --yes --expect <digest>
+```
+
+`--yes` without `--expect` is refused, and a machine that changed between the review and the
+confirmation returns the recomputed plan instead of applying the stale one. There is no flag that
+repairs everything.
+
+What it cannot repair, it still reports: an artifact whose payload is missing or divergent is named
+with what is wrong, rather than being omitted because no repair for it exists.
+
 ## Maintaining a registry
 
 A registry is an ordinary Git checkout. Maintainer mutations prepare reviewed files and stop. The
@@ -343,7 +379,7 @@ unreachable.
 
 Set none of them and CI reaches `github.com`. Inside a GitHub Enterprise instance that fails on the
 first run, loudly, rather than silently pointing at the wrong tool. Which arm answered is printed by
-the run: `AART: aart-cli 0.0.1  via wheel https://…`.
+the run: `AART: aart-cli 0.0.1  via wheel https://…`. <!-- x-release-please-version -->
 
 The registry also reads `AART_RUNNER`, `AART_CI_IMAGE`, `AART_PYTHON`, `AART_PIP_INDEX_URL`,
 `AART_REPOSITORY`, `AART_GH_HOST`, and `AART_PAGES` — set the last to `false` where the instance
@@ -452,7 +488,7 @@ from a block inside `pyproject.toml` — while pip reads `PIP_INDEX_URL` and alw
 internal index, set `PIP_INDEX_URL` and use the second command.
 
 `.venv/` is already in `.gitignore`. Activate it in every new shell before running the gates or
-`scripts/prepare_release.py`; `deactivate` leaves it. If `python3 -m venv` fails with an
+`scripts/packaging_check.py`; `deactivate` leaves it. If `python3 -m venv` fails with an
 `ensurepip` error, that interpreter's venv support is broken — use another one, for example
 `python3.11 -m venv .venv`.
 
@@ -486,7 +522,7 @@ and a real one did not. Run a single gate with `make <gate>`.
 | `typecheck` | `mypy` | `mypy` |
 | `unit` | `unittest discover -s tests -p "*_test.py"` | stdlib |
 | `integration` | `unittest discover -s tests -p "*e2e_test.py"` — drives the real CLI over real trees | stdlib |
-| `validate` | `scripts/validate.py`, then `scripts/version.py check` | stdlib |
+| `validate` | `scripts/validate.py` | stdlib |
 | `coverage` | `coverage run --branch --source=agent_artifacts` over the unit suite, then `coverage report` | `coverage` |
 | `packaging-check` | `scripts/packaging_check.py` — builds the wheel and inspects it | stdlib |
 | `docs-check` | `scripts/docs_check.py` | stdlib |
@@ -497,123 +533,92 @@ Python itself.
 
 ## Releasing
 
-**Actions → cut release → Run workflow → type the version.** That is the release.
+**Merge a pull request whose title says what kind of change it is. Later, merge the release pull
+request that Release Please keeps open.** That is the release.
 
-One thing is decided before you press it, and it is the one a machine cannot decide: what the
-notes say. It arrives on `main` through an ordinary reviewed change.
+Nobody edits a version. Nobody writes a changelog entry. Nobody pushes a tag or presses a button.
+The one decision left to a person is the one a machine has no business making: *when* the
+accumulated changes should become a release.
 
-### The number comes from the changelog
+### What a pull request title has to say
 
-Changes are written under `## Unreleased` in `CHANGELOG.md` as they land, each under a heading that
-says what kind of change it is. That heading is what decides the version:
+The title becomes the squash commit on `main`, and that commit is what decides the next version.
 
-| Heading | What moves |
+```text
+fix(tui): preserve selected artifact after refresh
+feat(mcp): add isolated Python runtime
+feat(registry)!: replace legacy source schema
+```
+
+| The title says | The version moves |
 |---|---|
-| `Removed`, `Breaking` | major |
-| `Added`, `Changed` | minor |
-| `Fixed`, `Security`, `Packaging`, `Documentation`, `Testing` | patch |
+| `fix`, `perf`, `revert` | patch |
+| `feat` | minor |
+| anything with `!` before the colon | major |
+| `docs`, `test`, `ci`, `chore`, `build`, `refactor`, `security` | nothing releases on its own |
 
-Anything else — `Compatibility`, `Known defects shipped open`, `Upgrading from 2.7.1` — is prose
-about the release rather than a change in it. It is kept and ignored when the number is decided,
-and a section made only of those refuses to decide one rather than guessing.
+`pr-check` validates the title on every pull request, and refuses one it cannot classify. That is
+a check on semantic change metadata, not on a version number — nothing in it knows what version
+this project is. The types and what each is called in the changelog are declared in
+[`release-please-config.json`](release-please-config.json), which is also where the `0.x` bumping
+rules are turned off so that `feat` means minor and `!` means major at every version.
 
-```sh
-python scripts/changelog.py next
-```
-
-Below `1.0.0` each part moves the one below it: a removal moves the minor, everything else moves
-the patch. A zero major version promises nothing, and `1.0.0` announces a stability that cannot be
-taken back, so it is not something a heading should trigger by accident.
-
-`scripts/prepare_release.py` offers that number and Enter takes it. `docs-check` holds the file's
-shape on every run (`DOC011`), because a heading in the wrong shape is no longer a typo — it is a
-version that comes out wrong, or a release that cannot be cut at all.
-
-### What you do
+Locally:
 
 ```sh
-python scripts/prepare_release.py
+python scripts/conventional_title.py "feat(tui): add a screen"
 ```
 
-It asks which version and what the release does in one line, then runs everything local in the
-only order that works: the version into the six files that carry it, the four documents into their
-places, the ten gates, the eleven checklist checks. It stops at the first refusal and says which
-step refused.
+### What happens after the merge
 
-One thing it deliberately leaves you: the prose. The documents arrive with their headings and a
-visible `TODO(2.9.0)` line wherever a human has to write something, and the script will not
-continue while one stands. A change record, a compatibility statement and a checklist entry are
-what someone reads to decide whether to upgrade; no command can write them, and a release that
-ships without them is a release nobody can assess.
+Release Please reads the accumulated commits on `main` and keeps **one** pull request open: the
+next version, the generated `CHANGELOG.md` entry, and the version written into `pyproject.toml`,
+`agent_artifacts/__init__.py` and this README. It updates that same pull request as more changes
+land, rather than asking anyone for a version-bump PR.
 
-When it finishes, three things are left and none of them is a gate:
+That pull request passes the ordinary `pr-check` contract, like any other. Merging it is the
+release: the tag and the GitHub Release are created, and the release run builds the wheel,
+verifies it against the tag and attaches it.
 
-1. Commit, push, open the pull request.
-2. Merge to `main`.
-3. **Actions → cut release → Run workflow → type the version.**
+Nothing merges that pull request for you. Automating the arithmetic is not automating the
+decision; auto-merge is a policy this repository has deliberately not turned on.
 
-### The same script, driven by an agent
+### What the release run proves
 
-Pass what a person would have typed and read a receipt instead of prose:
-
-```sh
-python scripts/prepare_release.py 2.9.0 --summary "One line about the release." --json
-```
-
-Both callers take the same path through the same steps — a JSON mode running different code is a
-JSON mode reporting a run nobody had. `stdout` carries exactly one document; everything the steps
-print goes to `stderr`. It never prompts where there is no terminal to prompt at, and never
-substitutes a default for an answer it could not get: a guessed version would set six files to a
-number nobody chose.
-
-Three exit codes, and the middle one is the interesting one:
-
-| Code | Meaning | What to do |
-|---|---|---|
-| `0` | prepared | commit, merge, press the button |
-| `3` | documents still hold placeholders | the receipt lists them by file and line — write them, run again |
-| `2` | a step failed | read `reason`; nothing already written was undone |
-
-`3` is separate from `2` on purpose. An unwritten changelog is a retry after work; a failing gate
-is a stop. One code for both teaches a caller to treat them the same.
-
-### What the button does
-
-In this order, writing nothing until every check has passed:
+Its subject is the artifact, not the source. The source was proven by the pull request that put it
+on `main`, and proving it again at the tag proves the same tree twice.
 
 | Step | Refuses when |
 |---|---|
-| Preconditions | the worktree is dirty, the source version does not match the tag, the notes are missing or empty, the tag already exists, or `HEAD` is not in `origin/main` |
-| Ten quality gates | any gate fails |
-| Eleven checklist checks | any check fails — four cover this repository, seven reconcile against the reference registry |
-| Tag and publish | — |
+| The tagged commit is in `main` | the tag names source no one reviewed |
+| Release checklist | schema freeze, system matrix, packaging, and the seven registry reconciliation checks |
+| Wheel build | the pinned `poetry-core` is not the one building it |
+| `scripts/release_artifact.py` | the wheel's filename, metadata version, project name or declared dependencies disagree with the tag, or the installed `aart` reports another version |
+| Attach and publish | — |
 
-A run therefore produces a tag and a release, or it produces neither. There is no half-published
-state to unpick by hand.
-
-Publishing the release fires `release.yml`, which builds the wheel and attaches it. That keeps one
-builder of release artifacts rather than two that can disagree. The release body carries the
-wheel's `sha256`, computed from the same tag, so a downloaded asset can be checked against it.
-
-### The same thing from a terminal
-
-The button is a trigger; the sequence lives in a script, so it runs anywhere:
+The last one is the one a pull request could not have run: the wheel did not exist yet.
 
 ```sh
-python scripts/cut_release.py 2.9.0 --registry /path/to/agent-artifacts-registry
+python scripts/release_artifact.py --tag v2.9.0
 ```
 
-With no registry checkout to hand:
+The seven registry checks are reported `skipped`, never `passed`, when no registry checkout is
+available. In CI that choice is one repository variable, `AART_REFERENCE_REGISTRY_URL` — set, the
+registry is cloned and reconciled against; unset, those checks are skipped. It has no default,
+because a default naming a github.com repository reproduces nothing on an instance that cannot
+reach it.
 
-```sh
-python scripts/cut_release.py 2.9.0 --without-registry
-```
+### One version, written by one thing
 
-The seven registry checks are then reported `skipped`, never `passed`, and the run says so. Typing
-the flag out is the point: a release that verifies less can only happen on purpose. In CI the same
-choice is made by one repository variable, `AART_REFERENCE_REGISTRY_URL` — set, the registry is
-cloned and reconciled against; unset, those checks are skipped. It has no default, because a
-default naming a github.com repository reproduces nothing on an instance that cannot reach it.
+There used to be three version values in this tree, a script that wrote all three, a set of
+"mirrors" it rewrote alongside them, and a gate whose whole job was to prove the copies agreed.
+The copies agreeing was never the point; the copies existing was the problem.
+
+Now `agent_artifacts/__init__.py` holds the only literal. `runtime_contract.EXECUTABLE_VERSION`
+parses it, `pyproject.toml` and this README are rewritten by the release engine on the lines marked
+`x-release-please-version`, and nothing compares any of them to anything, because nothing can
+disagree.
+
 
 ### The workflow is read from the tag, not from `main`
 

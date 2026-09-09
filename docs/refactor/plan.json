@@ -1,0 +1,353 @@
+{
+  "version": 1,
+  "title": "AART refactor and post-refactor acceptance",
+  "epics": [
+    {
+      "id": "CP-00",
+      "title": "Canonical planning baseline",
+      "status": "done"
+    },
+    {
+      "id": "CP-01",
+      "title": "Repository characterization and invariant map",
+      "status": "done"
+    },
+    {
+      "id": "CP-02",
+      "title": "Clean architecture migration seam",
+      "status": "done"
+    },
+    {
+      "id": "CP-03",
+      "title": "Five core algebras",
+      "status": "done"
+    },
+    {
+      "id": "CP-04",
+      "title": "Native authoring manifest and canonical compiler",
+      "status": "done"
+    },
+    {
+      "id": "CP-05",
+      "title": "Source, Candidate, Registry and Promotion lifecycle",
+      "status": "done"
+    },
+    {
+      "id": "CP-06",
+      "title": "Marketplace, Selection and Collections",
+      "status": "done"
+    },
+    {
+      "id": "CP-07",
+      "title": "Inspection, Remediation, Policy and Plan",
+      "status": "done"
+    },
+    {
+      "id": "CP-08",
+      "title": "Runtime inputs and credential lifecycle",
+      "status": "done"
+    },
+    {
+      "id": "CP-09",
+      "title": "Python environments and dependencies",
+      "status": "done"
+    },
+    {
+      "id": "CP-10",
+      "title": "MCP stdio vertical slice",
+      "status": "done"
+    },
+    {
+      "id": "CP-11",
+      "title": "Desired-state reconciliation engine",
+      "status": "done"
+    },
+    {
+      "id": "CP-12",
+      "title": "Installed lifecycle on reconciliation",
+      "status": "done"
+    },
+    {
+      "id": "CP-13",
+      "title": "Consumer TUI, screens 01-29",
+      "status": "done"
+    },
+    {
+      "id": "CP-14",
+      "title": "Maintainer TUI, screens 30-53",
+      "status": "done",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Maintainer screen catalog, navigation and the Maintainer Mode boundary",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Screen 30 and screens 31-34 over the canonical source scan",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "Screens 35-37: Candidate list, detail and semantic-first diff",
+          "status": "done"
+        },
+        {
+          "id": "4",
+          "title": "Screens 38-40: validation pipeline and policy review",
+          "status": "done"
+        },
+        {
+          "id": "5",
+          "title": "Screens 41-47: promotion review, registry diff, explicit commit, registry view, bulk promotion",
+          "status": "done"
+        },
+        {
+          "id": "6",
+          "title": "Screens 48-53: lifecycle, provenance, conflicts, Collection candidates, filters",
+          "status": "done"
+        },
+        {
+          "id": "7",
+          "title": "Retire the legacy consumer/maintainer authority CP-13 left standing",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "CP-15",
+      "title": "Edge-case hardening",
+      "status": "done",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Registry state safety through the public source verb (INV-218, INV-210)",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Rollback and provenance under a moving upstream (INV-216, INV-219)",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "Offline decomposition: metadata, payload and runtime dependencies (INV-223)",
+          "status": "done"
+        },
+        {
+          "id": "4a",
+          "title": "Verification failure and the compensatable restore (INV-224, INV-225)",
+          "status": "done"
+        },
+        {
+          "id": "4b",
+          "title": "Interrupted execution: discoverable, and re-inspected before resume (INV-226)",
+          "status": "done"
+        },
+        {
+          "id": "5",
+          "title": "Purge boundaries and the erasure claim AART must not make (INV-221, INV-222)",
+          "status": "done"
+        },
+        {
+          "id": "6",
+          "title": "Policy drift in installed health, and development installs kept distinct (INV-233, INV-237)",
+          "status": "done"
+        },
+        {
+          "id": "7",
+          "title": "Promotion evidence, audit and the local-promotion-is-not-publication boundary (INV-238, 240, 241, 242)",
+          "status": "done"
+        },
+        {
+          "id": "8",
+          "title": "Input and credential contract migrations, and unrelated credential ownership (INV-231, INV-232)",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "CP-16",
+      "title": "Doctor and supportability",
+      "status": "done",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Environment-wide read-only Doctor and minimal reconciliation plans (INV-194)",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Offline readiness: metadata, canonical payload and runtime dependencies (INV-223)",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "Reviewed repair entry points with re-inspection before execution",
+          "status": "done"
+        },
+        {
+          "id": "4",
+          "title": "Activity, Receipt, configuration, credential and orphan-run diagnostics",
+          "status": "done"
+        },
+        {
+          "id": "5",
+          "title": "Public-flow hardening, mutation evidence and full slice verification",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "CP-17",
+      "title": "Git-backed live acceptance",
+      "status": "done",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Real Git acquisition through validation and durable source publication",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Public sync, Marketplace install and receipt with the real Git revision",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "Runtime launch and explicit update traceable to a new Git commit",
+          "status": "done"
+        },
+        {
+          "id": "4",
+          "title": "Drift, repair, rollback and uninstall over the live installation",
+          "status": "done"
+        },
+        {
+          "id": "5",
+          "title": "Collection and bulk install with one full-chain acceptance proof",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "CP-18",
+      "title": "Migration and release gate",
+      "status": "done",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Zero runtime dependencies, evidenced by the import graph (INV-071)",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "CI/release profile contract complete (INV-072 through INV-080)",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "Legacy removal: only authority that is replaced and verified",
+          "status": "done"
+        },
+        {
+          "id": "4",
+          "title": "Docs reconciled with the Product Specification",
+          "status": "done"
+        },
+        {
+          "id": "5",
+          "title": "Traceability complete for all mandatory invariants",
+          "status": "done"
+        },
+        {
+          "id": "6",
+          "title": "Full quality, packaging, security and deep acceptance gates",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "CP-19",
+      "title": "Manual TUI acceptance hardening",
+      "status": "in_progress",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Contextual footer derived from the active key bindings (QA-026)",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Complete the manual Registry-to-lifecycle discovery run and capture every finding",
+          "status": "in_progress"
+        },
+        {
+          "id": "3",
+          "title": "Enter returns completed sequences to their owning list (QA-027)",
+          "status": "todo"
+        },
+        {
+          "id": "4",
+          "title": "New forms open empty while refused forms retain their draft (QA-028)",
+          "status": "todo"
+        },
+        {
+          "id": "5",
+          "title": "Review screens separate facts, decisions and action prompts (QA-029)",
+          "status": "todo"
+        },
+        {
+          "id": "6",
+          "title": "Stable table columns with the focused value shown in full (QA-030)",
+          "status": "todo"
+        },
+        {
+          "id": "7",
+          "title": "Diagnose registry baseline mismatch and provide an honest TUI recovery (QA-031)",
+          "status": "todo"
+        },
+        {
+          "id": "8",
+          "title": "Git publication makes reviewed promotion records visible without weakening the local boundary (QA-034/B-102)",
+          "status": "todo"
+        },
+        {
+          "id": "9",
+          "title": "TUI maintenance and generated Registry CI validate canonical promotion output (QA-025/QA-032/B-057/B-099)",
+          "status": "todo"
+        },
+        {
+          "id": "10",
+          "title": "Failed actions leave review state without retaining a stale confirmation (QA-033/B-101)",
+          "status": "todo"
+        },
+        {
+          "id": "11",
+          "title": "Workflow progress chrome and back navigation preserve stable context (QA-036/QA-037)",
+          "status": "todo"
+        },
+        {
+          "id": "12",
+          "title": "Readable Dashboard, lists, help and footer hierarchy with visible focus (QA-035/QA-038/QA-040/QA-041/QA-042)",
+          "status": "todo"
+        },
+        {
+          "id": "13",
+          "title": "Promotion mode explains Vendored and Referenced before toggling (QA-039)",
+          "status": "todo"
+        },
+        {
+          "id": "14",
+          "title": "Registries and authoring Sources expose honest rows and routes (QA-043)",
+          "status": "todo"
+        },
+        {
+          "id": "15",
+          "title": "Focused evidence per increment and full batch verification before handback",
+          "status": "todo"
+        }
+      ]
+    }
+  ]
+}

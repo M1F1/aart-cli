@@ -507,10 +507,15 @@ def plan_registry_init(
     # Every registry gets byte-identical files.  Where CI fetches AART from is a repository
     # variable, not something written in here at creation time, so these bytes never have to be
     # regenerated when a company moves the tool.
+    # Usage reporting is an optional service a registry may offer, and the manifest below already
+    # advertises it only when somebody named a destination.  The files were written either way,
+    # so a maintainer who declined the feature still got an Issue Form soliciting reports and two
+    # workflows to process them -- infrastructure for a service the registry does not offer, which
+    # invites contributions nothing will read (B-087).  One condition now governs both.
     templates = (
         (".gitignore", REGISTRY_GITIGNORE),
         (".github/workflows/aart-registry.yml", REGISTRY_CI_WORKFLOW),
-        *REPORTING_TEMPLATES,
+        *(REPORTING_TEMPLATES if options.usage_reporting_repository is not None else ()),
     )
     # The README is the one generated file a maintainer is meant to edit, so it is written when
     # absent and left alone otherwise -- never compared, never overwritten.  Managing it would
@@ -520,7 +525,14 @@ def plan_registry_init(
     written_once = tuple(
         (path, content)
         for path, content in (
-            ("README.md", render_registry_readme(options.registry_id, options.display_name)),
+            (
+                "README.md",
+                render_registry_readme(
+                    options.registry_id,
+                    options.display_name,
+                    usage_reporting=options.usage_reporting_repository is not None,
+                ),
+            ),
             # The pin is the version of the tool creating the registry -- the same number `init`
             # already writes as `requires_aart.min_inclusive`.  No inference is involved: AART
             # knows its own version, which is exactly what the deleted origin stamp did not.
@@ -684,6 +696,11 @@ def _payload(
                     (
                         ("name", options.name),
                         ("command", f"${{SCRIPT_DIR}}/{options.name}.sh"),
+                        # Complete enough to install, and deliberately the narrowest thing that is.
+                        # A scaffold an author has to finish before it works is better than one
+                        # that silently runs against every tool the harness has.
+                        ("event", "PreToolUse"),
+                        ("matcher", "Bash"),
                     )
                 )
             ),
@@ -1799,9 +1816,25 @@ def audit_registry_workspace(
     )
     if isinstance(native, Err):
         diagnostics.extend(native.diagnostics)
+    roots = tuple(f"{root}/" for root in source.artifact_roots)
+    owned = tuple(
+        (path, item)
+        for path, item in sorted(files.value.items())
+        if item.kind is SnapshotEntryKind.FILE
+        and path.endswith("/artifact.json")
+        and any(path.startswith(root) for root in roots)
+    )
+    # `QA-015`: a registry holding nothing has nothing to be partial about. The two findings below
+    # describe a limit rather than a defect, and on an empty registry the limit is the whole state
+    # of it, so they are reported as notes — what the audit did — exactly as `_upstream_check_note`
+    # reports having no vendored artifacts to check. One owned package or one external reference is
+    # enough to make them warnings again, because then an object exists that nobody assessed.
+    nothing_to_assess = not entries and not owned
     if not entries:
         diagnostics.append(
-            _diagnostic(
+            _note("registry contains no artifacts, so there is no provenance to check")
+            if nothing_to_assess
+            else _diagnostic(
                 "registry contains no external references; provenance coverage is partial",
                 _COVERAGE_LIMIT,
                 warning=True,
@@ -1841,14 +1874,7 @@ def audit_registry_workspace(
                             warning=True,
                         )
                     )
-    roots = tuple(f"{root}/" for root in source.artifact_roots)
-    for path, item in sorted(files.value.items()):
-        if (
-            item.kind is not SnapshotEntryKind.FILE
-            or not path.endswith("/artifact.json")
-            or not any(path.startswith(root) for root in roots)
-        ):
-            continue
+    for path, item in owned:
         manifest = parse_artifact_manifest(item.content, path=path)
         if isinstance(manifest, Err):
             diagnostics.extend(manifest.diagnostics)
@@ -1922,7 +1948,9 @@ def audit_registry_workspace(
     security_file = files.value.get("security/index.json")
     if security_file is None:
         diagnostics.append(
-            _diagnostic(
+            _note("registry contains no artifacts, so there is no installation risk to assess")
+            if nothing_to_assess
+            else _diagnostic(
                 "no per-object installation-risk evidence was supplied to registry audit",
                 _SECURITY_EVIDENCE,
                 warning=True,

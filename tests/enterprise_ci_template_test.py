@@ -22,11 +22,18 @@ from agent_artifacts.registry_commands.templates import (
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 PAGE = ROOT / "docs" / "ci" / "enterprise-fork-v1.md"
 ACTION = ROOT / ".github" / "actions" / "aart" / "action.yml"
+# The two workflows that run *this repository's* toolchain, and so have to be told where the
+# interpreter, the image and the index are.  `release-please.yml` is deliberately not here: it
+# runs one pinned action on the runner's own Node, touching neither pip nor Python, so every
+# variable below would be a variable it never reads.  `TheReleaseEngineIsPortableToo` states what
+# it must satisfy instead.
 WORKFLOWS = (
     ROOT / ".github" / "workflows" / "pr-check.yml",
     ROOT / ".github" / "workflows" / "release.yml",
-    ROOT / ".github" / "workflows" / "cut-release.yml",
 )
+RELEASE_ENGINE = ROOT / ".github" / "workflows" / "release-please.yml"
+# The workflows are thin by INV-076, so the steps -- and any condition on them -- are here.
+ACTIONS = tuple(sorted((ROOT / ".github" / "actions").rglob("action.yml")))
 # The registry's workflow has one home: the bytes `registry init` writes.  A second copy under
 # docs/ would rot, and `plan_registry_init` refuses a template whose content has drifted.
 TEMPLATE_TEXT = REGISTRY_CI_WORKFLOW.decode("utf-8")
@@ -39,6 +46,8 @@ _SHIPPED = {
 }
 EMITTED = {label: body.decode("utf-8") for label, body in _SHIPPED.items()}
 _VARIABLE = re.compile(r"vars\.(AART_[A-Z0-9_]+)")
+_SECRET = re.compile(r"secrets(\.[A-Za-z_][A-Za-z0-9_]*|\[[^\]]+\])")
+_URL = re.compile(r"https?://([A-Za-z0-9.-]*\.[A-Za-z]{2,})")
 
 
 def _read(path: pathlib.Path) -> str:
@@ -64,11 +73,18 @@ class TheButtonFinishesTheJobTest(unittest.TestCase):
     def _action(self, name: str) -> str:
         return _read(ROOT / ".github" / "actions" / name / "action.yml")
 
-    def test_the_button_delegates_to_the_one_thing_that_builds_a_release_artifact(self) -> None:
-        body = _uncommented(self._action("cut-release"))
-        self.assertIn("uses: ./.github/actions/release", body)
-        self.assertIn('attach: "true"', body)
-        # Delegating, not repeating: a second builder is a second answer to what the wheel is.
+    def test_the_release_engine_delegates_to_the_one_thing_that_builds_an_artifact(self) -> None:
+        """The button is gone; the wall it hit is not, and the answer it found outlived it.
+
+        `release-please.yml` creates the tag and the release with `GITHUB_TOKEN`, so nothing is
+        set off by either. It therefore calls the release workflow, which is `workflow_call`-able
+        for exactly this reason -- delegating rather than repeating, because a second builder is a
+        second answer to what the wheel is.
+        """
+
+        body = _uncommented(_read(ROOT / ".github" / "workflows" / "release-please.yml"))
+        self.assertIn("uses: ./.github/workflows/release.yml", body)
+        self.assertIn("attach: true", body)
         self.assertNotIn("scripts/build_wheel.py", body)
         self.assertNotIn("scripts/attach_release_asset.py", body)
 
@@ -88,16 +104,44 @@ class TheButtonFinishesTheJobTest(unittest.TestCase):
         self.assertNotIn("upload-artifact", _uncommented(self._action("release")))
 
     def test_every_caller_of_the_release_action_says_whether_to_attach(self) -> None:
-        callers = [
-            ROOT / ".github" / "workflows" / "release.yml",
-            ROOT / ".github" / "actions" / "cut-release" / "action.yml",
-        ]
+        callers = [ROOT / ".github" / "workflows" / "release.yml"]
         for path in callers:
             with self.subTest(caller=str(path.relative_to(ROOT))):
                 body = _uncommented(_read(path))
+                # `attach: ${{` is the caller's form.  The workflow also *declares* an `attach:`
+                # input for its callers, and counting that would make the two sides agree by
+                # accident rather than because every `uses:` said what it wanted.
                 self.assertEqual(
-                    body.count("uses: ./.github/actions/release"), body.count("attach:")
+                    body.count("uses: ./.github/actions/release"), body.count("attach: ${{")
                 )
+
+
+class TheReleaseEngineIsPortableTooTest(unittest.TestCase):
+    """`release-please.yml` reads no interpreter, image or index -- but it still reads the runner.
+
+    It is exempt from the plumbing every other workflow carries because it uses none of it: one
+    pinned action, running on the runner's Node. What it is not exempt from is the one variable
+    that decides *where* a fork's work runs, and from naming its action by an exact tag.
+    """
+
+    def test_the_runner_is_the_one_variable_it_still_reads(self) -> None:
+        body = _uncommented(_read(RELEASE_ENGINE))
+        self.assertIn("runs-on: ${{ fromJSON(vars.AART_RUNNER || '[\"ubuntu-latest\"]') }}", body)
+
+    def test_it_reads_none_of_the_plumbing_it_does_not_use(self) -> None:
+        body = _uncommented(_read(RELEASE_ENGINE))
+        for unused in ("AART_CI_IMAGE", "AART_PYTHON", "AART_PIP_INDEX_URL", "AART_POETRY"):
+            with self.subTest(variable=unused):
+                self.assertNotIn(unused, body)
+
+    def test_the_engine_is_pinned_rather_than_followed(self) -> None:
+        """A release engine tracking a moving reference is a version calculator that can change
+        its mind between two runs of the same repository."""
+
+        body = _uncommented(_read(RELEASE_ENGINE))
+        self.assertIn("uses: googleapis/release-please-action@v4", body)
+        self.assertNotIn("@main", body)
+        self.assertNotIn("@master", body)
 
 
 class PipReachesTheRightIndexTest(unittest.TestCase):
@@ -549,6 +593,248 @@ class TheContainerSwitchTest(unittest.TestCase):
                 self.assertIn(
                     "password: ${{ secrets[vars.AART_IMAGE_PASSWORD_SECRET] }}", body, where
                 )
+
+
+class VariablesCannotWeakenTheGatesTest(unittest.TestCase):
+    """INV-072: a repository variable may move the work, never decide whether it is checked.
+
+    Enterprise configuration is allowed to replace runners, images, indexes, tool locations and
+    credential references. What it must not be able to do is weaken the semantic quality contract
+    "merely by changing repository variables" -- and the shape that would do it is small and easy
+    to add by accident: one `if: vars.AART_SKIP_SOMETHING != 'true'` on a gate step, and a fork
+    turns a check off from a settings page with nothing in the diff to review.
+
+    So the property is closed rather than sampled. Every conditional in every workflow -- the ones
+    this repository runs and the ones it writes for somebody else -- is read, and the repository
+    variables appearing in them must be exactly the two that decide infrastructure.
+    """
+
+    SOURCES = {
+        **{str(path.relative_to(ROOT)): _read(path) for path in WORKFLOWS},
+        **{str(path.relative_to(ROOT)): _read(path) for path in ACTIONS},
+        **EMITTED,
+    }
+
+    #: `AART_IMAGE_USERNAME_SECRET` chooses which of two identical shapes of a job runs, and
+    #: `TheContainerSwitchTest` holds the two to the same steps. `AART_PAGES` decides whether a
+    #: dashboard is *published* on an instance that offers no Pages; the build above it still runs,
+    #: which `test_pages_deployment_can_be_switched_off` holds. Neither decides whether anything is
+    #: checked. A third name here is a new power over the quality contract and needs its own case.
+    INFRASTRUCTURE = frozenset({"AART_IMAGE_USERNAME_SECRET", "AART_PAGES"})
+
+    def _conditions(self, text: str) -> list[str]:
+        """Every condition, in both spellings.
+
+        A step's condition may be written on its own line or inline as the first key of the list
+        item, `- if: ...`. The second form was missed by the first draft of this method, and a
+        mutation putting a variable on a gate step in that spelling went straight past it -- it
+        was caught only by the documentation test noticing an undeclared variable, which is a
+        different claim that a fork writing the variable onto the page would satisfy.
+        """
+
+        conditions = []
+        for line in _uncommented(text).splitlines():
+            stripped = line.strip()
+            if stripped.startswith("- "):
+                stripped = stripped[2:]
+            if stripped.startswith("if:"):
+                conditions.append(stripped)
+        return conditions
+
+    def test_the_sources_really_carry_conditions_to_read(self) -> None:
+        """The guard: an empty harvest would make every assertion below vacuous."""
+
+        found = {label: self._conditions(text) for label, text in self.SOURCES.items()}
+        self.assertGreater(sum(len(items) for items in found.values()), 20)
+        self.assertEqual(["if: a", "if: b"], self._conditions("    - if: a\n      if: b\n"))
+        for label in ("pr-check.yml", "usage dashboard"):
+            key = next(name for name in found if name.endswith(label))
+            self.assertTrue(found[key], f"{label} yielded no conditions")
+
+    def test_no_variable_outside_the_two_infrastructure_switches_gates_anything(self) -> None:
+        offences = []
+        for label, text in self.SOURCES.items():
+            for condition in self._conditions(text):
+                for name in _VARIABLE.findall(condition):
+                    if name not in self.INFRASTRUCTURE:
+                        offences.append(f"{label}: {condition}")
+        self.assertEqual([], offences, "INV-072: a variable decides whether work is checked")
+
+    def test_the_action_that_runs_the_gates_reads_no_variable_at_all(self) -> None:
+        """The narrowest place the invariant could break, so it is stated on its own.
+
+        Both gate jobs delegate here, and this file runs `scripts/quality.py` unconditionally. Its
+        one condition is a caller input about whether the image already carries an interpreter --
+        a question about the machine, settled by the workflow, not a switch a fork can reach.
+        """
+
+        action = _read(ROOT / ".github" / "actions" / "quality" / "action.yml")
+        self.assertIn("scripts/quality.py", action)
+        for condition in self._conditions(action):
+            self.assertEqual([], _VARIABLE.findall(condition), condition)
+        # The gate *step* itself, not everything after it: the step that follows checks the pull
+        # request's title and is conditioned on there being one, which is a fact about the event
+        # rather than a switch anybody can set.
+        gate = action.split("Run canonical quality gates", 1)[1].split("\n    - name:", 1)[0]
+        self.assertNotIn("if:", gate)
+
+
+class EverySecretIsNamedByAVariableTest(unittest.TestCase):
+    """INV-073: variables carry endpoints, labels and the *names* of secrets; never a value.
+
+    The existing tests hold this one job at a time. This closes it: every `secrets.` reference in
+    every workflow, shipped or emitted, must be indirected through a variable. A hardcoded secret
+    name is not a leak by itself, but it is the thing that makes a fork edit YAML to move -- and a
+    fork editing YAML is outside the supported operating model (INV-075).
+    """
+
+    SOURCES = {
+        **{str(path.relative_to(ROOT)): _read(path) for path in WORKFLOWS},
+        **{str(path.relative_to(ROOT)): _read(path) for path in ACTIONS},
+        **EMITTED,
+    }
+
+    #: The one exception, and it is not a stored credential. GitHub mints `GITHUB_TOKEN` per run
+    #: and scopes it to this repository on whatever instance the job is on, so it is already
+    #: instance-relative and there is no secret store entry for a variable to name.
+    PLATFORM = frozenset({"GITHUB_TOKEN"})
+
+    def test_the_sources_really_carry_secrets_to_read(self) -> None:
+        found = sum(len(_SECRET.findall(_uncommented(text))) for text in self.SOURCES.values())
+        self.assertGreater(found, 15)
+
+    def test_no_workflow_names_a_secret_it_was_not_told_the_name_of(self) -> None:
+        offences = []
+        for label, text in self.SOURCES.items():
+            for reference in _SECRET.findall(_uncommented(text)):
+                if reference.startswith("[vars.") or reference.lstrip(".") in self.PLATFORM:
+                    continue
+                offences.append(f"{label}: secrets{reference}")
+        self.assertEqual([], offences, "INV-073: a secret name is hardcoded into a workflow")
+
+
+class NoPublicHostIsReachedThatAVariableCannotRetargetTest(unittest.TestCase):
+    """INV-078 and INV-074 meet here: the profile must be able to run with no public egress.
+
+    That is not provable by listing the arms that *can* be retargeted -- `EveryFetchArmIsReachable`
+    already does that, and an arm nobody thought of would pass it. The provable form is the
+    complement: no absolute URL to a public host appears anywhere except as the fallback of a
+    variable. Setting that variable then moves every one of them at once, and an air-gapped
+    instance has nothing left reaching out.
+
+    github.com is absent for a different reason and a better one: nothing names it. Every reference
+    to the instance is derived from `github.server_url`, so a fork is already talking to itself.
+    """
+
+    SOURCES = {
+        **{str(path.relative_to(ROOT)): _read(path) for path in WORKFLOWS},
+        **{str(path.relative_to(ROOT)): _read(path) for path in ACTIONS},
+        **EMITTED,
+    }
+
+    def test_the_sources_really_carry_urls_to_read(self) -> None:
+        found = sum(len(_URL.findall(_uncommented(text))) for text in self.SOURCES.values())
+        self.assertGreater(found, 8)
+
+    def test_every_absolute_url_is_a_variable_default(self) -> None:
+        """Both spellings of "default": the expression form and the shell form."""
+
+        offences = []
+        for label, text in self.SOURCES.items():
+            for line in _uncommented(text).splitlines():
+                if not _URL.search(line):
+                    continue
+                retargetable = "vars.AART_" in line or ":-http" in line
+                if not retargetable:
+                    offences.append(f"{label}: {line.strip()}")
+        self.assertEqual([], offences, "INV-078: a public host no variable can retarget")
+
+    def test_the_only_public_host_is_the_package_index(self) -> None:
+        """A second one would be a second variable to set, and a second thing to forget."""
+
+        hosts = set()
+        for text in self.SOURCES.values():
+            hosts.update(_URL.findall(_uncommented(text)))
+        self.assertEqual({"pypi.org"}, hosts)
+
+    def test_no_url_names_github_com(self) -> None:
+        """Every reference to the instance is derived from `github.server_url`, so a fork talks
+        to itself without being told to.
+
+        Stated over URLs rather than over the string, because the string does occur once and it is
+        not egress: `cut-release` builds the tagger's email as
+        `$GITHUB_ACTOR_ID+$GITHUB_ACTOR@users.noreply.github.com`, which is a committer identity
+        written into a commit, not a host anything connects to. Pinning that one occurrence here
+        keeps the distinction honest -- a real github.com URL added anywhere fails this -- and
+        B-069 records the enterprise wart, which is that an instance has its own noreply domain.
+        """
+
+        for label, text in self.SOURCES.items():
+            body = _uncommented(text)
+            for line in body.splitlines():
+                if "github.com" not in line:
+                    continue
+                self.assertIn("users.noreply.github.com", line, f"{label}: {line.strip()}")
+                self.assertNotIn("://", line.split("github.com")[0][-8:], f"{label}: {line}")
+
+    def test_github_com_is_named_nowhere_at_all(self) -> None:
+        """It used to be named once, and the once was defensible.
+
+        `cut-release` built the tagger's identity as
+        `$GITHUB_ACTOR_ID+$GITHUB_ACTOR@users.noreply.github.com` -- a committer identity written
+        into a commit, not a host anything connected to. The release engine writes that commit
+        now, with an identity the runner supplies, so the exception went with the button and the
+        claim is simply zero. B-069 records the enterprise wart it was hiding: an instance has its
+        own noreply domain.
+        """
+
+        occurrences = [
+            (label, line.strip())
+            for label, text in self.SOURCES.items()
+            for line in _uncommented(text).splitlines()
+            if "github.com" in line
+        ]
+        self.assertEqual([], occurrences)
+
+
+class ThisRepositorysWorkflowsStayThinTest(unittest.TestCase):
+    """INV-076: workflow YAML selects triggers, permissions and actions. Logic lives elsewhere.
+
+    Held as a closed property over the three workflows this repository runs: every step is either
+    a checkout or a composite action, with one exception, and the exception is the aggregate gate's
+    own report -- which `tests/aggregate_gate_test.py` runs under `bash`, so the one piece of logic
+    left in YAML is also the one piece proven testable outside GitHub Actions.
+
+    The emitted registry workflows are deliberately not held to this. They run in somebody else's
+    repository, which has no composite action of this project's to call until it has fetched AART,
+    and fetching AART is exactly what their inline step does.
+    """
+
+    def test_every_step_is_a_checkout_or_a_composite_action(self) -> None:
+        allowed = {"actions/checkout@v4"}
+        for path in WORKFLOWS:
+            text = _uncommented(_read(path))
+            for line in text.splitlines():
+                stripped = line.strip()
+                if not stripped.startswith("- uses:"):
+                    continue
+                used = stripped.removeprefix("- uses:").strip()
+                self.assertTrue(
+                    used in allowed or used.startswith("./.github/actions/"),
+                    f"{path.name}: {used}",
+                )
+
+    def test_the_one_inline_script_is_the_aggregate_and_it_is_tested_elsewhere(self) -> None:
+        inline = {
+            path.name: [line for line in _uncommented(_read(path)).splitlines() if "run: |" in line]
+            for path in WORKFLOWS
+        }
+        self.assertEqual(
+            {"pr-check.yml": 1, "release.yml": 0},
+            {name: len(items) for name, items in inline.items()},
+        )
+        aggregate = _job_bodies(_read(ROOT / ".github" / "workflows" / "pr-check.yml"))["pr-check"]
+        self.assertIn("run: |", aggregate)
 
 
 class TheIndexCredentialIsAssembledNotStoredTest(unittest.TestCase):

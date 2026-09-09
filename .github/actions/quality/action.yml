@@ -60,3 +60,21 @@ runs:
     - name: Run canonical quality gates
       shell: bash
       run: ${{ inputs.python }} scripts/quality.py
+
+    # The pull request's title, checked as what it actually is: the squash commit that will land
+    # on `main`, and the input the release engine classifies (INV-090, INV-092).  A title it
+    # cannot read does not fail loudly later -- it classifies as nothing and the change is left
+    # out of the release it belonged in.
+    #
+    # It lives here rather than in a job of its own because it needs an interpreter and a checked
+    # out tree, and this action is where a pull request run already has both, in either container
+    # shape.  `github.event_name` guards it: nothing else has a title to check.
+    #
+    # This validates semantic change metadata.  It is not a version check -- the script does not
+    # know what a version is.
+    - name: Validate the pull request title
+      if: github.event_name == 'pull_request'
+      shell: bash
+      env:
+        PR_TITLE: ${{ github.event.pull_request.title }}
+      run: ${{ inputs.python }} scripts/conventional_title.py "$PR_TITLE"

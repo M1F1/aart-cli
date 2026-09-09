@@ -1507,7 +1507,15 @@ def _record(
 ) -> SetupStateRecord:
     item = plan.item
     retry = "" if status in ("configured", "already_configured") else retry_command(item)
-    rollback = rollback_command(item) if receipts else ""
+    # A compensated step is evidence of what happened, not a step still standing in the world, so
+    # it must not put an undo command on the record. Offering one would invite the operator to
+    # reverse a change that is already reversed -- deleting whatever was put back in its place.
+    # `setup_engine/application.py` blanks the field by hand on the persistence-failure path for
+    # the same reason; deciding it from the receipts is how both paths get it from one place.
+    standing = [
+        receipt for receipt in receipts if receipt.get("setup_disposition") != "compensated"
+    ]
+    rollback = rollback_command(item) if standing else ""
     frozen_receipts = []
     for receipt in receipts:
         frozen = _freeze(receipt)
@@ -1534,6 +1542,25 @@ def _record(
         rollback_command=rollback,
         receipt=tuple(frozen_receipts),
     )
+
+
+def _compensated(
+    receipts: Sequence[Mapping[str, object]],
+) -> tuple[Mapping[str, object], ...]:
+    """Keep the steps a rollback undid, marked as no longer standing.
+
+    Product Specification 165.12 requires the receipt to record applied effects alongside the
+    verification result and the final health, and a run that rolled back has applied effects: they
+    are what it rolled back. Dropping them left a receipt that said a check failed and said nothing
+    about what had already been done to the machine before it did.
+
+    `setup_disposition` is the existing word for this, written by the persistence-failure path in
+    `setup_engine/application.py`, and every reader already honours it: `_rollback_receipt` treats
+    a compensated step as terminal, `plan_verification` asks nothing about its former target, and
+    `plan_undo` keeps rather than reverses it.
+    """
+
+    return tuple({**dict(receipt), "setup_disposition": "compensated"} for receipt in receipts)
 
 
 def _rollback_all(receipts: Sequence[Mapping[str, object]], runtime: SetupRuntime) -> bool:
@@ -1667,7 +1694,7 @@ def _apply_effects(
                 "Setup cancelled before applying the next reviewed effect",
                 started=started,
                 finished=runtime.clock(),
-                receipts=() if rolled_back else receipts,
+                receipts=_compensated(receipts) if rolled_back else receipts,
             )
         try:
             run_effect = _materialize_text_input_effect(effect, text_inputs)
@@ -1701,7 +1728,7 @@ def _apply_effects(
                 detail,
                 started=started,
                 finished=runtime.clock(),
-                receipts=() if rolled_back else receipts,
+                receipts=_compensated(receipts) if rolled_back else receipts,
                 exit_status=1,
             )
     status = "configured" if changed else "already_configured"

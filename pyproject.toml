@@ -59,6 +59,21 @@ include = [
 ruff = "0.16.4"
 mypy = "^1.11"
 coverage = "^7.6"
+hypothesis = "^6.165"
+# Mutation adequacy (D-134). Advisory and always scoped -- `make mutants ONLY=... TESTS=...` --
+# because mutating 40k statements at ~3 mutants/second is days of compute, and the question is
+# asked of the module a slice just changed. Dev group like the rest: nothing here reaches the
+# zero-dependency runtime.
+# mutmut's Textual UI supports Python below 4.0.  The project itself deliberately leaves the
+# future major open, so the dev-only tool needs its own bound or Poetry rejects the entire lock
+# as unsatisfiable for Python 4 even though no installed AART runtime imports it.
+mutmut = { version = "^3.7", python = ">=3.10,<4.0" }
+# The wheel gate runs on the full supported matrix. Python 3.10 predates stdlib tomllib, so its
+# build host needs the compatibility reader; this remains dev-only and never reaches the wheel.
+tomli = { version = "^2.4", python = ">=3.10,<3.11" }
+# The quality action invokes the Poetry CLI through scripts/build_wheel.py. A clean runner must
+# obtain that executable from the same locked dev environment as every other gate tool.
+poetry = { version = "2.4.1", python = ">=3.10,<4.0" }
 # The build backend, installed rather than merely declared.  Two gates need it present: the
 # offline editable install (`pip install --no-index --no-build-isolation -e .`) has no index to
 # fetch a backend from, and `scripts/build_wheel.py` checks that whatever built the wheel is the

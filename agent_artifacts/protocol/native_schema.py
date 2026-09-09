@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import posixpath
 import re
-from typing import Iterable, cast
+from typing import Iterable, Literal, cast
 
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity, SourceLocation
-from agent_artifacts.domain.identifiers import ArtifactIdentity, SourceId
+from agent_artifacts.domain.identifiers import ArtifactIdentity, SourceId, source_revision_kind
 from agent_artifacts.domain.result import Err, Ok, Result
 
 from .capabilities import Capability, parse_capability
@@ -37,7 +38,6 @@ from .schema import validate_object_fields
 from .semver import SemVer, VersionBounds, parse_semver, version_bounds
 
 _SLUG_RE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
-_COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 _SCP_GIT_RE = re.compile(r"^git@[A-Za-z0-9.-]+:[^\s?#]+$")
 _ARTIFACT_TYPES = frozenset(PAYLOAD_FORMAT_BY_TYPE)
 _SCOPES = frozenset({"project", "user"})
@@ -380,12 +380,22 @@ def _compatibility(value: JsonValue, *, path: str) -> Result[CompatibilitySpec]:
     if isinstance(validated, Err):
         return validated
     profiles = _parse_named_values(
-        _field(validated.value, "profiles"), ARTIFACT_INVALID, "profile", None, path=path
+        _field(validated.value, "profiles"),
+        ARTIFACT_INVALID,
+        "profile",
+        None,
+        path=path,
+        allow_empty=True,
     )
     if isinstance(profiles, Err):
         return profiles
     platforms = _parse_named_values(
-        _field(validated.value, "platforms"), ARTIFACT_INVALID, "platform", None, path=path
+        _field(validated.value, "platforms"),
+        ARTIFACT_INVALID,
+        "platform",
+        None,
+        path=path,
+        allow_empty=True,
     )
     if isinstance(platforms, Err):
         return platforms
@@ -679,14 +689,21 @@ def parse_provenance(
         return commit
     if isinstance(origin_path_raw, Err):
         return origin_path_raw
-    if (
-        kind.value != "git"
-        or not _safe_git_url(url.value)
-        or _COMMIT_RE.fullmatch(commit.value) is None
-    ):
+    revision_kind = source_revision_kind(commit.value)
+    valid_git = kind.value == "git" and revision_kind == "git" and _safe_git_url(url.value)
+    valid_local = (
+        kind.value == "local"
+        and revision_kind == "local"
+        and posixpath.isabs(url.value)
+        and posixpath.normpath(url.value) == url.value
+    )
+    if not (valid_git or valid_local):
         return _error(
-            PROVENANCE_INVALID, "origin must be a pinned credential-free Git source", path=path
+            PROVENANCE_INVALID,
+            "origin must be a pinned credential-free Git source or normalized local source",
+            path=path,
         )
+    origin_kind: Literal["git", "local"] = "git" if valid_git else "local"
     origin_path = parse_relative_path(
         origin_path_raw.value, location=_location(path, "/origin/path")
     )
@@ -747,7 +764,9 @@ def parse_provenance(
     return Ok(
         Provenance(
             schema_version.value,
-            OriginProvenance("git", url.value, commit.value, origin_path.value, input_digest.value),
+            OriginProvenance(
+                origin_kind, url.value, commit.value, origin_path.value, input_digest.value
+            ),
             ImporterProvenance(importer_id.value, importer_version.value, options_digest.value),
             warnings.value,
             _extensions(value, required),

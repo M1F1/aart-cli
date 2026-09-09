@@ -71,9 +71,11 @@ canonical Review, object digest, setup-state reference, current durable state, a
 locator still match the reviewed plan, then uses the existing ownership-aware reverse-order
 compensation.
 
-Legacy `aart setup` remains available during the staged 0.1.x migration. The source-aware TUI and
-CLI will consume this application boundary in TUI02/MIG01 rather than reconstructing authority from
-command output or a mutable checkout.
+`aart setup` is gone: the verb is `aart marketplace setup <coordinate> --profile <name>`, and
+`docs/release/compatibility-v8.md` records the replacement for each of its former subcommands. The
+0.1 boundary is refused rather than converted, so no staged 0.1.x migration path remains. The
+source-aware TUI and CLI consume this application boundary rather than reconstructing authority
+from command output or a mutable checkout.
 
 ## Secret and reporting boundary
 

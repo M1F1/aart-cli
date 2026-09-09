@@ -311,7 +311,14 @@ _RULES = (
         "embedded-credential",
         FindingSeverity.CRITICAL,
         "A credential-like literal is embedded in artifact content.",
-        "Remove the value, rotate it if real, and use runtime credential indirection.",
+        # The caveat is the point of the sentence (165.10). Artifact content is published from a
+        # version-controlled source, so removing the literal changes what is current and leaves the
+        # object reachable in history -- and someone who read "remove the value" alone would stop
+        # there believing the leak was closed. AART can neither rewrite that history nor rotate the
+        # credential, which is exactly why it has to say that both are still owed.
+        "Remove the value, rotate it if real, and use runtime credential indirection. "
+        "Removing it from the current payload does not guarantee removal from Git history: "
+        "follow the source repository's own secret-removal procedure as well.",
     ),
     _Rule(
         "python-parse-failed",

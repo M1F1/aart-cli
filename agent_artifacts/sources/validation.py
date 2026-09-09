@@ -2,12 +2,21 @@
 
 from __future__ import annotations
 
+from agent_artifacts.application.promotion import (
+    load_registry_versions,
+    validate_promoted_registry,
+)
 from agent_artifacts.configuration.model import ConfiguredSource, SourceKind
 from agent_artifacts.domain.diagnostics import Diagnostic, Severity
 from agent_artifacts.domain.identifiers import SourceId
 from agent_artifacts.domain.result import Err, Ok, Result
+from agent_artifacts.protocol.authoring import discover_author_manifests
 from agent_artifacts.protocol.native_schema import parse_source_manifest
-from agent_artifacts.protocol.native_tree import SnapshotEntryKind, load_native_source
+from agent_artifacts.protocol.native_tree import (
+    SnapshotEntryKind,
+    SourceSnapshot,
+    load_native_source,
+)
 from agent_artifacts.protocol.registry_schema import parse_registry_manifest
 from agent_artifacts.registry_commands.planning import validate_registry_workspace
 
@@ -20,6 +29,7 @@ from .model import (
 
 _REGISTRY_MARKER = "aart-registry.json"
 _SOURCE_MARKER = "aart-source.json"
+_AUTHOR_MANIFESTS = "aart.yaml/aart.json"
 
 
 def validate_source_candidate(
@@ -60,6 +70,82 @@ def validate_source_candidate(
 
 def _error(message: str) -> Err:
     return Err((Diagnostic(SOURCE_INVALID, Severity.ERROR, message),))
+
+
+def declares_native_source(snapshot: SourceSnapshot) -> bool:
+    """Whether the acquired tree claims to be a native package source at its root.
+
+    This is the one question that decides which admission rule an authoring Source is read by,
+    so it asks only what the marker's own presence answers.  Whether that marker *parses* is
+    `load_native_source`'s refusal to make, not a reason to silently fall through to the other
+    format: a tree that says it is a native source and then is not is broken, not an authoring
+    repository.
+    """
+
+    return any(
+        str(entry.path) == _SOURCE_MARKER and entry.kind is SnapshotEntryKind.FILE
+        for entry in snapshot.entries
+    )
+
+
+def validate_authoring_source_candidate(
+    source: ConfiguredSource,
+    request: SourceValidationRequest,
+) -> Result[ValidatedSourceCandidate]:
+    """Admit one authoring Source: a native package tree, or an explicit author manifest tree.
+
+    An authoring Source is a location that *offers Candidates*, which Product Specification 72.1
+    and 164.2 describe as a repository an author opted into by committing an `aart.yaml` or
+    `aart.json`.  It is not a consumer native package tree, and requiring it to be one refused
+    every real authoring repository at the public entrance (B-094/QA-020).
+
+    Admission is exactly INV-201 and no more: *some* explicit manifest is declared here.  It is
+    deliberately not "every manifest compiles" -- 164.2 shows a Source list whose entries say
+    `3 manifests · 1 invalid`, so an invalid manifest is a Candidate state that Source Sync
+    reports, not a subscription this refuses (INV-199).  What is refused is a repository that
+    declares nothing at all, because "no manifest = no AART artifact candidate" is the rule that
+    keeps discovery from becoming a heuristic crawl of arbitrary files.
+
+    Nothing here relaxes a safety boundary.  Symlinks and special entries never reach this
+    function: `source_snapshot_digest` refuses them outright, and `SourceCandidate` will not
+    construct without that digest.  Transport, size limits and revision pinning are the
+    acquisition adapter's, already applied.  Manifest discovery itself still refuses a manifest
+    that is not a regular file and a boundary that declares both spellings at once.
+    """
+
+    if declares_native_source(request.candidate.snapshot):
+        return validate_source_candidate(request)
+    discovered = discover_author_manifests(request.candidate.snapshot)
+    if isinstance(discovered, Err):
+        return discovered
+    if not discovered.value:
+        return Err((_undeclared_source_refusal(),))
+    # An authoring repository declares no identity of its own -- there is no document in it whose
+    # job is to say "this Source is X", and inventing one from the URL would make a rename look
+    # like a different Source.  The alias is what already identifies it everywhere the Candidate
+    # model looks: `compile_author_source` stamps candidates with `source_alias`, and the
+    # Maintainer screens key their history by it.  Naming the same thing here keeps identity
+    # single-valued, and makes the identity-transition check inert for a Source that has no
+    # declared identity to move.
+    return Ok(ValidatedSourceCandidate(request.candidate, SourceId(source.alias.value)))
+
+
+def _undeclared_source_refusal() -> Diagnostic:
+    return Diagnostic(
+        SOURCE_INVALID,
+        Severity.ERROR,
+        (
+            "this tree declares no AART content: an authoring Source declares each artifact in "
+            f"an explicit {_AUTHOR_MANIFESTS} manifest beside the files it names, and a native "
+            f"package source declares itself in {_SOURCE_MARKER} at its root; this one has "
+            "neither"
+        ),
+        remediation=(
+            f"in the source repository, commit an {_AUTHOR_MANIFESTS} manifest in each directory "
+            "that should become an artifact",
+            "then add the source again; AART never infers artifacts from repository layout",
+        ),
+    )
 
 
 def _root_file(request: SourceValidationRequest, path: str) -> Result[bytes]:
@@ -176,22 +262,35 @@ def _registry_identity(request: SourceValidationRequest) -> Result[SourceId]:
 def validate_registry_source_candidate(
     request: SourceValidationRequest,
 ) -> Result[ValidatedSourceCandidate]:
-    """Require a current compiled registry before admitting it as a marketplace source."""
+    """Require one validated registry representation before admitting a marketplace source."""
 
-    checked = validate_registry_workspace(
-        request.candidate.snapshot,
-        executable_version=request.executable_version,
-        available_capabilities=request.available_capabilities,
-        require_compiled=True,
-    )
-    if isinstance(checked, Err):
-        return checked
-    if not checked.value.passed:
-        diagnostics = tuple(
-            diagnostic for check in checked.value.checks for diagnostic in check.diagnostics
+    snapshot = request.candidate.snapshot
+    # Promotion produces the approved, versioned registry representation named by the Product
+    # Specification (`registry/versions/*` plus exact catalogs).  The older maintainer workspace
+    # compiler produces `aart.lock.json` and `aart.index.json`.  During the strangler migration both
+    # remain readable, but they must be validated by the authority that writes their own shape.
+    if any(str(entry.path).startswith("registry/") for entry in snapshot.entries):
+        versions = load_registry_versions(snapshot)
+        if isinstance(versions, Err):
+            return versions
+        checked_promotion = validate_promoted_registry(snapshot, versions.value)
+        if isinstance(checked_promotion, Err):
+            return checked_promotion
+    else:
+        checked = validate_registry_workspace(
+            snapshot,
+            executable_version=request.executable_version,
+            available_capabilities=request.available_capabilities,
+            require_compiled=True,
         )
-        assert diagnostics
-        return Err(diagnostics)
+        if isinstance(checked, Err):
+            return checked
+        if not checked.value.passed:
+            diagnostics = tuple(
+                diagnostic for check in checked.value.checks for diagnostic in check.diagnostics
+            )
+            assert diagnostics
+            return Err(diagnostics)
     identity = _registry_identity(request)
     if isinstance(identity, Err):
         return identity
@@ -211,4 +310,4 @@ def validate_configured_source_candidate(
         return _error("source validator received a candidate for another configured source")
     if source.kind is SourceKind.REGISTRY_GIT:
         return validate_registry_source_candidate(request)
-    return validate_source_candidate(request)
+    return validate_authoring_source_candidate(source, request)

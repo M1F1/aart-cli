@@ -19,6 +19,7 @@ from agent_artifacts.installation.application import (
     InstallReadPorts,
     finalize_install,
     prepare_install,
+    trust_shortfall,
 )
 from agent_artifacts.installation.model import (
     InstallLocation,
@@ -29,7 +30,7 @@ from agent_artifacts.installation.model import (
     PathSnapshot,
     classify_link,
 )
-from agent_artifacts.marketplace.model import MarketplaceCatalog
+from agent_artifacts.marketplace.model import MarketplaceCatalog, MarketplaceItem
 from agent_artifacts.profiles.model import Profile
 from agent_artifacts.protocol.hashing import json_digest, sha256_bytes
 from agent_artifacts.protocol.json import (
@@ -53,6 +54,7 @@ from .model import (
     LifecycleOutcome,
     LifecycleSelection,
     LifecycleStatus,
+    PolicyStanding,
     UninstallOperation,
     UninstallPlan,
     UpdatePlan,
@@ -379,7 +381,15 @@ def _recorded_subscription_current(
         and configured.ref == record.source.subscription_ref
         and source.resolved_revision is not None
         and source.snapshot_digest is not None
-        and source.health.value in {"healthy", "stale", "degraded"}
+        # `could-not-check` belongs here with the rest.  It does not mean the source is gone; it
+        # means the live re-check against the origin failed while the published snapshot -- the
+        # one the two lines above just required, and the one this comparison is actually made
+        # against -- is intact and still serving.  That is exactly what a refused `aart source
+        # sync` leaves behind, and excluding it made one invalid upstream revision report every
+        # installation from that source as `source-unavailable` and gave `aart marketplace update`
+        # a terminal refusal for an installation that was current.  Whether a snapshot exists is
+        # the digest check; health is not asked that question twice.
+        and source.health.value in {"healthy", "stale", "degraded", "could-not-check"}
     )
 
 
@@ -410,6 +420,29 @@ def _current_item(record: InstallationRecord, catalog: MarketplaceCatalog):
         ),
         None,
     )
+
+
+def _standing(
+    record: InstallationRecord, current: MarketplaceItem, effective: EffectiveConfiguration
+) -> PolicyStanding:
+    """What the policy in force says about one installation, judged at its current trust.
+
+    The trust comes from the marketplace item the record still resolves to, because trust is not a
+    property of the bytes -- the same payload served from a reviewed registry and from a directory
+    on somebody's disk is trusted differently, which is exactly what 165.23 asks to stay visible.
+
+    Called only where a current item exists, which is why there is no branch here for the case
+    where one does not. Every earlier `continue` in the loop below leaves the record with no trust
+    to read -- withdrawn upstream, source unavailable, identity changed -- and each of those already
+    reports `PolicyStanding()`, the `not-evaluated` default, by not answering. A branch here
+    returning the same thing would look like the answer without being it.
+    """
+
+    trust = current.trust.kind.value
+    refusal = trust_shortfall(record.scope, trust, effective)
+    if refusal is None:
+        return PolicyStanding("compliant", trust=trust)
+    return PolicyStanding("non-compliant", refusal, trust)
 
 
 def check_installations(
@@ -464,7 +497,7 @@ def check_installations(
             )
             else LifecycleStatus.UPDATE_AVAILABLE
         )
-        items.append(LifecycleItem(key, status))
+        items.append(LifecycleItem(key, status, policy=_standing(record, current, effective)))
     return LifecycleOutcome("check", len(items), tuple(items))
 
 
@@ -493,13 +526,17 @@ def reconcile_installations(
     for item in local.value.items:
         remote = remote_by_key[item.key]
         if item.status is LifecycleStatus.CURRENT:
-            items.append(LifecycleItem(item.key, remote.status, item.effects, detail=remote.detail))
+            items.append(
+                LifecycleItem(item.key, remote.status, item.effects, remote.detail, remote.policy)
+            )
         else:
             detail = item.detail
             if remote.status is not LifecycleStatus.CURRENT:
                 suffix = remote.detail or remote.status.value
                 detail = f"{detail}; upstream {suffix}" if detail else f"upstream {suffix}"
-            items.append(LifecycleItem(item.key, item.status, item.effects, detail=detail))
+            # Local damage owns the status, but the policy question is about the artifact's origin
+            # and is answered the same either way, so the upstream standing carries across both.
+            items.append(LifecycleItem(item.key, item.status, item.effects, detail, remote.policy))
     return Ok(LifecycleOutcome("status", len(items), tuple(items)))
 
 

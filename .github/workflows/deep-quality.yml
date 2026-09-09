@@ -1,0 +1,78 @@
+name: deep quality
+
+# Mutation adequacy, on request, over a named module.
+#
+# INV-103 asks that expensive verification not lengthen mandatory pull-request feedback. The ten
+# gates -- including the property suites and the whole end-to-end lifecycle -- were measured
+# against that budget and stay on the pull request, because they fit it. Mutation testing does
+# not: mutating this repository whole is days of compute (D-134), which is why `make mutants`
+# has always been scoped and advisory rather than a gate.
+#
+# There is deliberately no schedule. A weekly run would have to pick a module, the pick would be
+# arbitrary, and an arbitrary number produced every Monday is a number nobody reads. This runs
+# when somebody has a question about a specific module's tests -- which is the only time its
+# answer means anything.
+#
+# Advisory by contract, not by neglect: a survivor is a finding to read, never a number to drive
+# to zero, and no test is ever weakened to move it.
+#
+# The job appears twice for the reason pr-check.yml records: a container's `credentials` block
+# cannot be conditional, so the condition moves to the job.
+on:
+  workflow_dispatch:
+    inputs:
+      only:
+        description: "Module to mutate, e.g. agent_artifacts/application/consumer_views.py"
+        required: true
+        type: string
+      tests:
+        description: "Test files that claim to cover it, space separated"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  AART_POETRY: ${{ vars.AART_POETRY }}
+
+jobs:
+  mutants:
+    if: vars.AART_IMAGE_USERNAME_SECRET == ''
+    runs-on: ${{ fromJSON(vars.AART_RUNNER || '["ubuntu-latest"]') }}
+    container: ${{ vars.AART_CI_IMAGE }}
+    env:
+      AART_INDEX_URL: ${{ vars.AART_PIP_INDEX_URL || 'https://pypi.org/simple' }}
+      AART_INDEX_CREDENTIALS: ${{ secrets[vars.AART_PIP_INDEX_CREDENTIALS_SECRET] }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - uses: ./.github/actions/mutants
+        with:
+          python: ${{ vars.AART_PYTHON || 'python' }}
+          python-version: ${{ vars.AART_RELEASE_PYTHON_VERSION || '3.11' }}
+          setup-python: ${{ vars.AART_CI_IMAGE == '' }}
+          only: ${{ inputs.only }}
+          tests: ${{ inputs.tests }}
+
+  mutants-private-image:
+    if: vars.AART_IMAGE_USERNAME_SECRET != ''
+    runs-on: ${{ fromJSON(vars.AART_RUNNER || '["ubuntu-latest"]') }}
+    container:
+      image: ${{ vars.AART_CI_IMAGE }}
+      credentials:
+        username: ${{ secrets[vars.AART_IMAGE_USERNAME_SECRET] }}
+        password: ${{ secrets[vars.AART_IMAGE_PASSWORD_SECRET] }}
+    env:
+      AART_INDEX_URL: ${{ vars.AART_PIP_INDEX_URL || 'https://pypi.org/simple' }}
+      AART_INDEX_CREDENTIALS: ${{ secrets[vars.AART_PIP_INDEX_CREDENTIALS_SECRET] }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - uses: ./.github/actions/mutants
+        with:
+          python: ${{ vars.AART_PYTHON || 'python' }}
+          python-version: ${{ vars.AART_RELEASE_PYTHON_VERSION || '3.11' }}
+          setup-python: ${{ vars.AART_CI_IMAGE == '' }}
+          only: ${{ inputs.only }}
+          tests: ${{ inputs.tests }}

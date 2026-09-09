@@ -1,9 +1,21 @@
 # Installation state v2 and legacy migration
 
-This document records the implemented STATE01/MIG01 boundary. It refines
+> [!WARNING]
+> **The migration half of this document is a design record, not shipped behaviour.** AART converts
+> 0.1 state at no point: `agent_artifacts/install_state/schema.py` detects the retired envelope and
+> refuses it with `install-state-legacy`, whose remediation is to remove the retired file and
+> reinstall with `aart marketplace install`. There is no `aart migrate` command, no
+> `LegacyMigrationCandidate`, no `prepare`/`apply`/`rollback` migration service, and no
+> `state-migration-source-missing` or `state-migration-source-ambiguous` diagnostic — nor is there a
+> legacy `list`/`install`/`update`/`setup` command surface for `--source DIR` and
+> `--repo OWNER/NAME` to qualify. `docs/release/compatibility-v8.md` records the replacement for
+> each retired verb, and `aart migrate` is listed there as having none: the 0.1 boundary is refused
+> rather than converted. The schema-v2, state-path, manifest and transaction sections below do still
+> describe `agent_artifacts.install_state`.
+
+This document records the STATE01/MIG01 boundary as it was designed. It refines
 [`SPEC-aart-1.0.md` section 16.4](../design/SPEC-aart-1.0.md#164-state). Canonical lifecycle
-commands consume this state contract, while the bounded 0.1 command surface remains available only
-as an explicitly disclosed compatibility path.
+commands consume this state contract.
 
 ## Domain boundary
 

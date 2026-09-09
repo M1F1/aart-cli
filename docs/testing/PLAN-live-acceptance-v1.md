@@ -26,9 +26,20 @@ export LA_WORK="$LA_ROOT/work"                   # checkouts of the three fixtur
 ```
 
 User-scope scenarios run as `HOME="$LA_HOME" aart …`. This is load-bearing beyond the destination
-paths: [io/cache.py](../../agent_artifacts/io/cache.py) puts the object cache under
-`~/.cache/agent-artifacts`, so overriding `HOME` isolates the cache too, and the offline scenarios
-would otherwise silently read a warm real cache.
+paths: [configuration/paths.py](../../agent_artifacts/configuration/paths.py) derives the cache root
+from `HOME` — `~/.cache/agent-artifacts` on Linux, `~/Library/Caches/agent-artifacts` on macOS — so
+overriding `HOME` isolates the cache too, and the offline scenarios would otherwise silently read a
+warm real cache.
+
+**Unset `XDG_CACHE_HOME` as well**, on Linux and anywhere else it happens to be set. It takes
+precedence over `HOME` in that derivation, so a shell that exports it leaves the cache pointing at
+the real one while every other path moves — which is exactly the shape that makes an offline
+scenario pass for the wrong reason. The same applies to `XDG_CONFIG_HOME` and `XDG_DATA_HOME` for
+the config and data roots.
+
+```sh
+unset XDG_CACHE_HOME XDG_CONFIG_HOME XDG_DATA_HOME
+```
 
 ---
 

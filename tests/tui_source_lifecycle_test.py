@@ -9,7 +9,6 @@ exactly the requests the CLI does.
 
 from __future__ import annotations
 
-import curses
 import unittest
 
 from agent_artifacts import tui
@@ -24,6 +23,7 @@ from agent_artifacts.configuration.model import (
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.identifiers import ObjectDigest, SourceAlias, SourceId
 from agent_artifacts.domain.result import Err, Ok
+from agent_artifacts.io.consumer_actions import _refusal
 from agent_artifacts.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
@@ -41,7 +41,6 @@ from agent_artifacts.sources.model import (
     make_source_candidate,
     source_instance_id,
 )
-from agent_artifacts.tui_layout import CONTENT_MEASURE
 from agent_artifacts.tui_sources import (
     build_source_stage,
     plan_source_removal,
@@ -50,7 +49,6 @@ from agent_artifacts.tui_sources import (
     render_source_sync_outcome,
     render_source_sync_review,
 )
-from tests.tui_wizard_curses_test import Screen
 
 
 def _unwrap(result):
@@ -309,387 +307,58 @@ class _Runtime:
         )
 
 
-class SourceLifecycleTextTests(unittest.TestCase):
-    """The text front-end reaches both operations from the Sources stage."""
-
-    def _run(self, runtime, answers) -> tuple[int, str]:
-        writes: list[str] = []
-        code = tui._run_text(
-            _scripted(answers),
-            writes.append,
-            source_stage_view=runtime.view,
-            source_removal_finalizer=runtime.finalize_removal,
-            source_sync_runner=runtime.run_sync,
-            source_resubscribe_runner=runtime.run_resubscribe,
-            source_stage_loader=runtime.load,
-        )
-        return code, "\n".join(writes)
-
-    def test_the_sources_prompt_offers_every_maintenance_action_when_a_source_exists(self) -> None:
-        runtime = _Runtime(_view(_configuration(_registry())))
-
-        _code, rendered = self._run(runtime, ["", "1", "q"])
-
-        self.assertIn(
-            "Enter 's' to synchronize a configured source, 'i' to resubscribe one, "
-            "or 'r' to remove one",
-            rendered,
-        )
-
-    def test_an_empty_sources_stage_offers_only_add(self) -> None:
-        runtime = _Runtime(_view(_configuration()))
-
-        _code, rendered = self._run(runtime, ["", "1", "q"])
-
-        self.assertNotIn("s=sync", rendered)
-        self.assertIn("Enter 'a' to add a registry", rendered)
-
-    def test_sync_reviews_then_dispatches_and_reports_the_new_snapshot(self) -> None:
-        source = _registry()
-        runtime = _Runtime(_view(_configuration(source)), sync=Ok(_outcome(source)))
-
-        code, rendered = self._run(runtime, ["", "1", "s", "1", "y", "q"])
-
-        self.assertEqual(code, 0)
-        self.assertEqual(runtime.synced, [source.alias])
-        self.assertIn("Source sync review:", rendered)
-        self.assertIn("snapshot updated", rendered)
-        self.assertEqual(runtime.reloads, 1)
-
-    def test_declining_the_sync_review_dispatches_nothing(self) -> None:
-        source = _registry()
-        runtime = _Runtime(_view(_configuration(source)), sync=Ok(_outcome(source)))
-
-        _code, rendered = self._run(runtime, ["", "1", "s", "1", "n", "q"])
-
-        self.assertEqual(runtime.synced, [])
-        self.assertIn("Source was not synchronized", rendered)
-
-    def test_a_failed_sync_says_the_snapshot_is_unchanged_and_keeps_the_stage(self) -> None:
-        source = _registry()
-        failure = Err(
-            (
-                tui.Diagnostic(
-                    tui.DiagnosticCode("source-unavailable"),
-                    tui.Severity.ERROR,
-                    "origin is unreachable",
-                ),
-            )
-        )
-        runtime = _Runtime(_view(_configuration(source)), sync=failure)
-
-        _code, rendered = self._run(runtime, ["", "1", "s", "registry", "y", "q"])
-
-        self.assertEqual(runtime.synced, [source.alias])
-        self.assertIn("source-unavailable", rendered)
-        self.assertIn("its snapshot is unchanged", rendered)
-        self.assertIn("r removes this source", rendered)
-        self.assertEqual(runtime.reloads, 0)
-
-    def test_resubscribe_reviews_the_transition_then_adopts_exactly_it(self) -> None:
-        source = _registry()
-        runtime = _Runtime(
-            _view(_configuration(source)),
-            review=Ok(_adoption(source)),
-            adoption=Ok(_adoption(source, finalized=True)),
-        )
-
-        code, rendered = self._run(runtime, ["", "1", "i", "1", "y", "q"])
-
-        self.assertEqual(code, 0)
-        self.assertIn("Source resubscription review:", rendered)
-        self.assertIn("team-registry -> renamed-registry", rendered)
-        self.assertIn("registry now follows renamed-registry", rendered)
-        # Review with no expectation, then finalize with exactly the reviewed transition — never
-        # "whatever is upstream now", which is the authorization the review did not ask for.
-        self.assertEqual(
-            runtime.resubscribed,
-            [(source.alias, None), (source.alias, _TRANSITION)],
-        )
-
-    def test_declining_the_resubscription_review_adopts_nothing(self) -> None:
-        source = _registry()
-        runtime = _Runtime(_view(_configuration(source)), review=Ok(_adoption(source)))
-
-        _code, rendered = self._run(runtime, ["", "1", "i", "1", "n", "q"])
-
-        self.assertEqual([expected for _alias, expected in runtime.resubscribed], [None])
-        self.assertIn("Identity was not adopted", rendered)
-
-    def test_an_unchanged_identity_is_refused_with_the_refresh_command_named(self) -> None:
-        source = _registry()
-        refusal = Err(
-            (
-                tui.Diagnostic(
-                    tui.DiagnosticCode("source-invalid"),
-                    tui.Severity.ERROR,
-                    "source still declares the identity this alias is already subscribed to",
-                    remediation=("run `aart source sync --alias registry` instead",),
-                ),
-            )
-        )
-        runtime = _Runtime(_view(_configuration(source)), review=refusal)
-
-        _code, rendered = self._run(runtime, ["", "1", "i", "1", "q"])
-
-        self.assertIn("source still declares the identity this alias is already", rendered)
-        self.assertIn("aart source sync --alias registry", rendered)
-
-    def test_remove_reviews_then_finalizes_and_the_row_is_gone_afterwards(self) -> None:
-        source = _registry()
-        runtime = _Runtime(_view(_configuration(source, default="registry")))
-
-        code, rendered = self._run(runtime, ["", "1", "r", "1", "y", "q"])
-
-        self.assertEqual(code, 0)
-        self.assertEqual(runtime.removed, ["registry"])
-        self.assertIn("Source removal review:", rendered)
-        self.assertIn("removed registry and deleted its snapshot", rendered)
-        self.assertIn("the default registry was cleared", rendered)
-        self.assertEqual(runtime.view.rows, ())
-
-    def test_declining_the_removal_review_finalizes_nothing(self) -> None:
-        runtime = _Runtime(_view(_configuration(_registry())))
-
-        _code, rendered = self._run(runtime, ["", "1", "r", "1", "n", "q"])
-
-        self.assertEqual(runtime.removed, [])
-        self.assertIn("Source was not removed; nothing was deleted.", rendered)
-
-    def test_a_refused_removal_reports_the_diagnostic_and_keeps_the_source(self) -> None:
-        failure = Err(
-            (
-                tui.Diagnostic(
-                    tui.DiagnosticCode("source-locked"),
-                    tui.Severity.ERROR,
-                    "another aart process holds the source lock",
-                ),
-            )
-        )
-        runtime = _Runtime(_view(_configuration(_registry())), removal=failure)
-
-        _code, rendered = self._run(runtime, ["", "1", "r", "1", "y", "q"])
-
-        self.assertEqual(runtime.removed, ["registry"])
-        self.assertIn("source-locked", rendered)
-        self.assertIn("registry was not removed.", rendered)
-        self.assertEqual(len(runtime.view.rows), 1)
-
-    def test_maintenance_without_a_wired_runtime_refuses_instead_of_pretending(self) -> None:
-        view = _view(_configuration(_registry()))
-        writes: list[str] = []
-
-        tui._run_text(
-            _scripted(["", "1", "s", "r", "q"]),
-            writes.append,
-            source_stage_view=view,
-        )
-
-        rendered = "\n".join(writes)
-        self.assertIn("source synchronization is unavailable in this TUI runtime", rendered)
-        self.assertIn("source removal is unavailable in this TUI runtime", rendered)
-
-
 class SourceRefusalWayOutTests(unittest.TestCase):
     """A refused source operation must state its way out on the screen that refused it.
 
     This is the failure the whole stage exists to end: an origin that re-declared its identity
     refuses every sync, and a notice that shows only the refusal leaves the user exactly where
     they were before these operations existed.
+
+    Carried from the retired wizard's `tui._source_flow_diagnostics` to the shipped shell's
+    `_refusal`, which is what every declined consumer action now renders through. The wizard also
+    wrapped a long line to the content measure; the canonical shell does not, and that half is
+    recorded in `BACKLOG.md` rather than asserted here as though it held.
     """
 
-    IDENTITY_CHANGE = Err(
-        (
-            tui.Diagnostic(
-                tui.DiagnosticCode("source-invalid"),
-                tui.Severity.ERROR,
-                "resolved source changed its declared source identity",
-                remediation=(
-                    "review the origin, then run `aart source remove --alias registry` and add "
-                    "it again to subscribe to the new identity",
-                ),
+    IDENTITY_CHANGE = (
+        Diagnostic(
+            DiagnosticCode("source-invalid"),
+            Severity.ERROR,
+            "resolved source changed its declared source identity",
+            remediation=(
+                "review the origin, then run `aart source remove --alias registry` and add "
+                "it again to subscribe to the new identity",
             ),
-        )
+            # `QA-017`/`D-185`: the way out is still stated, in the words of somebody who is
+            # inside the application rather than at a shell. The CLI keeps the command above.
+            interactive=(
+                "The origin behind registry now declares a different identity, so this refresh "
+                "was refused and the snapshot you already have is kept.",
+                "Compare the two identities and re-subscribe deliberately if the change is one "
+                "you meant to accept.",
+            ),
+        ),
     )
 
-    def test_the_curses_notice_keeps_remediation_and_wraps_instead_of_truncating(self) -> None:
-        lines = tui._source_flow_diagnostics(self.IDENTITY_CHANGE)
+    def test_the_refusal_keeps_its_remediation_rather_than_only_the_complaint(self) -> None:
+        lines = _refusal(self.IDENTITY_CHANGE)
 
-        joined = " ".join(line.strip() for line in lines)
-        self.assertIn("changed its declared source identity", joined)
-        self.assertIn("aart source remove --alias registry", joined)
-        self.assertNotIn("…", joined)
-        for line in lines:
-            self.assertLessEqual(len(line), CONTENT_MEASURE)
+        self.assertEqual(lines[0], "resolved source changed its declared source identity")
+        self.assertEqual(lines[1:], self.IDENTITY_CHANGE[0].interactive)
+        self.assertNotIn("\u2026", " ".join(lines))
+        self.assertFalse(any("aart " in line for line in lines), lines)
 
-    def test_the_text_front_end_states_the_keys_that_lead_out_of_a_failed_sync(self) -> None:
-        source = _registry()
-        runtime = _Runtime(_view(_configuration(source)), sync=self.IDENTITY_CHANGE)
-        writes: list[str] = []
+    def test_every_diagnostic_is_drawable_as_one_row_each(self) -> None:
+        """A terminal row cannot hold a newline, so a multi-line message becomes several rows."""
 
-        tui._run_text(
-            _scripted(["", "1", "s", "1", "y", "q"]),
-            writes.append,
-            source_stage_view=runtime.view,
-            source_removal_finalizer=runtime.finalize_removal,
-            source_sync_runner=runtime.run_sync,
-            source_stage_loader=runtime.load,
+        wrapped = Diagnostic(
+            DiagnosticCode("source-invalid"),
+            Severity.ERROR,
+            "first line\nsecond line",
+            remediation=("do the thing",),
         )
 
-        rendered = "\n".join(writes)
-        self.assertIn("changed its declared source identity", rendered)
-        self.assertIn("remediation: review the origin", rendered)
-        self.assertIn("In Sources: s retries, r removes this source, a adds one.", rendered)
-
-
-class SourceLifecycleCursesTests(unittest.TestCase):
-    """The curses front-end binds the same three operations to s, i, and r on the Sources list."""
-
-    def test_the_sources_list_advertises_and_returns_every_maintenance_action(self) -> None:
-        for key, kind in ((ord("s"), "sync"), (ord("i"), "resubscribe"), (ord("r"), "remove")):
-            with self.subTest(kind=kind):
-                screen = Screen((key,), height=16, width=110)
-
-                event = tui._curses_multiselect(
-                    curses,
-                    screen,
-                    "Sources",
-                    ("registry — health: current",),
-                    wizard=True,
-                    allow_add=True,
-                    allow_source_maintenance=True,
-                )
-
-                assert not isinstance(event, tuple)
-                self.assertEqual(event.kind, kind)
-                self.assertEqual(event.selected, (0,))
-                bar = [value for row, _column, value in screen.lines if row == screen.height - 1][0]
-                self.assertIn("s=sync", bar)
-                self.assertIn("i=resubscribe", bar)
-                self.assertIn("r=remove", bar)
-
-    def test_a_list_without_source_maintenance_never_binds_those_keys(self) -> None:
-        screen = Screen((ord("s"), ord("r"), 10), height=16, width=110)
-
-        picked = tui._curses_multiselect(curses, screen, "Artifacts", ("one",), wizard=True)
-
-        self.assertEqual(picked.kind, "confirm")
-        bar = [value for row, _column, value in screen.lines if row == screen.height - 1][0]
-        self.assertNotIn("s=sync", bar)
-
-    def test_the_curses_sources_stage_reports_the_cursor_row_for_maintenance(self) -> None:
-        view = _view(_configuration(_registry("first"), _registry("second")))
-        screen = Screen((curses.KEY_DOWN, ord("r")), height=20, width=110)
-
-        event, selection, error = tui._curses_source_event(
-            curses,
-            screen,
-            tui.WizardSession(current="source"),
-            view,
-        )
-
-        self.assertEqual(event.kind, "remove")
-        self.assertIsNone(selection)
-        self.assertIsNone(error)
-        row = tui._selected_source_row(view, event.selected)
-        assert row is not None
-        self.assertEqual(row.source.alias, SourceAlias("second"))
-
-    def test_the_no_source_row_is_not_a_maintenance_target(self) -> None:
-        view = _view(_configuration(_registry()))
-
-        self.assertIsNone(tui._selected_source_row(view, (len(view.rows),)))
-
-    def test_the_curses_removal_screen_plans_and_reviews_before_returning(self) -> None:
-        view = _view(_configuration(_registry(), default="registry"))
-        session = tui.WizardSession(current="source")
-        screen = Screen((10,), height=24, width=110)
-
-        request = tui._curses_source_removal(curses, screen, session, view, view.rows[0])
-
-        assert not isinstance(request, tui.WizardInput)
-        self.assertEqual(request.source.alias, SourceAlias("registry"))
-        self.assertTrue(request.cleared_default)
-        rendered = "\n".join(value for _row, _column, value in screen.history)
-        self.assertIn("Source removal review:", rendered)
-        self.assertIn("enter=remove", rendered)
-
-    def test_the_curses_removal_screen_can_be_declined(self) -> None:
-        view = _view(_configuration(_registry()))
-        screen = Screen((ord("n"),), height=24, width=110)
-
-        request = tui._curses_source_removal(
-            curses,
-            screen,
-            tui.WizardSession(current="source"),
-            view,
-            view.rows[0],
-        )
-
-        self.assertIsInstance(request, tui.WizardInput)
-        assert isinstance(request, tui.WizardInput)
-        self.assertEqual(request.kind, "back")
-
-    def test_the_curses_resubscribe_screen_resolves_the_origin_then_reviews(self) -> None:
-        source = _registry()
-        view = _view(_configuration(source))
-        runtime = _Runtime(view, review=Ok(_adoption(source)))
-        screen = Screen((10,), height=24, width=110)
-
-        request = tui._curses_source_resubscription(
-            curses,
-            screen,
-            tui.WizardSession(current="source"),
-            view,
-            view.rows[0],
-            runtime.run_resubscribe,
-        )
-
-        assert not isinstance(request, tui.WizardInput)
-        # Review resolves the origin exactly once, and never with an expected transition: a curses
-        # screen cannot finalize something it has not yet drawn.
-        self.assertEqual(runtime.resubscribed, [(SourceAlias("registry"), None)])
-        self.assertEqual(request.transition, _TRANSITION)
-        rendered = "\n".join(value for _row, _column, value in screen.history)
-        self.assertIn("Source resubscription review:", rendered)
-        self.assertIn("team-registry -> renamed-registry", rendered)
-        self.assertIn("enter=resubscribe", rendered)
-
-    def test_the_curses_resubscribe_screen_can_be_declined(self) -> None:
-        source = _registry()
-        view = _view(_configuration(source))
-        runtime = _Runtime(view, review=Ok(_adoption(source)))
-        screen = Screen((ord("n"),), height=24, width=110)
-
-        request = tui._curses_source_resubscription(
-            curses,
-            screen,
-            tui.WizardSession(current="source"),
-            view,
-            view.rows[0],
-            runtime.run_resubscribe,
-        )
-
-        self.assertIsInstance(request, tui.WizardInput)
-        assert isinstance(request, tui.WizardInput)
-        self.assertEqual(request.kind, "back")
-        self.assertEqual([expected for _alias, expected in runtime.resubscribed], [None])
-
-    def test_the_curses_sync_screen_reviews_before_returning_the_row(self) -> None:
-        view = _view(_configuration(_registry()))
-        screen = Screen((10,), height=24, width=110)
-
-        reviewed = tui._curses_source_sync(
-            curses,
-            screen,
-            tui.WizardSession(current="source"),
-            view.rows[0],
-        )
-
-        self.assertIs(reviewed, view.rows[0])
-        rendered = "\n".join(value for _row, _column, value in screen.history)
-        self.assertIn("Source sync review:", rendered)
-        self.assertIn("enter=sync", rendered)
+        self.assertEqual(_refusal((wrapped,)), ("first line", "second line", "do the thing"))
 
 
 if __name__ == "__main__":

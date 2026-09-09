@@ -50,8 +50,9 @@ day dimension; clients do not create persistent identifiers or timestamps.
 
 `aart registry init --usage-reporting-repository OWNER/REPOSITORY` installs deterministic
 templates in addition to registry CI and advertises their GitHub Issues destination in both the
-authored manifest and the next built index. Without the option the templates remain inert and the
-init Review names the missing advertisement and exact enabling flag:
+authored manifest and the next built index. Naming the destination is the opt-in: without the
+option the templates are not written at all, and the initialized registry contains only its
+required validation and publication machinery (`D-180`). With it, init adds:
 
 - `.github/ISSUE_TEMPLATE/usage-report.yml` for disclosure and browser prefill;
 - `.github/workflows/aart-usage-validate.yml` to read the issue body as a file, validate it, and

@@ -1,0 +1,3610 @@
+"""Pure Maintainer Mode screen identities and forward navigation.
+
+The catalog is separate from the consumer catalog because the product makes visibility of the
+whole maintainer surface an explicit preference boundary.  Both catalogs still travel through the
+same application session and reducer; this module introduces no second UI state machine.
+"""
+
+from __future__ import annotations
+
+from collections import Counter
+from dataclasses import dataclass, replace
+from difflib import unified_diff
+from enum import Enum
+
+from agent_artifacts.application.candidate_validation import (
+    CandidateValidation,
+    ValidationCheck,
+    ValidationOutcome,
+    validate_candidate,
+)
+from agent_artifacts.application.maintainer import CandidateBundle, SourceScan
+from agent_artifacts.application.maintainer_promotion import (
+    CandidatePromotionExecutionResult,
+    PreparedCandidatePromotionTransaction,
+    plan_candidate_promotion,
+    prepare_candidate_promotion,
+    promotion_commit_subject,
+)
+from agent_artifacts.application.maintainer_sync import (
+    ApprovedRegistryState,
+    PreparedSourceSync,
+    SourceSyncExecutionResult,
+)
+from agent_artifacts.application.marketplace_resolution import (
+    ApprovedMarketplace,
+    aggregate_approved_marketplace,
+    resolve_selection,
+)
+from agent_artifacts.application.promotion import (
+    PromotionAudit,
+    PromotionSourceKind,
+    load_registry_promotions,
+    promotion_source_provenance,
+    registry_state_digest,
+)
+from agent_artifacts.configuration.model import ConfiguredSource, SourceKind
+from agent_artifacts.configuration.policy import redact_text
+from agent_artifacts.domain.artifacts import ArtifactKind
+from agent_artifacts.domain.candidates import CandidateId, CandidateState, semantic_candidate_diff
+from agent_artifacts.domain.collection_candidates import CollectionCandidate
+from agent_artifacts.domain.identifiers import ArtifactCoordinate, SourceAlias
+from agent_artifacts.domain.inputs import ConfigInput, RuntimeInput, SecretInput
+from agent_artifacts.domain.policies import EffectivePolicy
+from agent_artifacts.domain.python_runtime import (
+    PyProjectSpec,
+    RequirementsFile,
+    spec_descriptor_path,
+)
+from agent_artifacts.domain.registry import PromotionMode, RegistryArtifactVersion
+from agent_artifacts.domain.result import Err
+from agent_artifacts.domain.selection import ArtifactRequest, ArtifactSelection
+from agent_artifacts.protocol.authoring import read_package_description
+from agent_artifacts.protocol.native_tree import (
+    SnapshotEntry,
+    SnapshotEntryKind,
+    SourceSnapshot,
+)
+from agent_artifacts.sources.model import HealthStatus, SourceHealth, source_snapshot_digest
+
+__all__ = [
+    "MAINTAINER_SCREENS",
+    "MaintainerDashboardView",
+    "MaintainerCandidateFileChangeView",
+    "MaintainerCandidateFilter",
+    "MaintainerCandidateInputView",
+    "CandidateLifecyclePhase",
+    "MaintainerCandidateLifecycleStageView",
+    "MaintainerCandidateLifecycleView",
+    "MaintainerProvenanceView",
+    "MaintainerVersionConflictView",
+    "MaintainerCandidateSemanticChangeView",
+    "MaintainerCandidateView",
+    "MaintainerCandidateFilterFacet",
+    "MaintainerCandidateFilterGroupView",
+    "MaintainerCandidateFilterOptionView",
+    "MaintainerCandidateFilterView",
+    "MaintainerCollectionCandidateView",
+    "MaintainerCollectionMemberValidationView",
+    "MaintainerCollectionValidationView",
+    "MaintainerScreen",
+    "MaintainerSourceStatus",
+    "MaintainerSourceSyncResultView",
+    "MaintainerSourceSyncReviewView",
+    "MaintainerSourceView",
+    "MaintainerPolicyReviewView",
+    "MaintainerPromotionReviewView",
+    "MaintainerRegistryChangeView",
+    "MaintainerRegistryCommitView",
+    "MaintainerRegistryDiffView",
+    "MaintainerTransactionCandidateView",
+    "project_maintainer_bulk_promotion",
+    "MaintainerBulkPromotionView",
+    "MaintainerBulkExclusionView",
+    "MaintainerBulkCandidateView",
+    "project_maintainer_registry",
+    "MaintainerWorkingTreeView",
+    "MaintainerWorkingTreeState",
+    "MaintainerRegistryTransactionView",
+    "MaintainerRegistryView",
+    "MaintainerRepositoryArtifactView",
+    "MaintainerRepositoryScanView",
+    "MaintainerAdoptionReviewView",
+    "MaintainerAdoptedArtifactView",
+    "MaintainerAdoptionUpstreamView",
+    "MaintainerRegistryValidationView",
+    "MaintainerValidationCheckView",
+    "MaintainerValidationDetailView",
+    "MaintainerValidationRowId",
+    "MaintainerValidationView",
+    "MaintainerViews",
+    "filter_maintainer_candidates",
+    "maintainer_navigation_targets",
+    "parse_validation_row",
+    "project_maintainer_dashboard",
+    "project_maintainer_candidates",
+    "project_maintainer_candidate_lifecycle",
+    "project_maintainer_collection_candidate",
+    "project_maintainer_collection_validation",
+    "parse_candidate_filter_row",
+    "project_maintainer_candidate_filters",
+    "project_maintainer_provenance",
+    "project_maintainer_version_conflict",
+    "project_maintainer_policy_review",
+    "project_maintainer_promotion_review",
+    "project_maintainer_registry_diff",
+    "project_maintainer_registry_commit",
+    "project_maintainer_registry_validation",
+    "project_maintainer_source",
+    "project_maintainer_validation",
+    "REGISTRY_MAINTENANCE_STAGES",
+    "REGISTRY_REBUILD_EVERYTHING",
+    "REGISTRY_STAGE_PURPOSE",
+    "project_source_sync_result",
+    "project_source_sync_review",
+]
+
+
+#: The stages a rebuild may re-run over a registry that already exists (`B-099`), in the only
+#: order that means anything: an index built before the lock describes a registry that was never
+#: pinned. `init` is deliberately absent -- a registry is created once, and re-creating one is not
+#: maintenance. The sequence lives here rather than at the effect boundary that runs it because
+#: screen 46h offers it and screen 46i reviews it: the words on the screen and the stages of the
+#: run are one piece of product knowledge, and two copies of it would drift.
+REGISTRY_MAINTENANCE_STAGES: tuple[str, ...] = ("lock", "build", "validate", "audit")
+
+#: Screen 46h's row for the whole sequence, kept apart from the stage names so that "everything"
+#: cannot be mistaken for a stage the registry commands themselves know about.
+REGISTRY_REBUILD_EVERYTHING = "all"
+
+#: What each stage is for, in words somebody who has never run the CLI can act on (`QA-017`).
+REGISTRY_STAGE_PURPOSE: dict[str, str] = {
+    "init": "write the registry skeleton",
+    "lock": "pin everything the registry references",
+    "build": "write the registry index from what is pinned",
+    "validate": "check the registry strictly against that lock",
+    "audit": "report the registry's security evidence",
+}
+
+
+class MaintainerScreen(str, Enum):
+    """The accepted Maintainer Mode screen catalog, numbered 30 through 53."""
+
+    DASHBOARD = "30-maintainer-dashboard"
+    SOURCES = "31-sources"
+    # 31a/31b are the Add Source form and its review, numbered the way screen 21's own addition
+    # pair is (B-083).  They are Maintainer screens because a Source is an authoring/discovery
+    # location rather than an approved registry (164.2), and screen 21a must not learn to accept
+    # one.
+    SOURCE_ADD = "31a-add-source"
+    SOURCE_ADD_REVIEW = "31b-review-source"
+    SOURCE_DETAILS = "32-source-details"
+    SOURCE_SYNC = "33-source-sync"
+    SOURCE_SYNC_RESULT = "34-source-sync-result"
+    CANDIDATES = "35-candidates"
+    CANDIDATE_DETAILS = "36-candidate-details"
+    CANDIDATE_DIFF = "37-candidate-diff"
+    VALIDATION = "38-validation"
+    VALIDATION_DETAILS = "39-validation-details"
+    POLICY_REVIEW = "40-policy-review"
+    PROMOTION_REVIEW = "41-promotion-review"
+    PROMOTION_MODE = "42-promotion-mode"
+    REGISTRY_DIFF = "43-registry-diff"
+    REGISTRY_VALIDATION = "44-registry-validation"
+    REGISTRY_COMMIT = "45-registry-commit"
+    REGISTRY = "46-registry-maintainer"
+    # 46a/46b are the Initialize Registry form and its review, lettered the way 21a/21b and 31a/31b
+    # are (B-090).  Screen 46 is where a maintainer looks at the registry this project publishes, so
+    # it is where the registry that does not exist yet is created; the run is local, and 161.7's
+    # separation of publication from approval is why it never pushes or merges.
+    REGISTRY_INIT = "46a-init-registry"
+    REGISTRY_INIT_REVIEW = "46b-review-init"
+    # A repository scan is artifact-scoped adoption, not another Source subscription.  Keeping its
+    # form, result and mutation review under screen 46 makes that distinction visible in the
+    # navigation model instead of inventing a second Maintainer destination (B-095).
+    REPOSITORY_SCAN = "46c-scan-repository"
+    SCAN_RESULT = "46d-scan-result"
+    ADOPTION_REVIEW = "46e-review-adoption"
+    ADOPTED_ARTIFACTS = "46f-adopted-artifacts"
+    UPSTREAM_CHECK = "46g-check-upstream"
+    # 46h/46i are the rest of that same run, for a registry that already exists (B-099).  Every
+    # change to the checkout leaves the generated files behind it, and re-running lock, build,
+    # validate and audit was four commands the Maintainer had to remember in order.  The picker
+    # exists because the whole sequence and one stage on its own are different jobs: after a
+    # promotion the maintainer wants all four, and while fixing one refusal they want validate.
+    REGISTRY_REBUILD = "46h-rebuild-registry"
+    REGISTRY_REBUILD_REVIEW = "46i-review-rebuild"
+    BULK_PROMOTION = "47-bulk-promotion"
+    CANDIDATE_LIFECYCLE = "48-candidate-lifecycle"
+    PROVENANCE = "49-provenance"
+    VERSION_CONFLICT = "50-version-conflict"
+    COLLECTION_CANDIDATES = "51-collection-candidates"
+    COLLECTION_VALIDATION = "52-collection-validation"
+    CANDIDATE_FILTERS = "53-candidate-filters"
+
+
+MAINTAINER_SCREENS: tuple[MaintainerScreen, ...] = tuple(MaintainerScreen)
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerRepositoryArtifactView:
+    """One explicit author manifest found during a one-off repository scan."""
+
+    coordinate: str
+    kind: str
+    name: str
+    version: str
+    summary: str
+    manifest_path: str
+    state: str
+    payload_paths: tuple[str, ...]
+    adoptable: bool
+
+    def __post_init__(self) -> None:
+        values = (
+            self.coordinate,
+            self.kind,
+            self.name,
+            self.version,
+            self.summary,
+            self.manifest_path,
+            self.state,
+            *self.payload_paths,
+        )
+        if (
+            any(
+                not isinstance(item, str)
+                or not item
+                or any(character in item for character in "\r\n")
+                for item in values
+            )
+            or not isinstance(self.payload_paths, tuple)
+            or not isinstance(self.adoptable, bool)
+        ):
+            raise ValueError("repository scan artifact view is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerRepositoryScanView:
+    """The immutable, read-only observation screen 46d renders."""
+
+    url: str
+    ref: str
+    commit: str
+    manifest_count: int
+    artifacts: tuple[MaintainerRepositoryArtifactView, ...]
+
+    def __post_init__(self) -> None:
+        if (
+            any(
+                not isinstance(item, str)
+                or not item
+                or any(character in item for character in "\r\n")
+                for item in (self.url, self.ref, self.commit)
+            )
+            or not isinstance(self.manifest_count, int)
+            or isinstance(self.manifest_count, bool)
+            or self.manifest_count < 0
+            or any(
+                not isinstance(item, MaintainerRepositoryArtifactView) for item in self.artifacts
+            )
+            or self.manifest_count != len(self.artifacts)
+            or len({item.coordinate for item in self.artifacts}) != len(self.artifacts)
+        ):
+            raise ValueError("repository scan view is invalid")
+
+    def artifact(self, coordinate: str) -> MaintainerRepositoryArtifactView | None:
+        return next((item for item in self.artifacts if item.coordinate == coordinate), None)
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerAdoptionReviewView:
+    """The exact local registry transaction screen 46e asks somebody to confirm."""
+
+    url: str
+    commit: str
+    selected: tuple[str, ...]
+    changed_paths: tuple[str, ...]
+    review_digest: str
+
+    def __post_init__(self) -> None:
+        values = (self.url, self.commit, *self.selected, *self.changed_paths, self.review_digest)
+        if (
+            any(
+                not isinstance(item, str)
+                or not item
+                or any(character in item for character in "\r\n")
+                for item in values
+            )
+            or not self.selected
+            or not self.changed_paths
+            or len(set(self.selected)) != len(self.selected)
+            or len(set(self.changed_paths)) != len(self.changed_paths)
+        ):
+            raise ValueError("repository adoption review view is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerAdoptedArtifactView:
+    """One immutable adopted package offered for an explicit check on screen 46f."""
+
+    coordinate: str
+    url: str
+    ref: str
+    recorded_commit: str
+    manifest_path: str
+    input_digest: str
+
+    def __post_init__(self) -> None:
+        if any(
+            not isinstance(item, str) or not item or any(character in item for character in "\r\n")
+            for item in (
+                self.coordinate,
+                self.url,
+                self.ref,
+                self.recorded_commit,
+                self.manifest_path,
+                self.input_digest,
+            )
+        ):
+            raise ValueError("adopted artifact view is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerAdoptionUpstreamView:
+    """Screen 46g's complete read-only answer and whether a new-version review exists."""
+
+    artifact: MaintainerAdoptedArtifactView
+    disposition: str
+    resolved_commit: str | None
+    observed_coordinate: str | None
+    new_version_required: bool
+    proposal_available: bool
+    details: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        optional = (self.resolved_commit, self.observed_coordinate)
+        if (
+            not isinstance(self.artifact, MaintainerAdoptedArtifactView)
+            or not self.disposition
+            or any(
+                item is not None
+                and (
+                    not isinstance(item, str)
+                    or not item
+                    or any(character in item for character in "\r\n")
+                )
+                for item in optional
+            )
+            or any(
+                not isinstance(item, str)
+                or not item
+                or any(character in item for character in "\r\n")
+                for item in self.details
+            )
+            or not isinstance(self.new_version_required, bool)
+            or not isinstance(self.proposal_available, bool)
+            or (self.proposal_available and self.observed_coordinate is None)
+        ):
+            raise ValueError("adoption upstream view is invalid")
+
+
+class MaintainerSourceStatus(str, Enum):
+    DISABLED = "disabled"
+    SYNCED = "synced"
+    STALE = "stale"
+    NOT_SYNCHRONIZED = "not-synchronized"
+    ATTENTION = "attention"
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerSourceView:
+    """One authoring Source and the Candidate observation made from its pinned snapshot."""
+
+    alias: str
+    kind: str
+    location: str
+    branch: str | None
+    enabled: bool
+    status: MaintainerSourceStatus
+    revision: str | None
+    last_successful_sync: int | None
+    manifest_count: int
+    candidate_states: tuple[tuple[CandidateState, int], ...]
+    target_registries: tuple[str, ...]
+    diagnostics: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        lines = (
+            self.alias,
+            self.kind,
+            self.location,
+            *(self.target_registries),
+            *(self.diagnostics),
+        )
+        if (
+            not self.alias
+            or not self.kind
+            or not self.location
+            or any(
+                not isinstance(item, str) or any(char in item for char in "\r\n") for item in lines
+            )
+            or (
+                self.branch is not None
+                and (not self.branch or any(char in self.branch for char in "\r\n"))
+            )
+            or not isinstance(self.enabled, bool)
+            or not isinstance(self.status, MaintainerSourceStatus)
+            or (
+                self.revision is not None
+                and (not self.revision or any(char in self.revision for char in "\r\n"))
+            )
+            or (
+                self.last_successful_sync is not None
+                and (
+                    not isinstance(self.last_successful_sync, int)
+                    or isinstance(self.last_successful_sync, bool)
+                    or self.last_successful_sync < 0
+                )
+            )
+            or not isinstance(self.manifest_count, int)
+            or isinstance(self.manifest_count, bool)
+            or self.manifest_count < 0
+            or any(
+                not isinstance(state, CandidateState)
+                or not isinstance(count, int)
+                or isinstance(count, bool)
+                or count <= 0
+                for state, count in self.candidate_states
+            )
+            or len({state for state, _ in self.candidate_states}) != len(self.candidate_states)
+            or len(set(self.target_registries)) != len(self.target_registries)
+        ):
+            raise ValueError("maintainer Source view is invalid")
+        if self.manifest_count != self.candidate_count:
+            raise ValueError("maintainer Source manifest and active Candidate counts disagree")
+
+    @property
+    def candidate_count(self) -> int:
+        return sum(count for _, count in self.candidate_states)
+
+    def count(self, state: CandidateState) -> int:
+        return next((count for found, count in self.candidate_states if found is state), 0)
+
+    @property
+    def ready_count(self) -> int:
+        return self.count(CandidateState.READY)
+
+    @property
+    def invalid_count(self) -> int:
+        return self.count(CandidateState.INVALID)
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerDashboardView:
+    source_count: int
+    candidate_count: int
+    validation_failure_count: int
+    ready_count: int
+    recent_activity: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        counts = (
+            self.source_count,
+            self.candidate_count,
+            self.validation_failure_count,
+            self.ready_count,
+        )
+        if (
+            any(
+                not isinstance(count, int) or isinstance(count, bool) or count < 0
+                for count in counts
+            )
+            or self.validation_failure_count > self.candidate_count
+            or self.ready_count > self.candidate_count
+            or any(
+                not isinstance(item, str)
+                or not item
+                or any(character in item for character in "\r\n")
+                for item in self.recent_activity
+            )
+        ):
+            raise ValueError("maintainer Dashboard view is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerSourceSyncReviewView:
+    alias: str
+    kind: str
+    location: str
+    branch: str | None
+    target_registry: str
+    current_revision: str | None
+    candidate_count: int
+    approved_revision: str
+    approved_snapshot: str
+    review_digest: str
+
+    def __post_init__(self) -> None:
+        values = (
+            self.alias,
+            self.kind,
+            self.location,
+            self.target_registry,
+            self.approved_revision,
+            self.approved_snapshot,
+            self.review_digest,
+        )
+        if (
+            any(
+                not isinstance(item, str)
+                or not item
+                or any(character in item for character in "\r\n")
+                for item in values
+            )
+            or (
+                self.branch is not None
+                and (not self.branch or any(character in self.branch for character in "\r\n"))
+            )
+            or (
+                self.current_revision is not None
+                and (
+                    not self.current_revision
+                    or any(character in self.current_revision for character in "\r\n")
+                )
+            )
+            or not isinstance(self.candidate_count, int)
+            or isinstance(self.candidate_count, bool)
+            or self.candidate_count < 0
+        ):
+            raise ValueError("Maintainer Source Sync review view is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerSourceSyncResultView:
+    alias: str
+    target_registry: str
+    disposition: str
+    revision: str
+    manifest_count: int
+    candidate_states: tuple[tuple[CandidateState, int], ...]
+    review_digest: str
+
+    def __post_init__(self) -> None:
+        if (
+            any(
+                not isinstance(item, str)
+                or not item
+                or any(character in item for character in "\r\n")
+                for item in (
+                    self.alias,
+                    self.target_registry,
+                    self.disposition,
+                    self.revision,
+                    self.review_digest,
+                )
+            )
+            or not isinstance(self.manifest_count, int)
+            or isinstance(self.manifest_count, bool)
+            or self.manifest_count < 0
+            or any(
+                not isinstance(state, CandidateState)
+                or not isinstance(count, int)
+                or isinstance(count, bool)
+                or count <= 0
+                for state, count in self.candidate_states
+            )
+            or len({state for state, _ in self.candidate_states}) != len(self.candidate_states)
+            or sum(count for _, count in self.candidate_states) != self.manifest_count
+        ):
+            raise ValueError("Maintainer Source Sync result view is invalid")
+
+    @property
+    def candidate_count(self) -> int:
+        return sum(count for _, count in self.candidate_states)
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerCandidateInputView:
+    id: str
+    kind: str
+    label: str
+    required: bool
+    example: str | None = None
+    format_hint: str | None = None
+    obtain_from: str | None = None
+    obtain_from_url: str | None = None
+
+    def __post_init__(self) -> None:
+        required = (self.id, self.kind, self.label)
+        optional = (self.example, self.format_hint, self.obtain_from, self.obtain_from_url)
+        if (
+            any(
+                not isinstance(item, str)
+                or not item
+                or any(character in item for character in "\r\n")
+                for item in required
+            )
+            or self.kind not in {"CONFIG", "SECRET"}
+            or not isinstance(self.required, bool)
+            or any(
+                item is not None
+                and (
+                    not isinstance(item, str)
+                    or not item
+                    or any(character in item for character in "\r\n")
+                )
+                for item in optional
+            )
+            or (self.obtain_from is None) != (self.obtain_from_url is None)
+            or (self.kind == "SECRET" and self.example is not None)
+        ):
+            raise ValueError("Maintainer Candidate input view is invalid")
+
+
+@dataclass(frozen=True, slots=True, order=True)
+class MaintainerCandidateSemanticChangeView:
+    field: str
+    before: str | None
+    after: str | None
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.field, str)
+            or not self.field
+            or any(character in self.field for character in "\r\n")
+            or any(
+                item is not None
+                and (not isinstance(item, str) or any(character in item for character in "\r\n"))
+                for item in (self.before, self.after)
+            )
+        ):
+            raise ValueError("Maintainer Candidate semantic change is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerCandidateFileChangeView:
+    path: str
+    status: str
+    diff: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.path, str)
+            or not self.path
+            or any(character in self.path for character in "\r\n")
+            or self.status not in {"added", "modified", "removed"}
+            or any(
+                not isinstance(line, str) or any(character in line for character in "\r")
+                for line in self.diff
+            )
+            or len(self.diff) > 200
+        ):
+            raise ValueError("Maintainer Candidate file change is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerCandidateView:
+    id: str
+    state: CandidateState
+    coordinate: str
+    artifact: str
+    version: str
+    kind: str
+    source_alias: str
+    source_location: str
+    source_revision: str
+    manifest_path: str
+    input_digest: str
+    payload_digest: str
+    canonical_digest: str
+    target_registry: str
+    runtime: str | None
+    transport: str | None
+    inputs: tuple[MaintainerCandidateInputView, ...]
+    dependency_descriptor: str | None
+    findings: tuple[str, ...]
+    previous: str | None
+    successor: str | None
+    rejection_reason: str | None
+    baseline: str
+    semantic_changes: tuple[MaintainerCandidateSemanticChangeView, ...]
+    file_changes: tuple[MaintainerCandidateFileChangeView, ...]
+
+    def __post_init__(self) -> None:
+        required = (
+            self.id,
+            self.coordinate,
+            self.artifact,
+            self.version,
+            self.kind,
+            self.source_alias,
+            self.source_location,
+            self.source_revision,
+            self.manifest_path,
+            self.input_digest,
+            self.payload_digest,
+            self.canonical_digest,
+            self.target_registry,
+            self.baseline,
+        )
+        optional = (
+            self.runtime,
+            self.transport,
+            self.dependency_descriptor,
+            self.previous,
+            self.successor,
+            self.rejection_reason,
+        )
+        if (
+            any(
+                not isinstance(item, str)
+                or not item
+                or any(character in item for character in "\r\n")
+                for item in required
+            )
+            or not isinstance(self.state, CandidateState)
+            or any(
+                item is not None
+                and (
+                    not isinstance(item, str)
+                    or not item
+                    or any(character in item for character in "\r\n")
+                )
+                for item in optional
+            )
+            or any(not isinstance(item, MaintainerCandidateInputView) for item in self.inputs)
+            or any(not isinstance(item, str) or not item for item in self.findings)
+            or any(
+                not isinstance(item, MaintainerCandidateSemanticChangeView)
+                for item in self.semantic_changes
+            )
+            or any(
+                not isinstance(item, MaintainerCandidateFileChangeView)
+                for item in self.file_changes
+            )
+        ):
+            raise ValueError("Maintainer Candidate view is invalid")
+
+
+class CandidateLifecyclePhase(str, Enum):
+    """The evidence boundaries screen 48 walks, in lifecycle order."""
+
+    DISCOVERED = "discovered"
+    CANDIDATE = "candidate"
+    VALIDATION = "validation"
+    PROMOTION = "promotion"
+    SOURCE_CHANGE = "source-change"
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerCandidateLifecycleStageView:
+    """One durable or composed fact in a Candidate's lifecycle."""
+
+    phase: CandidateLifecyclePhase
+    candidate_id: str
+    outcome: str
+    detail: str
+    evidence: str | None = None
+
+    def __post_init__(self) -> None:
+        values = (self.candidate_id, self.outcome, self.detail)
+        if (
+            not isinstance(self.phase, CandidateLifecyclePhase)
+            or any(
+                not isinstance(item, str)
+                or not item
+                or any(character in item for character in "\r\n")
+                for item in values
+            )
+            or (
+                self.evidence is not None
+                and (
+                    not isinstance(self.evidence, str)
+                    or not self.evidence
+                    or any(character in self.evidence for character in "\r\n")
+                )
+            )
+        ):
+            raise ValueError("Maintainer Candidate lifecycle stage is invalid")
+        # CandidateId owns the exact identity grammar; constructing one here keeps a lifecycle row
+        # from carrying an arbitrary renderer string as evidence.
+        CandidateId(self.candidate_id)
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerCandidateLifecycleView:
+    """Screen 48: one active Candidate and the predecessor chain that led to it."""
+
+    current_candidate_id: str
+    artifact: str
+    version: str
+    stages: tuple[MaintainerCandidateLifecycleStageView, ...]
+
+    def __post_init__(self) -> None:
+        if (
+            not self.current_candidate_id
+            or not self.artifact
+            or not self.version
+            or any(character in self.artifact + self.version for character in "\r\n")
+            or not self.stages
+            or any(
+                not isinstance(item, MaintainerCandidateLifecycleStageView) for item in self.stages
+            )
+            or self.stages[-1].candidate_id != self.current_candidate_id
+        ):
+            raise ValueError("Maintainer Candidate lifecycle view is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerProvenanceView:
+    """Screen 49's exact compiler-produced provenance, with Source kinds discriminated."""
+
+    candidate_id: str
+    coordinate: str
+    source_url: str
+    source_kind: PromotionSourceKind
+    git_revision: str | None
+    local_snapshot_digest: str | None
+    manifest_path: str
+    input_digest: str
+    importer_id: str
+    importer_version: str
+    payload_paths: tuple[str, ...]
+    warnings: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        required = (
+            self.candidate_id,
+            self.coordinate,
+            self.source_url,
+            self.manifest_path,
+            self.input_digest,
+            self.importer_id,
+            self.importer_version,
+            *self.payload_paths,
+            *self.warnings,
+        )
+        if (
+            not isinstance(self.source_kind, PromotionSourceKind)
+            or any(
+                not isinstance(item, str)
+                or not item
+                or any(character in item for character in "\r\n")
+                for item in required
+            )
+            or len(set(self.payload_paths)) != len(self.payload_paths)
+            or tuple(sorted(self.payload_paths)) != self.payload_paths
+            or (
+                self.source_kind is PromotionSourceKind.GIT_REVISION
+                and (self.git_revision is None or self.local_snapshot_digest is not None)
+            )
+            or (
+                self.source_kind is PromotionSourceKind.LOCAL_SNAPSHOT
+                and (self.git_revision is not None or self.local_snapshot_digest is None)
+            )
+        ):
+            raise ValueError("Maintainer provenance view is invalid")
+        CandidateId(self.candidate_id)
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerVersionConflictView:
+    """Screen 50's hard refusal for a published coordinate/version collision."""
+
+    candidate_id: str
+    coordinate: str
+    exact_evidence: bool
+    evidence_detail: str
+    published_candidate_id: str | None
+    published_input_digest: str | None
+    published_payload_digest: str | None
+    published_canonical_digest: str | None
+    candidate_input_digest: str
+    candidate_payload_digest: str
+    candidate_canonical_digest: str
+    required_action: str
+
+    def __post_init__(self) -> None:
+        required = (
+            self.candidate_id,
+            self.coordinate,
+            self.evidence_detail,
+            self.candidate_input_digest,
+            self.candidate_payload_digest,
+            self.candidate_canonical_digest,
+            self.required_action,
+        )
+        published = (
+            self.published_candidate_id,
+            self.published_input_digest,
+            self.published_payload_digest,
+            self.published_canonical_digest,
+        )
+        if (
+            not isinstance(self.exact_evidence, bool)
+            or any(
+                not isinstance(item, str)
+                or not item
+                or any(character in item for character in "\r\n")
+                for item in required
+            )
+            or (self.exact_evidence and any(item is None for item in published))
+            or (not self.exact_evidence and any(item is not None for item in published))
+            or any(
+                item is not None
+                and (
+                    not isinstance(item, str)
+                    or not item
+                    or any(character in item for character in "\r\n")
+                )
+                for item in published
+            )
+        ):
+            raise ValueError("Maintainer version conflict view is invalid")
+        CandidateId(self.candidate_id)
+        if self.published_candidate_id is not None:
+            CandidateId(self.published_candidate_id)
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerCollectionCandidateView:
+    """Screen 51's versioned declarative Collection Candidate row/detail."""
+
+    candidate_id: str
+    state: CandidateState
+    coordinate: str
+    source_alias: str
+    source_location: str
+    source_revision: str
+    manifest_path: str
+    summary: str
+    input_digest: str
+    canonical_digest: str
+    members: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        values = (
+            self.candidate_id,
+            self.coordinate,
+            self.source_alias,
+            self.source_location,
+            self.source_revision,
+            self.manifest_path,
+            self.summary,
+            self.input_digest,
+            self.canonical_digest,
+            *self.members,
+        )
+        if (
+            not isinstance(self.state, CandidateState)
+            or not self.members
+            or any(
+                not isinstance(item, str)
+                or not item
+                or any(character in item for character in "\r\n")
+                for item in values
+            )
+            or len(set(self.members)) != len(self.members)
+            or tuple(sorted(self.members)) != self.members
+        ):
+            raise ValueError("Maintainer Collection Candidate view is invalid")
+        CandidateId(self.candidate_id)
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerCollectionMemberValidationView:
+    """One declared Collection member and the approved version that satisfies it, if any."""
+
+    request: str
+    outcome: str
+    resolved_coordinate: str | None
+    detail: str
+
+    def __post_init__(self) -> None:
+        values = (self.request, self.outcome, self.detail)
+        if any(
+            not isinstance(item, str) or not item or any(character in item for character in "\r\n")
+            for item in values
+        ) or (
+            self.resolved_coordinate is not None
+            and (
+                not isinstance(self.resolved_coordinate, str)
+                or not self.resolved_coordinate
+                or any(character in self.resolved_coordinate for character in "\r\n")
+            )
+        ):
+            raise ValueError("Maintainer Collection member validation is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerCollectionValidationView:
+    """Screen 52's whole-Collection resolution against one approved target registry."""
+
+    candidate_id: str
+    coordinate: str
+    outcome: str
+    registry_snapshot: str | None
+    members: tuple[MaintainerCollectionMemberValidationView, ...]
+    diagnostics: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        values = (self.candidate_id, self.coordinate, self.outcome, *self.diagnostics)
+        if (
+            not self.members
+            or any(
+                not isinstance(item, MaintainerCollectionMemberValidationView)
+                for item in self.members
+            )
+            or any(
+                not isinstance(item, str)
+                or not item
+                or any(character in item for character in "\r\n")
+                for item in values
+            )
+            or (
+                self.registry_snapshot is not None
+                and (
+                    not isinstance(self.registry_snapshot, str)
+                    or not self.registry_snapshot
+                    or any(character in self.registry_snapshot for character in "\r\n")
+                )
+            )
+        ):
+            raise ValueError("Maintainer Collection validation view is invalid")
+        CandidateId(self.candidate_id)
+
+
+_MAX_FILE_DIFF_BYTES = 256 * 1024
+_MAX_FILE_DIFF_LINES = 200
+_MAX_FILE_DIFF_LINE = 512
+
+
+def _input_view(item: RuntimeInput) -> MaintainerCandidateInputView:
+    guidance = item.guidance
+    obtain = None if guidance is None else guidance.obtain_from
+    return MaintainerCandidateInputView(
+        item.id.value,
+        "SECRET" if isinstance(item, SecretInput) else "CONFIG",
+        item.id.value if guidance is None else guidance.label,
+        item.required,
+        None if guidance is None or isinstance(item, SecretInput) else guidance.example,
+        None if guidance is None else guidance.format_hint,
+        None if obtain is None else obtain.label,
+        None if obtain is None else obtain.url,
+    )
+
+
+def _dependency_label(bundle: CandidateBundle) -> str | None:
+    described = read_package_description(bundle.artifact.canonical_entries)
+    if isinstance(described, Err):
+        raise ValueError(described.diagnostics[0].message)
+    dependency = described.value.dependencies
+    if dependency is None:
+        return None
+    if isinstance(dependency, RequirementsFile):
+        return f"requirements: {dependency.path}"
+    assert isinstance(dependency, PyProjectSpec)
+    suffix = (
+        "" if dependency.lock is None else f"; {dependency.lock_format} lock: {dependency.lock}"
+    )
+    return f"pyproject: {dependency.pyproject}{suffix}"
+
+
+def _description(bundle: CandidateBundle):
+    described = read_package_description(bundle.artifact.canonical_entries)
+    if isinstance(described, Err):
+        raise ValueError(described.diagnostics[0].message)
+    return described.value
+
+
+def _entry_map(bundle: CandidateBundle) -> dict[str, SnapshotEntry]:
+    return {
+        str(entry.path): entry
+        for entry in bundle.artifact.canonical_entries
+        if entry.kind is SnapshotEntryKind.FILE
+    }
+
+
+def _safe_file_text(content: bytes) -> list[str] | None:
+    if len(content) > _MAX_FILE_DIFF_BYTES:
+        return None
+    try:
+        return content.decode("utf-8").splitlines()
+    except UnicodeDecodeError:
+        return None
+
+
+def _file_changes(
+    before: CandidateBundle | None,
+    after: CandidateBundle,
+) -> tuple[MaintainerCandidateFileChangeView, ...]:
+    left = {} if before is None else _entry_map(before)
+    right = _entry_map(after)
+    changes = []
+    remaining = _MAX_FILE_DIFF_LINES
+    for path in sorted(set(left) | set(right)):
+        old = left.get(path)
+        new = right.get(path)
+        if (
+            old is not None
+            and new is not None
+            and (old.content == new.content and old.executable == new.executable)
+        ):
+            continue
+        status = "added" if old is None else "removed" if new is None else "modified"
+        old_lines = [] if old is None else _safe_file_text(old.content)
+        new_lines = [] if new is None else _safe_file_text(new.content)
+        diff: tuple[str, ...]
+        if remaining <= 0:
+            diff = ()
+        elif old_lines is None or new_lines is None:
+            diff = ("binary or oversized content differs",)
+        else:
+            raw = unified_diff(
+                old_lines,
+                new_lines,
+                fromfile=f"before/{path}",
+                tofile=f"after/{path}",
+                lineterm="",
+            )
+            diff = tuple(
+                redact_text(line[:_MAX_FILE_DIFF_LINE]) for line in raw if "\r" not in line
+            )[:remaining]
+        remaining -= len(diff)
+        changes.append(MaintainerCandidateFileChangeView(path, status, diff))
+    return tuple(changes)
+
+
+def _descriptor_content(bundle: CandidateBundle) -> tuple[str, str] | None:
+    description = _description(bundle)
+    dependency = description.dependencies
+    if dependency is None:
+        return None
+    path = spec_descriptor_path(dependency)
+    entry = _entry_map(bundle).get(f"payload/{path}")
+    if entry is None or len(entry.content) > _MAX_FILE_DIFF_BYTES:
+        return (path, "binary or oversized descriptor")
+    try:
+        content = " | ".join(entry.content.decode("utf-8").splitlines())
+    except UnicodeDecodeError:
+        content = "binary or oversized descriptor"
+    return (path, redact_text(content[:_MAX_FILE_DIFF_LINE]))
+
+
+def _input_summary(item: RuntimeInput) -> str:
+    kind = "SECRET" if isinstance(item, SecretInput) else "CONFIG"
+    guidance = item.guidance
+    details = [kind, item.id.value]
+    if guidance is not None:
+        if guidance.example is not None and isinstance(item, ConfigInput):
+            details.append(f"example: {guidance.example}")
+        if guidance.obtain_from is not None:
+            details.append(f"obtain from: {guidance.obtain_from.label}")
+    return " · ".join(details)
+
+
+def _semantic_changes(
+    before: CandidateBundle | None,
+    after: CandidateBundle,
+) -> tuple[MaintainerCandidateSemanticChangeView, ...]:
+    if before is None:
+        return (
+            MaintainerCandidateSemanticChangeView(
+                "candidate", None, str(after.candidate.artifact.coordinate)
+            ),
+        )
+    changes = [
+        MaintainerCandidateSemanticChangeView(item.field.replace("_", " "), item.before, item.after)
+        for item in semantic_candidate_diff(before.candidate, after.candidate)
+    ]
+    if (
+        before.candidate.artifact.provenance.revision
+        != after.candidate.artifact.provenance.revision
+    ):
+        changes.append(
+            MaintainerCandidateSemanticChangeView(
+                "source revision",
+                before.candidate.artifact.provenance.revision,
+                after.candidate.artifact.provenance.revision,
+            )
+        )
+    left_description, right_description = _description(before), _description(after)
+    left_inputs = {item.id.value: item for item in left_description.inputs}
+    right_inputs = {item.id.value: item for item in right_description.inputs}
+    for input_id in sorted(set(left_inputs) | set(right_inputs)):
+        left = left_inputs.get(input_id)
+        right = right_inputs.get(input_id)
+        before_summary = None if left is None else _input_summary(left)
+        after_summary = None if right is None else _input_summary(right)
+        if before_summary != after_summary:
+            changes.append(
+                MaintainerCandidateSemanticChangeView(
+                    f"runtime input {input_id}", before_summary, after_summary
+                )
+            )
+    left_dependency = _descriptor_content(before)
+    right_dependency = _descriptor_content(after)
+    if left_dependency != right_dependency:
+        path = (
+            right_dependency[0] if right_dependency is not None else left_dependency[0]  # type: ignore[index]
+        )
+        changes.append(
+            MaintainerCandidateSemanticChangeView(
+                f"dependency {path}",
+                None if left_dependency is None else left_dependency[1],
+                None if right_dependency is None else right_dependency[1],
+            )
+        )
+    return tuple(sorted(set(changes)))
+
+
+def _candidate_view(bundle: CandidateBundle, history: dict) -> MaintainerCandidateView:
+    candidate = bundle.candidate
+    previous = None if candidate.previous is None else history.get(candidate.previous)
+    description = _description(bundle)
+    runtime = description.runtime
+    if runtime is not None and description.runtime_version is not None:
+        runtime = f"{runtime} {description.runtime_version}"
+    transport = None if description.contract is None else description.contract.transport.value
+    baseline = (
+        "None"
+        if previous is None
+        else f"Candidate {previous.candidate.artifact.coordinate.version}"
+    )
+    return MaintainerCandidateView(
+        candidate.id.value,
+        candidate.state,
+        str(candidate.artifact.coordinate),
+        str(candidate.artifact.coordinate.artifact),
+        str(candidate.artifact.coordinate.version),
+        candidate.artifact.kind.value,
+        candidate.artifact.coordinate.source.value,
+        redact_text(candidate.artifact.provenance.source),
+        candidate.artifact.provenance.revision,
+        candidate.artifact.provenance.manifest_path,
+        str(candidate.artifact.provenance.input_digest),
+        str(candidate.artifact.payload_digest),
+        str(candidate.canonical_digest),
+        candidate.target_registry.value,
+        runtime,
+        transport,
+        tuple(_input_view(item) for item in description.inputs),
+        _dependency_label(bundle),
+        tuple(
+            redact_text(f"{item.severity.value}: {item.code} — {item.message}")
+            for item in candidate.findings
+        ),
+        None if candidate.previous is None else candidate.previous.value,
+        None if candidate.successor is None else candidate.successor.value,
+        None if candidate.rejection_reason is None else redact_text(candidate.rejection_reason),
+        baseline,
+        _semantic_changes(previous, bundle),
+        _file_changes(previous, bundle),
+    )
+
+
+def project_maintainer_candidates(
+    scans: tuple[SourceScan, ...],
+) -> tuple[MaintainerCandidateView, ...]:
+    if not isinstance(scans, tuple) or any(not isinstance(scan, SourceScan) for scan in scans):
+        raise ValueError("Maintainer Candidate projection needs Source Scans")
+    all_history = {bundle.candidate.id: bundle for scan in scans for bundle in scan.history}
+    if sum(len(scan.history) for scan in scans) != len(all_history):
+        raise ValueError("Maintainer Candidate history contains duplicate Candidate IDs")
+    projected = tuple(
+        _candidate_view(bundle, all_history) for scan in scans for bundle in scan.active
+    )
+    return tuple(
+        sorted(
+            projected,
+            key=lambda item: (
+                item.state.value,
+                item.source_alias,
+                item.artifact,
+                item.version,
+                item.id,
+            ),
+        )
+    )
+
+
+def _candidate_chain(
+    bundle: CandidateBundle,
+    history: tuple[CandidateBundle, ...],
+) -> tuple[CandidateBundle, ...]:
+    by_id = {item.candidate.id: item for item in history}
+    if len(by_id) != len(history) or by_id.get(bundle.candidate.id) != bundle:
+        raise ValueError("Candidate lifecycle needs the exact active record in unique history")
+    newest_to_oldest = []
+    cursor = bundle
+    seen = set()
+    while True:
+        if cursor.candidate.id in seen:
+            raise ValueError("Candidate lifecycle history contains a predecessor cycle")
+        seen.add(cursor.candidate.id)
+        newest_to_oldest.append(cursor)
+        previous = cursor.candidate.previous
+        if previous is None:
+            break
+        cursor = by_id.get(previous)  # type: ignore[assignment]
+        if cursor is None:
+            raise ValueError("Candidate lifecycle history is missing a predecessor")
+    return tuple(reversed(newest_to_oldest))
+
+
+def _exact_promotion(
+    bundle: CandidateBundle,
+    versions: tuple[RegistryArtifactVersion, ...],
+    audits: tuple[PromotionAudit, ...],
+) -> tuple[RegistryArtifactVersion, PromotionAudit] | None:
+    candidate = bundle.candidate
+    version = next(
+        (
+            item
+            for item in versions
+            if item.candidate_id == candidate.id
+            and item.coordinate.source == candidate.target_registry
+            and item.coordinate.artifact == candidate.artifact.coordinate.artifact
+            and item.coordinate.version == candidate.artifact.coordinate.version
+            and item.input_digest == candidate.artifact.provenance.input_digest
+            and item.payload_digest == candidate.artifact.payload_digest
+            and item.canonical_digest == candidate.canonical_digest
+        ),
+        None,
+    )
+    audit = next(
+        (
+            item
+            for item in audits
+            if item.candidate_id == candidate.id
+            and item.candidate_digest == candidate.canonical_digest
+            and item.source_provenance
+            == promotion_source_provenance(candidate.artifact.provenance.revision)
+        ),
+        None,
+    )
+    if version is None or audit is None or version.mode is not audit.mode:
+        return None
+    return version, audit
+
+
+def _promotion_stage(
+    bundle: CandidateBundle,
+    *,
+    current: bool,
+    versions: tuple[RegistryArtifactVersion, ...] | None,
+    audits: tuple[PromotionAudit, ...] | None,
+) -> MaintainerCandidateLifecycleStageView:
+    candidate = bundle.candidate
+    if versions is None or audits is None:
+        return MaintainerCandidateLifecycleStageView(
+            CandidateLifecyclePhase.PROMOTION,
+            candidate.id.value,
+            "unavailable",
+            "approved registry version and audit evidence were not both readable",
+        )
+    exact = _exact_promotion(bundle, versions, audits)
+    if exact is not None:
+        version, audit = exact
+        return MaintainerCandidateLifecycleStageView(
+            CandidateLifecyclePhase.PROMOTION,
+            candidate.id.value,
+            "promoted",
+            f"approved as {version.coordinate} in {audit.mode.value} mode",
+            f"registry snapshot {audit.registry_snapshot_after}",
+        )
+    mentions_candidate = any(item.candidate_id == candidate.id for item in versions) or any(
+        item.candidate_id == candidate.id for item in audits
+    )
+    if mentions_candidate or candidate.state is CandidateState.PROMOTED:
+        outcome = "unverified"
+        detail = "Candidate state and registry version/audit evidence do not agree exactly"
+    else:
+        outcome = "not-promoted" if current else "not-recorded"
+        detail = (
+            "no exact registry approval exists for the current Candidate"
+            if current
+            else "no exact registry approval was recorded before this Candidate was superseded"
+        )
+    return MaintainerCandidateLifecycleStageView(
+        CandidateLifecyclePhase.PROMOTION,
+        candidate.id.value,
+        outcome,
+        detail,
+    )
+
+
+def project_maintainer_candidate_lifecycle(
+    bundle: CandidateBundle,
+    validation: CandidateValidation,
+    *,
+    history: tuple[CandidateBundle, ...],
+    versions: tuple[RegistryArtifactVersion, ...] | None,
+    audits: tuple[PromotionAudit, ...] | None,
+) -> MaintainerCandidateLifecycleView:
+    """Project screen 48 without treating Candidate state as registry approval.
+
+    Candidate history tells us how Source observations succeeded one another. Promotion is a
+    different domain: it is shown only when the exact approved version *and* its audit record match
+    the Candidate's identity, content and typed Source provenance.
+    """
+
+    if (
+        not isinstance(bundle, CandidateBundle)
+        or not isinstance(validation, CandidateValidation)
+        or validation.candidate_id != bundle.candidate.id
+        or not isinstance(history, tuple)
+        or any(not isinstance(item, CandidateBundle) for item in history)
+        or not (
+            versions is None
+            or (
+                isinstance(versions, tuple)
+                and all(isinstance(item, RegistryArtifactVersion) for item in versions)
+            )
+        )
+        or not (
+            audits is None
+            or (
+                isinstance(audits, tuple)
+                and all(isinstance(item, PromotionAudit) for item in audits)
+            )
+        )
+    ):
+        raise ValueError("Candidate lifecycle projection needs typed, matching evidence")
+    chain = _candidate_chain(bundle, history)
+    stages: list[MaintainerCandidateLifecycleStageView] = []
+    for index, item in enumerate(chain):
+        candidate = item.candidate
+        if index == 0:
+            stages.append(
+                MaintainerCandidateLifecycleStageView(
+                    CandidateLifecyclePhase.DISCOVERED,
+                    candidate.id.value,
+                    "discovered",
+                    f"{candidate.artifact.provenance.manifest_path} in Source "
+                    f"{candidate.artifact.coordinate.source}",
+                    f"pinned revision {candidate.artifact.provenance.revision}",
+                )
+            )
+        else:
+            previous = chain[index - 1]
+            stages.append(
+                MaintainerCandidateLifecycleStageView(
+                    CandidateLifecyclePhase.SOURCE_CHANGE,
+                    candidate.id.value,
+                    "changed",
+                    f"Source moved from {previous.candidate.artifact.provenance.revision} "
+                    f"to {candidate.artifact.provenance.revision}",
+                    f"previous Candidate {previous.candidate.id}",
+                )
+            )
+        stages.append(
+            MaintainerCandidateLifecycleStageView(
+                CandidateLifecyclePhase.CANDIDATE,
+                candidate.id.value,
+                "new" if candidate.previous is None else "changed",
+                f"Candidate for {candidate.artifact.coordinate} targeting "
+                f"{candidate.target_registry}",
+                f"artifact input {candidate.artifact.provenance.input_digest}",
+            )
+        )
+        exact = (
+            None if versions is None or audits is None else _exact_promotion(item, versions, audits)
+        )
+        if item == bundle:
+            stages.append(
+                MaintainerCandidateLifecycleStageView(
+                    CandidateLifecyclePhase.VALIDATION,
+                    candidate.id.value,
+                    validation.state.value,
+                    "the validation run composed for this active Candidate",
+                )
+            )
+        elif exact is not None:
+            stages.append(
+                MaintainerCandidateLifecycleStageView(
+                    CandidateLifecyclePhase.VALIDATION,
+                    candidate.id.value,
+                    "approved",
+                    "the promotion audit retains the validation result used for approval",
+                    f"validation report {exact[1].validation_report_digest}",
+                )
+            )
+        else:
+            stages.append(
+                MaintainerCandidateLifecycleStageView(
+                    CandidateLifecyclePhase.VALIDATION,
+                    candidate.id.value,
+                    "historical",
+                    f"durable Candidate history records {candidate.state.value}; "
+                    "no promotion audit proves an approval",
+                )
+            )
+        stages.append(
+            _promotion_stage(
+                item,
+                current=item == bundle,
+                versions=versions,
+                audits=audits,
+            )
+        )
+    return MaintainerCandidateLifecycleView(
+        bundle.candidate.id.value,
+        str(bundle.candidate.artifact.coordinate.artifact),
+        str(bundle.candidate.artifact.coordinate.version),
+        tuple(stages),
+    )
+
+
+def project_maintainer_provenance(bundle: CandidateBundle) -> MaintainerProvenanceView:
+    """Project screen 49 from the canonical provenance the compiler put in the package."""
+
+    if not isinstance(bundle, CandidateBundle):
+        raise ValueError("Maintainer provenance projection needs one Candidate bundle")
+    candidate = bundle.candidate
+    domain = candidate.artifact.provenance
+    native = bundle.artifact.native_package.provenance
+    if native is None:
+        raise ValueError("Candidate canonical package carries no provenance record")
+    source = promotion_source_provenance(domain.revision)
+    expected_origin_kind = "git" if source.kind is PromotionSourceKind.GIT_REVISION else "local"
+    if (
+        native.origin.kind != expected_origin_kind
+        or native.origin.url != domain.source
+        or native.origin.resolved_commit != domain.revision
+        or str(native.origin.path) != domain.manifest_path
+        or native.origin.input_digest != domain.input_digest
+        or f"{native.importer.id}/{native.importer.version}" != domain.compiler
+    ):
+        raise ValueError("Candidate domain and canonical provenance do not agree")
+    payload_paths = tuple(
+        sorted(
+            str(entry.path)
+            for entry in bundle.artifact.canonical_entries
+            if entry.kind is SnapshotEntryKind.FILE and str(entry.path).startswith("payload/")
+        )
+    )
+    return MaintainerProvenanceView(
+        candidate.id.value,
+        str(candidate.artifact.coordinate),
+        redact_text(native.origin.url),
+        source.kind,
+        source.git_revision,
+        (None if source.local_snapshot_digest is None else str(source.local_snapshot_digest)),
+        str(native.origin.path),
+        str(native.origin.input_digest),
+        native.importer.id,
+        str(native.importer.version),
+        payload_paths,
+        tuple(redact_text(item) for item in native.warnings),
+    )
+
+
+def project_maintainer_version_conflict(
+    bundle: CandidateBundle,
+    versions: tuple[RegistryArtifactVersion, ...] | None,
+) -> MaintainerVersionConflictView | None:
+    """Project only a real screen-50 conflict; an unused version has no refusal screen."""
+
+    if not isinstance(bundle, CandidateBundle) or (
+        versions is not None
+        and (
+            any(not isinstance(item, RegistryArtifactVersion) for item in versions)
+            or len({item.coordinate for item in versions}) != len(versions)
+        )
+    ):
+        raise ValueError("Maintainer version conflict needs one Candidate and registry versions")
+    candidate = bundle.candidate
+    coordinate = ArtifactCoordinate(
+        candidate.target_registry,
+        candidate.artifact.coordinate.artifact,
+        candidate.artifact.coordinate.version,
+    )
+    durable_conflict = any(item.code == "registry-version-immutable" for item in candidate.findings)
+    published = (
+        None
+        if versions is None
+        else next(
+            (item for item in versions if item.coordinate == coordinate),
+            None,
+        )
+    )
+    if published is None and not durable_conflict:
+        return None
+    if published is not None:
+        exact_candidate = (
+            published.candidate_id == candidate.id
+            and published.input_digest == candidate.artifact.provenance.input_digest
+            and published.payload_digest == candidate.artifact.payload_digest
+            and published.canonical_digest == candidate.canonical_digest
+        )
+        if exact_candidate:
+            if durable_conflict:
+                raise ValueError("Candidate conflict finding contradicts approved registry state")
+            return None
+    return MaintainerVersionConflictView(
+        candidate.id.value,
+        str(coordinate),
+        published is not None,
+        (
+            "Exact approved registry version loaded."
+            if published is not None
+            else "Exact approved registry version evidence is unavailable; the durable Candidate "
+            "finding still records the immutable collision."
+        ),
+        None if published is None else published.candidate_id.value,
+        None if published is None else str(published.input_digest),
+        None if published is None else str(published.payload_digest),
+        None if published is None else str(published.canonical_digest),
+        str(candidate.artifact.provenance.input_digest),
+        str(candidate.artifact.payload_digest),
+        str(candidate.canonical_digest),
+        "This Candidate must receive a new version; published content will not be changed.",
+    )
+
+
+def _collection_coordinate(candidate: CollectionCandidate) -> str:
+    return f"{candidate.target_registry}/collection/{candidate.name}@{candidate.version}"
+
+
+def project_maintainer_collection_candidate(
+    candidate: CollectionCandidate,
+) -> MaintainerCollectionCandidateView:
+    """Project screen 51 without flattening its declarative version constraints."""
+
+    if not isinstance(candidate, CollectionCandidate):
+        raise ValueError("Maintainer Collection projection needs a Collection Candidate")
+    return MaintainerCollectionCandidateView(
+        candidate.id.value,
+        candidate.state,
+        _collection_coordinate(candidate),
+        candidate.source_alias.value,
+        redact_text(candidate.source_location),
+        candidate.source_revision,
+        candidate.manifest_path,
+        redact_text(candidate.summary),
+        str(candidate.input_digest),
+        str(candidate.canonical_digest),
+        tuple(sorted(str(item) for item in candidate.members)),
+    )
+
+
+def _collection_member_validation(
+    request: ArtifactRequest,
+    marketplace: ApprovedMarketplace,
+) -> MaintainerCollectionMemberValidationView:
+    resolved = resolve_selection(marketplace, ArtifactSelection(artifacts=(request,)))
+    if isinstance(resolved, Err):
+        detail = "; ".join(redact_text(item.message) for item in resolved.diagnostics)
+        return MaintainerCollectionMemberValidationView(str(request), "invalid", None, detail)
+    version = next(
+        (
+            item.version
+            for item in resolved.value.artifacts
+            if item.version.coordinate.artifact == request.identity
+            and (request.source is None or item.version.coordinate.source == request.source)
+        ),
+        None,
+    )
+    if version is None:
+        return MaintainerCollectionMemberValidationView(
+            str(request),
+            "invalid",
+            None,
+            "approved resolution did not retain the declared member",
+        )
+    return MaintainerCollectionMemberValidationView(
+        str(request),
+        "approved",
+        str(version.coordinate),
+        "approved published version satisfies the declared constraint",
+    )
+
+
+def project_maintainer_collection_validation(
+    candidate: CollectionCandidate,
+    marketplace: ApprovedMarketplace | None,
+) -> MaintainerCollectionValidationView:
+    """Resolve one Collection Candidate only against its approved target-registry snapshot."""
+
+    if not isinstance(candidate, CollectionCandidate) or not (
+        marketplace is None or isinstance(marketplace, ApprovedMarketplace)
+    ):
+        raise ValueError("Maintainer Collection validation needs typed Candidate and marketplace")
+    coordinate = _collection_coordinate(candidate)
+    target = (
+        None
+        if marketplace is None
+        else next(
+            (item for item in marketplace.registries if item.alias == candidate.target_registry),
+            None,
+        )
+    )
+    if target is None:
+        members = tuple(
+            MaintainerCollectionMemberValidationView(
+                str(item),
+                "unavailable",
+                None,
+                "approved target registry state is unavailable",
+            )
+            for item in candidate.members
+        )
+        return MaintainerCollectionValidationView(
+            candidate.id.value,
+            coordinate,
+            "unavailable",
+            None,
+            members,
+            ("Approved target registry state is unavailable.",),
+        )
+    scoped = aggregate_approved_marketplace((target,))
+    if isinstance(scoped, Err):
+        raise ValueError("approved target registry cannot form a Collection validation input")
+    members = tuple(_collection_member_validation(item, scoped.value) for item in candidate.members)
+    resolved = resolve_selection(
+        scoped.value,
+        ArtifactSelection(artifacts=candidate.members),
+    )
+    diagnostics = (
+        ()
+        if not isinstance(resolved, Err)
+        else tuple(
+            redact_text(
+                "Collection members must resolve to approved compatible versions for all declared "
+                "constraints: " + item.message
+            )
+            for item in resolved.diagnostics
+        )
+    )
+    return MaintainerCollectionValidationView(
+        candidate.id.value,
+        coordinate,
+        "invalid" if isinstance(resolved, Err) else "ready",
+        str(target.snapshot),
+        members,
+        diagnostics,
+    )
+
+
+class MaintainerCandidateFilterFacet(str, Enum):
+    """The four things a Candidate list may be narrowed by (Product Specification 164.10)."""
+
+    STATUS = "status"
+    KIND = "kind"
+    SOURCE = "source"
+    REGISTRY = "registry"
+
+
+#: What each facet is called on screen. The label is presentation; the facet is the value.
+_FILTER_FACET_LABELS: dict[MaintainerCandidateFilterFacet, str] = {
+    MaintainerCandidateFilterFacet.STATUS: "Status",
+    MaintainerCandidateFilterFacet.KIND: "Kind",
+    MaintainerCandidateFilterFacet.SOURCE: "Source",
+    MaintainerCandidateFilterFacet.REGISTRY: "Target registry",
+}
+
+
+def parse_candidate_filter_row(row: str) -> tuple[MaintainerCandidateFilterFacet, str] | None:
+    """Read one screen-53 row back into the typed facet and value it stands for.
+
+    Screen 53's rows are `"<facet>:<value>"` pairs for the same reason screen 38's are
+    `"<candidate-id>:<check>"` (D-100): a row is an address the reducer resolves, never a string a
+    renderer takes apart.  A row naming a facet or a closed-set value that does not exist parses to
+    `None` rather than to a filter nobody could have chosen.
+    """
+
+    if not isinstance(row, str) or row.count(":") != 1:
+        return None
+    name, _, value = row.partition(":")
+    if not value:
+        return None
+    try:
+        facet = MaintainerCandidateFilterFacet(name)
+    except ValueError:
+        return None
+    if facet is MaintainerCandidateFilterFacet.STATUS:
+        try:
+            CandidateState(value)
+        except ValueError:
+            return None
+    if facet is MaintainerCandidateFilterFacet.KIND:
+        try:
+            ArtifactKind(value)
+        except ValueError:
+            return None
+    return facet, value
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerCandidateFilter:
+    """What the Candidate list is currently narrowed to, held as state rather than as text.
+
+    Screen 53 edits this value and screen 35 obeys it.  The predicate lives here rather than in a
+    renderer because a filtered review has to be reproducible: the same filter over the same
+    composed Candidates selects the same rows on any terminal and at either presentation profile.
+    """
+
+    states: tuple[CandidateState, ...] = ()
+    kinds: tuple[ArtifactKind, ...] = ()
+    sources: tuple[str, ...] = ()
+    registries: tuple[str, ...] = ()
+    query: str = ""
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.states, tuple)
+            or any(not isinstance(item, CandidateState) for item in self.states)
+            or len(set(self.states)) != len(self.states)
+            or not isinstance(self.kinds, tuple)
+            or any(not isinstance(item, ArtifactKind) for item in self.kinds)
+            or len(set(self.kinds)) != len(self.kinds)
+            or not _filter_aliases_valid(self.sources)
+            or not _filter_aliases_valid(self.registries)
+            or not isinstance(self.query, str)
+            or any(character in self.query for character in "\r\n")
+        ):
+            raise ValueError("Maintainer Candidate filter is invalid")
+        object.__setattr__(self, "states", tuple(sorted(self.states, key=lambda item: item.value)))
+        object.__setattr__(self, "kinds", tuple(sorted(self.kinds, key=lambda item: item.value)))
+        object.__setattr__(self, "sources", tuple(sorted(self.sources)))
+        object.__setattr__(self, "registries", tuple(sorted(self.registries)))
+
+    @property
+    def is_empty(self) -> bool:
+        return not (self.states or self.kinds or self.sources or self.registries or self.query)
+
+    def matches(self, candidate: MaintainerCandidateView) -> bool:
+        """Whether one projected Candidate survives this filter."""
+
+        if not isinstance(candidate, MaintainerCandidateView):
+            raise ValueError("a Maintainer Candidate filter matches projected Candidate views")
+        if self.states and candidate.state not in self.states:
+            return False
+        if self.kinds and candidate.kind not in tuple(item.value for item in self.kinds):
+            return False
+        if self.sources and candidate.source_alias not in self.sources:
+            return False
+        if self.registries and candidate.target_registry not in self.registries:
+            return False
+        if not self.query:
+            return True
+        needle = self.query.casefold()
+        return any(
+            needle in field.casefold()
+            for field in (
+                candidate.artifact,
+                candidate.version,
+                candidate.source_alias,
+                candidate.state.value,
+                candidate.target_registry,
+            )
+        )
+
+    def with_query(self, text: str) -> MaintainerCandidateFilter:
+        return replace(self, query=text)
+
+    def toggled_state(self, state: CandidateState) -> MaintainerCandidateFilter:
+        if not isinstance(state, CandidateState):
+            raise ValueError("toggling a Candidate filter needs a Candidate state")
+        remaining = tuple(item for item in self.states if item is not state)
+        return replace(
+            self,
+            states=remaining if len(remaining) != len(self.states) else (*self.states, state),
+        )
+
+    def toggled_kind(self, kind: ArtifactKind) -> MaintainerCandidateFilter:
+        if not isinstance(kind, ArtifactKind):
+            raise ValueError("toggling a Candidate filter needs an artifact kind")
+        remaining = tuple(item for item in self.kinds if item is not kind)
+        return replace(
+            self,
+            kinds=remaining if len(remaining) != len(self.kinds) else (*self.kinds, kind),
+        )
+
+    def toggled_source(self, alias: str) -> MaintainerCandidateFilter:
+        if not isinstance(alias, str) or not alias:
+            raise ValueError("toggling a Candidate filter needs a Source alias")
+        remaining = tuple(item for item in self.sources if item != alias)
+        return replace(
+            self,
+            sources=remaining if len(remaining) != len(self.sources) else (*self.sources, alias),
+        )
+
+    def toggled_registry(self, alias: str) -> MaintainerCandidateFilter:
+        if not isinstance(alias, str) or not alias:
+            raise ValueError("toggling a Candidate filter needs a target registry alias")
+        remaining = tuple(item for item in self.registries if item != alias)
+        return replace(
+            self,
+            registries=(
+                remaining if len(remaining) != len(self.registries) else (*self.registries, alias)
+            ),
+        )
+
+    def toggled(
+        self, facet: MaintainerCandidateFilterFacet, value: str
+    ) -> MaintainerCandidateFilter:
+        """Toggle one already-parsed facet value, so no caller re-splits a row."""
+
+        if not isinstance(facet, MaintainerCandidateFilterFacet):
+            raise ValueError("toggling a Candidate filter needs a typed facet")
+        if facet is MaintainerCandidateFilterFacet.STATUS:
+            return self.toggled_state(CandidateState(value))
+        if facet is MaintainerCandidateFilterFacet.KIND:
+            return self.toggled_kind(ArtifactKind(value))
+        if facet is MaintainerCandidateFilterFacet.SOURCE:
+            return self.toggled_source(value)
+        return self.toggled_registry(value)
+
+
+def _filter_aliases_valid(values: tuple[str, ...]) -> bool:
+    return (
+        isinstance(values, tuple)
+        and len(set(values)) == len(values)
+        and all(
+            isinstance(item, str) and item and not any(character in item for character in "\r\n")
+            for item in values
+        )
+    )
+
+
+def filter_maintainer_candidates(
+    candidates: tuple[MaintainerCandidateView, ...],
+    candidate_filter: MaintainerCandidateFilter,
+) -> tuple[MaintainerCandidateView, ...]:
+    """The Candidate rows one filter selects, in the order they were composed in."""
+
+    if not isinstance(candidates, tuple) or any(
+        not isinstance(item, MaintainerCandidateView) for item in candidates
+    ):
+        raise ValueError("filtering Maintainer Candidates needs projected Candidate views")
+    if not isinstance(candidate_filter, MaintainerCandidateFilter):
+        raise ValueError("filtering Maintainer Candidates needs typed filter state")
+    return tuple(item for item in candidates if candidate_filter.matches(item))
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerCandidateFilterOptionView:
+    """One value a Candidate list may be narrowed to, and what narrowing to it would leave."""
+
+    row: str
+    value: str
+    matching: int
+    active: bool
+
+    def __post_init__(self) -> None:
+        if (
+            parse_candidate_filter_row(self.row) is None
+            or not isinstance(self.value, str)
+            or not self.value
+            or not isinstance(self.matching, int)
+            or isinstance(self.matching, bool)
+            or self.matching < 0
+            or not isinstance(self.active, bool)
+        ):
+            raise ValueError("a Candidate filter option is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerCandidateFilterGroupView:
+    """One facet and every value the composed Candidates actually offer for it."""
+
+    facet: MaintainerCandidateFilterFacet
+    label: str
+    options: tuple[MaintainerCandidateFilterOptionView, ...]
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.facet, MaintainerCandidateFilterFacet)
+            or not isinstance(self.label, str)
+            or not self.label
+            or not isinstance(self.options, tuple)
+            or any(
+                not isinstance(item, MaintainerCandidateFilterOptionView) for item in self.options
+            )
+            or len({item.row for item in self.options}) != len(self.options)
+        ):
+            raise ValueError("a Candidate filter group is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerCandidateFilterView:
+    """Screen 53: the whole editable narrowing, and what it currently leaves of screen 35."""
+
+    groups: tuple[MaintainerCandidateFilterGroupView, ...]
+    matching: int
+    total: int
+    query: str = ""
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.groups, tuple)
+            or any(not isinstance(item, MaintainerCandidateFilterGroupView) for item in self.groups)
+            or len({item.facet for item in self.groups}) != len(self.groups)
+            or not isinstance(self.matching, int)
+            or isinstance(self.matching, bool)
+            or not isinstance(self.total, int)
+            or isinstance(self.total, bool)
+            or not 0 <= self.matching <= self.total
+            or not isinstance(self.query, str)
+            or any(character in self.query for character in "\r\n")
+        ):
+            raise ValueError("the Candidate filter view is invalid")
+
+    @property
+    def is_empty(self) -> bool:
+        """Whether nothing is narrowing the list, which is not the same as nothing matching."""
+
+        return not self.query and not any(
+            option.active for group in self.groups for option in group.options
+        )
+
+    @property
+    def rows(self) -> tuple[str, ...]:
+        return tuple(option.row for group in self.groups for option in group.options)
+
+
+def _filter_facet_value(
+    candidate: MaintainerCandidateView, facet: MaintainerCandidateFilterFacet
+) -> str:
+    if facet is MaintainerCandidateFilterFacet.STATUS:
+        return candidate.state.value
+    if facet is MaintainerCandidateFilterFacet.KIND:
+        return candidate.kind
+    if facet is MaintainerCandidateFilterFacet.SOURCE:
+        return candidate.source_alias
+    return candidate.target_registry
+
+
+def project_maintainer_candidate_filters(
+    candidates: tuple[MaintainerCandidateView, ...],
+    candidate_filter: MaintainerCandidateFilter,
+) -> MaintainerCandidateFilterView:
+    """Project screen 53 from the composed Candidates and the filter currently held as state.
+
+    Only values the composed Candidates actually have are offered, because a facet value nothing
+    carries is a filter that can only ever empty the list.  Each option states what choosing it
+    would leave -- measured with that one value applied to the rest of the current filter -- so a
+    narrowing that selects nothing is visible here rather than discovered as an empty screen 35.
+    """
+
+    if not isinstance(candidates, tuple) or any(
+        not isinstance(item, MaintainerCandidateView) for item in candidates
+    ):
+        raise ValueError("projecting Candidate filters needs composed Candidate views")
+    if not isinstance(candidate_filter, MaintainerCandidateFilter):
+        raise ValueError("projecting Candidate filters needs the typed filter")
+    groups: list[MaintainerCandidateFilterGroupView] = []
+    for facet in MaintainerCandidateFilterFacet:
+        offered = sorted({_filter_facet_value(item, facet) for item in candidates})
+        if not offered:
+            continue
+        options: list[MaintainerCandidateFilterOptionView] = []
+        for value in offered:
+            row = f"{facet.value}:{value}"
+            if parse_candidate_filter_row(row) is None:
+                # A composed Candidate carrying a value this screen cannot address is a defect in
+                # composition, not something to draw an unusable row for.
+                continue
+            active = _filter_facet_active(candidate_filter, facet, value)
+            probed = candidate_filter if active else candidate_filter.toggled(facet, value)
+            options.append(
+                MaintainerCandidateFilterOptionView(
+                    row,
+                    value,
+                    len(filter_maintainer_candidates(candidates, probed)),
+                    active,
+                )
+            )
+        if options:
+            groups.append(
+                MaintainerCandidateFilterGroupView(
+                    facet, _FILTER_FACET_LABELS[facet], tuple(options)
+                )
+            )
+    return MaintainerCandidateFilterView(
+        tuple(groups),
+        len(filter_maintainer_candidates(candidates, candidate_filter)),
+        len(candidates),
+        candidate_filter.query,
+    )
+
+
+def _filter_facet_active(
+    candidate_filter: MaintainerCandidateFilter,
+    facet: MaintainerCandidateFilterFacet,
+    value: str,
+) -> bool:
+    if facet is MaintainerCandidateFilterFacet.STATUS:
+        return any(item.value == value for item in candidate_filter.states)
+    if facet is MaintainerCandidateFilterFacet.KIND:
+        return any(item.value == value for item in candidate_filter.kinds)
+    if facet is MaintainerCandidateFilterFacet.SOURCE:
+        return value in candidate_filter.sources
+    return value in candidate_filter.registries
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerViews:
+    """The Maintainer projections composed once and read by the shared screen source."""
+
+    dashboard: MaintainerDashboardView
+    sources: tuple[MaintainerSourceView, ...]
+    candidates: tuple[MaintainerCandidateView, ...] | None = None
+    validations: tuple[MaintainerValidationView, ...] | None = None
+    promotions: tuple[MaintainerPromotionReviewView, ...] | None = None
+    registry_diffs: tuple[MaintainerRegistryDiffView, ...] | None = None
+    registries: tuple[MaintainerRegistryView, ...] | None = None
+    bulk_promotions: tuple[MaintainerBulkPromotionView, ...] | None = None
+    lifecycles: tuple[MaintainerCandidateLifecycleView, ...] | None = None
+    provenances: tuple[MaintainerProvenanceView, ...] | None = None
+    version_conflicts: tuple[MaintainerVersionConflictView, ...] | None = None
+    collection_candidates: tuple[MaintainerCollectionCandidateView, ...] | None = None
+    collection_validations: tuple[MaintainerCollectionValidationView, ...] | None = None
+
+    def __post_init__(self) -> None:
+        aliases = tuple(source.alias for source in self.sources)
+        if (
+            not isinstance(self.dashboard, MaintainerDashboardView)
+            or any(not isinstance(source, MaintainerSourceView) for source in self.sources)
+            or len(set(aliases)) != len(aliases)
+            or self.dashboard.source_count != len(self.sources)
+            or self.dashboard.candidate_count
+            != sum(source.candidate_count for source in self.sources)
+            or self.dashboard.validation_failure_count
+            != sum(source.invalid_count for source in self.sources)
+            or self.dashboard.ready_count != sum(source.ready_count for source in self.sources)
+            or (
+                self.lifecycles is not None
+                and (
+                    any(
+                        not isinstance(item, MaintainerCandidateLifecycleView)
+                        for item in self.lifecycles
+                    )
+                    or len({item.current_candidate_id for item in self.lifecycles})
+                    != len(self.lifecycles)
+                )
+            )
+            or (
+                self.provenances is not None
+                and (
+                    any(not isinstance(item, MaintainerProvenanceView) for item in self.provenances)
+                    or len({item.candidate_id for item in self.provenances})
+                    != len(self.provenances)
+                )
+            )
+            or (
+                self.version_conflicts is not None
+                and (
+                    any(
+                        not isinstance(item, MaintainerVersionConflictView)
+                        for item in self.version_conflicts
+                    )
+                    or len({item.candidate_id for item in self.version_conflicts})
+                    != len(self.version_conflicts)
+                )
+            )
+            or (
+                self.collection_candidates is not None
+                and (
+                    any(
+                        not isinstance(item, MaintainerCollectionCandidateView)
+                        for item in self.collection_candidates
+                    )
+                    or len({item.candidate_id for item in self.collection_candidates})
+                    != len(self.collection_candidates)
+                )
+            )
+            or (
+                self.collection_validations is not None
+                and (
+                    any(
+                        not isinstance(item, MaintainerCollectionValidationView)
+                        for item in self.collection_validations
+                    )
+                    or len({item.candidate_id for item in self.collection_validations})
+                    != len(self.collection_validations)
+                )
+            )
+            or (
+                self.bulk_promotions is not None
+                and (
+                    any(
+                        not isinstance(item, MaintainerBulkPromotionView)
+                        for item in self.bulk_promotions
+                    )
+                    or len({item.target_registry for item in self.bulk_promotions})
+                    != len(self.bulk_promotions)
+                )
+            )
+            or (
+                self.registries is not None
+                and (
+                    any(
+                        not isinstance(registry, MaintainerRegistryView)
+                        for registry in self.registries
+                    )
+                    or len({item.alias for item in self.registries}) != len(self.registries)
+                )
+            )
+            or (
+                self.registry_diffs is not None
+                and (
+                    any(
+                        not isinstance(diff, MaintainerRegistryDiffView)
+                        for diff in self.registry_diffs
+                    )
+                    or len({(item.candidate_id, item.mode) for item in self.registry_diffs})
+                    != len(self.registry_diffs)
+                )
+            )
+            or (
+                self.promotions is not None
+                and (
+                    any(
+                        not isinstance(promotion, MaintainerPromotionReviewView)
+                        for promotion in self.promotions
+                    )
+                    # One review per Candidate *and mode*: both modes are composed here, so
+                    # choosing one on screen 42 selects a projection rather than making one.
+                    or len({(item.candidate_id, item.mode) for item in self.promotions})
+                    != len(self.promotions)
+                )
+            )
+            or (
+                self.validations is not None
+                and (
+                    any(
+                        not isinstance(validation, MaintainerValidationView)
+                        for validation in self.validations
+                    )
+                    or len({item.candidate_id for item in self.validations})
+                    != len(self.validations)
+                )
+            )
+            or (
+                self.candidates is not None
+                and (
+                    any(
+                        not isinstance(candidate, MaintainerCandidateView)
+                        for candidate in self.candidates
+                    )
+                    or len({candidate.id for candidate in self.candidates}) != len(self.candidates)
+                    or self.dashboard.candidate_count
+                    != len(self.candidates)
+                    + (0 if self.collection_candidates is None else len(self.collection_candidates))
+                )
+            )
+        ):
+            raise ValueError("composed Maintainer views disagree")
+        object.__setattr__(
+            self, "sources", tuple(sorted(self.sources, key=lambda item: item.alias))
+        )
+        if self.candidates is not None:
+            object.__setattr__(
+                self,
+                "candidates",
+                tuple(
+                    sorted(
+                        self.candidates,
+                        key=lambda item: (
+                            item.state.value,
+                            item.source_alias,
+                            item.artifact,
+                            item.version,
+                            item.id,
+                        ),
+                    )
+                ),
+            )
+
+    def source(self, alias: str) -> MaintainerSourceView | None:
+        return next((source for source in self.sources if source.alias == alias), None)
+
+    def candidate(self, candidate_id: str) -> MaintainerCandidateView | None:
+        if self.candidates is None:
+            return None
+        return next(
+            (candidate for candidate in self.candidates if candidate.id == candidate_id), None
+        )
+
+    def validation(self, candidate_id: str) -> MaintainerValidationView | None:
+        """The validation run composed for one Candidate, or nothing if none was composed.
+
+        Screens 38 to 40 refuse rather than validate on the spot: a run assembled while drawing
+        would be a second, unrecorded judgement of the same Candidate.
+        """
+
+        if self.validations is None:
+            return None
+        return next((item for item in self.validations if item.candidate_id == candidate_id), None)
+
+    def lifecycle(self, candidate_id: str) -> MaintainerCandidateLifecycleView | None:
+        """The lifecycle composed for one active Candidate, including registry evidence."""
+
+        if self.lifecycles is None:
+            return None
+        return next(
+            (item for item in self.lifecycles if item.current_candidate_id == candidate_id),
+            None,
+        )
+
+    def provenance(self, candidate_id: str) -> MaintainerProvenanceView | None:
+        """The compiler-produced provenance composed for one active Candidate."""
+
+        if self.provenances is None:
+            return None
+        return next((item for item in self.provenances if item.candidate_id == candidate_id), None)
+
+    def version_conflict(self, candidate_id: str) -> MaintainerVersionConflictView | None:
+        """The immutable-version refusal composed for one active Candidate, when present."""
+
+        if self.version_conflicts is None:
+            return None
+        return next(
+            (item for item in self.version_conflicts if item.candidate_id == candidate_id),
+            None,
+        )
+
+    def collection_candidate(self, candidate_id: str) -> MaintainerCollectionCandidateView | None:
+        """One versioned Collection Candidate by stable ID."""
+
+        if self.collection_candidates is None:
+            return None
+        return next(
+            (item for item in self.collection_candidates if item.candidate_id == candidate_id),
+            None,
+        )
+
+    def collection_validation(self, candidate_id: str) -> MaintainerCollectionValidationView | None:
+        """The approved-registry resolution composed for one Collection Candidate."""
+
+        if self.collection_validations is None:
+            return None
+        return next(
+            (item for item in self.collection_validations if item.candidate_id == candidate_id),
+            None,
+        )
+
+    def bulk_promotion(self, alias: str) -> MaintainerBulkPromotionView | None:
+        """The selectable set composed for one registry, refusals included."""
+
+        if self.bulk_promotions is None:
+            return None
+        return next((item for item in self.bulk_promotions if item.target_registry == alias), None)
+
+    def registry(self, alias: str) -> MaintainerRegistryView | None:
+        """The registry composed for one alias, refusals included."""
+
+        if self.registries is None:
+            return None
+        return next((item for item in self.registries if item.alias == alias), None)
+
+    def registry_diff(
+        self,
+        candidate_id: str,
+        mode: PromotionMode = PromotionMode.VENDORED,
+    ) -> MaintainerRegistryDiffView | None:
+        """The registry transaction composed for one Candidate in one mode, refusals included."""
+
+        if self.registry_diffs is None:
+            return None
+        return next(
+            (
+                item
+                for item in self.registry_diffs
+                if item.candidate_id == candidate_id and item.mode == mode.value
+            ),
+            None,
+        )
+
+    def promotion(
+        self,
+        candidate_id: str,
+        mode: PromotionMode = PromotionMode.VENDORED,
+    ) -> MaintainerPromotionReviewView | None:
+        """The promotion review composed for one Candidate in one mode, refusals included."""
+
+        if self.promotions is None:
+            return None
+        return next(
+            (
+                item
+                for item in self.promotions
+                if item.candidate_id == candidate_id and item.mode == mode.value
+            ),
+            None,
+        )
+
+
+def project_source_sync_review(prepared: PreparedSourceSync) -> MaintainerSourceSyncReviewView:
+    if not isinstance(prepared, PreparedSourceSync):
+        raise ValueError("Source Sync review projection needs a prepared Source Sync")
+    source = prepared.request.source
+    return MaintainerSourceSyncReviewView(
+        source.alias.value,
+        source.kind.value,
+        source.location,
+        source.ref,
+        prepared.target_registry.value,
+        prepared.baseline.revision,
+        prepared.baseline.candidate_count,
+        prepared.approved.revision,
+        str(prepared.approved.snapshot_digest),
+        str(prepared.review_digest),
+    )
+
+
+def project_source_sync_result(
+    result: SourceSyncExecutionResult,
+    *,
+    target_registry: SourceAlias,
+) -> MaintainerSourceSyncResultView:
+    if not isinstance(result, SourceSyncExecutionResult) or not isinstance(
+        target_registry, SourceAlias
+    ):
+        raise ValueError("Source Sync result projection needs a persisted result and target")
+    counts = Counter(
+        (
+            *(bundle.candidate.state for bundle in result.scan.active),
+            *(candidate.state for candidate in result.scan.collection_active),
+        )
+    )
+    return MaintainerSourceSyncResultView(
+        result.scan.source_alias.value,
+        target_registry.value,
+        result.source.disposition.value,
+        result.scan.revision,
+        result.scan.manifest_count,
+        tuple((state, counts[state]) for state in CandidateState if counts[state]),
+        str(result.review_digest),
+    )
+
+
+def _source_status(configured: ConfiguredSource, health: SourceHealth) -> MaintainerSourceStatus:
+    if not configured.enabled:
+        return MaintainerSourceStatus.DISABLED
+    if health.status is HealthStatus.HEALTHY:
+        return MaintainerSourceStatus.SYNCED
+    if health.status is HealthStatus.STALE:
+        return MaintainerSourceStatus.STALE
+    if health.status in {HealthStatus.MISSING, HealthStatus.NOT_SYNCHRONIZED}:
+        return MaintainerSourceStatus.NOT_SYNCHRONIZED
+    return MaintainerSourceStatus.ATTENTION
+
+
+def project_maintainer_source(
+    configured: ConfiguredSource,
+    health: SourceHealth,
+    scan: SourceScan | None = None,
+) -> MaintainerSourceView:
+    """Bind configuration, durable Source health and one matching non-mutating Source Scan."""
+
+    if (
+        not isinstance(configured, ConfiguredSource)
+        or configured.kind is SourceKind.REGISTRY_GIT
+        or not isinstance(health, SourceHealth)
+        or not (scan is None or isinstance(scan, SourceScan))
+    ):
+        raise ValueError("maintainer Source projection needs an authoring Source")
+    current = health.current
+    if current is not None and current.candidate.alias != configured.alias:
+        raise ValueError("maintainer Source health belongs to another configured Source")
+    if scan is not None:
+        if (
+            scan.source_alias != configured.alias
+            or current is None
+            or scan.revision != current.candidate.resolved_revision
+        ):
+            raise ValueError("maintainer Source scan does not bind the current pinned Source")
+    candidate_states_to_count = (
+        ()
+        if scan is None
+        else (
+            *(bundle.candidate.state for bundle in scan.active),
+            *(candidate.state for candidate in scan.collection_active),
+        )
+    )
+    counts = Counter(candidate_states_to_count)
+    candidate_states = tuple((state, counts[state]) for state in CandidateState if counts[state])
+    registries = tuple(
+        sorted(
+            {
+                bundle.candidate.target_registry.value
+                for bundle in (() if scan is None else scan.active)
+            }
+            | {
+                candidate.target_registry.value
+                for candidate in (() if scan is None else scan.collection_active)
+            }
+        )
+    )
+    return MaintainerSourceView(
+        configured.alias.value,
+        configured.kind.value,
+        configured.location,
+        configured.ref,
+        configured.enabled,
+        _source_status(configured, health),
+        None if current is None else current.candidate.resolved_revision,
+        None if current is None else current.published_at_epoch_seconds,
+        0 if scan is None else scan.manifest_count,
+        candidate_states,
+        registries,
+        tuple(redact_text(item.message) for item in health.diagnostics),
+    )
+
+
+def project_maintainer_dashboard(
+    sources: tuple[MaintainerSourceView, ...],
+    *,
+    recent_activity: tuple[str, ...] = (),
+) -> MaintainerDashboardView:
+    if any(not isinstance(source, MaintainerSourceView) for source in sources) or len(
+        {source.alias for source in sources}
+    ) != len(sources):
+        raise ValueError("maintainer Dashboard needs unique Source views")
+    return MaintainerDashboardView(
+        len(sources),
+        sum(source.candidate_count for source in sources),
+        sum(source.invalid_count for source in sources),
+        sum(source.ready_count for source in sources),
+        recent_activity,
+    )
+
+
+_NAVIGATION: dict[MaintainerScreen, tuple[MaintainerScreen, ...]] = {
+    MaintainerScreen.DASHBOARD: (
+        MaintainerScreen.SOURCES,
+        MaintainerScreen.CANDIDATES,
+        MaintainerScreen.REGISTRY,
+    ),
+    MaintainerScreen.SOURCES: (
+        MaintainerScreen.SOURCE_ADD,
+        MaintainerScreen.SOURCE_DETAILS,
+        MaintainerScreen.SOURCE_SYNC,
+    ),
+    MaintainerScreen.SOURCE_ADD: (MaintainerScreen.SOURCE_ADD_REVIEW,),
+    MaintainerScreen.SOURCE_ADD_REVIEW: (MaintainerScreen.SOURCES,),
+    MaintainerScreen.SOURCE_DETAILS: (MaintainerScreen.SOURCE_SYNC,),
+    MaintainerScreen.SOURCE_SYNC: (MaintainerScreen.SOURCE_SYNC_RESULT,),
+    MaintainerScreen.SOURCE_SYNC_RESULT: (MaintainerScreen.CANDIDATES,),
+    MaintainerScreen.CANDIDATES: (
+        MaintainerScreen.CANDIDATE_DETAILS,
+        MaintainerScreen.BULK_PROMOTION,
+        MaintainerScreen.COLLECTION_CANDIDATES,
+        MaintainerScreen.CANDIDATE_FILTERS,
+    ),
+    MaintainerScreen.CANDIDATE_DETAILS: (
+        MaintainerScreen.CANDIDATE_DIFF,
+        MaintainerScreen.VALIDATION,
+        MaintainerScreen.CANDIDATE_LIFECYCLE,
+        MaintainerScreen.PROVENANCE,
+        MaintainerScreen.VERSION_CONFLICT,
+    ),
+    MaintainerScreen.CANDIDATE_DIFF: (MaintainerScreen.VALIDATION,),
+    MaintainerScreen.VALIDATION: (
+        MaintainerScreen.VALIDATION_DETAILS,
+        MaintainerScreen.POLICY_REVIEW,
+    ),
+    MaintainerScreen.VALIDATION_DETAILS: (MaintainerScreen.POLICY_REVIEW,),
+    MaintainerScreen.POLICY_REVIEW: (MaintainerScreen.PROMOTION_REVIEW,),
+    MaintainerScreen.PROMOTION_REVIEW: (MaintainerScreen.PROMOTION_MODE,),
+    MaintainerScreen.PROMOTION_MODE: (MaintainerScreen.REGISTRY_DIFF,),
+    MaintainerScreen.REGISTRY_DIFF: (MaintainerScreen.REGISTRY_VALIDATION,),
+    MaintainerScreen.REGISTRY_VALIDATION: (MaintainerScreen.REGISTRY_COMMIT,),
+    MaintainerScreen.REGISTRY_COMMIT: (MaintainerScreen.REGISTRY,),
+    MaintainerScreen.REGISTRY: (
+        MaintainerScreen.BULK_PROMOTION,
+        MaintainerScreen.REGISTRY_INIT,
+        MaintainerScreen.REGISTRY_REBUILD,
+        MaintainerScreen.REPOSITORY_SCAN,
+        MaintainerScreen.ADOPTED_ARTIFACTS,
+    ),
+    MaintainerScreen.REGISTRY_INIT: (MaintainerScreen.REGISTRY_INIT_REVIEW,),
+    MaintainerScreen.REGISTRY_INIT_REVIEW: (MaintainerScreen.REGISTRY,),
+    MaintainerScreen.REGISTRY_REBUILD: (MaintainerScreen.REGISTRY_REBUILD_REVIEW,),
+    MaintainerScreen.REGISTRY_REBUILD_REVIEW: (MaintainerScreen.REGISTRY,),
+    MaintainerScreen.REPOSITORY_SCAN: (MaintainerScreen.SCAN_RESULT,),
+    MaintainerScreen.SCAN_RESULT: (MaintainerScreen.ADOPTION_REVIEW,),
+    MaintainerScreen.ADOPTION_REVIEW: (MaintainerScreen.REGISTRY,),
+    MaintainerScreen.ADOPTED_ARTIFACTS: (MaintainerScreen.UPSTREAM_CHECK,),
+    MaintainerScreen.UPSTREAM_CHECK: (MaintainerScreen.ADOPTION_REVIEW,),
+    # A bulk selection has no single-Candidate diff to open, so screen 47 assembles its
+    # transaction and hands it to the same validation screen a single promotion is reviewed on.
+    MaintainerScreen.BULK_PROMOTION: (MaintainerScreen.REGISTRY_VALIDATION,),
+    MaintainerScreen.CANDIDATE_LIFECYCLE: (MaintainerScreen.PROVENANCE,),
+    MaintainerScreen.PROVENANCE: (),
+    MaintainerScreen.VERSION_CONFLICT: (),
+    MaintainerScreen.COLLECTION_CANDIDATES: (MaintainerScreen.COLLECTION_VALIDATION,),
+    MaintainerScreen.COLLECTION_VALIDATION: (MaintainerScreen.VALIDATION,),
+    MaintainerScreen.CANDIDATE_FILTERS: (MaintainerScreen.CANDIDATES,),
+}
+
+
+def maintainer_navigation_targets(screen: MaintainerScreen) -> tuple[MaintainerScreen, ...]:
+    """Accepted Maintainer forward routes, independent of terminal and machine state."""
+
+    if not isinstance(screen, MaintainerScreen):
+        raise ValueError("maintainer navigation needs a maintainer screen")
+    return _NAVIGATION[screen]
+
+
+#: What each named check is called on screen.  The check's own value stays the stable identity.
+_VALIDATION_LABELS: dict[ValidationCheck, str] = {
+    ValidationCheck.MANIFEST_SCHEMA: "Manifest schema",
+    ValidationCheck.PAYLOAD_BOUNDARIES: "Payload boundaries",
+    ValidationCheck.SPECIAL_FILES: "No symlinks / special files",
+    ValidationCheck.RUNTIME_DESCRIPTOR: "Runtime descriptor",
+    ValidationCheck.DEPENDENCY_DESCRIPTOR: "Dependency descriptor",
+    ValidationCheck.INPUT_DEFINITIONS: "Input definitions",
+    ValidationCheck.SECRET_METADATA: "Secret metadata",
+    ValidationCheck.POLICY: "Policy",
+    ValidationCheck.SECURITY: "Security checks",
+    ValidationCheck.LIVE_ACCEPTANCE: "Live acceptance",
+}
+
+_CANDIDATE_ID_DIGITS = frozenset("0123456789abcdef")
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerValidationRowId:
+    """What screen 39 is about: one named check of one Candidate, not either alone.
+
+    A check name alone is ambiguous across Candidates and a Candidate ID alone cannot open one
+    check, so the row identity is the pair.  Keeping it parsed and typed rather than splitting a
+    string inside a renderer is what lets screens 39 and 40 be entered directly and still know what
+    they are showing.
+    """
+
+    candidate_id: str
+    check: ValidationCheck
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.candidate_id, str)
+            or len(self.candidate_id) != 64
+            or set(self.candidate_id) - _CANDIDATE_ID_DIGITS
+            or not isinstance(self.check, ValidationCheck)
+        ):
+            raise ValueError("a validation row is a Candidate ID and a named check")
+
+    def __str__(self) -> str:
+        return f"{self.candidate_id}:{self.check.value}"
+
+
+def parse_validation_row(value: str) -> MaintainerValidationRowId | None:
+    """One row identity read back from the focus string, or nothing if it is not one.
+
+    Returning nothing rather than raising is deliberate: the focus is whatever the previous screen
+    put there, and a screen that cannot recognise it must refuse in the frame rather than crash.
+    """
+
+    if not isinstance(value, str):
+        return None
+    candidate_id, separator, check = value.partition(":")
+    if not separator:
+        return None
+    try:
+        return MaintainerValidationRowId(candidate_id, ValidationCheck(check))
+    except ValueError:
+        return None
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerValidationDetailView:
+    """One actionable thing a check found, with what was declared against what was expected."""
+
+    message: str
+    path: str | None
+    declared: str | None
+    expected: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerValidationCheckView:
+    """One named check as screen 38 lists it and screen 39 details it."""
+
+    candidate_id: str
+    check: str
+    label: str
+    outcome: str
+    required: bool
+    details: tuple[MaintainerValidationDetailView, ...]
+
+    @property
+    def row(self) -> str:
+        return f"{self.candidate_id}:{self.check}"
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerValidationView:
+    """One complete validation run, projected for screens 38 and 39.
+
+    Warnings and errors are counted separately rather than totalled, because an error refuses
+    promotion outright while a warning is something policy may or may not treat as blocking.
+    """
+
+    candidate_id: str
+    artifact: str
+    version: str
+    state: CandidateState
+    checks: tuple[MaintainerValidationCheckView, ...]
+    unmet_requirements: tuple[str, ...]
+    #: The policy judgement of this same run.  Screen 40 reads it rather than re-deciding, because
+    #: a second judgement composed while drawing could disagree with the one screen 38 showed.
+    review: MaintainerPolicyReviewView
+
+    def check(self, name: str) -> MaintainerValidationCheckView:
+        matched = next((item for item in self.checks if item.check == name), None)
+        if matched is None:
+            raise ValueError(f"no validation check named {name!r}")
+        return matched
+
+    def _counted(self, outcome: ValidationOutcome) -> int:
+        return sum(1 for item in self.checks if item.outcome == outcome.value)
+
+    @property
+    def error_count(self) -> int:
+        return self._counted(ValidationOutcome.ERROR)
+
+    @property
+    def warning_count(self) -> int:
+        return self._counted(ValidationOutcome.WARNING)
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerPolicyReviewView:
+    """Screen 40: which policy decided what, separated from what the artifact declared.
+
+    An allowlist that is `None` is not an empty allowlist.  A policy that does not constrain
+    runtimes at all permits every runtime; one that constrains them to nothing permits none, and a
+    Maintainer reading the screen has to be able to tell those two apart.
+    """
+
+    candidate_id: str
+    artifact: str
+    version: str
+    decision: CandidateState
+    required_checks: tuple[str, ...]
+    unmet_requirements: tuple[str, ...]
+    allowed_runtimes: tuple[str, ...] | None
+    allowed_transports: tuple[str, ...] | None
+    allowed_network_hosts: tuple[str, ...] | None
+    allowed_secret_bindings: tuple[str, ...] | None
+    forbidden_effects: tuple[str, ...]
+    risk_ceiling: str
+    blocking_findings: tuple[str, ...]
+
+
+def _allowed(values: frozenset[str] | None) -> tuple[str, ...] | None:
+    return None if values is None else tuple(sorted(values))
+
+
+def project_maintainer_validation(
+    bundle: CandidateBundle,
+    *,
+    policy: EffectivePolicy,
+) -> MaintainerValidationView:
+    """Run the named pipeline over one Candidate and project it for screens 38 and 39."""
+
+    if not isinstance(bundle, CandidateBundle) or not isinstance(policy, EffectivePolicy):
+        raise ValueError("Maintainer validation projection needs a Candidate and a policy")
+    validation = validate_candidate(bundle, policy=policy)
+    candidate = bundle.candidate
+    candidate_id = candidate.id.value
+    checks = tuple(
+        MaintainerValidationCheckView(
+            candidate_id,
+            result.check.value,
+            _VALIDATION_LABELS[result.check],
+            result.outcome.value,
+            result.check.value in policy.required_checks,
+            tuple(
+                MaintainerValidationDetailView(
+                    detail.message, detail.path, detail.declared, detail.expected
+                )
+                for detail in result.details
+            ),
+        )
+        for result in validation.results
+    )
+    return MaintainerValidationView(
+        candidate_id,
+        str(candidate.artifact.coordinate.artifact),
+        str(candidate.artifact.coordinate.version),
+        validation.state,
+        checks,
+        tuple(item.value for item in validation.unmet_requirements),
+        project_maintainer_policy_review(validation, bundle, policy=policy),
+    )
+
+
+def project_maintainer_policy_review(
+    validation: CandidateValidation,
+    bundle: CandidateBundle,
+    *,
+    policy: EffectivePolicy,
+) -> MaintainerPolicyReviewView:
+    """Project screen 40 from a run that already happened, never by judging the Candidate again."""
+
+    if (
+        not isinstance(validation, CandidateValidation)
+        or not isinstance(bundle, CandidateBundle)
+        or not isinstance(policy, EffectivePolicy)
+    ):
+        raise ValueError(
+            "Maintainer policy review needs a validation run, a Candidate and a policy"
+        )
+    candidate = bundle.candidate
+    if validation.candidate_id != candidate.id:
+        raise ValueError("Maintainer policy review needs the run of the Candidate it reviews")
+    blocking = tuple(
+        redact_text(f"{result.check.value}: {detail.message}")
+        for result in validation.results
+        if result.outcome is ValidationOutcome.ERROR
+        for detail in result.details
+    )
+    return MaintainerPolicyReviewView(
+        candidate.id.value,
+        str(candidate.artifact.coordinate.artifact),
+        str(candidate.artifact.coordinate.version),
+        validation.state,
+        tuple(sorted(policy.required_checks)),
+        tuple(item.value for item in validation.unmet_requirements),
+        _allowed(policy.allowed_runtimes),
+        _allowed(policy.allowed_transports),
+        _allowed(policy.allowed_network_hosts),
+        _allowed(policy.allowed_secret_bindings),
+        tuple(sorted(policy.forbidden_effects)),
+        policy.risk_ceiling.name.lower().replace("_", "-"),
+        blocking,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerPromotionReviewView:
+    """Screen 41: what confirming a promotion would write, or why it cannot be confirmed.
+
+    A refusal is a legitimate answer to "can this be promoted", so it is projected rather than
+    raised.  The review digest is present only when there is something to confirm; a screen that
+    showed a digest for an unconfirmable review would invite confirming it.
+    """
+
+    candidate_id: str
+    artifact: str
+    version: str
+    target_registry: str
+    state: CandidateState
+    mode: str
+    canonical_digest: str
+    source_revision: str
+    review_digest: str | None
+    registry_revision: str | None
+    registry_snapshot_digest: str | None
+    validation_report_digest: str | None
+    effective_policy_digest: str | None
+    warnings: tuple[str, ...]
+    refusals: tuple[str, ...]
+
+    @property
+    def confirmable(self) -> bool:
+        return self.review_digest is not None
+
+
+def project_maintainer_promotion_review(
+    bundle: CandidateBundle,
+    validation: CandidateValidation,
+    policy: EffectivePolicy,
+    approved: ApprovedRegistryState | None,
+    *,
+    mode: PromotionMode,
+) -> MaintainerPromotionReviewView:
+    """Project one Candidate's promotion review, including the reasons it may have none."""
+
+    if (
+        not isinstance(bundle, CandidateBundle)
+        or not isinstance(validation, CandidateValidation)
+        or not isinstance(policy, EffectivePolicy)
+        or not isinstance(mode, PromotionMode)
+        or not (approved is None or isinstance(approved, ApprovedRegistryState))
+    ):
+        raise ValueError("Maintainer promotion review projection needs a Candidate and a policy")
+    candidate = bundle.candidate
+    common = {
+        "candidate_id": candidate.id.value,
+        "artifact": str(candidate.artifact.coordinate.artifact),
+        "version": str(candidate.artifact.coordinate.version),
+        "target_registry": candidate.target_registry.value,
+        "state": validation.state,
+        "mode": mode.value,
+        "canonical_digest": str(candidate.canonical_digest),
+        "source_revision": candidate.artifact.provenance.revision,
+    }
+    if approved is None:
+        return MaintainerPromotionReviewView(
+            **common,  # type: ignore[arg-type]
+            review_digest=None,
+            registry_revision=None,
+            registry_snapshot_digest=None,
+            validation_report_digest=None,
+            effective_policy_digest=None,
+            warnings=(),
+            refusals=(
+                f"target registry {candidate.target_registry.value} has no synchronized "
+                "approved snapshot to promote into",
+            ),
+        )
+    prepared = prepare_candidate_promotion(bundle, validation, policy, approved, mode=mode)
+    if isinstance(prepared, Err):
+        return MaintainerPromotionReviewView(
+            **common,  # type: ignore[arg-type]
+            review_digest=None,
+            registry_revision=approved.revision,
+            registry_snapshot_digest=str(approved.snapshot_digest),
+            validation_report_digest=None,
+            effective_policy_digest=None,
+            warnings=(),
+            refusals=tuple(redact_text(item.message) for item in prepared.diagnostics),
+        )
+    evidence = prepared.value.evidence
+    return MaintainerPromotionReviewView(
+        **common,  # type: ignore[arg-type]
+        review_digest=str(prepared.value.review_digest),
+        registry_revision=approved.revision,
+        registry_snapshot_digest=str(approved.snapshot_digest),
+        validation_report_digest=str(evidence.validation_report_digest),
+        effective_policy_digest=str(evidence.effective_policy_digest),
+        warnings=tuple(redact_text(item) for item in evidence.warnings),
+        refusals=(),
+    )
+
+
+#: How many changed paths screen 43 lists.  A promotion writes one file per payload entry, and a
+#: review that made somebody page through thousands of rows would not be read at all.
+_MAX_REGISTRY_CHANGES = 200
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerRegistryChangeView:
+    """One path a promotion transaction would write, and what it would do to it."""
+
+    path: str
+    kind: str
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerRegistryDiffView:
+    """Screen 43: the registry transaction a confirmed promotion would apply.
+
+    `changed_paths` counts the whole transaction while `changes` is bounded, so a truncated list
+    never understates what would be written.
+    """
+
+    candidate_id: str
+    artifact: str
+    version: str
+    mode: str
+    target_registry: str
+    changed_paths: int
+    changes: tuple[MaintainerRegistryChangeView, ...]
+    expected_registry_snapshot: str | None
+    next_registry_snapshot: str | None
+    plan_digest: str | None
+    refusals: tuple[str, ...]
+
+    @property
+    def plannable(self) -> bool:
+        return self.plan_digest is not None
+
+
+def project_maintainer_registry_diff(
+    bundle: CandidateBundle,
+    validation: CandidateValidation,
+    policy: EffectivePolicy,
+    approved: ApprovedRegistryState | None,
+    registry_snapshot: SourceSnapshot | None,
+    *,
+    mode: PromotionMode,
+) -> MaintainerRegistryDiffView:
+    """Project the transaction, or the reasons there is none to project."""
+
+    if (
+        not isinstance(bundle, CandidateBundle)
+        or not isinstance(validation, CandidateValidation)
+        or not isinstance(policy, EffectivePolicy)
+        or not isinstance(mode, PromotionMode)
+        or not (approved is None or isinstance(approved, ApprovedRegistryState))
+        or not (registry_snapshot is None or isinstance(registry_snapshot, SourceSnapshot))
+    ):
+        raise ValueError("Maintainer registry diff projection needs a Candidate and a policy")
+    candidate = bundle.candidate
+    common: dict[str, object] = {
+        "candidate_id": candidate.id.value,
+        "artifact": str(candidate.artifact.coordinate.artifact),
+        "version": str(candidate.artifact.coordinate.version),
+        "mode": mode.value,
+        "target_registry": candidate.target_registry.value,
+    }
+
+    def _refused(*reasons: str) -> MaintainerRegistryDiffView:
+        return MaintainerRegistryDiffView(
+            **common,  # type: ignore[arg-type]
+            changed_paths=0,
+            changes=(),
+            expected_registry_snapshot=None,
+            next_registry_snapshot=None,
+            plan_digest=None,
+            refusals=tuple(redact_text(item) for item in reasons),
+        )
+
+    if approved is None:
+        return _refused(
+            f"target registry {candidate.target_registry.value} has no synchronized "
+            "approved snapshot to promote into"
+        )
+    if registry_snapshot is None:
+        return _refused(
+            f"registry {candidate.target_registry.value} workspace could not be read, "
+            "so no transaction can be planned"
+        )
+    prepared = prepare_candidate_promotion(bundle, validation, policy, approved, mode=mode)
+    if isinstance(prepared, Err):
+        return _refused(*(item.message for item in prepared.diagnostics))
+    try:
+        planned = plan_candidate_promotion(prepared.value, registry_snapshot)
+    except ValueError as error:
+        # A planner that raises must still leave a readable screen: composing every other
+        # Candidate's view depends on this one not aborting the whole read.
+        return _refused(f"this transaction cannot be planned: {error}")
+    if isinstance(planned, Err):
+        return _refused(*(item.message for item in planned.diagnostics))
+    plan = planned.value
+    return MaintainerRegistryDiffView(
+        **common,  # type: ignore[arg-type]
+        changed_paths=len(plan.changes),
+        changes=tuple(
+            MaintainerRegistryChangeView(str(item.path), item.kind.value)
+            for item in plan.changes[:_MAX_REGISTRY_CHANGES]
+        ),
+        expected_registry_snapshot=str(plan.expected_registry_snapshot),
+        next_registry_snapshot=str(plan.next_registry_snapshot),
+        plan_digest=str(plan.review_digest),
+        refusals=(),
+    )
+
+
+_PROMOTED_REGISTRY_CHECKS = (
+    "Registry workspace projection",
+    "Approved version identities",
+    "Canonical package digests",
+    "Registry catalogs",
+    "Promotion provenance",
+    "Snapshot reproducibility",
+)
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerTransactionCandidateView:
+    """One Candidate a reviewed transaction carries, with the evidence that approved it.
+
+    A transaction may carry several, and each is approved by its own run and policy result, so the
+    evidence travels per Candidate rather than being summarized into one pair of digests.
+    """
+
+    candidate_id: str
+    artifact: str
+    version: str
+    validation_report_digest: str
+    effective_policy_digest: str
+
+    def __post_init__(self) -> None:
+        if any(
+            not isinstance(item, str) or not item or any(character in item for character in "\r\n")
+            for item in (
+                self.candidate_id,
+                self.artifact,
+                self.version,
+                self.validation_report_digest,
+                self.effective_policy_digest,
+            )
+        ):
+            raise ValueError("Maintainer transaction Candidate view is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerRegistryValidationView:
+    """Screen 44: evidence that the projected promoted registry is internally valid."""
+
+    candidates: tuple[MaintainerTransactionCandidateView, ...]
+    target_registry: str
+    mode: str
+    registry_snapshot: str
+    transaction_digest: str
+    approved_version_count: int
+    checks: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        lines = (
+            self.target_registry,
+            self.mode,
+            self.registry_snapshot,
+            self.transaction_digest,
+            *self.checks,
+        )
+        if (
+            not self.candidates
+            or any(
+                not isinstance(item, MaintainerTransactionCandidateView) for item in self.candidates
+            )
+            or len({item.candidate_id for item in self.candidates}) != len(self.candidates)
+            or any(
+                not isinstance(item, str)
+                or not item
+                or any(character in item for character in "\r\n")
+                for item in lines
+            )
+            or not isinstance(self.approved_version_count, int)
+            or isinstance(self.approved_version_count, bool)
+            or self.approved_version_count < 1
+            or len(set(self.checks)) != len(self.checks)
+        ):
+            raise ValueError("Maintainer registry validation view is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerRegistryCommitView:
+    """Screen 45 before or after the exact local approved-registry write."""
+
+    candidates: tuple[MaintainerTransactionCandidateView, ...]
+    target_registry: str
+    mode: str
+    transaction_digest: str
+    registry_snapshot_before: str
+    registry_snapshot_after: str
+    changed_paths: int
+    approved_version_count: int
+    applied: bool
+    commit_subject: str
+    commit_revision: str | None
+
+    def __post_init__(self) -> None:
+        if not self.candidates or any(
+            not isinstance(item, MaintainerTransactionCandidateView) for item in self.candidates
+        ):
+            raise ValueError("Maintainer registry commit view is invalid")
+        lines = (
+            self.target_registry,
+            self.mode,
+            self.transaction_digest,
+            self.registry_snapshot_before,
+            self.registry_snapshot_after,
+            self.commit_subject,
+        )
+        if (
+            any(
+                not isinstance(item, str)
+                or not item
+                or any(character in item for character in "\r\n")
+                for item in lines
+            )
+            or not isinstance(self.changed_paths, int)
+            or isinstance(self.changed_paths, bool)
+            or self.changed_paths < 0
+            or not isinstance(self.approved_version_count, int)
+            or isinstance(self.approved_version_count, bool)
+            or self.approved_version_count < 1
+            or not isinstance(self.applied, bool)
+            or (
+                self.commit_revision is not None
+                and (
+                    not self.commit_revision
+                    or any(character in self.commit_revision for character in "\r\n")
+                )
+            )
+            or (self.applied != (self.commit_revision is not None))
+        ):
+            raise ValueError("Maintainer registry commit view is invalid")
+
+
+def _transaction_candidates(
+    prepared: PreparedCandidatePromotionTransaction,
+) -> tuple[MaintainerTransactionCandidateView, ...]:
+    return tuple(
+        MaintainerTransactionCandidateView(
+            item.candidate.candidate.id.value,
+            str(item.candidate.candidate.artifact.coordinate.artifact),
+            str(item.candidate.candidate.artifact.coordinate.version),
+            str(item.evidence.validation_report_digest),
+            str(item.evidence.effective_policy_digest),
+        )
+        for item in prepared.promotions
+    )
+
+
+def project_maintainer_registry_validation(
+    prepared: PreparedCandidatePromotionTransaction,
+) -> MaintainerRegistryValidationView:
+    """Project the successful pre-write validation already performed by the application."""
+
+    if not isinstance(prepared, PreparedCandidatePromotionTransaction):
+        raise ValueError("registry validation projection needs a prepared promotion transaction")
+    return MaintainerRegistryValidationView(
+        _transaction_candidates(prepared),
+        prepared.target_registry.value,
+        prepared.promotions[0].mode.value,
+        str(prepared.registry_snapshot),
+        str(prepared.review_digest),
+        prepared.approved_version_count,
+        _PROMOTED_REGISTRY_CHECKS,
+    )
+
+
+def project_maintainer_registry_commit(
+    prepared: PreparedCandidatePromotionTransaction,
+    *,
+    result: CandidatePromotionExecutionResult | None = None,
+) -> MaintainerRegistryCommitView:
+    """Project screen 45's exact local write before confirmation or after verified readback."""
+
+    if not isinstance(prepared, PreparedCandidatePromotionTransaction) or not (
+        result is None or isinstance(result, CandidatePromotionExecutionResult)
+    ):
+        raise ValueError("registry commit projection needs a prepared promotion transaction")
+    plan = prepared.plan
+    if result is not None and (
+        result.review_digest != plan.review_digest
+        or result.registry_snapshot != plan.next_registry_snapshot
+        or result.workspace_digest != plan.next_workspace_digest
+        or result.changed_paths != plan.changed_paths
+        or result.approved_version_count != prepared.approved_version_count
+    ):
+        raise ValueError("registry commit result does not match the reviewed transaction")
+    return MaintainerRegistryCommitView(
+        _transaction_candidates(prepared),
+        prepared.target_registry.value,
+        prepared.promotions[0].mode.value,
+        str(plan.review_digest),
+        str(plan.expected_registry_snapshot),
+        str(plan.next_registry_snapshot),
+        plan.changed_paths,
+        prepared.approved_version_count,
+        result is not None,
+        promotion_commit_subject(prepared),
+        None if result is None else result.commit_revision,
+    )
+
+
+class MaintainerWorkingTreeState(str, Enum):
+    """What a local registry checkout is, relative to the approved snapshot it should hold."""
+
+    MATCHES_SNAPSHOT = "matches-snapshot"
+    DIVERGED = "diverged"
+    UNOBSERVED = "unobserved"
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerWorkingTreeView:
+    """Screen 46: the local checkout, observed rather than inferred."""
+
+    state: MaintainerWorkingTreeState
+    digest: str | None
+    detail: str | None = None
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.state, MaintainerWorkingTreeState)
+            or not (self.digest is None or isinstance(self.digest, str))
+            or (self.state is MaintainerWorkingTreeState.UNOBSERVED and self.digest is not None)
+            or not (self.detail is None or isinstance(self.detail, str))
+        ):
+            raise ValueError("Maintainer working tree view is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerRegistryTransactionView:
+    """One promotion transaction as the registry recorded it, newest first in the chain."""
+
+    snapshot_before: str
+    snapshot_after: str
+    mode: str
+    candidate_ids: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if (
+            not self.snapshot_before
+            or not self.snapshot_after
+            or not self.mode
+            or not self.candidate_ids
+            or any(not isinstance(item, str) or not item for item in self.candidate_ids)
+        ):
+            raise ValueError("Maintainer registry transaction view is invalid")
+        object.__setattr__(self, "candidate_ids", tuple(sorted(self.candidate_ids)))
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerRegistryView:
+    """Screen 46: registry validity, contents, checkout state and recent promotions."""
+
+    alias: str
+    valid: bool
+    revision: str | None
+    snapshot: str | None
+    version_count: int
+    artifact_counts: tuple[tuple[ArtifactKind, int], ...]
+    working_tree: MaintainerWorkingTreeView
+    transactions: tuple[MaintainerRegistryTransactionView, ...]
+    diagnostics: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if (
+            not self.alias
+            or not isinstance(self.valid, bool)
+            or self.version_count < 0
+            or not isinstance(self.working_tree, MaintainerWorkingTreeView)
+            or any(
+                not isinstance(item, MaintainerRegistryTransactionView)
+                for item in self.transactions
+            )
+            or (self.valid and self.diagnostics)
+        ):
+            raise ValueError("Maintainer registry view is invalid")
+
+
+_MAX_REGISTRY_TRANSACTIONS = 50
+
+
+def _registry_transactions(
+    audits: tuple[PromotionAudit, ...],
+    head: str,
+) -> tuple[MaintainerRegistryTransactionView, ...]:
+    """Order transactions newest first by walking the snapshot chain back from the head.
+
+    No promotion record carries a clock, and inventing one at read time would make the order a
+    property of when a Maintainer looked rather than of what happened.  Each audit names the
+    snapshot its own transaction started from and produced, so the records group into transactions
+    and the transactions chain -- which is derivable, reproducible evidence.
+    """
+
+    grouped: dict[tuple[str, str, str], list[str]] = {}
+    for audit in audits:
+        key = (
+            str(audit.registry_snapshot_after),
+            str(audit.registry_snapshot_before),
+            audit.mode.value,
+        )
+        grouped.setdefault(key, []).append(audit.candidate_id.value)
+    ordered: list[MaintainerRegistryTransactionView] = []
+    seen: set[str] = set()
+    cursor = head
+    while len(ordered) < _MAX_REGISTRY_TRANSACTIONS and cursor not in seen:
+        seen.add(cursor)
+        step = next((key for key in grouped if key[0] == cursor), None)
+        if step is None:
+            break
+        ordered.append(
+            MaintainerRegistryTransactionView(step[1], step[0], step[2], tuple(grouped[step]))
+        )
+        cursor = step[1]
+    return tuple(ordered)
+
+
+def project_maintainer_registry(
+    alias: SourceAlias,
+    approved: ApprovedRegistryState | None,
+    registry_snapshot: SourceSnapshot | None,
+    checkout: SourceSnapshot | None,
+) -> MaintainerRegistryView:
+    """Project screen 46 from durable registry evidence and one observed local checkout.
+
+    The checkout is a separate observation on purpose: synchronized source-store content is an
+    immutable record of what the registry published, and answering "does my working tree still
+    match" from it would answer a question nobody asked.
+    """
+
+    if (
+        not isinstance(alias, SourceAlias)
+        or not (approved is None or isinstance(approved, ApprovedRegistryState))
+        or not (registry_snapshot is None or isinstance(registry_snapshot, SourceSnapshot))
+        or not (checkout is None or isinstance(checkout, SourceSnapshot))
+    ):
+        raise ValueError("Maintainer registry projection needs an alias and typed observations")
+    diagnostics: list[str] = []
+    if approved is None:
+        return MaintainerRegistryView(
+            alias.value,
+            False,
+            None,
+            None,
+            0,
+            (),
+            MaintainerWorkingTreeView(MaintainerWorkingTreeState.UNOBSERVED, None),
+            (),
+            (f"registry {alias.value} has no synchronized approved state yet",),
+        )
+    snapshot = str(approved.snapshot_digest)
+    # A durable record may hold the kind as its wire string; the view states the typed kind.
+    counts = Counter(ArtifactKind(str(item.coordinate.artifact.kind)) for item in approved.versions)
+    artifact_counts = tuple(sorted(counts.items(), key=lambda item: item[0].value))
+    audits: tuple[PromotionAudit, ...] = ()
+    # A promotion audit names the *registry state* digest its transaction produced, which covers
+    # published content only, while the approved snapshot digest covers the whole synchronized
+    # tree. The chain head has to be read in the audits' own digest space or it matches nothing.
+    head = "" if registry_snapshot is None else registry_state_digest(registry_snapshot)
+    chain = "" if isinstance(head, str) or isinstance(head, Err) else str(head.value)
+    if registry_snapshot is None:
+        diagnostics.append(f"registry {alias.value} snapshot content was not read")
+    else:
+        loaded = load_registry_promotions(registry_snapshot)
+        if isinstance(loaded, Err):
+            diagnostics.append(f"registry {alias.value} promotion records are unreadable")
+        else:
+            audits = loaded.value
+            approved_ids = {item.candidate_id for item in approved.versions}
+            recorded = {item.candidate_id for item in audits}
+            missing = sorted(item.value for item in approved_ids - recorded)
+            if missing:
+                # A published version nobody approved is the failure registry validity exists for.
+                diagnostics.append(
+                    f"{len(missing)} approved version(s) carry no promotion approval record: "
+                    + ", ".join(missing[:5])
+                )
+    # The same digest D-103 requires promotion to match: a checkout that is not exactly the
+    # approved baseline cannot be promoted from, so that is the question this line answers.
+    observed = None if checkout is None else source_snapshot_digest(checkout)
+    if observed is None:
+        working = MaintainerWorkingTreeView(MaintainerWorkingTreeState.UNOBSERVED, None)
+    elif isinstance(observed, Err):
+        working = MaintainerWorkingTreeView(
+            MaintainerWorkingTreeState.UNOBSERVED, None, "the local checkout could not be digested"
+        )
+    elif str(observed.value) == snapshot:
+        working = MaintainerWorkingTreeView(
+            MaintainerWorkingTreeState.MATCHES_SNAPSHOT, str(observed.value)
+        )
+    else:
+        working = MaintainerWorkingTreeView(
+            MaintainerWorkingTreeState.DIVERGED,
+            str(observed.value),
+            "the local checkout holds different published content than the approved snapshot",
+        )
+    return MaintainerRegistryView(
+        alias.value,
+        not diagnostics,
+        approved.revision,
+        snapshot,
+        len(approved.versions),
+        artifact_counts,
+        working,
+        _registry_transactions(audits, chain),
+        tuple(diagnostics),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerBulkCandidateView:
+    """One selectable row on screen 47: a Candidate this registry's transaction could carry."""
+
+    candidate_id: str
+    artifact: str
+    version: str
+    state: CandidateState
+
+    def __post_init__(self) -> None:
+        if (
+            not self.candidate_id
+            or not self.artifact
+            or not self.version
+            or not isinstance(self.state, CandidateState)
+        ):
+            raise ValueError("Maintainer bulk Candidate view is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerBulkExclusionView:
+    """A Candidate of this registry that cannot join the transaction, and why."""
+
+    candidate_id: str
+    artifact: str
+    reason: str
+
+    def __post_init__(self) -> None:
+        if not self.candidate_id or not self.artifact or not self.reason:
+            raise ValueError("Maintainer bulk exclusion view is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerBulkPromotionView:
+    """Screen 47: what one registry's bulk transaction may be assembled from.
+
+    A bulk promotion is one transaction, so it has exactly one target registry.  Candidates scanned
+    for another registry are not offered here at all rather than refused after selection.
+    """
+
+    target_registry: str
+    candidates: tuple[MaintainerBulkCandidateView, ...]
+    excluded: tuple[MaintainerBulkExclusionView, ...] = ()
+    refusals: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        identifiers = tuple(item.candidate_id for item in self.candidates)
+        if (
+            not self.target_registry
+            or any(not isinstance(item, MaintainerBulkCandidateView) for item in self.candidates)
+            or any(not isinstance(item, MaintainerBulkExclusionView) for item in self.excluded)
+            or len(set(identifiers)) != len(identifiers)
+            or set(identifiers) & {item.candidate_id for item in self.excluded}
+        ):
+            raise ValueError("Maintainer bulk promotion view is invalid")
+
+
+def project_maintainer_bulk_promotion(
+    alias: SourceAlias,
+    runs: tuple[tuple[CandidateBundle, CandidateValidation], ...],
+    approved: ApprovedRegistryState | None,
+) -> MaintainerBulkPromotionView:
+    """Project the selectable set for one registry from runs that already happened.
+
+    Promotability is read off the run screens 38 to 40 showed rather than re-derived here, so a
+    Candidate cannot be offered for bulk promotion on a judgement no screen ever displayed.
+    """
+
+    if (
+        not isinstance(alias, SourceAlias)
+        or not isinstance(runs, tuple)
+        or not (approved is None or isinstance(approved, ApprovedRegistryState))
+    ):
+        raise ValueError("Maintainer bulk promotion projection needs an alias and typed runs")
+    mine = tuple(
+        (bundle, validation)
+        for bundle, validation in runs
+        if bundle.candidate.target_registry == alias
+    )
+    if approved is None:
+        return MaintainerBulkPromotionView(
+            alias.value,
+            (),
+            (),
+            (f"registry {alias.value} has no synchronized approved state to promote into",),
+        )
+    selectable: list[MaintainerBulkCandidateView] = []
+    excluded: list[MaintainerBulkExclusionView] = []
+    for bundle, validation in mine:
+        candidate = bundle.candidate
+        artifact = str(candidate.artifact.coordinate.artifact)
+        if validation.state is CandidateState.INVALID:
+            excluded.append(
+                MaintainerBulkExclusionView(
+                    candidate.id.value, artifact, "the validation run reported an error"
+                )
+            )
+            continue
+        if validation.state is CandidateState.APPROVAL_REQUIRED:
+            excluded.append(
+                MaintainerBulkExclusionView(
+                    candidate.id.value, artifact, "policy requires manual approval first"
+                )
+            )
+            continue
+        if validation.state not in (CandidateState.READY, CandidateState.WARNING):
+            excluded.append(
+                MaintainerBulkExclusionView(
+                    candidate.id.value, artifact, "the Candidate is not in a promotable state"
+                )
+            )
+            continue
+        selectable.append(
+            MaintainerBulkCandidateView(
+                candidate.id.value,
+                artifact,
+                str(candidate.artifact.coordinate.version),
+                validation.state,
+            )
+        )
+    return MaintainerBulkPromotionView(
+        alias.value,
+        tuple(sorted(selectable, key=lambda item: item.artifact)),
+        tuple(sorted(excluded, key=lambda item: item.artifact)),
+    )

@@ -3,7 +3,12 @@
 All notable AART changes are documented here. The project follows semantic versioning for the
 executable; protocol, schema, artifact, importer, profile, and registry versions remain independent.
 
-## Unreleased
+Release Please writes this file from the Conventional Commit titles that reach `main`, and inserts
+each new release below this paragraph. Everything under `## 0.0.1` and older was written by hand,
+under a release model that asked a person to decide the number and then keep six files agreeing
+with it; those sections are a record and are left as they were written.
+
+## 0.0.1
 
 Standing AART up on a company's GitHub Enterprise Server instance, one failure at a time, with
 every fix made here rather than on their side: a fork must need no hand-edits.

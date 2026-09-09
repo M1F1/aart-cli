@@ -13,7 +13,7 @@ import io
 import unittest
 from unittest.mock import patch
 
-from agent_artifacts import cli, tui
+from agent_artifacts import cli
 
 
 def _dispatch(argv, *, command, code=0):
@@ -81,12 +81,16 @@ class TestTypeFilterMemory(unittest.TestCase):
 
 
 class TestTuiKnowsMemory(unittest.TestCase):
-    def test_type_order_includes_memory(self):
-        self.assertIn("memory", tui._TYPE_ORDER)
+    def test_the_browsable_kinds_include_memory(self):
+        """Retargeted from the retired wizard's `tui._TYPE_ORDER`.
 
-    def test_memory_rank_is_stable(self):
-        # A defined rank, not the fall-through len() default reserved for unknown types.
-        self.assertEqual(tui._type_rank("memory"), tui._TYPE_ORDER.index("memory"))
+        The claim is unchanged -- a Memory is a first-class artifact kind an interface offers, not
+        a CLI-only one -- but the set that decides it now lives with the marketplace projection.
+        """
+
+        from agent_artifacts.tui_marketplace import _KINDS
+
+        self.assertIn("memory", _KINDS)
 
 
 if __name__ == "__main__":

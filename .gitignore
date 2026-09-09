@@ -28,5 +28,10 @@ venv/
 /.mcp.json
 /TABNINE.md
 
+# mutmut's working copy of the tree, rewritten on every run (`make mutants`).
+/mutants/
+/mutmut-stats.json
+/.mutmut-cache
+
 # OS
 .DS_Store

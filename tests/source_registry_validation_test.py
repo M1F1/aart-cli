@@ -6,7 +6,8 @@ from pathlib import Path
 from agent_artifacts.configuration.model import ConfiguredSource, SourceKind
 from agent_artifacts.domain.identifiers import SourceAlias, SourceId
 from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.native_tree import SnapshotEntry, SourceSnapshot
+from agent_artifacts.protocol.native_tree import SnapshotEntry, SnapshotEntryKind, SourceSnapshot
+from agent_artifacts.protocol.paths import parse_relative_path
 from agent_artifacts.runtime_contract import EXECUTABLE_CAPABILITIES, EXECUTABLE_VERSION
 from agent_artifacts.sources.local import read_local_snapshot
 from agent_artifacts.sources.model import (
@@ -92,6 +93,37 @@ class RegistrySourceValidationTest(unittest.TestCase):
         self.assertIsInstance(result, Err)
         assert isinstance(result, Err)
         self.assertIn("compiled registry requires lock and index", result.diagnostics[0].message)
+
+    def test_registry_validator_rejects_a_stale_approved_registry_catalog(self) -> None:
+        """An empty approved projection still has to bind its exact content snapshot."""
+
+        source = _registry_source()
+        candidate = _candidate(source)
+        catalog_path = _unwrap(parse_relative_path("registry/index.json"))
+        snapshot = SourceSnapshot(
+            candidate.snapshot.origin,
+            (
+                *candidate.snapshot.entries,
+                SnapshotEntry(catalog_path, SnapshotEntryKind.FILE, b"{}"),
+            ),
+        )
+        stale = _unwrap(
+            make_source_candidate(
+                candidate.instance_id,
+                candidate.alias,
+                candidate.resolved_revision,
+                snapshot,
+            )
+        )
+
+        result = validate_configured_source_candidate(
+            source,
+            SourceValidationRequest(stale, EXECUTABLE_VERSION, EXECUTABLE_CAPABILITIES),
+        )
+
+        self.assertIsInstance(result, Err)
+        assert isinstance(result, Err)
+        self.assertIn("registry catalog is missing or stale", result.diagnostics[0].message)
 
     def test_registry_validator_rejects_source_registry_identity_mismatch(self) -> None:
         source = _registry_source()

@@ -11,6 +11,7 @@ import contextlib
 import io
 import json
 import os
+import shutil
 import tempfile
 import time
 import unittest
@@ -144,11 +145,87 @@ class _Environment:
         raw = stdout.getvalue()
         return code, (json.loads(raw) if raw.strip() else None)
 
+    def run_text(self, *argv: str) -> tuple[int, str]:
+        """Invoke the real CLI without ``--json`` and return ``(exit_code, stdout)``.
+
+        The same command, asked for the other rendering.  Tests that compare the two need a way to
+        ask for the human one; everything else about the invocation is identical on purpose, so a
+        difference between them is a difference in rendering rather than in setup.
+        """
+
+        scoped_to_user = "user" in argv
+        arguments = list(argv) if scoped_to_user else [*argv, "--project", str(self.project)]
+        stdout = io.StringIO()
+        with (
+            mock.patch.dict(os.environ, self.xdg, clear=False),
+            contextlib.redirect_stdout(stdout),
+            mock.patch("os.getcwd", return_value=str(self.project)),
+        ):
+            code = cli.main(arguments)
+        return code, stdout.getvalue()
+
 
 @contextlib.contextmanager
 def _environment(source_location: Path | None = None):
     with tempfile.TemporaryDirectory() as raw:
         yield _Environment(Path(raw).resolve(), source_location)
+
+
+#: The file the declared setup writes, and nothing else does.
+_CONFIGURED = ".code-review.toml"
+
+#: One managed block in one project file: the smallest setup that is unmistakably observable. It
+#: needs no tool, no secret and no network, so nothing about the environment can explain the file
+#: being absent except that the recipe did not run.
+_RECIPE = {
+    "schema_version": 2,
+    "protocol_version": 2,
+    "artifact": "skill/code-review",
+    "purpose": "Write the configuration file the Skill reads.",
+    "platforms": ["darwin"],
+    "help_urls": [{"label": "Setup help", "url": "https://example.test/code-review/setup"}],
+    "required_tools": [],
+    "capabilities": ["filesystem"],
+    "inputs": [],
+    "steps": [
+        {
+            "id": "config",
+            "use": "file.managed-block@1",
+            "with": {"file": _CONFIGURED, "content": "enabled = true"},
+        }
+    ],
+}
+
+
+@contextlib.contextmanager
+def _environment_declaring_setup():
+    """The shared fixture source, copied and taught to declare setup on its Skill.
+
+    The fixture itself is read-only, and this is the first test to take the writable copy the
+    `_Environment` docstring describes. The declaration is written where a native source carries
+    one -- a `setup` reference on `artifact.json`, the recipe beside the payload, and the package
+    root `SETUP.md` the recipe's manual route requires -- so the source is compiled, validated and
+    synchronized as it stands rather than patched after the fact.
+    """
+
+    with tempfile.TemporaryDirectory() as raw:
+        root = Path(raw).resolve()
+        location = root / "source"
+        shutil.copytree(_FIXTURE, location)
+        artifact = location / "artifacts" / "skill" / "code-review"
+        manifest = json.loads((artifact / "artifact.json").read_text(encoding="utf-8"))
+        manifest["setup"] = {"recipe": "setup/installer.json", "platforms": ["darwin"]}
+        (artifact / "artifact.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+        (artifact / "setup").mkdir()
+        (artifact / "setup" / "installer.json").write_text(
+            json.dumps(_RECIPE, indent=2), encoding="utf-8"
+        )
+        (artifact / "SETUP.md").write_text(
+            "Write `enabled = true` into .code-review.toml yourself.\n", encoding="utf-8"
+        )
+        machine = root / "machine"
+        machine.mkdir()
+        yield _Environment(machine, location)
 
 
 class LifecycleCopyE2ETest(unittest.TestCase):
@@ -515,6 +592,146 @@ class LifecycleDiagnosticsE2ETest(unittest.TestCase):
 
             self.assertEqual(code, 0, payload)
             self.assertTrue(payload["offline_last_known_good"])
+
+
+@unittest.skipUnless(
+    os.sys.platform == "darwin",
+    "the setup engine accepts only darwin recipes (setup.py:562), so applying one elsewhere is "
+    "refused for the platform before any of these boundaries is reached",
+)
+class DeclaredSetupE2ETest(unittest.TestCase):
+    """The route on which declared setup actually runs, end to end, from the CLI.
+
+    Nothing anywhere proved this before: the only existing setup coverage over a real machine is
+    the empty case -- an artifact that declares none -- and everything else is unit-level against a
+    hand-built install state. So this is the working route's missing evidence, and it is also the
+    contrast that gives `tests/configured_setup_gap_test.py` its meaning: the same declaration on
+    the configured registry seam is never looked at (B-044).
+
+    What runs it is the legacy path, reached because a local source is not an approved registry
+    coordinate, and every gate on the way is asserted here rather than assumed: an unreviewed
+    source refuses without explicit authorization, a reviewed plan applies nothing until its
+    effects are approved, and only both together write the file.
+    """
+
+    #: Install first. Setup configures what is installed, so there is nothing to configure before.
+    def _installed(self, env) -> dict:
+        code, payload = env.run(
+            "marketplace", "install", _COORDINATE, "--profile", "claude", "--yes"
+        )
+        self.assertEqual(code, 0, payload)
+        self.assertFalse((env.project / _CONFIGURED).exists())
+        return payload
+
+    def test_install_names_the_setup_it_did_not_run_instead_of_staying_silent(self) -> None:
+        """The half the configured seam has no answer for at all.
+
+        `install` on this route reaches the setup engine, so an install that leaves setup outstanding
+        says so under a `setup` key with the reason. The same install through the configured seam
+        emits no `setup` key at all, which is the difference B-044 records.
+        """
+
+        with _environment_declaring_setup() as env:
+            payload = self._installed(env)
+
+            self.assertEqual(payload["setup"]["planned"], [])
+            self.assertEqual(
+                [item["detail"] for item in payload["setup"]["planning_failures"]],
+                ["setup from local requires explicit source authorization"],
+            )
+
+    def test_setup_from_an_unreviewed_source_refuses_without_explicit_authorization(self) -> None:
+        """The trust gate, over a real machine.
+
+        A local source is not company-reviewed, so its recipe may not run on somebody's machine
+        because they typed `--yes` to an install. This is the boundary the preserved B-044 draft
+        made unfireable by hardcoding `TrustClass.COMPANY_REVIEWED` into the policy check, and
+        nothing in the suite noticed -- because nothing in the suite reached it.
+        """
+
+        with _environment_declaring_setup() as env:
+            self._installed(env)
+
+            code, payload = env.run(
+                "marketplace",
+                "setup",
+                _COORDINATE,
+                "--profile",
+                "claude",
+                "--yes",
+                "--approve-setup-effects",
+            )
+
+            self.assertEqual(code, 1)
+            self.assertEqual(payload["setup"]["planned"], [])
+            self.assertEqual(
+                [item["detail"] for item in payload["setup"]["planning_failures"]],
+                ["setup from local requires explicit source authorization"],
+            )
+            self.assertFalse((env.project / _CONFIGURED).exists())
+
+    def test_an_authorized_plan_is_reviewed_and_applies_nothing_until_its_effects_are(self) -> None:
+        """Authorizing the source produces a plan; it does not consent to the plan.
+
+        The review names every effect with the capability it needs and the recovery it offers, and
+        the run stops there. Two separate answers, because "I trust this source" and "apply this
+        exact change to this exact file" are two separate questions.
+        """
+
+        with _environment_declaring_setup() as env:
+            self._installed(env)
+
+            code, payload = env.run(
+                "marketplace",
+                "setup",
+                _COORDINATE,
+                "--profile",
+                "claude",
+                "--yes",
+                "--authorize-untrusted-source",
+            )
+
+            self.assertEqual(payload["setup"]["planning_failures"], [])
+            planned = payload["setup"]["planned"]
+            self.assertEqual([item["trust"] for item in planned], ["local"])
+            self.assertEqual([item["recipe"] for item in planned], ["setup/installer.json"])
+            self.assertEqual(
+                [effect["target"] for effect in planned[0]["effects"]],
+                [str(env.project / _CONFIGURED)],
+            )
+            self.assertEqual(
+                [effect["capability"] for effect in planned[0]["effects"]], ["filesystem"]
+            )
+            # Reviewed, and refused: the effects were never approved, so the file is not there.
+            self.assertEqual([item["status"] for item in payload["setup"]["items"]], ["cancelled"])
+            self.assertEqual(payload["setup"]["configured"], 0)
+            self.assertFalse((env.project / _CONFIGURED).exists())
+            self.assertNotEqual(code, 0)
+
+    def test_an_authorized_and_approved_setup_writes_the_block_it_reviewed(self) -> None:
+        with _environment_declaring_setup() as env:
+            self._installed(env)
+
+            code, payload = env.run(
+                "marketplace",
+                "setup",
+                _COORDINATE,
+                "--profile",
+                "claude",
+                "--yes",
+                "--authorize-untrusted-source",
+                "--approve-setup-effects",
+            )
+
+            self.assertEqual(code, 0, payload)
+            self.assertEqual(payload["setup"]["configured"], 1)
+            self.assertEqual(payload["setup"]["incomplete"], 0)
+            self.assertEqual([item["status"] for item in payload["setup"]["items"]], ["configured"])
+            # The managed block, delimited so a later run owns exactly what it wrote and nothing a
+            # person added around it.
+            written = (env.project / _CONFIGURED).read_text(encoding="utf-8")
+            self.assertIn("enabled = true", written)
+            self.assertIn("aart setup: skill/code-review@claude:config", written)
 
 
 if __name__ == "__main__":  # pragma: no cover - unittest entry point

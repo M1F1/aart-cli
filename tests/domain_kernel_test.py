@@ -228,45 +228,36 @@ class DomainOutcomeTest(unittest.TestCase):
             OperationOutcome("install", -1)
 
 
-class DomainCollectionsTest(unittest.TestCase):
-    def test_sorted_upsert_and_remove_return_replacements_without_mutating_input(self):
-        from agent_artifacts.domain.collections import remove_sorted, sorted_values, upsert_sorted
-
-        original = (("b", 2), ("a", 1))
-        ordered = sorted_values(original, key=lambda item: item[0])
-        updated = upsert_sorted(ordered, ("b", 3), key=lambda item: item[0])
-        removed = remove_sorted(updated, "a", key=lambda item: item[0])
-
-        self.assertEqual(original, (("b", 2), ("a", 1)))
-        self.assertEqual(ordered, (("a", 1), ("b", 2)))
-        self.assertEqual(updated, (("a", 1), ("b", 3)))
-        self.assertEqual(removed, (("b", 3),))
-
-
-class DomainPortsTest(unittest.TestCase):
-    def test_ports_are_small_runtime_checkable_callable_protocols(self):
-        from agent_artifacts.domain.ports import CommandPort, QueryPort
-        from agent_artifacts.domain.result import Ok
-
-        class UpperQuery:
-            def __call__(self, request: str):
-                return Ok(request.upper())
-
-        class LengthCommand:
-            def __call__(self, command: str):
-                return Ok(len(command))
-
-        self.assertIsInstance(UpperQuery(), QueryPort)
-        self.assertIsInstance(LengthCommand(), CommandPort)
-        self.assertEqual(UpperQuery()("aart"), Ok("AART"))
-        self.assertEqual(LengthCommand()("aart"), Ok(4))
-
-
 class DomainArchitectureTest(unittest.TestCase):
     def test_domain_modules_do_not_import_io_or_legacy_layers(self):
         domain = ROOT / "agent_artifacts" / "domain"
         self.assertTrue(domain.is_dir(), domain)
-        forbidden_roots = {"http", "os", "pathlib", "shutil", "socket", "subprocess", "urllib"}
+        # INV-108 names six things by hand -- filesystem mutation, subprocess execution,
+        # credential-provider access, network I/O, terminal rendering and GitHub-specific
+        # operations -- and this set covered three of them.  A domain module could `import curses`,
+        # or import `agent_artifacts.io` despite this test's own name, and stay green (M43/M44).
+        forbidden_roots = {
+            "curses",  # terminal rendering
+            "ftplib",
+            "http",
+            "keyring",  # credential-provider access
+            "os",
+            "pathlib",
+            "shutil",
+            "socket",
+            "ssl",
+            "subprocess",
+            "termios",
+            "tty",
+            "urllib",
+        }
+        forbidden_prefixes = {
+            "agent_artifacts.io",  # the effect boundary this layer must stay above
+            "agent_artifacts.cli",
+            "agent_artifacts.tui",
+            "agent_artifacts.commands",
+            "agent_artifacts.security",  # GitHub- and provider-specific operations live below here
+        }
         forbidden_modules = {"agent_artifacts.model", "agent_artifacts.outcomes"}
         violations: list[str] = []
         for path in sorted(domain.glob("*.py")):
@@ -279,17 +270,33 @@ class DomainArchitectureTest(unittest.TestCase):
                 else:
                     continue
                 for module in modules:
-                    if module.split(".", 1)[0] in forbidden_roots or module in forbidden_modules:
+                    denied = (
+                        module.split(".", 1)[0] in forbidden_roots
+                        or module in forbidden_modules
+                        or any(
+                            module == prefix or module.startswith(f"{prefix}.")
+                            for prefix in forbidden_prefixes
+                        )
+                    )
+                    if denied:
                         violations.append(f"{path.name}: {module}")
         self.assertEqual(violations, [])
+        # The detector must detect: without this, an empty domain or a broken walk passes.
+        self.assertGreater(len(list(domain.glob("*.py"))), 3)
 
     def test_every_domain_dataclass_is_frozen(self):
-        module_names = (
-            "diagnostics",
-            "identifiers",
-            "outcomes",
-            "result",
+        # Derived from the directory rather than listed.  A hand-written list silently stops
+        # covering a module added later, and keeps naming one that is removed -- CP-18 step 3
+        # deleted `ports` and `collections`, and a listed name would have had to be chased.
+        module_names = tuple(
+            sorted(
+                path.stem
+                for path in (ROOT / "agent_artifacts" / "domain").glob("*.py")
+                if path.stem != "__init__"
+            )
         )
+        self.assertIn("result", module_names)
+        self.assertGreater(len(module_names), 2)
         mutable: list[str] = []
         found: list[str] = []
         for name in module_names:

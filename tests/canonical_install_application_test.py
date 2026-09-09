@@ -67,7 +67,8 @@ def _fixture(
         "hook": (
             (
                 "payload/hook.json",
-                b'{"name":"review","command":"${SCRIPT_DIR}/run.sh","matcher":"*"}\n',
+                b'{"name":"review","command":"${SCRIPT_DIR}/run.sh",'
+                b'"event":"PreToolUse","matcher":"*"}\n',
                 False,
             ),
             ("payload/run.sh", b"#!/bin/sh\n", True),

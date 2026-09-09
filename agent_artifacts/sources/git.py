@@ -41,8 +41,66 @@ _HOOK_FREE = (
 GitRunner = Callable[[GitProcessRequest], Result[GitProcessReceipt]]
 
 
-def _error(message: str) -> Err:
-    return Err((Diagnostic(SOURCE_INVALID, Severity.ERROR, redact_text(message)),))
+def _error(message: str, remediation: tuple[str, ...] = ()) -> Err:
+    return Err(
+        (
+            Diagnostic(
+                SOURCE_INVALID,
+                Severity.ERROR,
+                redact_text(message),
+                remediation=tuple(redact_text(item) for item in remediation),
+            ),
+        )
+    )
+
+
+# `QA-019`/`B-093`: the refusal is unchanged and stays fail-closed. What follows is the answer to
+# the operator's only question — what do I change in my repository — which a single "unsafe entry"
+# message could not give, because a symlink, a submodule, an unreadable mode and an unsafe path all
+# produced it. A refused entry's own path is named; a symlink's target never is, since that target
+# has not passed the repository's path-safety rules and reading it is what this boundary prevents.
+_REPLACE_SYMLINK = (
+    "AART never follows or materializes a link it has not reviewed. In the source repository, "
+    "commit a regular file in its place, delete it if nothing needs it, or subscribe to a source "
+    "that contains no symbolic links.",
+)
+_REMOVE_SUBMODULE = (
+    "a submodule's content lives in another repository and is not part of this snapshot. Commit "
+    "the files this source needs into the repository itself, or subscribe to the other repository "
+    "as its own Source.",
+)
+_SAFE_PATH = (
+    "commit the file under a plain relative path inside the repository: no leading slash, no `..` "
+    "segment, no drive letter and no reserved name.",
+)
+_REGULAR_FILE_ONLY = (
+    "AART reads regular files only, committed as Git mode 100644 or 100755. Re-commit the entry as "
+    "an ordinary file, or remove it from the source repository.",
+)
+_FLATTEN_TREE = (
+    "the entry is nested more deeply than this source's configured depth limit allows: move it "
+    "nearer the repository root, or raise the limit for this source if the depth is intended.",
+)
+_SYMLINK_MODE = b"120000"
+_GITLINK_TYPE = b"commit"
+_FILE_MODES = frozenset({b"100644", b"100755"})
+
+
+def _unsafe_entry(mode: bytes, object_type: bytes, path: str, max_depth: int) -> Err | None:
+    """Name the entry kind that was refused, or `None` when the entry is an ordinary file."""
+
+    parsed = parse_relative_path(path)
+    if isinstance(parsed, Err):
+        return _error(f"Git tree contains an unsafe path: {path!r}", _SAFE_PATH)
+    if mode == _SYMLINK_MODE:
+        return _error(f"Git tree entry is a symbolic link: {path!r}", _REPLACE_SYMLINK)
+    if object_type == _GITLINK_TYPE:
+        return _error(f"Git tree entry is a submodule: {path!r}", _REMOVE_SUBMODULE)
+    if object_type != b"blob" or mode not in _FILE_MODES:
+        return _error(f"Git tree entry has an unsupported Git mode: {path!r}", _REGULAR_FILE_ONLY)
+    if len(parsed.value.parts) > max_depth:
+        return _error(f"Git tree entry exceeds the configured path depth: {path!r}", _FLATTEN_TREE)
+    return None
 
 
 def _command(request: GitSnapshotRequest, *arguments: str) -> GitProcessRequest:
@@ -91,18 +149,19 @@ def _tree_listing(
             metadata, encoded_path = record.split(b"\t", 1)
             mode, object_type, _object_id, raw_size = metadata.split(b" ", 3)
             path = encoded_path.decode("utf-8", errors="strict")
-            size = int(raw_size)
         except (ValueError, UnicodeDecodeError):
             return _error("Git tree listing is malformed or contains non-UTF-8 paths")
-        parsed = parse_relative_path(path)
-        if (
-            isinstance(parsed, Err)
-            or object_type != b"blob"
-            or mode not in {b"100644", b"100755"}
-            or len(parsed.value.parts) > request.limits.max_depth
-            or size < 0
-        ):
-            return _error(f"Git tree contains an unsafe entry: {path!r}")
+        # The entry kind is decided before the size is read: `ls-tree -l` reports `-` for a
+        # gitlink, and reading that first made every submodule look like a broken listing.
+        refused = _unsafe_entry(mode, object_type, path, request.limits.max_depth)
+        if refused is not None:
+            return refused
+        try:
+            size = int(raw_size)
+        except ValueError:
+            return _error("Git tree listing is malformed or contains non-UTF-8 paths")
+        if size < 0:
+            return _error("Git tree listing is malformed or contains non-UTF-8 paths")
         if path in files:
             return _error(f"Git tree contains a duplicate path: {path}")
         if len(files) + 1 > request.limits.max_files:
