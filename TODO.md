@@ -76,6 +76,17 @@ Each new entry records:
       Note: the draft is carried in `ConsumerUiState` and never reset on entry. `QA-018` requires
       a **refused** form to keep what was typed, so the reset belongs on entering the form, not on
       leaving it.
+      Fix: `_navigate` empties the draft the entered form owns, and only that one, so opening Add
+      Source does not discard a half-typed Add Registry. It is read on forward navigation only,
+      which is exactly what separates opening a new form from returning to a refused one —
+      `_declined_preparation` goes back through the session history and never reaches this
+      (`D-211`). Add Registry and Add Source also state, in words, that they add another one and
+      change nothing already connected, which is the question the operator actually asked.
+      Evidence: `tests/form_draft_lifecycle_test.py` holds the empty form, the other drafts left
+      alone, the refused form still holding everything typed (`QA-018`/`D-184`), Esc back onto a
+      form keeping it, and the new sentence on both add forms.
+      Retest: add one Source, press `a` on screen 31 again, and confirm the form is empty; then
+      let a preparation refuse and confirm the typed values are still there.
 
 - [ ] **QA-029 — Screens are a wall of text; the action prompt is not separated from the body.**
       Stage: every review screen

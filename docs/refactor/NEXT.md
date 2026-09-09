@@ -1353,11 +1353,15 @@ binding without the edge is the silent key being fixed. Registry Maintainer bind
 a finished promotion is one key from the next one; screen 45's Enter still goes on to Registry
 (D-210).
 
-**Exact next action for Claude:** CP-19 step 4 — QA-028. Entering Add Registry, Add Source or
-Initialize Registry for a new action opens an empty form, while a preparation that was refused keeps
-the typed draft on screen (QA-018/D-184). Reset on entry, not on leave. Then steps 5–7 and 11–14.
-The operator has asked for targeted tests and quality gates only until the batch is handed back;
-step 15 runs the full suites then.
+**CP-19 step 4 is DONE — QA-028 closed (2026-09-09).** `_navigate` empties the draft the entered
+form owns, and only that one; `_declined_preparation` and `_back` walk the session history and touch
+no draft, so a refused form still holds everything typed (D-211). Both add forms say in words that
+they add another one and change nothing already connected.
+
+**Exact next action for Claude:** CP-19 step 5 — QA-029. State one layout rule for every review:
+facts, a blank line, then the decision or action prompt. Do not patch Source Sync alone, and keep
+B-048's refusal wrapping separate unless the rule requires it. Then steps 6, 7 and 11–14. Targeted
+tests and quality gates only until the batch is handed back; step 15 runs the full suites then.
 
 ## Critical boundaries for this slice
 

@@ -290,7 +290,7 @@
         {
           "id": "4",
           "title": "New forms open empty while refused forms retain their draft (QA-028)",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "5",

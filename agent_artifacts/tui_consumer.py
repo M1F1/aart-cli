@@ -2322,6 +2322,10 @@ class CanonicalScreenSource:
                 "Connect an approved registry. AART validates a fresh snapshot before saving it.",
                 "Local folders are authoring Sources, not Marketplace registries.",
                 "",
+                # `QA-028`: the empty form says a new one is being made; this says the old ones
+                # are not being replaced by it, which is the question the operator actually asked.
+                "This adds another registry. Nothing already connected is changed.",
+                "",
                 *(
                     f"{'>' if row == state.current_row else ' '} {labels[row]}: {values[row]}"
                     for row in state.rows
@@ -2354,6 +2358,8 @@ class CanonicalScreenSource:
             return (
                 "Subscribe to an authoring repository. AART discovers only the aart.yaml and",
                 "aart.json manifests its authors committed; nothing here is approved content yet.",
+                "",
+                "This adds another Source. Nothing already connected is changed.",
                 "",
                 *(
                     f"{'>' if row == state.current_row else ' '} {labels[row]}: {values[row]}"

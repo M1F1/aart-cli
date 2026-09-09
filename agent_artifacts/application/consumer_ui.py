@@ -12,6 +12,7 @@ for itself would eventually let `q` quit instead of typing a q.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from enum import Enum
 
@@ -446,6 +447,22 @@ def opening_state(settings: ConsumerSettings) -> ConsumerUiState:
     )
 
 
+#: The draft each form owns, and therefore what "a new one" means when that form is opened.
+#: Opening a form and returning to a refused one look alike from the screen and are opposite
+#: requirements: `QA-028` wants the first empty, `QA-018`/`D-184` wants the second untouched. This
+#: is read only on forward navigation, which is the difference between them.
+_FORM_DRAFTS: dict[ApplicationScreen, Callable[[ConsumerUiState], ConsumerUiState]] = {
+    ConsumerScreen.REGISTRY_ADD: lambda state: replace(state, registry_draft=RegistryDraft()),
+    MaintainerScreen.SOURCE_ADD: lambda state: replace(state, source_draft=SourceDraft()),
+    MaintainerScreen.REGISTRY_INIT: lambda state: replace(
+        state, registry_init_draft=RegistryInitDraft()
+    ),
+    MaintainerScreen.REPOSITORY_SCAN: lambda state: replace(
+        state, repository_scan_draft=RepositoryScanDraft()
+    ),
+}
+
+
 def _navigate(
     state: ConsumerUiState, screen: ApplicationScreen | None
 ) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
@@ -471,6 +488,11 @@ def _navigate(
         file_diff=False,
         failed_action=None,
     )
+    # Only the form being entered is emptied. Each form owns one draft, and entering one is not a
+    # reason to discard what somebody typed into another (`QA-028`).
+    empty = _FORM_DRAFTS.get(screen)
+    if empty is not None:
+        updated = empty(updated)
     return updated, (ConsumerUiCommand(ConsumerUiCommandKind.LOAD_SCREEN, screen),)
 
 

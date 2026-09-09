@@ -31,9 +31,11 @@ internal state model.
    binds `c Candidates`, so a finished promotion is one key from the next one; screen 45's own
    Enter still goes on to Registry, which is the precedent this generalizes (D-210). Confirmation
    screens stay confirmations: a review still holding its action is not treated as a result.
-4. **Form lifecycle (QA-028) — TODO.** Entering Add Registry, Add Source or Initialize Registry for
-   a new action resets its draft. A preparation refusal stays on the form with the typed draft
-   intact, preserving QA-018/D-184.
+4. **Form lifecycle (QA-028) — DONE.** `_navigate` empties the draft the entered form owns, and only
+   that one. It is forward navigation only, which is exactly what separates opening a new form from
+   returning to a refused one: `_declined_preparation` and `_back` walk the session history and
+   touch no draft, so `QA-018`/`D-184` holds unchanged. Both add forms also say in words that they
+   add another one and change nothing already connected (D-211).
 5. **Review layout (QA-029) — TODO.** State one layout rule for every review: facts, blank
    separation, decision/action prompt. Do not patch Source Sync alone; keep refusal wrapping B-048
    separate unless it becomes necessary to satisfy the rule.
@@ -148,7 +150,8 @@ green. Full repository gates are intentionally deferred until step 15 at the ope
 
 ## Exact next implementation action
 
-Execute step 4 (QA-028) next: a form opens empty when it is entered for a new action, while a form
-whose preparation was refused keeps the typed draft (QA-018/D-184). Then steps 5–7 and 11–14. The
-operator has asked for targeted tests and quality gates only until the batch is finished; step 15
-runs the full suites once it is handed back.
+Execute step 5 (QA-029) next: one layout rule for every review — facts, blank separation, then the
+decision or action prompt. Do not patch Source Sync alone, and keep B-048's refusal wrapping
+separate unless satisfying the rule requires it. Then steps 6, 7 and 11–14. The operator has asked
+for targeted tests and quality gates only until the batch is finished; step 15 runs the full suites
+once it is handed back.

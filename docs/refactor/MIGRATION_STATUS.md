@@ -873,7 +873,7 @@ the operator during the manual batch.
 **Next:** QA-027, Enter from completed result screens back to the list that began their sequence.
 
 **CP-19 planning checkpoint (2026-09-09).** The operator separated post-refactor manual acceptance
-from the closed refactor by opening CP-19 (D-203). QA-026, QA-034, QA-025/QA-032, QA-033 and QA-027 are its completed steps 1, 8, 9, 10 and 3; the rest of
+from the closed refactor by opening CP-19 (D-203). QA-026, QA-034, QA-025/QA-032, QA-033, QA-027 and QA-028 are its completed steps 1, 8, 9, 10, 3 and 4; the rest of
 QA-030 are scoped, unimplemented interaction/layout steps. QA-031/B-100 records the blocking second
 promotion: local `cc7c01d` contains an unpublished Skill promotion while synchronized remote `main`
 is `027ba7f`, so exact baseline equality correctly refuses the MCP transaction. The gap is the
@@ -1005,3 +1005,14 @@ its confirmation is not a result. Three targeted mutations killed.
 
 At the operator's instruction the batch runs targeted tests and quality gates only; the full suites
 run at step 15 once it is handed back.
+
+**CP-19 step 4 complete — QA-028 closed (2026-09-09).** Adding a second Source opened its form still
+holding the first Source's answers, and nothing said whether confirming would replace that
+subscription or add another. The draft was never reset -- which is also what makes `QA-018` work,
+because a refused preparation returns to the form with everything typed still in it. The two
+requirements look identical from the screen and are opposites, so the distinction is drawn where the
+paths differ: direction. `_navigate` empties the draft the entered form owns; `_declined_preparation`
+and `_back` walk the session history and touch no draft (`D-211`). Only that form's draft is
+emptied, so opening Add Source does not discard a half-typed Add Registry. Both add forms now also
+say in words that they add another one and change nothing already connected.
+`tests/form_draft_lifecycle_test.py` holds all five claims; three targeted mutations killed.

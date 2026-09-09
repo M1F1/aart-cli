@@ -4912,3 +4912,32 @@ now binds `c Candidates`.
 Consequence: this shares `QA-033`'s mechanism from the successful side — a finished thing leaves
 for the list that owns it — without merging the two, because a run that stopped and a run that
 completed say different things on the way out.
+
+## D-211 — A form is emptied on the way in, never on the way out
+
+Date: 2026-09-09 · Increment: CP-19 step 4, QA-028 · Status: accepted
+
+Adding a second Source opened screen 31a still holding the first Source's alias, URL and branch, and
+nothing on the screen said whether confirming would edit that subscription or create another. The
+draft lives in `ConsumerUiState` and was never reset — which is also the mechanism `QA-018`/`D-184`
+depends on, because a refused preparation returns to the form with everything still typed in it
+rather than making somebody retype a whole form to fix one field.
+
+The two requirements look identical from the screen and are opposites, so the distinction is drawn
+where the two paths genuinely differ: direction. `_navigate` is forward navigation and empties the
+draft the entered form owns; `_declined_preparation` and `_back` walk the session history and touch
+no draft at all. Nothing needs to remember which case it is in, because the case is which function
+ran.
+
+Only the entered form's draft is emptied. Each form owns exactly one, and opening Add Source is not
+a reason to discard a half-typed Add Registry. `_FORM_DRAFTS` maps a form screen to the one function
+that empties its own draft, so a form added without an entry here keeps the old defect visibly
+rather than silently clearing something else.
+
+Repository Scan is included even though `QA-028` names only the three add/init forms: it carries a
+draft through the same reducer and would have shown the same defect on its second use.
+
+The finding's second half — not knowing whether confirming replaces or adds — is answered in words
+as well as by the empty form: both add forms now say they add another one and change nothing already
+connected. Initialize Registry does not, because it does not have that ambiguity; there is one
+registry in a project.
