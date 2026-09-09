@@ -2579,3 +2579,23 @@ promotion can be reviewed. Interactive guidance must contain no `aart ...` comma
 
 Evidence/links: QA-031; `application/maintainer_promotion.py::prepare_promotion_transaction`;
 Product Specification 161.7 and 165.28; D-103; D-137; CP-19 step 7.
+
+## B-101 — A failed TUI action retains a confirmation for a plan that no longer exists
+
+Found: manual TUI acceptance, QA-033 (2026-09-09) · Severity: high · Status: open
+
+The real Registry rebuild ran `lock`, received the known QA-032/B-057 representation refusal and
+stopped. Its adapter correctly cleared `_pending` and `_pending_action`, but `_failed` emitted an
+`ACTION_RECORDED` event with no text. `_action_recorded` treats that as no transition and leaves the
+reducer on `REGISTRY_REBUILD_REVIEW` with its action and review digest intact. The static review
+header still says to press Enter to start, and `_CONFIRM_SCREENS` still advertises `Enter Confirm`.
+A second Enter therefore submits a confirmation the adapter can only reject as `nothing was
+prepared for this action`.
+
+This is independent of why the action failed. CP-19 must characterize a failed run as a terminal
+state distinct from an unexecuted review, remove the stale confirmation and provide an honest route
+to the owning list or a newly prepared retry. It belongs beside QA-027's successful-result exits,
+but one must not be implemented as though the other had succeeded.
+
+Evidence/links: QA-033; `io/consumer_actions.py::_failed`;
+`application/consumer_ui.py::_action_recorded`; CP-19 step 9.

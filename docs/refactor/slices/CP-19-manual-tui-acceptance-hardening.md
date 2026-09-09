@@ -45,34 +45,33 @@ internal state model.
    for the checked-out versioned Registry representation and make the generated workflow use the
    same authority as consumers. Keep compatibility/audit coverage explicit. Do not make promotion
    emit the legacy authoring workspace as a second truth merely to satisfy old commands.
-9. **Batch verification — TODO.** Each implementation increment gets a real RED/mutation and focused
+9. **Failed-action terminal state (QA-033/B-101) — TODO.** Once an attempted action refuses, replace
+   its review/confirmation state with an explicit failed result. The pending plan is already gone,
+   so the footer may not advertise confirmation; offer the owning list or a freshly prepared retry.
+   Characterize this across action kinds rather than special-casing Registry rebuild.
+10. **Batch verification — TODO.** Each implementation increment gets a real RED/mutation and focused
    suites. Only after the operator hands the batch back run full `make quality` and
    `make integration`, then return the fixed items for manual retest.
 
 ## Current manual checkpoint
 
-The Registry checkout `/Users/mifi/code/aart-e2e-work/aart-test-registry` is clean at `cc7c01d` on
-`qa/publish-v1`. That commit promotes `skill/verification-before-completion@1.0.0`. PR #1 publishes
-that branch, while `origin/main` is still `027ba7f`, the same revision the configured Registry
-source last synchronized. Reviewing `mcp/aart-e2e-mcp@1.0.0` therefore correctly refuses the
-unequal baseline until the PR is merged and synchronized.
+The operator merged Registry PR #1 at `f37d182` and synchronized it despite the known QA-032 false
+negative. Local `main` now holds the second promotion at
+`259af24`, one commit ahead of published `origin/main`, and the repository-adopted
+`skill/commit-message-discipline@1.0.0` transaction is present as an uncommitted working-tree
+change. A mistaken Rebuild run exposed QA-033: after `lock` refused on the legacy representation,
+the TUI remained on Review Rebuild and continued to advertise confirmation for a cleared plan.
 
-Registry PR #1 now exists. Both generated CI matrix arms fail on the legacy workspace validator,
-while public `registry-git` acquisition of the exact remote branch reports the promoted Registry
-healthy. This is QA-032 and the critical reclassification of B-057; it is safe for this disposable
-manual lab to merge the known false-negative PR so discovery can continue, but the generated gate
-must be repaired before CP-19 closes.
-
-To resume discovery, publish the existing branch through Git review/merge, update the local `main`,
-restart the TUI, synchronize `aart-test-registry` from screen 21 and retry the MCP Candidate. Do not
-reset or discard `cc7c01d`; it is the first promotion under test.
+To resume discovery, press Escape twice from Review Rebuild to reach Registry Maintainer, press `u`
+for Check upstream, focus `skill/commit-message-discipline@1.0.0` and press Enter. Do not run Rebuild
+again and do not discard the local MCP promotion or adoption transaction.
 
 ## Evidence and gates
 
 QA-026 was RED against the fixed footer. A semantic mutation routing advertised `b Rebuild` to the
 initialization screen was killed by the headless shell walk. The focused 238-test interaction and
 boundary set, changed-module `mypy`, `ruff check`, `ruff format --check` and `make docs-check` were
-green. Full repository gates are intentionally deferred until step 9 at the operator's request.
+green. Full repository gates are intentionally deferred until step 10 at the operator's request.
 
 ## Do not undo
 

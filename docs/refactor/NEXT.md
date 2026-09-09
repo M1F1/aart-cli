@@ -1252,12 +1252,13 @@ own execution slice and plan steps rather than living only in TODO/BACKLOG (D-20
 is paused while the operator continues discovery. QA-027's uncommitted RED draft was removed; no
 production change for QA-027–QA-031 exists.
 
-The current blocking checkpoint is QA-031/B-100. The local Registry is clean at `cc7c01d` on
-`qa/publish-v1`, containing the first Skill promotion; remote `main` and the synchronized approved
-Registry are still at `027ba7f`. The exact-baseline refusal is correct. To continue the manual run,
-publish and merge that existing branch, update the local `main`, restart the TUI, synchronize
-`aart-test-registry` on screen 21 and retry the MCP Candidate. The later implementation task is to
-make that state and recovery explicit in the TUI without weakening the comparison.
+QA-031's operational checkpoint has been crossed: Registry PR #1 was merged at `f37d182` and the
+subscription synchronized. Local `main` now has the MCP promotion commit `259af24`, one ahead of
+published `origin/main`, plus the uncommitted repository adoption of
+`skill/commit-message-discipline@1.0.0`. The operator is testing Check upstream next. From the
+failed Review Rebuild screen, Escape twice returns to Registry Maintainer; `u` opens the adopted
+artifact list. The later QA-031 implementation task still owes an honest diagnosis without
+weakening the exact comparison.
 
 **Next action:** continue manual discovery from the recorded CP-19 checkpoint and append new QA
 findings. Do not implement the open steps until the operator starts the next work session.
@@ -1267,9 +1268,16 @@ artifact through the generated workflow. Both matrix arms fail because `registry
 the legacy `format/validate/lock/build/audit/test` sequence over the canonical versioned output.
 The exact remote branch is healthy through public `registry-git` acquisition, so this is a false
 negative in the publication gate, not corrupt Registry content (D-204). CP-19 step 8 owns the fix.
-For the disposable manual run, PR #1 is mergeable and may be consciously merged so discovery can
-continue; full CP-19 verification may not pass until the generated gate validates the canonical
-representation without dropping its compatibility/audit claims.
+The disposable manual run consciously merged PR #1 after independent consumer validation; full
+CP-19 verification may not pass until the generated gate validates the canonical representation
+without dropping its compatibility/audit claims.
+
+**QA-033 / B-101 (2026-09-09).** The operator accidentally ran Rebuild while looking for Check
+upstream, and its known legacy `lock` refusal exposed a separate state-machine defect. Execution
+had ended and the adapter had discarded its pending plan, but the TUI remained on Review Rebuild,
+said `press Enter to start it` and advertised `Enter Confirm`; another Enter can only report that
+nothing was prepared. CP-19 step 9 must make a failed action an explicit terminal result across
+action kinds. Do not implement it during the active discovery pass.
 
 ## Critical boundaries for this slice
 

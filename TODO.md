@@ -141,6 +141,23 @@ Each new entry records:
       not in weakening promoted-Registry validation or teaching promotion to write a second legacy
       representation.
 
+- [ ] **QA-033 — A refused run remains on a stale confirmation screen.**
+      Stage: Registry maintenance after a canonical promotion
+      Surface: Review Rebuild (46i) after execution has already stopped
+      Severity: high
+      Blocks current stage: no; pressing Esc twice still reaches Registry Maintainer
+      Reproduction: Registry Maintainer → `b` → choose the whole rebuild → Enter to review → Enter
+      to run; let `lock` refuse because the canonical promoted Registry has no legacy
+      `artifact.json`
+      Expected: the screen clearly becomes a finished/refused result, removes the confirmation
+      prompt and offers one honest route back to Registry Maintainer or to prepare a fresh retry
+      Observed: the body says the run stopped, but the title remains `Review Rebuild`, the header
+      still says `press Enter to start it`, and the footer still advertises `Enter Confirm`. The
+      action adapter has already cleared its pending run, so another Enter can only answer
+      `nothing was prepared for this action; review it again`.
+      Note: QA-032 explains this particular lock refusal, but the stale terminal state is a
+      separate reducer/result-screen defect and must hold for every failed action.
+
 ### Fixed — awaiting manual retest
 
 - [ ] **QA-026 — The footer does not name the keys the current screen actually has.**

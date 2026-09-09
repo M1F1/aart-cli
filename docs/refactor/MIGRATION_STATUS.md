@@ -889,3 +889,13 @@ lock, build, audit and compatibility commands; public `registry-git` acquisition
 remote head `cc7c01d` as healthy. CP-19 step 8 must make the generated gate validate the canonical
 representation without deleting the gate's claims or producing a second legacy index (D-204).
 Implementation remains paused during discovery.
+
+**QA-033 (2026-09-09).** A refused Rebuild remains on its review screen after execution. The body
+says the run stopped, while the header and contextual footer still ask for Enter confirmation even
+though the adapter cleared the pending plan; the next Enter can only say nothing was prepared.
+CP-19 step 9/B-101 owns the action-agnostic failed-result transition. Implementation remains paused.
+
+**Current manual checkpoint (2026-09-09).** Registry PR #1 was merged at `f37d182` and synchronized.
+The lab's local `main` has the MCP promotion at `259af24`, one commit ahead of `origin/main`, plus
+the uncommitted adopted `skill/commit-message-discipline@1.0.0` transaction. Resume from Registry
+Maintainer → `u` Check upstream; the mistaken Rebuild needs only Escape twice and must not be rerun.

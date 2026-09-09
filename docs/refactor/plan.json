@@ -314,6 +314,11 @@
         },
         {
           "id": "9",
+          "title": "Failed actions leave review state without retaining a stale confirmation (QA-033/B-101)",
+          "status": "todo"
+        },
+        {
+          "id": "10",
           "title": "Focused evidence per increment and full batch verification before handback",
           "status": "todo"
         }
