@@ -2059,8 +2059,8 @@ Evidence/links: Product Specification 161.7; `ConsumerScreen.REGISTRIES`;
 ## B-085 — OpenCode is named by a dormant profile but absent from canonical installation targets
 
 Found: whole-product TUI acceptance preparation (2026-09-08) · Severity: high · Status: open —
-Skills, instructions, MCP and harness selection are measured, built and green (D-194); guidelines
-and hooks remain unmeasured and refuse by name
+Skills, instructions, MCP and harness selection are measured, built, installed end to end and green
+(D-194, D-197); guidelines and hooks remain unmeasured and refuse by name
 
 OpenCode 1.18.29 is installed on the acceptance Mac, and an artifact may declare `opencode` in its
 compatibility. Nevertheless every canonical placement lookup refuses it: `MCP_TARGETS`,
@@ -2399,7 +2399,9 @@ Evidence/links: `registry scan`, `discover`, `vendor`, `vendor-batch`;
 
 ## B-096 — Codex keeps its MCP servers in TOML, which AART cannot edit safely yet
 
-Found: QA-012 harness measurement (2026-09-08) · Severity: medium · Status: open
+Found: QA-012 harness measurement (2026-09-08) · Severity: medium · Status: closed (2026-09-09,
+D-196) — AART still does not write this file; Codex's own editor does, and user-scope registration
+is measured, built and green
 
 `LocalHarnessRegistry` is a JSON interpreter. Its whole contract is that the file belongs to the
 harness and the person using it, so unrelated keys survive, permissions survive, and a file it
@@ -2427,6 +2429,21 @@ its CLI contract. Neither option should be chosen without measuring it.
 
 Evidence/links: `domain/harness.py::MCP_TARGETS`; `io/harness.py::LocalHarnessRegistry`;
 `tests/codex_harness_test.py`; QA-012; B-086; D-193.
+
+Closed by the second of the two leads this entry recorded, and closed by measuring it rather than
+by choosing it. `codex mcp add`/`remove`/`list --json`, run against an isolated `CODEX_HOME`, keep
+exactly the promise `LocalHarnessRegistry` makes and a hand-rolled TOML writer could not: a config
+file holding an operator's comment, an unrelated `model` key, another server's table and a
+following `[tui]` table came back byte-identical after a server was added and removed. So the row
+delegates: `McpEditor.HARNESS_COMMAND` on the target, routed by the registry, with `harness-editor-
+missing` named when Codex is not installed and no fallback to writing the file directly. The first
+lead — a TOML editor that preserves what it did not write — was not taken and is not needed.
+
+The trust finding in this entry is why there is still no project row: `codex mcp add` writes the
+global configuration and offers no project flag, and a project registration would be inert until the
+operator trusts the project. `mcp_target("codex", Scope.PROJECT)` keeps raising. See `D-196`, and
+`B-097` for hooks, which delegation does not help because the blocker there is a review gate rather
+than a file format.
 
 ## B-097 — Codex hooks exist and are enabled, but a written file cannot make one run
 
@@ -2467,3 +2484,32 @@ whether that file is JSON or TOML — the binary contains both "failed to serial
 
 Evidence/links: `codex features list`; strings measured from Codex CLI 0.152.0;
 `domain/harness.py::HOOK_TARGETS`; `tests/delivery_targets_test.py`; QA-012; B-086; B-096; D-193.
+
+## B-098 — A harness is not integrated until something installs through it and reads it back
+
+Found: OpenCode/Codex install verification (2026-09-09) · Severity: medium · Status: open
+
+`D-197` records a defect that neither harness table nor either harness's tests could have caught:
+writing an MCP registration learned about `McpEntryShape` and reading one did not, so a correct
+OpenCode registration observed as missing and every install of one ended partially-applied. Both
+halves were individually right. Only installing through them and reading the result back found it.
+
+Two harnesses now have that end-to-end proof — `tests/opencode_installation_e2e_test.py` and
+`tests/codex_installation_e2e_test.py` — and Tabnine has had it since
+`tests/artifact_installation_e2e_test.py`. Claude has target rows exercised everywhere and no test
+that installs an MCP server for Claude and then starts what landed in `.mcp.json`. That is very
+likely fine, since Claude's shape is the one the writer was built around, but "very likely fine" is
+what was true of the reader too.
+
+The three E2E modules are also now substantially the same file: compile an authored manifest,
+publish it, describe it, plan against a target, install, assert. The differences worth keeping are
+the target and the assertions about that harness. A shared fixture would make adding the fourth
+harness cheap and would make the missing Claude case obvious rather than invisible.
+
+Do this when a fourth harness arrives, or sooner if the duplication starts drifting. It is not on
+the critical path: the two harnesses this work was asked for are proven, and nothing in the Product
+Specification is unsatisfied without it.
+
+Evidence/links: `D-197`; `tests/harness_registration_roundtrip_test.py`;
+`tests/opencode_installation_e2e_test.py`; `tests/codex_installation_e2e_test.py`;
+`tests/artifact_installation_e2e_test.py`.

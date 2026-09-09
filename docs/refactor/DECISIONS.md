@@ -4459,3 +4459,99 @@ default location and whether it is JSON or TOML, since the binary carries error 
 Whether AART should install a hook and tell the operator plainly that Codex will ask them to review
 it is a defensible product answer and a reasonable future slice. It is a product decision about what
 a receipt means, and it does not belong in a target table.
+
+## D-196 — A harness whose file AART cannot write safely gets written by the harness
+
+`B-096` blocked Codex MCP on a constraint that was real and correctly stated: Codex keeps servers as
+`[mcp_servers.<name>]` TOML tables, `tomllib` reads only and only from 3.11 while `requires-python`
+is `>=3.10`, nothing in the standard library writes TOML at any version, and INV-071 forbids a
+dependency. What that entry got right, and what matters here, is that the objection was never the
+syntax. `LocalHarnessRegistry` exists to promise that a registration leaves the operator's file
+otherwise untouched — unrelated keys, ordering, permissions, a map it cannot parse reported rather
+than replaced. A hand-rolled TOML writer cannot promise that, and a registration that destroys
+somebody's configuration to succeed is not a successful registration.
+
+**What unblocked it is a measurement.** Codex ships `codex mcp add`, `remove`, `get` and
+`list --json`, and against an isolated `CODEX_HOME` it keeps exactly the promise this repository
+could not: a config file holding an operator's comment, an unrelated `model` key, another server's
+table and a following `[tui]` table came back byte-identical after a server was added and removed.
+So the answer is not to write the file better; it is not to write the file.
+
+**`McpEditor` on the target.** A target now says who writes it: `SETTINGS_FILE`, which is AART's
+JSON interpreter and every other measured harness, or `HARNESS_COMMAND`, which is the harness's own
+editor. `LocalHarnessRegistry` routes on that, so nothing above it learns that harnesses differ —
+the same reason `McpEntryShape` lives on the target rather than in a caller (`D-194`). Delegation is
+the exception it was measured to be, and a test pins that Codex is the only harness holding it.
+
+**The trade, stated rather than hidden.** A delegated registration needs the Codex executable on
+this machine, and says `harness-editor-missing` by name when it is absent instead of reporting a
+registration that did not happen. That is honest: installing into a harness that is not installed
+was never meaningful. There is no silent fallback to writing the file directly — a fallback would
+defeat the entire reason for delegating, and a test holds that the file stays untouched when the
+editor is missing.
+
+**Reading came with it.** Observation used to parse the settings file as JSON, which for Codex is a
+file that cannot parse. `observed_command` moved onto the registry port, so whoever writes a
+harness's servers is also who reads them back. That closed a defect this work found in the harness
+that was already shipping: see `D-197`.
+
+**User scope only.** `codex mcp add` reports "Added global MCP server" and offers no project flag,
+and a project-scope registration would be inert until the operator trusts the project. So there is a
+user row and no project row, and `mcp_target("codex", Scope.PROJECT)` keeps raising the ordinary
+unmeasured-target `KeyError`.
+
+**One measured correction.** The first implementation removed a server before re-adding it, on the
+assumption that `add` refuses a name it already knows. A surviving mutant said no test held that,
+and measuring it found `add` overwrites in place. The removal was deleted: it was dead, and it would
+have widened a window in which the operator's Codex had no server at all.
+
+**Evidence.** `tests/codex_mcp_registration_test.py` (17 tests): the target row, the routing, the
+named refusal when the editor is missing with the file left untouched, and eight that run the
+installed Codex — register, list back, re-register unchanged, replace, unregister twice, the
+operator's file surviving byte-identical, another server surviving, and an unregistered name reading
+back as nothing. `tests/codex_installation_e2e_test.py` (4 tests) is the whole path: an author's
+manifest compiled, published, planned against the measured target and installed, after which Codex
+lists the server and the launcher Codex was handed starts the author's server and answers with the
+declared arguments, the supplied config value and the secret read at launch. Nine targeted
+mutations, all killed; two survived first and both were findings — a test that skipped where it
+should have failed, and the unmeasured removal above.
+
+`QA-012`'s MCP half is therefore closed at user scope. Hooks remain refused for the reasons in
+`D-195`/`B-097`, which delegation does not change: the blocker there is a trust and review gate, not
+a file format.
+
+## D-197 — Whoever writes a harness's registration is who reads it back
+
+Installing an MCP server into OpenCode wrote a correct `opencode.json`, started a working server,
+and then reported the harness component absent. The install ended partially-applied, status showed
+drift that was not there, and repair would have rewritten an already-correct file forever.
+
+Writing had learned about shapes and reading had not. `registration_entry` grew `McpEntryShape` when
+OpenCode's typed command vector arrived (`D-194`); the observation still did `entry["command"] if
+isinstance(command, str)`, which is Claude's spelling, so every vector-shaped entry read as nothing.
+The failure is quiet in the worst way — the file is right, the server starts, and the installation
+simply never converges — and nothing in the harness tables could catch it, because both halves were
+individually correct.
+
+Two changes, both of them the same idea. `registered_command` is now the inverse of
+`registration_entry` and lives beside it, because a reader that knows one spelling reports every
+other harness's correct registration as missing. And `observed_command` moved onto the registry
+port, so the observation asks whoever owns the file rather than parsing it — which is what let Codex
+join at all (`D-196`), since its file is TOML that this build cannot parse.
+
+The round trip is held as a property rather than by examples, because the claim is universal over
+harnesses, launchers and arguments: for every measured MCP target, what `registration_entry` writes
+is what `registered_command` reads back. That property would have failed the day the second shape
+existed. The example-based half covers what the two shapes disagree about, an entry hand-edited into
+another harness's spelling, an empty vector and a non-object.
+
+The general lesson, recorded because the next harness will be someone else's: a harness is not
+integrated when its tables are measured. It is integrated when something installs through them and
+the thing that was installed is read back, started, and asked a question. Both harness slices now
+have that, and it is what found this.
+
+**Evidence.** `tests/harness_registration_roundtrip_test.py` (5 tests, two of them properties);
+`tests/opencode_installation_e2e_test.py` (8 tests, including the launcher started from the vector
+that landed in `opencode.json`, the public `marketplace install --profile opencode` landing a Skill
+in `.opencode/skills/<name>` and in neither `.claude` nor `.agents`, and two that run the installed
+OpenCode). Six targeted mutations for this defect, all killed.

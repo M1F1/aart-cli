@@ -46,7 +46,7 @@ Nothing open. Every QA-001–QA-021 finding has a fix awaiting the operator's re
       unmeasured and writes nothing
       Evidence: OpenCode 1.18.29 is installed locally; all `domain/harness.py` target lookups for
       OpenCode refuse, while the dormant `profiles/builtin.py` values are not canonical authority
-      Fix: partial — Skills, instructions and MCP are measured and installable at both scopes
+      Fix: yes — Skills, instructions and MCP are measured and installable at both scopes
       (`.opencode/skills/<name>`, `.config/opencode/skills/<name>`, `AGENTS.md`,
       `.config/opencode/AGENTS.md`, the `mcp` key of `opencode.json` and
       `.config/opencode/opencode.json`), and OpenCode is selectable in the TUI through the union
@@ -54,6 +54,10 @@ Nothing open. Every QA-001–QA-021 finding has a fix awaiting the operator's re
       `McpEntryShape` because a local server here is `{"type": "local", "command": [...]}` rather
       than a command string beside `args`. Guidelines and hooks stay refused by name because that
       build documents no guidelines directory and its event model was not measured.
+      Verified end to end (D-197): an authored server compiled, published, planned, installed and
+      then started from the vector that landed in `opencode.json`, and `marketplace install
+      --profile opencode --yes` landing a Skill in `.opencode/skills/<name>`. That verification
+      found and fixed a reader defect that made every OpenCode MCP install end partially-applied.
 - [ ] **QA-012 — Canonical installation cannot target Codex.**
       Stage: installing the Skill and MCP into the locally installed Codex CLI 0.152.0
       Surface: Marketplace/TUI and `marketplace install --profile codex`
@@ -73,7 +77,13 @@ Nothing open. Every QA-001–QA-021 finding has a fix awaiting the operator's re
       (D-193, 10 tests, two of which run the installed Codex). The expectation above named
       `.agents/skills`; measurement found that is the cross-vendor interop root Codex also migrates
       other agents from, and `.codex/skills` is its own. MCP stays refused by name because Codex
-      keeps servers in TOML (B-096). Hooks are now measured and still refused (B-097): `codex
+      writes its own MCP configuration now (D-196, B-096 closed): `codex mcp add`/`remove`/`list
+      --json` were measured leaving an operator's comments, unrelated keys and other servers
+      byte-identical, so the user-scope target delegates to them and a missing Codex is named
+      rather than reported as registered. Verified end to end: Codex lists the server the install
+      registered and the launcher it was handed starts the author's server. User scope only —
+      `codex mcp add` offers no project flag, so project scope is still refused by name. Hooks are
+      measured and still refused (B-097): `codex
       features list` reports them stable and enabled, but they are configured through a path in
       `config.toml`, project-local hooks are disabled until the operator trusts the project, and
       every new or changed hook is held for interactive review — a file AART wrote would not run.

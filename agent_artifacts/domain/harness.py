@@ -24,6 +24,7 @@ from .managed_blocks import BlockPosition
 
 __all__ = [
     "DELIVERY_TARGETS",
+    "McpEditor",
     "McpEntryShape",
     "HOOK_TARGETS",
     "MCP_TARGETS",
@@ -76,6 +77,26 @@ class McpEntryShape(str, Enum):
     TYPED_COMMAND_VECTOR = "typed-command-vector"
 
 
+class McpEditor(str, Enum):
+    """Who writes the file this harness reads its servers out of.
+
+    AART's editor is a JSON interpreter, and its contract is the reason it exists: the file belongs
+    to the harness and to the person using it, so unrelated keys, comments, ordering and
+    permissions all survive a registration. A format it cannot promise that for is not a format it
+    should be writing. Codex keeps its servers in TOML tables, and no standard-library writer
+    preserves what sits around them, so its own supported editor writes them instead.
+
+    That is a real trade, not a free one: a delegated registration needs the harness's executable
+    on this machine. It is also the honest one, since installing into a harness that is not
+    installed was never going to be meaningful.
+    """
+
+    #: AART edits the file itself, preserving every key it did not write.
+    SETTINGS_FILE = "settings-file"
+    #: The harness's own command-line editor writes it, because AART cannot do so safely.
+    HARNESS_COMMAND = "harness-command"
+
+
 @dataclass(frozen=True, slots=True)
 class McpTarget:
     """One harness's MCP registration slot, relative to that scope's root."""
@@ -86,6 +107,7 @@ class McpTarget:
     server_map: str
     transports: frozenset[Transport] = _STDIO
     entry_shape: McpEntryShape = McpEntryShape.COMMAND_WITH_ARGS
+    editor: McpEditor = McpEditor.SETTINGS_FILE
 
     def __post_init__(self) -> None:
         if not isinstance(self.harness, str) or _SLUG_RE.fullmatch(self.harness) is None:
@@ -106,6 +128,8 @@ class McpTarget:
             raise ValueError("a harness target names at least one measured transport")
         if not isinstance(self.entry_shape, McpEntryShape):
             raise ValueError("a harness target names one measured entry shape")
+        if not isinstance(self.editor, McpEditor):
+            raise ValueError("a harness target names who edits its settings file")
 
 
 @dataclass(frozen=True, slots=True)
@@ -166,6 +190,27 @@ MCP_TARGETS: dict[tuple[str, Scope], McpTarget] = {
     # The entry shape is the reason this harness could not be copied from the dormant profile
     # registry (`B-085`): a local server here is an object with `type` and one `command` array, not
     # a command string beside `args`.
+    # Codex CLI 0.152.0, measured with `codex mcp add` and `codex mcp list --json` against an
+    # isolated `CODEX_HOME`. `add` writes `[mcp_servers.<name>]` with `command` and `args` into
+    # `$CODEX_HOME/config.toml`, and `list --json` reads the same servers back structurally.
+    #
+    # AART does not write this file, because it cannot promise what its own editor promises: TOML
+    # has no standard-library writer, `tomllib` reads only and only from 3.11 while
+    # `requires-python` is `>=3.10`, and INV-071 leaves no room for a dependency. What was measured
+    # instead is that Codex's own editor keeps the promise: adding and removing a server left an
+    # operator's comment, an unrelated `model` key, another server's table and a following `[tui]`
+    # table all exactly as they were. So the row delegates (`B-096`).
+    #
+    # User scope only. `codex mcp add` reports "Added global MCP server" and offers no project
+    # flag, and a project registration would in any case be inert until the operator trusts the
+    # project -- so there is no project row to write and none is invented.
+    ("codex", Scope.USER): McpTarget(
+        "codex",
+        Scope.USER,
+        ".codex/config.toml",
+        "mcp_servers",
+        editor=McpEditor.HARNESS_COMMAND,
+    ),
     ("opencode", Scope.PROJECT): McpTarget(
         "opencode",
         Scope.PROJECT,

@@ -930,11 +930,39 @@ every new or changed hook is held for interactive review before it runs. AART co
 and report success, and the hook still would not run; a receipt for something that did not happen is
 worse than a refusal by name, so `hook_target("codex", …)` keeps raising.
 
-**Next:** QA-012's MCP half stays blocked on B-096 — the two measured leads are a TOML editor that
-preserves what it did not write, or delegating to `codex mcp add` — and its hook half is now a
-product question (B-097) rather than a measurement one. OpenCode's guidelines and hooks are
-unmeasured. Nothing else in the QA-001–QA-021 batch is open, so the batch is handed back for manual
-retest with the full `make quality` and `make integration` gates run.
+Both harnesses were then taken from measured tables to installed and read back (2026-09-09), which
+is what the request "mcps, skills for opencode in first place then for codex" actually asks for and
+what tables alone never prove.
+
+That verification immediately found a defect in the OpenCode half that was already shipping
+(`D-197`). Writing a registration had learned about `McpEntryShape`; reading one had not, so every
+vector-shaped entry read back as nothing. The file was correct, the server started, and the
+installation never converged — status showed drift that was not there and repair would have
+rewritten a correct file forever. `registered_command` is now the inverse of `registration_entry`,
+held by a property over every measured target, and `observed_command` moved onto the registry port
+so whoever writes a harness's servers is who reads them back.
+
+That move is also what let Codex MCP land (`D-196`), closing `B-096` by measurement rather than by
+choice. Codex's own `mcp add`/`remove`/`list --json` keep the promise `LocalHarnessRegistry` makes
+and a hand-rolled TOML writer could not — an operator's comment, an unrelated key, another server's
+table and a following table all came back byte-identical around an add and a remove. So the target
+names `McpEditor.HARNESS_COMMAND`, the registry routes to it, a missing Codex is named rather than
+reported as registered, and there is no fallback to writing the file directly. User scope only,
+because `codex mcp add` writes the global configuration and offers no project flag.
+
+Both paths are now proven end to end: an author's manifest compiled, published, planned, installed,
+and then the launcher that landed started and asked a question, answering with the arguments the
+author declared, the config value supplied and the secret read at launch. OpenCode's Skill half goes
+through the public command and lands in `.opencode/skills/<name>` and in neither `.claude` nor
+`.agents`. Nine targeted mutations for Codex and six for OpenCode, all killed; three survived first
+and each was a finding — a test that skipped where it should have failed, an unmeasured assumption
+that `codex mcp add` refuses duplicates (it overwrites), and the reader defect above.
+
+**Next:** OpenCode's guidelines and hooks are unmeasured, and Codex's hooks stay refused for the
+review-gate reason in `D-195`/`B-097`, which delegation does not change. `B-098` notes that Claude
+has no install-and-start MCP test of its own and that the three E2E modules want a shared fixture
+before a fourth harness arrives; neither is on the critical path. Nothing in the QA-001–QA-021 batch
+is open, so the batch is handed back for manual retest.
 
 **Batch verified (2026-09-08).** With QA-011 and QA-012 landed, every QA-001–QA-021 finding has a
 fix or a recorded, named refusal, so the full gates were run rather than the focused suites this

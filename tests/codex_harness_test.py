@@ -25,6 +25,7 @@ from pathlib import Path
 from agent_artifacts.domain.artifacts import ArtifactKind
 from agent_artifacts.domain.effects import DeliveryKind
 from agent_artifacts.domain.harness import (
+    McpEditor,
     Scope,
     delivery_destination,
     delivery_target,
@@ -87,15 +88,24 @@ class CodexMemoryTargetTest(unittest.TestCase):
 
 
 class CodexUnmeasuredSurfaceTest(unittest.TestCase):
-    def test_codex_mcp_registration_is_refused_by_name_until_it_is_measured(self) -> None:
-        """Codex keeps its servers in TOML, which this build cannot edit without destroying the
-        keys around them. Refusing by name is the honest answer; a JSON row here would write a
-        file Codex does not read (B-096)."""
+    def test_a_project_scope_mcp_registration_is_still_refused_by_name(self) -> None:
+        """`codex mcp add` writes the global configuration and offers no project flag, and a
+        project registration would be inert until the operator trusts the project. So there is no
+        project row, and asking for one is refused rather than pointed at the user's file (D-196).
+        """
 
-        for scope in (Scope.PROJECT, Scope.USER):
-            with self.subTest(scope=scope), self.assertRaises(KeyError) as refused:
-                mcp_target("codex", scope)
-            self.assertIn("codex", str(refused.exception))
+        with self.assertRaises(KeyError) as refused:
+            mcp_target("codex", Scope.PROJECT)
+
+        self.assertIn("codex", str(refused.exception))
+
+    def test_the_user_scope_row_delegates_rather_than_letting_aart_write_toml(self) -> None:
+        """What B-096 was waiting for. AART still does not write this file -- Codex does."""
+
+        target = mcp_target("codex", Scope.USER)
+
+        self.assertIs(McpEditor.HARNESS_COMMAND, target.editor)
+        self.assertEqual(".codex/config.toml", target.settings_file)
 
 
 class CodexIsOfferedByThisMachineTest(unittest.TestCase):
