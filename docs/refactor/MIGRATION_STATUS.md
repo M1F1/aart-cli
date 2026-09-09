@@ -1056,3 +1056,11 @@ different origin as the wrong workspace. The unpublished case orders publication
 Registry synchronization without exposing CLI commands (`D-214`). Four real temporary repository
 tests were RED against the generic prior answer; the configured-seam mutation kills all four. The
 whole focused set is green at 1612 tests plus 639 subtests. Step 11 is next.
+
+**CP-19 step 11 complete — QA-036/QA-037/B-103 closed (2026-09-09).** Typed workflow routes are
+validated against the same navigation graph the reducer obeys. Session history supplies completed
+steps; shared chrome marks completed/current/upcoming and wraps long trails at the content measure.
+Back retains a stable focus only inside the same declared workflow, which fixes every reverse edge
+of Candidate promotion without changing unrelated detail/list behavior (`D-215`). Removing the
+chrome and restoring unconditional focus clearing each turn their named tests red. The 136 nearest
+tests plus 23 subtests, `ruff` and `mypy` are green. Step 12 is next; full gates remain deferred.

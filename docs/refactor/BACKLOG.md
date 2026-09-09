@@ -2683,7 +2683,13 @@ Evidence/links: QA-034; Product Specification 165.28; INV-137; INV-242;
 
 ## B-103 — Workflow chrome and Back do not preserve operator context
 
-Found: manual TUI acceptance, QA-036/QA-037 (2026-09-09) · Severity: high · Status: open
+Found: manual TUI acceptance, QA-036/QA-037 (2026-09-09) · Severity: high · Status: CLOSED by CP-19 step 11
+
+**Closed (2026-09-09).** Typed workflow routes are checked against `navigation_targets` before they
+are projected, and session history supplies which stages were actually visited. Shared frame chrome
+marks completed/current/upcoming stages and bounds long trails to the content measure. Back retains
+focus only across two screens of the same route, so Candidate identity survives every reverse edge
+without making an unrelated Activity detail leak focus back to its list (`D-215`).
 
 The Candidate flow shows only the current page title, so a maintainer cannot see completed,
 current and upcoming review stages. Worse, pressing Escape from a later Candidate screen can return

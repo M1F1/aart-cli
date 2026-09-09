@@ -288,7 +288,7 @@ Each new entry records:
       as one text block. The operator proposed a simple horizontal divider around the focused-item
       explanation rather than more labels.
 
-- [ ] **QA-036 — Multi-step workflows do not show progress or what comes next.**
+- [x] **QA-036 — Multi-step workflows do not show progress or what comes next.**
       Stage: Candidate review/promotion and every other wizard-like sequence
       Surface: page title/chrome across the workflow
       Severity: high
@@ -298,8 +298,11 @@ Each new entry records:
       it from the same navigation state as the reducer
       Observed: only the current title, for example `AART / Promotion Review`, is visible. The user
       cannot tell how they arrived, what was accepted or what remains.
+      Fix: `D-215`. Workflow routes are application declarations checked against the live
+      navigation graph. The frame projects visited/current/upcoming screens as `✓`/`▸`/`·`, wraps
+      the Candidate path at the shared content measure and stays absent on owning lists.
 
-- [ ] **QA-037 — Esc in the Candidate workflow loses the Candidate context.**
+- [x] **QA-037 — Esc in the Candidate workflow loses the Candidate context.**
       Stage: backing up from Candidate review/promotion
       Surface: Candidate detail/diff/validation/promotion history
       Severity: high
@@ -309,6 +312,9 @@ Each new entry records:
       state
       Observed: the previous screen reports `That Candidate is not available.` The back stack keeps
       the screen but loses or replaces the stable Candidate focus.
+      Fix: `D-215`. Back keeps the stable focus only when both screens belong to the same declared
+      workflow; ordinary detail-to-list browsing retains the old focus-clearing behavior. Every
+      reverse edge of Candidate promotion is covered, including a rendered prior screen.
 
 - [ ] **QA-038 — The `?` help view is a dense multi-command grid.**
       Stage: asking for keyboard help from any screen

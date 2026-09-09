@@ -5023,3 +5023,22 @@ operator to restore intentional work. The other states omit steps that do not ap
 Four tests create those states in real temporary repositories and drive the configured promotion
 seam. Removing the context passed at that seam turns all four red, proving the diagnosis is on the
 shipped path rather than a helper tested beside it.
+
+## D-215 — Workflow progress and Back share declared navigation routes
+
+Date: 2026-09-09 · Increment: CP-19 step 11, QA-036/QA-037/B-103 · Status: accepted
+
+A renderer-local breadcrumb would be another navigation description capable of drifting from the
+reducer. Instead the application declares the multi-screen routes and checks every adjacent pair
+against `navigation_targets` whenever it projects progress. The current `ConsumerSession.history`
+says which steps were actually visited; the current screen and the remaining route supply `current`
+and `upcoming`. The renderer contributes only compact labels, status glyphs and bounded line layout.
+
+Optional branches are omitted from the canonical trail rather than marked complete when they were
+skipped. The route still names the stable stages common to each job. Owning lists show no progress:
+the workflow begins only after navigation has left its first screen.
+
+The same route membership decides Back context. Focus survives only when the current and previous
+screens are stages of one workflow, so every Candidate-promotion reverse edge remains about the
+same Candidate. A normal Activity detail returning to its list still clears focus as before. This
+fixes the lost-subject defect without turning `focus` into global sticky state.

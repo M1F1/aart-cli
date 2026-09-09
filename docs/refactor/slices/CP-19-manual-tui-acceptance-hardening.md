@@ -83,10 +83,12 @@ internal state model.
    `_ACTION_RESULT` table a recorded run uses, and the review's prompt and heading say the run did
    not happen (D-209). The screen does not move, because the refusal is drawn here. Held across four
    confirmed action kinds, with `QA-024` preserved.
-11. **Workflow progress and back context (QA-036/QA-037) — TODO.** Give every multi-step sequence a
-   compact completed/current/upcoming trail derived from its real navigation graph. Back restores
-   the same stable subject and read model; it may not return to a screen that says its Candidate is
-   unavailable.
+11. **Workflow progress and back context (QA-036/QA-037) — DONE.** Typed workflow routes are checked
+   against `navigation_targets`, while session history determines which steps were actually visited.
+   Shared frame chrome renders `✓` completed, `▸` current and `·` upcoming, bounded to the content
+   measure. Back retains focus only when both screens share such a route; all Candidate-promotion
+   reverse edges preserve the same Candidate, while unrelated detail browsing still clears focus
+   (D-215).
 12. **Visual hierarchy and focus (QA-035/QA-038/QA-040/QA-041/QA-042) — TODO.** State one small
    layout vocabulary for section separators, bounded Registry rows, readable one-binding-per-line
    help, compact `[Key] Action` footer chrome and a cursor on every actionable row. Avoid a
@@ -181,6 +183,13 @@ fails. Removing the context at the configured call site turns all four tests red
 TUI/consumer/maintainer/source/registry/setup/promotion/candidate set is green at 1612 tests plus
 639 subtests.
 
+Step 11 was RED both in the frame and reducer. Six flow families cover Candidate promotion,
+Registry initialization/rebuild, Source addition/sync and consumer installation; owning lists show
+no false workflow. Every reverse Candidate edge retains its subject. Removing the frame chrome
+turns all six projections red, and restoring the old unconditional focus reset turns the concrete
+Candidate Back test red. The 136 nearest navigation/shell/action tests plus 23 subtests are green;
+full gates remain deferred to step 15 by operator instruction.
+
 ## Do not undo
 
 - Do not weaken the exact synchronized-baseline comparison to pass QA-031.
@@ -197,8 +206,8 @@ TUI/consumer/maintainer/source/registry/setup/promotion/candidate set is green a
 
 ## Exact next implementation action
 
-Execute step 11 (QA-036/QA-037) next: workflow progress chrome derived from real navigation state,
-and Back preserving the stable subject/read model. Then steps 12–14. The operator has asked for
+Execute step 12 (QA-035/QA-038/QA-040/QA-041/QA-042) next: one shared visual hierarchy for
+sections, Registry rows, help, footer keycaps and actionable focus. Then steps 13–14. The operator has asked for
 targeted tests and quality gates only until the batch is
 finished; run the whole `tui`/`consumer`/`maintainer`/`source`/`registry`/`setup`/`promotion`/
 `candidate` test file set after each step, not only the files it edits, and step 15 runs the full

@@ -45,10 +45,13 @@ __all__ = [
     "RegistryInitDraft",
     "RepositoryScanDraft",
     "SourceDraft",
+    "WorkflowProgressStep",
+    "WorkflowStepStatus",
     "key_event",
     "key_bindings",
     "opening_state",
     "reduce_consumer_ui",
+    "workflow_progress",
 ]
 
 
@@ -212,6 +215,26 @@ class ConsumerUiCommandKind(str, Enum):
     PREPARE_ACTION = "prepare-action"
     EXECUTE_ACTION = "execute-action"
     PERSIST_SETTINGS = "persist-settings"
+
+
+class WorkflowStepStatus(str, Enum):
+    """Where one declared screen sits relative to the current workflow position."""
+
+    COMPLETED = "completed"
+    CURRENT = "current"
+    UPCOMING = "upcoming"
+
+
+@dataclass(frozen=True, slots=True)
+class WorkflowProgressStep:
+    screen: ApplicationScreen
+    status: WorkflowStepStatus
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.screen, (ConsumerScreen, MaintainerScreen)) or not isinstance(
+            self.status, WorkflowStepStatus
+        ):
+            raise ValueError("workflow progress needs a screen and status")
 
 
 @dataclass(frozen=True, slots=True)
@@ -432,6 +455,141 @@ class ConsumerUiState:
         return self.rows[self.cursor] if self.rows else ""
 
 
+#: Multi-screen jobs whose progress is useful to the operator. Every adjacent pair is an accepted
+#: edge in ``navigation_targets``; optional detail/question screens are omitted rather than shown as
+#: completed when a real run skipped them. The session history supplies what was actually visited.
+_WORKFLOW_ROUTES: tuple[tuple[ApplicationScreen, ...], ...] = (
+    (
+        MaintainerScreen.CANDIDATES,
+        MaintainerScreen.CANDIDATE_DETAILS,
+        MaintainerScreen.CANDIDATE_DIFF,
+        MaintainerScreen.VALIDATION,
+        MaintainerScreen.POLICY_REVIEW,
+        MaintainerScreen.PROMOTION_REVIEW,
+        MaintainerScreen.PROMOTION_MODE,
+        MaintainerScreen.REGISTRY_DIFF,
+        MaintainerScreen.REGISTRY_VALIDATION,
+        MaintainerScreen.REGISTRY_COMMIT,
+    ),
+    (
+        MaintainerScreen.REGISTRY,
+        MaintainerScreen.BULK_PROMOTION,
+        MaintainerScreen.REGISTRY_VALIDATION,
+        MaintainerScreen.REGISTRY_COMMIT,
+    ),
+    (
+        MaintainerScreen.SOURCES,
+        MaintainerScreen.SOURCE_ADD,
+        MaintainerScreen.SOURCE_ADD_REVIEW,
+    ),
+    (
+        MaintainerScreen.SOURCES,
+        MaintainerScreen.SOURCE_SYNC,
+        MaintainerScreen.SOURCE_SYNC_RESULT,
+    ),
+    (
+        MaintainerScreen.REGISTRY,
+        MaintainerScreen.REGISTRY_INIT,
+        MaintainerScreen.REGISTRY_INIT_REVIEW,
+    ),
+    (
+        MaintainerScreen.REGISTRY,
+        MaintainerScreen.REGISTRY_REBUILD,
+        MaintainerScreen.REGISTRY_REBUILD_REVIEW,
+    ),
+    (
+        MaintainerScreen.REGISTRY,
+        MaintainerScreen.REPOSITORY_SCAN,
+        MaintainerScreen.SCAN_RESULT,
+        MaintainerScreen.ADOPTION_REVIEW,
+    ),
+    (
+        ConsumerScreen.REGISTRIES,
+        ConsumerScreen.REGISTRY_ADD,
+        ConsumerScreen.REGISTRY_REVIEW,
+    ),
+    (
+        ConsumerScreen.MARKETPLACE,
+        ConsumerScreen.REVIEW_SELECTION,
+        ConsumerScreen.AUTOMATIC_INSPECTION,
+        ConsumerScreen.READY,
+        ConsumerScreen.INSTALLING,
+        ConsumerScreen.SUCCESS,
+    ),
+    (
+        ConsumerScreen.UPDATES,
+        ConsumerScreen.UPDATE_INPUTS,
+        ConsumerScreen.UPDATING,
+        ConsumerScreen.ACTIVITY_DETAILS,
+    ),
+    (
+        ConsumerScreen.INSTALLED_ARTIFACT_DETAILS,
+        ConsumerScreen.UNINSTALL_REVIEW,
+        ConsumerScreen.UNINSTALLING,
+        ConsumerScreen.ACTIVITY_DETAILS,
+    ),
+    (
+        ConsumerScreen.INSTALLED_ARTIFACT_DETAILS,
+        ConsumerScreen.VERIFY_REPAIR,
+        ConsumerScreen.ACTIVITY_DETAILS,
+    ),
+    (
+        ConsumerScreen.DOCTOR,
+        ConsumerScreen.VERIFY_REPAIR,
+        ConsumerScreen.ACTIVITY_DETAILS,
+    ),
+)
+
+
+def _workflow_route(state: ConsumerUiState) -> tuple[ApplicationScreen, ...] | None:
+    """Choose the declared route best supported by the journey actually in session history."""
+
+    for route in _WORKFLOW_ROUTES:
+        for current, target in zip(route[:-1], route[1:], strict=True):
+            if target not in navigation_targets(current, maintainer_mode=True):
+                raise ValueError("workflow progress route is outside the navigation graph")
+    candidates = tuple(
+        route
+        for route in _WORKFLOW_ROUTES
+        if state.session.screen in route[1:] and route[0] in state.session.history
+    )
+    if not candidates:
+        return None
+    return max(
+        candidates,
+        key=lambda route: sum(screen in state.session.history for screen in route),
+    )
+
+
+def workflow_progress(state: ConsumerUiState) -> tuple[WorkflowProgressStep, ...]:
+    """Project completed/current/upcoming screens from the reducer's real navigation state."""
+
+    if not isinstance(state, ConsumerUiState):
+        raise ValueError("workflow progress needs consumer UI state")
+    route = _workflow_route(state)
+    if route is None:
+        return ()
+    return tuple(
+        WorkflowProgressStep(
+            screen,
+            (
+                WorkflowStepStatus.CURRENT
+                if screen is state.session.screen
+                else (
+                    WorkflowStepStatus.COMPLETED
+                    if screen in state.session.history
+                    else WorkflowStepStatus.UPCOMING
+                )
+            ),
+        )
+        for screen in route
+    )
+
+
+def _same_workflow(current: ApplicationScreen, target: ApplicationScreen) -> bool:
+    return any(current in route and target in route for route in _WORKFLOW_ROUTES)
+
+
 def opening_state(settings: ConsumerSettings) -> ConsumerUiState:
     """The state a session opens in, at the preferences somebody last chose.
 
@@ -503,7 +661,9 @@ def _back(state: ConsumerUiState) -> tuple[ConsumerUiState, tuple[ConsumerUiComm
     updated = replace(
         state,
         session=session,
-        focus="",
+        # A wizard-like journey remains about the same stable subject while walking backwards.
+        # Browsing back to an unrelated list still clears stale detail focus as before.
+        focus=(state.focus if _same_workflow(state.session.screen, session.screen) else ""),
         search="",
         help_visible=False,
         quit_pending=False,

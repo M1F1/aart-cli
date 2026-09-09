@@ -1407,6 +1407,18 @@ the navigation state and make Back retain the stable Candidate/subject and alrea
 Cover Candidate promotion, Registry initialization/rebuild, Source add/sync and consumer install;
 do not build a breadcrumb for one hard-coded route. Then steps 12–14 and the full gates at step 15.
 
+**CP-19 step 11 is DONE — QA-036/QA-037/B-103 closed (2026-09-09).** Workflow routes are typed
+application declarations checked against the live navigation graph, session history determines what
+is completed, and shared frame chrome renders `✓`/`▸`/`·` with long paths bounded to the content
+measure. Candidate, Registry init/rebuild, Source add/sync and consumer install are covered. Back
+keeps the stable subject only within one of these routes; every Candidate-promotion reverse edge
+retains the Candidate, while unrelated detail browsing still clears stale focus (D-215). Two
+targeted mutations killed; 136 nearby tests plus 23 subtests are green.
+
+**Exact next action:** CP-19 step 12 — QA-035/QA-038/QA-040/QA-041/QA-042. Establish one restrained
+section/card/footer vocabulary, one help binding per line, compact keycaps and a visible cursor on
+every actionable Registry row. Then steps 13–14; full gates run once at step 15.
+
 ## Critical boundaries for this slice
 
 - Product Specification is the sole product authority.

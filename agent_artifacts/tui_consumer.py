@@ -22,9 +22,11 @@ from agent_artifacts.application.consumer_ui import (
     ConsumerUiEventKind,
     ConsumerUiState,
     KeyBinding,
+    WorkflowStepStatus,
     key_bindings,
     key_event,
     reduce_consumer_ui,
+    workflow_progress,
 )
 from agent_artifacts.application.consumer_views import (
     SETTING_ROWS,
@@ -86,7 +88,16 @@ from agent_artifacts.application.maintainer_views import (
 from agent_artifacts.domain.registry import PromotionMode
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.domain.selection import Collection
-from agent_artifacts.tui_layout import action_prompt, is_action_prompt, separate
+from agent_artifacts.tui_layout import (
+    CONTENT_MEASURE,
+    STAGE_CONFIRMED,
+    STAGE_CURRENT,
+    STAGE_JOIN,
+    STAGE_PENDING,
+    action_prompt,
+    is_action_prompt,
+    separate,
+)
 from agent_artifacts.tui_maintainer import (
     render_adopted_artifacts,
     render_adoption_upstream_check,
@@ -1095,6 +1106,48 @@ def _title(screen: ApplicationScreen) -> str:
     return _human(screen.value.split("-", 1)[1]).title()
 
 
+_WORKFLOW_LABELS: dict[ApplicationScreen, str] = {
+    MaintainerScreen.CANDIDATES: "Candidate",
+    MaintainerScreen.CANDIDATE_DETAILS: "Details",
+    MaintainerScreen.CANDIDATE_DIFF: "Diff",
+    MaintainerScreen.VALIDATION: "Validation",
+    MaintainerScreen.POLICY_REVIEW: "Policy",
+    MaintainerScreen.PROMOTION_REVIEW: "Promotion Review",
+    MaintainerScreen.PROMOTION_MODE: "Mode",
+    MaintainerScreen.REGISTRY_DIFF: "Registry Diff",
+    MaintainerScreen.REGISTRY_VALIDATION: "Registry Validation",
+    MaintainerScreen.REGISTRY_COMMIT: "Commit",
+}
+
+
+def _workflow_chrome(state: ConsumerUiState) -> tuple[str, ...]:
+    icons = {
+        WorkflowStepStatus.COMPLETED: STAGE_CONFIRMED,
+        WorkflowStepStatus.CURRENT: STAGE_CURRENT,
+        WorkflowStepStatus.UPCOMING: STAGE_PENDING,
+    }
+    steps = workflow_progress(state)
+    if not steps:
+        return ()
+    labels = tuple(
+        f"{icons[step.status]} {_WORKFLOW_LABELS.get(step.screen, _title(step.screen))}"
+        for step in steps
+    )
+    join = f" {STAGE_JOIN} "
+    lines: list[str] = []
+    current = ""
+    for label in labels:
+        candidate = label if not current else current + join + label
+        if current and len(candidate) > CONTENT_MEASURE:
+            lines.append(current)
+            current = "  " + label
+        else:
+            current = candidate
+    if current:
+        lines.append(current)
+    return tuple(lines)
+
+
 def _review_prompt(state: ConsumerUiState, prompt: str) -> tuple[str, ...]:
     """A review's own instruction, or -- once its confirmed run stopped -- what happened instead.
 
@@ -1139,7 +1192,11 @@ def frame(source: ConsumerScreenSource, state: ConsumerUiState) -> tuple[str, ..
         # The screen's name still says "review", and it is now the result of an attempt. Saying so
         # here is what stops the plan below reading as something still about to happen (`QA-033`).
         heading += " - did not run"
-    lines = [heading, "", *source.lines(state)]
+    progress = _workflow_chrome(state)
+    lines = [heading, "", *progress]
+    if progress:
+        lines.append("")
+    lines.extend(source.lines(state))
     if state.help_visible:
         lines.extend(("", *_HELP_LINES))
     if state.searching:
