@@ -5042,3 +5042,22 @@ The same route membership decides Back context. Focus survives only when the cur
 screens are stages of one workflow, so every Candidate-promotion reverse edge remains about the
 same Candidate. A normal Activity detail returning to its list still clears focus as before. This
 fixes the lost-subject defect without turning `focus` into global sticky state.
+
+## D-216 — TUI hierarchy is a small shared vocabulary, not per-screen punctuation
+
+Date: 2026-09-09 · Increment: CP-19 step 12, QA-035/QA-038/QA-040/QA-041/QA-042/B-104 · Status: accepted
+
+The layout kernel now names a single restrained horizontal rule, a section bounded by that rule and
+cards separated by exactly one blank line. These are deliberately small: they state grouping and
+do not introduce a second widget system or terminal-dependent drawing policy.
+
+Dashboard puts the selected destination's explanation between the shared rules and separates recent
+activity from its counters. Registries renders Add Registry and each configured item as a card;
+only the card head receives the cursor, from the same stable row identity actions use. Help lists
+one key or related pair per line. The footer begins at the same rule and packs contextual then global
+bindings into adjacent `[Key] Action` lines bounded to the content measure, without the repeated
+`Keys here` and `Keys always` labels that made one footer look like two unrelated regions.
+
+The renderer still receives typed views and key bindings; none of these primitives interprets a key,
+loads state or invents an action. Five independent mutations prove each visible grouping/focus claim
+is held rather than merely appearing in one snapshot.

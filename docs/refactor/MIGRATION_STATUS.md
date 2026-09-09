@@ -1064,3 +1064,10 @@ Back retains a stable focus only inside the same declared workflow, which fixes 
 of Candidate promotion without changing unrelated detail/list behavior (`D-215`). Removing the
 chrome and restoring unconditional focus clearing each turn their named tests red. The 136 nearest
 tests plus 23 subtests, `ruff` and `mypy` are green. Step 12 is next; full gates remain deferred.
+
+**CP-19 step 12 complete — QA-035/QA-038/QA-040/QA-041/QA-042/B-104 closed (2026-09-09).** One
+shared section rule and card composition now structure Dashboard explanation/activity, Registry
+records, help and footer chrome. Registry card heads show the stable focus; help is one binding per
+line; the footer is one bounded keycap block with local actions before global navigation (`D-216`).
+Five independent mutations killed. The 93 nearest tests plus 182 subtests and `ruff` are green;
+step 13 is next and full gates remain deferred to step 15.

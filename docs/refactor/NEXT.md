@@ -1419,6 +1419,17 @@ targeted mutations killed; 136 nearby tests plus 23 subtests are green.
 section/card/footer vocabulary, one help binding per line, compact keycaps and a visible cursor on
 every actionable Registry row. Then steps 13–14; full gates run once at step 15.
 
+**CP-19 step 12 is DONE — QA-035/QA-038/QA-040/QA-041/QA-042/B-104 closed (2026-09-09).** The
+layout kernel now owns one restrained section rule and card grouping. Dashboard explanation and
+activity are distinct regions; Registry rows are separate indented cards and show `>` on the real
+focus; help has one binding per line; the footer is one adjacent, width-bounded `[Key] Action` block
+with contextual actions first (D-216). Five independent mutations killed; 93 nearest tests plus 182
+subtests are green.
+
+**Exact next action:** CP-19 step 13 — QA-039/B-105. Explain Vendored and Referenced ownership,
+payload availability and upstream consequences before confirmation, and label `m` as an explicit
+toggle rather than an unexplained mode name. Then step 14 and the full gates once at step 15.
+
 ## Critical boundaries for this slice
 
 - Product Specification is the sole product authority.

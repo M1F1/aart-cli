@@ -90,12 +90,15 @@ from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.domain.selection import Collection
 from agent_artifacts.tui_layout import (
     CONTENT_MEASURE,
+    SECTION_RULE,
     STAGE_CONFIRMED,
     STAGE_CURRENT,
     STAGE_JOIN,
     STAGE_PENDING,
     action_prompt,
+    cards,
     is_action_prompt,
+    section,
     separate,
 )
 from agent_artifacts.tui_maintainer import (
@@ -753,6 +756,7 @@ def render_dashboard(view: DashboardView) -> tuple[str, ...]:
         f"{view.update_count} update, {view.attention_count} attention",
         f"{view.registry_count} registries — "
         f"{view.credential_attention_count} credentials need attention",
+        "",
         "Recent activity:",
     ]
     lines.extend(f"  - {item}" for item in view.recent_activity)
@@ -761,19 +765,26 @@ def render_dashboard(view: DashboardView) -> tuple[str, ...]:
     return tuple(lines)
 
 
-def render_registry(view: RegistryView, profile: PresentationProfile) -> tuple[str, ...]:
+def render_registry(
+    view: RegistryView,
+    profile: PresentationProfile,
+    *,
+    focused: bool = False,
+) -> tuple[str, ...]:
     if not isinstance(view, RegistryView) or not isinstance(profile, PresentationProfile):
         raise ValueError("registry rendering needs a registry view and presentation profile")
+    if not isinstance(focused, bool):
+        raise ValueError("registry focus must be boolean")
     noun = "artifact" if view.artifact_count == 1 else "artifacts"
     lines = [
-        f"{view.alias} — {_human(view.availability)}",
-        f"{view.artifact_count} {noun}",
+        f"{'> ' if focused else '  '}{view.alias} — {_human(view.availability)}",
+        f"  {view.artifact_count} {noun}",
     ]
     if view.is_registry:
         lines.extend(
             (
-                "Actions: details, sync.",
-                "Sync refreshes Marketplace availability; it does not update installed artifacts.",
+                "  Actions: details, sync.",
+                "  Sync refreshes Marketplace availability; it does not update installed artifacts.",
             )
         )
     else:
@@ -781,9 +792,9 @@ def render_registry(view: RegistryView, profile: PresentationProfile) -> tuple[s
         # fault; this one is configured, healthy and simply not a registry (INV-026, B-038).
         lines.extend(
             (
-                "An authoring Source, not a registry.",
-                "Its content is offered here once a maintainer promotes it into a registry.",
-                "Actions: details.",
+                "  An authoring Source, not a registry.",
+                "  Its content is offered here once a maintainer promotes it into a registry.",
+                "  Actions: details.",
             )
         )
     if profile is PresentationProfile.VERBOSE:
@@ -792,12 +803,12 @@ def render_registry(view: RegistryView, profile: PresentationProfile) -> tuple[s
         )
         lines.extend(
             (
-                f"Kind: {_human(view.kind)}",
-                f"Origin: {view.origin}",
-                f"Health: {_human(view.health)}; last sync: {age}",
-                f"Revision: {view.revision or 'none'}",
-                f"Snapshot: {view.snapshot_digest or 'none'}",
-                f"Trust: {', '.join(view.trust) or 'none'}",
+                f"  Kind: {_human(view.kind)}",
+                f"  Origin: {view.origin}",
+                f"  Health: {_human(view.health)}; last sync: {age}",
+                f"  Revision: {view.revision or 'none'}",
+                f"  Snapshot: {view.snapshot_digest or 'none'}",
+                f"  Trust: {', '.join(view.trust) or 'none'}",
             )
         )
     return tuple(lines)
@@ -1070,13 +1081,20 @@ class ConsumerActionHandler(Protocol):
 
 
 _HELP_LINES: tuple[str, ...] = (
-    "↑ ↓  move        space  select",
-    "enter  details   esc  back",
-    "i  install/update  r  repair  u  uninstall / check adopted upstream",
-    "s  sync focused Source / scan repository from Registry",
-    "a  add Registry (Registries)",
-    "/  search        v  Fast/Verbose",
-    "?  help          q  quit",
+    "Keyboard help",
+    "[↑/↓] Move",
+    "[Space] Select or toggle",
+    "[Enter] Open or continue",
+    "[Esc] Back",
+    "[i] Install or update",
+    "[r] Repair",
+    "[u] Uninstall or check adopted upstream",
+    "[s] Sync or scan repository",
+    "[a] Add or adopt",
+    "[/] Search",
+    "[v] Fast / Verbose",
+    "[?] Help",
+    "[q] Quit",
 )
 
 _DASHBOARD_DESCRIPTIONS: dict[ApplicationScreen, str] = {
@@ -1167,7 +1185,23 @@ def _review_prompt(state: ConsumerUiState, prompt: str) -> tuple[str, ...]:
 
 
 def _binding_text(binding: KeyBinding) -> str:
-    return f"{binding.key} {binding.label}"
+    return f"[{binding.key}] {binding.label}"
+
+
+def _binding_lines(bindings: tuple[KeyBinding, ...]) -> tuple[str, ...]:
+    lines: list[str] = []
+    current = ""
+    for binding in bindings:
+        text = _binding_text(binding)
+        candidate = text if not current else current + "   " + text
+        if current and len(candidate) > CONTENT_MEASURE:
+            lines.append(current)
+            current = text
+        else:
+            current = candidate
+    if current:
+        lines.append(current)
+    return tuple(lines)
 
 
 def _key_legend(source: ConsumerScreenSource, state: ConsumerUiState) -> tuple[str, ...]:
@@ -1175,13 +1209,9 @@ def _key_legend(source: ConsumerScreenSource, state: ConsumerUiState) -> tuple[s
 
     bindings = key_bindings(state, detail=source.detail(state))
     if state.searching or state.quit_pending:
-        return ("Keys here: " + "  ".join(map(_binding_text, bindings)),)
+        return (SECTION_RULE, *_binding_lines(bindings))
     local, global_keys = bindings[:-4], bindings[-4:]
-    lines = []
-    if local:
-        lines.append("Keys here: " + "  ".join(map(_binding_text, local)))
-    lines.append("Keys always: " + "  ".join(map(_binding_text, global_keys)))
-    return tuple(lines)
+    return (SECTION_RULE, *_binding_lines((*local, *global_keys)))
 
 
 def frame(source: ConsumerScreenSource, state: ConsumerUiState) -> tuple[str, ...]:
@@ -2060,11 +2090,7 @@ class CanonicalScreenSource:
             selected = next(
                 (target for target in targets if target.value == state.current_row), None
             )
-            about = (
-                ()
-                if selected is None
-                else (f"About {_title(selected)}:", _DASHBOARD_DESCRIPTIONS[selected], "")
-            )
+            about = () if selected is None else section((_DASHBOARD_DESCRIPTIONS[selected],))
             # A first run is a machine that has nothing, not merely a machine that has no source
             # configured.  A person who installed an artifact from a source they have since
             # removed -- or through a direct install -- is not seeing AART for the first time, and
@@ -2354,7 +2380,6 @@ class CanonicalScreenSource:
             add = (
                 f"{'>' if state.current_row == 'add-registry' else ' '} [ Add Registry ]",
                 "Connect an approved Git registry by URL. Local authoring Sources belong in Maintainer Mode.",
-                "",
             )
             if not screens.registries:
                 return (
@@ -2363,8 +2388,12 @@ class CanonicalScreenSource:
                     "Marketplace needs an approved registry before it can offer tools.",
                     "Choose Add Registry above to connect the first one.",
                 )
-            return add + tuple(
-                line for item in screens.registries for line in render_registry(item, profile)
+            return cards(
+                add,
+                *(
+                    render_registry(item, profile, focused=item.alias == state.current_row)
+                    for item in screens.registries
+                ),
             )
         if screen is ConsumerScreen.REGISTRY_ADD:
             draft = state.registry_draft

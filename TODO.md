@@ -276,7 +276,7 @@ Each new entry records:
       Retest: run a Registry action that refuses, and confirm the screen becomes a result with one
       route back and no confirmation prompt.
 
-- [ ] **QA-035 — Dashboard sections have no visual hierarchy.**
+- [x] **QA-035 — Dashboard sections have no visual hierarchy.**
       Stage: reading the main Dashboard
       Surface: Dashboard navigation, focused-option explanation and status summary
       Severity: medium
@@ -287,6 +287,8 @@ Each new entry records:
       Observed: `About Updates:`, its sentence, the AART summary, counters and activity run together
       as one text block. The operator proposed a simple horizontal divider around the focused-item
       explanation rather than more labels.
+      Fix: `D-216`. The focused explanation is now bounded by the shared restrained rule, without
+      an extra `About` label, and Recent activity is a separate summary block.
 
 - [x] **QA-036 — Multi-step workflows do not show progress or what comes next.**
       Stage: Candidate review/promotion and every other wizard-like sequence
@@ -316,7 +318,7 @@ Each new entry records:
       workflow; ordinary detail-to-list browsing retains the old focus-clearing behavior. Every
       reverse edge of Candidate promotion is covered, including a rendered prior screen.
 
-- [ ] **QA-038 — The `?` help view is a dense multi-command grid.**
+- [x] **QA-038 — The `?` help view is a dense multi-command grid.**
       Stage: asking for keyboard help from any screen
       Surface: global help overlay
       Severity: medium
@@ -325,6 +327,7 @@ Each new entry records:
       formatting and enough spacing to scan vertically
       Observed: multiple unrelated commands share each line (`enter`, `esc`, install, repair and
       uninstall among them), so the help is harder to read than the footer it expands.
+      Fix: `D-216`. `Keyboard help` renders one `[Key] Action` (or one related key pair) per line.
 
 - [ ] **QA-039 — Vendored and Referenced promotion modes are unexplained.**
       Stage: choosing how a Candidate enters a Registry
@@ -337,7 +340,7 @@ Each new entry records:
       payload and upstream consequences. Pressing `m` silently flips to the other value; for
       example it sets vendored when referenced was displayed.
 
-- [ ] **QA-040 — Registry rows are an unreadable wall of text.**
+- [x] **QA-040 — Registry rows are an unreadable wall of text.**
       Stage: reviewing configured availability
       Surface: Registries (21)
       Severity: medium
@@ -346,8 +349,10 @@ Each new entry records:
       clear separation between identity/status and explanatory detail
       Observed: aliases, artifact counts, action prose and Source-vs-Registry explanation run
       together. Three configured items become a long paragraph with no reliable row boundary.
+      Fix: `D-216`. Add Registry and every configured row are separate compact cards; identity is
+      the card head and its facts are indented beneath it.
 
-- [ ] **QA-041 — The contextual footer is functionally correct but visually fragmented.**
+- [x] **QA-041 — The contextual footer is functionally correct but visually fragmented.**
       Stage: every screen after QA-026
       Surface: `Keys here` / `Keys always` shell chrome
       Severity: medium
@@ -356,8 +361,10 @@ Each new entry records:
       local and global actions adjacent and consistently aligned
       Observed: `Keys here` and `Keys always` are separated by a large empty region, repeat labels
       and read as unrelated blocks. The hierarchy is noisy despite the correct contextual content.
+      Fix: `D-216`. One shared separator introduces adjacent, width-bounded `[Key] Action` lines;
+      contextual bindings still precede global ones without the two repeated headings.
 
-- [ ] **QA-042 — Connected rows on Registries do not display the cursor.**
+- [x] **QA-042 — Connected rows on Registries do not display the cursor.**
       Stage: selecting a Registry to synchronize or inspect
       Surface: Registries (21)
       Severity: high
@@ -366,6 +373,8 @@ Each new entry records:
       Expected: the focused connected row carries the same visible `>` marker as Add Registry
       Observed: only `[ Add Registry ]` renders the cursor. Connected rows are rendered without
       focus, so the user cannot see which alias will receive `s` or Enter.
+      Fix: `D-216`. The screen passes its stable row identity into the card renderer; exactly the
+      focused Registry head receives `>`.
 
 - [ ] **QA-043 — Registries exposes authoring Sources as actionable rows and leaks an internal error.**
       Stage: browsing consumer Registry connections

@@ -2704,7 +2704,13 @@ for one hard-coded sequence is not the requested capability.
 ## B-104 — TUI lacks one readable visual hierarchy for sections, rows, help and key chrome
 
 Found: manual TUI acceptance, QA-035/QA-038/QA-040/QA-041/QA-042 (2026-09-09) · Severity: medium/high
-· Status: open
+· Status: CLOSED by CP-19 step 12
+
+**Closed (2026-09-09).** The layout kernel now names one restrained section rule and card grouping.
+Dashboard explanation and activity, Registry records, help and footer all compose those primitives:
+one explanatory region between rules, one blank between cards, one help binding per line, and one
+compact width-bounded footer with `[Key] Action` labels. Registry card heads receive the screen's
+stable focus and render `>` on the actual target (`D-216`).
 
 The Dashboard has no visual boundary between navigation explanation and machine summary; Registry
 items concatenate into a wall of text; the help overlay packs unrelated actions onto the same line;

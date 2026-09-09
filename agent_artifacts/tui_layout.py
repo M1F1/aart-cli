@@ -26,6 +26,9 @@ READABLE_MEASURE = 80
 CONTENT_MEASURE = 100
 """Bound for structured lines: list rows, the detail pane, aligned columns."""
 
+SECTION_RULE = "─" * 64
+"""Restrained boundary shared by body sections and the persistent key footer."""
+
 STAGE_CONFIRMED = "✓"
 STAGE_CURRENT = "▸"
 STAGE_PENDING = "·"
@@ -274,6 +277,19 @@ def separate(*blocks: Sequence[str]) -> Tuple[str, ...]:
     return tuple(joined)
 
 
+def section(lines: Sequence[str]) -> Tuple[str, ...]:
+    """Put one explanatory region between the shared restrained boundaries."""
+
+    body = separate(lines)
+    return () if not body else (SECTION_RULE, *body, SECTION_RULE)
+
+
+def cards(*blocks: Sequence[str]) -> Tuple[str, ...]:
+    """Keep list records visually separate while retaining one compact reading order."""
+
+    return separate(*blocks)
+
+
 def action_prompt(facts: Sequence[str], prompt: str) -> Tuple[str, ...]:
     """The facts, one blank line, then the single line saying what a key press will do.
 
@@ -311,6 +327,7 @@ __all__ = [
     "PANE_MIN_HEIGHT",
     "PROTECTED_HINTS",
     "READABLE_MEASURE",
+    "SECTION_RULE",
     "STAGE_CONFIRMED",
     "STAGE_CURRENT",
     "STAGE_JOIN",
@@ -318,11 +335,13 @@ __all__ = [
     "STAGE_PENDING",
     "STAGE_PROJECTION",
     "action_prompt",
+    "cards",
     "columns",
     "field_block",
     "is_action_prompt",
     "measure",
     "pane_budget",
+    "section",
     "separate",
     "status_bar",
     "wrap",

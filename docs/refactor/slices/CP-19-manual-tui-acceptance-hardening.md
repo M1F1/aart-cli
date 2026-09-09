@@ -89,10 +89,11 @@ internal state model.
    measure. Back retains focus only when both screens share such a route; all Candidate-promotion
    reverse edges preserve the same Candidate, while unrelated detail browsing still clears focus
    (D-215).
-12. **Visual hierarchy and focus (QA-035/QA-038/QA-040/QA-041/QA-042) — TODO.** State one small
-   layout vocabulary for section separators, bounded Registry rows, readable one-binding-per-line
-   help, compact `[Key] Action` footer chrome and a cursor on every actionable row. Avoid a
-   screen-by-screen pile of unrelated punctuation.
+12. **Visual hierarchy and focus (QA-035/QA-038/QA-040/QA-041/QA-042) — DONE.** One restrained
+   section rule and card grouping in the layout kernel now compose Dashboard explanation/activity,
+   Registry records and footer chrome. Help is one key or related pair per line; the footer is one
+   adjacent width-bounded `[Key] Action` block with contextual actions first; the Registry card head
+   matching the stable cursor receives `>` (D-216).
 13. **Promotion mode explanation (QA-039) — TODO.** Explain Vendored and Referenced ownership,
    payload and upstream consequences before confirmation; label `m` as a toggle with the active
    value visible.
@@ -190,6 +191,12 @@ turns all six projections red, and restoring the old unconditional focus reset t
 Candidate Back test red. The 136 nearest navigation/shell/action tests plus 23 subtests are green;
 full gates remain deferred to step 15 by operator instruction.
 
+Step 12 was RED against the operator's four concrete frames. Five semantic mutations were killed
+independently: removing the Dashboard section, flattening cards, discarding Registry focus, joining
+two help bindings and removing keycaps from the footer. The 93 nearest layout/shell/Registry tests
+plus 182 subtests are green. Existing contextual-footer tests now locate the shared footer boundary
+instead of depending on removed `Keys here`/`Keys always` headings.
+
 ## Do not undo
 
 - Do not weaken the exact synchronized-baseline comparison to pass QA-031.
@@ -206,8 +213,8 @@ full gates remain deferred to step 15 by operator instruction.
 
 ## Exact next implementation action
 
-Execute step 12 (QA-035/QA-038/QA-040/QA-041/QA-042) next: one shared visual hierarchy for
-sections, Registry rows, help, footer keycaps and actionable focus. Then steps 13–14. The operator has asked for
+Execute step 13 (QA-039) next: explain Vendored and Referenced ownership, payload and upstream
+consequences before the mode changes. Then step 14. The operator has asked for
 targeted tests and quality gates only until the batch is
 finished; run the whole `tui`/`consumer`/`maintainer`/`source`/`registry`/`setup`/`promotion`/
 `candidate` test file set after each step, not only the files it edits, and step 15 runs the full
