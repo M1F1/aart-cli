@@ -285,7 +285,7 @@
         {
           "id": "3",
           "title": "Enter returns completed sequences to their owning list (QA-027)",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "4",

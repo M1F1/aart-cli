@@ -2570,7 +2570,12 @@ _NAVIGATION: dict[MaintainerScreen, tuple[MaintainerScreen, ...]] = {
     MaintainerScreen.SOURCE_ADD_REVIEW: (MaintainerScreen.SOURCES,),
     MaintainerScreen.SOURCE_DETAILS: (MaintainerScreen.SOURCE_SYNC,),
     MaintainerScreen.SOURCE_SYNC: (MaintainerScreen.SOURCE_SYNC_RESULT,),
-    MaintainerScreen.SOURCE_SYNC_RESULT: (MaintainerScreen.CANDIDATES,),
+    # A finished sync is the end of a Source journey, so it offers the list that journey
+    # started from as well as the Candidates it just produced (`QA-027`).
+    MaintainerScreen.SOURCE_SYNC_RESULT: (
+        MaintainerScreen.SOURCES,
+        MaintainerScreen.CANDIDATES,
+    ),
     MaintainerScreen.CANDIDATES: (
         MaintainerScreen.CANDIDATE_DETAILS,
         MaintainerScreen.BULK_PROMOTION,
@@ -2597,6 +2602,10 @@ _NAVIGATION: dict[MaintainerScreen, tuple[MaintainerScreen, ...]] = {
     MaintainerScreen.REGISTRY_VALIDATION: (MaintainerScreen.REGISTRY_COMMIT,),
     MaintainerScreen.REGISTRY_COMMIT: (MaintainerScreen.REGISTRY,),
     MaintainerScreen.REGISTRY: (
+        # Where a finished promotion lands (screen 45 goes on to here), and the operator's next
+        # promotion starts on Candidates -- without this they backed out through the whole
+        # journey they had just completed (`QA-027`).
+        MaintainerScreen.CANDIDATES,
         MaintainerScreen.BULK_PROMOTION,
         MaintainerScreen.REGISTRY_INIT,
         MaintainerScreen.REGISTRY_REBUILD,

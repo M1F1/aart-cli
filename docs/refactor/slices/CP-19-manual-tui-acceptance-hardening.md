@@ -25,9 +25,12 @@ internal state model.
    prior Skill promotion is merged, the local checkout observes it and the configured Registry is
    synchronized. Every new finding goes immediately to root `TODO.md` and receives a bounded CP-19
    step or a backlog item; it is not implemented during the discovery pass.
-3. **Completed-sequence navigation (QA-027) — TODO.** Characterize every result screen with no
-   forward decision. Enter returns to the owning list, beginning with Source Sync Result → Sources;
-   confirmation screens must remain confirmations until their action has run.
+3. **Completed-sequence navigation (QA-027) — DONE.** Screen 34 binds `Enter → Sources`, with the
+   matching edge declared in the navigation map, because `_navigate` refuses a target the map does
+   not carry and a binding without it is a key that silently does nothing. Registry Maintainer
+   binds `c Candidates`, so a finished promotion is one key from the next one; screen 45's own
+   Enter still goes on to Registry, which is the precedent this generalizes (D-210). Confirmation
+   screens stay confirmations: a review still holding its action is not treated as a result.
 4. **Form lifecycle (QA-028) — TODO.** Entering Add Registry, Add Source or Initialize Registry for
    a new action resets its draft. A preparation refusal stays on the form with the typed draft
    intact, preserving QA-018/D-184.
@@ -145,7 +148,7 @@ green. Full repository gates are intentionally deferred until step 15 at the ope
 
 ## Exact next implementation action
 
-Execute step 3 (QA-027) next. It is the same mechanism step 10 just built seen from the successful
-side — Enter on a terminal result returns to the list that owns it — so it extends `_owning_screen`
-rather than adding a second route. Steps 4–7 and 11–14 follow; step 15 runs the full gates once the
-operator hands the batch back.
+Execute step 4 (QA-028) next: a form opens empty when it is entered for a new action, while a form
+whose preparation was refused keeps the typed draft (QA-018/D-184). Then steps 5–7 and 11–14. The
+operator has asked for targeted tests and quality gates only until the batch is finished; step 15
+runs the full suites once it is handed back.

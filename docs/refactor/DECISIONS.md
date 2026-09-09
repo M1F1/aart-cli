@@ -4880,3 +4880,35 @@ returning to the list that owns it — so step 3 extends `_owning_screen` rather
 route. The claims are held across four confirmed action kinds in
 `tests/failed_action_terminal_state_test.py`, including the `QA-024` claim that a review nobody has
 confirmed still asks for its confirmation.
+
+## D-210 — A result screen's Enter is a declared route to the list its journey started from
+
+Date: 2026-09-09 · Increment: CP-19 step 3, QA-027 · Status: accepted
+
+Screen 34 is where a Source Sync ends, and it had no forward key at all: Enter meant nothing, so
+the only way anywhere was Esc through every screen of the journey just completed. Screen 45 already
+had the right rule — once its commit had happened, Enter meant "go on to the registry" rather than
+"confirm" — applied to one screen.
+
+The rule is stated as a screen binding rather than as a new rule in `key_event`, because
+`_SCREEN_BINDINGS` is already consulted before the generic Enter fallbacks and already suppresses
+the generic Enter when a screen binds it. So `Enter → Sources` on screen 34 is one entry in the
+table every other key goes through, and the footer names where it goes because the footer is drawn
+from the same entry. The matching edge is added to the navigation map: `_navigate` refuses a target
+the map does not declare, so a binding without the edge would be a key that silently does nothing —
+the defect being fixed.
+
+Which list owns a journey is answered by where it started, which is the operator's own phrasing: at
+the end of a sequence, Enter returns to the first screen of that section so the next one can begin.
+For the Source journey that is Sources. Screen 34 keeps its declared route to Candidates as well;
+the sync genuinely produces them.
+
+The Candidate promotion half is answered differently, and deliberately. Screen 45's Enter still
+goes on to Registry: a promotion's product outcome is a change to the registry, and `QA-027` cites
+that behaviour as the correct pattern. What was missing is that Registry Maintainer had no route
+back to Candidates, so the next promotion began with an Esc for every screen of the last one. It
+now binds `c Candidates`.
+
+Consequence: this shares `QA-033`'s mechanism from the successful side — a finished thing leaves
+for the list that owns it — without merging the two, because a run that stopped and a run that
+completed say different things on the way out.

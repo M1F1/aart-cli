@@ -48,6 +48,17 @@ Each new entry records:
       Additional manual evidence: completing the Candidate promotion sequence also leaves the
       operator backing through every intermediate screen to reach Candidates. The owning-list
       return must cover completed Candidate workflows, not only Source Sync.
+      Fix: Source Sync Result binds Enter to Sources — the list that journey started from — and
+      the route is declared in the navigation map, because a key that navigates somewhere the map
+      does not allow is a key that does nothing. Registry Maintainer gains `c Candidates`, so the
+      screen a finished promotion lands on is one key from the next promotion instead of an Esc
+      for every screen just walked. Screen 45's own Enter still goes on to Registry, which is the
+      precedent this generalizes rather than replaces (`D-210`).
+      Evidence: `tests/terminal_result_return_test.py` holds the key, the declared route, the
+      footer label, the move it really makes, both halves of the finding, and that a review still
+      waiting for its confirmation is not treated as a result.
+      Retest: Sources → `s` → review → Enter → Source Sync Result → Enter should land on Sources;
+      after a promotion, `c` from Registry Maintainer should reach Candidates.
 
 - [ ] **QA-028 — Add Source opens holding the previous Source's answers.**
       Stage: adding a second authoring Source

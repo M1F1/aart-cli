@@ -1347,11 +1347,17 @@ now the end of, the footer offers `Enter Back to list`, Enter navigates through 
 (D-209). The screen deliberately does not move, because the refusal is drawn there. Held over four
 confirmed action kinds in `tests/failed_action_terminal_state_test.py`, with `QA-024` preserved.
 
-**Exact next action for Claude:** CP-19 step 3 — QA-027. Enter on a terminal result must return to
-the list that owns it. That is step 10's mechanism seen from the successful side, so extend
-`_owning_screen` and the `ACTION_RECORDED` rule rather than adding a second route, and use the
-completed Candidate flow as its evidence. Then steps 4–7 and 11–14. Focused gates only; the operator
-deferred the full suites to step 15.
+**CP-19 step 3 is DONE — QA-027 closed (2026-09-09).** Screen 34 binds `Enter → Sources`, with the
+matching edge declared in the navigation map, because `_navigate` refuses an undeclared target and a
+binding without the edge is the silent key being fixed. Registry Maintainer binds `c Candidates`, so
+a finished promotion is one key from the next one; screen 45's Enter still goes on to Registry
+(D-210).
+
+**Exact next action for Claude:** CP-19 step 4 — QA-028. Entering Add Registry, Add Source or
+Initialize Registry for a new action opens an empty form, while a preparation that was refused keeps
+the typed draft on screen (QA-018/D-184). Reset on entry, not on leave. Then steps 5–7 and 11–14.
+The operator has asked for targeted tests and quality gates only until the batch is handed back;
+step 15 runs the full suites then.
 
 ## Critical boundaries for this slice
 

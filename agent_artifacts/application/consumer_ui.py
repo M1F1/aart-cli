@@ -1171,10 +1171,19 @@ _SCREEN_BINDINGS: dict[ApplicationScreen, tuple[_ScreenBinding, ...]] = {
         _event_binding("m", "Mode", ConsumerUiEventKind.TOGGLE_PROMOTION_MODE),
     ),
     MaintainerScreen.REGISTRY: (
+        # Where a finished promotion lands, so the next one starts one key away instead of behind
+        # an Esc for every screen of the journey just completed (`QA-027`).
+        _navigate_binding("c", "Candidates", MaintainerScreen.CANDIDATES),
         _navigate_binding("n", "Initialize", MaintainerScreen.REGISTRY_INIT),
         _navigate_binding("b", "Rebuild", MaintainerScreen.REGISTRY_REBUILD),
         _navigate_binding("s", "Scan Repository", MaintainerScreen.REPOSITORY_SCAN),
         _navigate_binding("u", "Check upstream", MaintainerScreen.ADOPTED_ARTIFACTS),
+    ),
+    # The end of a Source journey. Enter is bound here rather than left to the generic rule
+    # because a result screen has nothing to open, and an Enter that does nothing is how somebody
+    # ends up pressing Esc through every screen they just walked (`QA-027`).
+    MaintainerScreen.SOURCE_SYNC_RESULT: (
+        _navigate_binding("Enter", "Sources", MaintainerScreen.SOURCES),
     ),
     MaintainerScreen.SCAN_RESULT: (
         _action_binding("a", "Adopt", ConsumerActionKind.REPOSITORY_ADOPT),

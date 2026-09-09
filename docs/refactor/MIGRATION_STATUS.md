@@ -873,7 +873,7 @@ the operator during the manual batch.
 **Next:** QA-027, Enter from completed result screens back to the list that began their sequence.
 
 **CP-19 planning checkpoint (2026-09-09).** The operator separated post-refactor manual acceptance
-from the closed refactor by opening CP-19 (D-203). QA-026, QA-034, QA-025/QA-032 and QA-033 are its completed steps 1, 8, 9 and 10; QA-027 through
+from the closed refactor by opening CP-19 (D-203). QA-026, QA-034, QA-025/QA-032, QA-033 and QA-027 are its completed steps 1, 8, 9, 10 and 3; the rest of
 QA-030 are scoped, unimplemented interaction/layout steps. QA-031/B-100 records the blocking second
 promotion: local `cc7c01d` contains an unpublished Skill promotion while synchronized remote `main`
 is `027ba7f`, so exact baseline equality correctly refuses the MCP transaction. The gap is the
@@ -989,3 +989,19 @@ subtests -- Registry rebuild, Registry init, Source add and Registry add -- plus
 operator actually read, and the `QA-024` claim that a review nobody has confirmed still asks for its
 confirmation. `_owning_screen` is the shared mechanism `QA-027` (step 3) extends rather than
 duplicating.
+
+**CP-19 step 3 complete — QA-027 closed (2026-09-09).** Screen 34 is where a Source Sync ends and it
+had no forward key at all, so the only way anywhere was Esc through every screen of the journey just
+completed. It now binds `Enter -> Sources` through `_SCREEN_BINDINGS`, which is already consulted
+before the generic Enter fallbacks and already suppresses the generic Enter when a screen binds it,
+so the footer names where the key goes because it is drawn from the same entry. The matching edge is
+declared in the navigation map: `_navigate` refuses a target the map does not carry, so a binding
+without the edge would be exactly the silent key being fixed. Registry Maintainer binds
+`c Candidates`, closing the promotion half -- the screen a finished promotion lands on is one key
+from the next one. Screen 45's own Enter still goes on to Registry, which `QA-027` cites as the
+correct pattern (`D-210`). `tests/terminal_result_return_test.py` holds the key, the declared route,
+the footer label, the move it makes, both halves of the finding, and that a review still waiting for
+its confirmation is not a result. Three targeted mutations killed.
+
+At the operator's instruction the batch runs targeted tests and quality gates only; the full suites
+run at step 15 once it is handed back.
