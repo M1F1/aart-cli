@@ -4741,7 +4741,28 @@ implementation is the legacy authored-workspace compiler and requires an unversi
 `artifact.json`. The route is present, but it cannot maintain the output of the route before it.
 
 QA-025 and B-099 therefore reopen. This is the local half of QA-032/B-057, not a reason to invent a
-second Registry layout. CP-19 step 8 owns one representation-aligned boundary used by both TUI
+second Registry layout. CP-19 step 9 owns one representation-aligned boundary used by both TUI
 maintenance and generated CI, while retaining each explicit deterministic, validation,
 compatibility and audit claim. During continued discovery, Rebuild is skipped rather than reported
 as passed or repeatedly retried.
+
+## D-206 — Publication must be evidenced at the Git boundary, not manufactured by its fixture
+
+Date: 2026-09-09 · Increment: CP-19 manual consumer acceptance, QA-034 · Status: accepted
+
+The first real merged promotion leaves Marketplace empty. This separates two facts the existing
+tests collapsed: the promotion record correctly says `promoted-local` before Git review, while the
+consumer correctly admits only `published` versions. Git merge changes repository reachability but
+does not rewrite the record, and no public boundary turns one state into the other.
+
+CP-17's live Git fixture did not evidence this transition: it called `publish_registry_version`
+inside fixture construction, then created the repository from bytes that were already Published.
+That proves consumers can read a Published Git snapshot, not that AART's accepted publication
+workflow can produce one.
+
+CP-19 step 8 owns the missing vertical slice. Its RED begins with genuine promoted-local output and
+crosses a real Git branch/merge/sync boundary before Marketplace is read. The implementation must
+preserve INV-242 — a local promotion is not publication — and must not relabel local bytes early to
+make the test pass. The configured approved Git boundary is where publication evidence must enter
+the read model or an explicit reviewed transition; the slice decides the smallest compliant form
+from the Product Specification and measured public behavior.

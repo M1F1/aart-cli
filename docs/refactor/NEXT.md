@@ -1267,7 +1267,7 @@ findings. Do not implement the open steps until the operator starts the next wor
 artifact through the generated workflow. Both matrix arms fail because `registry init` generated
 the legacy `format/validate/lock/build/audit/test` sequence over the canonical versioned output.
 The exact remote branch is healthy through public `registry-git` acquisition, so this is a false
-negative in the publication gate, not corrupt Registry content (D-204). CP-19 step 8 owns the fix.
+negative in the publication gate, not corrupt Registry content (D-204). CP-19 step 9 owns the fix.
 The disposable manual run consciously merged PR #1 after independent consumer validation; full
 CP-19 verification may not pass until the generated gate validates the canonical representation
 without dropping its compatibility/audit claims.
@@ -1276,15 +1276,38 @@ without dropping its compatibility/audit claims.
 and its known legacy `lock` refusal exposed a separate state-machine defect. Execution
 had ended and the adapter had discarded its pending plan, but the TUI remained on Review Rebuild,
 said `press Enter to start it` and advertised `Enter Confirm`; another Enter can only report that
-nothing was prepared. CP-19 step 9 must make a failed action an explicit terminal result across
+nothing was prepared. CP-19 step 10 must make a failed action an explicit terminal result across
 action kinds. Do not implement it during the active discovery pass.
 
 **QA-025 manual retest FAILED (2026-09-09).** The operator was not detouring: the acceptance
 procedure explicitly required `b → Everything → review → run`. The focused increment proved that
 screens 46h/46i route and preserve stage order, but the first real canonical promotion output made
-`lock` refuse the missing legacy `artifact.json`. B-099 is reopened. CP-19 step 8 now owns both
+`lock` refuse the missing legacy `artifact.json`. B-099 is reopened. CP-19 step 9 now owns both
 local TUI maintenance and generated CI because each currently invokes the same wrong workspace
 authority. Skip Rebuild and continue with Check upstream during discovery (D-205).
+
+**Manual discovery handoff — QA-034 through QA-043 (2026-09-09).** The first clean Consumer is the
+new blocking checkpoint. Its Registry connection is healthy at merged Git commit `f37d182`, and
+the synchronized tree contains the promoted Skill's version, manifest and payload, yet both TUI
+Marketplace and `marketplace list --json` contain zero artifacts. The record remains
+`promoted-local`; no public Git review/merge path applies the Published transition. CP-17's fixture
+called `publish_registry_version` internally before creating its repository and therefore did not
+test the accepted chain. QA-034/B-102/D-206 make CP-19 step 8 the next implementation action.
+
+The same walkthrough captured the remaining UX batch without implementing it: Dashboard grouping
+(QA-035); workflow progress across every multi-step journey (QA-036); Candidate Back losing its
+stable focus and rendering `That Candidate is not available` (QA-037); vertically readable help
+(QA-038); an explanation of Vendored versus Referenced and an honest `m` toggle (QA-039); bounded
+Registry rows and whitespace (QA-040); compact keycap footer hierarchy (QA-041); a visible cursor
+on connected Registry rows (QA-042); and authoring Sources advertising an Enter/details route that
+does not exist and leaks `no connected registry here is 21-registries` (QA-043). QA-027 also gains
+the completed Candidate flow as evidence for returning directly to its owning list.
+
+**Exact next action for Claude:** implement CP-19 step 8 with TDD over a real promoted-local Git
+branch merged into the configured publication branch, then public sync and Marketplace. Do not use
+the `_published_registries` fixture shortcut. Step 9 then aligns TUI Rebuild and generated CI with
+the canonical representation. The operator explicitly ended this discovery session and asked for
+the repository handoff to be committed and pushed.
 
 ## Critical boundaries for this slice
 

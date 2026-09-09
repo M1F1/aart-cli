@@ -41,42 +41,68 @@ internal state model.
    equality. Characterize unpublished prior promotion, stale checkout, wrong workspace root and
    unrelated drift separately. The measured first case must explain the Git publication → local
    update → Registry synchronization sequence in product terms without embedding CLI commands.
-8. **Canonical Registry maintenance and CI (QA-025/QA-032/B-057/B-099) — TODO, CRITICAL.** Provide
+8. **Git publication transition (QA-034/B-102) — TODO, CRITICAL.** Characterize the real sequence
+   promotion → local commit → Git review/merge → configured Registry sync. Preserve
+   `promoted-local` before publication, but make a version read from the configured published Git
+   boundary available to Marketplace. No fixture may call `publish_registry_version` on behalf of
+   a public flow; the test must prove the actual boundary performs the transition.
+9. **Canonical Registry maintenance and CI (QA-025/QA-032/B-057/B-099) — TODO, CRITICAL.** Provide
    public read-only validation and appropriate deterministic maintenance for the checked-out
    versioned Registry representation. Make both TUI Rebuild and the generated workflow use the
    authority paired with promotion's output. Keep compatibility/audit coverage explicit. Do not
    make promotion emit the legacy authoring workspace as a second truth merely to satisfy old
    commands.
-9. **Failed-action terminal state (QA-033/B-101) — TODO.** Once an attempted action refuses, replace
+10. **Failed-action terminal state (QA-033/B-101) — TODO.** Once an attempted action refuses, replace
    its review/confirmation state with an explicit failed result. The pending plan is already gone,
    so the footer may not advertise confirmation; offer the owning list or a freshly prepared retry.
    Characterize this across action kinds rather than special-casing Registry rebuild.
-10. **Batch verification — TODO.** Each implementation increment gets a real RED/mutation and focused
+11. **Workflow progress and back context (QA-036/QA-037) — TODO.** Give every multi-step sequence a
+   compact completed/current/upcoming trail derived from its real navigation graph. Back restores
+   the same stable subject and read model; it may not return to a screen that says its Candidate is
+   unavailable.
+12. **Visual hierarchy and focus (QA-035/QA-038/QA-040/QA-041/QA-042) — TODO.** State one small
+   layout vocabulary for section separators, bounded Registry rows, readable one-binding-per-line
+   help, compact `[Key] Action` footer chrome and a cursor on every actionable row. Avoid a
+   screen-by-screen pile of unrelated punctuation.
+13. **Promotion mode explanation (QA-039) — TODO.** Explain Vendored and Referenced ownership,
+   payload and upstream consequences before confirmation; label `m` as a toggle with the active
+   value visible.
+14. **Registry/Source row truth (QA-043) — TODO.** Decide the screen-21 representation from the
+   Product Specification distinction: authoring Sources may not advertise a detail action whose
+   route accepts only Registry connections, and no internal screen enum may enter user output.
+15. **Batch verification — TODO.** Each implementation increment gets a real RED/mutation and focused
    suites. Only after the operator hands the batch back run full `make quality` and
    `make integration`, then return the fixed items for manual retest.
 
 ## Current manual checkpoint
 
 The operator merged Registry PR #1 at `f37d182` and synchronized it despite the known QA-032 false
-negative. Local `main` now holds the second promotion at
+negative. The clean Consumer sees that Source as healthy, and its snapshot contains the promoted
+Skill's version, manifest and payload, but Marketplace offers zero artifacts. The version remains
+`promoted-local`; no public path applies the publication transition that CP-17 fixtures applied
+internally. This is blocking QA-034.
+
+Local Registry `main` now holds the second promotion at
 `259af24`, one commit ahead of published `origin/main`, and the repository-adopted
 `skill/commit-message-discipline@1.0.0` transaction is present as an uncommitted working-tree
-change. A mistaken Rebuild run exposed QA-033: after `lock` refused on the legacy representation,
+change. The procedure's required Rebuild run exposed QA-033: after `lock` refused on the legacy
+representation,
 the TUI remained on Review Rebuild and continued to advertise confirmation for a cleared plan.
 That run was the procedure's required QA-025 retest, not an operator detour: QA-025 is reopened
 because its real canonical input fails even though its route and ordering passed focused tests.
 
-To resume discovery, press Escape twice from Review Rebuild to reach Registry Maintainer, press `u`
-for Check upstream, focus `skill/commit-message-discipline@1.0.0` and press Enter. Do not run Rebuild
-again until CP-19 step 8 is implemented, and do not discard the local MCP promotion or adoption
-transaction.
+The Marketplace-to-lifecycle half of discovery cannot continue honestly until step 8 closes
+QA-034. The operator may keep collecting navigation and layout observations, but must not treat an
+empty Marketplace as the expected result or synthesize an offer by editing Registry JSON. Do not
+run Rebuild again until step 9 is implemented, and do not discard the local MCP promotion or
+adoption transaction.
 
 ## Evidence and gates
 
 QA-026 was RED against the fixed footer. A semantic mutation routing advertised `b Rebuild` to the
 initialization screen was killed by the headless shell walk. The focused 238-test interaction and
 boundary set, changed-module `mypy`, `ruff check`, `ruff format --check` and `make docs-check` were
-green. Full repository gates are intentionally deferred until step 10 at the operator's request.
+green. Full repository gates are intentionally deferred until step 15 at the operator's request.
 
 ## Do not undo
 
@@ -88,6 +114,7 @@ green. Full repository gates are intentionally deferred until step 10 at the ope
 
 ## Exact next implementation action
 
-None during the current discovery pass. CP-19 step 2 is the operator's active manual walkthrough.
-When implementation resumes, begin with QA-027 unless the operator explicitly prioritizes blocking
-QA-031.
+The discovery pass is now blocked at Marketplace by QA-034. When Claude resumes implementation,
+start with CP-19 step 8 and prove the defect over an actual Git merge/sync boundary. Do not use the
+fixture shortcut that calls `publish_registry_version` before the repository exists. Then execute
+step 9 so the same canonical representation passes local TUI maintenance and generated CI.

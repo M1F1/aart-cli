@@ -886,22 +886,38 @@ the Registry in the TUI and resume the walkthrough at the MCP Candidate. Record 
 **QA-032 (2026-09-09).** The real Registry PR made B-057 critical. Generated run `34341007222`
 rejects TUI promotion's versioned Registry in both matrix arms using the legacy workspace validator,
 lock, build, audit and compatibility commands; public `registry-git` acquisition accepts exact
-remote head `cc7c01d` as healthy. CP-19 step 8 must make the generated gate validate the canonical
+remote head `cc7c01d` as healthy. CP-19 step 9 must make the generated gate validate the canonical
 representation without deleting the gate's claims or producing a second legacy index (D-204).
 Implementation remains paused during discovery.
 
 **QA-033 (2026-09-09).** A refused Rebuild remains on its review screen after execution. The body
 says the run stopped, while the header and contextual footer still ask for Enter confirmation even
 though the adapter cleared the pending plan; the next Enter can only say nothing was prepared.
-CP-19 step 9/B-101 owns the action-agnostic failed-result transition. Implementation remains paused.
+CP-19 step 10/B-101 owns the action-agnostic failed-result transition. Implementation remains paused.
 
 **Current manual checkpoint (2026-09-09).** Registry PR #1 was merged at `f37d182` and synchronized.
 The lab's local `main` has the MCP promotion at `259af24`, one commit ahead of `origin/main`, plus
 the uncommitted adopted `skill/commit-message-discipline@1.0.0` transaction. Resume from Registry
-Maintainer → `u` Check upstream; the mistaken Rebuild needs only Escape twice and must not be rerun.
+Maintainer → `u` Check upstream; after the required Rebuild retest fails, Escape twice returns to
+that screen and the broken run must not be retried.
 
 **QA-025 retest correction (2026-09-09).** Rebuild was not accidental; the manual procedure
 required it. Its real promoted input immediately disproved the earlier route-level conclusion:
 screens 46h/46i exist and order stages, but the stages use the legacy authored-workspace authority
-and reject canonical promotion output. QA-025/B-099 reopen and join QA-032/B-057 in CP-19 step 8
+and reject canonical promotion output. QA-025/B-099 reopen and join QA-032/B-057 in CP-19 step 9
 (D-205). Skip that broken checkpoint while discovery continues.
+
+**QA-034 blocking Consumer checkpoint (2026-09-09).** A clean Consumer synchronized the merged
+Registry `main` at `f37d182` as healthy and stored the real version, manifest and payload, but
+Marketplace is empty. The promoted record remains `promoted-local` after Git merge and every
+consumer projection requires `published`; no public transition joins them. CP-17's Git-backed
+fixture performed that transition internally before repository creation, so it did not evidence
+the accepted publication chain. CP-19 step 8/B-102/D-206 is next and must preserve the rule that a
+local promotion is not publication.
+
+**QA-035–QA-043 UX scope (2026-09-09).** The operator completed the discovery batch by recording
+missing Dashboard section hierarchy, workflow progress, Candidate Back context, readable help,
+Vendored/Referenced explanation, Registry row grouping, compact keycap footer layout, connected-row
+focus and the dishonest authoring-Source details route/internal diagnostic on Registries. They are
+bounded as CP-19 steps 11–14 with B-103–B-106. No implementation was started. Full gates remain
+deferred until the implementation batch is handed back.

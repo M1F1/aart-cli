@@ -45,6 +45,9 @@ Each new entry records:
       mnie do pierwszego ekranu Source, żeby dodać kolejne"
       Note: screen 45 already does exactly this (`Enter` after the receipt goes to screen 46).
       The rule exists; it is applied to one screen instead of all of them.
+      Additional manual evidence: completing the Candidate promotion sequence also leaves the
+      operator backing through every intermediate screen to reach Candidates. The owning-list
+      return must cover completed Candidate workflows, not only Source Sync.
 
 - [ ] **QA-028 — Add Source opens holding the previous Source's answers.**
       Stage: adding a second authoring Source
@@ -155,7 +158,7 @@ Each new entry records:
       Registry it is supposed to maintain.
       Retest outcome: FAILED on the real promoted Registry. The earlier focused fixture proved the
       route and ordering but never supplied canonical promotion output. Reopened under B-099 and
-      joined to QA-032/B-057 in CP-19 step 8.
+      joined to QA-032/B-057 in CP-19 step 9.
 
 - [ ] **QA-033 — A refused run remains on a stale confirmation screen.**
       Stage: Registry maintenance after a canonical promotion
@@ -173,6 +176,121 @@ Each new entry records:
       `nothing was prepared for this action; review it again`.
       Note: QA-032 explains this particular lock refusal, but the stale terminal state is a
       separate reducer/result-screen defect and must hold for every failed action.
+
+- [ ] **QA-034 — A Git-merged promotion never becomes visible in Marketplace.**
+      Stage: first clean Consumer after Registry PR #1 was merged and synchronized
+      Surface: Marketplace in TUI and `marketplace list --json`
+      Severity: blocking
+      Blocks current stage: yes; install/update/repair acceptance cannot start
+      Reproduction: merge the TUI promotion commit into the configured Registry's `main`, connect
+      a clean consumer to that branch, then open Marketplace
+      Expected: merging into the configured approved branch is the publication boundary, so the
+      promoted artifact becomes an approved Marketplace offer
+      Observed: Source health is `healthy` at merged commit `f37d182`, and the synchronized tree
+      contains the version, manifest and payload, but Marketplace returns `artifacts: []`. The
+      durable record still says `publication: promoted-local`; the consumer admits only
+      `PublicationStage.PUBLISHED`, and no public Git publication path changes that field.
+      Evidence: even the first merged Skill is absent, independently of the not-yet-published MCP
+      and adopted Skill. CP-17's Git-backed fixture called `publish_registry_version` internally
+      before materializing its repository, so it never exercised this missing public transition.
+
+- [ ] **QA-035 — Dashboard sections have no visual hierarchy.**
+      Stage: reading the main Dashboard
+      Surface: Dashboard navigation, focused-option explanation and status summary
+      Severity: medium
+      Blocks current stage: no
+      Expected: Navigation, the focused item's explanation and the AART status summary are visibly
+      separate regions, using a restrained separator and whitespace; Recent activity is separated
+      from the counters
+      Observed: `About Updates:`, its sentence, the AART summary, counters and activity run together
+      as one text block. The operator proposed a simple horizontal divider around the focused-item
+      explanation rather than more labels.
+
+- [ ] **QA-036 — Multi-step workflows do not show progress or what comes next.**
+      Stage: Candidate review/promotion and every other wizard-like sequence
+      Surface: page title/chrome across the workflow
+      Severity: high
+      Blocks current stage: no, but operators cannot orient themselves safely
+      Expected: every multi-step flow shows a compact path such as Candidate → Details → Diff →
+      Promotion Review, marks completed/current/upcoming steps with clear status icons and derives
+      it from the same navigation state as the reducer
+      Observed: only the current title, for example `AART / Promotion Review`, is visible. The user
+      cannot tell how they arrived, what was accepted or what remains.
+
+- [ ] **QA-037 — Esc in the Candidate workflow loses the Candidate context.**
+      Stage: backing up from Candidate review/promotion
+      Surface: Candidate detail/diff/validation/promotion history
+      Severity: high
+      Blocks current stage: intermittently; the flow must be restarted from Candidates
+      Reproduction: enter a Candidate's workflow, advance through review screens, then press Esc
+      Expected: return to the preceding step with the same focused Candidate and already-observed
+      state
+      Observed: the previous screen reports `That Candidate is not available.` The back stack keeps
+      the screen but loses or replaces the stable Candidate focus.
+
+- [ ] **QA-038 — The `?` help view is a dense multi-command grid.**
+      Stage: asking for keyboard help from any screen
+      Surface: global help overlay
+      Severity: medium
+      Blocks current stage: no
+      Expected: one key or closely related key pair per line, with consistent `[Key] Action`
+      formatting and enough spacing to scan vertically
+      Observed: multiple unrelated commands share each line (`enter`, `esc`, install, repair and
+      uninstall among them), so the help is harder to read than the footer it expands.
+
+- [ ] **QA-039 — Vendored and Referenced promotion modes are unexplained.**
+      Stage: choosing how a Candidate enters a Registry
+      Surface: Promotion Mode and Promotion Review
+      Severity: high
+      Blocks current stage: no, but the choice changes what the Registry owns and can install
+      Expected: concise definitions and consequences for both modes, the currently selected mode,
+      and a key label that says what `m` changes
+      Observed: the screen names `vendored` or `referenced` without explaining the ownership,
+      payload and upstream consequences. Pressing `m` silently flips to the other value; for
+      example it sets vendored when referenced was displayed.
+
+- [ ] **QA-040 — Registry rows are an unreadable wall of text.**
+      Stage: reviewing configured availability
+      Surface: Registries (21)
+      Severity: medium
+      Blocks current stage: no
+      Expected: one visually bounded row/card per configured item, blank space between items and a
+      clear separation between identity/status and explanatory detail
+      Observed: aliases, artifact counts, action prose and Source-vs-Registry explanation run
+      together. Three configured items become a long paragraph with no reliable row boundary.
+
+- [ ] **QA-041 — The contextual footer is functionally correct but visually fragmented.**
+      Stage: every screen after QA-026
+      Surface: `Keys here` / `Keys always` shell chrome
+      Severity: medium
+      Blocks current stage: no
+      Expected: a compact footer with a subtle separator and keycaps such as `[Enter] Open`, with
+      local and global actions adjacent and consistently aligned
+      Observed: `Keys here` and `Keys always` are separated by a large empty region, repeat labels
+      and read as unrelated blocks. The hierarchy is noisy despite the correct contextual content.
+
+- [ ] **QA-042 — Connected rows on Registries do not display the cursor.**
+      Stage: selecting a Registry to synchronize or inspect
+      Surface: Registries (21)
+      Severity: high
+      Blocks current stage: no, but actions can target an item the operator cannot identify
+      Reproduction: move down from `[ Add Registry ]` across connected rows
+      Expected: the focused connected row carries the same visible `>` marker as Add Registry
+      Observed: only `[ Add Registry ]` renders the cursor. Connected rows are rendered without
+      focus, so the user cannot see which alias will receive `s` or Enter.
+
+- [ ] **QA-043 — Registries exposes authoring Sources as actionable rows and leaks an internal error.**
+      Stage: browsing consumer Registry connections
+      Surface: Registries (21)
+      Severity: high
+      Blocks current stage: no
+      Reproduction: configure one `registry-git` plus authoring Sources, open Registries and try to
+      open an authoring Source row
+      Expected: the Registry screen either contains only Registry connections or makes Source rows
+      deliberately non-actionable and routes their detail to Maintainer Sources without ambiguity
+      Observed: `aart-test-mcp` and `superpowers-test` appear as connected rows with `Actions:
+      details`, but Enter cannot open them and the screen reports the internal-state phrase
+      `no connected registry here is 21-registries`.
 
 ### Fixed — awaiting manual retest
 

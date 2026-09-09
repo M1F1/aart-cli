@@ -145,7 +145,9 @@ Registry baseline safety check while making each mismatch and recovery actionabl
 walkthrough from its recorded checkpoint. Both TUI maintenance and generated Registry CI must
 operate on the canonical versioned representation produced by promotion. A refused run must
 terminate as a result rather than retain a confirmation for a discarded plan. Run the full batch
-gates before handback.
+gates before handback. The first real Consumer also exposed the missing Git-publication transition;
+after that critical repair, finish workflow progress/back context, shared visual hierarchy,
+promotion-mode explanation and honest Registry/Source rows before handback.
 
 ## Dependency order
 

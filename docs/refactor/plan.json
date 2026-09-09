@@ -309,16 +309,41 @@
         },
         {
           "id": "8",
-          "title": "TUI maintenance and generated Registry CI validate canonical promotion output (QA-025/QA-032/B-057/B-099)",
+          "title": "Git publication makes reviewed promotion records visible without weakening the local boundary (QA-034/B-102)",
           "status": "todo"
         },
         {
           "id": "9",
-          "title": "Failed actions leave review state without retaining a stale confirmation (QA-033/B-101)",
+          "title": "TUI maintenance and generated Registry CI validate canonical promotion output (QA-025/QA-032/B-057/B-099)",
           "status": "todo"
         },
         {
           "id": "10",
+          "title": "Failed actions leave review state without retaining a stale confirmation (QA-033/B-101)",
+          "status": "todo"
+        },
+        {
+          "id": "11",
+          "title": "Workflow progress chrome and back navigation preserve stable context (QA-036/QA-037)",
+          "status": "todo"
+        },
+        {
+          "id": "12",
+          "title": "Readable Dashboard, lists, help and footer hierarchy with visible focus (QA-035/QA-038/QA-040/QA-041/QA-042)",
+          "status": "todo"
+        },
+        {
+          "id": "13",
+          "title": "Promotion mode explains Vendored and Referenced before toggling (QA-039)",
+          "status": "todo"
+        },
+        {
+          "id": "14",
+          "title": "Registries and authoring Sources expose honest rows and routes (QA-043)",
+          "status": "todo"
+        },
+        {
+          "id": "15",
           "title": "Focused evidence per increment and full batch verification before handback",
           "status": "todo"
         }

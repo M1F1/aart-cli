@@ -1394,7 +1394,7 @@ then have the TUI and generated workflow use them. Do not restore green by emitt
 representation or weakening either validator.
 
 Evidence/links: QA-025; QA-032; GitHub Actions run `34341007222`; D-147; D-204; D-205;
-CP-19 step 8.
+CP-19 step 9.
 
 ## B-058 — Scoped mutmut can reuse stale outcomes after test-only changes
 
@@ -2545,7 +2545,7 @@ Evidence/links: `D-197`; `tests/harness_registration_roundtrip_test.py`;
 fixture never fed it the Registry that canonical promotion actually writes. The first real run
 reached legacy `lock`, refused the missing unversioned `artifact.json` and stopped. Screens 46h/46i
 exist and preserve ordering, but cannot maintain their own preceding workflow's output. QA-025 is
-open again and this item joins B-057 in CP-19 step 8.
+open again and this item joins B-057 in CP-19 step 9.
 
 **Earlier closure (`D-200`).** Superseded rather than answered: screens 46h/46i now run lock, build,
 validate and audit over the registry from the TUI, so the walkthrough no longer ends in four typed
@@ -2609,4 +2609,79 @@ to the owning list or a newly prepared retry. It belongs beside QA-027's success
 but one must not be implemented as though the other had succeeded.
 
 Evidence/links: QA-033; `io/consumer_actions.py::_failed`;
-`application/consumer_ui.py::_action_recorded`; CP-19 step 9.
+`application/consumer_ui.py::_action_recorded`; CP-19 step 10.
+
+## B-102 — Git publication has no public transition from promoted-local to published — CRITICAL
+
+Found: manual TUI acceptance, QA-034 (2026-09-09) · Severity: blocking · Status: open
+
+Registry PR #1 merged the real TUI promotion into `main`, the clean Consumer synchronized exact Git
+revision `f37d182`, and source health is `healthy`. The synchronized snapshot contains the version
+record, vendored `artifact.json` and payload. Marketplace nevertheless returns no artifacts because
+the durable record still says `publication: promoted-local`, while `configured_selection` and
+`configured_offers` admit only `PublicationStage.PUBLISHED`.
+
+This is not a missing second PR: even the first merged Skill is absent. The public chain has no
+operation that applies `publish_registry_version`. CP-17's Git-backed acceptance fixture concealed
+the gap by calling that pure function internally before materializing the Git repository, so the
+repository began life with `published` records instead of observing review/merge make them public.
+
+CP-19 step 8 must start RED over the actual sequence: TUI-equivalent promotion output committed to
+one branch, Git review/merge into the configured publication branch, public Source sync and
+Marketplace read. Local promotion must remain non-public before the boundary (INV-242); the fix may
+not make the local writer claim Git did something it did not do.
+
+Evidence/links: QA-034; Product Specification 165.28; INV-137; INV-242;
+`io/configured_selection.py::_approved_snapshot`; `io/configured_offers.py`;
+`tests/git_backed_consumer_e2e_test.py::_registry_snapshot`; CP-19 step 8.
+
+## B-103 — Workflow chrome and Back do not preserve operator context
+
+Found: manual TUI acceptance, QA-036/QA-037 (2026-09-09) · Severity: high · Status: open
+
+The Candidate flow shows only the current page title, so a maintainer cannot see completed,
+current and upcoming review stages. Worse, pressing Escape from a later Candidate screen can return
+to a prior screen whose stable Candidate focus is gone, producing `That Candidate is not
+available.` A progress trail and correct Back behavior are one state problem: both must derive from
+the navigation graph and the subject carried through it, never from renderer-local labels.
+
+CP-19 step 11 owns a workflow-wide solution. Test at least Candidate promotion, Registry
+initialization/rebuild, Source addition/sync and consumer installation; a breadcrumb that is right
+for one hard-coded sequence is not the requested capability.
+
+## B-104 — TUI lacks one readable visual hierarchy for sections, rows, help and key chrome
+
+Found: manual TUI acceptance, QA-035/QA-038/QA-040/QA-041/QA-042 (2026-09-09) · Severity: medium/high
+· Status: open
+
+The Dashboard has no visual boundary between navigation explanation and machine summary; Registry
+items concatenate into a wall of text; the help overlay packs unrelated actions onto the same line;
+and the contextual footer leaves a large void between `Keys here` and `Keys always`. Connected
+Registry rows also omit the cursor entirely, making the focused action target invisible.
+
+CP-19 step 12 must establish a small shared layout vocabulary: restrained section separators,
+bounded rows/cards, visible focus, one help binding per line and compact keycaps such as `[Enter]
+Open`. The exact separator glyph is presentation, but the grouping and focus are behavioral claims
+and need renderer/property evidence across screen families.
+
+## B-105 — Promotion mode names a storage strategy without explaining the decision
+
+Found: manual TUI acceptance, QA-039 (2026-09-09) · Severity: high · Status: open
+
+`vendored` and `referenced` change ownership, installed payload availability and the relationship to
+upstream, yet Promotion Mode displays only the label. `m Mode` silently toggles it; when Referenced
+is shown, pressing `m` simply produces Vendored with no preview of the consequence. CP-19 step 13
+must explain both choices before confirmation, keep the active value visible and label the toggle
+honestly. The explanation must come from the domain distinction rather than duplicate policy in the
+renderer.
+
+## B-106 — Registries advertises details for authoring Sources that it cannot open
+
+Found: manual TUI acceptance, QA-043 (2026-09-09) · Severity: high · Status: open
+
+Screen 21 includes `source-git` authoring Sources beside `registry-git` connections and prints
+`Actions: details.` for them. Its Enter router, however, accepts only `[ Add Registry ]`; attempting
+to act on such a row leaves the internal diagnostic `no connected registry here is 21-registries`.
+CP-19 step 14 must settle the Product Specification's Source/Registry distinction at this surface:
+either exclude authoring Sources, or render and route them deliberately without presenting a false
+action. Internal enum values may never reach operator-facing prose.
