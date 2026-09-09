@@ -319,6 +319,9 @@ manual-acceptance batch had been using: `make quality` green (format-check, lint
 `make integration` green (357 tests). The batch is handed back for manual retest; TODO.md's Open
 section is empty and its Fixed section is the retest list.
 
+**Re-verified after the harness install work (2026-09-09).** `make quality` green (3538 unit tests)
+and `make integration` green (369 tests), on the branch that carries `D-196` and `D-197`.
+
 
 On top of that, Maintainer screen 31 now offers `a` Add Source: a separate `SourceDraft` form (31a)
 and review (31b) that accept only `source-git`/`source-local`, refuse `registry-git` by name, never
