@@ -142,7 +142,8 @@ Convert findings from the real post-refactor Registry → Marketplace → lifecy
 bounded work without reopening the verified refactor slices. Complete the contextual keyboard
 footer, result-screen exits, fresh-form lifecycle, review layout and stable tables; preserve the
 Registry baseline safety check while making each mismatch and recovery actionable; then resume the
-walkthrough from its recorded checkpoint and run the full batch gates before handback.
+walkthrough from its recorded checkpoint. The generated Registry CI must validate the canonical
+versioned representation produced by promotion. Run the full batch gates before handback.
 
 ## Dependency order
 

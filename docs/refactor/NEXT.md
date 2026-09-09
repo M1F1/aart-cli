@@ -1262,6 +1262,15 @@ make that state and recovery explicit in the TUI without weakening the compariso
 **Next action:** continue manual discovery from the recorded CP-19 checkpoint and append new QA
 findings. Do not implement the open steps until the operator starts the next work session.
 
+**QA-032 / B-057 reclassified critical (2026-09-09).** Registry PR #1 is the first real promoted
+artifact through the generated workflow. Both matrix arms fail because `registry init` generated
+the legacy `format/validate/lock/build/audit/test` sequence over the canonical versioned output.
+The exact remote branch is healthy through public `registry-git` acquisition, so this is a false
+negative in the publication gate, not corrupt Registry content (D-204). CP-19 step 8 owns the fix.
+For the disposable manual run, PR #1 is mergeable and may be consciously merged so discovery can
+continue; full CP-19 verification may not pass until the generated gate validates the canonical
+representation without dropping its compatibility/audit claims.
+
 ## Critical boundaries for this slice
 
 - Product Specification is the sole product authority.

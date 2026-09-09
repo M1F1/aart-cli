@@ -121,6 +121,26 @@ Each new entry records:
       an unpublished local promotion, a stale checkout, the wrong workspace root and unrelated
       drift; no `aart ...` command text may enter the TUI.
 
+- [ ] **QA-032 — A Registry produced by TUI promotion fails its generated GitHub Actions.**
+      Stage: publishing the first promoted artifact through Registry PR #1
+      Surface: generated `.github/workflows/aart-registry.yml`
+      Severity: blocking
+      Blocks current stage: yes, unless the known false-negative checks are consciously bypassed
+      Reproduction: promote `skill/verification-before-completion@1.0.0` through the TUI, push the
+      resulting clean commit and open a PR; observe both `registry-quality (minimum)` and
+      `registry-quality (latest)`
+      Expected: the generated CI validates the same versioned approved-Registry representation the
+      canonical TUI promotion writes, and a public consumer would accept
+      Observed: both jobs run the legacy workspace commands. `registry validate` reports a missing
+      unversioned `artifact.json` plus stale `aart.lock.json`/`aart.index.json`; `registry lock`,
+      `build`, `audit` and `test` fail for the same representation mismatch
+      Evidence: public `source add --kind registry-git` over remote branch `qa/publish-v1` accepts
+      exact commit `cc7c01d` as healthy, while generated run `34341007222` fails. This is B-057's
+      remaining command disagreement reaching the real publication gate, so it is critical now.
+      Note: the fix belongs in the generated workflow/template and its public validation command,
+      not in weakening promoted-Registry validation or teaching promotion to write a second legacy
+      representation.
+
 ### Fixed — awaiting manual retest
 
 - [ ] **QA-026 — The footer does not name the keys the current screen actually has.**

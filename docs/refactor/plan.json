@@ -309,6 +309,11 @@
         },
         {
           "id": "8",
+          "title": "Generated Registry CI validates the canonical promoted representation (QA-032/B-057)",
+          "status": "todo"
+        },
+        {
+          "id": "9",
           "title": "Focused evidence per increment and full batch verification before handback",
           "status": "todo"
         }

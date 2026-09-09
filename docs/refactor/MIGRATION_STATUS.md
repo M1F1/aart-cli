@@ -882,3 +882,10 @@ unfinished QA-027 RED file was removed.
 
 **Next:** publish the existing Registry branch through Git review, update local `main`, synchronize
 the Registry in the TUI and resume the walkthrough at the MCP Candidate. Record findings only.
+
+**QA-032 (2026-09-09).** The real Registry PR made B-057 critical. Generated run `34341007222`
+rejects TUI promotion's versioned Registry in both matrix arms using the legacy workspace validator,
+lock, build, audit and compatibility commands; public `registry-git` acquisition accepts exact
+remote head `cc7c01d` as healthy. CP-19 step 8 must make the generated gate validate the canonical
+representation without deleting the gate's claims or producing a second legacy index (D-204).
+Implementation remains paused during discovery.

@@ -1363,11 +1363,9 @@ should run — CP-15 step 7 deliberately keeps the maintainer's checkout and the
 separate for exactly this reason — but the diagnostic an operator would get says nothing about the
 cause.
 
-**Not critical path.** No Product Specification invariant requires the two verbs to compose, and
-step 7's boundary claims are unaffected: they are about what promotion does *not* do, and it does
-not do it under either layout. This becomes critical if CP-17's Git-backed acceptance drives
-`promote` and `publish` in sequence over one repository, which is the natural way to write it —
-whoever opens CP-17 should read this first.
+**Originally not critical.** No Product Specification invariant required the two verbs to compose,
+and CP-15 step 7's boundary claims were about what promotion does *not* do. The item explicitly
+became critical if a later live chain put promotion's output through a publication gate.
 
 **CP-17 step 2 update.** The consumer consequence became critical and is closed: public source
 validation and Marketplace projection now recognize promotion's versioned approved-registry shape
@@ -1376,6 +1374,22 @@ command disagreement remains here: the older `registry publish` verb still expec
 maintainer-workspace shape. CP-17 follows the accepted 165.27/165.28 boundary instead -- promotion
 prepares local state and Git review/merge publishes it -- so making that legacy verb compose is not
 required to continue the live chain.
+
+**CP-19/QA-032 reclassification — CRITICAL (2026-09-09).** The real Registry PR reached exactly the
+deferred boundary. `registry init` generated `.github/workflows/aart-registry.yml`, and both of its
+matrix jobs validate every PR with the legacy `registry format/validate/lock/build/audit/test`
+sequence. A TUI promotion writes the accepted versioned representation, so the first real promoted
+artifact fails both jobs with the missing unversioned `artifact.json` and mismatched legacy lock and
+index. The generated publication gate therefore rejects the output of the canonical promotion path.
+
+This is not evidence that the promoted Registry is corrupt. The public `source add --kind
+registry-git` path acquired remote branch `qa/publish-v1` at exact revision `cc7c01d` and reported
+it healthy, exercising `load_registry_versions` and `validate_promoted_registry`. It is evidence
+that the generated CI invokes the wrong authority. CP-19 must provide a public, read-only validation
+of the checked-out promoted representation and have the generated workflow use it. Do not restore
+green by emitting a second legacy representation or weakening either validator.
+
+Evidence/links: QA-032; GitHub Actions run `34341007222`; D-147; D-204; CP-19 step 8.
 
 ## B-058 — Scoped mutmut can reuse stale outcomes after test-only changes
 
