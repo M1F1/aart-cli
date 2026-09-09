@@ -29,9 +29,40 @@ Each new entry records:
 
 ### Open
 
-Nothing open. Every QA-001–QA-021 finding has a fix awaiting the operator's retest below.
+Nothing open. Every QA-001–QA-023 finding has a fix awaiting the operator's retest below.
 
 ### Fixed — awaiting manual retest
+
+- [ ] **QA-022 — The TUI could not install any MCP artifact once Codex was measured.**
+      Stage: installing the MCP from Marketplace in the persistent shell
+      Surface: Marketplace → Install (screens 05–10)
+      Severity: blocking
+      Blocks current stage: yes
+      Reproduction: select any `mcp` offer in the TUI on a machine whose measured harness set
+      includes Codex, and open the install review
+      Expected: the plan registers the server with the harnesses that can host one at this scope
+      Observed: the whole placement was refused with `no measured MCP target for harness 'codex'
+      at project scope`, so no MCP artifact could be installed for Claude or Tabnine either
+      Evidence: the shell's profiles are the union of every measured table (`D-193`), and Codex
+      registers servers only at user scope (`D-196`); `placement_for` refused a profile it could
+      not place, which is correct for `--profile` and wrong for a set nobody asked for
+      Fix: yes — `placement_for` now takes `profiles_requested`, the shell passes `False`, and a
+      measured harness that cannot host this kind at this scope is left out of that artifact's
+      plan instead of refusing it. A harness no table names is still refused by name, and a
+      Selection every profile left out is still refused (D-198, 13 tests).
+- [ ] **QA-023 — Settings offers an installation scope the TUI then ignores.**
+      Stage: installing at user scope from the shell
+      Surface: Settings (screen 28) → Marketplace → Install
+      Severity: high
+      Blocks current stage: yes, for user-mode acceptance
+      Reproduction: set `Default scope: User` on screen 28, then install any artifact
+      Expected: the artifact lands under the user's home
+      Observed: it landed in the project; the preference was persisted, redrawn and never read
+      Evidence: composition built the installation host with `Scope.PROJECT` hard-coded
+      Fix: yes — the host's scope is derived from the stored preference at the point of use, so it
+      applies in the session that changed it; each review records the host it was prepared against
+      and its confirmation acts on that one; the maintainer registry root no longer follows the
+      installation scope (D-199, 1 end-to-end test through the real shell).
 
 - [ ] **QA-011 — Canonical installation cannot target OpenCode.**
       Stage: installing the Skill and MCP into the locally installed OpenCode 1.18.29

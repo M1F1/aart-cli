@@ -40,6 +40,7 @@ __all__ = [
     "hook_event_path",
     "hook_target",
     "mcp_target",
+    "measured_harnesses",
     "memory_target",
     "registration_entry",
     "registered_command",
@@ -602,6 +603,24 @@ def delivery_destination(target: DeliveryTarget, name: str) -> str:
         # delivery whose name walked out of its directory would land somewhere nobody measured.
         raise ValueError(f"{name!r} is not a name an artifact can be delivered under")
     return target.destination.replace(_NAME_SLOT, name)
+
+
+def measured_harnesses() -> frozenset[str]:
+    """Every harness some table in this module names, whatever it names it for.
+
+    A harness belongs here because something about it was observed, not because it can host
+    everything: Codex is measured and registers no project MCP server, and Tabnine is measured and
+    reads no user Skill. So this answers "has this build looked at that harness", which is the
+    question a machine-derived profile set asks, and never "can this artifact be placed there",
+    which only the individual target lookups can answer.
+    """
+
+    return frozenset(
+        {harness for harness, _ in MCP_TARGETS}
+        | {harness for harness, _ in MEMORY_TARGETS}
+        | {harness for harness, _ in HOOK_TARGETS}
+        | {harness for harness, _, _ in DELIVERY_TARGETS}
+    )
 
 
 def registration_entry(registration: McpRegistration) -> dict[str, object]:

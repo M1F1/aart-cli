@@ -249,6 +249,26 @@ class ConsumerApplicationSettingsTest(unittest.TestCase):
             _, terminal, _ = _drive(env, opened, actions=reopened)
             self.assertTrue(terminal.screen_containing("Maintainer Mode: on"), terminal.last)
 
+    def test_the_chosen_scope_is_the_scope_the_next_install_lands_at(self) -> None:
+        """Screen 28 offers `Default scope: Project/User`, so choosing User has to install into
+        the user's home. A preference the application draws and then ignores is worse than one it
+        never offered: the operator reads it as a promise about where their files went."""
+
+        with _environment() as env:
+            _drive(env, _at(ConsumerScreen.SETTINGS, rows=SETTING_ROWS, cursor=1), ENTER)
+            chosen = _actions(env)
+            self.assertEqual("user", chosen.settings.default_scope)
+
+            _drive(env, _at(ConsumerScreen.MARKETPLACE), *_INSTALL, actions=chosen)
+
+            self.assertTrue(
+                (env.home / ".claude/skills/code-review/SKILL.md").exists(),
+                "the user-scope install never reached the user home",
+            )
+            self.assertFalse(
+                _delivered(env).exists(), "a user-scope install wrote into the project"
+            )
+
     def test_a_detail_level_chosen_with_v_reopens_at_that_level(self) -> None:
         with _environment() as env:
             _drive(env, _at(ConsumerScreen.ACTIVITY), ord("v"))

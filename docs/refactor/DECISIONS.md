@@ -4555,3 +4555,51 @@ have that, and it is what found this.
 that landed in `opencode.json`, the public `marketplace install --profile opencode` landing a Skill
 in `.opencode/skills/<name>` and in neither `.claude` nor `.agents`, and two that run the installed
 OpenCode). Six targeted mutations for this defect, all killed.
+
+## D-198 — A harness this machine has is not a harness somebody asked for
+
+Measuring Codex (`D-193`) put it in `_canonical_marketplace_target`'s harness set, which is the
+union of every measured table. That set is what the persistent shell installs into. Codex registers
+MCP servers only at user scope (`D-196`), so `mcp_target("codex", PROJECT)` raises, and
+`placement_for` refused the whole placement by name — which meant the shell could no longer install
+*any* MCP artifact on a machine where Codex is measured. Claude's and Tabnine's servers included.
+Nobody had asked for Codex; the machine simply had it.
+
+The refusal it hit is the right one for the caller it was written for. `aart marketplace install`
+refuses without `--profile`, so every profile that reaches it was typed by somebody, and dropping
+one silently is an install that reports success and leaves the harness they named with nothing to
+read and no way to start a server.
+
+So the two callers now say which they are. `placement_for` takes `profiles_requested`, defaulting to
+the honest value for a command — these were asked for, and one that cannot host this artifact is a
+refusal naming it. `_canonical_installation_host` passes `False`, because the shell's profiles are
+what this build measured rather than what anybody typed, and a measured harness that cannot host
+*this* kind at *this* scope is not a mistake in a request that was never made.
+
+The skip stays narrow on both sides. A harness no table names is refused however the profiles
+arrived — the machine's own set can never contain one, so that only ever fires on a typed name — and
+a Selection every profile left out is refused too, because an install with no effect anywhere is not
+a successful one. `measured_harnesses()` is the one place that answers "has this build looked at
+that harness", and `_canonical_marketplace_target` now derives its set from it rather than unioning
+the four tables inline.
+
+## D-199 — Screen 28's installation scope is where installations go
+
+Settings has offered `Default scope: Project/User` since the canonical shell replaced the wizard.
+It was written, persisted and drawn, and nothing read it: composition fixed the host at
+`Scope.PROJECT`, so choosing User installed into the project anyway. A preference an application
+displays and then ignores is worse than one it never offered, because the operator reads it as a
+statement about where their files went.
+
+The scope is now derived at the point of use rather than frozen at composition, so toggling it takes
+effect in the same session that toggled it — `save_settings` already replaces the context's
+settings, and `_host()` reads through them. Only the scope moves: `harness_root` follows from it,
+and the machine is otherwise the same machine. The maintainer registry root moved off `harness_root`
+onto `project_root` for exactly that reason — the registry a maintainer curates is the checkout this
+session opened in, and it must not follow an installation preference into the home directory.
+
+What is executed stays what was reviewed. Each `_prepare_*` records the host it prepared against and
+each confirmation acts on that one, so a scope toggled between a review and its confirmation cannot
+record a project plan as a user installation. The completion factory is handed that host too, for
+the same reason: setup and usage reporting describe the installation that happened, at the scope it
+happened at.

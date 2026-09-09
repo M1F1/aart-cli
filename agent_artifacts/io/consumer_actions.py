@@ -68,6 +68,7 @@ from agent_artifacts.configuration.policy import EffectiveConfiguration
 from agent_artifacts.configuration.schema import configured_source_from_input
 from agent_artifacts.domain.candidates import CandidateId
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from agent_artifacts.domain.harness import Scope
 from agent_artifacts.domain.identifiers import ArtifactCoordinate, SourceAlias
 from agent_artifacts.domain.policies import EffectivePolicy
 from agent_artifacts.domain.receipts import ArtifactReceipt
@@ -365,11 +366,14 @@ _Pending = (
     | PreparedAdoption
 )
 
+#: The host is passed rather than closed over: setup and usage reporting describe the installation
+#: that just happened, and it happened at whichever scope the review was prepared against.
 ConfiguredCompletionFactory = Callable[
     [
         CompletedConfiguredInstallation,
         Literal["install", "update"],
         Callable[[tuple[DeclaredArtifactSetup, ...]], CanonicalScreenSource],
+        InstallationHost,
     ],
     ConsumerActionCompletion | None,
 ]
@@ -407,6 +411,9 @@ class LocalConsumerActions:
         self._now = now if now is not None else (lambda: datetime.now(timezone.utc))
         self._pending: _Pending | None = None
         self._pending_action: ConsumerActionKind | None = None
+        #: The machine the held action was prepared against, so a preference changed between the
+        #: review and its confirmation cannot execute a project plan as a user install.
+        self._pending_host: InstallationHost | None = None
         self._data_root = data_root
         self._completion_factory = completion_factory
         self._registry_connection = registry_connection
@@ -429,6 +436,35 @@ class LocalConsumerActions:
         """What screen 28 was last told, which is what a session opens on."""
 
         return self._context.settings
+
+    def _host(self) -> InstallationHost:
+        """The machine as the operator's current preference addresses it.
+
+        Screen 28 offers `Default scope: Project/User`, and until this read it was a preference the
+        application drew and then ignored: composition fixed the host at project scope, so a User
+        install landed in the project anyway. A preference that is displayed and not honoured is
+        worse than one that was never offered, because the operator reads it as a statement about
+        where their files went.
+
+        Only the scope moves. `harness_root` follows from it, and everything else about this
+        machine -- its state, its project checkout, its home, the harnesses it measured -- is the
+        same machine either way. The registry a maintainer curates is addressed as
+        `project_root` for that reason: it is the checkout this session was opened in, whatever
+        scope installations are going to.
+        """
+
+        host = self._context.host
+        scope = Scope.USER if self._context.settings.default_scope == "user" else Scope.PROJECT
+        return host if host.scope is scope else replace(host, scope=scope)
+
+    def _reviewed_host(self) -> InstallationHost:
+        """The machine the held review was prepared against, not the one preferences name now.
+
+        What is executed has to be what somebody reviewed, and a scope toggled between the two
+        would otherwise record a project plan as a user installation.
+        """
+
+        return self._pending_host if self._pending_host is not None else self._host()
 
     def save_settings(self, settings: ConsumerSettings) -> None:
         """Keep a changed preference, and keep drawing it, for the rest of this session too.
@@ -856,7 +892,7 @@ class LocalConsumerActions:
             self._context.effective,
             candidate_id,
             data_root=self._data_root,
-            registry_root=self._context.host.harness_root,
+            registry_root=self._context.host.project_root,
             policy=self._context.policy,
             mode=command.promotion_mode,
         )
@@ -912,7 +948,7 @@ class LocalConsumerActions:
             self._context.effective,
             selected,
             data_root=self._data_root,
-            registry_root=self._context.host.harness_root,
+            registry_root=self._context.host.project_root,
             policy=self._context.policy,
             mode=command.promotion_mode,
         )
@@ -1068,10 +1104,11 @@ class LocalConsumerActions:
         previous_receipts: tuple[tuple[ArtifactCoordinate, ArtifactReceipt], ...] = (),
     ) -> ConsumerActionUpdate:
         context = self._context
+        host = self._host()
         prepared = prepare_configured_installation(
             context.effective,
             selection,
-            host=context.host,
+            host=host,
             sources=(),
             policy=context.policy,
             selected_remediations=None,
@@ -1081,6 +1118,7 @@ class LocalConsumerActions:
         )
         if isinstance(prepared, Err):
             return self._declined(command, _refusal(prepared.diagnostics))
+        self._pending_host = host
         if not prepared.value.ready:
             # Unanswered inputs are not a refusal -- screen 07 exists because the answer is "not
             # yet" -- but this shell has no way to collect one, so it says what it is waiting for
@@ -1120,6 +1158,7 @@ class LocalConsumerActions:
         prepared = prepare_configured_repair(inspected.value[0], policy=self._context.policy)
         if isinstance(prepared, Err):
             return self._declined(command, _refusal(prepared.diagnostics))
+        self._pending_host = self._host()
         self._pending = prepared.value
         self._pending_action = command.action
         return ConsumerActionUpdate(
@@ -1135,14 +1174,16 @@ class LocalConsumerActions:
         inspected = self._inspections(self._targets(command))
         if isinstance(inspected, Err):
             return self._declined(command, _refusal(inspected.diagnostics))
+        host = self._host()
         prepared = prepare_configured_uninstall(
             tuple(item.record for item in inspected.value),
-            host=self._context.host,
+            host=host,
             policy=self._context.policy,
             credential_providers=self._context.credential_providers,
         )
         if isinstance(prepared, Err):
             return self._declined(command, _refusal(prepared.diagnostics))
+        self._pending_host = host
         self._pending = prepared.value
         self._pending_action = command.action
         # One artifact per removal review, because screen 18 renders one lifecycle plan. A
@@ -1174,7 +1215,7 @@ class LocalConsumerActions:
                     ),
                 )
             )
-        host = self._context.host
+        host = self._host()
         inspected = read_installed_inspections(
             state_root=host.state_root,
             harness_root=host.harness_root,
@@ -1291,7 +1332,7 @@ class LocalConsumerActions:
                 self._context.effective,
                 data_root=self._data_root,
                 observed_at_epoch_seconds=int(self._now().timestamp()),
-                registry_root=self._context.host.harness_root,
+                registry_root=self._context.host.project_root,
             )
             if isinstance(refreshed, Ok):
                 self._context = replace(self._context, maintainer=refreshed.value)
@@ -1455,7 +1496,7 @@ class LocalConsumerActions:
             self._context.effective,
             data_root=self._data_root,
             observed_at_epoch_seconds=int(self._now().timestamp()),
-            registry_root=self._context.host.harness_root,
+            registry_root=self._context.host.project_root,
         )
         if isinstance(refreshed, Err):
             return self._failed(command, _refusal(refreshed.diagnostics))
@@ -1479,7 +1520,7 @@ class LocalConsumerActions:
             self._context.effective,
             pending,
             reviewed_digest=pending.review_digest,
-            registry_root=self._context.host.harness_root,
+            registry_root=self._context.host.project_root,
         )
         if isinstance(completed, Err):
             return self._failed(command, _refusal(completed.diagnostics))
@@ -1490,7 +1531,7 @@ class LocalConsumerActions:
             self._context.effective,
             data_root=self._data_root,
             observed_at_epoch_seconds=int(self._now().timestamp()),
-            registry_root=self._context.host.harness_root,
+            registry_root=self._context.host.project_root,
         )
         if isinstance(refreshed, Ok):
             self._context = replace(self._context, maintainer=refreshed.value)
@@ -1516,7 +1557,7 @@ class LocalConsumerActions:
         completed = complete_configured_installation(
             pending.prepared,
             expected_review_digest=pending.prepared.review_digest,
-            host=self._context.host,
+            host=self._reviewed_host(),
             policy=self._context.policy,
             credential_providers=self._context.credential_providers,
             previous_receipts=pending.previous_receipts,
@@ -1538,6 +1579,7 @@ class LocalConsumerActions:
                     transaction=receipt,
                     pending_setup=remaining,
                 ),
+                self._reviewed_host(),
             )
         return self._recorded(
             command,
@@ -1554,7 +1596,7 @@ class LocalConsumerActions:
         completed = complete_configured_repair(
             pending,
             expected_review_digest=pending.review_digest,
-            host=self._context.host,
+            host=self._reviewed_host(),
             policy=self._context.policy,
             credential_providers=self._context.credential_providers,
             recorded_at=recorded_at,
@@ -1573,7 +1615,7 @@ class LocalConsumerActions:
         completed = complete_configured_uninstall(
             pending,
             expected_review_digest=pending.review_digest,
-            host=self._context.host,
+            host=self._reviewed_host(),
             policy=self._context.policy,
             credential_providers=self._context.credential_providers,
             recorded_at=recorded_at,

@@ -103,6 +103,11 @@ class InstallationHost:
     user_home: str
     scope: Scope
     profiles: tuple[str, ...] = ()
+    #: Whether somebody named these harnesses. A command's profiles are typed, so one that cannot
+    #: host an artifact is a refusal naming it; the persistent shell's are every harness this build
+    #: measured, which is a capability set rather than a request. `_skippable` carries the full
+    #: reasoning.
+    profiles_requested: bool = True
 
     def __post_init__(self) -> None:
         for value, label in (
@@ -114,8 +119,10 @@ class InstallationHost:
                 raise ValueError(f"an installation host needs an absolute {label}")
         if not isinstance(self.scope, Scope):
             raise ValueError("an installation host needs an installation scope")
-        if not isinstance(self.profiles, tuple) or any(
-            not isinstance(item, str) or not item.strip() for item in self.profiles
+        if (
+            not isinstance(self.profiles, tuple)
+            or any(not isinstance(item, str) or not item.strip() for item in self.profiles)
+            or not isinstance(self.profiles_requested, bool)
         ):
             raise ValueError("installation host profiles are invalid")
 
@@ -242,6 +249,7 @@ def prepare_configured_installation(
         project_root=host.project_root,
         scope=host.scope,
         profiles=host.profiles,
+        profiles_requested=host.profiles_requested,
         sources=sources,
         policy=policy,
         harness_root=host.harness_root,

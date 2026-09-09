@@ -32,6 +32,7 @@ from agent_artifacts.domain.harness import (
     hook_event_path,
     hook_target,
     mcp_target,
+    measured_harnesses,
     memory_target,
 )
 from agent_artifacts.domain.hooks import HookEntry
@@ -78,6 +79,24 @@ def _error(message: str, *remediation: str) -> Err:
 _MERGED_KINDS = frozenset({ArtifactKind.MEMORY})
 
 
+def _skippable(profile: str, *, requested: bool) -> bool:
+    """Whether a harness with no measured target for this artifact may be left out of the plan.
+
+    `aart marketplace install` refuses without `--profile`, so a profile that reaches it was typed
+    by somebody, and dropping one would leave the harness they asked for with nothing to read and
+    no way to start a server. The persistent shell names no profiles: it installs into every
+    harness whose tables this build measured, which is a capability set rather than a request, and
+    a harness that cannot host this kind at this scope is not a mistake in it.
+
+    So the skip is narrow on both sides. A harness nobody measured is a refusal however the
+    profiles arrived -- that is somebody naming a harness this build has never looked at, and the
+    machine's own set can never contain one. And `placement_for` still refuses a Selection that
+    every profile left out, because an install with no effect anywhere is not a successful one.
+    """
+
+    return not requested and profile in measured_harnesses()
+
+
 def _delivered(description: InstallDescription) -> bool:
     """Whether this artifact is read off a path rather than started, as the package declares it."""
 
@@ -91,6 +110,7 @@ def _merges(
     kind: ArtifactKind,
     scope: Scope,
     profiles: tuple[str, ...],
+    profiles_requested: bool,
     root: str,
     harness_root: str,
 ) -> Result[tuple[ArtifactMerge, ...]]:
@@ -116,7 +136,9 @@ def _merges(
         except KeyError as error:
             # Named rather than skipped, for the same reason a missing delivery target is: an
             # install that reports success and merges nowhere leaves the harness somebody asked for
-            # with nothing to read.
+            # with nothing to read. A harness nobody asked for is left out instead (`_skippable`).
+            if _skippable(profile, requested=profiles_requested):
+                continue
             return _error(str(error).strip("'"))
         merges.append(
             ArtifactMerge(
@@ -184,6 +206,7 @@ def _deliveries(
     *,
     scope: Scope,
     profiles: tuple[str, ...],
+    profiles_requested: bool,
     root: str,
     harness_root: str,
 ) -> Result[tuple[ArtifactDelivery, ...]]:
@@ -216,7 +239,9 @@ def _deliveries(
         except KeyError as error:
             # Named rather than skipped, for the same reason a missing MCP target is: an install
             # that reports success and delivers nowhere leaves the harness somebody asked for with
-            # nothing to read.
+            # nothing to read. A harness nobody asked for is left out instead (`_skippable`).
+            if _skippable(profile, requested=profiles_requested):
+                continue
             return _error(str(error).strip("'"))
         if target.delivery is not packaged.value.delivery:
             # Two measured tables disagreeing about one kind. Delivering anyway would write a
@@ -249,6 +274,7 @@ def placement_for(
     project_root: str,
     data_root: str,
     store: ObjectStorePaths,
+    profiles_requested: bool = True,
     harness_root: str | None = None,
     sources: tuple[InputValueSource, ...] = (),
     preferred_installer: PythonInstaller | None = None,
@@ -258,6 +284,11 @@ def placement_for(
     `harness_root` is the scope's own root, the one a harness's paths are resolved against. It is
     needed only by an artifact a harness reads, which is why it is optional -- an MCP server names
     its settings file relative to that root and the registry adapter applies it later.
+
+    `profiles_requested` says where the profiles came from. The default is the honest one for a
+    command: somebody typed them, so a harness that cannot host this artifact is a refusal naming
+    it. The persistent shell passes `False`, because its profiles are every harness this build
+    measured rather than a list anybody asked for -- see `_skippable`.
     """
 
     if not isinstance(artifact, ResolvedArtifact) or not isinstance(scope, Scope):
@@ -301,8 +332,15 @@ def placement_for(
             except KeyError as error:
                 # Named rather than skipped. A profile quietly dropped is an install that reports
                 # success and leaves the harness somebody asked for with no way to start the
-                # server.
+                # server. A harness nobody asked for is left out instead (`_skippable`).
+                if _skippable(profile, requested=profiles_requested):
+                    continue
                 return _error(str(error).strip("'"))
+        if not targets:
+            return _error(
+                f"{coordinate} registers with none of {', '.join(profiles)} at {scope.value} scope",
+                "install it at a scope one of these harnesses starts servers from",
+            )
 
     deliveries: tuple[ArtifactDelivery, ...] = ()
     merges: tuple[ArtifactMerge, ...] = ()
@@ -322,24 +360,37 @@ def placement_for(
                 kind=kind,
                 scope=scope,
                 profiles=profiles,
+                profiles_requested=profiles_requested,
                 root=root,
                 harness_root=harness_root,
             )
             if isinstance(blocks, Err):
                 return blocks
             merges = blocks.value
+            if not merges:
+                return _error(
+                    f"{coordinate} merges into no file of {', '.join(profiles)} at "
+                    f"{scope.value} scope",
+                    "install it at a scope one of these harnesses reads that file at",
+                )
         else:
             made = _deliveries(
                 coordinate.artifact,
                 stored.value.candidate.entries,
                 scope=scope,
                 profiles=profiles,
+                profiles_requested=profiles_requested,
                 root=root,
                 harness_root=harness_root,
             )
             if isinstance(made, Err):
                 return made
             deliveries = made.value
+            if not deliveries:
+                return _error(
+                    f"{coordinate} is read by none of {', '.join(profiles)} at {scope.value} scope",
+                    "install it at a scope one of these harnesses reads it at",
+                )
             if kind is ArtifactKind.HOOK:
                 # Both halves, from one read of one package. A hook whose script is delivered and
                 # whose entry is not is installed and inert, which is worse than not installed.

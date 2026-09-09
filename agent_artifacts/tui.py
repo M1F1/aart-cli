@@ -35,6 +35,7 @@ from .application.consumer_ui import (
 )
 from .application.consumer_views import ConsumerScreen, ConsumerSession
 from .application.installed_setup import DeclaredArtifactSetup
+from .configuration.paths import ConfigPaths
 from .consumer import (
     ConsumerApplicationService,
     ConsumerOutcome,
@@ -1092,6 +1093,7 @@ def _canonical_consumer_actions(
         completed: CompletedConfiguredInstallation,
         action: Literal["install", "update"],
         source: Callable[[tuple[DeclaredArtifactSetup, ...]], ConsumerScreenSource],
+        host: InstallationHost,
     ) -> ConsumerActionCompletion:
         # A registry can be connected without restarting the shell. Re-read here so setup and
         # reporting after the next install use the configuration that authorized that install,
@@ -1106,7 +1108,7 @@ def _canonical_consumer_actions(
         projected = configured_consumer_completion(
             completed,
             current_configuration.value,
-            InstallationHost(paths.data_root, project_root, home, Scope.PROJECT, target.profiles),
+            host,
             action=action,
         )
         if isinstance(projected, DomainErr):
@@ -1133,9 +1135,7 @@ def _canonical_consumer_actions(
     return DomainOk(
         LocalConsumerActions(
             ConsumerActionContext(
-                InstallationHost(
-                    paths.data_root, project_root, home, Scope.PROJECT, target.profiles
-                ),
+                _canonical_installation_host(paths, project_root, home, target),
                 loaded.value,
                 machine.value,
                 offers=offers.value,
@@ -1184,6 +1184,28 @@ def _canonical_consumer_configuration(paths) -> DomainResult:
     return DomainOk(loaded.value.effective)
 
 
+def _canonical_installation_host(
+    paths: ConfigPaths, project_root: str, home: str, target: MarketplaceTarget
+) -> InstallationHost:
+    """The machine one persistent-shell session installs into.
+
+    Its profiles are `_canonical_marketplace_target`'s measured set, so they are marked as what
+    this build has rather than what anybody typed. That is the whole difference between the shell
+    and the command here: `aart marketplace install` refuses without `--profile`, so a harness that
+    cannot host the artifact is a mistake in the request; the shell asked for no harness at all, so
+    a measured one that cannot host this artifact at this scope is simply not in its plan.
+    """
+
+    return InstallationHost(
+        paths.data_root,
+        project_root,
+        home,
+        Scope.PROJECT,
+        target.profiles,
+        profiles_requested=False,
+    )
+
+
 def _canonical_marketplace_target() -> MarketplaceTarget:
     """What this machine can actually accept.
 
@@ -1193,19 +1215,18 @@ def _canonical_marketplace_target() -> MarketplaceTarget:
 
     All four tables, not only `MCP_TARGETS`. A harness that starts no MCP server can still be one
     this machine installs Skills and instructions into -- Codex is measured that way (`B-086`) --
-    and deriving the set from the MCP table alone hid it behind a capability it does not need. An
-    artifact this machine cannot actually place for a harness is still refused by name at
-    installation, which is where that refusal belongs.
+    and deriving the set from the MCP table alone hid it behind a capability it does not need.
+
+    This set is what this machine has, not what anybody asked for, which is why the host built
+    from it says so: a measured harness that cannot host one artifact is left out of that
+    artifact's plan rather than refusing the whole install. A harness nobody measured is still
+    refused by name.
     """
 
-    from .domain.harness import DELIVERY_TARGETS, HOOK_TARGETS, MCP_TARGETS, MEMORY_TARGETS
+    from .domain.harness import measured_harnesses
 
-    measured = {harness for harness, _ in MCP_TARGETS}
-    measured.update(harness for harness, _ in MEMORY_TARGETS)
-    measured.update(harness for harness, _ in HOOK_TARGETS)
-    measured.update(harness for harness, _, _ in DELIVERY_TARGETS)
     return MarketplaceTarget(
-        tuple(sorted(measured)),
+        tuple(sorted(measured_harnesses())),
         "darwin" if sys.platform == "darwin" else "linux",
         "project",
         "copy",
