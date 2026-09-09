@@ -25,7 +25,7 @@ from agent_artifacts.application.installation_verification import (
 from agent_artifacts.application.runtime_projection import RuntimeProjection
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.effects import DeliveryKind
-from agent_artifacts.domain.harness import McpRegistration, registered_command
+from agent_artifacts.domain.harness import McpRegistration
 from agent_artifacts.domain.hooks import hook_entry_at
 from agent_artifacts.domain.identifiers import ObjectDigest
 from agent_artifacts.domain.managed_blocks import managed_block_body
@@ -300,17 +300,11 @@ def _relative_entry(directory: str, name: str) -> SafeRelativePath | None:
 
 
 def _observed_command(registry: object, registration: McpRegistration) -> str | None:
-    path = registry.path_for(registration.target)  # type: ignore[attr-defined]
-    try:
-        with open(path, "r", encoding="utf-8") as handle:
-            data = json.load(handle)
-    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
-        return None
-    if not isinstance(data, dict):
-        return None
-    servers = data.get(registration.target.server_map)
-    if not isinstance(servers, dict):
-        return None
-    # Read it the way the harness that owns the file spells it. Anything else observes a
-    # correct registration as missing and leaves the installation permanently unconverged.
-    return registered_command(registration.target, servers.get(registration.server))
+    """Ask whoever writes this harness's servers what it currently has for one of them.
+
+    Reading the file here instead would mean knowing every harness's format and spelling, and a
+    reader that knows only one reports every other harness's correct registration as missing --
+    which looks like drift that repair rewrites identically forever.
+    """
+
+    return registry.observed_command(registration)  # type: ignore[attr-defined]
