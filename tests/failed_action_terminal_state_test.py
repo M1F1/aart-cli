@@ -170,7 +170,7 @@ class FailedActionFrameTest(unittest.TestCase):
             ConsumerActionKind.REGISTRY_REBUILD, MaintainerScreen.REGISTRY_REBUILD_REVIEW
         )
 
-        self.assertNotIn("Review the run below, then press Enter to start it.", drawn)
+        self.assertNotIn("Press Enter to start this run.", drawn)
         self.assertNotIn("Enter Confirm", " ".join(drawn))
 
     def test_the_heading_says_the_attempt_is_over(self) -> None:
@@ -201,7 +201,7 @@ class FailedActionFrameTest(unittest.TestCase):
             ),
         )
 
-        self.assertIn("Review the run below, then press Enter to start it.", drawn)
+        self.assertIn("Press Enter to start this run.", drawn)
         self.assertNotIn("did not run", drawn[0])
 
 

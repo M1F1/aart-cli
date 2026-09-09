@@ -2722,3 +2722,21 @@ to act on such a row leaves the internal diagnostic `no connected registry here 
 CP-19 step 14 must settle the Product Specification's Source/Registry distinction at this surface:
 either exclude authoring Sources, or render and route them deliberately without presenting a false
 action. Internal enum values may never reach operator-facing prose.
+
+## B-107 — The layout kernel's width arithmetic is unheld by its own tests
+
+Found: CP-19 step 5 scoped `make mutants` over `agent_artifacts/tui_layout.py` (2026-09-09)
+Severity: medium · Status: open
+
+The scoped advisory run reports survivors concentrated in the width arithmetic that predates this
+slice: `_ellipsize`, `wrap`, `measure`, `_column_widths`, `columns`, `field_block`, `status_bar` and
+`pane_budget`. Off-by-one bounds, swapped comparisons and dropped gap constants all pass, which
+means the module's bounds are asserted at a few chosen widths rather than as claims. Nothing is
+known to be wrong: a survivor is an unheld claim, not a defect.
+
+This is load-bearing for CP-19 step 6 (QA-030), which will place the Candidates list on `columns`
+and `_column_widths`. That step must state the column claims it depends on — a bounded column, a
+truncated cell, a total that fits the measure — rather than assume the kernel already holds them.
+The ordering and grouping functions added by step 5 (`separate`, `action_prompt`,
+`is_action_prompt`) are held; the survivors remaining in them are exact `ValueError` message texts,
+which is `make mutants` noise rather than a finding (D-134).

@@ -36,9 +36,15 @@ internal state model.
    returning to a refused one: `_declined_preparation` and `_back` walk the session history and
    touch no draft, so `QA-018`/`D-184` holds unchanged. Both add forms also say in words that they
    add another one and change nothing already connected (D-211).
-5. **Review layout (QA-029) — TODO.** State one layout rule for every review: facts, blank
-   separation, decision/action prompt. Do not patch Source Sync alone; keep refusal wrapping B-048
-   separate unless it becomes necessary to satisfy the rule.
+5. **Review layout (QA-029) — DONE.** The rule — facts, one blank line, the single line saying what
+   a key press will do, nothing after it — is stated once in the pure layout kernel and applied at
+   the seams every screen already passes through: `tui_layout.separate` joins blocks with exactly
+   one blank and drops an empty one, `tui_layout.action_prompt` composes facts with the prompt, and
+   `is_action_prompt` recognises the prompt from the line itself so `CanonicalScreenSource.lines`
+   can lift whatever prompt a screen wrote and re-place it last, under the notice it is about. Four
+   review prompts stopped saying "below" about a plan that is now above them. The two Source Sync
+   screens were regrouped into what it is / where it stands / what it will do / the evidence. B-048
+   (refusal wrapping) stays separate: wrapping is a width decision, this is an ordering one (D-212).
 6. **Stable tabular projections (QA-030) — TODO.** Bound each column, truncate only the list row and
    show the focused value in full below it. Survey the other Maintainer tables before choosing the
    shared projection boundary.
@@ -138,11 +144,30 @@ initialization screen was killed by the headless shell walk. The focused 238-tes
 boundary set, changed-module `mypy`, `ruff check`, `ruff format --check` and `make docs-check` were
 green. Full repository gates are intentionally deferred until step 15 at the operator's request.
 
+Step 5 was RED as a rule rather than as a screen: a sweep over every Consumer and Maintainer
+screen, run twice — once with no notice and once with one on it — plus the three maintainer reviews
+the sweep cannot reach without their typed views, in every presentation profile. Six targeted
+mutations were killed: dropping the blank in `action_prompt`, joining without a blank in `separate`,
+keeping a block's trailing blank, restoring the old `(*body, "", *notice)` order in `lines`, and
+un-grouping either Source Sync screen. The second of those initially survived, which is what the
+grouping claim and the join property were added to hold — the prompt rule alone had said nothing
+about the groups above it.
+
+The step-5 sweep also caught a step-4 regression that step 4's own targeted set had missed:
+`consumer_declined_preparation_test` planted a typed draft and *then* navigated into the form, so
+`D-211` emptied it. The claim is intact and still holds — a decline keeps what was typed — but its
+fixture now types on the form after opening it, which is what the shell actually does. The lesson is
+recorded rather than the fix alone: a targeted set chosen per-module misses reducer fixtures living
+under other names, so each remaining CP-19 step runs the whole `tui`/`consumer`/`maintainer`/
+`source`/`registry`/`setup` file set, not only the files it edited.
+
 ## Do not undo
 
 - Do not weaken the exact synchronized-baseline comparison to pass QA-031.
 - Do not put `aart ...` commands into TUI frames.
 - Do not reset a refused form on leave; reset a fresh form on entry.
+- Do not put an action prompt anywhere but last, and do not reintroduce `(*body, "", *notice)`:
+  the notice is what the reader is being asked about, so it belongs above the ask.
 - Keep `key_event` as the only key interpreter and keep application code free of IO.
 - Never commit the embedded `superpowers-aart-test/` lab repository.
 - Do not make promotion write the authoring workspace as a second representation, and do not
@@ -150,8 +175,11 @@ green. Full repository gates are intentionally deferred until step 15 at the ope
 
 ## Exact next implementation action
 
-Execute step 5 (QA-029) next: one layout rule for every review — facts, blank separation, then the
-decision or action prompt. Do not patch Source Sync alone, and keep B-048's refusal wrapping
-separate unless satisfying the rule requires it. Then steps 6, 7 and 11–14. The operator has asked
-for targeted tests and quality gates only until the batch is finished; step 15 runs the full suites
-once it is handed back.
+Execute step 6 (QA-030) next: the Candidates list holds its columns. Bound each column, truncate
+only the list row, and show the focused value in full below the list. Survey the other Maintainer
+tables before choosing the shared projection boundary — `tui_layout.columns` already exists and is
+the natural home, and the scoped `make mutants` run over that module reports pre-existing survivors
+in `_column_widths`, `columns` and `field_block` (B-103), so state the claims that step needs rather
+than assuming the kernel is already held. Then steps 7 and 11–14. The operator has asked for
+targeted tests and quality gates only until the batch is finished; step 15 runs the full suites once
+it is handed back.

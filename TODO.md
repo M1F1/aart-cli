@@ -88,7 +88,7 @@ Each new entry records:
       Retest: add one Source, press `a` on screen 31 again, and confirm the form is empty; then
       let a preparation refuse and confirm the typed values are still there.
 
-- [ ] **QA-029 — Screens are a wall of text; the action prompt is not separated from the body.**
+- [x] **QA-029 — Screens are a wall of text; the action prompt is not separated from the body.**
       Stage: every review screen
       Surface: Source Sync (33), Source Sync Result (34), and reviews generally
       Severity: medium
@@ -103,6 +103,27 @@ Each new entry records:
       nieczytelne, powinno być więcej pustych linii pomiędzy wierszami tekstu"
       Note: related to `B-048` (refusal lines are not wrapped). This is the positive half — the
       screens need a stated layout rule, not one more line each.
+      Fix: `D-212`. The rule is stated once, in the pure layout kernel, and applied at the seams
+      every screen already passes through rather than screen by screen. `tui_layout.separate`
+      joins blocks with exactly one blank line and drops a block that turned out to be empty;
+      `tui_layout.action_prompt` puts the facts, one blank line, then the single line saying what
+      a key press will do, and nothing after it. `is_action_prompt` recognises that line from the
+      line itself — a sentence naming a key — so `CanonicalScreenSource.lines` can lift whatever
+      prompt a screen wrote and re-place it last, under the notice it is about. Four review
+      prompts were reworded to stop saying "below" about a plan that is now above them, and the
+      two Source Sync screens were regrouped into what it is / where it stands / what it will do /
+      the evidence.
+      Evidence: `tests/action_prompt_layout_test.py` — the rule as a sweep over every Consumer and
+      Maintainer screen (with and without a notice on it), a Hypothesis property that a join never
+      doubles a blank and never loses a line, and the three maintainer reviews the sweep cannot
+      reach without their typed views, in every presentation profile.
+      Mutation (`D-091`): dropping the blank in `action_prompt`, joining without a blank in
+      `separate`, keeping a block's trailing blank, restoring the old `(*body, "", *notice)` order
+      in `lines`, and un-grouping either Source Sync screen each turn the suite red.
+      Retest: open Sources → `s`. Screen 33 should read as four groups with `Press Enter to
+      synchronize.` alone at the bottom; press Enter and screen 34 should be grouped the same way.
+      Then open Registry → Rebuild → pick a stage → Enter: the plan comes first and the prompt is
+      the last line under it.
 
 - [ ] **QA-030 — The Candidates list does not hold its columns.**
       Stage: reviewing Candidates after a sync

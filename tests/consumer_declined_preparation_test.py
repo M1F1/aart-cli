@@ -17,6 +17,7 @@ cannot even reach a confirmation.
 from __future__ import annotations
 
 import unittest
+from dataclasses import replace
 
 from agent_artifacts.application.consumer_ui import (
     ConsumerActionKind,
@@ -50,13 +51,15 @@ def _requested_registry_addition() -> ConsumerUiState:
         ConsumerSession(ConsumerScreen.REGISTRIES),
         rows=("add-registry",),
         cursor=0,
-        registry_draft=RegistryDraft(alias="company"),
     )
     opened, _ = reduce_consumer_ui(
         state, ConsumerUiEvent(ConsumerUiEventKind.NAVIGATE, screen=ConsumerScreen.REGISTRY_ADD)
     )
+    # The alias is typed on the form, after it is opened: opening one empties it (`QA-028`/`D-211`),
+    # so a draft planted before the navigation would be describing a form nobody had filled in.
+    typed = replace(opened, registry_draft=RegistryDraft(alias="company"))
     requested, _ = reduce_consumer_ui(
-        opened,
+        typed,
         ConsumerUiEvent(ConsumerUiEventKind.REQUEST_ACTION, action=ConsumerActionKind.REGISTRY_ADD),
     )
     assert requested.session.screen is ConsumerScreen.REGISTRY_REVIEW, requested.session.screen

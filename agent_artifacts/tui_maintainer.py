@@ -31,6 +31,7 @@ from agent_artifacts.application.maintainer_views import (
     MaintainerVersionConflictView,
     MaintainerWorkingTreeState,
 )
+from agent_artifacts.tui_layout import action_prompt, separate
 
 __all__ = [
     "render_maintainer_dashboard",
@@ -174,25 +175,31 @@ def render_source_sync_review(
         if view.current_revision is not None:
             revision = view.current_revision[:12]
         registry_revision = registry_revision[:12]
-    lines = [
+    # `QA-029`: what it is, where it stands, what it will do, and the evidence, as four groups a
+    # reader can skip between rather than as one block they have to read to the end.
+    identity = [
         f"Sync authoring Source {view.alias}",
         f"Location: {view.location}",
         f"Branch: {view.branch or 'local'}",
+    ]
+    if profile is PresentationProfile.VERBOSE:
+        identity.append(f"Source kind: {_human(view.kind)}")
+    standing = [
         f"Current revision: {revision}",
         f"Current Candidates: {view.candidate_count}",
         f"Compare with approved registry: {view.target_registry}@{registry_revision}",
+    ]
+    effects = [
         "Effects: fetch/read, exact manifest discovery, compile, Candidate reconciliation",
         "Registry mutations: none",
     ]
+    evidence = []
     if profile is PresentationProfile.VERBOSE:
-        lines.extend(
-            (
-                f"Source kind: {_human(view.kind)}",
-                f"Approved snapshot: {view.approved_snapshot}",
-            )
-        )
-    lines.extend((f"Review identity: {view.review_digest}", "Press Enter to synchronize."))
-    return tuple(lines)
+        evidence.append(f"Approved snapshot: {view.approved_snapshot}")
+    evidence.append(f"Review identity: {view.review_digest}")
+    return action_prompt(
+        separate(identity, standing, effects, evidence), "Press Enter to synchronize."
+    )
 
 
 def render_source_sync_result(
@@ -204,24 +211,23 @@ def render_source_sync_result(
     ):
         raise ValueError("Source Sync result rendering needs a typed view and profile")
     revision = view.revision if profile is PresentationProfile.VERBOSE else view.revision[:12]
-    lines = [
-        f"Source Sync {view.disposition}: {view.alias}",
-        f"Pinned revision: {revision}",
+    # `QA-029` again, on the screen the run lands on: the outcome, what it found, what it left
+    # alone, and the evidence.
+    outcome = [f"Source Sync {view.disposition}: {view.alias}", f"Pinned revision: {revision}"]
+    found = [
         f"Discovered manifests: {view.manifest_count}",
         f"Candidates: {view.candidate_count}",
-        f"Target registry observed: {view.target_registry}",
-        "Registry mutations: none",
     ]
     if profile is PresentationProfile.VERBOSE:
-        lines.append(
+        found.append(
             "Candidate states: "
             + (
                 ", ".join(f"{state.value}={count}" for state, count in view.candidate_states)
                 or "none"
             )
         )
-    lines.append(f"Review identity: {view.review_digest}")
-    return tuple(lines)
+    untouched = [f"Target registry observed: {view.target_registry}", "Registry mutations: none"]
+    return separate(outcome, found, untouched, [f"Review identity: {view.review_digest}"])
 
 
 def render_maintainer_candidates(
@@ -764,7 +770,7 @@ def render_maintainer_registry_commit(
         lines.append(f"Local Git revision: {_short(view.commit_revision or '', profile)}")
         lines.append("Canonical-branch publication remains external.")
     else:
-        lines.append("Enter commits this exact local transaction.")
+        return action_prompt(lines, "Enter commits this exact local transaction.")
     return tuple(lines)
 
 
@@ -890,11 +896,12 @@ def render_repository_adoption_review(
         *(f"  {path}" for path in view.changed_paths),
         "",
         "The repository will not be saved as a Source. Nothing is pushed or merged.",
-        "Press Enter to write this exact transaction into the local registry checkout.",
     ]
     if profile is PresentationProfile.VERBOSE:
         lines.append(f"Review identity: {view.review_digest}")
-    return tuple(lines)
+    return action_prompt(
+        lines, "Press Enter to write this exact transaction into the local registry checkout."
+    )
 
 
 def render_adopted_artifacts(

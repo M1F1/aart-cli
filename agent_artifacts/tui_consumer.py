@@ -86,6 +86,7 @@ from agent_artifacts.application.maintainer_views import (
 from agent_artifacts.domain.registry import PromotionMode
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.domain.selection import Collection
+from agent_artifacts.tui_layout import action_prompt, is_action_prompt, separate
 from agent_artifacts.tui_maintainer import (
     render_adopted_artifacts,
     render_adoption_upstream_check,
@@ -1976,9 +1977,15 @@ class CanonicalScreenSource:
         """
 
         body = self._body(state)
-        if not self._screens.notice or state.session.screen not in _ANSWERABLE:
-            return body
-        return (*body, "", *self._screens.notice)
+        notice = self._screens.notice if state.session.screen in _ANSWERABLE else ()
+        # `QA-029`: the one line addressed to the reader goes last, under everything it is about,
+        # separated by a blank. A notice is the thing being asked about, so it lands above the ask
+        # rather than under it -- which is where an answered review used to leave the reader.
+        prompt = body[-1] if body and is_action_prompt(body[-1]) else ""
+        facts = separate(body[:-1] if prompt else body, notice)
+        if not prompt:
+            return facts
+        return action_prompt(facts, prompt)
 
     def _body(self, state: ConsumerUiState) -> tuple[str, ...]:
         screen, profile = state.session.screen, state.session.profile
@@ -2448,19 +2455,13 @@ class CanonicalScreenSource:
                 "Enter reviews the run under the cursor.",
             )
         if screen is MaintainerScreen.REGISTRY_REBUILD_REVIEW:
-            return _review_prompt(state, "Review the run below, then press Enter to start it.")
+            return _review_prompt(state, "Press Enter to start this run.")
         if screen is MaintainerScreen.REGISTRY_INIT_REVIEW:
-            return _review_prompt(
-                state, "Review the registry below, then press Enter to create it."
-            )
+            return _review_prompt(state, "Press Enter to create this registry.")
         if screen is MaintainerScreen.SOURCE_ADD_REVIEW:
-            return _review_prompt(
-                state, "Review the Source connection below, then press Enter to connect."
-            )
+            return _review_prompt(state, "Press Enter to connect this Source.")
         if screen is ConsumerScreen.REGISTRY_REVIEW:
-            return _review_prompt(
-                state, "Review the registry connection below, then press Enter to connect."
-            )
+            return _review_prompt(state, "Press Enter to connect this registry.")
         if screen is ConsumerScreen.REGISTRY_SYNC:
             connected = next(
                 (item for item in screens.registries if item.alias == state.focus),

@@ -227,6 +227,71 @@ STAGE_MARKERS: Mapping[str, str] = {
     "pending": STAGE_PENDING,
 }
 
+KEY_NAMES = frozenset({"Enter", "Esc", "Space", "Tab", "Backspace"})
+"""The keys a screen may address the reader by name. Naming one makes a line a prompt."""
+
+
+def is_action_prompt(line: str) -> bool:
+    """True when a line's subject is a key press: what pressing something will do.
+
+    Read from the line itself rather than from a list of remembered sentences, so a screen written
+    tomorrow is held to the same rule as the ones written today.
+    """
+
+    if not isinstance(line, str):
+        raise ValueError("an action prompt is a line of text")
+    stripped = line.strip()
+    if not stripped.endswith("."):
+        return False
+    return any(word.strip(",;:.") in KEY_NAMES for word in stripped.split())
+
+
+def separate(*blocks: Sequence[str]) -> Tuple[str, ...]:
+    """Blocks of lines joined by exactly one blank line, with empty blocks dropped.
+
+    A screen is read in groups, not in lines, and the operator reported that a screen written as
+    one undifferentiated block is unreadable -- "powinno byc wiecej pustych linii pomiedzy
+    wierszami tekstu" (`QA-029`). Composing groups here keeps the separation exactly one line
+    wherever a block turns out to be absent, which is what an ad-hoc ``("", *notice)`` gets wrong.
+    """
+
+    kept = []
+    for block in blocks:
+        lines = [line for line in block]
+        if any(not isinstance(line, str) for line in lines):
+            raise ValueError("a block is lines of text")
+        while lines and not lines[-1].strip():
+            lines.pop()
+        while lines and not lines[0].strip():
+            lines.pop(0)
+        if lines:
+            kept.append(tuple(lines))
+    if not kept:
+        return ()
+    joined: list[str] = list(kept[0])
+    for block in kept[1:]:
+        joined.extend(("", *block))
+    return tuple(joined)
+
+
+def action_prompt(facts: Sequence[str], prompt: str) -> Tuple[str, ...]:
+    """The facts, one blank line, then the single line saying what a key press will do.
+
+    A screen whose only actionable sentence is the ninth line of an undifferentiated block has not
+    delivered the action: the reader has to read the whole screen to find the one line addressed to
+    them, and reports that it is lost in the text (`QA-029`). The separation is the entire rule, so
+    it lives here and is applied at the seam every screen already passes through, rather than being
+    a habit each screen has to remember. The prompt goes last because last is where reading stops.
+    """
+
+    if not is_action_prompt(prompt):
+        raise ValueError(f"not an action prompt: {prompt!r}")
+    body = separate(facts)
+    if not body:
+        return (prompt,)
+    return (*body, "", prompt)
+
+
 BOX_MARKERS: Mapping[str, str] = {
     "checked": BOX_CHECKED,
     "empty": BOX_EMPTY,
@@ -241,6 +306,7 @@ __all__ = [
     "CHROME_ROWS",
     "CONTENT_MEASURE",
     "HINT_ORDER",
+    "KEY_NAMES",
     "MIN_LIST_ROWS",
     "PANE_MIN_HEIGHT",
     "PROTECTED_HINTS",
@@ -251,10 +317,13 @@ __all__ = [
     "STAGE_MARKERS",
     "STAGE_PENDING",
     "STAGE_PROJECTION",
+    "action_prompt",
     "columns",
     "field_block",
+    "is_action_prompt",
     "measure",
     "pane_budget",
+    "separate",
     "status_bar",
     "wrap",
 ]

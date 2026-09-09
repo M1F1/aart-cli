@@ -1016,3 +1016,21 @@ and `_back` walk the session history and touch no draft (`D-211`). Only that for
 emptied, so opening Add Source does not discard a half-typed Add Registry. Both add forms now also
 say in words that they add another one and change nothing already connected.
 `tests/form_draft_lifecycle_test.py` holds all five claims; three targeted mutations killed.
+
+**CP-19 step 5 (QA-029) — layout rule for prompts and groups.** `Press Enter to synchronize.` was
+the ninth line of an undifferentiated block. The rule is now stated once in the pure layout kernel
+and applied at the seams every screen already passes through, rather than screen by screen:
+`tui_layout.separate` joins blocks with exactly one blank line and drops an empty one,
+`tui_layout.action_prompt` puts the facts, a blank, then the single line saying what a key press
+will do, and `is_action_prompt` recognises that line from the line itself so
+`CanonicalScreenSource.lines` can lift a screen's prompt and re-place it last — under the notice it
+is about, where the old `(*body, "", *notice)` had put the notice below the ask. Four review prompts
+were reworded to stop saying "below" about a plan that is now above them, and the two Source Sync
+screens were regrouped into what it is / where it stands / what it will do / the evidence (`D-212`).
+`tests/action_prompt_layout_test.py` states the rule as a sweep over every Consumer and Maintainer
+screen, run with and without a notice, plus the three maintainer reviews the sweep cannot reach
+without typed views, in every profile; six targeted mutations killed. The sweep also caught a step-4
+regression in `consumer_declined_preparation_test`, whose fixture planted a draft before navigating
+into the form; the claim is unchanged and the fixture now types on the form, as the shell does.
+The scoped advisory `make mutants` over the kernel recorded pre-existing width-arithmetic survivors
+as `B-107`, which CP-19 step 6 must address before building the Candidates columns on them.

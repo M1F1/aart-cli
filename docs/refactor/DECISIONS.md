@@ -4941,3 +4941,33 @@ The finding's second half — not knowing whether confirming replaces or adds �
 as well as by the empty form: both add forms now say they add another one and change nothing already
 connected. Initialize Registry does not, because it does not have that ambiguity; there is one
 registry in a project.
+
+## D-212 — The prompt is placed by the layout kernel, not by each screen
+
+Date: 2026-09-09 · Increment: CP-19 step 5, QA-029 · Status: accepted
+
+`Press Enter to synchronize.` was the ninth line of an undifferentiated block on screen 33, so the
+one sentence addressed to the operator had to be found by reading everything above it. The operator
+asked for the general rule rather than one more line on one screen: "powinno być więcej pustych
+linii pomiędzy wierszami tekstu".
+
+The rule is: the facts, one blank line, then the single line saying what a key press will do, and
+nothing after it. It is stated once in `agent_artifacts/tui_layout.py`, the pure layout kernel that
+already owns what is decidable without a terminal, and applied at the two seams every screen passes
+through rather than screen by screen. `separate` joins blocks with exactly one blank line and drops
+a block that turned out to be empty — the thing an ad-hoc `("", *notice)` gets wrong, which is how a
+form with no rows on it grew a double blank. `action_prompt` composes the facts with the prompt.
+
+A prompt is recognised from the line itself — a sentence naming a key — rather than from a list of
+sentences somebody has to remember to extend, so `is_action_prompt` holds a screen written later to
+the same rule. That recogniser is what lets `CanonicalScreenSource.lines` lift whatever prompt a
+screen wrote and re-place it last: a review's notice is the plan the reader is being asked about, so
+it belongs above the ask, where the old `(*body, "", *notice)` put it below.
+
+Four review prompts were reworded because they said "below" about a plan that is now above them.
+"Review the run below, then press Enter to start it." became "Press Enter to start this run.", which
+is also shorter — the review is the screen, and it does not need to announce itself.
+
+`B-048` (refusal lines are not wrapped) stays separate. Wrapping is a width decision and this is an
+ordering decision; nothing here needed the wrap to hold, and doing both at once would have made
+neither testable on its own.

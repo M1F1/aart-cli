@@ -1358,10 +1358,25 @@ form owns, and only that one; `_declined_preparation` and `_back` walk the sessi
 no draft, so a refused form still holds everything typed (D-211). Both add forms say in words that
 they add another one and change nothing already connected.
 
-**Exact next action for Claude:** CP-19 step 5 — QA-029. State one layout rule for every review:
-facts, a blank line, then the decision or action prompt. Do not patch Source Sync alone, and keep
-B-048's refusal wrapping separate unless the rule requires it. Then steps 6, 7 and 11–14. Targeted
-tests and quality gates only until the batch is handed back; step 15 runs the full suites then.
+**CP-19 step 5 is DONE — QA-029 closed (2026-09-09).** The rule is stated once in the pure layout
+kernel and applied at the seams every screen already passes through: `separate` joins blocks with
+exactly one blank line and drops an empty one, `action_prompt` puts the facts, a blank, then the
+single line saying what a key press will do, and `is_action_prompt` recognises that line from the
+line itself so `CanonicalScreenSource.lines` can lift a screen's prompt and re-place it last — under
+the notice it is about, not above it (D-212). Four review prompts stopped saying "below" about a
+plan that is now above them; the two Source Sync screens were regrouped. Held as a sweep over every
+Consumer and Maintainer screen with and without a notice, plus the three typed-view maintainer
+reviews in every profile; six targeted mutations killed. B-048's refusal wrapping stays separate.
+
+**Exact next action for Claude:** CP-19 step 6 — QA-030. The Candidates list holds its columns:
+bound each column, truncate only the list row, and show the focused value in full below the list.
+Survey the other Maintainer tables before choosing the shared projection boundary. `tui_layout`
+already owns `columns`/`_column_widths`, and the scoped advisory mutation run found its width
+arithmetic unheld (B-107), so state the column claims that step depends on rather than assuming the
+kernel holds them. Then steps 7 and 11–14. Targeted tests and quality gates only until the batch is
+handed back — and run the whole `tui`/`consumer`/`maintainer`/`source`/`registry`/`setup` test file
+set, not only the files a step edits: step 5 found a step-4 fixture regression that way. Step 15
+runs the full suites.
 
 ## Critical boundaries for this slice
 
