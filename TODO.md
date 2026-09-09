@@ -29,7 +29,95 @@ Each new entry records:
 
 ### Open
 
-Nothing open. Every QA-001–QA-025 finding has a fix awaiting the operator's retest below.
+- [ ] **QA-026 — The footer does not name the keys the current screen actually has.**
+      Stage: every screen; found while walking Maintainer Mode
+      Surface: shell chrome (`_NAVIGATION_LEGEND`), every screen
+      Severity: high
+      Blocks current stage: no, but it makes every other finding harder to report
+      Reproduction: open any screen with its own actions — 21 (`a`, `s`), 31 (`a`, `s`), 46
+      (`n`, `b`, `s`, `u`), 35 (`f`, `c`), 37 (`f`) — and read the last line
+      Expected: the footer lists the keys usable **here**, view-specific ones first, then the
+      global movement/back/help/quit set
+      Observed: the footer is one fixed legend (`↑/↓ move  Enter open/continue  Space
+      select/toggle  Esc back  ? keys  q quit`). A screen's own keys live in a body line the
+      screen happens to draw, or nowhere at all, and the full vocabulary appears only after `?`
+      Operator's words: "zawsze na dole stopki powinny być skróty klawiszowe których mogę użyć,
+      najpierw te charakterystyczne dla danego widoku; a czasem one pojawiają się dopiero jak
+      kliknę `?`"
+      Note: `B-077`/`D-168` added the fixed legend. This is the next step it did not take — the
+      legend has to be derived per screen, from the same table `key_event` reads, or it will drift.
+
+- [ ] **QA-027 — A finished sequence has no way out but pressing Esc repeatedly.**
+      Stage: after any completed Maintainer action
+      Surface: Source Sync Result (34), and every result screen with no forward route
+      Severity: high
+      Blocks current stage: no
+      Reproduction: Sources → `s` → review → Enter → Source Sync Result. Now try to add or sync
+      another Source
+      Expected: Enter on a result screen returns to the list the sequence started from — Sources
+      for a Source action, Registry for a registry action — so the next one can begin
+      Observed: Enter does nothing; the only way back is Esc, Esc, Esc through the history
+      Operator's words: "jak przechodzę przez dodanie source to nie wiem jak się mam cofnąć do
+      ekranu głównego... na koniec journey w danej sekwencji Enter powinien wracać do pierwszego
+      ekranu danej sekcji, np. jak dodaję source i wszystko poszło dobrze, to kolejny Enter cofa
+      mnie do pierwszego ekranu Source, żeby dodać kolejne"
+      Note: screen 45 already does exactly this (`Enter` after the receipt goes to screen 46).
+      The rule exists; it is applied to one screen instead of all of them.
+
+- [ ] **QA-028 — Add Source opens holding the previous Source's answers.**
+      Stage: adding a second authoring Source
+      Surface: Add Source (31a); the same shape applies to Add Registry (21a) and Initialize
+      Registry (46a)
+      Severity: medium
+      Blocks current stage: no
+      Reproduction: add one Source, then press `a` on screen 31 again
+      Expected: an empty form, so it is obvious a **new** subscription is being created
+      Observed: every field still holds the previous Source's values, and nothing on screen says
+      whether confirming edits the old subscription or creates another one
+      Operator's words: "jak próbuję dodać nowe source to mam wartości z poprzedniego, co jest
+      nieintuicyjne, bo nie wiem czy właśnie usuwam to stare i zamieniam na nowe wartości, czy
+      dodaję całkowicie nowe source"
+      Note: the draft is carried in `ConsumerUiState` and never reset on entry. `QA-018` requires
+      a **refused** form to keep what was typed, so the reset belongs on entering the form, not on
+      leaving it.
+
+- [ ] **QA-029 — Screens are a wall of text; the action prompt is not separated from the body.**
+      Stage: every review screen
+      Surface: Source Sync (33), Source Sync Result (34), and reviews generally
+      Severity: medium
+      Blocks current stage: no
+      Reproduction: open Sources → `s` and read screen 33 top to bottom
+      Expected: the facts, then a blank line, then the one line that says what a key press will
+      do — so `Press Enter to synchronize.` is findable without reading the whole screen
+      Observed: eight dense lines with no vertical grouping, `Press Enter to synchronize.` being
+      the ninth in the same block
+      Operator's words: "`Press Enter to synchronize.` powinno być oddzielone, żeby było widoczne";
+      "nie podoba mi się, że jest tak wiele tekstu w opisach, to się wszystko gubi i jest
+      nieczytelne, powinno być więcej pustych linii pomiędzy wierszami tekstu"
+      Note: related to `B-048` (refusal lines are not wrapped). This is the positive half — the
+      screens need a stated layout rule, not one more line each.
+
+- [ ] **QA-030 — The Candidates list does not hold its columns.**
+      Stage: reviewing Candidates after a sync
+      Surface: Candidates (35); check the other tabular lists for the same defect
+      Severity: medium
+      Blocks current stage: no
+      Reproduction: sync two Sources so the list holds both `mcp/aart-e2e-mcp` and
+      `skill/verification-before-completion`, then open screen 35
+      Expected: `STATUS`, `ARTIFACT`, `VERSION`, `SOURCE` stay aligned; a name too long for its
+      column is truncated, and the row under the cursor is shown in full below the list
+      Observed: the header is aligned but a long artifact name pushes `VERSION` and `SOURCE` out
+      of their columns, so the rows no longer line up with the header
+      Operator's words: "powinno wszystko być w kolumnach, a nie taki przepchany tekst; powinno
+      najwyżej ucinać nazwy, ale jak się najedzie kursorem, to pod spodem jest całość"
+      Evidence:
+      ```
+      STATUS               ARTIFACT                 VERSION       SOURCE
+      > New                mcp/aart-e2e-mcp         1.0.0         aart-test-mcp
+        New                skill/verification-before-completion 1.0.0         superpowers-test
+      ```
+
+### Fixed — awaiting manual retest
 
 ### Fixed — awaiting manual retest
 
