@@ -2513,3 +2513,15 @@ Specification is unsatisfied without it.
 Evidence/links: `D-197`; `tests/harness_registration_roundtrip_test.py`;
 `tests/opencode_installation_e2e_test.py`; `tests/codex_installation_e2e_test.py`;
 `tests/artifact_installation_e2e_test.py`.
+
+## B-099 — Whether a TUI promotion leaves generated registry files complete
+
+The operator's walkthrough runs `registry lock`, `build`, `validate` and `audit` from the CLI after
+promoting through the TUI, inherited from the pre-TUI version of that procedure. The promotion
+already writes the approved registry state, revalidates the persisted tree and makes the local
+commit, so those four commands may be writing nothing at all. The manual pass will say which:
+`git status --short` immediately after the TUI's Registry Commit answers it.
+
+If they change nothing, the walkthrough should drop them and the TUI is complete for that boundary.
+If they do change something, the gap is real and this becomes a QA finding rather than a backlog
+note. Not on the critical path either way — the Git publication boundary is deliberately manual.

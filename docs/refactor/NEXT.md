@@ -700,6 +700,24 @@ read as "this source is gone" in three places, so one invalid upstream revision 
 `update` fail on a plan-construction invariant carrying no remediation. Product Specification
 165.11 settles it.
 
+Rewriting the operator's local TUI walkthrough for the whole QA-001–QA-021 batch found two more
+defects, both of them created by earlier work in this same batch, and both fixed here as QA-022 and
+QA-023. Measuring Codex put it in the shell's harness set, and because Codex hosts no project MCP
+server, `placement_for` refused every MCP install the TUI could offer — Claude's and Tabnine's
+included. `profiles_requested` now separates a profile somebody typed from one this build merely
+measured (D-198). Separately, screen 28's `Default scope: Project/User` had been persisted, redrawn
+and never read: the installation host was fixed at project scope, so a User install landed in the
+project (D-199). Both are held by tests that were red first, and the full unit suite is green at
+3,606 tests.
+
+The walkthrough itself is now a TUI manual rather than a CLI script: registry creation, authoring
+Sources, sync, promotion, one-off repository scan with selective vendoring, upstream checks,
+consumer registry connection, refresh, scope selection, install, update, repair and uninstall are
+all driven from screens, and the terminal is used only for Git/GitHub work AART deliberately does
+not do and for reading back what the TUI wrote. It lives at
+`.local/END_TO_END_ACCEPTANCE_M1F1_TUI.md`, which is excluded from the repository.
+
+
 ## Exact next action
 
 **CP-18 step 5 — traceability for the remaining PARTIAL invariant rows.** Step 4 closed the

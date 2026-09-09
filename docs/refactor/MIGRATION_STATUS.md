@@ -810,3 +810,29 @@ and `make integration` green (369 tests), on the branch that carries `D-196` and
 Never mark a slice beyond the strongest evidence actually present.
 `IMPLEMENTED` means code exists; `VERIFIED` requires relevant tests; `MIGRATED` means callers/flows
 use the new path; `LEGACY REMOVED` requires the old authority/path to be safely removed.
+
+**QA-022 / QA-023 (2026-09-09).** Turning the operator's local walkthrough into a TUI manual found
+two defects the batch itself had created, and both are fixed. Codex being measured put it in the
+shell's harness set; Codex hosts no project MCP server; `placement_for` refused a profile it could
+not place; so the persistent shell could no longer install *any* MCP artifact, for any harness, on
+this machine. `placement_for` now takes `profiles_requested` — a command's profiles were typed and a
+harness that cannot host the artifact is a refusal naming it, while the shell's are every harness
+this build measured and one that cannot host this kind at this scope is simply left out of that
+artifact's plan. A harness no table names stays a refusal either way, and a Selection every profile
+left out stays a refusal (D-198).
+
+Screen 28's `Default scope: Project/User` was written, persisted and drawn, and nothing read it:
+composition fixed the installation host at project scope, so choosing User installed into the
+project. The scope is now derived from the stored preference at the point of use, so it applies in
+the session that changed it; each review records the host it was prepared against and its
+confirmation acts on that one; and the maintainer registry root follows the checkout rather than the
+installation scope (D-199).
+
+Both were red before implementation and three targeted mutations were killed. The full unit suite is
+green at 3,606 tests, and `make typecheck`, `ruff check` and `ruff format --check` are clean. The
+walkthrough at `.local/END_TO_END_ACCEPTANCE_M1F1_TUI.md` now drives every product operation from
+the screens and uses the terminal only for Git/GitHub work and for reading back what the TUI wrote.
+
+**Next:** the operator's manual retest of QA-001–QA-023. `registry lock/build/validate/audit` after
+a promotion is still a CLI step in that walkthrough; whether the TUI's promotion already writes the
+complete generated set is an observation for that pass, recorded as `B-099`.
