@@ -1235,6 +1235,18 @@ rebuild request inherited screen 46's focused registry alias instead of the stag
 `.local/END_TO_END_ACCEPTANCE_M1F1_TUI.md`. Nothing in this batch is on CP-14's critical path; new
 findings go to root `TODO.md` as `QA-NNN`.
 
+**QA-026 (2026-09-09).** The footer now answers the screen the operator is actually on (D-202).
+Contextual actions are listed first and the universal movement/back/help/quit keys second; Space,
+Enter and search appear only where the reducer can use them. The same binding value owns both a
+letter key's event and its displayed label, while selectable/searchable/form/review keys derive
+from the reducer's existing screen sets. Screen 46 no longer repeats its shortcuts as body text.
+The RED was the fixed footer on every asserted screen; a `b` route mutation was killed by walking
+the advertised Registry key through the real shell.
+
+**Next executable work:** QA-027, generalizing screen 45's completed-sequence Enter route to every
+terminal result screen, beginning with Source Sync Result (34). Continue with focused gates only;
+the operator deferred the full suites until this manual-acceptance batch is handed back.
+
 ## Critical boundaries for this slice
 
 - Product Specification is the sole product authority.

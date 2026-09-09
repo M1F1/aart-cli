@@ -21,6 +21,8 @@ from agent_artifacts.application.consumer_ui import (
     ConsumerUiEvent,
     ConsumerUiEventKind,
     ConsumerUiState,
+    KeyBinding,
+    key_bindings,
     key_event,
     reduce_consumer_ui,
 )
@@ -1062,9 +1064,6 @@ _HELP_LINES: tuple[str, ...] = (
     "?  help          q  quit",
 )
 
-_NAVIGATION_LEGEND = "↑/↓ move  Enter open/continue  Space select/toggle  Esc back  ? keys  q quit"
-"""Always-visible route to the complete help and the keys needed to leave any screen."""
-
 _DASHBOARD_DESCRIPTIONS: dict[ApplicationScreen, str] = {
     ConsumerScreen.MARKETPLACE: "Browse and install approved tools from configured registries.",
     ConsumerScreen.INSTALLED: "See what AART manages in this project and whether it is healthy.",
@@ -1092,6 +1091,24 @@ def _title(screen: ApplicationScreen) -> str:
     return _human(screen.value.split("-", 1)[1]).title()
 
 
+def _binding_text(binding: KeyBinding) -> str:
+    return f"{binding.key} {binding.label}"
+
+
+def _key_legend(source: ConsumerScreenSource, state: ConsumerUiState) -> tuple[str, ...]:
+    """Draw the reducer's current bindings, with local actions before universal escape routes."""
+
+    bindings = key_bindings(state, detail=source.detail(state))
+    if state.searching or state.quit_pending:
+        return ("Keys here: " + "  ".join(map(_binding_text, bindings)),)
+    local, global_keys = bindings[:-4], bindings[-4:]
+    lines = []
+    if local:
+        lines.append("Keys here: " + "  ".join(map(_binding_text, local)))
+    lines.append("Keys always: " + "  ".join(map(_binding_text, global_keys)))
+    return tuple(lines)
+
+
 def frame(source: ConsumerScreenSource, state: ConsumerUiState) -> tuple[str, ...]:
     """One drawn screen: heading, body, prompts, and the persistent navigation footer."""
 
@@ -1107,7 +1124,7 @@ def frame(source: ConsumerScreenSource, state: ConsumerUiState) -> tuple[str, ..
         lines.append(f"{len(state.selection)} selected")
     if state.quit_pending:
         lines.append(f"Discard {len(state.selection)} selected item(s) and quit? y/n")
-    lines.append(_NAVIGATION_LEGEND)
+    lines.extend(("", *_key_legend(source, state)))
     return tuple(lines)
 
 
@@ -2121,12 +2138,7 @@ class CanonicalScreenSource:
                 else render_maintainer_registry_diff(registry_diff, profile)
             )
         if screen is MaintainerScreen.REGISTRY:
-            return (
-                "Actions: n Initialize Registry   b Rebuild generated files",
-                "         s Scan Repository once   u Check upstream",
-                "",
-                *render_maintainer_registries(screens.maintainer_registries(), profile),
-            )
+            return render_maintainer_registries(screens.maintainer_registries(), profile)
         if screen is MaintainerScreen.SCAN_RESULT:
             return (
                 ("No repository has been scanned yet.",)

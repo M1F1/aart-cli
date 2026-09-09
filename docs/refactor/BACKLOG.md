@@ -1934,6 +1934,12 @@ were first observed red against the shipped frame/clipping behavior, then passed
 All nine quality gates pass over 3,324 tests at 85.35% branch coverage, as do all 343 separate
 integration tests.
 
+**Extended by QA-026/D-202 (2026-09-09).** The always-visible route remains, but it is no longer a
+fixed promise that hides local actions and advertises inert ones. Each frame now draws contextual
+bindings first and the universal movement/back/help/quit set second. The contextual letter binding
+contains both its event and its label, so keyboard handling and the footer cannot acquire separate
+screen maps; structural bindings derive from the same screen sets and review map as the reducer.
+
 ## B-078 — Escape inherits curses' long escape-sequence delay
 
 Found: manual TUI acceptance (2026-09-04) · Severity: high · Status: done

@@ -29,24 +29,6 @@ Each new entry records:
 
 ### Open
 
-- [ ] **QA-026 — The footer does not name the keys the current screen actually has.**
-      Stage: every screen; found while walking Maintainer Mode
-      Surface: shell chrome (`_NAVIGATION_LEGEND`), every screen
-      Severity: high
-      Blocks current stage: no, but it makes every other finding harder to report
-      Reproduction: open any screen with its own actions — 21 (`a`, `s`), 31 (`a`, `s`), 46
-      (`n`, `b`, `s`, `u`), 35 (`f`, `c`), 37 (`f`) — and read the last line
-      Expected: the footer lists the keys usable **here**, view-specific ones first, then the
-      global movement/back/help/quit set
-      Observed: the footer is one fixed legend (`↑/↓ move  Enter open/continue  Space
-      select/toggle  Esc back  ? keys  q quit`). A screen's own keys live in a body line the
-      screen happens to draw, or nowhere at all, and the full vocabulary appears only after `?`
-      Operator's words: "zawsze na dole stopki powinny być skróty klawiszowe których mogę użyć,
-      najpierw te charakterystyczne dla danego widoku; a czasem one pojawiają się dopiero jak
-      kliknę `?`"
-      Note: `B-077`/`D-168` added the fixed legend. This is the next step it did not take — the
-      legend has to be derived per screen, from the same table `key_event` reads, or it will drift.
-
 - [ ] **QA-027 — A finished sequence has no way out but pressing Esc repeatedly.**
       Stage: after any completed Maintainer action
       Surface: Source Sync Result (34), and every result screen with no forward route
@@ -119,7 +101,22 @@ Each new entry records:
 
 ### Fixed — awaiting manual retest
 
-### Fixed — awaiting manual retest
+- [ ] **QA-026 — The footer does not name the keys the current screen actually has.**
+      Stage: every screen; found while walking Maintainer Mode
+      Surface: shell chrome, every screen
+      Severity: high
+      Blocks current stage: no, but it makes every other finding harder to report
+      Reproduction: open any screen with its own actions — 21 (`a`, `s`), 31 (`a`, `s`), 46
+      (`n`, `b`, `s`, `u`), 35 (`f`, `c`), 37 (`f`) — and read the footer
+      Expected: the footer lists the keys usable **here**, view-specific ones first, then the
+      global movement/back/help/quit set
+      Observed: the footer was one fixed legend. A screen's own keys lived in a body line the
+      screen happened to draw, or nowhere at all.
+      Fix: yes — contextual letter bindings now carry their displayed meaning beside the event
+      they produce, and both `key_event` and the footer read that one table. Structural keys derive
+      from the reducer's searchable/selectable/form/review sets. Local actions are drawn first,
+      global movement/back/help/quit second; a screen no longer advertises Space when it cannot
+      select anything. Screen 46's duplicate body-level `Actions:` header is gone (D-202).
 
 - [ ] **QA-025 — Re-running a registry's generated files had no home in the TUI.**
       Stage: after promoting, adopting or editing anything in the registry checkout

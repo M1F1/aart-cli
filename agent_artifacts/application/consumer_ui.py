@@ -39,11 +39,13 @@ __all__ = [
     "ConsumerUiEvent",
     "ConsumerUiEventKind",
     "ConsumerUiState",
+    "KeyBinding",
     "RegistryDraft",
     "RegistryInitDraft",
     "RepositoryScanDraft",
     "SourceDraft",
     "key_event",
+    "key_bindings",
     "opening_state",
     "reduce_consumer_ui",
 ]
@@ -96,6 +98,23 @@ class ConsumerUiEventKind(str, Enum):
     EDIT_SOURCE = "edit-source"
     EDIT_REGISTRY_INIT = "edit-registry-init"
     EDIT_REPOSITORY_SCAN = "edit-repository-scan"
+
+
+@dataclass(frozen=True, slots=True)
+class KeyBinding:
+    """One key the current screen accepts and the short meaning its footer displays."""
+
+    key: str
+    label: str
+
+    def __post_init__(self) -> None:
+        if any(
+            not isinstance(value, str)
+            or not value
+            or any(character in value for character in "\r\n")
+            for value in (self.key, self.label)
+        ):
+            raise ValueError("a key binding needs a safe key and label")
 
 
 @dataclass(frozen=True, slots=True)
@@ -1030,6 +1049,221 @@ def reduce_consumer_ui(
 _SPECIAL_KEYS = frozenset({"up", "down", "enter", "escape", "backspace"})
 
 
+@dataclass(frozen=True, slots=True)
+class _ScreenBinding:
+    """A screen-specific shortcut, including both its event and its displayed meaning."""
+
+    display: KeyBinding
+    event: ConsumerUiEvent
+
+
+def _navigate_binding(key: str, label: str, screen: ApplicationScreen) -> _ScreenBinding:
+    return _ScreenBinding(
+        KeyBinding(key, label),
+        ConsumerUiEvent(ConsumerUiEventKind.NAVIGATE, screen=screen),
+    )
+
+
+def _action_binding(key: str, label: str, action: ConsumerActionKind) -> _ScreenBinding:
+    return _ScreenBinding(
+        KeyBinding(key, label),
+        ConsumerUiEvent(ConsumerUiEventKind.REQUEST_ACTION, action=action),
+    )
+
+
+def _event_binding(key: str, label: str, kind: ConsumerUiEventKind) -> _ScreenBinding:
+    return _ScreenBinding(KeyBinding(key, label), ConsumerUiEvent(kind))
+
+
+#: The contextual letter keys have one authority: :func:`key_event` translates this table and the
+#: footer displays it. Adding a route without its explanation, or explaining a key that routes
+#: nowhere, is therefore not representable (`QA-026`). Structural keys such as Space and Enter are
+#: derived below from the same screen sets and review maps that the reducer uses.
+_SCREEN_BINDINGS: dict[ApplicationScreen, tuple[_ScreenBinding, ...]] = {
+    ConsumerScreen.MARKETPLACE: (_action_binding("i", "Install", ConsumerActionKind.INSTALL),),
+    ConsumerScreen.ARTIFACT_DETAILS: (_action_binding("i", "Install", ConsumerActionKind.INSTALL),),
+    ConsumerScreen.COLLECTION_PREVIEW: (
+        _action_binding("i", "Install", ConsumerActionKind.INSTALL),
+    ),
+    ConsumerScreen.COLLECTION_CUSTOMIZE: (
+        _action_binding("i", "Install", ConsumerActionKind.INSTALL),
+    ),
+    ConsumerScreen.UPDATES: (_action_binding("i", "Update", ConsumerActionKind.UPDATE),),
+    ConsumerScreen.INSTALLED_ARTIFACT_DETAILS: (
+        _action_binding("r", "Repair", ConsumerActionKind.VERIFY_REPAIR),
+        _action_binding("u", "Uninstall", ConsumerActionKind.UNINSTALL),
+    ),
+    ConsumerScreen.INSTALLED_COLLECTION_DETAILS: (
+        _action_binding("u", "Uninstall", ConsumerActionKind.UNINSTALL),
+    ),
+    ConsumerScreen.DOCTOR: (
+        _action_binding("r", "Repair issues", ConsumerActionKind.VERIFY_REPAIR),
+    ),
+    ConsumerScreen.REGISTRIES: (
+        _navigate_binding("a", "Add Registry", ConsumerScreen.REGISTRY_ADD),
+        _action_binding("s", "Sync", ConsumerActionKind.REGISTRY_SYNC),
+    ),
+    MaintainerScreen.SOURCES: (
+        _navigate_binding("a", "Add Source", MaintainerScreen.SOURCE_ADD),
+        _action_binding("s", "Sync", ConsumerActionKind.SOURCE_SYNC),
+    ),
+    MaintainerScreen.SOURCE_DETAILS: (
+        _action_binding("s", "Sync", ConsumerActionKind.SOURCE_SYNC),
+    ),
+    MaintainerScreen.CANDIDATES: (
+        _navigate_binding("f", "Filters", MaintainerScreen.CANDIDATE_FILTERS),
+        _navigate_binding("c", "Collections", MaintainerScreen.COLLECTION_CANDIDATES),
+    ),
+    MaintainerScreen.CANDIDATE_DETAILS: (
+        _navigate_binding("d", "Diff", MaintainerScreen.CANDIDATE_DIFF),
+        _navigate_binding("r", "Lifecycle", MaintainerScreen.CANDIDATE_LIFECYCLE),
+    ),
+    MaintainerScreen.CANDIDATE_DIFF: (
+        _event_binding("f", "Files", ConsumerUiEventKind.TOGGLE_FILE_DIFF),
+    ),
+    MaintainerScreen.VALIDATION: (
+        _navigate_binding("p", "Promote", MaintainerScreen.POLICY_REVIEW),
+    ),
+    MaintainerScreen.PROMOTION_MODE: (
+        _event_binding("m", "Mode", ConsumerUiEventKind.TOGGLE_PROMOTION_MODE),
+    ),
+    MaintainerScreen.REGISTRY: (
+        _navigate_binding("n", "Initialize", MaintainerScreen.REGISTRY_INIT),
+        _navigate_binding("b", "Rebuild", MaintainerScreen.REGISTRY_REBUILD),
+        _navigate_binding("s", "Scan Repository", MaintainerScreen.REPOSITORY_SCAN),
+        _navigate_binding("u", "Check upstream", MaintainerScreen.ADOPTED_ARTIFACTS),
+    ),
+    MaintainerScreen.SCAN_RESULT: (
+        _action_binding("a", "Adopt", ConsumerActionKind.REPOSITORY_ADOPT),
+    ),
+    MaintainerScreen.UPSTREAM_CHECK: (
+        _action_binding("a", "Review new version", ConsumerActionKind.REPOSITORY_ADOPT_UPDATE),
+    ),
+    MaintainerScreen.ADOPTED_ARTIFACTS: (
+        _action_binding("Enter", "Check upstream", ConsumerActionKind.REPOSITORY_UPSTREAM_CHECK),
+    ),
+    MaintainerScreen.BULK_PROMOTION: (
+        _action_binding("Enter", "Review promotion", ConsumerActionKind.BULK_PROMOTION),
+    ),
+    MaintainerScreen.REGISTRY_DIFF: (
+        _action_binding("Enter", "Review promotion", ConsumerActionKind.CANDIDATE_PROMOTION),
+    ),
+    MaintainerScreen.REGISTRY_REBUILD: (
+        _action_binding("Enter", "Review run", ConsumerActionKind.REGISTRY_REBUILD),
+    ),
+}
+
+_FORM_SCREENS = frozenset(
+    {
+        ConsumerScreen.REGISTRY_ADD,
+        MaintainerScreen.SOURCE_ADD,
+        MaintainerScreen.REGISTRY_INIT,
+        MaintainerScreen.REPOSITORY_SCAN,
+    }
+)
+_FORM_TOGGLE_SCREENS = frozenset(
+    {
+        ConsumerScreen.REGISTRY_ADD,
+        MaintainerScreen.SOURCE_ADD,
+        MaintainerScreen.REGISTRY_INIT,
+    }
+)
+_CONFIRM_SCREENS = frozenset(
+    {
+        ConsumerScreen.READY,
+        ConsumerScreen.UPDATE_INPUTS,
+        ConsumerScreen.UNINSTALL_REVIEW,
+        ConsumerScreen.VERIFY_REPAIR,
+        ConsumerScreen.REGISTRY_REVIEW,
+        ConsumerScreen.REGISTRY_SYNC,
+        MaintainerScreen.SOURCE_SYNC,
+        MaintainerScreen.REGISTRY_COMMIT,
+        MaintainerScreen.ADOPTION_REVIEW,
+        MaintainerScreen.SOURCE_ADD_REVIEW,
+        MaintainerScreen.REGISTRY_INIT_REVIEW,
+        MaintainerScreen.REGISTRY_REBUILD_REVIEW,
+    }
+)
+
+
+def _binding_enabled(binding: _ScreenBinding, state: ConsumerUiState) -> bool:
+    if binding.event.action is ConsumerActionKind.REGISTRY_SYNC:
+        return (state.focus or state.current_row) not in ("", "add-registry")
+    return True
+
+
+def _screen_binding(key: str, state: ConsumerUiState) -> _ScreenBinding | None:
+    return next(
+        (
+            binding
+            for binding in _SCREEN_BINDINGS.get(state.session.screen, ())
+            if binding.display.key.lower() == key and _binding_enabled(binding, state)
+        ),
+        None,
+    )
+
+
+def key_bindings(
+    state: ConsumerUiState, *, detail: ApplicationScreen | None = None
+) -> tuple[KeyBinding, ...]:
+    """Return the keys that can act in this exact UI state, specific actions first."""
+
+    if not isinstance(state, ConsumerUiState) or not (
+        detail is None or isinstance(detail, (ConsumerScreen, MaintainerScreen))
+    ):
+        raise ValueError("key bindings need consumer UI state and an optional detail screen")
+    if state.quit_pending:
+        return (KeyBinding("y/Enter", "Quit"), KeyBinding("n/Esc", "Stay"))
+    if state.searching:
+        return (
+            KeyBinding("Type", "Search"),
+            KeyBinding("Backspace", "Edit"),
+            KeyBinding("Enter", "Apply"),
+            KeyBinding("Esc", "Cancel"),
+        )
+
+    bindings = [
+        binding.display
+        for binding in _SCREEN_BINDINGS.get(state.session.screen, ())
+        if _binding_enabled(binding, state)
+    ]
+    keys = {binding.key.lower() for binding in bindings}
+    if state.session.screen in _FORM_SCREENS:
+        bindings.append(KeyBinding("Enter", "Next / continue"))
+        if state.session.screen in _FORM_TOGGLE_SCREENS:
+            bindings.append(KeyBinding("Space", "Toggle"))
+    elif state.session.screen is ConsumerScreen.SETTINGS:
+        bindings.append(KeyBinding("Space/Enter", "Change"))
+    elif state.session.screen is MaintainerScreen.CANDIDATE_FILTERS:
+        bindings.append(KeyBinding("Space/Enter", "Toggle filter"))
+    else:
+        if state.session.screen in _SELECTABLE and " " not in keys:
+            bindings.append(KeyBinding("Space", "Select"))
+        if state.session.screen in _CONFIRM_SCREENS and "enter" not in keys:
+            label = "Continue" if state.action is None else "Confirm"
+            bindings.append(KeyBinding("Enter", label))
+        elif detail is not None and "enter" not in keys:
+            bindings.append(KeyBinding("Enter", "Open"))
+        elif (
+            state.session.screen is MaintainerScreen.REGISTRY_COMMIT
+            and state.action is None
+            and "enter" not in keys
+        ):
+            bindings.append(KeyBinding("Enter", "Registry"))
+    if state.session.screen in _SEARCHABLE:
+        bindings.append(KeyBinding("/", "Search"))
+    bindings.append(KeyBinding("v", "Fast / Verbose"))
+    bindings.extend(
+        (
+            KeyBinding("↑/↓", "Move"),
+            KeyBinding("Esc", "Back"),
+            KeyBinding("?", "Help"),
+            KeyBinding("q", "Quit"),
+        )
+    )
+    return tuple(bindings)
+
+
 def key_event(
     key: str,
     state: ConsumerUiState,
@@ -1226,33 +1460,9 @@ def key_event(
         return ConsumerUiEvent(ConsumerUiEventKind.HELP)
     if key == "v":
         return ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_PROFILE)
-    if key == "a" and state.session.screen is ConsumerScreen.REGISTRIES:
-        return ConsumerUiEvent(ConsumerUiEventKind.NAVIGATE, screen=ConsumerScreen.REGISTRY_ADD)
-    if key == "a" and state.session.screen is MaintainerScreen.SOURCES:
-        return ConsumerUiEvent(ConsumerUiEventKind.NAVIGATE, screen=MaintainerScreen.SOURCE_ADD)
-    # `n` for a registry that does not exist yet.  `a` on screen 46 would read as "add" -- the word
-    # both subscription forms use -- and creating the registry this project publishes is not
-    # connecting to somebody else's (INV-199).
-    if key == "n" and state.session.screen is MaintainerScreen.REGISTRY:
-        return ConsumerUiEvent(ConsumerUiEventKind.NAVIGATE, screen=MaintainerScreen.REGISTRY_INIT)
-    # `b` for the run that follows every later change to the checkout (B-099).  It is deliberately
-    # not `r`: `r` already means repair on the Consumer screens that have it, and one letter that
-    # meant "repair here, rebuild there" is how an operator confirms the wrong thing.
-    if key == "b" and state.session.screen is MaintainerScreen.REGISTRY:
-        return ConsumerUiEvent(
-            ConsumerUiEventKind.NAVIGATE,
-            screen=MaintainerScreen.REGISTRY_REBUILD,
-        )
-    if key == "s" and state.session.screen is MaintainerScreen.REGISTRY:
-        return ConsumerUiEvent(
-            ConsumerUiEventKind.NAVIGATE,
-            screen=MaintainerScreen.REPOSITORY_SCAN,
-        )
-    if key == "u" and state.session.screen is MaintainerScreen.REGISTRY:
-        return ConsumerUiEvent(
-            ConsumerUiEventKind.NAVIGATE,
-            screen=MaintainerScreen.ADOPTED_ARTIFACTS,
-        )
+    binding = _screen_binding(key, state)
+    if binding is not None:
+        return binding.event
     # Screen 28 is the one screen whose rows are settings rather than artifacts, so space and
     # Enter move a preference here instead of ticking or opening something.
     if key in (" ", "enter") and state.session.screen is ConsumerScreen.SETTINGS:
@@ -1267,16 +1477,6 @@ def key_event(
             if not row
             else ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_CANDIDATE_FILTER, key=row)
         )
-    if key == "a" and state.session.screen is MaintainerScreen.SCAN_RESULT:
-        return ConsumerUiEvent(
-            ConsumerUiEventKind.REQUEST_ACTION,
-            action=ConsumerActionKind.REPOSITORY_ADOPT,
-        )
-    if key == "a" and state.session.screen is MaintainerScreen.UPSTREAM_CHECK:
-        return ConsumerUiEvent(
-            ConsumerUiEventKind.REQUEST_ACTION,
-            action=ConsumerActionKind.REPOSITORY_ADOPT_UPDATE,
-        )
     if key == " ":
         return ConsumerUiEvent(
             ConsumerUiEventKind.TOGGLE_SELECTION, key=cursor or state.current_row
@@ -1285,100 +1485,6 @@ def key_event(
         return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="up")
     if key in ("down", "j"):
         return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="down")
-    if key == "i":
-        action = (
-            ConsumerActionKind.UPDATE
-            if state.session.screen in (ConsumerScreen.UPDATES, ConsumerScreen.UPDATE_INPUTS)
-            else ConsumerActionKind.INSTALL
-        )
-        return ConsumerUiEvent(ConsumerUiEventKind.REQUEST_ACTION, action=action)
-    if key == "r" and state.session.screen in (
-        ConsumerScreen.INSTALLED_ARTIFACT_DETAILS,
-        ConsumerScreen.DOCTOR,
-    ):
-        return ConsumerUiEvent(
-            ConsumerUiEventKind.REQUEST_ACTION,
-            action=ConsumerActionKind.VERIFY_REPAIR,
-        )
-    if key == "r" and state.session.screen is MaintainerScreen.CANDIDATE_DETAILS:
-        return ConsumerUiEvent(
-            ConsumerUiEventKind.NAVIGATE,
-            screen=MaintainerScreen.CANDIDATE_LIFECYCLE,
-        )
-    if key == "u" and state.session.screen in (
-        ConsumerScreen.INSTALLED_ARTIFACT_DETAILS,
-        ConsumerScreen.INSTALLED_COLLECTION_DETAILS,
-    ):
-        return ConsumerUiEvent(
-            ConsumerUiEventKind.REQUEST_ACTION,
-            action=ConsumerActionKind.UNINSTALL,
-        )
-    # The mode belongs to the promotion under review, so only the screen whose question it is
-    # may change it.
-    if key == "m" and state.session.screen is MaintainerScreen.PROMOTION_MODE:
-        return ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_PROMOTION_MODE)
-    if key == "p" and state.session.screen is MaintainerScreen.VALIDATION:
-        return ConsumerUiEvent(ConsumerUiEventKind.NAVIGATE, screen=MaintainerScreen.POLICY_REVIEW)
-    if key == "d" and state.session.screen is MaintainerScreen.CANDIDATE_DETAILS:
-        return ConsumerUiEvent(ConsumerUiEventKind.NAVIGATE, screen=MaintainerScreen.CANDIDATE_DIFF)
-    # INV-202: the raw canonical file diff is secondary evidence somebody asks for, never the
-    # review itself, so it has its own key rather than riding along with the semantic diff.
-    if key == "f" and state.session.screen is MaintainerScreen.CANDIDATE_DIFF:
-        return ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_FILE_DIFF)
-    # The Product Specification gives `f` to filters. Screen 37 claimed it first for the raw file
-    # diff, and both keep it: one key means what the screen it was pressed on is about.
-    if key == "f" and state.session.screen is MaintainerScreen.CANDIDATES:
-        return ConsumerUiEvent(
-            ConsumerUiEventKind.NAVIGATE, screen=MaintainerScreen.CANDIDATE_FILTERS
-        )
-    # "Collections are candidates too", so the way into them is the Candidate surface rather than a
-    # separate place in the dashboard: `c` opens the Collection Candidates of the same scan.
-    if key == "c" and state.session.screen is MaintainerScreen.CANDIDATES:
-        return ConsumerUiEvent(
-            ConsumerUiEventKind.NAVIGATE, screen=MaintainerScreen.COLLECTION_CANDIDATES
-        )
-    # `add-registry` is a button screen 21 draws above its rows, not a subscription, so it is the
-    # one row here that cannot be fetched.  Asking for a refresh with no row under the cursor is
-    # not a request either: there would be nothing to name in the review.
-    if (
-        key == "s"
-        and state.session.screen is ConsumerScreen.REGISTRIES
-        and (state.focus or state.current_row) not in ("", "add-registry")
-    ):
-        return ConsumerUiEvent(
-            ConsumerUiEventKind.REQUEST_ACTION,
-            action=ConsumerActionKind.REGISTRY_SYNC,
-        )
-    if key == "s" and state.session.screen in (
-        MaintainerScreen.SOURCES,
-        MaintainerScreen.SOURCE_DETAILS,
-    ):
-        return ConsumerUiEvent(
-            ConsumerUiEventKind.REQUEST_ACTION,
-            action=ConsumerActionKind.SOURCE_SYNC,
-        )
-    if key == "enter" and state.session.screen is MaintainerScreen.BULK_PROMOTION:
-        return ConsumerUiEvent(
-            ConsumerUiEventKind.REQUEST_ACTION,
-            action=ConsumerActionKind.BULK_PROMOTION,
-        )
-    if key == "enter" and state.session.screen is MaintainerScreen.REGISTRY_DIFF:
-        return ConsumerUiEvent(
-            ConsumerUiEventKind.REQUEST_ACTION,
-            action=ConsumerActionKind.CANDIDATE_PROMOTION,
-        )
-    # Screen 46h's rows are stages of one run rather than artifacts, so Enter asks for the run the
-    # row under the cursor names instead of opening anything.
-    if key == "enter" and state.session.screen is MaintainerScreen.REGISTRY_REBUILD:
-        return ConsumerUiEvent(
-            ConsumerUiEventKind.REQUEST_ACTION,
-            action=ConsumerActionKind.REGISTRY_REBUILD,
-        )
-    if key == "enter" and state.session.screen is MaintainerScreen.ADOPTED_ARTIFACTS:
-        return ConsumerUiEvent(
-            ConsumerUiEventKind.REQUEST_ACTION,
-            action=ConsumerActionKind.REPOSITORY_UPSTREAM_CHECK,
-        )
     # Screen 45 keeps its receipt on screen after the commit, so Enter means "confirm" only while
     # there is something to confirm; once the write happened it means "go on to the registry".
     if (
@@ -1387,22 +1493,7 @@ def key_event(
         and state.session.screen is MaintainerScreen.REGISTRY_COMMIT
     ):
         return ConsumerUiEvent(ConsumerUiEventKind.NAVIGATE, screen=MaintainerScreen.REGISTRY)
-    if key == "enter" and state.session.screen in (
-        ConsumerScreen.READY,
-        ConsumerScreen.UPDATE_INPUTS,
-        ConsumerScreen.UNINSTALL_REVIEW,
-        ConsumerScreen.VERIFY_REPAIR,
-        ConsumerScreen.REGISTRY_REVIEW,
-        ConsumerScreen.REGISTRY_SYNC,
-        MaintainerScreen.SOURCE_SYNC,
-        MaintainerScreen.REGISTRY_COMMIT,
-        MaintainerScreen.ADOPTION_REVIEW,
-        # QA-024: these three reviews reach the execution boundary the same way every other one
-        # does.  Leaving them out made Enter mean nothing on the screen that says to press it.
-        MaintainerScreen.SOURCE_ADD_REVIEW,
-        MaintainerScreen.REGISTRY_INIT_REVIEW,
-        MaintainerScreen.REGISTRY_REBUILD_REVIEW,
-    ):
+    if key == "enter" and state.session.screen in _CONFIRM_SCREENS:
         return ConsumerUiEvent(ConsumerUiEventKind.CONFIRM_ACTION)
     if key == "enter" and detail is not None:
         return ConsumerUiEvent(ConsumerUiEventKind.NAVIGATE, screen=detail)

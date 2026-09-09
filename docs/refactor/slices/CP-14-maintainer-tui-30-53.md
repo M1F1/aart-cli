@@ -1204,3 +1204,13 @@ it, including the shell walk-through that would have caught the three.
 Gates on 2026-09-09: full unit suite green at 3,623 tests, `make typecheck`, `ruff check`,
 `ruff format --check` and `make docs-check` clean. `make quality`/`make integration` deferred at the
 operator's instruction while manual acceptance iterates.
+
+**The footer now follows the screen (D-202/QA-026, 2026-09-09).** The first always-visible legend
+was deliberately small, but it became false as Maintainer screens gained actions: screen 46 hid
+`n/b/s/u`, while the same footer advertised Space on Dashboard where Space cannot select anything.
+Contextual letter bindings now own the reducer event and human label together. Structural bindings
+derive from `_SELECTABLE`, `_SEARCHABLE`, the form set and the confirmation set. Frames draw those
+local keys before the universal movement/back/help/quit set, and Registry no longer repeats an
+`Actions:` block in its body. The five focused legend tests were RED against the fixed footer; a
+semantic mutation routing advertised `b Rebuild` to initialization was killed by the headless shell
+walk. The focused 238-test interaction/boundary set plus `mypy` and `ruff` are green.

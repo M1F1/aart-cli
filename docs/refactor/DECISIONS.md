@@ -4664,3 +4664,24 @@ first. Stated as a set of actions rather than a special case in the key handler,
 These are recorded together because they share a cause: every piece was tested where it was written,
 and nothing had pressed the keys in order. The shell walk-through in
 `tests/maintainer_registry_rebuild_test.py` is the test that would have caught all three.
+
+## D-202 — A key and the words that advertise it are one binding
+
+Date: 2026-09-09 · Increment: QA-026 manual acceptance · Status: accepted
+
+The accepted TUI catalog says contextual shortcuts appear only where relevant. A fixed navigation
+legend violated both halves: it hid the actions Maintainer screens had accumulated and advertised
+Space/Enter on screens where the reducer could do nothing with them. Moving each missing shortcut
+into another renderer table would repeat the drift behind D-201.
+
+A contextual letter binding therefore contains the key, its application event and its short label.
+`key_event` translates that value and the footer displays the same value. Structural keys do not
+receive a parallel table: selection, search, forms and confirmation derive from the same screen sets
+and action-review map the reducer already enforces. Each frame lists those local actions first and
+the universal movement/back/help/quit routes second. Modal search and quit prompts replace the
+footer with only the keys their mode accepts.
+
+This also settles where action instructions belong. Screen 46's `Actions:` body block was a second
+copy of its keyboard contract and is removed; the body describes Registry state, while the chrome
+describes how to act on that state. A headless test presses advertised `b Rebuild` and reaches 46h,
+so the claim is not held by matching label text alone.

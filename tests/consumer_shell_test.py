@@ -126,14 +126,13 @@ class ConsumerShellTest(unittest.TestCase):
         _, terminal = drive()
 
         first = terminal.frames[0]
-        legend = first[-1]
-        self.assertIn("↑/↓", legend)
-        self.assertIn("Enter", legend)
-        self.assertIn("Space", legend)
-        self.assertIn("select/toggle", legend)
-        self.assertIn("Esc", legend)
-        self.assertIn("?", legend)
-        self.assertIn("q", legend)
+        legend = "\n".join(line for line in first if line.startswith("Keys"))
+        self.assertIn("Enter Open", legend)
+        self.assertNotIn("Space", legend)
+        self.assertIn("↑/↓ Move", legend)
+        self.assertIn("Esc Back", legend)
+        self.assertIn("? Help", legend)
+        self.assertIn("q Quit", legend)
 
     def test_dashboard_explains_the_navigation_row_under_the_cursor(self):
         _, terminal = drive(DOWN)

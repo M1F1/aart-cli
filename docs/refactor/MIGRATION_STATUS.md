@@ -861,3 +861,13 @@ suite green at 3,623 tests with `make typecheck`, `ruff check`, `ruff format --c
 `.local/END_TO_END_ACCEPTANCE_M1F1_TUI.md` now drives the generated-file run from screen 46 in both
 places it used to shell out; the only remaining CLI `registry validate` is over a *fresh clone*
 after the merge, which is a different checkout than the maintainer session.
+
+**QA-026 (2026-09-09).** The fixed shell legend is replaced by a contextual footer (D-202): local
+actions first, universal movement/back/help/quit second, with structural keys derived from the same
+selectable/searchable/form/review classifications the reducer enforces. Letter bindings carry their
+event and display meaning together, so adding a key cannot silently omit it from the footer. Screen
+46's body-level shortcut copy is removed. The focused 238-test interaction/boundary set, `mypy` on
+the changed modules, and `ruff check`/`ruff format --check` are green; full gates remain deferred by
+the operator during the manual batch.
+
+**Next:** QA-027, Enter from completed result screens back to the list that began their sequence.
