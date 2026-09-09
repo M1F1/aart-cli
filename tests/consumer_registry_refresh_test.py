@@ -20,6 +20,9 @@ import tempfile
 import unittest
 from unittest import mock
 
+from hypothesis import given
+from hypothesis import strategies as st
+
 from agent_artifacts.application.consumer_ui import (
     ConsumerActionKind,
     ConsumerUiCommand,
@@ -89,6 +92,45 @@ class RegistryRefreshInteractionTest(unittest.TestCase):
 
         event = key_event("s", state)
         self.assertIsNone(event)
+
+    def test_stale_navigation_focus_cannot_override_the_visible_add_row(self) -> None:
+        state = _state(
+            ConsumerScreen.REGISTRIES,
+            rows=("add-registry", "company"),
+            focus=ConsumerScreen.REGISTRIES.value,
+        )
+
+        self.assertIsNone(key_event("s", state))
+
+    def test_refresh_targets_the_visible_registry_not_stale_navigation_focus(self) -> None:
+        state = _state(
+            ConsumerScreen.REGISTRIES,
+            rows=("add-registry", "company"),
+            cursor=1,
+            focus=ConsumerScreen.REGISTRIES.value,
+        )
+
+        event = key_event("s", state)
+        assert event is not None
+        reviewed, commands = reduce_consumer_ui(state, event)
+
+        self.assertIs(reviewed.session.screen, ConsumerScreen.REGISTRY_SYNC)
+        self.assertEqual(commands[0].focus, "company")
+
+    @given(st.text(alphabet=st.characters(exclude_characters="\r\n"), max_size=40))
+    def test_refresh_targets_the_visible_registry_for_every_stale_focus(self, focus: str) -> None:
+        state = _state(
+            ConsumerScreen.REGISTRIES,
+            rows=("add-registry", "company"),
+            cursor=1,
+            focus=focus,
+        )
+
+        event = key_event("s", state)
+        assert event is not None
+        _reviewed, commands = reduce_consumer_ui(state, event)
+
+        self.assertEqual(commands[0].focus, "company")
 
     def test_refresh_is_not_offered_where_there_is_no_row_under_the_cursor(self) -> None:
         state = _state(ConsumerScreen.REGISTRIES)

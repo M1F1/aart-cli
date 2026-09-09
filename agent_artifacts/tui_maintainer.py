@@ -696,9 +696,27 @@ def render_maintainer_promotion_review(
         f"{view.artifact}@{view.version} — {_human(view.state.value)}",
         f"Target registry: {view.target_registry}",
         f"Promotion mode: {view.mode}",
-        f"Source revision: {_short(view.source_revision, profile)}",
-        f"Canonical digest: {_short(view.canonical_digest, profile)}",
+        "",
+        "Promotion choices:",
     ]
+    for choice in view.mode_choices:
+        default = " (enterprise default)" if choice.enterprise_default else ""
+        selected = " — selected" if choice.selected else ""
+        lines.extend(
+            (
+                f"{'●' if choice.selected else '○'} {choice.label}{default}{selected}",
+                f"  {choice.registry_ownership}",
+                f"  {choice.payload_availability}",
+                f"  {choice.upstream_relationship}",
+            )
+        )
+    lines.extend(
+        (
+            "",
+            f"Source revision: {_short(view.source_revision, profile)}",
+            f"Canonical digest: {_short(view.canonical_digest, profile)}",
+        )
+    )
     if view.registry_revision is not None:
         lines.append(f"Registry baseline: {_short(view.registry_revision, profile)}")
     if not view.confirmable:

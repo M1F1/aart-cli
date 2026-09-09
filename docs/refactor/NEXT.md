@@ -1426,9 +1426,24 @@ focus; help has one binding per line; the footer is one adjacent, width-bounded 
 with contextual actions first (D-216). Five independent mutations killed; 93 nearest tests plus 182
 subtests are green.
 
-**Exact next action:** CP-19 step 13 — QA-039/B-105. Explain Vendored and Referenced ownership,
-payload availability and upstream consequences before confirmation, and label `m` as an explicit
-toggle rather than an unexplained mode name. Then step 14 and the full gates once at step 15.
+**CP-19 steps 13–14 are DONE — QA-039/B-105 and QA-043/B-106 closed (2026-09-09).** Promotion
+Review now projects both domain-owned mode explanations, marks the active mode and Vendored's
+enterprise default, and labels `m` as `Toggle mode` (`D-217`). Registries now projects only
+`registry-git` connections; filtering cannot hide a later Registry, and refresh availability plus
+command focus both follow the visible row (`D-218`). The whole focused cross-family set is green at
+1513 tests. Domain-default, projection-filter and stale-focus mutations each turn their named test
+red.
+
+**CP-19 step 15 checkpoint.** Final `make quality` is green across all nine gates: 3653 tests, one
+skipped, 85.38% branch coverage, packaging/docs/secret checks clean. Two standalone
+`make integration` runs reached 380/381 and then the real macOS Keychain E2E failed with
+Security.framework `errSecParam`; that exact test passed alone and twice inside `make quality`.
+B-108 records the order-dependent gate failure and the diagnostic narrowing.
+
+**Exact next action:** resolve B-108 without skipping or weakening the real Keychain test, then run
+`make integration` to green. After that, hand the Fixed list — including QA-039 and QA-043 — back
+to the operator for manual retest. Do not reopen the completed CP-19 implementation unless that
+retest supplies new evidence.
 
 ## Critical boundaries for this slice
 

@@ -56,7 +56,11 @@ from agent_artifacts.domain.python_runtime import (
     RequirementsFile,
     spec_descriptor_path,
 )
-from agent_artifacts.domain.registry import PromotionMode, RegistryArtifactVersion
+from agent_artifacts.domain.registry import (
+    PromotionMode,
+    RegistryArtifactVersion,
+    promotion_mode_consequences,
+)
 from agent_artifacts.domain.result import Err
 from agent_artifacts.domain.selection import ArtifactRequest, ArtifactSelection
 from agent_artifacts.protocol.authoring import read_package_description
@@ -93,6 +97,7 @@ __all__ = [
     "MaintainerSourceSyncReviewView",
     "MaintainerSourceView",
     "MaintainerPolicyReviewView",
+    "MaintainerPromotionModeView",
     "MaintainerPromotionReviewView",
     "MaintainerRegistryChangeView",
     "MaintainerRegistryCommitView",
@@ -2874,6 +2879,19 @@ def project_maintainer_policy_review(
 
 
 @dataclass(frozen=True, slots=True)
+class MaintainerPromotionModeView:
+    """One typed promotion choice and the consequences the Registry contract assigns it."""
+
+    mode: PromotionMode
+    label: str
+    selected: bool
+    enterprise_default: bool
+    registry_ownership: str
+    payload_availability: str
+    upstream_relationship: str
+
+
+@dataclass(frozen=True, slots=True)
 class MaintainerPromotionReviewView:
     """Screen 41: what confirming a promotion would write, or why it cannot be confirmed.
 
@@ -2888,6 +2906,7 @@ class MaintainerPromotionReviewView:
     target_registry: str
     state: CandidateState
     mode: str
+    mode_choices: tuple[MaintainerPromotionModeView, ...]
     canonical_digest: str
     source_revision: str
     review_digest: str | None
@@ -2929,6 +2948,18 @@ def project_maintainer_promotion_review(
         "target_registry": candidate.target_registry.value,
         "state": validation.state,
         "mode": mode.value,
+        "mode_choices": tuple(
+            MaintainerPromotionModeView(
+                consequence.mode,
+                consequence.label,
+                consequence.mode is mode,
+                consequence.enterprise_default,
+                consequence.registry_ownership,
+                consequence.payload_availability,
+                consequence.upstream_relationship,
+            )
+            for consequence in (promotion_mode_consequences(item) for item in PromotionMode)
+        ),
         "canonical_digest": str(candidate.canonical_digest),
         "source_revision": candidate.artifact.provenance.revision,
     }

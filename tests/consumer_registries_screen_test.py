@@ -1,15 +1,14 @@
-"""Screen 21 lists the configured sources, and says why a native Source offers nothing.
+"""Screen 21 lists configured Registry connections, never authoring Sources.
 
 Screen 21 was reachable but empty in the composed application, for the same reason screens 02–04a
 once were: nothing on the composition path ever projected the configured sources into
 ``ConsumerScreens.registries``.  So a person opening the canonical shell saw no registries at all,
 and the dashboard said "0 registries", while their configured registries sat on disk beside it.
 
-The second half is B-038.  Under INV-026 a Marketplace projects configured *registries*, so an
-enabled ``SourceKind.SOURCE_GIT`` or ``SOURCE_LOCAL`` contributes its health and offers nothing.
-Listing it with a bare "0 artifacts" and an advertised sync that "refreshes Marketplace
-availability" describes an emptiness as a fault and an action that cannot have that effect.  A
-Source is where content comes from; a registry is what approves it, and the row has to say so.
+Under Product Specification 161.7 and INV-199, this consumer screen is the list of Registry
+connections that determine Marketplace availability. Authoring Sources belong to Maintainer
+Sources; projecting them here advertises a detail action screen 21 cannot route and lets stale
+screen focus leak into the attempted action.
 """
 
 from __future__ import annotations
@@ -20,6 +19,7 @@ import os
 import pathlib
 import tempfile
 import unittest
+from dataclasses import replace
 
 from agent_artifacts.application.consumer_views import (
     ConsumerScreen,
@@ -30,6 +30,7 @@ from agent_artifacts.configuration.model import SourceKind
 from agent_artifacts.domain.identifiers import SourceId
 from agent_artifacts.domain.result import Ok
 from agent_artifacts.io.source_store import publish_source_snapshot
+from agent_artifacts.marketplace.model import MarketplaceCatalog
 from agent_artifacts.sources.model import (
     SourcePublishCommand,
     ValidatedSourceCandidate,
@@ -93,17 +94,13 @@ class ConfiguredRegistriesScreenTest(unittest.TestCase):
 
     # -- the projection ------------------------------------------------------ #
 
-    def test_the_projection_decides_which_rows_are_registries_rather_than_the_renderer(
-        self,
-    ) -> None:
-        """A renderer that split `kind` on a string would re-derive this once per screen."""
+    def test_the_projection_contains_only_registry_connections(self) -> None:
 
         offers = self._offers()
         rows = {item.alias: item for item in offers.registries}
 
-        self.assertEqual(sorted(rows), ["authors", "company"])
+        self.assertEqual(sorted(rows), ["company"])
         self.assertTrue(rows["company"].is_registry)
-        self.assertFalse(rows["authors"].is_registry)
 
     def test_a_local_source_is_not_a_registry_either(self) -> None:
         local = configured_source("workspace", SourceKind.SOURCE_LOCAL)
@@ -111,7 +108,21 @@ class ConfiguredRegistriesScreenTest(unittest.TestCase):
             self._catalog(effective_configuration((local,), default_registry=None))
         )
 
-        self.assertEqual([item.is_registry for item in rows], [False])
+        self.assertEqual(rows, ())
+
+    def test_an_authoring_source_before_a_registry_does_not_hide_the_registry(self) -> None:
+        catalog = self._catalog(self.effective)
+        sources = {item.alias.value: item for item in catalog.sources}
+        source_first = MarketplaceCatalog(
+            (
+                replace(sources["authors"], is_default=True),
+                replace(sources["company"], is_default=False),
+            ),
+            (),
+        )
+        rows = project_registries(source_first)
+
+        self.assertEqual([item.alias for item in rows], ["company"])
 
     def _catalog(self, effective):
         from agent_artifacts.io.configured_offers import read_configured_marketplace
@@ -122,16 +133,19 @@ class ConfiguredRegistriesScreenTest(unittest.TestCase):
 
     # -- what the row says --------------------------------------------------- #
 
-    def test_a_native_source_row_says_why_it_offers_nothing_and_advertises_no_sync(self) -> None:
+    def test_an_authoring_source_never_becomes_an_actionable_screen_21_row(self) -> None:
         offers = self._offers()
-        native = next(item for item in offers.registries if item.alias == "authors")
+        source = CanonicalScreenSource(
+            screens_from(_machine(), marketplace=offers.artifacts, registries=offers.registries)
+        )
+        state = run_consumer_shell(
+            source, FakeTerminal(ord("q")), state=_at(ConsumerScreen.REGISTRIES)
+        )
 
-        drawn = "\n".join(render_registry(native, PresentationProfile.FAST))
+        drawn = "\n".join(frame(source, state))
 
-        self.assertIn("authoring Source", drawn)
-        self.assertIn("promotes", drawn)
-        self.assertNotIn("sync", drawn.lower())
-        self.assertEqual(native.actions, ("details",))
+        self.assertNotIn("authors", state.rows)
+        self.assertNotIn("An authoring Source, not a registry", drawn)
 
     def test_a_registry_row_is_unchanged_and_still_separates_sync_from_update(self) -> None:
         offers = self._offers()
@@ -157,7 +171,7 @@ class ConfiguredRegistriesScreenTest(unittest.TestCase):
             source, FakeTerminal(ord("q")), state=_at(ConsumerScreen.REGISTRIES)
         )
 
-        self.assertEqual(state.rows, ("add-registry", "company", "authors"))
+        self.assertEqual(state.rows, ("add-registry", "company"))
 
     def test_the_dashboard_counts_registries_rather_than_every_configured_source(self) -> None:
         """ "2 registries" over one registry and one authoring Source would be a false count."""

@@ -258,7 +258,7 @@ class FailedActionShellTest(unittest.TestCase):
 
             self.assertIn("This run stopped", stopped)
             self.assertIn("lock: refused", stopped)
-            self.assertIn("Enter Back to list", stopped)
+            self.assertIn("[Enter] Back to list", stopped)
             self.assertNotIn("Enter Confirm", stopped)
             self.assertNotIn("press Enter to start it", stopped)
             # The fourth Enter is the way out the screen advertises, and it has to work.

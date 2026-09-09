@@ -129,23 +129,22 @@ class ConsumerOverviewTest(unittest.TestCase):
         self.assertNotIn("reinstall", rendered_doctor.lower())
 
     def test_registries_offer_sync_but_never_artifact_update(self) -> None:
-        """And an authoring Source offers neither, because it has no availability to refresh."""
+        """Authoring Sources stay on the Maintainer surface, outside this consumer projection."""
 
         registries = {item.alias: item for item in project_registries(_catalog())}
 
-        self.assertEqual(sorted(registries), ["company", "team"])
-        self.assertEqual(sum(item.artifact_count for item in registries.values()), 3)
+        self.assertEqual(sorted(registries), ["company"])
+        self.assertEqual(sum(item.artifact_count for item in registries.values()), 1)
         self.assertEqual(registries["company"].actions, ("details", "sync"))
-        self.assertEqual(registries["team"].actions, ("details",))
         rendered = "\n".join(
             line
             for registry in registries.values()
             for line in render_registry(registry, PresentationProfile.FAST)
         )
-        self.assertIn("2 artifacts", rendered)
+        self.assertIn("1 artifact", rendered)
         self.assertNotIn("Actions: update", rendered)
         self.assertIn("does not update installed artifacts", rendered)
-        self.assertIn("An authoring Source, not a registry.", rendered)
+        self.assertNotIn("An authoring Source, not a registry.", rendered)
 
     def test_settings_default_to_fast_and_hide_maintainer_navigation(self) -> None:
         settings = ConsumerSettings()

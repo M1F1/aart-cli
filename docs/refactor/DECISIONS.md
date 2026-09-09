@@ -5061,3 +5061,34 @@ bindings into adjacent `[Key] Action` lines bounded to the content measure, with
 The renderer still receives typed views and key bindings; none of these primitives interprets a key,
 loads state or invents an action. Five independent mutations prove each visible grouping/focus claim
 is held rather than merely appearing in one snapshot.
+
+## D-217 — Promotion mode consequences belong to the domain and every review shows both choices
+
+Date: 2026-09-09 · Increment: CP-19 step 13, QA-039/B-105 · Status: accepted
+
+`PromotionMode` changes more than a label. Vendored makes the Registry own the canonical manifest
+and declared payload, keeps installation independent of upstream disappearance and treats upstream
+as provenance for later checks. Referenced stores a pinned source revision rather than payload,
+makes installation depend on upstream availability and is the weaker mode policy may reject.
+Those are Product Specification 75/80/164.7 semantics, so `promotion_mode_consequences` owns them
+beside the enum rather than a renderer duplicating policy prose.
+
+Promotion Review projects every enum member as a typed choice with its selected state. The renderer
+therefore shows both consequences before confirmation, marks Vendored as the enterprise default and
+keeps the active value explicit while `m` toggles it. The key label is `Toggle mode`, which names
+the event instead of presenting the current mode as though it were an action.
+
+## D-218 — Screen 21 contains Registry connections, and Registry actions own the visible row
+
+Date: 2026-09-09 · Increment: CP-19 step 14, QA-043/B-106 · Status: accepted
+
+Product Specification 161.7 assigns Marketplace availability to Registry connections. Authoring
+Sources have their own Maintainer surface and are not alternate Registry rows. Screen 21 therefore
+projects only `registry-git` configuration entries; it does not invent a Source detail route or
+advertise a Registry-only action on a different domain. Filtering uses `continue`, not `break`, so
+a Source ordered before a Registry cannot hide the Registry that follows it.
+
+Registry Sync is also a row-owned request. Both its enabled state and its command subject derive
+from `current_row`, never a stale `focus` retained from the screen that opened Registries. This
+keeps the visible cursor, advertised action and eventual sync target on one stable identity while
+leaving Source synchronization and its domain untouched.

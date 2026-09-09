@@ -703,6 +703,51 @@ class PromotionModeStateTest(unittest.TestCase):
         self.assertIn("Promotion mode: referenced", referenced)
         self.assertNotEqual(vendored, referenced)
 
+    def test_both_choices_explain_ownership_payload_and_upstream_before_confirmation(self) -> None:
+        for selected, selected_label, other_label in (
+            (PromotionMode.VENDORED, "Vendored", "Referenced"),
+            (PromotionMode.REFERENCED, "Referenced", "Vendored"),
+        ):
+            with self.subTest(selected=selected):
+                drawn = "\n".join(
+                    frame(
+                        self.source,
+                        _reload(
+                            self.source,
+                            self._on(
+                                MaintainerScreen.PROMOTION_MODE,
+                                promotion_mode=selected,
+                            ),
+                            entering=True,
+                        ),
+                    )
+                )
+
+                selected_suffix = (
+                    " (enterprise default) — selected"
+                    if selected is PromotionMode.VENDORED
+                    else " — selected"
+                )
+                self.assertIn(f"● {selected_label}{selected_suffix}", drawn)
+                self.assertIn(f"○ {other_label}", drawn)
+                self.assertIn("Registry owns the canonical manifest and declared payload", drawn)
+                self.assertIn("remain available if upstream disappears", drawn)
+                self.assertIn("Registry stores a pinned source revision, not a payload copy", drawn)
+                self.assertIn("depend on upstream remaining available", drawn)
+
+    def test_the_projected_choices_come_from_the_typed_mode_distinction(self) -> None:
+        review = self.views.promotion(self.candidate, PromotionMode.VENDORED)
+        assert review is not None
+
+        self.assertEqual(
+            tuple(choice.mode for choice in review.mode_choices),
+            tuple(PromotionMode),
+        )
+        self.assertEqual(
+            [choice.selected for choice in review.mode_choices],
+            [True, False],
+        )
+
     def test_m_toggles_the_mode_and_only_where_the_mode_is_the_question(self) -> None:
         state = self._on(MaintainerScreen.PROMOTION_MODE)
 

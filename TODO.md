@@ -329,17 +329,6 @@ Each new entry records:
       uninstall among them), so the help is harder to read than the footer it expands.
       Fix: `D-216`. `Keyboard help` renders one `[Key] Action` (or one related key pair) per line.
 
-- [ ] **QA-039 — Vendored and Referenced promotion modes are unexplained.**
-      Stage: choosing how a Candidate enters a Registry
-      Surface: Promotion Mode and Promotion Review
-      Severity: high
-      Blocks current stage: no, but the choice changes what the Registry owns and can install
-      Expected: concise definitions and consequences for both modes, the currently selected mode,
-      and a key label that says what `m` changes
-      Observed: the screen names `vendored` or `referenced` without explaining the ownership,
-      payload and upstream consequences. Pressing `m` silently flips to the other value; for
-      example it sets vendored when referenced was displayed.
-
 - [x] **QA-040 — Registry rows are an unreadable wall of text.**
       Stage: reviewing configured availability
       Surface: Registries (21)
@@ -376,20 +365,46 @@ Each new entry records:
       Fix: `D-216`. The screen passes its stable row identity into the card renderer; exactly the
       focused Registry head receives `>`.
 
+### Fixed — awaiting manual retest
+
+- [ ] **QA-039 — Vendored and Referenced promotion modes are unexplained.**
+      Stage: choosing how a Candidate enters a Registry
+      Surface: Promotion Mode and Promotion Review
+      Severity: high
+      Blocks current stage: no, but the choice changes what the Registry owns and can install
+      Expected: concise definitions and consequences for both modes, the currently selected mode,
+      and a key label that says what `m` changes
+      Observed: the screen named `vendored` or `referenced` without explaining ownership, payload
+      availability or the upstream relationship, and labelled `m` only as `Mode`.
+      Fix: `D-217`. The domain now owns the consequences of both promotion modes. Promotion Review
+      projects both choices, marks the active one, labels Vendored as the enterprise default and
+      explains Registry ownership, install availability and upstream dependence before confirmation.
+      The footer names `m` as `Toggle mode`.
+      Evidence: projection and renderer tests were RED on the missing choices and explanation. A
+      semantic mutation removing Vendored's enterprise-default fact turns the exact explanation
+      test red; the focused 1513-test family is green.
+      Retest: open a Candidate promotion review, read both complete choices, press `m`, and confirm
+      that only the selected marker changes while both consequence explanations remain visible.
+
 - [ ] **QA-043 — Registries exposes authoring Sources as actionable rows and leaks an internal error.**
       Stage: browsing consumer Registry connections
       Surface: Registries (21)
       Severity: high
       Blocks current stage: no
-      Reproduction: configure one `registry-git` plus authoring Sources, open Registries and try to
-      open an authoring Source row
-      Expected: the Registry screen either contains only Registry connections or makes Source rows
-      deliberately non-actionable and routes their detail to Maintainer Sources without ambiguity
-      Observed: `aart-test-mcp` and `superpowers-test` appear as connected rows with `Actions:
-      details`, but Enter cannot open them and the screen reports the internal-state phrase
-      `no connected registry here is 21-registries`.
-
-### Fixed — awaiting manual retest
+      Reproduction: configure one `registry-git` plus authoring Sources, then open Registries
+      Expected: the Registry screen contains Registry connections only; authoring Sources remain on
+      Maintainer Sources and cannot advertise a Registry-only detail action here
+      Observed: authoring Sources appeared as connected rows with `Actions: details`, but Enter could
+      not open them and exposed `no connected registry here is 21-registries`.
+      Fix: `D-218`. The screen-21 projection now admits only `registry-git` connections. Its sync
+      request always targets the visible Registry row rather than stale navigation focus; Source
+      records remain available through their own Maintainer surface.
+      Evidence: an authoring Source placed before a Registry cannot hide the later Registry, and a
+      Hypothesis property holds the sync target for every single-line stale focus. Mutating the
+      filter from `continue` to `break`, or removing Registry Sync from the row-owned actions, turns
+      the corresponding test red. The focused 1513-test family is green.
+      Retest: configure Registry and authoring Source entries, open Registries, and confirm only the
+      Registry connection appears and `s` refreshes the visibly focused Registry.
 
 - [ ] **QA-034 — A Git-merged promotion never becomes visible in Marketplace.**
       Stage: first clean Consumer after Registry PR #1 was merged and synchronized

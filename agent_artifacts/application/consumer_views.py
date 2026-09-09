@@ -1716,11 +1716,10 @@ def _settings_invalid(message: str) -> Diagnostic:
 
 @dataclass(frozen=True, slots=True)
 class RegistryView:
-    """One configured source as screen 21 shows it.
+    """One configured Registry connection as screen 21 shows it.
 
-    ``is_registry`` is decided here rather than left for each renderer to re-derive by taking
-    ``kind`` apart: under INV-026 a Marketplace projects configured *registries*, so whether this
-    row can offer anything at all is a property of the row, not a string a screen inspects.
+    Authoring Sources belong to Maintainer screen 31. Under 161.7 and INV-199, projecting one here
+    would make a discovery subscription look like a consumer availability boundary.
     """
 
     alias: str
@@ -1743,8 +1742,9 @@ def project_registries(catalog: MarketplaceCatalog) -> tuple[RegistryView, ...]:
         raise ValueError("registry projection needs a marketplace catalog")
     rows = []
     for source in catalog.sources:
+        if source.kind is not SourceKind.REGISTRY_GIT:
+            continue
         source_items = tuple(item for item in catalog.items if item.source.alias == source.alias)
-        is_registry = source.kind is SourceKind.REGISTRY_GIT
         availability = (
             "connected" if source.health.value in {"healthy", "stale"} else "not-connected"
         )
@@ -1761,10 +1761,8 @@ def project_registries(catalog: MarketplaceCatalog) -> tuple[RegistryView, ...]:
                 source.resolved_revision,
                 None if source.snapshot_digest is None else str(source.snapshot_digest),
                 tuple(sorted({item.trust.kind.value for item in source_items})),
-                # An authoring Source has no Marketplace availability to refresh, so offering a
-                # sync here would advertise an action with the effect the row cannot have.
-                ("details", "sync") if is_registry else ("details",),
-                is_registry,
+                ("details", "sync"),
+                True,
             )
         )
     return tuple(rows)

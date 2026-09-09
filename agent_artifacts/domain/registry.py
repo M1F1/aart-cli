@@ -14,6 +14,46 @@ class PromotionMode(str, Enum):
     REFERENCED = "referenced"
 
 
+@dataclass(frozen=True, slots=True)
+class PromotionModeConsequences:
+    """The ownership and availability contract selected by one promotion mode."""
+
+    mode: PromotionMode
+    label: str
+    enterprise_default: bool
+    registry_ownership: str
+    payload_availability: str
+    upstream_relationship: str
+
+
+_PROMOTION_MODE_CONSEQUENCES: dict[PromotionMode, PromotionModeConsequences] = {
+    PromotionMode.VENDORED: PromotionModeConsequences(
+        PromotionMode.VENDORED,
+        "Vendored",
+        True,
+        "Registry owns the canonical manifest and declared payload.",
+        "Installs use Registry-owned content and remain available if upstream disappears.",
+        "Upstream is provenance for future checks, not an installation dependency.",
+    ),
+    PromotionMode.REFERENCED: PromotionModeConsequences(
+        PromotionMode.REFERENCED,
+        "Referenced",
+        False,
+        "Registry stores a pinned source revision, not a payload copy.",
+        "Installs depend on upstream remaining available.",
+        "This is the weaker mode and policy may refuse it.",
+    ),
+}
+
+
+def promotion_mode_consequences(mode: PromotionMode) -> PromotionModeConsequences:
+    """Return the product contract a promotion choice carries, independently of its renderer."""
+
+    if not isinstance(mode, PromotionMode):
+        raise ValueError("promotion consequences need a promotion mode")
+    return _PROMOTION_MODE_CONSEQUENCES[mode]
+
+
 class PublicationStage(str, Enum):
     PROMOTED_LOCAL = "promoted-local"
     PUBLISHED = "published"

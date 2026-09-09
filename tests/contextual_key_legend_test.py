@@ -75,7 +75,7 @@ class ContextualKeyLegendTest(unittest.TestCase):
             MaintainerScreen.SCAN_RESULT: ("[a] Adopt",),
             MaintainerScreen.ADOPTED_ARTIFACTS: ("[Enter] Check upstream",),
             MaintainerScreen.UPSTREAM_CHECK: ("[a] Review new version",),
-            MaintainerScreen.PROMOTION_MODE: ("[m] Mode",),
+            MaintainerScreen.PROMOTION_MODE: ("[m] Toggle mode",),
             MaintainerScreen.VALIDATION: ("[p] Promote",),
         }
 

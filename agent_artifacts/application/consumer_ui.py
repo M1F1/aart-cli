@@ -808,7 +808,14 @@ ACTION_REQUEST_SCREENS: frozenset[ApplicationScreen] = frozenset(
 #: the screen they are requested from. Screen 46h's rows are stages of one run, and the registry
 #: alias focused back on screen 46 is not one of them: inheriting it would ask for a run nobody
 #: chose, which is what a shell walk-through of the keys found it doing (`QA-025`).
-_ROW_IS_THE_REQUEST = frozenset({ConsumerActionKind.REGISTRY_REBUILD})
+_ROW_IS_THE_REQUEST = frozenset(
+    {
+        ConsumerActionKind.REGISTRY_REBUILD,
+        # Navigation focus can still name the screen that opened this list. A Registry refresh is
+        # always about the visible row, never that stale workflow subject (`QA-043`).
+        ConsumerActionKind.REGISTRY_SYNC,
+    }
+)
 
 
 def _request_action(
@@ -1350,7 +1357,7 @@ _SCREEN_BINDINGS: dict[ApplicationScreen, tuple[_ScreenBinding, ...]] = {
         _navigate_binding("p", "Promote", MaintainerScreen.POLICY_REVIEW),
     ),
     MaintainerScreen.PROMOTION_MODE: (
-        _event_binding("m", "Mode", ConsumerUiEventKind.TOGGLE_PROMOTION_MODE),
+        _event_binding("m", "Toggle mode", ConsumerUiEventKind.TOGGLE_PROMOTION_MODE),
     ),
     MaintainerScreen.REGISTRY: (
         # Where a finished promotion lands, so the next one starts one key away instead of behind
@@ -1422,7 +1429,7 @@ _CONFIRM_SCREENS = frozenset(
 
 def _binding_enabled(binding: _ScreenBinding, state: ConsumerUiState) -> bool:
     if binding.event.action is ConsumerActionKind.REGISTRY_SYNC:
-        return (state.focus or state.current_row) not in ("", "add-registry")
+        return state.current_row not in ("", "add-registry")
     return True
 
 

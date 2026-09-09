@@ -2724,7 +2724,12 @@ and need renderer/property evidence across screen families.
 
 ## B-105 — Promotion mode names a storage strategy without explaining the decision
 
-Found: manual TUI acceptance, QA-039 (2026-09-09) · Severity: high · Status: open
+Found: manual TUI acceptance, QA-039 (2026-09-09) · Severity: high · Status: CLOSED by CP-19 step 13
+
+**Closed (2026-09-09).** `promotion_mode_consequences` is the domain-owned explanation of both
+choices. The Maintainer projection carries every choice and its selected state, and the review
+renders ownership, payload availability and upstream dependence before confirmation. Vendored is
+identified as the enterprise default and the footer says `Toggle mode` (`D-217`).
 
 `vendored` and `referenced` change ownership, installed payload availability and the relationship to
 upstream, yet Promotion Mode displays only the label. `m Mode` silently toggles it; when Referenced
@@ -2735,7 +2740,12 @@ renderer.
 
 ## B-106 — Registries advertises details for authoring Sources that it cannot open
 
-Found: manual TUI acceptance, QA-043 (2026-09-09) · Severity: high · Status: open
+Found: manual TUI acceptance, QA-043 (2026-09-09) · Severity: high · Status: CLOSED by CP-19 step 14
+
+**Closed (2026-09-09).** Product Specification 161.7 defines screen 21 as Registry connections, so
+`project_registries` now excludes every authoring Source kind. The projection continues after a
+Source so ordering cannot hide a later Registry. Registry Sync is a row-owned request and its
+availability and command focus both use the visible row, never stale navigation focus (`D-218`).
 
 Screen 21 includes `source-git` authoring Sources beside `registry-git` connections and prints
 `Actions: details.` for them. Its Enter router, however, accepts only `[ Add Registry ]`; attempting
@@ -2765,3 +2775,22 @@ shrink order in `_column_widths` when several columns compete, `_ellipsize` at w
 The ordering and grouping functions added by step 5 (`separate`, `action_prompt`,
 `is_action_prompt`) are held; the survivors remaining in them are exact `ValueError` message texts,
 which is `make mutants` noise rather than a finding (D-134).
+
+## B-108 — The real macOS Keychain E2E is order-dependent in the integration suite
+
+Found: CP-19 step 15 full verification (2026-09-09) · Severity: high · Status: promoted to CP-19
+step 15
+
+Two independent `make integration` runs completed 380 of 381 E2E tests and failed while
+`mcp_stdio_e2e_test` asked `/usr/bin/security create-keychain` to create a unique temporary
+Keychain. Security.framework returned `errSecParam` (`-50`, process status 206): `One or more
+parameters passed to a function were not valid.` The same test passed alone in 2.151 seconds and
+the identical E2E was green twice inside the successful final `make quality` run.
+
+The failure is not a leaked process environment or working directory: a diagnostic prefix run
+reproduced it after 274 earlier E2Es with no changes to `os.environ`, the repository working
+directory or `tempfile.tempdir`. An immediate retry with the same valid unique path also failed.
+Smaller module combinations can pass, while the full integration ordering reproduces the failure.
+Do not hide it with a platform skip or claim the separate gate is green. Resolve the Keychain test
+isolation, then rerun `make integration`; the product assertions and CP-19 focused tests are not
+implicated.

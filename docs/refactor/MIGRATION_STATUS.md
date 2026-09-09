@@ -1071,3 +1071,20 @@ records, help and footer chrome. Registry card heads show the stable focus; help
 line; the footer is one bounded keycap block with local actions before global navigation (`D-216`).
 Five independent mutations killed. The 93 nearest tests plus 182 subtests and `ruff` are green;
 step 13 is next and full gates remain deferred to step 15.
+
+**CP-19 steps 13–14 complete — QA-039/B-105 and QA-043/B-106 closed (2026-09-09).** Promotion-mode
+ownership, availability and upstream consequences now come from the domain and both choices are
+visible before confirmation, with Vendored identified as the enterprise default (`D-217`). Screen
+21 is Registry-only; a preceding Source cannot hide a Registry and refresh always targets the
+visible connection rather than stale navigation focus (`D-218`). The 1513-test cross-family set is
+green, with targeted semantic mutations killed and the stale-focus claim stated as a Hypothesis
+property.
+
+**CP-19 step 15 checkpoint (2026-09-09).** `make quality` is green across all nine gates: 3653
+tests, one skipped, 85.38% branch coverage, packaging, docs and secret-shape checks clean. The
+separate integration gate is not recorded green: two 381-test runs completed 380 product scenarios
+and failed when the real macOS Keychain test received Security.framework `errSecParam`. The same
+test passed alone and twice inside `make quality`; diagnostic prefix runs found no environment,
+working-directory or tempdir leak and immediate retry did not recover. B-108 is promoted into step
+15. CP-19 implementation is complete, but the slice awaits that clean standalone gate and operator
+manual retest.

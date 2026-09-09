@@ -1,6 +1,6 @@
 # CP-19 — Manual TUI acceptance hardening
 
-Status: IN PROGRESS — paused for the operator's manual discovery run
+Status: IMPLEMENTED — awaiting a clean standalone integration gate (B-108) and operator retest
 
 ## Goal
 
@@ -94,15 +94,18 @@ internal state model.
    Registry records and footer chrome. Help is one key or related pair per line; the footer is one
    adjacent width-bounded `[Key] Action` block with contextual actions first; the Registry card head
    matching the stable cursor receives `>` (D-216).
-13. **Promotion mode explanation (QA-039) — TODO.** Explain Vendored and Referenced ownership,
-   payload and upstream consequences before confirmation; label `m` as a toggle with the active
-   value visible.
-14. **Registry/Source row truth (QA-043) — TODO.** Decide the screen-21 representation from the
-   Product Specification distinction: authoring Sources may not advertise a detail action whose
-   route accepts only Registry connections, and no internal screen enum may enter user output.
-15. **Batch verification — TODO.** Each implementation increment gets a real RED/mutation and focused
-   suites. Only after the operator hands the batch back run full `make quality` and
-   `make integration`, then return the fixed items for manual retest.
+13. **Promotion mode explanation (QA-039) — DONE.** Domain-owned consequences define Vendored and
+   Referenced ownership, payload availability and upstream dependence. Promotion Review shows both
+   choices, marks the active one and Vendored's enterprise default, and labels `m` as `Toggle mode`
+   (D-217).
+14. **Registry/Source row truth (QA-043) — DONE.** Screen 21 projects only `registry-git`
+   connections. Registry Sync availability and command focus both use the visible row, so stale
+   navigation focus cannot target or enable another subject (D-218).
+15. **Batch verification — PARTIAL.** Every increment has a real RED/targeted mutation and the
+   1513-test focused family is green. Final `make quality` is green across all nine gates: 3653
+   tests, one skipped and 85.38% branch coverage. Two standalone `make integration` runs completed
+   380/381 E2Es but the real macOS Keychain test failed in Security.framework with `errSecParam`;
+   the same test passed alone and twice inside `make quality`. B-108 owns the test-isolation blocker.
 
 ## Current manual checkpoint
 
@@ -197,6 +200,26 @@ two help bindings and removing keycaps from the footer. The 93 nearest layout/sh
 plus 182 subtests are green. Existing contextual-footer tests now locate the shared footer boundary
 instead of depending on removed `Keys here`/`Keys always` headings.
 
+Step 13 was RED on the missing mode choices, consequence text and honest toggle label. The domain
+now owns the complete meaning of both modes and the projection carries every enum member plus its
+selected state; the renderer only presents those facts. Changing Vendored's enterprise-default
+fact turns the exact explanation test red. The focused cross-family suite is green at 1513 tests
+(`D-217`).
+
+Step 14 was RED on authoring Sources appearing as actionable Registry rows and on stale navigation
+focus overriding the visible Registry sync target. Screen 21 now admits Registry connections only.
+A Source ordered before a Registry cannot hide it, and a Hypothesis property holds the command
+target for every single-line stale focus. `continue -> break` and removing Registry Sync from the
+row-owned action set each turn their named test red (`D-218`).
+
+Step 15 ran the full gates on the finished implementation. `make quality` is green: format, lint,
+typecheck, 3653 tests (one skipped), validation, 85.38% branch coverage, packaging, docs and secret
+shape. The first run exposed one stale CP-19 footer expectation, corrected from `Enter Back to list`
+to `[Enter] Back to list`; the complete rerun passed. Standalone `make integration` then reproduced
+the order-dependent real-Keychain failure twice after 191–193 seconds. The exact Keychain test passed
+alone in 2.151 seconds; diagnostic subset runs prove no environment/cwd/tempdir leak and no immediate
+retry recovery. B-108 records the remaining gate blocker without weakening or skipping the test.
+
 ## Do not undo
 
 - Do not weaken the exact synchronized-baseline comparison to pass QA-031.
@@ -213,9 +236,7 @@ instead of depending on removed `Keys here`/`Keys always` headings.
 
 ## Exact next implementation action
 
-Execute step 13 (QA-039) next: explain Vendored and Referenced ownership, payload and upstream
-consequences before the mode changes. Then step 14. The operator has asked for
-targeted tests and quality gates only until the batch is
-finished; run the whole `tui`/`consumer`/`maintainer`/`source`/`registry`/`setup`/`promotion`/
-`candidate` test file set after each step, not only the files it edits, and step 15 runs the full
-suites once the batch is handed back.
+Resolve B-108 without skipping the real macOS test or weakening its assertions, then rerun
+`make integration`. Once that standalone gate is green, return QA-039 and QA-043 with the rest of
+the Fixed batch for the operator's manual retest. The implementation itself and full `make quality`
+are complete; do not reopen steps 13 or 14 unless the manual retest produces new evidence.
