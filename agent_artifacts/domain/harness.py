@@ -41,6 +41,7 @@ __all__ = [
     "mcp_target",
     "memory_target",
     "registration_entry",
+    "registered_command",
     "registration_from_data",
     "registration_to_data",
 ]
@@ -573,6 +574,31 @@ def registration_entry(registration: McpRegistration) -> dict[str, object]:
     if registration.arguments:
         entry["args"] = list(registration.arguments)
     return dict(sorted(entry.items()))
+
+
+def registered_command(target: McpTarget, entry: object) -> str | None:
+    """The launcher one harness's stored entry names, or nothing when the entry names none.
+
+    The inverse of `registration_entry`, and here rather than beside the reader for the reason the
+    shape itself is on the target: a reader that knows one spelling reports every other harness's
+    registration as missing. That failure is quiet and expensive -- the file is correct, the server
+    starts, and the installation still never converges, so status shows drift that repair rewrites
+    identically forever.
+
+    Only the launcher comes back. What the two shapes disagree about is where the arguments live,
+    and every caller is asking the one question both shapes answer the same way: which program does
+    this harness start.
+    """
+
+    if not isinstance(entry, dict):
+        return None
+    command = entry.get("command")
+    if target.entry_shape is McpEntryShape.TYPED_COMMAND_VECTOR:
+        if not isinstance(command, list) or not command:
+            return None
+        first = command[0]
+        return first if isinstance(first, str) else None
+    return command if isinstance(command, str) else None
 
 
 def registration_from_data(data: object) -> McpRegistration:

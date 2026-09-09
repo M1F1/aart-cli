@@ -25,7 +25,7 @@ from agent_artifacts.application.installation_verification import (
 from agent_artifacts.application.runtime_projection import RuntimeProjection
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.effects import DeliveryKind
-from agent_artifacts.domain.harness import McpRegistration
+from agent_artifacts.domain.harness import McpRegistration, registered_command
 from agent_artifacts.domain.hooks import hook_entry_at
 from agent_artifacts.domain.identifiers import ObjectDigest
 from agent_artifacts.domain.managed_blocks import managed_block_body
@@ -311,8 +311,6 @@ def _observed_command(registry: object, registration: McpRegistration) -> str | 
     servers = data.get(registration.target.server_map)
     if not isinstance(servers, dict):
         return None
-    entry = servers.get(registration.server)
-    if not isinstance(entry, dict):
-        return None
-    command = entry.get("command")
-    return command if isinstance(command, str) else None
+    # Read it the way the harness that owns the file spells it. Anything else observes a
+    # correct registration as missing and leaves the installation permanently unconverged.
+    return registered_command(registration.target, servers.get(registration.server))
