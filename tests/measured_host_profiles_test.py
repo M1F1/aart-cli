@@ -41,11 +41,14 @@ from agent_artifacts.store.model import (
 from tests.artifact_installation_e2e_test import MANIFEST, SERVER_SOURCE
 from tests.artifact_placement_resolution_test import SKILL_MANIFEST, _stored_artifact
 
+#: Declares no harnesses on purpose. This file is about the difference between a request and a
+#: capability set; an artifact's own `compatibility.harnesses` is a separate narrowing, held by
+#: `declared_harness_narrowing_test.py` (`QA-078`, `D-231`). Constraining it here would make every
+#: assertion below depend on two rules at once and say which of them failed for neither.
 MEMORY_MANIFEST = {
     "schema": "aart.dev/memory/v1",
     "artifact": {"name": "house-rules", "kind": "memory", "version": "1.0.0"},
     "payload": {"include": ["house.md"]},
-    "compatibility": {"harnesses": ["claude"]},
 }
 
 #: What the persistent shell targets: every harness this build measured, not a list beside them.

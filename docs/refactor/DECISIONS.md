@@ -5343,7 +5343,7 @@ manifest that was seen and not compiled is still a manifest that was seen.
 
 ## D-231 — An empty `compatibility.harnesses` means unconstrained, not "nowhere"
 
-Date: 2026-09-10 · Increment: QA-078 · Status: accepted, implementation deferred
+Date: 2026-09-10 · Increment: QA-078 · Status: accepted; **implemented 2026-09-11, see `D-241`**
 
 `QA-078` is a truthfulness defect and it was measured to the line. `evaluate_compatibility`
 (`agent_artifacts/compiler/graph.py:791`) answers Artifact Details from the manifest's declared
@@ -5604,3 +5604,41 @@ The same increment fixes the mirror of `QA-058`. The committed screen tells the 
 while the legend listed no such key. `QA-058` was a legend advertising a key that did nothing; this
 is a key that did something and was advertised nowhere, and both leave the reader guessing, so the
 binding is now derived from the same state that enables the key.
+
+## D-241 — A setup step is owed for a harness the artifact reached, not for every harness present
+
+Date: 2026-09-11 · Increment: QA-078/QA-079/QA-080 · Status: accepted
+
+`D-231` settled what an empty `compatibility.harnesses` means and then deliberately did not land
+the narrowing, because applying it inside `placement_for` produced a receipt recording one harness
+while the machine still carried four, and `configured_consumer_completion` refused with
+`configured-setup-invalid: setup requires one exact configured installation receipt`. It expected
+the answer to arrive with the consumer setup path that CP-21 step 3 was rebuilding. Step 3 turned
+out to be the promotion path, so that host never existed and the deferral's premise expired.
+
+The refusal was right and it was pointing at the second half of the same defect. Setup iterated
+`host.profiles` — every harness this build measured — and asked the receipt store for evidence
+about harnesses the install had never touched. That is also `QA-080` exactly: four rows reading
+`configure harness (configuration mutation)`, one per measured harness, for an artifact installed
+into one of them. The operator's question, *"jak mam skonfigurowac harness?? nie rozumiem"*, had no
+answer because three of those rows were about nothing.
+
+So the rule is: **a setup step is owed for a harness the artifact was actually installed into.**
+`receipt_profiles` already says which those are, and says it from the recorded effects rather than
+from anything the install was asked for, which is the same principle one layer down. With that in
+place the narrowing lands where `D-231` said it belonged all along, and the receipt and the machine
+stop disagreeing because they are no longer being asked the same question.
+
+Narrowing itself is one point in `placement_for` rather than a check inside each of the four
+per-profile loops, and it reuses the `_skippable` asymmetry instead of inventing a second one: a
+harness this build merely measured is left out, a harness somebody typed is refused by name, and
+the refusal names the supported set with the same formatter Artifact Details uses — that shared
+`supported_label` is why the two screens can no longer word the same fact differently.
+
+Two consequences worth naming. Several fixtures declared one harness while asserting delivery to
+several, which is the defect written down as a test; where the file's own subject was the
+measured-versus-requested asymmetry the declaration was incidental and removed, with a comment
+saying where the narrowing is held instead. And `QA-079` is closed by explanation rather than by a
+picker: the set is derived from the machine and the manifest together, so there is nothing left to
+choose, and the review now names it and says so instead of leaving the operator to find out after
+the install.

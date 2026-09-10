@@ -314,7 +314,7 @@ that run; the screen transcripts in it are the reproduction.
       that is one. Covered by `tests/screen_identifier_leak_test.py` (6 tests + 86 subtests, one
       per declared route).
 
-- [ ] **QA-078 — A Skill reports three harnesses unsupported, then installs for all four.**
+- [x] **QA-078 — A Skill reports three harnesses unsupported, then installs for all four.**
       Surface: Artifact Details, Installing, Success. Severity: high. Observed: Artifact Details
       listed `profile 'codex' is not supported; supported profiles: claude` for codex, opencode and
       tabnine; the install then reported `✓ delivery:claude`, `✓ delivery:codex`,
@@ -338,15 +338,34 @@ that run; the screen transcripts in it are the reproduction.
       is made — the consumer setup and remediation path step 3 established — not inside the
       placement that serves it. `measured_host_profiles_test.py` and `git_backed_runtime_e2e_test.py`
       currently assert the defect and must be corrected with the fix.
+      Done (2026-09-11, `D-241`). The deferral's premise expired: step 3 turned out to be the
+      promotion path, so the setup path it was waiting for never existed. The refusal it had been
+      backed out on was the *second half of the same defect* -- setup iterated every measured
+      harness and asked the receipt store about harnesses the install never touched. A setup step
+      is owed for a harness the artifact actually reached, and `receipt_profiles` already says
+      which those are, from recorded effects rather than from the request. With that, the
+      narrowing lands in `placement_for` at one point, reusing the `_skippable` asymmetry: a
+      measured harness is left out, a typed one is refused by name, and the refusal uses the same
+      `supported_label` formatter as Artifact Details so the two screens cannot word one fact two
+      ways. Fixtures that declared one harness while asserting delivery to several were freed where
+      their file's subject was the measured-versus-requested asymmetry, each with a comment naming
+      where the narrowing is held instead.
+      Covered by `tests/declared_harness_narrowing_test.py`; whole suite 3915 passed.
 
-- [ ] **QA-079 — Install never asks which harness to install for.**
+- [x] **QA-079 — Install never asks which harness to install for.**
       Surface: Marketplace install sequence. Severity: medium. Observed: the artifact was delivered
       to every harness without the operator choosing.
       Expected: the review names the harnesses that will receive the artifact and lets the operator
       narrow them, or states plainly why the set is not a choice. Related to `QA-078`.
       Blocks the end-to-end stage: no.
+      Done (2026-09-11, `D-241`) by the second half of that expectation, which is the true one: the
+      set is derived from the machine and the manifest together -- every measured harness the
+      artifact declares support for -- so there is nothing left to choose. Screen 09 now reads
+      `Harnesses: tabnine (every harness this machine measured that the artifact declares support
+      for).`, read off the plan's own effects so it cannot disagree with what runs.
+      Covered by `tests/install_review_names_harnesses_test.py`.
 
-- [ ] **QA-080 — Remediation lists "configure harness" three times with no way to act on it.**
+- [x] **QA-080 — Remediation lists "configure harness" three times with no way to act on it.**
       Surface: Remediation. Severity: high. Observed:
       `4 thing(s) need preparing first / configure harness (configuration mutation)` repeated three
       times plus `configure credential (credential mutation)`. Nothing says which harness, what
@@ -354,6 +373,12 @@ that run; the screen transcripts in it are the reproduction.
       *"jak mam skonfigurowac harness?? nie rozumiem"*.
       Expected: each row names its subject and what will be written; identical rows are either
       distinguished or collapsed. Blocks the end-to-end stage: no.
+      Done (2026-09-11, `D-241`) in both halves. Most of the duplication was `QA-078`: setup was
+      planned for every harness the machine measured, so three of those four rows were about
+      harnesses the artifact never reached. Those are gone. Where several rows legitimately remain,
+      each now names its subject -- `configure harness: claude (configuration mutation)` -- read
+      off the summary the projection already builds, so no view field has to be filled in per kind.
+      Covered by `tests/remediation_row_subject_test.py`.
 
 - [x] **QA-081 — Credential entry drops out of the TUI into a raw shell prompt and fails.**
       Surface: MCP install, credential step. Severity: **blocking**. Observed: the TUI stayed on

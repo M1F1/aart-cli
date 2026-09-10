@@ -117,6 +117,10 @@ TOKEN = InputId("github-token")
 ORG = InputId("github-org")
 KIT = OwnershipReason(OwnershipKind.COLLECTION, "public/collection/data-scientist@1.0.0")
 
+#: No `compatibility.harnesses`, deliberately. This fixture is shared by the tests that map a
+#: *request* onto measured targets; an artifact's own declaration is a separate narrowing held by
+#: `declared_harness_narrowing_test.py` (`QA-078`, `D-231`). It used to declare one harness while
+#: the tests placed it into several, which is the defect itself written down as a fixture.
 MANIFEST = {
     "schema": "aart.dev/mcp/v1",
     "artifact": {"name": "github", "kind": "mcp", "version": "1.5.0"},
@@ -140,7 +144,6 @@ MANIFEST = {
         },
     ],
     "python": {"dependencies": {"type": "requirements", "path": "requirements.txt"}},
-    "compatibility": {"harnesses": ["tabnine"]},
 }
 
 

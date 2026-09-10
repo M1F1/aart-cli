@@ -1345,3 +1345,33 @@ the review line, and dropping `p` from the legend. Broad set: **1777 passed / 80
 `ruff check`, `ruff format --check`, `make typecheck`, `make docs-check`, `make secret-shape-check`
 — all clean. `mypy` needed one real change: the receipt-implies-command invariant is now nested
 rather than stated as two side-by-side conditions, which is what makes it visible.
+
+### CP-21 step 8 — harness delivery is one honest answer (2026-09-11)
+
+`D-231` had diagnosed `QA-078` to the line and deliberately not landed it, expecting the consumer
+setup path that step 3 was rebuilding. Step 3 turned out to be the promotion path, so that host
+never arrived and the deferral had to be re-examined rather than re-deferred.
+
+What the re-examination found is that the refusal `D-231` backed out on was not an obstacle to the
+fix; it was the other half of the same defect. Setup iterated `host.profiles`, every harness this
+build measured, and asked the receipt store for evidence about harnesses the install had never
+touched. That is `QA-080` in the operator's own words as well: four `configure harness` rows for an
+artifact installed into one harness, three of them about nothing.
+
+So `D-241` states the rule the two findings share — a setup step is owed for a harness the artifact
+actually reached — and `receipt_profiles` already answers it from recorded effects rather than from
+the request. With that in place the narrowing lands in `placement_for` at a single point, reusing
+the existing `_skippable` asymmetry rather than inventing a second one, and sharing `supported_label`
+with `evaluate_compatibility` so the two screens cannot word the same fact differently.
+
+`QA-079` is closed by explanation rather than by a picker: the harness set is derived from the
+machine and the manifest together, so nothing is left to choose, and screen 09 now names it and
+says where it came from instead of leaving the operator to find out afterwards. `QA-080`'s
+remaining half — rows that legitimately repeat must be told apart — is closed by reading the
+identifying value out of the summary the projection already builds.
+
+Four targeted mutations, all killed: an empty declaration ceasing to mean unconstrained, setup
+ignoring what the receipt served, the remediation row dropping its subject, and the review dropping
+its harness line. **The whole unit suite passes: 3915 passed, 1 skipped, 2091 subtests.** Gates:
+`ruff check`, `ruff format --check`, `make typecheck`, `make docs-check`, `make secret-shape-check`
+— all clean.

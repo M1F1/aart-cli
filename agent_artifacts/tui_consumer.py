@@ -50,6 +50,7 @@ from agent_artifacts.application.consumer_views import (
     ReceiptArtifactView,
     ReceiptDetailView,
     RegistryView,
+    RemediationView,
     navigation_targets,
     project_collection,
     project_registries,
@@ -416,6 +417,24 @@ def render_inspection(view: ConsumerPlanView, profile: PresentationProfile) -> t
     return tuple(lines)
 
 
+def _remediation_subject(item: RemediationView) -> str:
+    """What one remediation is *about*, read off the summary the projection already builds.
+
+    `_summary` renders `<kind>: key=value, key=value` and every remediation kind carries exactly
+    one identifying value -- the harness, the host, the provider. Taking the values keeps the row
+    truthful without the view gaining a field each kind would have to fill in separately.
+    """
+
+    _, separator, details = item.summary.partition(": ")
+    if not separator:
+        return ""
+    return ", ".join(
+        part.split("=", 1)[1]
+        for part in details.split(", ")
+        if "=" in part and not part.startswith("requirement=")
+    )
+
+
 def render_remediation(view: ConsumerPlanView, profile: PresentationProfile) -> tuple[str, ...]:
     """Screen 08. Only meaningful choices are surfaced, with what they will not touch."""
 
@@ -426,12 +445,36 @@ def render_remediation(view: ConsumerPlanView, profile: PresentationProfile) -> 
     else:
         lines = [f"{len(view.remediations)} thing(s) need preparing first"]
         for item in view.remediations:
-            lines.append(f"  {_human(item.kind)} ({_human(item.risk)})")
+            # `QA-080`: the kind alone repeated `configure harness` once per harness and named
+            # none of them, so the rows were indistinguishable and none was actionable. The
+            # identifying value is already in the summary; the row it is read from now carries it.
+            subject = _remediation_subject(item)
+            named = f"{_human(item.kind)}: {subject}" if subject else _human(item.kind)
+            lines.append(f"  {named} ({_human(item.risk)})")
             if profile is PresentationProfile.VERBOSE:
                 lines.append(f"    {item.summary}; owners: {', '.join(item.owners)}")
         lines.append("Nothing outside this installation will be modified.")
     lines.append("[ Continue ]")
     return tuple(lines)
+
+
+def _planned_harnesses(view: ConsumerPlanView) -> tuple[str, ...]:
+    """The harnesses this plan actually touches, read off the effects rather than the request.
+
+    An effect that names a harness is one this install registers with, delivers to or merges into;
+    one that names none is the artifact's own tree and belongs to no harness in particular. Reading
+    the plan means the screen cannot disagree with what runs, which is the whole of `QA-078`.
+    """
+
+    return tuple(
+        sorted(
+            {
+                harness
+                for planned in view.canonical.mutation.effects
+                if isinstance(harness := getattr(planned.effect, "harness", None), str) and harness
+            }
+        )
+    )
 
 
 def render_ready(view: ConsumerPlanView, profile: PresentationProfile) -> tuple[str, ...]:
@@ -447,6 +490,15 @@ def render_ready(view: ConsumerPlanView, profile: PresentationProfile) -> tuple[
     credentials = tuple(item for item in view.inputs if isinstance(item, CredentialInputView))
     if credentials:
         lines.append(f"  {len(credentials)} credential(s) stored securely")
+    # `QA-079`: the operator learned where it had gone only afterwards. The set is derived rather
+    # than chosen -- every measured harness the artifact declares support for (`D-231`) -- so the
+    # screen names it and says where it comes from instead of offering a menu with one answer.
+    harnesses = _planned_harnesses(view)
+    if harnesses:
+        lines.append(
+            f"Harnesses: {', '.join(harnesses)} "
+            "(every harness this machine measured that the artifact declares support for)."
+        )
     # Compressed, never quieter: this is the screen somebody confirms from, so every risk the plan
     # carries and every remediation it decided is named here as well as in the full plan.
     if view.remediations:

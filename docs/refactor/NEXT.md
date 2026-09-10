@@ -2,7 +2,7 @@
 
 ## CP-21 current objective (2026-09-10)
 
-**CP-21 is OPEN — 7 OF 11 STEPS DONE.** The operator's second manual TUI run walked the
+**CP-21 is OPEN — 10 OF 11 STEPS DONE.** The operator's second manual TUI run walked the
 maintainer route from an empty Registry through initialization, Sources, Candidates, promotion and
 publication, then the consumer route through Marketplace, install and credentials. Its findings are
 `QA-058` through `QA-083` in [`TODO.md`](../../TODO.md); the slice document is
@@ -30,10 +30,21 @@ terminal history (`D-239`).
 
 **What to pick up next, in this order:**
 
-1. Step 9's remainder — the publication branch as maintainer configuration, the Registry Commit
-   screen action, and the receipt in the maintainer frame, all in `tui_maintainer.py`.
-2. Step 8 — `QA-078`, deferred by `D-231` to the setup path, where it also settles `QA-080`.
-3. Step 11 — mutations, full gates, durable handoff.
+**Steps 8 and 9 are now done too (2026-09-11).** Step 9 publishes a reviewed registry commit to a
+configured review branch from inside AART (`QA-082`/`QA-055`; `D-228`, `D-240`). Step 8 makes
+harness delivery one honest answer across Artifact Details, the review, Remediation and Success
+(`QA-078`/`QA-079`/`QA-080`; `D-241`) — `D-231`'s deferral was re-examined rather than re-deferred,
+because the step it was waiting for turned out to be a different step, and the refusal it had been
+backed out on was the second half of the same defect.
+
+1. **Step 11 is the only step left** — targeted mutations, the full gates (`make quality`,
+   `make integration`) and a durable handoff. Every finding CP-21 opened is closed in the tree; what
+   step 11 owes is the full-suite evidence the operator asked to defer to the end of the batch.
+   The whole unit suite already passes (3915 passed, 1 skipped, 2091 subtests) — `make integration`
+   and `make quality` have not been run in this batch, by the operator's own instruction.
+2. **The operator's manual retest is the real gate.** `QA-044`…`QA-057` were already waiting;
+   everything CP-21 closed joins them. None of it has been seen at a terminal by a person since the
+   run that produced the findings.
 
 `QA-082` asked AART to push a reviewed Registry commit to a non-default branch, and was recorded as
 needing a Product Specification decision first. **The product owner made that decision on

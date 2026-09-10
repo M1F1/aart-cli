@@ -422,3 +422,42 @@ Two deliberate QA-076 mutations were killed. The scoped advisory run generated 4
 killed 353; none survived in the registry matching helpers or the new refresh branches. Broad set:
 1767 passed / 799 subtests. Gates: focused suites, `ruff check`, `ruff format --check`,
 `make typecheck`, `make docs-check`, and `make secret-shape-check` — all clean.
+
+### Step 8 — harness delivery is one honest answer (`QA-078`/`QA-079`/`QA-080`)
+
+This step began by re-opening a deferral rather than by writing code. `D-231` had measured `QA-078`
+completely and then declined to land it, because narrowing inside `placement_for` made
+`configured_consumer_completion` refuse: the receipt recorded one harness while the machine carried
+four. It expected the narrowing to arrive with the consumer setup path step 3 was rebuilding. Step 3
+turned out to be the promotion path, so that host never existed, and re-deferring on a premise that
+had expired would have been the easy wrong answer.
+
+Looking again at the refusal turned out to be the whole step. It was not blocking the fix; it was
+the second half of the same defect. Setup iterated every harness the build measured and asked the
+receipt store for evidence about harnesses the install had never touched — which is also `QA-080`
+told from the screen instead of from the code: four `configure harness` rows for an artifact
+installed into one, three of them about nothing, and the operator asking *"jak mam skonfigurowac
+harness?? nie rozumiem"* with no answer available because three of those rows had no subject.
+
+`D-241` names the rule both findings share: a setup step is owed for a harness the artifact actually
+reached. `receipt_profiles` already answered that and answered it the right way — from recorded
+effects rather than from the request — so the fix was to ask it rather than to build anything. Once
+the two sides stopped being asked the same question, the narrowing landed where `D-231` had said it
+belonged: one point in `placement_for`, reusing the `_skippable` asymmetry instead of inventing a
+second one, and sharing `supported_label` with `evaluate_compatibility` so the two screens that
+disagreed cannot word one fact two ways again.
+
+`QA-079` is closed by explanation, which is the honest half of its own expectation. The harness set
+is derived from the machine and the manifest together, so there is nothing left to choose, and a
+picker offering one answer would be a different lie. Screen 09 names the set and says where it came
+from, read off the plan's effects so it cannot disagree with what runs.
+
+Several fixtures declared one harness while asserting delivery to several — the defect written down
+as a test, as `D-231` predicted. Where the file's own subject was the measured-versus-requested
+asymmetry the declaration was incidental, so it was removed with a comment saying where the
+narrowing is held instead; making those tests depend on two rules at once would have left them
+saying which of the two failed for neither.
+
+Four targeted mutations, all killed. Tests: `tests/declared_harness_narrowing_test.py`,
+`tests/remediation_row_subject_test.py`, `tests/install_review_names_harnesses_test.py`. **Whole
+unit suite: 3915 passed, 1 skipped, 2091 subtests.** Gates all clean.

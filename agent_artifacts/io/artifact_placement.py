@@ -23,6 +23,7 @@ from __future__ import annotations
 import os
 
 from agent_artifacts.application.installation_offer import ArtifactPlacement
+from agent_artifacts.compiler.graph import supported_label
 from agent_artifacts.domain.artifacts import ArtifactKind
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.harness import (
@@ -56,6 +57,7 @@ from agent_artifacts.protocol.authoring import (
     package_payload_root,
     read_package_description,
 )
+from agent_artifacts.protocol.native_tree import compile_native_package
 from agent_artifacts.store.model import ObjectReadRequest, ObjectStorePaths
 
 from .object_store import read_object
@@ -95,6 +97,49 @@ def _skippable(profile: str, *, requested: bool) -> bool:
     """
 
     return not requested and profile in measured_harnesses()
+
+
+def _declared_narrowing(
+    entries: object,
+    identity: ArtifactIdentity,
+    profiles: tuple[str, ...],
+    *,
+    profiles_requested: bool,
+) -> Result[tuple[str, ...]]:
+    """The harnesses left after the artifact's own declaration is applied to the asked-for set.
+
+    An empty or absent `compatibility.harnesses` means unconstrained rather than "nowhere"
+    (`D-231`): the schema parses both as `()`, so they cannot be given different meanings, and an
+    author who wrote nothing did not say the artifact goes nowhere.
+
+    A non-empty declaration narrows through the asymmetry that already governs a missing target
+    (`_skippable`) rather than a second one of its own. A harness this build merely measured is
+    left out, because the machine's capability set is not a request. A harness somebody typed is
+    refused by name, because they asked for something the artifact says it does not support, and
+    the message names the set they can choose from -- the same set Artifact Details showed them.
+    """
+
+    package = compile_native_package(entries, expected_identity=identity)  # type: ignore[arg-type]
+    if isinstance(package, Err):
+        return package
+    declared = package.value.manifest.compatibility.profiles
+    if not declared:
+        return Ok(profiles)
+    for profile in profiles:
+        if profile in declared or _skippable(profile, requested=profiles_requested):
+            continue
+        return _error(
+            f"profile {profile!r} is not supported; supported profiles: {supported_label(declared)}",
+            "install it for a harness this artifact declares support for",
+        )
+    kept = tuple(profile for profile in profiles if profile in declared)
+    if not kept:
+        return _error(
+            f"{identity} declares support for {supported_label(declared)}, and this machine measured "
+            "none of them",
+            "install it on a machine with one of those harnesses",
+        )
+    return Ok(kept)
 
 
 def _delivered(description: InstallDescription) -> bool:
@@ -313,6 +358,19 @@ def placement_for(
     described = read_package_description(stored.value.candidate.entries)
     if isinstance(described, Err):
         return described
+
+    # `QA-078`/`D-231`: what the artifact declares it supports and what it is installed into are
+    # one answer. Narrowing happens here, once, rather than inside each per-profile loop, so the
+    # two screens that used to disagree read the same set.
+    narrowed = _declared_narrowing(
+        stored.value.candidate.entries,
+        coordinate.artifact,
+        profiles,
+        profiles_requested=profiles_requested,
+    )
+    if isinstance(narrowed, Err):
+        return narrowed
+    profiles = narrowed.value
 
     root = artifact_root(coordinate, scope, project_root=project_root, data_root=data_root)
     delivered = _delivered(described.value)

@@ -319,6 +319,24 @@ def _absolute_effects(
     return tuple(effects)
 
 
+def _served_profiles(host: InstallationHost) -> Result[dict[ArtifactCoordinate, frozenset[str]]]:
+    """Which harnesses each recorded installation actually did something for.
+
+    Keyed unversioned, because that is how a setup request names its subject. A coordinate absent
+    from this map has no standing receipt at all; the caller keeps the machine's own set for it, so
+    a failed install still reports and the subject resolution still refuses by name.
+    """
+
+    installed = LocalReceiptStore(host.state_root).installations()
+    if isinstance(installed, Err):
+        return installed
+    served: dict[ArtifactCoordinate, frozenset[str]] = {}
+    for record in installed.value:
+        key = _unversioned(record.coordinate)
+        served[key] = served.get(key, frozenset()) | receipt_profiles(record.receipt)
+    return Ok(served)
+
+
 def configured_consumer_completion(
     completed: CompletedConfiguredInstallation,
     effective: EffectiveConfiguration,
@@ -337,6 +355,10 @@ def configured_consumer_completion(
     if action not in {"install", "update"}:
         return _error("configured setup completion needs an install or update action")
     subject_port = configured_setup_subject(effective, host)
+    served_profiles = _served_profiles(host)
+    if isinstance(served_profiles, Err):
+        return served_profiles
+    served = served_profiles.value
     pending = {
         (item.coordinate.source, item.coordinate.artifact): item for item in completed.pending_setup
     }
@@ -358,6 +380,13 @@ def configured_consumer_completion(
             "completed-with-attention",
         }
         for profile in host.profiles:
+            # `QA-078`/`QA-080`: a setup step is owed for a harness this artifact was installed
+            # into, not for every harness the machine has. Once an artifact's own
+            # `compatibility.harnesses` narrows its placement (`D-231`) the two sets differ, and
+            # the machine's set asked the receipt store for evidence that cannot exist while also
+            # offering "configure harness" once per harness nothing ever touched.
+            if profile not in served.get(_unversioned(exact), frozenset(host.profiles)):
+                continue
             setup_request = SetupRequest(
                 _unversioned(exact),
                 profile,
@@ -577,6 +606,10 @@ def configured_installed_setup_completion(
         (item.coordinate.source, item.coordinate.artifact): item for item in declared.value
     }
     subject_port = configured_setup_subject(effective, host)
+    served_profiles = _served_profiles(host)
+    if isinstance(served_profiles, Err):
+        return served_profiles
+    served = served_profiles.value
     service = ConfiguredSetupService(effective, host, subject_port)
     location = InstallLocation(host.project_root, host.user_home, host.data_root)
     store = object_store_paths(host.data_root)
@@ -587,6 +620,13 @@ def configured_installed_setup_completion(
         if declaration is None:
             continue
         for profile in host.profiles:
+            # `QA-078`/`QA-080`: a setup step is owed for a harness this artifact was installed
+            # into, not for every harness the machine has. Once an artifact's own
+            # `compatibility.harnesses` narrows its placement (`D-231`) the two sets differ, and
+            # the machine's set asked the receipt store for evidence that cannot exist while also
+            # offering "configure harness" once per harness nothing ever touched.
+            if profile not in served.get(_unversioned(exact), frozenset(host.profiles)):
+                continue
             setup_request = SetupRequest(
                 _unversioned(exact),
                 profile,

@@ -40,11 +40,14 @@ PROFILES = ("tabnine",)
 #: An artifact a harness reads rather than starts: no transport, no runtime, no launch, no inputs.
 #: `read_package_description` returns an empty description for it, and that is the discriminator
 #: `placement_for` routes on.
+#: No `compatibility.harnesses`, deliberately. This fixture is shared by the tests that map a
+#: *request* onto measured targets; an artifact's own declaration is a separate narrowing held by
+#: `declared_harness_narrowing_test.py` (`QA-078`, `D-231`). It used to declare one harness while
+#: the tests placed it into several, which is the defect itself written down as a fixture.
 SKILL_MANIFEST = {
     "schema": "aart.dev/skill/v1",
     "artifact": {"name": "code-review", "kind": "skill", "version": "1.2.0"},
     "payload": {"include": ["SKILL.md", "reference.md"]},
-    "compatibility": {"harnesses": ["claude"]},
 }
 
 
