@@ -350,7 +350,9 @@ class MaintainerRegistryShellTest(unittest.TestCase):
 
         drawn = "\n".join(frame(source, _reload(source, state, entering=True)))
 
-        self.assertIn("No Registry is connected.", drawn)
+        # `QA-075`: the empty block now says what it is empty *of*.  The claim this test makes is
+        # that the screen refuses rather than raises, so it tracks the wording it renders.
+        self.assertIn("No Registry is subscribed in this project yet.", drawn)
 
     def test_drawing_screen_46_opens_no_file(self) -> None:
         """Registry validity read while drawing could contradict the promotion that produced it."""

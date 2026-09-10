@@ -413,6 +413,12 @@ accepts only `READY`/`WARNING`, so re-deriving an unchanged prior has to leave t
 records alone. That is a slice's worth of care and the budget for this segment is spent; it is a
 better handoff as a written diagnosis than as an untested branch.
 
+One existing test changed, and it is the ordinary kind:
+`maintainer_registry_view_test.py::test_an_installation_with_no_composed_registry_refuses_instead_of_raising`
+asserted the old sentence while claiming to be about refusing rather than raising. It now tracks the
+new wording; nothing about what it holds moved. The broad run is what caught it, which is the reason
+that run exists.
+
 Tests: `tests/empty_state_truthfulness_test.py` (6), `tests/screen_identifier_leak_test.py`
-(6 + 86 subtests). Gates: focused suites, `ruff check`, `ruff format --check`, `make typecheck`,
+(6 + 86 subtests). Broad set: 1755 passed / 793 subtests. Gates: focused suites, `ruff check`, `ruff format --check`, `make typecheck`,
 `make docs-check` — all clean.
