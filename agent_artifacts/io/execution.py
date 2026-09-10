@@ -19,7 +19,8 @@ import json
 import os
 import shutil
 import stat
-from typing import Mapping
+from contextlib import AbstractContextManager, nullcontext
+from typing import Callable, Mapping
 
 from agent_artifacts.domain.credentials import CredentialReference
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
@@ -74,6 +75,7 @@ __all__ = [
     "EXECUTION_NEEDS_A_PERSON",
     "EXECUTION_REFUSED",
     "CredentialEffectInterpreter",
+    "TerminalHandover",
     "DeliveryEffectInterpreter",
     "FileEffectInterpreter",
     "HarnessEffectInterpreter",
@@ -818,6 +820,12 @@ class DeliveryEffectInterpreter:
         return Ok(None)
 
 
+#: What a terminal adapter does around an effect only a person at the keyboard can carry out: it
+#: gives the screen up on the way in and takes it back on the way out.  A caller that has no drawn
+#: screen -- the CLI, a test -- supplies nothing and nothing happens (`QA-081`).
+TerminalHandover = Callable[[], AbstractContextManager[None]]
+
+
 class CredentialEffectInterpreter:
     """Verifies and removes credentials, and says plainly when a person has to be present.
 
@@ -825,6 +833,12 @@ class CredentialEffectInterpreter:
     process on purpose -- `MacOsKeychainProvider.store` delegates to the provider's own prompt --
     so there is no unattended path to offer and none is invented here. The honest report is that
     the repair is waiting for a person, not that a provider failed.
+
+    That prompt is a conversation on the terminal, and under the TUI the terminal is already drawn
+    on. `terminal_handover` is how the adapter that drew it lends it out: the screen is released
+    before the provider speaks and taken back afterwards, whatever the provider answered
+    (`QA-081`). Only storing and replacing hand it over -- reading and removing a credential are
+    AART's own work and say nothing to anybody.
 
     References are supplied at construction, like the harness registrations are, so an effect that
     names a credential this executor was not given is refused rather than resolved by guesswork.
@@ -834,9 +848,14 @@ class CredentialEffectInterpreter:
         self,
         provider: CredentialProviderPort,
         references: tuple[CredentialReference, ...] = (),
+        *,
+        interactive_store: bool = False,
+        terminal_handover: TerminalHandover | None = None,
     ) -> None:
         self.provider = provider
         self.references = tuple(references)
+        self.interactive_store = interactive_store
+        self.terminal_handover = terminal_handover
 
     def supports(self, effect: Effect) -> bool:
         """Whether this interpreter was given the reference `effect` names (see the harness one)."""
@@ -852,20 +871,39 @@ class CredentialEffectInterpreter:
         return next((candidate for candidate in self.references if str(candidate) == raw), None)
 
     def apply(self, effect: Effect) -> Result[str]:
-        if isinstance(effect, (StoreCredential, ReplaceCredential)):
+        reference = (
+            self._reference(effect.reference)
+            if isinstance(
+                effect, (StoreCredential, ReplaceCredential, DeleteCredential, VerifyCredential)
+            )
+            else None
+        )
+        if isinstance(effect, (StoreCredential, ReplaceCredential)) and not self.interactive_store:
             return _error(
                 EXECUTION_NEEDS_A_PERSON,
                 f"{effect.reference} has to be entered by someone through the credential flow; "
                 "this repair cannot run unattended",
             )
         if not isinstance(effect, (DeleteCredential, VerifyCredential)):
-            return _error(EXECUTION_REFUSED, f"{type(effect).__name__} is not a credential effect")
-        reference = self._reference(effect.reference)
+            if not isinstance(effect, (StoreCredential, ReplaceCredential)):
+                return _error(
+                    EXECUTION_REFUSED, f"{type(effect).__name__} is not a credential effect"
+                )
         if reference is None:
             return _error(
                 EXECUTION_REFUSED,
                 f"nothing here knows the credential reference {effect.reference}",
             )
+        if isinstance(effect, (StoreCredential, ReplaceCredential)):
+            lent = nullcontext() if self.terminal_handover is None else self.terminal_handover()
+            with lent:
+                stored = self.provider.store(
+                    reference,
+                    replace=isinstance(effect, ReplaceCredential),
+                )
+            if isinstance(stored, Err):
+                return stored
+            return Ok(f"{effect.reference} is {stored.value.state.value}")
         if isinstance(effect, VerifyCredential):
             observed = self.provider.inspect(reference)
             if isinstance(observed, Err):

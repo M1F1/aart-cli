@@ -60,7 +60,7 @@ from .configured_installation import (
 from .consumer_machine import read_consumer_machine
 from .credentials import CredentialProviderPort
 from .environment_inspection import LocalEnvironmentInspector, platform_name
-from .execution import LocalMutationLock
+from .execution import LocalMutationLock, TerminalHandover
 from .harness import LocalHarnessRegistry
 from .installation_execution import interpreters_for
 from .installation_observation import (
@@ -269,6 +269,15 @@ def prepare_configured_installation(
         host, credential_providers, interpreter=base_interpreter
     )
     registry = LocalHarnessRegistry(host.harness_root)
+    providers = {provider.provider: provider for provider in credential_providers}
+    observations = []
+    for reference in draft.inputs.bound.credential_references:
+        provider = providers.get(reference.provider.provider)
+        if provider is None:
+            continue
+        observed = provider.inspect(reference)
+        if isinstance(observed, Ok):
+            observations.append(observed.value)
     prepared = prepare_installation_action(
         draft.selection,
         placements.value,
@@ -282,6 +291,7 @@ def prepare_configured_installation(
         base_interpreter=base_interpreter or sys.executable,
         resolvers=resolvers,  # type: ignore[arg-type]
         previous=previous,
+        credential_observations=tuple(observations),
     )
     if isinstance(prepared, Err):
         return prepared
@@ -303,6 +313,8 @@ def complete_configured_installation(
     previous_receipts: tuple[tuple[ArtifactCoordinate, ArtifactReceipt], ...] = (),
     timeout_seconds: float = 900.0,
     offline: bool = False,
+    interactive_credentials: bool = False,
+    credential_handover: TerminalHandover | None = None,
 ) -> Result[CompletedConfiguredInstallation]:
     """Execute the confirmed review, record it, and re-read the machine it left behind.
 
@@ -330,6 +342,8 @@ def complete_configured_installation(
         credential_providers=credential_providers,
         timeout_seconds=timeout_seconds,
         offline=offline,
+        interactive_credentials=interactive_credentials,
+        credential_handover=credential_handover,
     )
     if isinstance(interpreters, Err):
         return interpreters

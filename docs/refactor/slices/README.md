@@ -37,3 +37,7 @@ Handoff:
 
 A slice file is operational state, not a product specification. If it conflicts with the Product
 Specification, fix the slice.
+
+Implemented post-refactor acceptance slice awaiting operator retest:
+
+- `CP-20-operator-clarity-and-reproducible-testing.md`

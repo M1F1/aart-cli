@@ -27,7 +27,589 @@ Each new entry records:
 - whether it blocks the current end-to-end stage;
 - the fixing commit once accepted.
 
+### Fixed — awaiting manual retest (CP-20)
+
+- [ ] **QA-044 — Registry Maintainer contradicts the connected Registry with local-project state.**
+      Surface: Registry Maintainer. Severity: high. The frame can show a valid connected Registry
+      and then say there is no Registry to rebuild because it silently switches subjects to the
+      current project; its remediation also leaks the internal name `Screen 46`. Expected: label
+      connected Registry snapshots and the local Registry workspace separately, name the current
+      project explicitly, and offer `Initialize Registry` without any internal screen identifier.
+      CP-20 step 2 owns the fix and manual retest.
+      Fix: connected snapshots and the local Registry workspace now have separate labelled blocks;
+      an absent local marker names the current project and offers Initialize Registry in product
+      language. Evidence: `tests/cp20_tui_clarity_test.py`, `tests/maintainer_registry_view_test.py`.
+
+- [ ] **QA-045 — Doctor exposes an internal screen identifier as the repair subject.**
+      Surface: Doctor/Automatic Inspection. Severity: high. `nothing canonical is installed here
+      as 29-doctor` is implementation-state leakage, not a diagnosis. Expected: repair/reload uses
+      the visibly focused installed coordinate and never renders a route identifier. CP-20 step 2.
+      Fix: Doctor repair is row-owned and refuses when no visible repairable issue is focused.
+      Evidence: `tests/cp20_tui_clarity_test.py`, `tests/consumer_navigation_test.py`.
+
+- [ ] **QA-046 — Automatic Inspection presents inconclusive harness observations as a failed quiz.**
+      Surface: Fast installation workflow. Severity: high. A page showing `0 of 4` and four
+      `unknown` harness requirements asks for no decision and reads like failure immediately before
+      a successful install. Expected: inspection still builds the immutable plan, but Fast mode
+      advances directly to the first genuinely required input/remediation decision or Ready.
+      CP-20 step 2.
+      Fix: inspection still contributes to the immutable plan, while Fast mode advances directly
+      to Required Inputs, Remediation or Ready. Evidence: `tests/consumer_install_flow_shell_test.py`.
+
+- [ ] **QA-047 — Success requires backing out of a completed installation wizard.**
+      Surface: installation Success. Severity: high. Expected: Enter on Done completes the wizard
+      and returns directly to Marketplace; View installed and View receipt remain explicit choices.
+      CP-20 step 2.
+      Fix: Success binds Enter/Done to Marketplace without changing its explicit detail routes.
+      Evidence: `tests/consumer_navigation_test.py`, `tests/consumer_application_e2e_test.py`.
+
+- [ ] **QA-048 — Section rules and Settings groups run together vertically.**
+      Surface: shared section layout and Settings. Severity: medium. Expected: one blank line on
+      both sides of section text, one blank between Settings groups, and one blank before the
+      Maintainer Mode explanatory sentence. CP-20 step 2.
+      Fix: the shared section primitive owns blank lines on both sides, and Settings renders its
+      groups as separate blocks. Evidence: `tests/tui_layout_test.py`, `tests/consumer_views_test.py`.
+
+- [ ] **QA-049 — The manual MCP cannot exercise credential input and management.**
+      Surface: disposable manual acceptance fixture. Severity: high. Expected: the fixture
+      publishes an installable dummy MCP with a declared safe test credential, drives the required
+      input/credential views, and never commits or prints the supplied value. CP-20 step 4.
+      Fix: the disposable Registry publishes `dummy-mcp@1.0.0` with required `dummy-token`; only a
+      provider reference is planned and the server reports presence, never content. Evidence:
+      `tests/manual_test_lab_test.py`, `tests/configured_installation_action_e2e_test.py`.
+
+- [ ] **QA-050 — A connected Registry cannot be disconnected from Marketplace in the TUI.**
+      Surface: Registries. Severity: high. Expected: the focused Registry has a reviewed Disconnect
+      action that removes its connection and AART-managed snapshot, clears it as default if needed,
+      and leaves installed artifacts and receipts untouched. CP-20 step 3.
+      Fix: `d` opens an exact origin/ref review and confirmation rechecks the source identity before
+      removing configuration and its managed snapshot. Evidence: `tests/consumer_registry_disconnect_test.py`.
+
+- [ ] **QA-051 — Manual acceptance inherits repositories and app state from earlier runs.**
+      Surface: manual-test setup. Severity: blocking for reproducible acceptance. Expected: one
+      command builds a fresh lab with new clones, isolated HOME/XDG, a unique `manual/<run-id>`
+      branch in every repository and all prerequisites; one reset command deletes only that
+      marker-owned local lab. GitHub-specific passes use the same unique branch namespace in
+      dedicated test repositories and never reset/force-push shared branches; remote cleanup is a
+      separate exact reviewed action. CP-20 step 5.
+      Fix: `make manual-test-setup` creates three fresh working repositories and local bare remotes
+      under isolated homes; `make manual-test-reset` deletes only the exact marker-owned root.
+      Evidence: `tests/manual_test_lab_test.py` and a real setup/reset smoke.
+
+- [ ] **QA-052 — AART has no safe command-line factory reset.**
+      Surface: CLI administration. Severity: high. Expected: a CLI-only reset lists exact AART-owned
+      configuration/data/cache targets, requires two deliberate confirmations, refuses unsafe
+      targets, restores the app to no connections/settings, and leaves projects, harness files,
+      other applications' credentials and unrelated files untouched. CP-20 step 6.
+      Fix: CLI-only `aart reset` lists the exact plan/digest, requires `RESET AART` and
+      `DELETE AART STATE`, and refuses unsafe/symlinked targets before deleting anything.
+      Evidence: `tests/factory_reset_test.py` including Hypothesis target properties.
+
+- [ ] **QA-053 — No screen says which directory the session was launched from.**
+      Surface: every canonical shell frame. Severity: medium. Reproduction: launch `aart` from any
+      directory and read any screen. Observed: nothing on the frame names the directory, so an
+      install or a Registry edit gives no way to tell whether it is about to land in a manual-test
+      lab or in the real project. Expected: the frame names the launch directory as persistent
+      chrome, on every screen. Blocks the end-to-end stage: no.
+      Fix: the composition boundary resolves the launch directory once, the state carries it, and
+      the frame prints `Working in <path>` directly under the heading; home is written `~` and an
+      over-long path drops leading segments so the directory's own name always survives.
+      Evidence: `tests/workspace_context_line_test.py`, including a Hypothesis property that a
+      shown path is bounded and keeps its final segment.
+
+- [ ] **QA-054 — The manual acceptance procedure tests the CLI, not the TUI.**
+      Surface: `docs/testing/END_TO_END_ACCEPTANCE.md` and the manual lab. Severity: medium.
+      Observed: stages 1-3 are entirely CLI and GitHub setup, stage 4 adds author Sources through
+      the CLI although adding a Source is itself a Maintainer screen, and the CP-20 head advertising
+      `make manual-test-setup` was never reconciled with a body that still exports
+      `$AART_MAINTAINER_HOME`. The default lab also publishes both fixtures, so the whole Maintainer
+      run — Initialize Registry, Add Source, Sync, Candidates, validation, promotion, commit — is
+      already done by the setup script and an operator walking those screens re-reads a result
+      instead of producing one. Expected: a TUI-first walkthrough over a Registry that starts empty.
+      Blocks the end-to-end stage: no.
+      Fix: `make manual-test-setup-empty` builds the lab with the author sources published and the
+      Registry repository empty, and `docs/testing/TUI_MANUAL_WALKTHROUGH.md` walks both roles
+      through the screens, naming the one `git push` the TUI deliberately does not do (161.7).
+      Evidence: `tests/manual_test_lab_test.py`, plus a driven text-TUI run reaching
+      `[n] Initialize` on the empty Registry.
+
 ### Open
+
+#### CP-21 — second manual TUI run (2026-09-10)
+
+Raw operator notes: `nowe bledy i znaleziska.txt` (untracked). Every item below is transcribed from
+that run; the screen transcripts in it are the reproduction.
+
+- [ ] **QA-064 — `[v] Fast / Verbose` does nothing on the Dashboard.**
+      Surface: Dashboard, and every screen whose footer advertises it. Severity: medium.
+      Observed: the footer offers `[v] Fast / Verbose` and pressing it changes nothing visible.
+      Expected: either the key changes what the screen shows, or the screen stops advertising it.
+      A binding in the footer is a promise. Blocks the end-to-end stage: no.
+
+- [x] **QA-065 — Screens draw two section rules with nothing between them.**
+      Surface: Dashboard, Registries, and other list screens. Severity: medium. Observed: the
+      operator's transcript shows a rule, one explanatory line, a rule, then a second rule
+      immediately — an empty section drawn as if it had content. The help block is also present
+      before `?` is pressed, so `?` appears to do nothing.
+      Expected: an empty section is not drawn at all, and the help block appears only on `?`.
+      Blocks the end-to-end stage: no.
+      Landed (2026-09-10, `D-232`): a rule separates two regions that both spoke, so an
+      empty section cannot draw one. Help was already gated on `?` and is now a region of its own.
+
+- [x] **QA-066 — The screen title and the working directory are run together.**
+      Surface: every screen. Severity: medium. **Revises `QA-053`/`D-224`.** Observed: the header
+      is `AART / Activity` immediately followed by `Working in <path>`, which reads as one wrapped
+      line rather than two facts. Expected, in the operator's words: title, one blank line, the
+      context line, then the rule. Note this partly reverses the placement `QA-053` chose, and
+      `QA-069` moves the line entirely; settle both together rather than separately.
+      Blocks the end-to-end stage: no.
+      Landed (2026-09-10, `D-235`): settled with `QA-069` — the directory left the
+      header, so there is no second header line to run together with the first.
+
+- [x] **QA-067 — There is no standard screen skeleton, so every screen composes itself.**
+      Surface: all TUI screens. Severity: high. Observed, in the operator's words: *"teraz to jest
+      wolna amerykanka odnosnie UI"* — sections, spacing and the key legend sit at different
+      heights on different screens, and text touches its rules with no breathing room.
+      Expected: one skeleton every screen fills, in this order — title; blank; rule; **menu /
+      list section**; rule; **cursor-description section** (what the thing under the cursor is and
+      what can be done with it); rule; **view-status section** (state of the whole view: counts,
+      errors, remaining steps) which is omitted entirely when it has nothing to say; then the
+      footer. One blank line above and below every block of text next to a rule.
+      Blocks the end-to-end stage: no. Owns `QA-065`, and `QA-070` is the toggle over its second
+      section.
+      Landed (2026-09-10, `D-232`): `screen_frame` composes title, menu/list, cursor description,
+      view status and footer in that order, and one `frame` puts every screen through it.
+
+- [x] **QA-068 — The key legend is not anchored to the bottom and mixes two kinds of key.**
+      Surface: every screen. Severity: high. Observed: on short screens the legend floats directly
+      under the body with the rest of the terminal blank beneath it; screen-specific and universal
+      keys share one line.
+      Expected: the legend is always the last thing on the screen, with screen-specific keys on a
+      line **above** the universal ones (`[Esc] Back  [?] Help  [q] Quit`).
+      Blocks the end-to-end stage: no.
+      Landed (2026-09-10, `D-234`): `anchor` pads above the footer so the legend sits on
+      the bottom rows, and screen keys are on the line above the universal ones.
+
+- [x] **QA-069 — The working directory belongs in the footer, above the keys.**
+      Surface: every screen. Severity: medium. **Revises `QA-053`/`D-224`.** Observed: the operator
+      now wants the top line to carry only the TUI path and the launch directory to sit in the
+      footer, separated from the key legend by a rule. Expected: `working at <path>`, a rule, then
+      the key lines. Decide together with `QA-066`.
+      Blocks the end-to-end stage: no.
+      Landed (2026-09-10, `D-235`): `working at <path>` is its own region immediately
+      before the key legend, separated from it by the skeleton's rule.
+
+- [x] **QA-070 — The cursor-description sections should be one toggleable mode.**
+      Surface: all TUI screens. Severity: low. Observed: the operator asked for the per-cursor
+      explanations to be switchable by a key rather than always present — plausibly what
+      `[v] Fast / Verbose` was meant to be (`QA-064`).
+      Expected: one key toggles the description sections across screens, and the footer names it
+      honestly. Blocks the end-to-end stage: no.
+      Landed (2026-09-10, `D-233`): `[v]` is the toggle, which also settles `QA-064`.
+
+- [x] **QA-071 — Nested views do not name their parent.**
+      Surface: Sources, Candidates, and every screen reached from a dashboard. Severity: medium.
+      Observed: the header reads `AART / Sources`, which is not where the operator is.
+      Expected: `AART / Maintainer Dashboard / Sources`, and the same for every nested view.
+      Blocks the end-to-end stage: no.
+      Landed (2026-09-10, `D-236`): the heading is the trail from the session's own
+      history, so `AART / Maintainer / Sources` names the parent it was reached through.
+
+- [x] **QA-072 — Esc after a finished sequence re-enters the wizard it just completed.**
+      Surface: Sources, Marketplace, and every list reached after a completed sequence. Severity:
+      high. Observed: after finishing Initialize Registry the operator lands on Sources; pressing
+      Esc walks back into the wizard that has already run instead of returning to Maintainer
+      Dashboard. The same happens from Marketplace after an install.
+      Expected: a completed sequence is not on the back stack. Esc from a list goes to the
+      dashboard that owns it. Related to `QA-027`, which fixed the forward exit but not this.
+      Blocks the end-to-end stage: no.
+      Landed (2026-09-10, `D-237`): `navigate` rewinds when the target is already on the
+      stack, so a sequence that ends by returning somewhere is off it by the act of
+      returning — no list of "finished" journeys is needed. Esc from a list is a second
+      rule, read from the declared navigation, and guarded so it never invents a forward
+      step to a dashboard nobody has opened.
+
+- [x] **QA-073 — Backing out of Candidate Diff or Validation loses the Candidate.**
+      Surface: Candidate Diff (37), Validation (38). Severity: high. Observed: pressing Esc from
+      Diff produces `That Candidate is not available.`, and from Validation
+      `That Candidate's validation is not available.` — the workflow chrome still draws the whole
+      sequence above a screen that has lost its subject.
+      Expected: going back keeps the Candidate. A screen that genuinely cannot resolve one says so
+      without drawing the sequence as if it were still in it. Related to `QA-037`.
+      **Fixed (2026-09-10, `D-232`).** Optional Candidate inspections remain out of the progress
+      chrome, but their explicit reverse edges preserve the workflow subject. This covers
+      Lifecycle, Provenance and Version Conflict returning directly to Candidate Details, their
+      nested reverse edges, and Validation Details returning to Validation. When Back crosses from
+      Validation to a screen whose projection needs a bare Candidate identity, the reducer reduces
+      the selected `candidate:check` row to its Candidate ID; unrelated Back navigation still
+      clears focus. The complete reverse journey now renders the same Candidate instead of either
+      unavailable message. Three targeted mutations and the relevant scoped `mutmut` mutants were
+      killed.
+      Evidence: `tests/maintainer_candidate_shell_test.py` covers all Candidate side-view edges;
+      `tests/maintainer_validation_views_test.py` covers the whole Details → Validation → Diff
+      journey, every `ValidationCheck`, and the negative dashboard boundary. Blocks the end-to-end
+      stage: no.
+
+- [x] **QA-074 — A validation that passed does not advance, and promotion is hidden behind `p`.**
+      Surface: Validation (38), Validation Details (39). Severity: high. Observed: on Validation
+      Details every check reads `Passed`, Enter does nothing, and only Esc leaves — into the
+      broken Validation screen of `QA-073`. Promotion requires knowing to press `p`, which no
+      section states.
+      Expected, in the operator's words: a passed validation says so, and Enter continues to
+      Policy. If the extra key press is a deliberate guard against clicking through a promotion,
+      the view-status section must say that the next step needs a deliberate action, and name it.
+      **Fixed (2026-09-10, `D-232`).** Validation Details now projects Policy Review as its Enter
+      destination and advertises `[Enter] Policy`; this consumes the already-composed validation
+      evidence and performs no validation or promotion effect. The `p` shortcut on Validation is
+      retained but truthfully labelled `Policy`, not `Promote`. The production-composition walk now
+      reaches Policy by opening a check and pressing Enter again. Two targeted mutations and six
+      focused `tui_consumer.py` `mutmut` mutants were killed.
+      Evidence: `tests/maintainer_validation_views_test.py` and the maintainer production
+      composition E2E. Blocks the end-to-end stage: no longer.
+
+- [x] **QA-075 — "No Registry is connected." reads as a failure while one is being created.**
+      Surface: Registry Maintainer (46). Severity: medium. Observed: immediately after a successful
+      five-stage initialization the screen reports `No Registry is connected.` above a completed
+      run. The operator worked out that it refers to *subscribed* Registries, but only by guessing.
+      Expected: the connected-snapshots block says what it is empty *of*, and — given `QA-059` —
+      names publishing and subscribing as the next step. Overlaps `QA-060`.
+      Blocks the end-to-end stage: no.
+      Done (2026-09-10): `render_maintainer_registries` now says `No Registry is subscribed in this
+      project yet.` and, when the project is itself a Registry workspace, adds that a Registry
+      created here becomes connectable once it is published to its branch and subscribed to.
+      Covered by `tests/empty_state_truthfulness_test.py::EmptyConnectedRegistriesTest`.
+
+- [ ] **QA-076 — A promoted artifact still shows as a `New` Candidate.**
+      Surface: Candidates (35). Severity: high. Observed: `skill/manual-check@1.0.0` was installable
+      from Marketplace while Candidates still listed it as `New`, with no indication it had been
+      promoted and published.
+      Expected: a Candidate whose version the target Registry has published reads as promoted, not
+      as new work. The state exists (`CandidateState.PROMOTED`) — check whether the screen reads a
+      stale scan rather than re-deriving against the Registry, and whether `QA-062`'s history
+      separation changes what it sees. Blocks the end-to-end stage: no.
+      Diagnosed, not yet fixed (2026-09-10): the screen is not stale, the reconciliation is.
+      `reconcile_source_scan` (`application/maintainer.py:207`) short-circuits when the source has
+      not moved -- `if prior is not None and prior.candidate.id == candidate_id: active.append(
+      prior); continue` -- and that path never consults `approved`. `_with_registry_state`, the
+      only thing that can set `PROMOTED` for an artifact Candidate, runs solely on the freshly
+      derived branch below it. So a Candidate that was `New` when last scanned stays `New` through
+      every later Sync, however much the *registry* moved underneath it, which is exactly the
+      observed `skill/manual-check@1.0.0`. `QA-062`'s promoted/current split is not the cause: it
+      only routes records whose state already is `PROMOTED`.
+      The fix is to re-derive that branch against `approved` too, guarded so a terminal or rejected
+      prior is left alone -- `assess_candidate` raises on a terminal state and
+      `mark_candidate_promoted` accepts only `READY`/`WARNING`, so the guard is not optional.
+
+- [x] **QA-077 — `authoring Source 31-sources is not configured and enabled`.**
+      Surface: Sources (33). Severity: high. Observed: both Sources flipped to `Stale` and the
+      screen printed that line. `31-sources` is an internal screen identifier being used as a
+      Source alias — the same class of leak as `QA-045`. The operator could not tell what had
+      failed or what to do.
+      Expected: the message names the real alias, says why it is stale, and offers the fix.
+      No internal screen identifier ever reaches the operator. Blocks the end-to-end stage: no.
+      Done (2026-09-10): measured end to end -- a dashboard's rows *are* screens, so navigating
+      away carried `focus="31-sources"` (`MaintainerScreen.SOURCES.value`) into the next screen,
+      where it survived `SET_ROWS` and reached `prepare_configured_source_sync` as a `SourceAlias`.
+      Fixed at source: `is_screen_identifier` in `consumer_views.py`, and `_navigate` drops a focus
+      that is one. Covered by `tests/screen_identifier_leak_test.py` (6 tests + 86 subtests, one
+      per declared route).
+
+- [ ] **QA-078 — A Skill reports three harnesses unsupported, then installs for all four.**
+      Surface: Artifact Details, Installing, Success. Severity: high. Observed: Artifact Details
+      listed `profile 'codex' is not supported; supported profiles: claude` for codex, opencode and
+      tabnine; the install then reported `✓ delivery:claude`, `✓ delivery:codex`,
+      `✓ delivery:opencode`, `✓ delivery:tabnine`. Both cannot be true.
+      Expected: either the manifest's `compatibility.harnesses` limits delivery and the extra three
+      are not written, or the artifact really is deliverable everywhere and Artifact Details stops
+      claiming otherwise. The operator's question stands: what about a plain Markdown Skill makes
+      three harnesses unsupported? Blocks the end-to-end stage: no.
+      Diagnosed whole (2026-09-10, `D-231`), implementation deferred to step 3's rebuild. The two
+      screens read different sources: `evaluate_compatibility` (`compiler/graph.py:791`) answers
+      Details from the manifest's `compatibility.profiles`, `_deliveries`
+      (`io/artifact_placement.py`) answers the plan from the request and never reads the manifest.
+      Nothing about Markdown makes three harnesses unsupported — the author declared one, and only
+      one screen listened. An absent `compatibility` block and an explicit `[]` are the same `()`
+      after `allow_empty=True`, so empty means unconstrained. Narrowing inside `placement_for` was
+      built and backed out: it works and delivers, but the receipt then records the narrowed set
+      while the host still carries every measured harness, and `configured_consumer_completion`
+      refuses with `configured-setup-invalid: setup requires one exact configured installation
+      receipt`, so the `CONFIGURED` marker is never written. The narrowing belongs where the offer
+      is made — the consumer setup and remediation path step 3 is rebuilding — not inside the
+      placement that serves it. `measured_host_profiles_test.py` and `git_backed_runtime_e2e_test.py`
+      currently assert the defect and must be corrected with the fix.
+
+- [ ] **QA-079 — Install never asks which harness to install for.**
+      Surface: Marketplace install sequence. Severity: medium. Observed: the artifact was delivered
+      to every harness without the operator choosing.
+      Expected: the review names the harnesses that will receive the artifact and lets the operator
+      narrow them, or states plainly why the set is not a choice. Related to `QA-078`.
+      Blocks the end-to-end stage: no.
+
+- [ ] **QA-080 — Remediation lists "configure harness" three times with no way to act on it.**
+      Surface: Remediation. Severity: high. Observed:
+      `4 thing(s) need preparing first / configure harness (configuration mutation)` repeated three
+      times plus `configure credential (credential mutation)`. Nothing says which harness, what
+      would change, or how the operator is meant to configure one. The operator's reaction:
+      *"jak mam skonfigurowac harness?? nie rozumiem"*.
+      Expected: each row names its subject and what will be written; identical rows are either
+      distinguished or collapsed. Blocks the end-to-end stage: no.
+
+- [x] **QA-081 — Credential entry drops out of the TUI into a raw shell prompt and fails.**
+      Surface: MCP install, credential step. Severity: **blocking**. Observed: the TUI stayed on
+      screen while `security` printed `password data for new item:` directly after the footer,
+      producing the line `[q] Quitpassword data for new item:`. The install finished
+      `✗ credential:dummy-token`, then `launcher`, `harness:claude`, `harness:opencode` and
+      `harness:tabnine` all `missing`, and `Undo unavailable`.
+      **Characterized (2026-09-10).** `MacKeychainProvider.store` with no carrier — the default, and
+      deliberately so — runs `security add-generic-password -w` with `capture=not interactive`,
+      i.e. `capture=False` (`agent_artifacts/io/credentials.py:389-436`). The subprocess therefore
+      inherits the terminal and prints its prompt over whatever curses last drew. Not seeing the
+      value is correct and must stay (161.8/161.9, INV-206/INV-207: this process never learns the
+      secret); handing the drawn screen to a subprocess is the defect.
+      Nothing in the codebase releases the terminal: `curses.endwin`, `def_prog_mode` and
+      `reset_shell_mode` appear nowhere, and the whole session runs inside one `curses.wrapper`
+      (`agent_artifacts/tui.py:876`) while the credential write happens far below it, in
+      `CredentialExecutor.apply` (`agent_artifacts/io/execution.py:882`).
+      Expected: an effect that needs a person at the terminal says so, and the terminal adapter
+      releases and restores the screen around it — so the provider still owns the prompt and AART
+      still never sees the value, but the prompt gets a clean screen and the TUI repaints after.
+      **Fixed (2026-09-10).** The seam is a loan, not a redraw. `CredentialEffectInterpreter`
+      takes an optional `terminal_handover` and wraps only `provider.store` in it, so the screen is
+      released before the provider speaks and taken back afterwards whatever it answered — and
+      reading or removing a credential, which says nothing to anybody, never disturbs the screen.
+      `_CursesHandover` in `agent_artifacts/tui.py` is the adapter: `def_prog_mode` + `endwin` on
+      the way in, `reset_prog_mode` + a full repaint on the way out. It is composed unbound and the
+      curses runner binds the screen to it, so the text terminal and the CLI keep prompting exactly
+      as they did. The loan travels beside `interactive_credentials` through
+      `LocalConsumerActions` → `complete_configured_installation` → `interpreters_for`. AART still
+      never sees the value. Three targeted mutations killed; see `tests/credential_terminal_handover_test.py`.
+      Blocks the end-to-end stage: no longer.
+
+- [x] **QA-084 — The manual lab drives macOS into offering to reset a keychain.**
+      Surface: manual lab + credential step. Severity: **blocking**, and hazardous. Observed: during
+      the credential step macOS raised `Keychain Not Found — A keychain cannot be found to store
+      "dummy-token." / Cancel / Reset To Defaults`. An offer to reset a keychain must never be
+      reachable from a manual test.
+      **Characterized (2026-09-10).** `_home` in `scripts/manual_test.py` creates `.config`,
+      `.local/share` and `.cache` in the lab home and nothing else; there is no
+      `Library/Keychains` under either lab home, confirmed on the operator's own lab. `security`
+      then finds no default keychain and offers to create one by resetting.
+      `MacKeychainProvider` can already be pointed at an explicit keychain file — `keychain` is a
+      field and `_suffix()` appends it (`agent_artifacts/io/credentials.py:262,279`) — but nothing
+      outside the constructor can set it: there is no environment or configuration path to it, and
+      the provider reaches the flow as an injected port.
+      **Fixed (2026-09-10), and with no product change at all.** Measured rather than assumed:
+      `security` does resolve the default keychain from `HOME`, and the missing piece was only that
+      the lab home had nowhere for one to live. `_keychain` in `scripts/manual_test.py` now creates
+      `Library/Keychains/aart-manual.keychain-db` with an empty password, creates
+      `Library/Preferences` (without it `default-keychain -s` silently forgets the choice), makes it
+      the default and the search list, and unlocks it — so the credential write lands in the lab,
+      the operator's real keychain is never a candidate, and `reset` takes it away with the
+      directory. Verified in both lab homes, and verified that the real default keychain is
+      unchanged by a setup. The empty password protects nothing and is not a secret. Three targeted
+      mutations killed.
+      Blocks the end-to-end stage: no longer. Split out of `QA-081`, which was the product half.
+
+- [ ] **QA-082 — Feature request: AART should push a reviewed Registry commit to a branch.**
+      Surface: Registry commit (45), and the CLI equivalent. Severity: medium.
+      **Decided by the product owner on 2026-09-10; 164.7 has been amended and the work is
+      unblocked (`D-228`).** Having to leave AART to type `git push` is the defect: the same bytes
+      were just reviewed, validated and committed here. AART now pushes the reviewed registry
+      commit, on an explicit action, to a remote branch the maintainer configures — any branch but
+      the registry's default one. A push to, merge into or fast-forward of the default branch is
+      refused by AART itself, by name, rather than left to the forge's branch protection. A
+      consumer subscribing to a registry reads its default branch, so what a consumer can install
+      is still what somebody merged. To build: the configured publication branch (maintainer
+      setting, with no default-branch value accepted), the push effect and its receipt, the refusal
+      and its test, and the Registry Commit screen's action. Supersedes the open question in
+      `QA-055`.
+      **Half-built (2026-09-10).** Landed: `agent_artifacts/domain/publication.py` decides the rule
+      from two strings — what was requested and what a subscriber reads — so `refs/heads/main`,
+      `HEAD` and a case variant are refused as the default branch under other spellings rather than
+      as three separate targets. `application/registry_publication.py` binds one reviewed revision
+      to one branch on one remote, with no `force`, `merge`, `fast_forward` or `delete` field to
+      set. `io/registry_publication.py` pushes `<revision>:refs/heads/<branch>` — the reviewed
+      commit, not whatever `HEAD` has become — and makes the refusal a second time from the remote's
+      own advertised `HEAD`, because a configured ref can disagree with the remote it names.
+      Evidence: 30 tests over a real bare remote, two of them Hypothesis properties, one asserting
+      the remote's `main` is byte-for-byte where it was. Five targeted mutations killed; `make
+      mutants` found four more (the adapter's guard branches and its held-commit check) and those
+      are closed too.
+      **Still to do:** the publication branch as a maintainer setting rather than an argument, the
+      Registry Commit screen's action, and the receipt's place in the frame. All three are in
+      `tui_maintainer.py` and the maintainer views, which CP-21 step 3 is rebuilding — take them
+      after it lands.
+      Blocks the end-to-end stage: no.
+
+- [x] **QA-083 — Repeated "Maintainer" in nested Maintainer titles.**
+      Surface: Maintainer screens. Severity: low. Observed: the operator asked not to repeat
+      "maintainer" in a title when the whole view is already the Maintainer's. Weigh against
+      `QA-071`, which adds the parent to the breadcrumb; the two must produce one scheme, not two.
+      Blocks the end-to-end stage: no.
+      Landed (2026-09-10, `D-236`): a dashboard passed through drops the word, so
+      "Maintainer" is said once however deep the view goes.
+
+
+- [ ] **QA-056 — A promotion cannot be completed from the CLI without fabricating its evidence.**
+      Surface: `aart registry promote`. Severity: medium. **Unconfirmed — verify during the CLI
+      run.** Observed in code: `registry promote` requires `--validation-report DIGEST` and
+      `--policy-result DIGEST`, and no CLI command emits either; `validation_report_digest` is
+      derived in the application layer and displayed only by the Maintainer screens. An operator
+      following a CLI-only route therefore either reads the digests off the TUI, which makes the
+      route not CLI-only, or invents them, which defeats the evidence the flags exist to carry.
+      Expected: either a command that emits the validation/policy evidence for scanned Candidates,
+      or an explicit statement that Candidate promotion is a TUI-only transaction. Blocks the
+      end-to-end stage: no. Workaround in use: `registry vendor`, which needs no external evidence.
+      Confirm at: `docs/testing/END_TO_END_ACCEPTANCE.md` step 3.
+
+- [ ] **QA-057 — The CLI route had no way into the lab's environment.**
+      Surface: manual acceptance tooling. Severity: low. Observed: `manual_test.py open` starts the
+      TUI, and the CLI procedure told the operator to paste four environment variables in front of
+      every command — unreadable, and a mistyped HOME runs a manual test against real state.
+      Expected: one entry point that puts a shell inside the lab.
+      Fix: `make manual-test-shell-maintainer` / `make manual-test-shell-consumer` open an
+      interactive shell with the lab's isolated HOME/XDG and the role's working directory.
+      Evidence: `tests/manual_test_lab_test.py::...a_lab_shell_is_described_for_each_role...`.
+
+- [ ] **QA-055 — The end of the promotion path states the publication boundary but never closes it.**
+      Surface: Registry commit (screen 45). Severity: low. **Unconfirmed — to verify during the next
+      manual run.** Observed in code, not yet at the terminal: the screen prints `Git push: no` and,
+      once applied, `Canonical-branch publication remains external.` Both are true statements of the
+      161.7 boundary, and neither tells the operator what is still theirs to do. The promotion
+      sequence therefore ends on a screen that says what AART did not do rather than naming the one
+      remaining step. Expected: the terminal screen of the sequence closes the path — the reviewed
+      commit is local, and publishing it is a push the maintainer performs — without AART pushing
+      or offering to. Blocks the end-to-end stage: no.
+      Confirm at: `docs/testing/TUI_MANUAL_WALKTHROUGH.md` step 8.
+
+- [x] **QA-062 — An author editing an already-published version crashed Source Sync.**
+      Surface: `reconcile_source_scan` (`agent_artifacts/application/maintainer.py`). Severity:
+      high. Found while answering how Sync detects upstream change. Observed, in the lab: after a
+      version is published, the next Sync records its Candidate as `promoted`; when the author then
+      edited a payload file without bumping the version, reconciliation called
+      `supersede_candidate` on that promoted record and the domain raised
+      `ValueError: published registry state, not its candidate history, owns promotion` — an
+      exception, not a `Result`, that no boundary catches, so it reached the caller as a crash. The
+      Collection path did the same thing with a bare `replace`, silently overwriting a published
+      record instead of raising.
+      Fix: a manifest now has at most two live records, kept apart — the promoted one, which states
+      what the registry contains and is never moved by a scan, and the Candidate under review, which
+      is the only one superseded. A new Candidate names whichever of the two it descends from, so
+      the conflict still points at the record it collides with, and the answer to the edit stays the
+      one already modelled: `invalid` with `registry-version-immutable`.
+      Verified in the lab: unchanged → `promoted` and stable across repeated Syncs; payload edited
+      at the same version → `invalid` with `registry-version-immutable`, linked to its predecessor;
+      version bumped → `changed`, ready to promote.
+      Evidence: `tests/maintainer_version_conflict_test.py::PublishedCandidateSupersessionTest`,
+      `tests/maintainer_collection_history_test.py::...a_promoted_collection_record_is_not_superseded...`.
+      Mutations killed: putting promoted records back in the current map; dropping the ancestor
+      link to a published predecessor; letting Collections supersede a promoted record.
+
+- [x] **QA-061 — The default lab's Registry disagreed with the Sources it claimed to have vendored.**
+      Surface: `scripts/manual_test.py`. Severity: high. Observed: the very first maintainer Source
+      Sync of an untouched lab reported both fixtures `invalid` with
+      `Published coordinate/version already contains different canonical content` — a real product
+      refusal, fired by a fixture that disagreed with itself. Two causes, both in the lab: the
+      manifest was written to the author repository as `json.dumps(manifest, indent=2)` and handed
+      to the Registry as `json.dumps(manifest)`, which are different bytes and therefore a different
+      `input_digest`; and the fixtures were pre-promoted under the aliases `manual-skill-source` /
+      `manual-mcp-source` while both walkthroughs tell the operator to configure `manual-skill` /
+      `manual-mcp`, and a Candidate's identity includes its Source alias.
+      Fix: one `_manifest_text` rendering used in both places, and the fixture aliases are the ones
+      the walkthroughs configure.
+      Evidence: `tests/manual_test_lab_test.py::...the_first_sync_of_an_untouched_lab_finds_the_registry_already_agrees`,
+      which drives the operator's own first Sync rather than comparing bytes.
+
+- [x] **QA-063 — One malformed manifest fails the whole Source, with no path in the message.**
+      Surface: Source Sync. Severity: medium. **Confirmed by measurement.** Observed:
+      setting `artifact.version` to `not-a-version` in one manifest made the entire Sync fail with
+      `invalid SemVer: 'not-a-version'` — no manifest path, no artifact name, and every other
+      artifact in that Source went unscanned. `CandidateState.INVALID` exists precisely so a bad
+      artifact can be reported as a bad Candidate; a Source-wide abort spends it. Expected: the
+      malformed manifest becomes an `invalid` Candidate naming its path, and its neighbours still
+      scan.
+      **Confirmed (2026-09-10).** Measured, not assumed: with `good/aart.json` at
+      `1.0.0` and `bad/aart.json` at `not-a-version`, `compile_author_snapshot` returns `Err` and
+      the healthy artifact is discarded — the abort is real. The diagnostic *does* carry
+      `location.path='bad/aart.json'`; it is the rendering that drops it, so the operator saw only
+      `invalid SemVer: 'not-a-version'`.
+      Landed: `compile_author_manifests` compiles each manifest on its own merits and answers with
+      `(artifacts, refusals)`, where a `ManifestRefusal` holds the manifest path beside its
+      diagnostics; a fault in the tree itself (uncanonical or duplicated path) still refuses whole,
+      because no manifest could own it. `compile_author_snapshot` is now a strict wrapper over it,
+      so adoption and publication keep refusing whole — which is right there.
+      **Landed whole (2026-09-10, `D-230`).** `compile_author_source`, the watching boundary, is now
+      tolerant, and a refusal has somewhere to go: `SourceSyncExecutionResult.refusals` carries it,
+      `MaintainerSourceSyncResultView.refusals` projects it as `(path, reason)`, and the Sync result
+      screen renders `Could not read N manifests:` with the path on each line. `manifest_count`
+      counts refusals beside the candidate states, so the arithmetic on the screen still closes — a
+      manifest seen and not compiled is still a manifest seen.
+      The malformed manifest is reported beside the scan rather than stored as an `invalid`
+      Candidate, deliberately: a Candidate is persisted and reconciled, and a refusal has no compiled
+      artifact behind it to promote, validate or publish, so a Candidate row would mean a
+      Candidate-history schema bump for a record that can never advance. Nothing persists a refusal;
+      the next Sync re-derives it. Both halves of the finding are met — the neighbours scan, and the
+      message names the file.
+      Four targeted mutations, all killed; the fourth (turning a schema refusal into a silent skip)
+      survived first and is what
+      `tests/source_partial_compilation_test.py::test_a_manifest_whose_schema_cannot_be_read_is_refused_rather_than_skipped`
+      exists for.
+      Evidence: `tests/source_partial_compilation_test.py` (7) and
+      `tests/source_sync_refusal_report_test.py` (5).
+      Blocks the end-to-end stage: no.
+
+- [x] **QA-059 — The TUI walkthrough went from Add Source straight to Sync, which cannot work.**
+      Surface: `docs/testing/TUI_MANUAL_WALKTHROUGH.md`, and the Sources screen's own refusal.
+      Severity: high. Found during the operator's manual TUI run. Observed: pressing `s` on Sources
+      refused with `Source Sync needs an explicit default target registry`, both Sources sat at
+      `0 manifests`, and Candidates was empty. `prepare_configured_source_sync`
+      (`agent_artifacts/io/maintainer_sync.py:135`) requires `configuration.default_registry` and
+      then a *synchronized approved snapshot* of it, because Sync classifies each Candidate as new,
+      updated or unchanged against what the target Registry already approved. In an empty-registry
+      lab the Registry the maintainer just initialized exists only as a local commit, so it must be
+      pushed and subscribed to before Sync has any baseline — and the walkthrough put its only push
+      after promotion.
+      Fix: new step 3, *Publish the Registry and subscribe to it*, between Create the Registry and
+      Add the author Sources; later steps renumbered, and the post-promotion push is now named as
+      the second one.
+      Verified against a copy of the operator's own lab: push → `source add --kind registry-git
+      --default` → `prepare_configured_source_sync` returns `Ok` for both Sources, and completing
+      it reports `manifests=1` per Source where it previously refused.
+
+- [x] **QA-060 — The Source Sync refusal names a fix the screen offers no route to.**
+      Surface: Sources (screen 33). Severity: medium. **Unconfirmed — judge it during the run.**
+      Observed: the refusal says `configure an enabled default registry, then review Source Sync
+      again`. From Sources there is no route to Registries, and nothing says that the Registry the
+      operator initialized minutes earlier is not yet subscribable because it has not been pushed.
+      A maintainer who has just created a Registry is told to configure a different thing without
+      being told that the thing they made is the thing to configure. Expected: the refusal names
+      the two steps in the order they must happen, or the screen offers the route. Blocks the
+      end-to-end stage: no.
+      Done (2026-09-10, `D-238`): the refusal now advises `publish the Registry to its branch,
+      subscribe to it in this project, then configure it as the enabled default target`, matching
+      the `QA-075` wording on the screen next door. It is deliberately one remediation line, not
+      three: `Diagnostic` sorts remediation into a set, so alphabetical order is the only order
+      several lines can have and it is the wrong one (`D-238`).
+      Covered by `tests/empty_state_truthfulness_test.py::SourceSyncWithoutADefaultRegistryTest`;
+      mutation: reversing the clauses turns the ordering test red.
+
+- [x] **QA-058 — A space typed into the Initialize Registry form made a usable identity unusable.**
+      Surface: Initialize Registry (screen 46a). Severity: high. Found during the operator's manual
+      TUI run. Observed: `manual-registry` / `Manual Registry` was refused with `this is not a
+      usable registry identity`. The form's own status bar advertises `[Space] Toggle`, but on a
+      text row a printable key is text, so pressing Space there types a space into the answer; the
+      identity was then judged with it, and `_SLUG_RE`/`_one_safe_line` reject any surrounding
+      whitespace. The refusal named none of the three answers and its single advice line was
+      truncated mid-word by the content measure, so the operator had nothing to act on.
+      Fix: `RegistryInitDraft.settled()` drops the whitespace around the three text answers at the
+      action boundary — after typing, so `Manual Registry` stays typeable — and the review, digest
+      and run all use the settled draft. `registry_identity_refusal` now judges each answer beside
+      two known-good ones and names the faulted fields, one short line of advice each.
+      Evidence: `tests/maintainer_registry_init_test.py::RegistryIdentityWhitespaceTest`,
+      `::RegistryIdentityRefusalTest`, and
+      `::MaintainerRegistryInitActionTest::test_a_stray_space_around_an_answer_still_reviews_the_registry`.
+      Mutations killed: dropping `.strip()` on the identifier; keeping unfaulted fields in the
+      refusal; naming only the first faulted field.
 
 - [ ] **QA-027 — A finished sequence has no way out but pressing Esc repeatedly.**
       Stage: after any completed Maintainer action
@@ -365,7 +947,7 @@ Each new entry records:
       Fix: `D-216`. The screen passes its stable row identity into the card renderer; exactly the
       focused Registry head receives `>`.
 
-### Fixed — awaiting manual retest
+### Fixed — awaiting manual retest (earlier batches)
 
 - [ ] **QA-039 — Vendored and Referenced promotion modes are unexplained.**
       Stage: choosing how a Candidate enters a Registry

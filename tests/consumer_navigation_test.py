@@ -157,6 +157,9 @@ class ConsumerOverviewTest(unittest.TestCase):
         rendered = "\n".join(render_settings(settings))
         self.assertIn("Fast", rendered)
         self.assertIn("Maintainer Mode: off", rendered)
+        self.assertIn("Experience\n  Detail level: Fast\n\nInstallation", rendered)
+        self.assertIn("Updates\n  Show available updates: on\n\nAdvanced", rendered)
+        self.assertIn("Maintainer Mode: off\n\nMaintainer Mode off hides", rendered)
 
 
 if __name__ == "__main__":

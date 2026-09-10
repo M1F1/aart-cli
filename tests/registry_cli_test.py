@@ -40,6 +40,7 @@ class RegistryCliTest(unittest.TestCase):
             "format",
             "promote-native",
             "publish",
+            "push",
             "refresh-native",
             "vendor",
             "vendor-batch",

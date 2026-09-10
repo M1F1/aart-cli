@@ -574,6 +574,10 @@ class MaintainerSourceSyncResultView:
     manifest_count: int
     candidate_states: tuple[tuple[CandidateState, int], ...]
     review_digest: str
+    #: Manifests this Source contains that would not compile, as (path, why) (`QA-063`).  A Sync
+    #: that reads the rest of a Source and says nothing about the file it could not read is worse
+    #: than the Source-wide refusal it replaces, because the omission is silent.
+    refusals: tuple[tuple[str, str], ...] = ()
 
     def __post_init__(self) -> None:
         if (
@@ -600,7 +604,21 @@ class MaintainerSourceSyncResultView:
                 for state, count in self.candidate_states
             )
             or len({state for state, _ in self.candidate_states}) != len(self.candidate_states)
-            or sum(count for _, count in self.candidate_states) != self.manifest_count
+            # Every discovered manifest is accounted for: it became a Candidate or it was refused.
+            or sum(count for _, count in self.candidate_states) + len(self.refusals)
+            != self.manifest_count
+            or any(
+                not isinstance(item, tuple)
+                or len(item) != 2
+                or any(
+                    not isinstance(part, str)
+                    or not part
+                    or any(character in part for character in "\r\n")
+                    for part in item
+                )
+                for item in self.refusals
+            )
+            or len({path for path, _ in self.refusals}) != len(self.refusals)
         ):
             raise ValueError("Maintainer Source Sync result view is invalid")
 
@@ -2148,11 +2166,15 @@ class MaintainerViews:
     version_conflicts: tuple[MaintainerVersionConflictView, ...] | None = None
     collection_candidates: tuple[MaintainerCollectionCandidateView, ...] | None = None
     collection_validations: tuple[MaintainerCollectionValidationView, ...] | None = None
+    # Whether the project this TUI was opened in is itself a Registry workspace. Connected
+    # registries are Marketplace inputs and do not establish this fact.
+    registry_workspace_present: bool = True
 
     def __post_init__(self) -> None:
         aliases = tuple(source.alias for source in self.sources)
         if (
             not isinstance(self.dashboard, MaintainerDashboardView)
+            or not isinstance(self.registry_workspace_present, bool)
             or any(not isinstance(source, MaintainerSourceView) for source in self.sources)
             or len(set(aliases)) != len(aliases)
             or self.dashboard.source_count != len(self.sources)
@@ -2462,9 +2484,13 @@ def project_source_sync_result(
         target_registry.value,
         result.source.disposition.value,
         result.scan.revision,
-        result.scan.manifest_count,
+        result.scan.manifest_count + len(result.refusals),
         tuple((state, counts[state]) for state in CandidateState if counts[state]),
         str(result.review_digest),
+        tuple(
+            (str(refusal.manifest_path), refusal.diagnostics[0].message)
+            for refusal in result.refusals
+        ),
     )
 
 

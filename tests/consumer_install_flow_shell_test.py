@@ -13,6 +13,7 @@ from agent_artifacts.application.consumer_ui import (
     ConsumerUiEvent,
     ConsumerUiEventKind,
     ConsumerUiState,
+    key_event,
     reduce_consumer_ui,
 )
 from agent_artifacts.application.consumer_views import (
@@ -172,6 +173,16 @@ class InstallFlowScreenTest(unittest.TestCase):
 
         self.assertIn("View installed", fast)
         self.assertIn("View receipt", fast)
+
+    def test_enter_on_success_finishes_the_wizard_at_marketplace(self) -> None:
+        source, state = at(ConsumerScreen.SUCCESS)
+
+        event = key_event("enter", state, detail=source.detail(state))
+        self.assertIsNotNone(event)
+        assert event is not None
+        finished, _commands = reduce_consumer_ui(state, event)
+
+        self.assertIs(finished.session.screen, ConsumerScreen.MARKETPLACE)
 
     def test_updates_lists_only_what_has_an_update_and_opens_its_inputs(self):
         source, state = at(ConsumerScreen.UPDATES)

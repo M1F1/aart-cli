@@ -135,7 +135,10 @@ def prepare_configured_source_sync(
     if target is None:
         return _error(
             "Source Sync needs an explicit default target registry",
-            "configure an enabled default registry, then review Source Sync again",
+            # `D-238`: remediation is a sorted set of independent remedies, so an ordered
+            # sequence of steps has to be one of them (`QA-060`).
+            "publish the Registry to its branch, subscribe to it in this project, then "
+            "configure it as the enabled default target",
         )
     approved = read_approved_registry_state(effective, target, data_root=data_root)
     if isinstance(approved, Err):

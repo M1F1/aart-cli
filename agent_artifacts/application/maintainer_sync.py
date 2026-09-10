@@ -31,7 +31,7 @@ from agent_artifacts.domain.identifiers import (
 from agent_artifacts.domain.registry import RegistryArtifactVersion
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.domain.serialization import canonical_json_bytes
-from agent_artifacts.protocol.authoring import CompiledAuthorSource
+from agent_artifacts.protocol.authoring import CompiledAuthorSource, ManifestRefusal
 from agent_artifacts.protocol.hashing import sha256_bytes
 from agent_artifacts.protocol.native_tree import SourceSnapshot
 from agent_artifacts.sources.model import (
@@ -253,12 +253,17 @@ class SourceSyncExecutionResult:
     review_digest: ObjectDigest
     source: SourceSyncOutcome
     scan: SourceScan
+    #: Manifests this Source contains that would not compile (`QA-063`).  They belong here rather
+    #: than on the scan: a refusal is a fact about this revision, recomputed every Sync, and the
+    #: Candidate history is the record of Candidates.  Nothing persists them.
+    refusals: tuple[ManifestRefusal, ...] = ()
 
     def __post_init__(self) -> None:
         if (
             not _valid_digest(self.review_digest)
             or not isinstance(self.source, SourceSyncOutcome)
             or not isinstance(self.scan, SourceScan)
+            or any(not isinstance(item, ManifestRefusal) for item in self.refusals)
             or self.scan.registry_mutations
             or self.scan.source_alias != self.source.current.candidate.alias
             or self.scan.revision != self.source.current.candidate.resolved_revision
@@ -428,6 +433,7 @@ def execute_source_sync(
             prepared.review_digest,
             synchronized.value,
             reconciled.value,
+            compiled.value.refusals,
         )
     )
     return _release(result, ports, lease.value)

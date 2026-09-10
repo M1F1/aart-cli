@@ -67,12 +67,14 @@ from agent_artifacts.application.maintainer_views import (
     project_source_sync_review,
 )
 from agent_artifacts.configuration.model import ConfiguredSource, SourceKind
-from agent_artifacts.configuration.policy import EffectiveConfiguration
+from agent_artifacts.configuration.policy import EffectiveConfiguration, redact_text
 from agent_artifacts.configuration.schema import configured_source_from_input
 from agent_artifacts.domain.candidates import CandidateId
+from agent_artifacts.domain.credentials import CredentialProviderRef, ProviderState
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.harness import Scope
 from agent_artifacts.domain.identifiers import ArtifactCoordinate, SourceAlias
+from agent_artifacts.domain.inputs import SecretInput, SecretProviderReference
 from agent_artifacts.domain.policies import EffectivePolicy
 from agent_artifacts.domain.receipts import ArtifactReceipt
 from agent_artifacts.domain.reconciliation import DesiredState
@@ -107,6 +109,7 @@ from .configured_uninstall_action import (
 from .consumer_machine import read_installed_inspections
 from .consumer_settings import write_consumer_settings
 from .credentials import CredentialProviderPort
+from .execution import TerminalHandover
 from .maintainer_promotion import (
     PreparedConfiguredCandidatePromotion,
     complete_configured_candidate_promotion,
@@ -309,6 +312,14 @@ class _PendingRegistryRefresh:
 
 
 @dataclass(frozen=True, slots=True)
+class _PendingRegistryRemoval:
+    """The complete Registry identity shown before its connection is removed."""
+
+    source: ConfiguredSource
+    review_digest: str
+
+
+@dataclass(frozen=True, slots=True)
 class _PendingSourceAddition:
     draft: SourceDraft
     source: ConfiguredSource
@@ -362,6 +373,7 @@ class RegistryBootstrapCompletion:
 
 RegistryConnectionPort = Callable[[RegistryDraft], Result[RegistryConnectionSnapshot]]
 RegistryRefreshPort = Callable[[str], Result[RegistryConnectionSnapshot]]
+RegistryRemovalPort = Callable[[ConfiguredSource], Result[RegistryConnectionSnapshot]]
 SourceConnectionPort = Callable[[SourceDraft], Result[RegistryConnectionSnapshot]]
 RegistryBootstrapPort = Callable[[RegistryInitDraft], Result[RegistryBootstrapCompletion]]
 RegistryRebuildPort = Callable[[tuple[str, ...]], Result[RegistryBootstrapCompletion]]
@@ -390,6 +402,7 @@ _Pending = (
     | PreparedConfiguredCandidatePromotion
     | _PendingRegistryAddition
     | _PendingRegistryRefresh
+    | _PendingRegistryRemoval
     | _PendingSourceAddition
     | _PendingRegistryInit
     | _PendingRegistryRebuild
@@ -426,6 +439,7 @@ class LocalConsumerActions:
         completion_factory: ConfiguredCompletionFactory | None = None,
         registry_connection: RegistryConnectionPort | None = None,
         registry_refresh: RegistryRefreshPort | None = None,
+        registry_removal: RegistryRemovalPort | None = None,
         source_connection: SourceConnectionPort | None = None,
         registry_bootstrap: RegistryBootstrapPort | None = None,
         registry_rebuild: RegistryRebuildPort | None = None,
@@ -434,6 +448,7 @@ class LocalConsumerActions:
         adopted_artifacts: tuple[AdoptedArtifact, ...] = (),
         repository_upstream_check: RepositoryUpstreamCheckPort | None = None,
         repository_adopted_list: RepositoryAdoptedListPort | None = None,
+        terminal_handover: TerminalHandover | None = None,
     ) -> None:
         if not isinstance(context, ConsumerActionContext):
             raise ValueError("consumer actions need a composed action context")
@@ -449,6 +464,7 @@ class LocalConsumerActions:
         self._completion_factory = completion_factory
         self._registry_connection = registry_connection
         self._registry_refresh = registry_refresh
+        self._registry_removal = registry_removal
         self._source_connection = source_connection
         self._registry_bootstrap = registry_bootstrap
         self._registry_rebuild = registry_rebuild
@@ -457,11 +473,25 @@ class LocalConsumerActions:
         self._adopted_artifacts = adopted_artifacts
         self._repository_upstream_check = repository_upstream_check
         self._repository_adopted_list = repository_adopted_list
+        #: How the terminal adapter lends its screen to an effect that needs a person at the
+        #: keyboard.  A credential prompt belongs to the provider, not to AART (161.8/161.9), and
+        #: under the TUI it would otherwise be spoken over a drawn frame (`QA-081`).
+        self._terminal_handover = terminal_handover
         self._scanned_repository: RepositoryScan | None = None
         self._adoption_review: MaintainerAdoptionReviewView | None = None
         self._adoption_upstream: AdoptionUpstreamCheck | None = None
 
     # -- preferences --------------------------------------------------------- #
+
+    @property
+    def terminal_handover(self) -> TerminalHandover | None:
+        """The screen loan this was composed with, for whoever draws the screen to bind (`QA-081`).
+
+        Composition happens before any terminal exists, so the loan is handed over here inert and
+        the adapter that draws claims it.  A route with no drawn screen never looks.
+        """
+
+        return self._terminal_handover
 
     @property
     def settings(self) -> ConsumerSettings:
@@ -621,6 +651,8 @@ class LocalConsumerActions:
             return self._prepare_repair(command)
         if action is ConsumerActionKind.REGISTRY_SYNC:
             return self._prepare_registry_refresh(command)
+        if action is ConsumerActionKind.REGISTRY_REMOVE:
+            return self._prepare_registry_removal(command)
         if action is ConsumerActionKind.SOURCE_SYNC:
             return self._prepare_source_sync(command)
         if action is ConsumerActionKind.CANDIDATE_PROMOTION:
@@ -858,9 +890,11 @@ class LocalConsumerActions:
         other way to know that confirming it cannot publish anything (B-090).
         """
 
-        draft = command.registry_init_draft
-        if draft is None or self._registry_bootstrap is None:
+        if command.registry_init_draft is None or self._registry_bootstrap is None:
             return self._declined(command, _lines("registry initialization is unavailable"))
+        # `QA-058`: judged, reviewed, digested and run as the operator named it, without the
+        # spaces a `[Space] Toggle` press leaves in a text row.
+        draft = command.registry_init_draft.settled()
         refused = registry_identity_refusal(
             registry_id=draft.registry_id,
             display_name=draft.display_name,
@@ -1198,11 +1232,51 @@ class LocalConsumerActions:
         )
         if isinstance(prepared, Err):
             return self._declined(command, _refusal(prepared.diagnostics))
+        if not prepared.value.ready:
+            unanswered = prepared.value.draft.inputs.unanswered
+            provider = next(
+                (
+                    item
+                    for item in context.credential_providers
+                    if item.available() is ProviderState.AVAILABLE
+                ),
+                None,
+            )
+            if provider is not None and all(
+                isinstance(field.input, SecretInput) for field in unanswered
+            ):
+                # The reference is safe application state, never a value. It is stable inside one
+                # AART home and separate across disposable/manual homes, so test runs and users do
+                # not silently share a Keychain item merely because an author reused an input id.
+                service = "aart." + hashlib.sha256(host.user_home.encode("utf-8")).hexdigest()[:12]
+                sources = tuple(
+                    SecretProviderReference(
+                        field.input.id,
+                        CredentialProviderRef(
+                            provider.provider,
+                            service,
+                            field.input.id.value,
+                        ),
+                    )
+                    for field in unanswered
+                )
+                prepared = prepare_configured_installation(
+                    context.effective,
+                    selection,
+                    host=host,
+                    sources=sources,
+                    policy=context.policy,
+                    selected_remediations=None,
+                    credential_providers=context.credential_providers,
+                    resolvers=context.credential_providers,
+                    previous=previous,
+                )
+                if isinstance(prepared, Err):
+                    return self._declined(command, _refusal(prepared.diagnostics))
         self._pending_host = host
         if not prepared.value.ready:
-            # Unanswered inputs are not a refusal -- screen 07 exists because the answer is "not
-            # yet" -- but this shell has no way to collect one, so it says what it is waiting for
-            # rather than offering a plan that cannot be confirmed (B-036).
+            # Config values still need an editable field. Secret values never do: the shell binds
+            # only their provider reference above and the provider itself owns entry/storage.
             waiting = ", ".join(
                 item.input.id.value for item in prepared.value.draft.inputs.unanswered
             )
@@ -1383,6 +1457,8 @@ class LocalConsumerActions:
             return self._execute_registry_addition(command, pending)
         if isinstance(pending, _PendingRegistryRefresh):
             return self._execute_registry_refresh(command, pending)
+        if isinstance(pending, _PendingRegistryRemoval):
+            return self._execute_registry_removal(command, pending)
         if isinstance(pending, _PendingSourceAddition):
             return self._execute_source_addition(command, pending)
         if isinstance(pending, _PendingRegistryInit):
@@ -1507,6 +1583,77 @@ class LocalConsumerActions:
             effective=refreshed.value.effective,
             offers=refreshed.value.offers,
             maintainer=refreshed.value.maintainer,
+        )
+        recorded_at, _today = self._moment()
+        return self._recorded(command, recorded_at)
+
+    def _prepare_registry_removal(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        if self._registry_removal is None:
+            return self._declined(command, _lines("Registry disconnection is unavailable"))
+        source = next(
+            (
+                item
+                for item in self._context.effective.configuration.sources
+                if item.alias.value == command.focus and item.kind is SourceKind.REGISTRY_GIT
+            ),
+            None,
+        )
+        if source is None:
+            return self._declined(command, _lines(f"no connected Registry here is {command.focus}"))
+        cleared_default = self._context.effective.configuration.default_registry == source.alias
+        identity = json.dumps(
+            {
+                "alias": source.alias.value,
+                "location": source.location,
+                "ref": source.ref,
+                "cleared_default": cleared_default,
+                "operation": "registry-remove",
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        review_digest = "sha256:" + hashlib.sha256(identity).hexdigest()
+        self._pending = _PendingRegistryRemoval(source, review_digest)
+        self._pending_action = command.action
+        default_effect = (
+            "  default Registry: cleared; no replacement is selected"
+            if cleared_default
+            else "  default Registry: unchanged"
+        )
+        return ConsumerActionUpdate(
+            self.source(
+                notice=(
+                    "Disconnect Registry review:",
+                    f"  Registry: {source.alias}",
+                    f"  origin: {redact_text(source.location)}",
+                    f"  branch or tag: {source.ref or 'repository default'}",
+                    "  removes: this connection and its AART-managed snapshot",
+                    default_effect,
+                    "  keeps: all installed artifacts and receipts",
+                    "  Marketplace will be reloaded from the Registries that remain connected.",
+                )
+            ),
+            ConsumerUiEvent(
+                ConsumerUiEventKind.ACTION_PREPARED,
+                action=command.action,
+                review_digest=review_digest,
+            ),
+        )
+
+    def _execute_registry_removal(
+        self,
+        command: ConsumerUiCommand,
+        pending: _PendingRegistryRemoval,
+    ) -> ConsumerActionUpdate:
+        assert self._registry_removal is not None
+        removed = self._registry_removal(pending.source)
+        if isinstance(removed, Err):
+            return self._failed(command, _refusal(removed.diagnostics))
+        self._context = replace(
+            self._context,
+            effective=removed.value.effective,
+            offers=removed.value.offers,
+            maintainer=removed.value.maintainer,
         )
         recorded_at, _today = self._moment()
         return self._recorded(command, recorded_at)
@@ -1681,6 +1828,8 @@ class LocalConsumerActions:
             recorded_at=recorded_at,
             today=today,  # type: ignore[arg-type]
             offline=self._context.offline,
+            interactive_credentials=True,
+            credential_handover=self._terminal_handover,
         )
         if isinstance(completed, Err):
             return self._failed(command, _refusal(completed.diagnostics))

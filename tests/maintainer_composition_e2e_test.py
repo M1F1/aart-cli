@@ -269,10 +269,10 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             )
 
             self.assertIs(finished.session.screen, MaintainerScreen.SOURCE_DETAILS)
-            self.assertTrue(terminal.screen_containing("AART / Maintainer Dashboard"))
+            self.assertTrue(terminal.screen_containing("/ Maintainer Dashboard"))
             self.assertIn("Candidates: 1", terminal.screen_containing("Maintainer overview"))
-            self.assertIn("authors", terminal.screen_containing("AART / Sources"))
-            detail = terminal.screen_containing("AART / Source Details")
+            self.assertIn("authors", terminal.screen_containing("/ Sources"))
+            detail = terminal.screen_containing("/ Source Details")
             self.assertIn("branch: main", detail)
             self.assertIn("Candidates: 1", detail)
 
@@ -409,10 +409,10 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             )
 
             self.assertIs(finished.session.screen, MaintainerScreen.SOURCE_SYNC_RESULT)
-            review = terminal.screen_containing("AART / Source Sync")
+            review = terminal.screen_containing("/ Source Sync")
             self.assertIn("Registry mutations: none", review)
             self.assertIn("Review identity: sha256:", review)
-            result = terminal.screen_containing("AART / Source Sync Result")
+            result = terminal.screen_containing("/ Source Sync Result")
             self.assertIn("Discovered manifests: 1", result)
             self.assertIn("Candidates: 1", result)
             self.assertIn("Registry mutations: none", result)
@@ -456,7 +456,7 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             self.assertIs(promoted.session.screen, MaintainerScreen.REGISTRY)
             self.assertNotIn(
                 "cannot be promoted",
-                promotion_terminal.screen_containing("AART / Registry Diff"),
+                promotion_terminal.screen_containing("/ Registry Diff"),
             )
             self.assertIn(
                 "Approved registry state written locally",
@@ -559,12 +559,12 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             self.assertIs(finished.session.screen, MaintainerScreen.CANDIDATE_DIFF)
             self.assertEqual(finished.focus, expected.id.value)
 
-            listed = terminal.screen_containing("AART / Candidates")
+            listed = terminal.screen_containing("/ Candidates")
             self.assertIn("STATUS", listed)
             self.assertIn("authors", listed)
             self.assertNotIn(expected.id.value, listed)
 
-            detail = terminal.screen_containing("AART / Candidate Details")
+            detail = terminal.screen_containing("/ Candidate Details")
             self.assertIn("Manifest:", detail)
             self.assertIn("Target registry: company", detail)
             self.assertIn("Press d for semantic diff.", detail)
@@ -637,7 +637,11 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
                 ENTER,
                 ord("d"),
                 ENTER,
-                ord("p"),
+                # Open one validation check, then continue from its details with Enter. The
+                # completed validation is evidence in the workflow, not a dead end that requires
+                # knowing the hidden `p` shortcut (`QA-074`).
+                ENTER,
+                ENTER,
                 ENTER,
                 ENTER,
                 ord("m"),
@@ -660,19 +664,19 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             assert entered is not None
             self.assertEqual(entered.candidate_id, expected.id.value)
 
-            checks = terminal.screen_containing("AART / Validation")
+            checks = terminal.screen_containing("/ Validation")
             self.assertIn("Manifest schema", checks)
             self.assertIn("Live acceptance", checks)
             # Live acceptance has not run, and no undemanding policy may report it as passed.
             self.assertIn("Not run", checks)
 
-            review = terminal.screen_containing("AART / Policy Review")
+            review = terminal.screen_containing("/ Policy Review")
             self.assertIn("Policy allows:", review)
             self.assertIn("Runtimes: unconstrained", review)
             self.assertIn("nothing beyond the pipeline itself", review)
             self.assertIn("none; nothing here refuses promotion", review)
 
-            promotion = terminal.screen_containing("AART / Promotion Review")
+            promotion = terminal.screen_containing("/ Promotion Review")
             self.assertIn("Target registry: company", promotion)
             self.assertIn("Promotion mode: vendored", promotion)
             # This walk reaches a confirmable review against the registry this machine actually
@@ -701,6 +705,54 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
 
             registry_root = env.project
             _materialize(registry_root, approved_snapshot)
+            # An approved snapshot is connected Registry content, not proof that this project is
+            # itself a Registry checkout.  This scenario exercises a real local Registry, so give
+            # it the marker whose absence must make the Maintainer screen say otherwise.
+            (registry_root / "aart-registry.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "protocol_version": 1,
+                        "registry_id": "company",
+                        "display_name": "Company Registry",
+                        "requires_aart": {
+                            "min_inclusive": "0.0.1",
+                            "max_exclusive": "3.0.0",
+                        },
+                        "required_capabilities": [],
+                        "default_channel": "main",
+                        "services": {},
+                    },
+                    sort_keys=True,
+                ),
+                encoding="utf-8",
+            )
+            local_baseline = FilesystemPromotionOutput(str(registry_root)).current()
+            assert isinstance(local_baseline, Ok), local_baseline
+            synchronized_baseline = SourceSnapshot(
+                SnapshotOrigin.IMMUTABLE_GIT,
+                local_baseline.value.entries,
+            )
+            baseline_candidate = make_source_candidate(
+                source_instance_id(env.source),
+                env.source.alias,
+                "b" * 40,
+                synchronized_baseline,
+            )
+            assert isinstance(baseline_candidate, Ok), baseline_candidate
+            self.assertIsInstance(
+                publish_source_snapshot(
+                    SourcePublishCommand(
+                        original_paths,
+                        ValidatedSourceCandidate(
+                            baseline_candidate.value,
+                            SourceId("company-registry"),
+                        ),
+                        int(time.time()),
+                    )
+                ),
+                Ok,
+            )
             subprocess.run(
                 ("git", "init", "-b", "main", str(registry_root)),
                 check=True,
@@ -799,7 +851,7 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
                 MaintainerScreen.REGISTRY,
                 terminal.last,
             )
-            validation = terminal.screen_containing("AART / Registry Validation")
+            validation = terminal.screen_containing("/ Registry Validation")
             self.assertIn("Registry validation: Passed", validation)
             self.assertIn("No approved registry state has been written", validation)
             committed = terminal.screen_containing("Approved registry state written locally")
@@ -807,10 +859,10 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             self.assertIn("Git push: no", committed)
             self.assertIn("Canonical-branch publication remains external", committed)
 
-            # Screen 46 draws the registry the walk just wrote into.  The local commit is
-            # deliberately not a sync, so the checkout is ahead of the synchronized approved
-            # snapshot here -- and saying so is the point of the working-tree line.
-            registry = terminal.screen_containing("AART / Registry Maintainer")
+            # Registry Maintainer draws the local Registry the walk just wrote into.  The local
+            # commit is deliberately not a sync, so the checkout is ahead of the synchronized
+            # approved snapshot here -- and saying so is the point of the working-tree line.
+            registry = terminal.screen_containing("/ Registry Maintainer")
             self.assertIn(env.source.alias.value, registry)
             self.assertIn("Approved versions:", registry)
             self.assertIn("Working tree:", registry)
@@ -926,10 +978,10 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
                 MaintainerScreen.COLLECTION_VALIDATION,
                 terminal.last,
             )
-            listed = terminal.screen_containing("AART / Collection Candidates")
+            listed = terminal.screen_containing("/ Collection Candidates")
             self.assertIn("data-engineer", listed)
             self.assertIn("2.1.0", listed)
-            validated = terminal.screen_containing("AART / Collection Validation")
+            validated = terminal.screen_containing("/ Collection Validation")
             # The member resolves to the version this registry actually approved, and screen 52
             # says which one rather than only that it is satisfiable.
             self.assertIn("skill/code-review", validated)

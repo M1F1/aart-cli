@@ -9405,7 +9405,26 @@ Registry review remains semantic-first:
 Registry validation checks schema, identities, digests, provenance, dependency closure, collections,
 policy and snapshot reproducibility.
 
-Commit is explicit. AART may create the local registry commit but does not push it.
+Commit is explicit. AART creates the local registry commit.
+
+**Publishing that commit is an action inside AART, not a reason to leave it.** Having to drop out
+of the surface to type `git push` is a gap in the product, not a safeguard: the maintainer has
+already reviewed exactly these bytes here, and the push carries no decision the surface did not
+already record.
+
+**Publication is a push to a branch, never to the default branch.** The maintainer configures which
+remote branch a registry publishes to, and may choose any branch except the registry's default one.
+Pushing to, merging into, or fast-forwarding the default branch is outside what AART does at all:
+no surface offers it, and the attempt is refused here rather than delegated to policy or to the
+forge's branch protection. Opening the pull request and merging it remain the reviewer's work,
+through `gh` or the forge.
+
+A consumer never sees that choice. Subscribing to a registry reads its default branch, so what a
+consumer can install is what somebody merged, not what somebody published.
+
+This is what separates publication from approval, and it is unchanged by AART performing the push:
+a push moves reviewed bytes to a place other people can look at; only the merge makes them the
+registry, and AART never performs that step.
 
 ## 164.8 Screen 46 — Registry Maintainer View — ACCEPTED
 

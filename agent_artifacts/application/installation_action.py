@@ -16,6 +16,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from agent_artifacts.domain.credentials import CredentialObservation
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.identifiers import ArtifactCoordinate, ObjectDigest
 from agent_artifacts.domain.inspection import EnvironmentFacts
@@ -123,6 +124,7 @@ def prepare_installation_action(
     base_interpreter: str | None = None,
     resolvers: tuple[CredentialResolutionPort, ...] = (),
     previous: tuple[tuple[ArtifactCoordinate, DesiredState], ...] = (),
+    credential_observations: tuple[CredentialObservation, ...] = (),
 ) -> Result[PreparedInstallationAction]:
     """Offer and begin one action without mutating the machine.
 
@@ -158,6 +160,7 @@ def prepare_installation_action(
         observed=offered.value.observed,
         previous=previous,
         selected_remediations=chosen,
+        credential_observations=credential_observations,
     )
     if isinstance(begun, Err):
         return begun

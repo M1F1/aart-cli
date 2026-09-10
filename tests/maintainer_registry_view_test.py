@@ -15,6 +15,7 @@ from __future__ import annotations
 import builtins
 import json
 import unittest
+from dataclasses import replace
 
 from agent_artifacts.application.candidate_validation import validate_candidate
 from agent_artifacts.application.consumer_ui import ConsumerUiState
@@ -317,6 +318,24 @@ class MaintainerRegistryShellTest(unittest.TestCase):
         self.assertIn("matches the approved snapshot", drawn)
         self.assertIn("Recent promotions", drawn)
 
+    def test_connected_registry_is_not_presented_as_the_current_project_workspace(self) -> None:
+        views = replace(self.views, registry_workspace_present=False)
+        source = CanonicalScreenSource(
+            ConsumerScreens(project_dashboard((), registry_count=0), maintainer=views)
+        )
+        state = ConsumerUiState(
+            ConsumerSession(MaintainerScreen.REGISTRY),
+            settings=ConsumerSettings().with_maintainer_mode(True),
+        )
+
+        drawn = "\n".join(frame(source, _reload(source, state, entering=True)))
+
+        self.assertIn("Connected Registry snapshots", drawn)
+        self.assertIn("determine what Marketplace can offer", drawn)
+        self.assertIn("Current project is not a Registry", drawn)
+        self.assertIn("Initialize creates", drawn)
+        self.assertNotIn("Working tree: differs", drawn)
+
     def test_an_installation_with_no_composed_registry_refuses_instead_of_raising(self) -> None:
         source = CanonicalScreenSource(
             ConsumerScreens(
@@ -331,7 +350,7 @@ class MaintainerRegistryShellTest(unittest.TestCase):
 
         drawn = "\n".join(frame(source, _reload(source, state, entering=True)))
 
-        self.assertIn("No registry is configured.", drawn)
+        self.assertIn("No Registry is connected.", drawn)
 
     def test_drawing_screen_46_opens_no_file(self) -> None:
         """Registry validity read while drawing could contradict the promotion that produced it."""

@@ -101,9 +101,10 @@ def _drive(env, state: ConsumerUiState, *codes: int, actions=None):
     return finished, terminal, handler
 
 
-#: Marketplace to installed, one screen at a time: review the selection, read what was inspected,
-#: accept what has to be prepared first, then confirm the plan that was reviewed.
-_INSTALL = (SPACE, ord("i"), ENTER, ENTER, ENTER, ENTER)
+#: Marketplace to installed, one screen at a time: review the selection, accept what has to be
+#: prepared first, then confirm the plan that was reviewed.  Fast mode keeps inspection in the
+#: plan but does not stop at a mandatory inspection screen.
+_INSTALL = (SPACE, ord("i"), ENTER, ENTER, ENTER)
 
 
 class ConsumerApplicationInstallTest(unittest.TestCase):
@@ -130,8 +131,8 @@ class ConsumerApplicationInstallTest(unittest.TestCase):
 
             self.assertEqual(finished.session.screen, ConsumerScreen.SUCCESS)
             self.assertTrue(_delivered(env).exists(), "the Skill never reached the harness")
-            self.assertTrue(terminal.screen_containing("AART / Installing"))
-            self.assertTrue(terminal.screen_containing("AART / Success"))
+            self.assertTrue(terminal.screen_containing("/ Installing"))
+            self.assertTrue(terminal.screen_containing("/ Success"))
             # Drawn from the machine as it was read afterwards, not from what the install intended.
             self.assertEqual(
                 [item.coordinate for item in handler.source().screens.installed], [OFFERED]
@@ -169,7 +170,7 @@ class ConsumerApplicationLifecycleTest(unittest.TestCase):
 
             self.assertTrue(_delivered(env).exists(), "the repair never restored the delivery")
             self.assertEqual(finished.session.screen, ConsumerScreen.ACTIVITY_DETAILS)
-            self.assertTrue(terminal.screen_containing("AART / Verify Repair"))
+            self.assertTrue(terminal.screen_containing("/ Verify Repair"))
 
     def test_a_repair_review_measures_and_changes_nothing(self) -> None:
         with _environment() as env:
@@ -204,7 +205,7 @@ class ConsumerApplicationLifecycleTest(unittest.TestCase):
                 actions=handler,
             )
 
-            self.assertTrue(terminal.screen_containing("AART / Uninstall Review"))
+            self.assertTrue(terminal.screen_containing("/ Uninstall Review"))
             self.assertEqual(finished.session.screen, ConsumerScreen.ACTIVITY_DETAILS)
             self.assertFalse(_delivered(env).exists(), "the Skill outlived its uninstall")
             self.assertTrue(neighbour.is_dir(), "the uninstall took a neighbour with it")

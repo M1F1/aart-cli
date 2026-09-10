@@ -272,6 +272,8 @@ class ConsumerPlanProjectionTest(unittest.TestCase):
 
         self.assertIn(ConsumerScreen.REQUIRED_INPUTS, complete)
         self.assertIn(ConsumerScreen.REMEDIATION, complete)
+        self.assertNotIn(ConsumerScreen.AUTOMATIC_INSPECTION, complete)
+        self.assertNotIn(ConsumerScreen.AUTOMATIC_INSPECTION, routine)
         self.assertNotIn(ConsumerScreen.REQUIRED_INPUTS, routine)
         self.assertNotIn(ConsumerScreen.REMEDIATION, routine)
         self.assertEqual(len(input_view), 1)
@@ -299,6 +301,20 @@ class ConsumerPlanProjectionTest(unittest.TestCase):
         self.assertIn("Configured securely", fast)
         self.assertNotIn("macos-keychain:github.com/work", fast)
         self.assertIn("macos-keychain:github.com/work", verbose)
+
+    def test_a_reference_to_an_absent_credential_is_not_called_configured(self) -> None:
+        runtime_input, bound, observation = _credential_input()
+        absent = dataclasses.replace(observation, state=CredentialState.ABSENT)
+        inputs = project_required_inputs(
+            (runtime_input,),
+            bound_inputs=bound,
+            credential_observations=(absent,),
+        )
+
+        fast = "\n".join(render_required_inputs(inputs, PresentationProfile.FAST))
+
+        self.assertIn("Enter securely during installation", fast)
+        self.assertNotIn("Configured securely", fast)
 
     def test_fast_carries_enough_help_to_obtain_or_construct_the_value(self) -> None:
         """INV-163 and INV-167: compact, but never so compact the reader has to guess.

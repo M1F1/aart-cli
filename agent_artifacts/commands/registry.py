@@ -6,6 +6,7 @@ import json
 import os
 import re
 import subprocess
+from hashlib import sha256
 
 from agent_artifacts import command_outcome as _common
 from agent_artifacts.application.maintainer import CandidateBundle, reconcile_source_scan
@@ -14,6 +15,10 @@ from agent_artifacts.application.promotion import (
     finalize_promotion,
     load_registry_versions,
     plan_bulk_promotion,
+)
+from agent_artifacts.application.registry_publication import (
+    prepare_registry_publication,
+    publication_summary,
 )
 from agent_artifacts.configuration.model import ConfiguredSource, SourceKind
 from agent_artifacts.curation.model import (
@@ -37,9 +42,10 @@ from agent_artifacts.domain.diagnostics import (
     Severity,
     diagnostic_to_data,
 )
-from agent_artifacts.domain.identifiers import SourceAlias
+from agent_artifacts.domain.identifiers import ObjectDigest, SourceAlias
 from agent_artifacts.domain.registry import PromotionMode, RegistryArtifactVersion
 from agent_artifacts.domain.result import Err, Ok, Result
+from agent_artifacts.io.git import GitProcessRequest, run_git_process
 from agent_artifacts.io.registry_adoption import (
     AdoptionUpstreamCheck,
     PreparedAdoption,
@@ -51,6 +57,7 @@ from agent_artifacts.io.registry_adoption import (
     scan_repository,
 )
 from agent_artifacts.io.registry_promotion import FilesystemPromotionOutput
+from agent_artifacts.io.registry_publication import publish_registry_commit
 from agent_artifacts.io.registry_workspace import FilesystemRegistryWorkspace
 from agent_artifacts.model import Request
 from agent_artifacts.protocol.authoring import compile_author_snapshot
@@ -1325,6 +1332,96 @@ def _run_check_upstream(request: Request) -> int:
     return _common.OK
 
 
+def _run_push(request: Request) -> int:
+    """Publish the commit this checkout is on, to a branch that is not the one people read.
+
+    The revision is resolved here rather than carried as `HEAD`: `RegistryPublicationCommand`
+    refuses a moving name on purpose, because the whole point is that the bytes pushed are the
+    bytes reviewed. Resolving it at the surface and passing the result is the honest reading of
+    "the commit AART just made for you".
+    """
+
+    root = _root(request)
+    resolved = run_git_process(
+        GitProcessRequest(("git", "-C", root, "rev-parse", "--verify", "HEAD"), root, 30.0, 128)
+    )
+    if isinstance(resolved, Err):
+        return _emit_error(request, "push", resolved)
+    revision = resolved.value.stdout.decode("ascii", errors="replace").strip()
+    default_branch = _configured_registry_branch(request)
+    prepared = prepare_registry_publication(
+        registry=SourceAlias(os.path.basename(root) or "registry"),
+        remote=request.publication_remote,
+        default_branch=default_branch,
+        requested_branch=request.publication_branch or "",
+        revision=revision,
+        review_digest=ObjectDigest("sha256", sha256(revision.encode("ascii")).hexdigest()),
+    )
+    if isinstance(prepared, Err):
+        return _emit_error(request, "push", prepared)
+    published = publish_registry_commit(root, prepared.value)
+    if isinstance(published, Err):
+        return _emit_error(request, "push", published)
+    if request.json:
+        receipt = published.value
+        print(
+            json.dumps(
+                {
+                    "action": "push",
+                    "registry": receipt.registry.value,
+                    "remote": receipt.remote,
+                    "branch": receipt.branch.value,
+                    "revision": receipt.revision,
+                    "outcome": receipt.outcome.value,
+                },
+                indent=2,
+            )
+        )
+    else:
+        for line in publication_summary(published.value):
+            print(line)
+    return _common.OK
+
+
+def _configured_registry_branch(request: Request) -> str:
+    """The branch a subscriber of this registry reads, which is the one publication may never be.
+
+    Read from the checkout's own remote HEAD when it can be, because that is what the remote
+    itself calls default. The adapter checks it again for the same reason; this makes the refusal
+    reachable before a remote is contacted at all when the answer is already known locally.
+    """
+
+    root = _root(request)
+    shown = run_git_process(
+        GitProcessRequest(
+            (
+                "git",
+                "-C",
+                root,
+                "symbolic-ref",
+                "--short",
+                f"refs/remotes/{request.publication_remote}/HEAD",
+            ),
+            root,
+            30.0,
+            256,
+        )
+    )
+    if isinstance(shown, Ok):
+        named = shown.value.stdout.decode("utf-8", errors="replace").strip()
+        prefix = f"{request.publication_remote}/"
+        if named.startswith(prefix):
+            return named[len(prefix) :]
+    current = run_git_process(
+        GitProcessRequest(("git", "-C", root, "branch", "--show-current"), root, 30.0, 256)
+    )
+    if isinstance(current, Ok):
+        branch = current.value.stdout.decode("utf-8", errors="replace").strip()
+        if branch:
+            return branch
+    return "main"
+
+
 def run(request: Request) -> int:
     action = request.registry_action or "unknown"
     workspace = FilesystemRegistryWorkspace(_root(request))
@@ -1364,6 +1461,8 @@ def run(request: Request) -> int:
         return _run_audit(request, workspace)
     if action == "publish":
         return _run_publish(request)
+    if action == "push":
+        return _run_push(request)
     if action == "test":
         return _run_test(request, workspace)
     if action == "diff":

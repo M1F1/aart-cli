@@ -223,6 +223,16 @@ class AddedConfiguredSource:
     changed: bool
 
 
+@dataclass(frozen=True, slots=True)
+class RemovedConfiguredSource:
+    """The exact source and store effects of one completed unsubscribe."""
+
+    source: ConfiguredSource
+    default_registry: SourceAlias | None
+    snapshot_discarded: bool
+    changed: bool
+
+
 def add_configured_source(request: Request) -> Result[AddedConfiguredSource]:
     """Run the canonical source-add transaction without choosing an output surface."""
 
@@ -295,6 +305,72 @@ def add_configured_source(request: Request) -> Result[AddedConfiguredSource]:
             parsed.value,
             planned.value.after.default_registry,
             synchronized.value,
+            finalized.value.changed,
+        )
+    )
+
+
+def remove_configured_source(
+    request: Request, *, expected_source: ConfiguredSource | None = None
+) -> Result[RemovedConfiguredSource]:
+    """Run the canonical unsubscribe transaction without choosing an output surface.
+
+    A TUI review may bind the complete source identity it showed.  In that case an alias that was
+    repointed between Review and confirmation is refused rather than removing an origin nobody
+    reviewed.  The CLI can omit the expectation because it plans and applies in one invocation.
+    """
+
+    if request.source_alias is None:
+        return _failure("config-invalid", "source remove requires --alias")
+    runtime = load_runtime_configuration(request, content_required=False)
+    if isinstance(runtime, Err):
+        return runtime
+    if runtime.value.loaded.recovery is not None:
+        return _recovery_error()
+    view = build_source_stage(
+        runtime.value.loaded.user_configuration,
+        runtime.value.loaded.effective.policy,
+        _health_by_alias(runtime.value, now=int(time.time())),
+        first_run=runtime.value.loaded.first_run is not None,
+    )
+    if isinstance(view, Err):
+        return view
+    try:
+        alias = SourceAlias(request.source_alias)
+    except ValueError:
+        return _failure("config-invalid", "source alias is not a valid slug")
+    planned = plan_source_removal(view.value, alias)
+    if isinstance(planned, Err):
+        return planned
+    if expected_source is not None and planned.value.source != expected_source:
+        return _failure(
+            "source-selection-invalid",
+            f"registry {alias} changed after Review",
+            "review the current Registry connection before disconnecting it",
+        )
+
+    discarded = discard_configured_source(
+        planned.value.source, data_root=runtime.value.paths.data_root
+    )
+    if isinstance(discarded, Err):
+        return discarded
+    finalized = finalize_source_removal(
+        planned.value,
+        lambda desired, policy: save_user_configuration_checked(
+            desired,
+            policy,
+            runtime.value.paths,
+            runtime.value.ports,
+            expected_digest=runtime.value.loaded.observed_digest,
+        ),
+    )
+    if isinstance(finalized, Err):
+        return finalized
+    return Ok(
+        RemovedConfiguredSource(
+            planned.value.source,
+            planned.value.after.default_registry,
+            discarded.value.existed,
             finalized.value.changed,
         )
     )
@@ -398,43 +474,27 @@ def _remove(request: Request) -> int:
             print("Reviewed only; re-run with --yes to apply this exact removal.")
         return _common.OK
 
-    # The store goes first: a half-applied removal must leave a repairable subscription, never an
-    # origin that is unsubscribed while its managed snapshot still binds the old identity.
-    discarded = discard_configured_source(
-        planned.value.source, data_root=runtime.value.paths.data_root
-    )
-    if isinstance(discarded, Err):
-        return _emit_error(request, _REMOVE_OPERATION, discarded)
-    finalized = finalize_source_removal(
-        planned.value,
-        lambda desired, policy: save_user_configuration_checked(
-            desired,
-            policy,
-            runtime.value.paths,
-            runtime.value.ports,
-            expected_digest=runtime.value.loaded.observed_digest,
-        ),
-    )
-    if isinstance(finalized, Err):
-        return _emit_error(request, _REMOVE_OPERATION, finalized)
+    removed = remove_configured_source(request, expected_source=planned.value.source)
+    if isinstance(removed, Err):
+        return _emit_error(request, _REMOVE_OPERATION, removed)
     payload = {
         "schema_version": 1,
         "ok": True,
         "operation": _REMOVE_OPERATION,
         "finalized": True,
         "source": {
-            "alias": planned.value.source.alias.value,
-            "kind": planned.value.source.kind.value,
-            "location": redact_text(planned.value.source.location),
-            "ref": planned.value.source.ref,
+            "alias": removed.value.source.alias.value,
+            "kind": removed.value.source.kind.value,
+            "location": redact_text(removed.value.source.location),
+            "ref": removed.value.source.ref,
             "cleared_default": planned.value.cleared_default,
         },
-        "snapshot_discarded": discarded.value.existed,
+        "snapshot_discarded": removed.value.snapshot_discarded,
     }
     if request.json:
         print(json.dumps(payload, indent=2))
     else:
-        snapshot = "discarded" if discarded.value.existed else "none stored"
+        snapshot = "discarded" if removed.value.snapshot_discarded else "none stored"
         default = "; default registry cleared" if planned.value.cleared_default else ""
         print(f"source removed: {planned.value.source.alias.value}; snapshot {snapshot}{default}")
     return _common.OK

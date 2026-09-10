@@ -1,5 +1,21 @@
 # AART Refactor Migration Status
 
+**CP-20 IMPLEMENTED — awaiting manual retest (2026-09-09).** All seven machine-readable plan steps
+are done. Connected Registry snapshots and the current local project are distinct; internal route
+identifiers no longer leak through the reported paths; Fast installation omits a no-decision
+inspection stop; Success returns to Marketplace; shared sections and Settings are spaced; Registry
+disconnect is a reviewed exact-identity transaction; and the credential-bearing MCP fixture,
+marker-owned fresh Git lab and doubly confirmed CLI-only AART factory reset are implemented.
+
+Closing evidence: the focused CP-20 set passes 177 tests plus eight subtests and six deliberate
+semantic mutations were killed. `make quality` passes 3,677 tests (one skipped), 85.36% branch
+coverage and every format/lint/type/validation/package/docs/secret gate; separate
+`make integration` passes all 381 E2E tests. A real setup/reset smoke created three working
+repositories plus three local bare remotes on unique branch `manual/7fd37689f593`, then removed
+only its exact marker-owned lab. B-108 did not reproduce in the closing gates and remains durable
+as an intermittent historical isolation finding. CP-19 remains closed at `e9616dd`; CP-20 now waits
+only for the operator to retest QA-044 through QA-052 before their checkboxes and commit are final.
+
 > Source of truth for **where implementation currently is**.
 > Product truth lives only in the Product Specification.
 
@@ -1088,3 +1104,209 @@ test passed alone and twice inside `make quality`; diagnostic prefix runs found 
 working-directory or tempdir leak and immediate retry did not recover. B-108 is promoted into step
 15. CP-19 implementation is complete, but the slice awaits that clean standalone gate and operator
 manual retest.
+
+**CP-21 opened — the second manual TUI run is captured (2026-09-10).** The operator walked the
+maintainer route from an empty Registry through initialization, Sources, Candidates, promotion and
+publication, then the consumer route through Marketplace, install and credentials. Twenty-six
+findings are recorded as `QA-058` through `QA-083`; the slice document is
+`docs/refactor/slices/CP-21-second-manual-tui-run.md` and the epic is `CP-21` in `plan.json`.
+
+Four are already fixed and await retest. `QA-058`: the Initialize Registry form typed a space into a
+text row whenever the operator followed its own `[Space] Toggle` legend, and the refusal named none
+of its three fields. `QA-059`: the TUI walkthrough went from Add Source straight to Sync, which
+cannot work — Source Sync classifies Candidates against a default target Registry, so the Registry
+just initialized must be pushed and subscribed to first. `QA-061`: the default lab pre-promoted its
+fixtures from different manifest bytes and under different Source aliases than the author
+repositories hold, so the first Sync of an untouched lab reported every artifact `invalid` with
+`registry-version-immutable` — a real product refusal fired by a fixture that disagreed with itself.
+`QA-062`: once a version is published the next Sync records its Candidate as `promoted`, and an
+author editing the payload without bumping the version then drove `reconcile_source_scan` into
+`supersede_candidate`, which refuses to move a promoted record and raised a `ValueError` no boundary
+catches; `D-227` indexes the published record and the Candidate under review separately.
+
+The rest are open. `QA-081` is blocking: credential entry leaves the TUI, hands the terminal to an
+interactive `security` prompt and reaches a macOS keychain-reset dialog, so the MCP cannot be
+installed. `QA-074`/`QA-073` break the promotion path. `QA-067`/`QA-068` are the absent screen
+skeleton behind most of the readability findings. `QA-082` requests a Registry branch push and is
+blocked on a 161.7 decision, since the Product Specification is the sole authority; it supersedes
+the open question in `QA-055`. `QA-066`/`QA-069` revise the `QA-053`/`D-224` placement of the launch
+directory and must be settled together with `QA-071`/`QA-083`.
+
+**CP-21 steps 2 and 10 are done (2026-09-10).** Step 2 closed the blocking credential finding and a
+lab fault behind it. `QA-081` was a drawing fault, not a secrecy one: `MacOsKeychainProvider.store`
+already keeps the value off argv and out of this process, but the prompt was spoken over a frame
+curses was still drawing. `D-229` lends the terminal instead of taking entry into the TUI —
+`CredentialEffectInterpreter` wraps only `provider.store` in an optional `terminal_handover`, and
+`_CursesHandover` gives the screen up and takes it back, so the CLI and the text terminal are
+untouched. `QA-084`, split out of it, was the lab: `security` resolves the default keychain from
+`HOME` — measured — and the lab home had no `Library/Keychains`, so macOS offered to reset the real
+one. The lab now creates, defaults, lists and unlocks its own `aart-manual.keychain-db`, with no
+product change.
+
+Step 10 closed `QA-063`, taken out of order because it touches the authoring and sync layers rather
+than the screens steps 3–8 are rebuilding. `compile_author_manifests` compiles each manifest on its
+own merits and answers with `(artifacts, refusals)`, a `ManifestRefusal` carrying the manifest path
+beside its diagnostics; a fault in the tree itself still refuses whole, and `compile_author_snapshot`
+survives as a strict wrapper so adoption and publication are unchanged. A refusal reaches the
+operator through `SourceSyncExecutionResult`, `MaintainerSourceSyncResultView` and the Sync result
+screen's `Could not read N manifests:` section. `D-230` records why a refusal is reported beside the
+scan rather than persisted as an `invalid` Candidate: a Candidate is reconciled and promotable, and
+a refusal has no compiled artifact behind it.
+
+Ten targeted mutations across the two steps, all killed — one survived first, a schema refusal
+turned into a silent skip, and named the test that was missing. New tests:
+`tests/credential_terminal_handover_test.py`, `tests/source_partial_compilation_test.py`,
+`tests/source_sync_refusal_report_test.py`, and two keychain tests in
+`tests/manual_test_lab_test.py`. Step 3 (`QA-073`/`QA-074`) is in progress; steps 4–9 and 11 are
+open.
+
+**CP-21 step 9 is started (2026-09-10) — three layers, not four.** `D-228` turned publication into
+AART's own action, and the layers that do not draw are built. `agent_artifacts/domain/publication.py`
+answers which branch a registry publishes to from two strings — what was requested, and what a
+subscriber reads — so `refs/heads/main`, `HEAD` and `Main` are refused as the default branch under
+other spellings rather than treated as three targets. `application/registry_publication.py` binds
+one reviewed revision to one branch on one remote and has no `force`, `merge`, `fast_forward` or
+`delete` field to set. `io/registry_publication.py` pushes `<revision>:refs/heads/<branch>`, so the
+reviewed commit moves rather than whatever `HEAD` has become, and repeats the default-branch refusal
+against the remote's own advertised `HEAD`, because a configured ref can disagree with the remote it
+names.
+
+Evidence uses a real bare remote: 30 tests across `tests/registry_publication_branch_test.py`
+(including two Hypothesis properties), `tests/registry_publication_test.py` and
+`tests/registry_publication_io_test.py`, which pushes and then reads the remote back to assert
+`main` did not move. Five targeted mutations were killed; `make mutants` found four more the
+targeted set had missed — the adapter's guard-clause branches and its held-commit check — and those
+are closed. Remaining survivors are message prose and equivalent mutants, plus one class belonging
+to `Diagnostic` itself (`B-109`); `B-110` records that `make mutants` reuses a stale working copy
+when `ONLY` changes.
+
+The Registry Commit screen's action, the publication branch as configuration, and the receipt's
+place in the maintainer frame are not built. They live in `tui_maintainer.py` and the maintainer
+views, which CP-21 step 3 is rebuilding, so they wait for it rather than race it.
+
+### CP-21 step 8 — QA-078 diagnosed and deferred (2026-09-10)
+
+`QA-078` is settled as an analysis and left unbuilt on purpose. Artifact Details answers from the
+manifest (`evaluate_compatibility`, `compiler/graph.py:791`); the install plan answers from the
+request (`_deliveries`, `io/artifact_placement.py`), which has never read the manifest. `D-231`
+records the rule the fix needs — an absent `compatibility` block and an explicit `[]` are the same
+`()` under `allow_empty=True`, so empty means unconstrained, and narrowing applies only against a
+non-empty declaration.
+
+The narrowing was implemented at the placement boundary, proven to deliver, and then backed out:
+the receipt records the narrowed harness set while the host still carries every measured one, and
+`configured_consumer_completion` refuses with `configured-setup-invalid: setup requires one exact
+configured installation receipt`, leaving the `CONFIGURED` marker unwritten. Narrowing changes what
+is offered, so it belongs in the consumer setup and remediation path CP-21 step 3 is rebuilding, not
+in the placement that serves the offer. Landed there it also settles `QA-080`.
+
+### CP-21 step 3 — QA-073/QA-074 done (2026-09-10)
+
+The Candidate review path now keeps one subject across its optional inspection screens without
+pretending those screens are required progress stages (`D-232`). A separate reverse-edge table
+covers Candidate Lifecycle, Provenance and Version Conflict returning directly to Candidate Details
+or to their nested owner, and Validation Details returning to Validation. Back from Validation to
+Candidate Diff reduces the composite `candidate:check` focus to the bare Candidate ID the Diff
+projection consumes. Leaving the workflow still clears focus, so stale Candidate state does not
+leak onto the Maintainer Dashboard.
+
+Validation Details now advertises `[Enter] Policy` and projects Policy Review as its destination.
+That transition reuses the validation evidence already composed for the screen and executes no
+effect; the direct `p` shortcut remains on Validation but is labelled `Policy`, not `Promote`. The
+production-composition E2E follows the operator's route by opening a validation check and pressing
+Enter again to reach Policy.
+
+Five deliberate semantic mutations were killed: removing an optional Candidate-inspection edge,
+removing the Validation Details edge, retaining the composite row on Diff, removing the Details
+destination, and changing its Enter binding. The scoped
+advisory runs also killed every mutant in the changed navigation helpers and six selected mutants in
+the Details/Policy projection; whole-file survivors were outside this slice's claims. Focused tests,
+Ruff, mypy and docs checks are the closing evidence. Step 4 is next; no full quality or integration
+suite was run at the operator's request.
+
+No product code changed. `measured_host_profiles_test.py` and `git_backed_runtime_e2e_test.py`
+currently assert the defect and are expected to change when the fix lands.
+
+### CP-21 step 4 — one screen skeleton, an anchored footer, and a toggle that means something (2026-09-10)
+
+`QA-065`, `QA-067`, `QA-068` and `QA-070` are closed. `tui_layout.screen_frame` composes title,
+menu/list, cursor description, help, view status and footer, separating regions with a rule only
+where both sides have something to say (`D-232`); an empty section can no longer draw the doubled
+rule the operator saw, because the rule is a separator rather than a border. `footer_start` and
+`anchor` let the curses adapter place the whole legend on the bottom rows without the frame ever
+learning the terminal height (`D-234`), and screen keys now sit above the universal ones. `[v]`
+toggles the cursor descriptions, which makes the label it already carried true and settles `QA-064`
+(`D-233`).
+
+Five targeted mutations killed; `make mutants` found six further unheld claims in the new kernel and
+all six are closed, leaving message prose and one equivalent mutant. `tests/screen_skeleton_test.py`
+holds the claims; five existing tests changed because the skeleton moved the landmarks they read by,
+or because `QA-070` reversed what they asserted.
+
+Full unit suite green at 3851 passed, with `ruff`, `format-check`, `typecheck` and `docs-check`
+clean. Step 5 owns where the launch directory and the view path live; the skeleton deliberately
+leaves the heading region's internals alone.
+
+### CP-21 step 5 — the launch directory moved, and nested titles became a trail (2026-09-10)
+
+`QA-066`, `QA-069`, `QA-071` and `QA-083` are closed as two settled pairs. The launch directory left
+the header for a region immediately above the key legend (`D-235`, revising `D-224`), so the top line
+carries only the trail. The trail itself is built from `ConsumerSession` history rather than the
+declared navigation graph (`D-236`) — the graph declares four parents for Review Selection alone, so
+it cannot answer without guessing — and a dashboard passed through drops the word, which is what
+makes `AART / Maintainer / Sources` name its parent while saying "Maintainer" once.
+
+Four targeted mutations killed. `make mutants` left one survivor in `_step`, equivalent within the
+real screen catalog and recorded as such. Twenty-two existing assertions changed because they
+identified screens by the flat `AART / <screen>` scheme `QA-071` replaces; `QA-053`'s own
+characterization records the revision in its docstring rather than changing quietly under it.
+
+Full unit suite green at 3860 passed, `ruff`, `format-check`, `typecheck` and `docs-check` clean.
+`B-111` filed: `make mutants` aborts when a Hypothesis property test is in `TESTS`.
+
+### CP-21 step 6 — a finished sequence leaves the back stack (2026-09-10)
+
+`QA-072` is closed by two rules (`D-237`). `ConsumerSession.navigate` rewinds when its target is
+already in history rather than pushing, so a journey that ends by returning to the list it started
+from takes itself off the stack; no register of "finished" journeys is needed, because returning is
+what finishing looks like. Separately, Esc from a dashboard-owned list goes to that dashboard,
+read from the declared navigation and guarded on the owner actually being on the stack so that
+leaving never invents a forward step.
+
+Four targeted mutations killed, including the guard that `make mutants` showed nothing was holding.
+No existing test changed — nothing had asserted the defect. Full unit suite green at 3869 passed
+before the two guard tests were added; `ruff`, `format-check`, `typecheck` and `docs-check` clean.
+
+`B-112` filed: the mutation run over `consumer_views.py` mutated no class method at all, so a clean
+result there says nothing about the session, settings and draft code that module exists for.
+
+### CP-21 step 7 — screens tell the truth about state (2026-09-10)
+
+Three of the four findings closed; the fourth is diagnosed in writing rather than half-built.
+
+`QA-077` is fixed where the wrong value is made, not where it was seen. A dashboard's rows *are*
+screens, so `current_row` on one holds a screen identifier and `_navigate` carried it forward as the
+next screen's `focus`; it survived `SET_ROWS` loading the real aliases and reached
+`prepare_configured_source_sync` as a `SourceAlias` nothing could match, which is why both Sources
+read `Stale` at once. `is_screen_identifier` (`application/consumer_views.py`) asks the two screen
+enums and `_navigate` drops a focus that is one — a single guard on the single carrying-forward
+point, asserted over all 86 declared routes.
+
+`QA-075` and `QA-060` were one complaint from two screens: neither said that the Registry the
+maintainer had just created is not yet a *subscribed* one. Both now say so in the same words
+(`D-228`). `QA-060` also turned up a constraint worth recording: `Diagnostic` normalises
+`remediation` with `tuple(sorted(set(...)))`, so several remediation lines are an unordered set and
+alphabetical is the only order they can have — backwards, here. Steps that must happen in sequence
+are one remedy on one line; `D-238` says why, so it is not rediscovered by watching a test fail.
+
+`QA-076` is open with a full diagnosis. The Candidates screen is not stale — the reconciliation
+never re-derives. `reconcile_source_scan` (`application/maintainer.py:207`) short-circuits when the
+source has not moved and that branch never consults `approved`, so `_with_registry_state`, the only
+thing that sets `PROMOTED` for an artifact Candidate, cannot run for it. A Candidate that read `New`
+when last scanned reads `New` through every later Sync regardless of what the registry did.
+`QA-062`'s promoted/current split is not implicated. The fix needs a guard, not a moved line —
+`assess_candidate` raises on a terminal state and `mark_candidate_promoted` accepts only
+`READY`/`WARNING` — and is the first thing to pick up.
+
+Tests: `tests/empty_state_truthfulness_test.py`, `tests/screen_identifier_leak_test.py`. Gates:
+focused suites, `ruff check`, `ruff format --check`, `make typecheck`, `make docs-check` — clean.

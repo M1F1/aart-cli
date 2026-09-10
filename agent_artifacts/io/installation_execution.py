@@ -44,6 +44,7 @@ from .execution import (
     ManagedBlockInterpreter,
     RuntimeEffectInterpreter,
     SettingsEntryInterpreter,
+    TerminalHandover,
 )
 from .harness import LocalHarnessRegistry
 from .python_runtime import LocalPythonRuntime
@@ -65,6 +66,8 @@ def interpreters_for(
     credential_providers: tuple[CredentialProviderPort, ...] = (),
     timeout_seconds: float = 900.0,
     offline: bool = False,
+    interactive_credentials: bool = False,
+    credential_handover: TerminalHandover | None = None,
 ) -> Result[tuple[EffectInterpreter, ...]]:
     """Build the interpreters `installations` are executed through, or say what is missing.
 
@@ -142,7 +145,12 @@ def interpreters_for(
             + "; no adapter for that provider was supplied"
         )
     interpreters.extend(
-        CredentialEffectInterpreter(providers[name], tuple(references[name]))
+        CredentialEffectInterpreter(
+            providers[name],
+            tuple(references[name]),
+            interactive_store=interactive_credentials,
+            terminal_handover=credential_handover,
+        )
         for name in sorted(references)
     )
     return Ok(tuple(interpreters))

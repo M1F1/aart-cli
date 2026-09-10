@@ -234,6 +234,38 @@ KEY_NAMES = frozenset({"Enter", "Esc", "Space", "Tab", "Backspace"})
 """The keys a screen may address the reader by name. Naming one makes a line a prompt."""
 
 
+HOME_MARKER = "~"
+"""Home written as one character, so a path says where it is without saying who is reading it."""
+
+
+def abbreviate_path(path: str, *, home: str = "", width: int = CONTENT_MEASURE) -> str:
+    """One line naming a directory: home written as ``~``, and length bought from the front.
+
+    A directory is identified by its tail -- the thing somebody is actually in -- so when the path
+    will not fit, the leading segments are what goes. Ellipsizing the end instead would spend the
+    line on the part that is the same for every checkout and drop the only part that answers the
+    question the line exists to answer (`QA-053`).
+    """
+
+    if not isinstance(path, str):
+        raise ValueError("a path is a line of text")
+    shown = path.replace("\r", " ").replace("\n", " ").strip()
+    if not shown:
+        return ""
+    if home:
+        base = home.replace("\r", " ").replace("\n", " ").strip().rstrip("/")
+        if base and (shown == base or shown.startswith(base + "/")):
+            shown = HOME_MARKER + shown[len(base) :]
+    if len(shown) <= width:
+        return shown
+    segments = [segment for segment in shown.split("/") if segment]
+    for index in range(1, len(segments)):
+        candidate = f"{STAGE_PROJECTION}/" + "/".join(segments[index:])
+        if len(candidate) <= width:
+            return candidate
+    return _ellipsize(segments[-1] if segments else shown, width)
+
+
 def is_action_prompt(line: str) -> bool:
     """True when a line's subject is a key press: what pressing something will do.
 
@@ -281,7 +313,7 @@ def section(lines: Sequence[str]) -> Tuple[str, ...]:
     """Put one explanatory region between the shared restrained boundaries."""
 
     body = separate(lines)
-    return () if not body else (SECTION_RULE, *body, SECTION_RULE)
+    return () if not body else (SECTION_RULE, "", *body, "", SECTION_RULE)
 
 
 def cards(*blocks: Sequence[str]) -> Tuple[str, ...]:
@@ -308,6 +340,81 @@ def action_prompt(facts: Sequence[str], prompt: str) -> Tuple[str, ...]:
     return (*body, "", prompt)
 
 
+def screen_frame(*regions: Sequence[str], footer: Sequence[str]) -> Tuple[str, ...]:
+    """The one skeleton every screen fills: regions in order, rules only between the ones that spoke.
+
+    The operator's complaint was that each screen composed itself -- *"teraz to jest wolna
+    amerykanka odnosnie UI"* (`QA-067`) -- so sections, spacing and the legend landed at different
+    heights depending on which screen had been written when. Composing here makes the arrangement a
+    property of the frame rather than a habit each screen has to remember.
+
+    A rule is a *separator*, which is the whole reason the empty-section fault disappears. It is
+    drawn between two regions that both have something to say, never around a region, so a region
+    that turns out empty takes its rule with it instead of leaving the pair of rules with nothing
+    between them that `QA-065` reported. The blank either side of a rule comes from the same place,
+    so text never touches a boundary.
+
+    The footer is a region that is always drawn, because a screen with no documented way out is the
+    first-run trap the legend exists to remove. It is passed separately rather than as the last
+    region for exactly that reason: the others may all be empty and it still appears.
+    """
+
+    kept: list[Tuple[str, ...]] = []
+    for region in (*regions, footer):
+        lines = tuple(region)
+        if any(not isinstance(line, str) for line in lines):
+            raise ValueError("a screen region is lines of text")
+        trimmed = separate(lines)
+        if trimmed:
+            kept.append(trimmed)
+    if not kept:
+        return ()
+    composed: list[str] = list(kept[0])
+    for region in kept[1:]:
+        composed.extend(("", SECTION_RULE, "", *region))
+    return tuple(composed)
+
+
+def footer_start(lines: Sequence[str]) -> int:
+    """Where the persistent key footer begins: the last rule, and everything after it.
+
+    ``screen_frame`` separates regions with rules and draws the footer last, so the final rule is
+    the footer's own boundary by construction. Reading it back off the composed frame keeps the
+    terminal free of any knowledge of what a screen contains -- it places a block it can find,
+    rather than being told a row number by something that would have to guess the height.
+
+    A frame with no rule at all still has a last line, and the last line is where the way out
+    lives, so that is what is returned rather than "no footer". Answering "nothing" would let a
+    body long enough to fill the terminal clip the only documented exit off the screen (`B-077`).
+    """
+
+    for index in range(len(lines) - 1, -1, -1):
+        if lines[index] == SECTION_RULE:
+            return index
+    return max(len(lines) - 1, 0)
+
+
+def anchor(lines: Sequence[str], *, height: int) -> Tuple[str, ...]:
+    """Pad above the footer so it sits on the bottom row of a terminal this tall (`QA-068`).
+
+    On a short screen the legend used to float directly under the body with the rest of the
+    terminal blank beneath it, so the eye had to hunt for the keys at a different height on every
+    screen. The padding goes above the footer rather than below it because below it there is
+    nothing: the footer is the last thing read, and last is where reading stops.
+
+    A frame taller than the terminal is returned untouched. Deciding what to drop is clipping, and
+    clipping is the terminal's job -- this function only ever adds blank rows.
+    """
+
+    if not isinstance(height, int) or isinstance(height, bool) or height < 0:
+        raise ValueError("anchoring needs a terminal height in rows")
+    body = tuple(lines)
+    if len(body) >= height:
+        return body
+    start = footer_start(body)
+    return (*body[:start], *("",) * (height - len(body)), *body[start:])
+
+
 BOX_MARKERS: Mapping[str, str] = {
     "checked": BOX_CHECKED,
     "empty": BOX_EMPTY,
@@ -322,6 +429,7 @@ __all__ = [
     "CHROME_ROWS",
     "CONTENT_MEASURE",
     "HINT_ORDER",
+    "HOME_MARKER",
     "KEY_NAMES",
     "MIN_LIST_ROWS",
     "PANE_MIN_HEIGHT",
@@ -334,13 +442,17 @@ __all__ = [
     "STAGE_MARKERS",
     "STAGE_PENDING",
     "STAGE_PROJECTION",
+    "abbreviate_path",
     "action_prompt",
+    "anchor",
     "cards",
     "columns",
     "field_block",
+    "footer_start",
     "is_action_prompt",
     "measure",
     "pane_budget",
+    "screen_frame",
     "section",
     "separate",
     "status_bar",

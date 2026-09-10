@@ -49,6 +49,7 @@ from agent_artifacts.sources.model import (
 from .candidate_store import candidate_history_paths, read_candidate_history
 from .configured_selection import load_configured_approved_marketplace
 from .maintainer_sync import read_approved_registry_state
+from .registry_bootstrap import registry_absent_refusal
 from .registry_promotion import FilesystemPromotionOutput
 from .source_store import read_current_source
 
@@ -179,8 +180,15 @@ def read_maintainer_views(
             for item in effective.configuration.sources
             if item.enabled and item.kind is SourceKind.REGISTRY_GIT
         )
+        registry_workspace_present = (
+            registry_root is not None and registry_absent_refusal(registry_root) is None
+        )
         checkout: SourceSnapshot | None = None
-        if registry_root is not None and len(configured_registries) == 1:
+        if (
+            registry_root is not None
+            and registry_workspace_present
+            and len(configured_registries) == 1
+        ):
             local = FilesystemPromotionOutput(registry_root).current()
             if isinstance(local, Ok):
                 checkout = local.value
@@ -289,6 +297,7 @@ def read_maintainer_views(
                 version_conflicts,
                 collection_candidates,
                 collection_validations,
+                registry_workspace_present,
             )
         )
     except ValueError as error:

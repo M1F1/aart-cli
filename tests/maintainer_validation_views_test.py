@@ -20,7 +20,10 @@ from agent_artifacts.application.consumer_ui import (
     ConsumerUiEvent,
     ConsumerUiEventKind,
     ConsumerUiState,
+    KeyBinding,
+    key_bindings,
     key_event,
+    reduce_consumer_ui,
 )
 from agent_artifacts.application.consumer_views import (
     ConsumerSession,
@@ -318,9 +321,118 @@ class ValidationShellTest(unittest.TestCase):
         )
         self.assertIn("Secret metadata", drawn)
 
+    def test_enter_on_validation_details_continues_to_policy(self) -> None:
+        listed = _reload(
+            self.source, _on(MaintainerScreen.VALIDATION, focus=self.candidate), entering=True
+        )
+        details, _ = reduce_consumer_ui(
+            listed,
+            ConsumerUiEvent(
+                ConsumerUiEventKind.NAVIGATE,
+                screen=MaintainerScreen.VALIDATION_DETAILS,
+            ),
+        )
+        details = _reload(self.source, details, entering=True)
+
+        self.assertIs(self.source.detail(details), MaintainerScreen.POLICY_REVIEW)
+        self.assertIn(KeyBinding("Enter", "Policy"), key_bindings(details))
+        self.assertEqual(
+            key_event("enter", details, detail=self.source.detail(details)),
+            ConsumerUiEvent(
+                ConsumerUiEventKind.NAVIGATE,
+                screen=MaintainerScreen.POLICY_REVIEW,
+            ),
+        )
+        policy, _ = reduce_consumer_ui(
+            details,
+            ConsumerUiEvent(
+                ConsumerUiEventKind.NAVIGATE,
+                screen=MaintainerScreen.POLICY_REVIEW,
+            ),
+        )
+        details_again, _ = reduce_consumer_ui(policy, ConsumerUiEvent(ConsumerUiEventKind.BACK))
+        self.assertIs(details_again.session.screen, MaintainerScreen.VALIDATION_DETAILS)
+        self.assertEqual(details_again.focus, details.focus)
+
+    def test_back_from_validation_details_keeps_the_candidate_on_the_diff(self) -> None:
+        diff = dataclasses.replace(
+            _on(MaintainerScreen.CANDIDATE_DIFF, focus=self.candidate),
+            session=ConsumerSession(
+                MaintainerScreen.CANDIDATE_DIFF,
+                history=(
+                    MaintainerScreen.CANDIDATES,
+                    MaintainerScreen.CANDIDATE_DETAILS,
+                ),
+            ),
+        )
+        validation, _ = reduce_consumer_ui(
+            diff,
+            ConsumerUiEvent(
+                ConsumerUiEventKind.NAVIGATE,
+                screen=MaintainerScreen.VALIDATION,
+            ),
+        )
+        validation = _reload(self.source, validation, entering=True)
+        details, _ = reduce_consumer_ui(
+            validation,
+            ConsumerUiEvent(
+                ConsumerUiEventKind.NAVIGATE,
+                screen=MaintainerScreen.VALIDATION_DETAILS,
+            ),
+        )
+        details = _reload(self.source, details, entering=True)
+
+        validation_again, _ = reduce_consumer_ui(details, ConsumerUiEvent(ConsumerUiEventKind.BACK))
+        validation_again = _reload(self.source, validation_again, entering=True)
+        diff_again, _ = reduce_consumer_ui(
+            validation_again, ConsumerUiEvent(ConsumerUiEventKind.BACK)
+        )
+        diff_again = _reload(self.source, diff_again, entering=True)
+
+        self.assertIs(diff_again.session.screen, MaintainerScreen.CANDIDATE_DIFF)
+        self.assertEqual(diff_again.focus, self.candidate)
+        self.assertNotIn("That Candidate is not available.", frame(self.source, diff_again))
+        self.assertIn("Semantic changes:", frame(self.source, diff_again))
+
+    def test_back_from_any_validation_check_restores_the_bare_candidate_identity(self) -> None:
+        # ValidationCheck is a finite closed enum, so exhaust every member instead of sampling it.
+        for check in ValidationCheck:
+            with self.subTest(check=check):
+                row = str(MaintainerValidationRowId(self.candidate, check))
+                validation = dataclasses.replace(
+                    _on(MaintainerScreen.VALIDATION, focus=row),
+                    session=ConsumerSession(
+                        MaintainerScreen.VALIDATION,
+                        history=(MaintainerScreen.CANDIDATE_DIFF,),
+                    ),
+                )
+
+                diff, commands = reduce_consumer_ui(
+                    validation, ConsumerUiEvent(ConsumerUiEventKind.BACK)
+                )
+
+                self.assertIs(diff.session.screen, MaintainerScreen.CANDIDATE_DIFF)
+                self.assertEqual(diff.focus, self.candidate)
+                self.assertEqual(len(commands), 1)
+
+    def test_back_to_the_maintainer_dashboard_drops_the_candidate_focus(self) -> None:
+        candidates = dataclasses.replace(
+            _on(MaintainerScreen.CANDIDATES, focus=self.candidate),
+            session=ConsumerSession(
+                MaintainerScreen.CANDIDATES,
+                history=(MaintainerScreen.DASHBOARD,),
+            ),
+        )
+
+        dashboard, _ = reduce_consumer_ui(candidates, ConsumerUiEvent(ConsumerUiEventKind.BACK))
+
+        self.assertIs(dashboard.session.screen, MaintainerScreen.DASHBOARD)
+        self.assertEqual(dashboard.focus, "")
+
     def test_p_opens_the_policy_review_from_validation(self) -> None:
         validation = _on(MaintainerScreen.VALIDATION, focus=self.candidate)
 
+        self.assertIn(KeyBinding("p", "Policy"), key_bindings(validation))
         self.assertEqual(
             key_event("p", validation),
             ConsumerUiEvent(ConsumerUiEventKind.NAVIGATE, screen=MaintainerScreen.POLICY_REVIEW),

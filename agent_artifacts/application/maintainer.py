@@ -165,7 +165,12 @@ def reconcile_source_scan(
     previous_by_id = {bundle.candidate.id: bundle for bundle in previous}
     if len(previous_by_id) != len(previous):
         return _error("candidate history contains duplicate candidate IDs")
+    # One manifest has at most two live records, and they mean different things.  The published
+    # one states what the registry contains and is not this scan's to move (`QA-062`); the other
+    # is the Candidate still under review.  Keeping them apart is what lets an author edit an
+    # already published version without either raising or leaving two rival current records.
     current_by_locator: dict[tuple[str, str], CandidateBundle] = {}
+    promoted_by_locator: dict[tuple[str, str], CandidateBundle] = {}
     for bundle in previous:
         if bundle.candidate.target_registry != target_registry:
             continue
@@ -174,6 +179,13 @@ def reconcile_source_scan(
         if bundle.candidate.state is CandidateState.SUPERSEDED:
             continue
         locator = _locator(bundle)
+        if bundle.candidate.state is CandidateState.PROMOTED:
+            if locator in promoted_by_locator:
+                return _error(
+                    "candidate history contains multiple promoted records for one manifest"
+                )
+            promoted_by_locator[locator] = bundle
+            continue
         if locator in current_by_locator:
             return _error("candidate history contains multiple current records for one manifest")
         current_by_locator[locator] = bundle
@@ -187,6 +199,7 @@ def reconcile_source_scan(
             return _error("source scan contains duplicate manifest boundaries")
         seen_locators.add(locator)
         prior = current_by_locator.get(locator)
+        published = promoted_by_locator.get(locator)
         digest = _canonical_digest(artifact)
         if isinstance(digest, Err):
             return digest
@@ -194,11 +207,17 @@ def reconcile_source_scan(
         if prior is not None and prior.candidate.id == candidate_id:
             active.append(prior)
             continue
+        if prior is None and published is not None and published.candidate.id == candidate_id:
+            # Nothing moved upstream at a version this registry published: the promoted record
+            # already is the answer, and re-deriving it would only restate what it says.
+            active.append(published)
+            continue
+        ancestor = prior if prior is not None else published
         candidate = make_candidate(
             artifact.package,
             digest.value,
             target_registry,
-            previous=None if prior is None else prior.candidate.id,
+            previous=None if ancestor is None else ancestor.candidate.id,
         )
         registry_version = _approved_for(artifact, target_registry, approved)
         candidate = _with_registry_state(candidate, registry_version)
@@ -213,6 +232,8 @@ def reconcile_source_scan(
         bundle = CandidateBundle(candidate, artifact)
         history[candidate.id] = bundle
         active.append(bundle)
+        # Only the record under review is superseded.  A promoted one is a statement about the
+        # registry, which `supersede_candidate` refuses to move for that exact reason.
         if prior is not None:
             superseded = replace(
                 prior,
@@ -316,7 +337,9 @@ def reconcile_source_scan(
             collection_candidate = replace(collection_candidate, state=CandidateState.CHANGED)
         collection_history[collection_candidate.id] = collection_candidate
         collection_active.append(collection_candidate)
-        if collection_prior is not None:
+        # The same rule as for artifacts: a promoted Collection record states what the registry
+        # published, and this scan does not get to overwrite it (`QA-062`).
+        if collection_prior is not None and collection_prior.state is not CandidateState.PROMOTED:
             collection_history[collection_prior.id] = replace(
                 collection_prior,
                 state=CandidateState.SUPERSEDED,

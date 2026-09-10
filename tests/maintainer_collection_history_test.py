@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import unittest
 
@@ -95,6 +96,24 @@ class MaintainerCollectionHistoryTest(unittest.TestCase):
         self.assertEqual(current.previous, prior.id)
         self.assertEqual(prior.state, CandidateState.SUPERSEDED)
         self.assertEqual(prior.successor, current.id)
+
+    def test_a_promoted_collection_record_is_not_superseded_by_a_later_scan(self) -> None:
+        """`QA-062`: what the registry published is not this scan's to overwrite.
+
+        The same rule the artifact path enforces, where the domain refuses outright. Nothing here
+        raises, so without this the promoted record would quietly become `superseded` and the
+        history would stop saying that the Collection was ever published.
+        """
+
+        first = _scan("a" * 40)
+        published = dataclasses.replace(first.collection_active[0], state=CandidateState.PROMOTED)
+
+        second = _scan("b" * 40, version="2.2.0", previous=(published,))
+
+        kept = next(item for item in second.collection_history if item.id == published.id)
+        self.assertEqual(kept.state, CandidateState.PROMOTED)
+        self.assertIsNone(kept.successor)
+        self.assertEqual(second.collection_active[0].previous, published.id)
 
     def test_disappearing_collection_is_retained_as_source_removed(self) -> None:
         first = _scan("a" * 40)

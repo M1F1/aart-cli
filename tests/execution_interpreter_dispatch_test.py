@@ -30,6 +30,7 @@ from agent_artifacts.domain.effects import (
     CreatePythonEnvironment,
     InstallPythonDependencies,
     RemoveOwnedPath,
+    StoreCredential,
     UnconfigureHarness,
     VerifyCredential,
     WriteFile,
@@ -58,6 +59,23 @@ def _reference(name: str) -> CredentialReference:
 
 class _Provider:
     provider = "macos-keychain"
+
+
+class _InteractiveProvider(_Provider):
+    def __init__(self) -> None:
+        self.stored = []
+
+    def store(self, reference, secret=None, *, replace=False):
+        self.stored.append((reference, secret, replace))
+        from agent_artifacts.domain.credentials import (
+            CredentialObservation,
+            CredentialState,
+            ProviderState,
+        )
+
+        return Ok(
+            CredentialObservation(reference, ProviderState.AVAILABLE, CredentialState.PRESENT)
+        )
 
 
 def _dispatch(effect, interpreters):
@@ -196,6 +214,16 @@ class TwoArtifactDispatchTest(unittest.TestCase):
         )
 
         self.assertIsInstance(applied, Ok, getattr(applied, "diagnostics", ()))
+
+    def test_an_explicit_interactive_credential_flow_delegates_entry_to_the_provider(self) -> None:
+        provider = _InteractiveProvider()
+        reference = _reference("dummy-token")
+        interpreter = CredentialEffectInterpreter(provider, (reference,), interactive_store=True)
+
+        applied = interpreter.apply(StoreCredential(str(reference), provider.provider))
+
+        self.assertIsInstance(applied, Ok, getattr(applied, "diagnostics", ()))
+        self.assertEqual(provider.stored, [(reference, None, False)])
 
 
 class OwnedPathRemovalTest(unittest.TestCase):

@@ -5092,3 +5092,469 @@ Registry Sync is also a row-owned request. Both its enabled state and its comman
 from `current_row`, never a stale `focus` retained from the screen that opened Registries. This
 keeps the visible cursor, advertised action and eventual sync target on one stable identity while
 leaving Source synchronization and its domain untouched.
+
+## D-219 — The second operator batch is CP-20 and every progress surface tracks it
+
+Date: 2026-09-09 · Increment: CP-20 planning, QA-044–QA-052 · Status: accepted
+
+The findings are one coherent acceptance slice: clearer state subjects and navigation are needed
+to interpret the test, Registry disconnection and credential input close missing TUI lifecycle
+actions, and a disposable lab plus a separately bounded application reset make each observation
+reproducible. They therefore become CP-20 rather than being appended to the already committed
+CP-19 implementation.
+
+Root `TODO.md` owns the operator observations, the CP-20 slice owns execution/evidence,
+`docs/refactor/NEXT.md` owns the next action, `MIGRATION_STATUS.md` owns the durable checkpoint and
+`docs/refactor/plan.json` owns machine-readable progress. CP-19 is closed because its implementation
+is complete and committed and its full quality gate passed. B-108 is retained as a named
+test-isolation finding under CP-20's final integration step rather than being mistaken for missing
+CP-19 product behavior or silently erased.
+
+## D-220 — Fast mode stops only for a decision, and every visible subject stays product-owned
+
+Date: 2026-09-09 · Increment: CP-20 step 2, QA-044–QA-048 · Status: accepted
+
+Automatic inspection remains part of the canonical immutable installation plan, but Fast mode no
+longer opens its projection as a mandatory page when the operator can neither answer nor choose
+anything there. The next stop is Required Inputs, Remediation or Ready. Success is terminal for the
+wizard rather than a new navigation trap: Enter on Done returns directly to Marketplace while the
+installed and receipt routes remain explicit.
+
+The same product-language rule applies to state identity. Registry Maintainer labels synchronized
+connected content separately from the current project's local Registry workspace and offers
+Initialize Registry without an internal screen number. Doctor repair derives its subject from the
+visible repairable row, never the route that opened Doctor. Shared section composition owns one
+blank line inside each rule, and Settings owns blank lines between semantic groups.
+
+## D-221 — Disconnect removes one reviewed Registry connection, not what it delivered
+
+Date: 2026-09-09 · Increment: CP-20 step 3, QA-050 · Status: accepted
+
+Registry disconnect is a row-owned TUI action over an exact configured source identity. Its review
+names alias, origin and ref, and confirmation supplies that reviewed source as an expected value to
+the same configuration/source-store transaction used by the CLI. If the alias was repointed after
+review, confirmation refuses rather than removing the replacement.
+
+The transaction removes only the connection and its AART-managed synchronized snapshot, clearing
+the default alias when necessary. Installed artifacts and receipts remain because 161.7 makes a
+Registry connection Marketplace authority, not ownership of already installed state.
+
+## D-222 — Manual acceptance owns a fresh local Git ecosystem per run
+
+Date: 2026-09-09 · Increment: CP-20 steps 4–5, QA-049/QA-051 · Status: accepted
+
+The default manual-test command builds an isolated lab under one explicit root: separate maintainer
+and consumer HOME/XDG trees, a clean consumer project, three new working repositories, three local
+bare remotes and one unique `manual/<run-id>` branch shared by that run. A marker binds the exact
+absolute root and run identity; reset refuses an unmarked or mismatched directory and deletes only
+that lab. Setup resets an earlier marked lab before creating a new identity. It exports nothing to
+the calling shell and never resets or force-pushes a shared branch. GitHub-specific tests use fresh
+clones and the same unique branch namespace; remote cleanup remains a separate reviewed operation.
+
+The Registry already publishes a Skill and an MCP declaring required secret input `dummy-token`.
+Installation plans only an isolated provider reference; the provider owns value entry, and the MCP
+reports only whether its environment variable exists. No reusable credential value enters a repo,
+plan, receipt, frame or log.
+
+## D-223 — Factory reset is an exact AART-owned deletion plan with two textual confirmations
+
+Date: 2026-09-09 · Increment: CP-20 step 6, QA-052 · Status: accepted
+
+`aart reset` is deliberately CLI-only. A pure planner derives the exact user configuration file,
+its lock, and AART data/cache roots from resolved platform paths, deduplicates nested Darwin paths,
+requires every target to remain inside the supplied home with an AART-specific suffix, and binds the
+review to a SHA-256 digest. The command prints those targets and requires the literal phrases
+`RESET AART` and `DELETE AART STATE` before any deletion.
+
+Execution validates the whole target set first, refuses target symlinks and symlink ancestors, and
+then removes only those exact files/directories. Projects, harness placements, unrelated files and
+credentials owned by provider tools are outside the plan. EOF or interruption cancels without
+mutation; no session-global environment variable is created or reused.
+
+## D-224 — The launch directory is frame chrome, resolved at composition and carried on the state
+
+Date: 2026-09-10 · Increment: QA-053 · Status: accepted
+
+An operator cannot tell from a screen which directory the session is rooted in, and that directory
+is what a project-scope install and a local Registry edit act on. The directory is therefore
+context for everything a screen offers, not a fact one screen reports, so it is drawn as header
+chrome on every frame rather than added to the screens that happen to mention paths.
+
+It is resolved once in `tui.launch_workspace`, beside the composition whose `project_root` it must
+agree with, and travels on `ConsumerUiState.workspace` as a string already written for a reader.
+A frame that called `os.getcwd()` itself would be a draw touching the filesystem (D-051), and a
+second resolution could name a different directory than the one the actions work in.
+
+`tui_layout.abbreviate_path` writes home as `~` and, when the path will not fit, drops leading
+segments behind `…/` instead of ellipsizing the end: a directory is identified by its tail, so
+truncating the end would spend the line on the part every checkout shares and drop the only part
+that answers the question the line exists for. An empty workspace prints no line, which keeps every
+existing frame and its tests unchanged.
+
+## D-225 — The manual lab has two shapes, and the maintainer-first one starts with an empty Registry
+
+Date: 2026-09-10 · Increment: QA-054 · Status: accepted
+
+`make manual-test-setup` publishes both fixtures so consumer testing is not blocked on publication
+(QA-051). That is the right default for the consumer half and the wrong one for the Maintainer half:
+Initialize Registry, Add Source, Sync, Candidates, validation, promotion and commit have all already
+been performed by the setup script, so an operator walking those screens is reading a result rather
+than producing one, and a screen that failed to produce it would look identical.
+
+`make manual-test-setup-empty` therefore builds the same ecosystem with the Registry repository
+holding one commit and nothing AART owns. Screen 46 then reports that the current project is not a
+Registry and offers Initialize, which is where a maintainer walkthrough has to begin. The author
+repositories are still published, because an author publishes independently of any registry and the
+run needs something to discover.
+
+The walkthrough is a second document rather than a rewrite of `END_TO_END_ACCEPTANCE.md`: that
+procedure tests commands and GitHub integration and remains valid for what it covers. The new one
+tests the screens. It names the single `git push` explicitly rather than hiding it, because the TUI
+never pushes or merges by design (161.7), and a walkthrough that implied otherwise would report that
+invariant as a missing feature.
+
+## D-226 — Manual acceptance is two parallel routes, one per surface
+
+Date: 2026-09-10 · Increment: QA-054/QA-056/QA-057 · Status: accepted
+
+`END_TO_END_ACCEPTANCE.md` mixed both surfaces: CLI-and-GitHub setup for three stages, TUI
+walkthroughs in two more, and a stage 5 that told the operator to leave the CLI because deriving
+promotion evidence by hand would replace it with arbitrary digests. A procedure that switches
+surface mid-journey tests neither one completely.
+
+It is now two documents over one lab. `TUI_MANUAL_WALKTHROUGH.md` walks the screens;
+`END_TO_END_ACCEPTANCE.md` keeps its path — every existing reference stays valid — and is rewritten
+as the command-line route. Each covers the whole journey on its own surface, in two acts, and names
+the boundaries it cannot cross rather than stepping over them.
+
+The CLI route reaches the Registry through `registry vendor` rather than `registry promote`, because
+promote requires validation and policy digests no command emits (QA-056). Vendoring needs no
+external evidence: the Registry takes ownership of the bytes, which is a different and
+self-contained claim. The gap is recorded rather than papered over, and the walkthrough tells the
+operator not to fabricate a digest to get past it.
+
+`make manual-test-shell-<role>` exists because the CLI route otherwise required exporting four
+variables per command (QA-057), and a mistyped HOME is the one failure the lab exists to prevent.
+
+## D-227 — A published Candidate record and the Candidate under review are two live records
+
+Date: 2026-09-10 · Increment: QA-062 · Status: accepted
+
+`reconcile_source_scan` kept one live record per manifest and superseded it whenever the source
+moved. Once a version is published, the Sync after it records that manifest's Candidate as
+`promoted`, and `supersede_candidate` refuses to move a promoted Candidate — deliberately, because
+the registry, not the candidate history, is the authority on what was published. So the ordinary
+next event, an author editing the payload without bumping the version, met a domain refusal raised
+as a `ValueError` that no boundary catches.
+
+Making the scan skip the supersession was not enough on its own: the promoted record then stayed
+current alongside the new one and the following Sync refused with "candidate history contains
+multiple current records for one manifest". The two records are not rivals for one slot; they answer
+different questions. The promoted one says what the registry contains. The other says what is under
+review against it.
+
+So the history now indexes them separately. A promoted record is never superseded and never counted
+as the Candidate under review; the record under review is the only one a scan moves. A new Candidate
+names whichever of the two it descends from, so a conflict still points at the record it collides
+with. Nothing else changes: the answer to an edit at a published version remains the
+`registry-version-immutable` finding that already existed, now reachable instead of pre-empted by a
+crash. The Collection path enforced the same rule with a bare `replace`, which did not raise and so
+quietly rewrote a published record; it carries the same guard.
+
+## D-228 — AART pushes a reviewed registry commit, and never to the default branch
+
+Date: 2026-09-10 · Increment: QA-082 · Status: accepted · Authority: product owner
+
+164.7 used to end "AART may create the local registry commit but does not push it", and `QA-082`
+was recorded as needing a Product Specification decision before anything could be built. The
+product owner made that decision on 2026-09-10 and the section now says so: AART pushes.
+
+The reason the old rule existed was that publication must not become approval. Refusing to push at
+all was one way to guarantee that, and it was the wrong one — it bought the guarantee by making the
+operator leave the surface to run `git push` by hand, immediately after AART had reviewed, validated
+and committed exactly those bytes. Nothing about that detour is a decision; it is the same bytes
+moved by a different tool.
+
+The guarantee is now carried by the branch instead. A maintainer configures which remote branch a
+registry publishes to and may choose any branch but the registry's default one. A push to the
+default branch, a merge into it and a fast-forward of it are outside what AART does: refused here,
+by name, rather than left to the forge's branch protection to catch — protection is somebody else's
+configuration and is exactly the kind of thing that is absent on the day it matters. A consumer
+subscribing to a registry reads its default branch, so what a consumer can install is still what a
+person merged, never what a maintainer published.
+
+`QA-055`'s open question and `QA-082`'s blocked note are both settled by this.
+
+## D-229 — The terminal is lent to a credential prompt, not taken from it
+
+Date: 2026-09-10 · Increment: QA-081 · Status: accepted
+
+`MacOsKeychainProvider.store` runs `security add-generic-password -w` with no value on argv, so the
+provider prompts and this process never learns the secret. That is the invariant (161.8/161.9,
+INV-206/INV-207) and it is not what broke. What broke is that the prompt is a conversation on a
+terminal curses was still drawing on: the operator read `[q] Quitpassword data for new item:` and
+had nowhere to answer it.
+
+Two shapes were available. Bring entry into the TUI — draw a masked field, read the keystrokes, hand
+the value to the provider — which would work and would make AART hold the secret, discarding the
+invariant to fix a drawing fault. Or lend the terminal for the length of the prompt. The second
+keeps the invariant and is smaller.
+
+So `CredentialEffectInterpreter` takes an optional `terminal_handover` and wraps `provider.store` in
+it — only that call. Reading and removing a credential are AART's own work and say nothing to
+anybody, so they never disturb the screen. `_CursesHandover` is the adapter: `def_prog_mode` and
+`endwin` on the way in, `reset_prog_mode` and a full repaint on the way out, in a `finally` so a
+provider that raises still gives the terminal back. It is composed unbound, and the curses runner is
+what binds a screen to it, so the text terminal and the CLI — which have no drawn screen — keep
+prompting exactly as they did and need no loan to do it.
+
+The loan travels beside `interactive_credentials`, which already marks the one route where a person
+is present, so no new route was opened.
+
+## D-230 — A manifest that will not compile is reported beside the scan, not stored as a Candidate
+
+Date: 2026-09-10 · Increment: QA-063 · Status: accepted
+
+Measured first: with `good/aart.json` at `1.0.0` and `bad/aart.json` at `not-a-version`,
+`compile_author_snapshot` returned `Err` and the healthy artifact was discarded with it. The abort
+was real, and the diagnostic already carried `location.path='bad/aart.json'` — the path was being
+dropped on the way to the screen, not missing from the evidence.
+
+So the compile step now answers with both halves. `compile_author_manifests` judges each manifest on
+its own merits and returns `(artifacts, refusals)`, a `ManifestRefusal` holding the manifest's path
+beside its diagnostics. A fault in the tree itself — an uncanonical or duplicated path — still
+refuses whole, because no single manifest owns it. `compile_author_snapshot` became a strict wrapper
+that turns any refusal back into `Err`, so adoption and publication keep refusing whole; only
+`compile_author_source`, the watching boundary, tolerates.
+
+The finding asked for the malformed manifest to appear as an `invalid` Candidate. It does not, and
+that is deliberate. A Candidate is a record the Sync persists and later reconciles: `SourceScan`
+carries a `manifest_count` invariant, and `serialize_source_scan`/`parse_source_scan` round-trip
+under an assertion the Sync makes on every run. Giving a refusal a Candidate row means a schema bump
+to Candidate history for a record that can never be promoted, validated or published — it has no
+compiled artifact behind it. A refusal is therefore what it is: an observation about this scan,
+carried on `SourceSyncExecutionResult`, projected onto `MaintainerSourceSyncResultView` as
+`(path, reason)` pairs, and rendered under `Could not read N manifests:` with the path on the line.
+Nothing persists it, and the next Sync re-derives it from the tree.
+
+What the operator asked for is met either way: the neighbours scan, and the message names the file.
+The count still adds up, because `manifest_count` counts refusals alongside candidate states — a
+manifest that was seen and not compiled is still a manifest that was seen.
+
+## D-231 — An empty `compatibility.harnesses` means unconstrained, not "nowhere"
+
+Date: 2026-09-10 · Increment: QA-078 · Status: accepted, implementation deferred
+
+`QA-078` is a truthfulness defect and it was measured to the line. `evaluate_compatibility`
+(`agent_artifacts/compiler/graph.py:791`) answers Artifact Details from the manifest's declared
+`compatibility.profiles`; `_deliveries` in `agent_artifacts/io/artifact_placement.py` answers the
+install plan from the request alone and has never read the manifest. So a Skill that declares
+`claude` reports three harnesses unsupported on one screen and is installed to all four on the next.
+Both screens are internally consistent; they are consistent with different sources.
+
+The rule that closes it needs one prior decision, because the schema cannot distinguish two cases.
+`compatibility.harnesses` is optional and parsed with `allow_empty=True` (`native_schema.py`), so an
+absent block and an explicit `[]` both arrive as `()`. They must therefore mean the same thing, and
+the only safe meaning is **unconstrained**: an author who wrote nothing did not say "nowhere". The
+opposite reading was tried and refused every artifact in the fixture registry, including
+`company/mcp/notes@1.0.0`, which carries no `compatibility` block at all. Narrowing applies only
+against a non-empty declaration; an undeclared harness a person typed stays a refusal by name and one
+the build merely measured stays skippable, which is the existing `_skippable(profile, requested=...)`
+asymmetry and is not disturbed.
+
+The narrowing itself is **not landed**, deliberately. Applied inside `placement_for` it works — the
+targeted tests pass and the shell reaches `SUCCESS` and delivers — but the installation receipt then
+records the narrowed harness set while the host it is reconciled against still carries every measured
+one, and `configured_consumer_completion` refuses with `configured-setup-invalid: setup requires one
+exact configured installation receipt`. The marker is never written. That is the right refusal: the
+narrowing belongs where the offer is made, not inside the placement that serves it, and the offer is
+the consumer setup and remediation path that step 3 is rebuilding. Landing it under step 3 also
+settles `QA-080`, since a plan for one harness cannot list "configure harness" three times.
+
+Two facts to carry forward: several fixtures encode the defect rather than merely tolerate it —
+`measured_host_profiles_test.py` asserts a `["claude"]`-declaring Skill is delivered to three
+harnesses — and `git_backed_runtime_e2e_test.py` requests `claude` from an artifact that never
+declares it, so both need correcting with the fix and neither is a regression when they change.
+
+## D-232 — Validation Details is an optional view inside one Candidate review journey
+
+Date: 2026-09-10 · Increment: QA-073/QA-074 · Status: accepted
+
+Validation Details is not a required progress stage: a maintainer may continue from Validation
+straight to Policy with `p`, so adding screen 39 to the progress route would make an optional
+inspection look mandatory. Candidate Lifecycle, Provenance and Version Conflict are likewise views
+of the Candidate rather than promotion stages. They are nevertheless part of the same Candidate
+review journey. The navigation boundary therefore keeps all four out of progress chrome while a
+separate finite table declares their direct and nested reverse edges as subject-preserving.
+
+The subject changes representation inside that journey. Candidate Diff consumes a bare Candidate
+ID; selecting a Validation row changes focus to the composite `candidate:check` identity that
+Validation Details needs. Back cannot preserve that string literally when it returns to Diff. The
+reducer now canonicalizes a parsed validation row to its Candidate ID only when the target screen
+consumes a bare Candidate, and continues to clear focus when Back leaves the workflow. This is a
+navigation-state rule, not a renderer repair, so an unavailable projection still remains honest
+when the Candidate truly cannot be resolved.
+
+Enter on Validation Details continues to Policy Review. It reuses the composed validation evidence
+already on the screen and causes no validation, policy, promotion or IO effect. Validation retains
+`p` as the optional direct shortcut, labelled `Policy` rather than the false `Promote`; the actual
+promotion remains behind its later explicit review and confirmation screens.
+
+## D-232 — A rule is a separator between regions, never a border around one
+
+Date: 2026-09-10 · Increment: QA-065/QA-067 · Status: accepted
+
+The operator's word for the screens was *"wolna amerykanka"*: every screen composed its own
+spacing, sections and footer position, so the same kind of thing sat at a different height
+depending on which screen had been written when. Two findings came out of that one cause. `QA-067`
+asked for a skeleton; `QA-065` reported its most visible symptom, a rule followed immediately by
+another rule — an empty section drawn as though it had content.
+
+Both are settled by deciding what a rule *is*. `section()` treated it as a border: it wrapped a
+region in a rule above and a rule below, so two adjacent regions produced two adjacent rules and an
+empty one still produced its pair. `screen_frame` treats it as a separator drawn between two
+regions that both have something to say. Empty regions are dropped before any rule is placed, so a
+section with nothing in it takes its boundary with it and the doubled rule cannot be constructed.
+The blank line either side of every rule comes from the same place, which is why text no longer
+touches a boundary anywhere rather than on the screens somebody remembered.
+
+The footer is passed separately rather than as the last region. Every other region may turn out
+empty; the keys may not, because a screen with no documented way out is the first-run trap the
+legend exists to remove (`B-077`).
+
+## D-233 — The cursor description is what `[v]` toggles
+
+Date: 2026-09-10 · Increment: QA-070/QA-064 · Status: accepted
+
+`QA-070` asked for the per-row explanations to be switchable rather than permanent. `QA-064`
+reported that `[v] Fast / Verbose` did nothing. They are the same key and the same fix: `v` already
+moved `PresentationProfile` between Fast and Verbose, but nothing on the screens the operator
+walked read that profile, so the key was honest in the state and invisible on the screen.
+
+Binding the skeleton's second section to the profile makes one key mean one thing everywhere: Fast
+is the screen without descriptions, Verbose is the screen with them. Nothing new was added to the
+key legend, and the label it already carried became true.
+
+Fast is the default, so the descriptions are off until asked for. That is the direction the finding
+wanted — the complaint was that they were always present — and it also removes a permanent section
+from every screen that has describable rows.
+
+## D-234 — The terminal places the footer; the frame does not know how tall the terminal is
+
+Date: 2026-09-10 · Increment: QA-068 · Status: accepted
+
+The legend used to float directly under the body with the rest of the terminal blank beneath it, so
+on a short screen the keys landed at whatever height the body ended (`QA-068`). The curses adapter
+did pin one row to the bottom, which was enough while the legend was one line and stopped being
+enough the moment it became a block.
+
+Anchoring could have been done by giving `frame` the terminal height, and was not. A frame that
+knows how tall the terminal is has to be re-composed on every resize and can no longer be asserted
+against as a value. Instead `screen_frame` composes a frame of whatever length it needs,
+`footer_start` reads back where the footer begins — the last rule, which is the footer's own
+boundary by construction — and `anchor` inserts blank rows above it for a terminal of a given
+height. The adapter calls `anchor` with its real height and paints. It only ever adds rows; a frame
+taller than the terminal is clipped in the body and keeps the legend whole, because clipping is a
+decision about what to drop and that belongs to the thing that ran out of room.
+
+`footer_start` answers with the last line rather than "no footer" for a frame with no rule at all.
+The alternative reading would let a body long enough to fill the terminal clip the only documented
+exit off the screen, which is `B-077` re-opened.
+
+## D-235 — The launch directory is the last fact before the keys, not the second line of the title
+
+Date: 2026-09-10 · Increment: QA-066/QA-069 · Status: accepted, revises `D-224`
+
+`D-224` put the launch directory directly under the heading with no blank between them, reasoning
+that the directory is part of naming where the reader is rather than something the body reports.
+The operator lived with it and revised themselves twice in one run: first that the two lines ran
+together and needed separating (`QA-066`), then that the directory should leave the header entirely
+and sit in the footer above the keys (`QA-069`).
+
+Taken together they are one decision, and `QA-069` is the later and more specific half, so it wins:
+the top line carries only the trail, and `working at <path>` is a region of its own immediately
+before the key legend. `QA-066`'s complaint is answered by the move rather than by the blank line it
+asked for -- there is no longer a second header line to run together with the first.
+
+`D-224`'s reasoning survives the reversal. The directory is still frame chrome that every screen
+carries rather than a line a screen remembers to print; only its place changed. Putting it beside
+the keys also groups the two things that are true of the session rather than of the view, which is
+why the skeleton's own rule is enough to separate it and nothing new had to be invented.
+
+## D-236 — A nested title is the trail the reader walked, with each place named once
+
+Date: 2026-09-10 · Increment: QA-071/QA-083 · Status: accepted
+
+`QA-071` asks a nested view to name its parent; `QA-083` asks it to stop repeating "Maintainer".
+They produce one scheme or an inconsistent pair, so they were settled together.
+
+The trail is built from the session's own history rather than from the declared navigation graph.
+`ConsumerSession.advance` pushes the screen being left and `back` pops it, so the stack *is* the
+ancestor chain, and it names where the reader actually came from. The graph could not do that
+without guessing: several screens declare more than one parent -- Review Selection is reachable from
+Marketplace, Artifact Details, Collection Preview and Collection Customize -- and a breadcrumb that
+picked one would be wrong for three of the four journeys.
+
+Two places are named differently, in opposite directions for the same reason. The home Dashboard
+contributes no step, because `AART` already names it and `AART / Dashboard / Marketplace` says home
+twice. A dashboard passed *through* drops the word, because a dashboard inside a trail is the place
+it is the dashboard of. That is what turns `AART / Maintainer Dashboard / Sources` into
+`AART / Maintainer / Sources`, and it is why "Maintainer" is said once however deep the view goes.
+A dashboard the reader is standing on keeps its full name, because there it is the view rather than
+a step towards one.
+
+The `QA-033` suffix stays last: "did not run" qualifies the whole trail, not its final segment.
+
+## D-237 — Returning to a place already stood in is a return, not a step deeper
+
+Date: 2026-09-10 · Increment: QA-072 · Status: accepted
+
+`QA-027` gave every finished journey a forward exit: one key that lands on the list the next piece
+of work starts from, instead of an Esc for each screen just walked. It left the stack alone, so the
+list arrived on it a second time and Esc walked straight back into the wizard that had already run.
+The operator hit it twice, from Initialize Registry and from an install, and reported it as one
+fault (`QA-072`).
+
+`ConsumerSession.navigate` now rewinds when the target is already in history, rather than pushing.
+Rewinding drops exactly the screens walked since that place and nothing else, so the stack stays a
+record of where the reader still *is* rather than of everywhere they have been. It needs no list of
+which journeys are "finished": a sequence that ends by returning somewhere is finished by the act of
+returning, and a sequence that ends somewhere new is not, so the rule reads the same in both cases.
+
+The second half of the finding — Esc from a list reaches the dashboard that owns it — is a separate
+rule because it is true even where nothing was completed. A list is a place the reader goes *to*
+from a dashboard, so leaving it means "done looking at this", however they arrived; Candidates is
+reachable sideways from the Registry screen and still answers to the Maintainer Dashboard. The
+owner is read from the declared navigation, so a dashboard that gains a list gets this without a
+second table to keep in step.
+
+That redirect is guarded by "and the owner is on the stack". Leaving is a return, and a dashboard
+nobody has been to is not somewhere to return to — without the guard, Esc from a stranded list would
+invent a forward step into a screen the reader never opened.
+
+One consequence worth naming: the heading reads the same stack (`D-236`), so this also removes the
+trail that named a place twice. The two findings had one cause.
+
+## D-238 — Remediation is a set of remedies, so an ordered sequence of steps is one remedy
+
+Date: 2026-09-10 · Increment: QA-060 · Status: accepted
+
+`QA-060`: Source Sync refused with `configure an enabled default registry, then review Source Sync
+again` to an operator who had just initialized a Registry. Every word of it was true and none of it
+was actionable, because the Registry they had made was not yet published to its branch and not yet
+subscribed to, and the advice named neither. It is the same complaint as `QA-075` from the next
+screen over, and it takes the same answer (`D-228`): name what turns a created Registry into a
+connectable one, and name it before the step that depends on it.
+
+Writing that as two remediation lines did not work, and the reason is a real property of the domain:
+`Diagnostic.__post_init__` normalises `remediation` with `tuple(sorted(set(...)))`. Remediation is
+a *set* of independent remedies — deduplicated and canonically ordered so that a receipt records the
+same advice however it was assembled — not a script. Alphabetical order is therefore the only order
+a multi-line remediation can have, and "configure…" sorts before "publish…", which is exactly
+backwards from the order the operator must act in.
+
+So a sequence of steps that must happen in order is one remedy, written as one line. The alternative
+— teaching `Diagnostic` to preserve authored order — would trade a canonical form that receipts and
+comparisons depend on for a formatting convenience, and every other caller in the tree treats
+remediation as an unordered set. The constraint is recorded here because the next agent who wants
+ordered advice will otherwise rediscover it the same way.

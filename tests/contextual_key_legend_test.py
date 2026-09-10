@@ -64,7 +64,12 @@ class ContextualKeyLegendTest(unittest.TestCase):
 
         self.assertTrue(finished.exited)
         self.assertTrue(
-            any(frame_lines[0] == "AART / Rebuild Registry" for frame_lines in terminal.frames)
+            # `QA-071`: a nested view names the parent it was reached through, so the heading is
+            # the trail rather than the screen alone.
+            any(
+                frame_lines[0] == "AART / Registry Maintainer / Rebuild Registry"
+                for frame_lines in terminal.frames
+            )
         )
 
     def test_each_maintainer_screen_names_its_own_shortcuts(self) -> None:
@@ -76,7 +81,8 @@ class ContextualKeyLegendTest(unittest.TestCase):
             MaintainerScreen.ADOPTED_ARTIFACTS: ("[Enter] Check upstream",),
             MaintainerScreen.UPSTREAM_CHECK: ("[a] Review new version",),
             MaintainerScreen.PROMOTION_MODE: ("[m] Toggle mode",),
-            MaintainerScreen.VALIDATION: ("[p] Promote",),
+            MaintainerScreen.VALIDATION: ("[p] Policy",),
+            MaintainerScreen.VALIDATION_DETAILS: ("[Enter] Policy",),
         }
 
         for screen, labels in expected.items():

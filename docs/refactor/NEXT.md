@@ -1,5 +1,104 @@
 # AART Refactor — Next Work
 
+## CP-21 current objective (2026-09-10)
+
+**CP-21 is OPEN — 7 OF 11 STEPS DONE.** The operator's second manual TUI run walked the
+maintainer route from an empty Registry through initialization, Sources, Candidates, promotion and
+publication, then the consumer route through Marketplace, install and credentials. Its findings are
+`QA-058` through `QA-083` in [`TODO.md`](../../TODO.md); the slice document is
+[`slices/CP-21-second-manual-tui-run.md`](slices/CP-21-second-manual-tui-run.md) and the raw
+transcripts are the operator's own `nowe bledy i znaleziska.txt` (untracked).
+
+Nine are already fixed and await the operator's retest: `QA-058` (a space typed into Initialize
+Registry made a usable identity unusable), `QA-059` (the walkthrough went from Add Source straight
+to Sync, which cannot work without a published and subscribed target Registry), `QA-061` (the
+default lab's Registry recorded different manifest bytes and different Source aliases than the
+Sources it claimed to have vendored, so the first Sync of an untouched lab reported every artifact
+invalid) and `QA-062` (an author editing an already-published version raised a `ValueError` out of
+`reconcile_source_scan`; `D-227` separates the published record from the Candidate under review),
+`QA-081` (the credential prompt was spoken over the drawn frame; `D-229` lends the screen to the
+provider for the length of the prompt and takes it back), `QA-084` (the lab home had no keychain,
+so macOS offered to reset one; the lab now creates and owns its own), `QA-063` (one malformed
+manifest failed the whole Source with no path in the message; `D-230` compiles each manifest alone
+and reports the refusals beside the scan), and `QA-073`/`QA-074` (Back keeps the Candidate through
+Lifecycle, Provenance, Version Conflict and Validation Details, while Enter on a check's details
+continues to Policy; `D-232`).
+
+The promotion path's blocking pair is closed. The next coupled findings set the order of the
+remaining screen work:
+
+Steps 4 through 7 are done and await the operator's retest: `QA-067`/`QA-068` (a screen skeleton —
+`screen_frame`/`anchor`/`footer_start` in `tui_layout.py` compose every consumer screen and the
+terminal, not the frame, places the footer; `D-233`, `D-234`), `QA-066`/`QA-069`/`QA-071`/`QA-083`
+(the launch directory moved to the footer and a nested title is the trail through session history;
+`D-235`, `D-236`), `QA-072` (returning to a place already stood in rewinds the stack, and Esc from a
+list reaches the dashboard that owns it; `D-237`), and `QA-060`/`QA-075`/`QA-077` (a refusal names
+publishing and subscribing before the default, an empty block says what it is empty of, and no
+screen identifier leaks into a focus; `D-238`).
+
+**What to pick up next, in this order:**
+
+1. `QA-076` — a promoted artifact still reads as a `New` Candidate. Diagnosed in full, not built:
+   `reconcile_source_scan` (`application/maintainer.py:207`) short-circuits when the source has not
+   moved and that branch never consults `approved`, so `_with_registry_state` — the only thing that
+   sets `PROMOTED` for an artifact Candidate — never runs for it. Re-derive that branch against the
+   registry, guarded: `assess_candidate` raises on a terminal state and `mark_candidate_promoted`
+   accepts only `READY`/`WARNING`, so terminal and rejected priors must be left alone. It is the one
+   piece of step 7 still open.
+2. Step 9's remainder — the publication branch as maintainer configuration, the Registry Commit
+   screen action, and the receipt in the maintainer frame, all in `tui_maintainer.py`.
+3. Step 8 — `QA-078`, deferred by `D-231` to the setup path, where it also settles `QA-080`.
+4. Step 11 — mutations, full gates, durable handoff.
+
+`QA-082` asked AART to push a reviewed Registry commit to a non-default branch, and was recorded as
+needing a Product Specification decision first. **The product owner made that decision on
+2026-09-10 and 164.7 now says so (`D-228`):** AART pushes the reviewed registry commit, on an
+explicit action, to a remote branch the maintainer configures — any branch but the registry's
+default one, and a push to, merge into or fast-forward of the default branch is refused by AART
+itself. A consumer subscribing to a registry still reads its default branch, so what a consumer can
+install is still what somebody merged. Step 9 of CP-21 builds it, and it also settles `QA-055`.
+
+**Step 10 is also done, out of order, because it does not touch the screens the other steps are
+rebuilding.** `QA-063` is closed: `compile_author_manifests` compiles each manifest on its own
+merits and answers with `(artifacts, refusals)`; `compile_author_snapshot` stays strict so adoption
+and publication keep refusing whole; and a refusal rides `SourceSyncExecutionResult` to the Sync
+result screen as `Could not read N manifests:` with the path on the line. `D-230` records why a
+refusal is reported beside the scan rather than persisted as an `invalid` Candidate.
+
+**Step 9 is started and deliberately incomplete.** The rule, the command and the push adapter
+exist and are tested against a real bare remote: `agent_artifacts/domain/publication.py` refuses the
+default branch from two strings, `application/registry_publication.py` builds a command with no
+`force`, `merge`, `fast_forward` or `delete` field to set, and `io/registry_publication.py` pushes
+`<revision>:refs/heads/<branch>` and refuses again from the remote's own advertised `HEAD`. What is
+missing is the surface: the Registry Commit screen's action, the publication branch as configuration
+rather than an argument, and the receipt's place in the frame. Those live in `tui_maintainer.py` and
+the maintainer views, which step 3 is rebuilding — take them once step 3 lands.
+
+**Exact next action:** steps 1–3 and 10 are done; step 9 is half-built. Take step 4
+(`QA-065`/`QA-067`/`QA-068`/`QA-070`): establish one screen skeleton with an anchored split footer,
+no empty sections, and one cursor-description mode before changing individual screen wording.
+Steps 5–8 and 11 remain untouched.
+
+
+## CP-20 current objective (2026-09-09)
+
+CP-20 is **IMPLEMENTED — AWAITING MANUAL RETEST**. All seven steps in
+`docs/refactor/plan.json` are done: the Registry/Doctor/install wording and navigation are clear;
+Registry disconnection is reviewed and bounded; the disposable MCP exercises a provider-owned
+credential prompt; fresh manual labs own isolated HOME/XDG, repositories, bare remotes and unique
+branches; and `aart reset` plans only exact AART-owned state behind two confirmations.
+
+Closing evidence is green: six targeted semantic mutations were killed; the focused CP-20 set
+passes 177 tests plus eight subtests; `make quality` passes 3,677 tests (one skipped) at 85.36%
+branch coverage and every non-test gate; separate `make integration` passes all 381 E2E tests. A
+real lab smoke created three repository/remotes pairs on `manual/7fd37689f593` and its marked reset
+removed only that lab. B-108 did not reproduce and remains recorded as an intermittent historical
+test-isolation finding.
+
+**Exact next action:** run `make manual-test-setup`, follow the generated `START_HERE.md` through
+the TUI, and manually retest QA-044 through QA-052. Check those items only after the operator
+confirms them, then commit CP-20. CP-19 remains closed at `e9616dd`.
+
 ## Current objective
 
 **CP-18 Migration and release gate is VERIFIED. All six steps and the mandatory execution plan are
@@ -1444,6 +1543,22 @@ B-108 records the order-dependent gate failure and the diagnostic narrowing.
 `make integration` to green. After that, hand the Fixed list — including QA-039 and QA-043 — back
 to the operator for manual retest. Do not reopen the completed CP-19 implementation unless that
 retest supplies new evidence.
+
+## CP-21 steps 4 and 5 landed; step 6 is next
+
+The frame is settled: one skeleton every screen fills (`D-232`), a placed footer (`D-234`), the
+launch directory above the keys (`D-235`) and a heading that is the trail the reader walked
+(`D-236`). Step 6 landed too (`D-237`): the stack no longer keeps a finished sequence, and Esc from a list
+reaches the dashboard that owns it. Step 7 is next — `QA-060`, `QA-075`, `QA-076`, `QA-077`: screens
+telling the truth about promoted Candidates, empty connected-Registry blocks, stale Sources, and the
+internal screen identifier leaking into an operator-facing message.
+
+## CP-21 step 8 is diagnosed, not open
+
+Do not re-derive `QA-078`. `D-231` holds the rule and the slice file holds the measurement: the fix
+is a change to what the install *offers*, so it lands with CP-21 step 3's consumer setup and
+remediation path, where it also settles `QA-080`. Building it at the placement boundary was tried and
+backed out — the receipt and the host then disagree and `configured_consumer_completion` refuses.
 
 ## Critical boundaries for this slice
 

@@ -36,6 +36,7 @@ from tests.consumer_activity_test import lifecycle_outcome
 ESCAPE, ENTER, BACKSPACE, SLASH = 27, 10, 263, ord("/")
 QUESTION = ord("?")
 UP, DOWN, SPACE = 259, 258, 32
+VERBOSE = ord("v")
 TODAY = dt.date(2026, 8, 31)
 
 
@@ -137,10 +138,12 @@ class ConsumerShellTest(unittest.TestCase):
         self.assertIn("[q] Quit", legend)
 
     def test_dashboard_explains_the_navigation_row_under_the_cursor(self):
-        _, terminal = drive(DOWN)
+        # `QA-070` made the per-row explanations a mode rather than a fixture, and `[v]` is the key
+        # that turns it on, so the walk that reads them starts by pressing it.
+        _, terminal = drive(VERBOSE, DOWN)
 
-        marketplace = "\n".join(terminal.frames[0])
-        installed = "\n".join(terminal.frames[1])
+        marketplace = "\n".join(terminal.frames[1])
+        installed = "\n".join(terminal.frames[2])
         self.assertIn("Browse and install", marketplace)
         self.assertIn("Marketplace", marketplace)
         self.assertIn("See what AART manages", installed)
@@ -226,7 +229,10 @@ class ConsumerShellTest(unittest.TestCase):
         _, terminal = drive(QUESTION, state=_at(ConsumerScreen.INSTALLED))
 
         lines = terminal.last.splitlines()
-        help_lines = lines[lines.index("Keyboard help") + 1 : lines.index(SECTION_RULE)]
+        # The skeleton separates every region with a rule (`QA-067`), so help is now bounded by the
+        # rule that follows it rather than by the frame's first one.
+        opened = lines.index("Keyboard help")
+        help_lines = lines[opened + 1 : lines.index(SECTION_RULE, opened)]
         advertised = [line for line in help_lines if "search" in line.casefold()]
         self.assertEqual(len(advertised), 1, terminal.last)
         self.assertIn("/", advertised[0])

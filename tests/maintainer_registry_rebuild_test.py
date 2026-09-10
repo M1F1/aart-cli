@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import tempfile
 import unittest
 from unittest import mock
 
@@ -103,6 +104,24 @@ class MaintainerRegistryRebuildInteractionTest(unittest.TestCase):
         # `QA-017`: a screen never answers with a command line, which is the whole point here.
         self.assertNotIn("aart ", drawn)
         self.assertNotIn("--frozen", drawn)
+
+    def test_absent_registry_guidance_names_the_current_project_not_an_internal_screen(
+        self,
+    ) -> None:
+        from agent_artifacts.io.registry_bootstrap import registry_absent_refusal
+
+        with tempfile.TemporaryDirectory() as root:
+            refused = registry_absent_refusal(root)
+
+        self.assertIsNotNone(refused)
+        assert refused is not None
+        rendered = "\n".join(item.message for item in refused.diagnostics)
+        rendered += "\n" + "\n".join(
+            step for item in refused.diagnostics for step in (*item.remediation, *item.interactive)
+        )
+        self.assertIn("current project", rendered)
+        self.assertIn("Initialize Registry", rendered)
+        self.assertNotIn("Screen 46", rendered)
 
     def test_choosing_one_stage_carries_that_choice_into_the_review(self) -> None:
         state = _state(MaintainerScreen.REGISTRY_REBUILD, rows=_PICKER_ROWS, cursor=3)

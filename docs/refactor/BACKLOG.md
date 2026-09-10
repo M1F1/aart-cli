@@ -2778,8 +2778,8 @@ which is `make mutants` noise rather than a finding (D-134).
 
 ## B-108 — The real macOS Keychain E2E is order-dependent in the integration suite
 
-Found: CP-19 step 15 full verification (2026-09-09) · Severity: high · Status: promoted to CP-19
-step 15
+Found: CP-19 step 15 full verification (2026-09-09) · Severity: high · Status: intermittent,
+retained after green CP-20 closing gates
 
 Two independent `make integration` runs completed 380 of 381 E2E tests and failed while
 `mcp_stdio_e2e_test` asked `/usr/bin/security create-keychain` to create a unique temporary
@@ -2794,3 +2794,94 @@ Smaller module combinations can pass, while the full integration ordering reprod
 Do not hide it with a platform skip or claim the separate gate is green. Resolve the Keychain test
 isolation, then rerun `make integration`; the product assertions and CP-19 focused tests are not
 implicated.
+
+CP-20 closing evidence no longer reproduces the failure: the real Keychain E2E passed in both
+3,677-test `make quality` executions and the immediately following standalone 381-test
+`make integration`. No Keychain test was skipped or weakened. Because the earlier order-dependent
+failure had no identified cause, one green closing sequence is evidence that the release gate is
+currently clear, not proof that the intermittent condition can never recur; retain this item for a
+future recurrence with the exact order and Security.framework diagnostics.
+
+## B-109 — `Diagnostic` accepts a message that is not a string
+
+Found while reading `make mutants` survivors for CP-21 step 9 (`agent_artifacts/domain/publication.py`,
+`application/registry_publication.py`, `io/registry_publication.py`). A recurring survivor class
+replaces a refusal's `message` with `None`, and nothing notices: `Diagnostic.__post_init__` sorts
+and freezes `remediation`, `details` and `interactive`, but never checks that `code` is a
+`DiagnosticCode`, that `severity` is a `Severity`, or that `message` is a non-empty single-line
+string. A `None` message survives construction and reaches a renderer, where it prints as `None`.
+
+This is not specific to publication — it is every refusal in the repository, and it is why that
+survivor class appears in any module `make mutants` is pointed at. Adding the three checks to
+`Diagnostic` would kill the class everywhere at once. It is not on the critical path: no product
+behaviour currently constructs such a diagnostic, and every call site passes a literal.
+
+Not blocking. Do it in a slice that already touches `agent_artifacts/domain/diagnostics.py`, and
+expect a wide but mechanical test fallout from fixtures that pass loose values.
+
+## B-110 — `make mutants` reuses a stale working copy when `ONLY` changes
+
+Reproduced three times during CP-21 step 9. Pointing `make mutants ONLY=<a.py>` at one module and
+then at a different one makes the second run stop with:
+
+```
+Stopping early, because we could not find any test case for any mutant.
+It seems that the selected tests do not cover any code that we mutated.
+```
+
+which reads as a test-selection mistake and is not one. `mutants/` still holds the previous run's
+working copy, whose `mutmut-stats.json` reports `0 files mutated, 255 ignored, 1 unmodified`, so the
+newly scoped module is never mutated. `rm -rf mutants` before the run fixes it every time, and the
+run then completes normally.
+
+`scripts/mutants.py` already writes and restores the `[mutmut]` scope in `setup.cfg`; it could
+clear `mutants/` whenever the scope it is about to write differs from the one already recorded
+there, which would make the tool honest about what it is measuring. The advisory nature of the gate
+is why this is backlog rather than critical: the misleading message costs a run, not a wrong answer.
+
+## B-111 — `make mutants` aborts when a Hypothesis property test is in `TESTS`
+
+Found: 2026-09-10, during CP-21 step 5.
+
+`make mutants ONLY=agent_artifacts/tui_consumer.py TESTS="… tests/workspace_context_line_test.py"`
+exits 2 with every mutant reported `not checked`, and the cause is buried far above the summary:
+
+```
+hypothesis.errors.FailedHealthCheck: The method
+WorkspaceContextLineTest.test_a_shown_path_is_bounded_and_keeps_its_final_segment was called from
+multiple different executors.
+```
+
+mutmut runs the suite from several executors; Hypothesis treats that as a source of flaky,
+non-replayable results and refuses. The whole run is lost, not just the property test, and the exit
+message says nothing about Hypothesis.
+
+Workaround: leave property-test files out of `TESTS` and mutate against the example-based ones.
+That is what step 5 did, and it costs nothing there because the property in question is about
+`abbreviate_path` rather than about the mutated module. It will cost something the first time a
+slice's only coverage of a claim is a property.
+
+Worth fixing properly in `scripts/mutants.py` -- either by suppressing that health check for the
+mutation run, or by naming the cause in the failure so the next agent does not spend the run
+finding it. Related to `B-110`, which is the other way this command fails with a misleading message.
+
+## B-112 — `make mutants` mutates no class methods in `consumer_views.py`
+
+Found: 2026-09-10, during CP-21 step 6.
+
+A scoped run over `agent_artifacts/application/consumer_views.py` generated 4329 mutants and not one
+of them touched a method: `ConsumerSession.navigate`, `ConsumerSession.back` and their neighbours
+appear in `mutants/…/consumer_views.py` verbatim. Only module-level functions were mutated. mutmut
+is capable of mutating methods — a run over `tui_consumer.py` produced
+`xǁCanonicalScreenSourceǁ_list__mutmut_17` — so this is specific to that module, most likely to its
+`@dataclass(frozen=True, slots=True)` shape.
+
+Why it matters: a clean mutation run over that module says nothing about the code that holds the
+session, the settings and the drafts, which is where its behaviour actually lives. An agent reading
+"no survivors" could reasonably conclude the opposite of the truth. Step 6's own claims are held —
+the targeted mutations covered `navigate` by hand and both were killed — but that was hand work
+that the advisory tool did not and will not report on.
+
+Worth pinning down which shape mutmut is skipping, and either recording it in `DECISIONS.md` as a
+known blind spot the targeted mutation must cover, or configuring around it. Related to `B-110` and
+`B-111`, the other two ways this command misleads.

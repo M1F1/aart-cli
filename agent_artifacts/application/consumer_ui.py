@@ -24,6 +24,7 @@ from .consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     ConsumerSettings,
+    is_screen_identifier,
     keeps_focus,
     navigation_targets,
 )
@@ -31,6 +32,7 @@ from .maintainer_views import (
     MaintainerCandidateFilter,
     MaintainerScreen,
     parse_candidate_filter_row,
+    parse_validation_row,
 )
 
 __all__ = [
@@ -67,6 +69,7 @@ class ConsumerActionKind(str, Enum):
     BULK_PROMOTION = "bulk-promotion"
     REGISTRY_ADD = "registry-add"
     REGISTRY_SYNC = "registry-sync"
+    REGISTRY_REMOVE = "registry-remove"
     SOURCE_ADD = "source-add"
     REGISTRY_INIT = "registry-init"
     REGISTRY_REBUILD = "registry-rebuild"
@@ -191,6 +194,25 @@ class RegistryInitDraft:
             for value in (self.registry_id, self.display_name, self.usage_reporting)
         ) or not isinstance(self.commit, bool):
             raise ValueError("registry init draft is invalid")
+
+    def settled(self) -> "RegistryInitDraft":
+        """The same three answers with the spaces around them dropped (`QA-058`).
+
+        Screen 46a's status bar offers `[Space] Toggle`, and on a text row a printable key is
+        text, so the space it types lands in the answer.  None of the three can carry one at
+        either end -- an identifier is a slug, a display name is one line, a reporting repository
+        is `owner/name` -- so surrounding whitespace is not part of what the operator named and
+        the identity is judged without it.  Settling happens here, at the boundary that judges,
+        rather than while typing, because `Manual Registry` has to stay typeable one key at a
+        time.
+        """
+
+        return replace(
+            self,
+            registry_id=self.registry_id.strip(),
+            display_name=self.display_name.strip(),
+            usage_reporting=self.usage_reporting.strip(),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -401,6 +423,11 @@ class ConsumerUiState:
     source_draft: SourceDraft = SourceDraft()
     registry_init_draft: RegistryInitDraft = RegistryInitDraft()
     repository_scan_draft: RepositoryScanDraft = RepositoryScanDraft()
+    #: The directory this session was launched from, already written for a reader. It is context
+    #: for every screen -- an install and a Registry edit land relative to it -- so it is carried
+    #: on the state rather than fetched where it is drawn, which keeps the frame off the
+    #: filesystem (`QA-053`).
+    workspace: str = ""
 
     def __post_init__(self) -> None:
         if (
@@ -434,6 +461,8 @@ class ConsumerUiState:
             or (self.action is not None and self.failed_action is not None)
             or not isinstance(self.candidate_filter, MaintainerCandidateFilter)
             or not isinstance(self.file_diff, bool)
+            or not isinstance(self.workspace, str)
+            or any(character in self.workspace for character in "\r\n")
             or not isinstance(self.registry_draft, RegistryDraft)
             or not isinstance(self.source_draft, SourceDraft)
             or not isinstance(self.registry_init_draft, RegistryInitDraft)
@@ -590,7 +619,50 @@ def _same_workflow(current: ApplicationScreen, target: ApplicationScreen) -> boo
     return any(current in route and target in route for route in _WORKFLOW_ROUTES)
 
 
-def opening_state(settings: ConsumerSettings) -> ConsumerUiState:
+# These are reverse-navigation relationships about one stable Candidate, not stages in the
+# promotion route. Keeping them separate prevents optional inspection screens from appearing in
+# the progress chrome merely to retain their subject (`QA-073`).
+_SUBJECT_PRESERVING_BACK_EDGES = frozenset(
+    {
+        (MaintainerScreen.CANDIDATE_LIFECYCLE, MaintainerScreen.CANDIDATE_DETAILS),
+        (MaintainerScreen.PROVENANCE, MaintainerScreen.CANDIDATE_DETAILS),
+        (MaintainerScreen.VERSION_CONFLICT, MaintainerScreen.CANDIDATE_DETAILS),
+        (MaintainerScreen.PROVENANCE, MaintainerScreen.CANDIDATE_LIFECYCLE),
+        (MaintainerScreen.VERSION_CONFLICT, MaintainerScreen.PROVENANCE),
+        (MaintainerScreen.VALIDATION_DETAILS, MaintainerScreen.VALIDATION),
+        (MaintainerScreen.POLICY_REVIEW, MaintainerScreen.VALIDATION_DETAILS),
+    }
+)
+
+
+_BARE_CANDIDATE_FOCUS_SCREENS = frozenset(
+    {
+        MaintainerScreen.CANDIDATE_DETAILS,
+        MaintainerScreen.CANDIDATE_DIFF,
+        MaintainerScreen.CANDIDATE_LIFECYCLE,
+        MaintainerScreen.PROVENANCE,
+        MaintainerScreen.VERSION_CONFLICT,
+    }
+)
+
+
+def _back_focus(state: ConsumerUiState, target: ApplicationScreen) -> str:
+    """Keep one workflow subject, reducing a validation-row pair to its Candidate when needed."""
+
+    if not (
+        _same_workflow(state.session.screen, target)
+        or (state.session.screen, target) in _SUBJECT_PRESERVING_BACK_EDGES
+    ):
+        return ""
+    focus = state.focus
+    if target in _BARE_CANDIDATE_FOCUS_SCREENS:
+        row = parse_validation_row(focus)
+        if row is not None:
+            return row.candidate_id
+    return focus
+
+
+def opening_state(settings: ConsumerSettings, *, workspace: str = "") -> ConsumerUiState:
     """The state a session opens in, at the preferences somebody last chose.
 
     The session's profile and the stored detail level have to be set together: state validation
@@ -601,7 +673,9 @@ def opening_state(settings: ConsumerSettings) -> ConsumerUiState:
     if not isinstance(settings, ConsumerSettings):
         raise ValueError("opening the consumer application needs consumer settings")
     return ConsumerUiState(
-        session=replace(_INITIAL_SESSION, profile=settings.profile), settings=settings
+        session=replace(_INITIAL_SESSION, profile=settings.profile),
+        settings=settings,
+        workspace=workspace,
     )
 
 
@@ -636,6 +710,11 @@ def _navigate(
         if keeps_focus(state.session.screen, screen)
         else state.current_row or state.focus
     )
+    # A dashboard's rows are destinations, so the row somebody was on is where they are going and
+    # not what they are looking at. Carrying one forward put `31-sources` into a refusal as if it
+    # were a Source alias, and the message then named no Source at all (`QA-077`).
+    if is_screen_identifier(focus):
+        focus = ""
     updated = replace(
         state,
         session=state.session.navigate(screen),
@@ -654,8 +733,28 @@ def _navigate(
     return updated, (ConsumerUiCommand(ConsumerUiCommandKind.LOAD_SCREEN, screen),)
 
 
+#: The dashboard each list answers to: the one that declares it as a forward route. A list is a
+#: place the reader goes *to* from a dashboard, so leaving it goes back there however they arrived
+#: -- Candidates is reachable sideways from the Registry screen, and Esc from it still means "done
+#: looking at candidates" rather than "back into whatever finished a moment ago" (`QA-072`).
+_OWNING_DASHBOARD: dict[ApplicationScreen, ApplicationScreen] = {
+    **{
+        target: ConsumerScreen.DASHBOARD
+        for target in navigation_targets(ConsumerScreen.DASHBOARD, maintainer_mode=False)
+    },
+    **{
+        target: MaintainerScreen.DASHBOARD
+        for target in navigation_targets(MaintainerScreen.DASHBOARD, maintainer_mode=True)
+    },
+}
+
+
 def _back(state: ConsumerUiState) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
-    session = state.session.back()
+    owner = _OWNING_DASHBOARD.get(state.session.screen)
+    if owner is not None and owner in state.session.history:
+        session = state.session.navigate(owner)
+    else:
+        session = state.session.back()
     if session is state.session:
         return state, ()
     updated = replace(
@@ -663,7 +762,7 @@ def _back(state: ConsumerUiState) -> tuple[ConsumerUiState, tuple[ConsumerUiComm
         session=session,
         # A wizard-like journey remains about the same stable subject while walking backwards.
         # Browsing back to an unrelated list still clears stale detail focus as before.
-        focus=(state.focus if _same_workflow(state.session.screen, session.screen) else ""),
+        focus=_back_focus(state, session.screen),
         search="",
         help_visible=False,
         quit_pending=False,
@@ -727,6 +826,7 @@ _ACTION_REVIEW: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
     # A refresh is requested from the list, where the row being refreshed is the row under the
     # cursor; its review is a screen of its own so the fetch is stated before it happens (B-084).
     (ConsumerActionKind.REGISTRY_SYNC, ConsumerScreen.REGISTRIES): ConsumerScreen.REGISTRY_SYNC,
+    (ConsumerActionKind.REGISTRY_REMOVE, ConsumerScreen.REGISTRIES): ConsumerScreen.REGISTRY_REMOVE,
     (
         ConsumerActionKind.SOURCE_ADD,
         MaintainerScreen.SOURCE_ADD,
@@ -811,9 +911,13 @@ ACTION_REQUEST_SCREENS: frozenset[ApplicationScreen] = frozenset(
 _ROW_IS_THE_REQUEST = frozenset(
     {
         ConsumerActionKind.REGISTRY_REBUILD,
+        # Doctor is entered from Dashboard with that screen identifier as navigation focus. Its
+        # repair action is about the measured installed issue under the cursor, never "29-doctor".
+        ConsumerActionKind.VERIFY_REPAIR,
         # Navigation focus can still name the screen that opened this list. A Registry refresh is
         # always about the visible row, never that stale workflow subject (`QA-043`).
         ConsumerActionKind.REGISTRY_SYNC,
+        ConsumerActionKind.REGISTRY_REMOVE,
     }
 )
 
@@ -939,6 +1043,7 @@ def _action_prepared(
 _ACTION_RUNNING: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationScreen | None] = {
     (ConsumerActionKind.REGISTRY_ADD, ConsumerScreen.REGISTRY_REVIEW): None,
     (ConsumerActionKind.REGISTRY_SYNC, ConsumerScreen.REGISTRY_SYNC): None,
+    (ConsumerActionKind.REGISTRY_REMOVE, ConsumerScreen.REGISTRY_REMOVE): None,
     (ConsumerActionKind.SOURCE_ADD, MaintainerScreen.SOURCE_ADD_REVIEW): None,
     (ConsumerActionKind.REGISTRY_INIT, MaintainerScreen.REGISTRY_INIT_REVIEW): None,
     (ConsumerActionKind.REGISTRY_REBUILD, MaintainerScreen.REGISTRY_REBUILD_REVIEW): None,
@@ -989,6 +1094,7 @@ def _confirm_action(
 _ACTION_RESULT: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationScreen] = {
     (ConsumerActionKind.REGISTRY_ADD, ConsumerScreen.REGISTRY_REVIEW): ConsumerScreen.REGISTRIES,
     (ConsumerActionKind.REGISTRY_SYNC, ConsumerScreen.REGISTRY_SYNC): ConsumerScreen.REGISTRIES,
+    (ConsumerActionKind.REGISTRY_REMOVE, ConsumerScreen.REGISTRY_REMOVE): ConsumerScreen.REGISTRIES,
     (
         ConsumerActionKind.SOURCE_ADD,
         MaintainerScreen.SOURCE_ADD_REVIEW,
@@ -1313,6 +1419,7 @@ def _event_binding(key: str, label: str, kind: ConsumerUiEventKind) -> _ScreenBi
 #: derived below from the same screen sets and review maps that the reducer uses.
 _SCREEN_BINDINGS: dict[ApplicationScreen, tuple[_ScreenBinding, ...]] = {
     ConsumerScreen.MARKETPLACE: (_action_binding("i", "Install", ConsumerActionKind.INSTALL),),
+    ConsumerScreen.SUCCESS: (_navigate_binding("Enter", "Done", ConsumerScreen.MARKETPLACE),),
     ConsumerScreen.ARTIFACT_DETAILS: (_action_binding("i", "Install", ConsumerActionKind.INSTALL),),
     ConsumerScreen.COLLECTION_PREVIEW: (
         _action_binding("i", "Install", ConsumerActionKind.INSTALL),
@@ -1334,6 +1441,7 @@ _SCREEN_BINDINGS: dict[ApplicationScreen, tuple[_ScreenBinding, ...]] = {
     ConsumerScreen.REGISTRIES: (
         _navigate_binding("a", "Add Registry", ConsumerScreen.REGISTRY_ADD),
         _action_binding("s", "Sync", ConsumerActionKind.REGISTRY_SYNC),
+        _action_binding("d", "Disconnect", ConsumerActionKind.REGISTRY_REMOVE),
     ),
     MaintainerScreen.SOURCES: (
         _navigate_binding("a", "Add Source", MaintainerScreen.SOURCE_ADD),
@@ -1354,7 +1462,12 @@ _SCREEN_BINDINGS: dict[ApplicationScreen, tuple[_ScreenBinding, ...]] = {
         _event_binding("f", "Files", ConsumerUiEventKind.TOGGLE_FILE_DIFF),
     ),
     MaintainerScreen.VALIDATION: (
-        _navigate_binding("p", "Promote", MaintainerScreen.POLICY_REVIEW),
+        _navigate_binding("p", "Policy", MaintainerScreen.POLICY_REVIEW),
+    ),
+    # Screen 39 is a drill-down, not a dead end. The evidence was already produced before the
+    # screen opened, so continuing to the policy that judges it needs no second action (`QA-074`).
+    MaintainerScreen.VALIDATION_DETAILS: (
+        _navigate_binding("Enter", "Policy", MaintainerScreen.POLICY_REVIEW),
     ),
     MaintainerScreen.PROMOTION_MODE: (
         _event_binding("m", "Toggle mode", ConsumerUiEventKind.TOGGLE_PROMOTION_MODE),
@@ -1417,6 +1530,7 @@ _CONFIRM_SCREENS = frozenset(
         ConsumerScreen.VERIFY_REPAIR,
         ConsumerScreen.REGISTRY_REVIEW,
         ConsumerScreen.REGISTRY_SYNC,
+        ConsumerScreen.REGISTRY_REMOVE,
         MaintainerScreen.SOURCE_SYNC,
         MaintainerScreen.REGISTRY_COMMIT,
         MaintainerScreen.ADOPTION_REVIEW,
@@ -1428,7 +1542,10 @@ _CONFIRM_SCREENS = frozenset(
 
 
 def _binding_enabled(binding: _ScreenBinding, state: ConsumerUiState) -> bool:
-    if binding.event.action is ConsumerActionKind.REGISTRY_SYNC:
+    if binding.event.action in (
+        ConsumerActionKind.REGISTRY_SYNC,
+        ConsumerActionKind.REGISTRY_REMOVE,
+    ):
         return state.current_row not in ("", "add-registry")
     return True
 

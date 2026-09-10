@@ -90,7 +90,6 @@ from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.domain.selection import Collection
 from agent_artifacts.tui_layout import (
     CONTENT_MEASURE,
-    SECTION_RULE,
     STAGE_CONFIRMED,
     STAGE_CURRENT,
     STAGE_JOIN,
@@ -98,7 +97,7 @@ from agent_artifacts.tui_layout import (
     action_prompt,
     cards,
     is_action_prompt,
-    section,
+    screen_frame,
     separate,
 )
 from agent_artifacts.tui_maintainer import (
@@ -836,10 +835,11 @@ def render_settings(view: ConsumerSettings, focus: str = "") -> tuple[str, ...]:
         "show-updates": "Updates",
         "maintainer-mode": "Advanced",
     }
-    lines: list[str] = []
+    groups: list[tuple[str, ...]] = []
     for row in SETTING_ROWS:
-        lines.append(headings[row])
-        lines.append(f"{'> ' if row == focus else '  '}{values[row]}")
+        groups.append((headings[row], f"{'> ' if row == focus else '  '}{values[row]}"))
+    lines = list(separate(*groups))
+    lines.append("")
     if view.maintainer_mode:
         lines.append("Maintainer screens are reachable from the Dashboard.")
     else:
@@ -882,7 +882,12 @@ def render_required_inputs(
     for item in inputs:
         lines.append(item.label)
         if isinstance(item, CredentialInputView):
-            status = "Configured securely" if item.provider_reference is not None else "Required"
+            if item.health == "present":
+                status = "Configured securely"
+            elif item.provider_reference is not None:
+                status = "Enter securely during installation"
+            else:
+                status = "Required"
             lines.append(f"  {status}")
             if item.format_hint:
                 lines.append(f"  Format: {item.format_hint}")
@@ -1040,6 +1045,12 @@ class ConsumerScreenSource(Protocol):
     def lines(self, state: ConsumerUiState) -> tuple[str, ...]:
         """The body of the screen, rendered at the profile `state` holds."""
 
+    def description(self, state: ConsumerUiState) -> tuple[str, ...]:
+        """What the thing under the cursor is, for the skeleton's second section (`QA-067`)."""
+
+    def status(self, state: ConsumerUiState) -> tuple[str, ...]:
+        """The state of the whole view -- counts, errors, steps left -- or nothing (`QA-067`)."""
+
     def detail(self, state: ConsumerUiState) -> ApplicationScreen | None:
         """Where Enter goes from the row under the cursor, if anywhere."""
 
@@ -1096,6 +1107,11 @@ _HELP_LINES: tuple[str, ...] = (
     "[?] Help",
     "[q] Quit",
 )
+
+_DESCRIBED_SCREENS: frozenset[ApplicationScreen] = frozenset(
+    {ConsumerScreen.DASHBOARD, MaintainerScreen.DASHBOARD}
+)
+"""Screens whose rows are destinations, and so have something to say about the one under the cursor."""
 
 _DASHBOARD_DESCRIPTIONS: dict[ApplicationScreen, str] = {
     ConsumerScreen.MARKETPLACE: "Browse and install approved tools from configured registries.",
@@ -1205,40 +1221,102 @@ def _binding_lines(bindings: tuple[KeyBinding, ...]) -> tuple[str, ...]:
 
 
 def _key_legend(source: ConsumerScreenSource, state: ConsumerUiState) -> tuple[str, ...]:
-    """Draw the reducer's current bindings, with local actions before universal escape routes."""
+    """This screen's own keys on one line, the ways out of it on the line below (`QA-068`).
+
+    Mixing them read as one undifferentiated row of brackets, so the two questions a reader
+    actually has -- "what can I do here?" and "how do I leave?" -- had to be answered by scanning
+    the same line twice. The universal four are last in `key_bindings` by construction, so the
+    split is read off the order the reducer already guarantees rather than off a second list that
+    could drift from it.
+
+    A mode that has taken the keyboard -- search, the quit prompt -- has no universal half to
+    separate: every key it lists is the mode's own, so it stays one line.
+    """
 
     bindings = key_bindings(state, detail=source.detail(state))
     if state.searching or state.quit_pending:
-        return (SECTION_RULE, *_binding_lines(bindings))
+        return _binding_lines(bindings)
     local, global_keys = bindings[:-4], bindings[-4:]
-    return (SECTION_RULE, *_binding_lines((*local, *global_keys)))
+    return (*_binding_lines(local), *_binding_lines(global_keys))
 
 
 def frame(source: ConsumerScreenSource, state: ConsumerUiState) -> tuple[str, ...]:
     """One drawn screen: heading, body, prompts, and the persistent navigation footer."""
 
-    heading = f"AART / {_title(state.session.screen)}"
+    heading = _heading(state)
+    progress = _workflow_chrome(state)
+    header = (heading, *(("", *progress) if progress else ()))
+    status: list[str] = list(source.status(state))
+    if state.searching:
+        status.append(f"Search: {state.search}_")
+    elif state.search:
+        status.append(f"Filter: {state.search} (esc to clear)")
+    if state.selection:
+        status.append(f"{len(state.selection)} selected")
+    if state.quit_pending:
+        status.append(f"Discard {len(state.selection)} selected item(s) and quit? y/n")
+    # `QA-069`: the launch directory is the last fact before the keys, separated from them by the
+    # skeleton's own rule, rather than a second line under the title (`QA-066`, revising `D-224`).
+    workspace = (f"working at {state.workspace}",) if state.workspace else ()
+    return screen_frame(
+        header,
+        source.lines(state),
+        _described(source, state),
+        _HELP_LINES if state.help_visible else (),
+        status,
+        workspace,
+        footer=_key_legend(source, state),
+    )
+
+
+def _heading(state: ConsumerUiState) -> str:
+    """The trail the reader walked, each place named once (`QA-071`, `QA-083`).
+
+    The two findings pull against each other -- one asks a nested view to name its parent, the other
+    to stop repeating "Maintainer" -- so they produce one scheme or an inconsistent pair. The scheme
+    is a breadcrumb over the session's own history, which is the ancestor chain by construction:
+    `advance` pushes the screen being left and `back` pops it, so what is on the stack is where the
+    reader actually came from rather than a guess from a graph where several parents are declared.
+
+    Two places are named differently from the rest, for the same reason in both directions. The home
+    Dashboard contributes no step, because `AART` is already its name and `AART / Dashboard /
+    Marketplace` says "home" twice. A dashboard passed *through* drops the word, because a dashboard
+    in a trail is the place it is the dashboard of -- which is what turns `AART / Maintainer
+    Dashboard / Sources` into `AART / Maintainer / Sources` and says "Maintainer" once.
+    """
+
+    trail = (*state.session.history, state.session.screen)
+    steps = [step for step in (_step(screen) for screen in trail[:-1]) if step]
+    heading = " / ".join(("AART", *steps, _title(trail[-1])))
     if state.failed_action is not None:
         # The screen's name still says "review", and it is now the result of an attempt. Saying so
         # here is what stops the plan below reading as something still about to happen (`QA-033`).
         heading += " - did not run"
-    progress = _workflow_chrome(state)
-    lines = [heading, "", *progress]
-    if progress:
-        lines.append("")
-    lines.extend(source.lines(state))
-    if state.help_visible:
-        lines.extend(("", *_HELP_LINES))
-    if state.searching:
-        lines.extend(("", f"Search: {state.search}_"))
-    elif state.search:
-        lines.extend(("", f"Filter: {state.search} (esc to clear)"))
-    if state.selection:
-        lines.append(f"{len(state.selection)} selected")
-    if state.quit_pending:
-        lines.append(f"Discard {len(state.selection)} selected item(s) and quit? y/n")
-    lines.extend(("", *_key_legend(source, state)))
-    return tuple(lines)
+    return heading
+
+
+def _step(screen: ApplicationScreen) -> str:
+    """One passed-through place in the trail, or nothing where the place is `AART` itself."""
+
+    if screen is ConsumerScreen.DASHBOARD:
+        return ""
+    title = _title(screen)
+    return title[: -len(" Dashboard")] if title.endswith(" Dashboard") else title
+
+
+def _described(source: ConsumerScreenSource, state: ConsumerUiState) -> tuple[str, ...]:
+    """The cursor description, which is a mode rather than a permanent fixture (`QA-070`).
+
+    The operator asked for the per-row explanations to be switchable by a key instead of standing
+    on every screen forever, and `[v] Fast / Verbose` was already the key that claimed to change
+    how much a screen says while changing nothing the operator could see (`QA-064`). Binding the
+    descriptions to it makes one key honest and settles both: Fast is the screen without them,
+    Verbose is the screen with them.
+    """
+
+    if state.session.profile is not PresentationProfile.VERBOSE:
+        return ()
+    return source.description(state)
 
 
 class ConsumerSettingsWriter(Protocol):
@@ -1856,6 +1934,12 @@ class CanonicalScreenSource:
                 for item in self._screens.activity.entries
                 if _matches(query, item.summary, item.intent)
             )
+        if screen is ConsumerScreen.DOCTOR:
+            if self._screens.doctor is None:
+                return ()
+            return tuple(
+                item for item in self._screens.doctor.repairable_issues if _matches(query, item)
+            )
         if screen is ConsumerScreen.REGISTRIES:
             return ("add-registry",) + tuple(
                 item.alias for item in self._screens.registries if _matches(query, item.alias)
@@ -1983,6 +2067,15 @@ class CanonicalScreenSource:
                 if parse_validation_row(row) is not None
                 else None
             )
+        if screen is MaintainerScreen.VALIDATION_DETAILS:
+            # A check detail is an optional inspection inside the same completed validation run.
+            # Enter continues to the policy judgement instead of ending in a screen that only Esc
+            # can leave (`QA-074`).
+            return (
+                MaintainerScreen.POLICY_REVIEW
+                if self._screens.validation(state.focus) is not None
+                else None
+            )
         if screen is MaintainerScreen.POLICY_REVIEW:
             # Review ends by asking what promoting would write, including when the answer is that
             # it would write nothing.
@@ -2022,7 +2115,16 @@ class CanonicalScreenSource:
                 return ConsumerScreen.INSTALLED_COLLECTION_DETAILS
             return ConsumerScreen.INSTALLED_ARTIFACT_DETAILS if state.current_row else None
         if screen is ConsumerScreen.REVIEW_SELECTION:
-            return ConsumerScreen.AUTOMATIC_INSPECTION if self._screens.plan is not None else None
+            plan = self._screens.plan
+            if plan is None:
+                return None
+            # Inspection has already happened to produce this immutable plan. It remains
+            # available as a detailed projection, but is not a mandatory click-through step.
+            if plan.inputs:
+                return ConsumerScreen.REQUIRED_INPUTS
+            if plan.remediations:
+                return ConsumerScreen.REMEDIATION
+            return ConsumerScreen.READY
         if screen is ConsumerScreen.AUTOMATIC_INSPECTION:
             plan = self._screens.plan
             if plan is None:
@@ -2074,6 +2176,39 @@ class CanonicalScreenSource:
             return facts
         return action_prompt(facts, prompt)
 
+    def description(self, state: ConsumerUiState) -> tuple[str, ...]:
+        """What the row under the cursor is, as bare lines the skeleton will bound (`QA-067`).
+
+        It answers from the cursor rather than from the screen, so a screen that gains describable
+        rows tomorrow says something here without the frame changing.
+        """
+
+        if state.session.screen not in _DESCRIBED_SCREENS:
+            return ()
+        targets = navigation_targets(
+            state.session.screen, maintainer_mode=state.settings.maintainer_mode
+        )
+        selected = next((target for target in targets if target.value == state.current_row), None)
+        described = None if selected is None else _DASHBOARD_DESCRIPTIONS.get(selected)
+        return () if described is None else (described,)
+
+    def status(self, state: ConsumerUiState) -> tuple[str, ...]:
+        """The state of the whole view, or nothing at all (`QA-067`).
+
+        Returning `()` is the point: an empty view-status section is omitted entirely rather than
+        drawn as a boundary around nothing, which is the fault `QA-065` reported.
+        """
+
+        if state.session.screen is ConsumerScreen.DASHBOARD:
+            screens = self._screens
+            first_run = (
+                not screens.registries
+                and screens.dashboard.registry_count == 0
+                and screens.dashboard.installed_count == 0
+            )
+            return () if first_run else render_dashboard(screens.dashboard)
+        return ()
+
     def _body(self, state: ConsumerUiState) -> tuple[str, ...]:
         screen, profile = state.session.screen, state.session.profile
         screens = self._screens
@@ -2087,10 +2222,6 @@ class CanonicalScreenSource:
                     strict=False,
                 )
             )
-            selected = next(
-                (target for target in targets if target.value == state.current_row), None
-            )
-            about = () if selected is None else section((_DASHBOARD_DESCRIPTIONS[selected],))
             # A first run is a machine that has nothing, not merely a machine that has no source
             # configured.  A person who installed an artifact from a source they have since
             # removed -- or through a direct install -- is not seeing AART for the first time, and
@@ -2102,14 +2233,8 @@ class CanonicalScreenSource:
                 and screens.dashboard.installed_count == 0
             )
             if first_run:
-                return (*_FIRST_RUN_LINES, "", "Navigation:", *menu, "", *about)
-            return (
-                "Navigation:",
-                *menu,
-                "",
-                *about,
-                *render_dashboard(screens.dashboard),
-            )
+                return (*_FIRST_RUN_LINES, "", "Navigation:", *menu)
+            return ("Navigation:", *menu)
         if screen is MaintainerScreen.DASHBOARD:
             if screens.maintainer is None:
                 return ("Maintainer state is not available yet.",)
@@ -2256,7 +2381,16 @@ class CanonicalScreenSource:
                 else render_maintainer_registry_diff(registry_diff, profile)
             )
         if screen is MaintainerScreen.REGISTRY:
-            return render_maintainer_registries(screens.maintainer_registries(), profile)
+            present = (
+                True
+                if screens.maintainer is None
+                else screens.maintainer.registry_workspace_present
+            )
+            return render_maintainer_registries(
+                screens.maintainer_registries(),
+                profile,
+                registry_workspace_present=present,
+            )
         if screen is MaintainerScreen.SCAN_RESULT:
             return (
                 ("No repository has been scanned yet.",)
@@ -2568,6 +2702,8 @@ class CanonicalScreenSource:
                 "",
                 "Press Enter to refresh.",
             )
+        if screen is ConsumerScreen.REGISTRY_REMOVE:
+            return _review_prompt(state, "Press Enter to disconnect this Registry.")
         if not isinstance(screen, ConsumerScreen):
             return (f"{_title(screen)} is not available yet.",)
         if screen in _PLAN_SCREENS:

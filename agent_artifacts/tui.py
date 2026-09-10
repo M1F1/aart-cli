@@ -18,6 +18,7 @@ from __future__ import annotations
 import os
 import sys
 import traceback
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, replace
 from datetime import date
 from typing import Callable, List, Literal, Mapping, Optional, Sequence, Tuple
@@ -35,6 +36,7 @@ from .application.consumer_ui import (
 )
 from .application.consumer_views import ConsumerScreen, ConsumerSession
 from .application.installed_setup import DeclaredArtifactSetup
+from .configuration.model import ConfiguredSource
 from .configuration.paths import ConfigPaths
 from .consumer import (
     ConsumerApplicationService,
@@ -716,6 +718,50 @@ def _ellipsize(text: str, width: int) -> str:
     return one_line[: width - 1] + "…"
 
 
+class _CursesHandover:
+    """The drawn screen, lent out to an effect that needs a person, and taken back (`QA-081`).
+
+    Storing a credential is the provider's own conversation with the operator: `security` prompts,
+    the operator types, and this process never learns the value (161.8/161.9, INV-206/INV-207).
+    That conversation happens on the terminal curses is holding, so without a loan it is spoken
+    over the frame -- the operator read `[q] Quitpassword data for new item:` and had nowhere to
+    answer it.
+
+    Lending is the whole of the fix, and it is deliberately not a redraw: the shell repaints at the
+    top of its own loop, so this only has to give the terminal back in the mode a subprocess can
+    use and restore curses' idea of it afterwards.  Unbound -- the text terminal, the CLI, a test
+    -- it lends nothing, because there is no screen to lend.
+    """
+
+    def __init__(self) -> None:
+        self._stdscr = None
+
+    def bind(self, stdscr) -> None:
+        """Name the screen this will lend out; called once, by whoever drew it."""
+
+        self._stdscr = stdscr
+
+    def __call__(self):
+        if self._stdscr is None:
+            return nullcontext()
+        return self._lent(self._stdscr)
+
+    @contextmanager
+    def _lent(self, stdscr):
+        import curses  # stdlib; only reachable once a curses screen exists to lend.
+
+        curses.def_prog_mode()
+        curses.endwin()
+        try:
+            yield
+        finally:
+            curses.reset_prog_mode()
+            # The prompt wrote wherever it liked; curses believes the screen is still its own, so
+            # say plainly that all of it has to be painted again.
+            stdscr.clear()
+            stdscr.refresh()
+
+
 class _CursesTerminal:
     """The whole curses dependency of the canonical consumer application.
 
@@ -734,14 +780,23 @@ class _CursesTerminal:
             self._stdscr.refresh()
             return
 
-        # ``frame`` reserves its last line for global navigation. Keep that chrome visible when
-        # a long report has more rows than the terminal: clipping help off screen would recreate
-        # the first-run trap the footer exists to remove. The terminal only places and clips the
-        # already-composed frame; key meaning remains in the pure shell.
-        body = lines[:-1][: max(drawable - 1, 0)]
-        for row, line in enumerate(body):
+        # The legend is placed on the bottom rows rather than merely drawn after the body: on a
+        # short screen it used to float directly under the text with the terminal blank beneath it,
+        # so the keys sat at a different height on every screen (`QA-068`). It is a block of several
+        # lines now, so the whole block is anchored, not just its last line.
+        #
+        # A frame taller than the terminal is clipped in the body and keeps the legend whole, because
+        # a long report that pushed the keys off screen would recreate the first-run trap the footer
+        # exists to remove. The terminal only places and clips the already-composed frame; what a key
+        # means, and what a screen says, remain in the pure shell.
+        from .tui_layout import anchor, footer_start
+
+        placed = anchor(lines, height=drawable)
+        start = footer_start(placed)
+        footer = placed[start:][:drawable]
+        body = placed[:start][: max(drawable - len(footer), 0)]
+        for row, line in enumerate((*body, *footer)):
             self._stdscr.addstr(row, 0, line[: max(width - 1, 0)])
-        self._stdscr.addstr(drawable - 1, 0, lines[-1][: max(width - 1, 0)])
         self._stdscr.refresh()
 
     def key(self) -> int | str:
@@ -801,11 +856,29 @@ class _TextTerminal:
         return raw if named is None else named
 
 
+def launch_workspace(project: str | None, user_home: str | None) -> str:
+    """The directory this invocation was launched from, written for a reader.
+
+    Resolved here rather than where it is drawn: the frame is pure, and a screen that reached for
+    the current directory itself would be a draw touching the filesystem (D-051). The resolution is
+    the one `_canonical_consumer_actions` uses for `project_root`, so the line names the directory
+    the actions actually work in rather than a second, plausible one (`QA-053`).
+    """
+
+    from .tui_layout import abbreviate_path
+
+    return abbreviate_path(
+        os.path.abspath(project or os.getcwd()),
+        home=os.path.abspath(user_home or os.path.expanduser("~")),
+    )
+
+
 def run_consumer_text(
     actions: LocalConsumerActions,
     *,
     read: ReadFn = input,
     write: WriteFn = print,
+    workspace: str = "",
 ) -> ConsumerUiState:
     """Run the canonical consumer application over a line-oriented terminal.
 
@@ -816,13 +889,13 @@ def run_consumer_text(
     return run_consumer_shell(
         actions.source(),
         _TextTerminal(read, write),
-        state=opening_state(actions.settings),
+        state=opening_state(actions.settings, workspace=workspace),
         action_handler=actions,
         settings_writer=actions.save_settings,
     )
 
 
-def run_consumer(actions: LocalConsumerActions) -> ConsumerUiState:
+def run_consumer(actions: LocalConsumerActions, *, workspace: str = "") -> ConsumerUiState:
     """Run the canonical consumer application over curses, or raise if there is no terminal.
 
     The handler is the argument rather than the screens, because the screens come from it: what is
@@ -845,10 +918,15 @@ def run_consumer(actions: LocalConsumerActions) -> ConsumerUiState:
     captured: dict = {}
 
     def _ui(stdscr) -> None:
+        # The screen exists only from here.  Binding it is what turns the composed handover from
+        # an inert one into the real loan a credential prompt needs (`QA-081`).
+        loan = actions.terminal_handover
+        if isinstance(loan, _CursesHandover):
+            loan.bind(stdscr)
         captured["state"] = run_consumer_shell(
             actions.source(),
             _CursesTerminal(stdscr),
-            state=opening_state(actions.settings),
+            state=opening_state(actions.settings, workspace=workspace),
             action_handler=actions,
             settings_writer=actions.save_settings,
         )
@@ -895,6 +973,9 @@ def _canonical_consumer_actions(
     # One set of adapters for the whole application. Measuring a credential through a provider the
     # actions could not act on would report an attention nothing here is able to close.
     providers = (MacOsKeychainProvider(),) if sys.platform == "darwin" else ()
+    # Composed here and bound by whichever terminal ends up drawing, so the actions hold one loan
+    # rather than reaching for a screen that may never exist (`QA-081`).
+    handover = _CursesHandover()
     machine = read_consumer_machine(
         state_root=os.path.join(paths.data_root, "state"),
         harness_root=project_root,
@@ -994,6 +1075,28 @@ def _canonical_consumer_actions(
         )
         if isinstance(synchronized, DomainErr):
             return synchronized
+        return reread()
+
+    def registry_removal(
+        source: ConfiguredSource,
+    ) -> DomainResult[RegistryConnectionSnapshot]:
+        # Disconnect is the reviewed TUI face of the same unsubscribe transaction as
+        # `aart source remove`. The complete reviewed identity prevents an alias repointed after
+        # Review from deleting a different managed snapshot.
+        from .commands.source import remove_configured_source
+
+        removed = remove_configured_source(
+            Request(
+                "source",
+                project=project_root,
+                user_home=home,
+                source_action="remove",
+                source_alias=source.alias.value,
+            ),
+            expected_source=source,
+        )
+        if isinstance(removed, DomainErr):
+            return removed
         return reread()
 
     def source_connection(draft: SourceDraft) -> DomainResult[RegistryConnectionSnapshot]:
@@ -1161,9 +1264,11 @@ def _canonical_consumer_actions(
                 credential_providers=providers,
             ),
             data_root=paths.data_root,
+            terminal_handover=handover,
             completion_factory=completion_factory,
             registry_connection=registry_connection,
             registry_refresh=registry_refresh,
+            registry_removal=registry_removal,
             source_connection=source_connection,
             registry_bootstrap=registry_bootstrap,
             registry_rebuild=registry_rebuild,
@@ -1312,6 +1417,7 @@ def run(
         composed = _canonical_consumer_actions(
             project=project, user_home=user_home, today=date.today()
         )
+        workspace = launch_workspace(project, user_home)
     except Exception as error:
         # Composition reads local state, so an unexpected defect here carries paths and file
         # contents in its message. A typed startup failure is rendered below; this is the untyped
@@ -1325,7 +1431,7 @@ def run(
         # for different things and a person reproducing it needs to know which one to reach.
         canonical_failures.stage = "curses"
         try:
-            run_consumer(composed.value)
+            run_consumer(composed.value, workspace=workspace)
         except CursesUnavailable:
             # The terminal claimed it could and could not. That is ERR05's one legitimate
             # degradation, and it lands on the same application in a line-oriented terminal
@@ -1340,7 +1446,7 @@ def run(
             return 0
     canonical_failures.stage = "text"
     try:
-        run_consumer_text(composed.value)
+        run_consumer_text(composed.value, workspace=workspace)
     except Exception as error:
         return _render_internal_failure(error, canonical_failures)
     return 0

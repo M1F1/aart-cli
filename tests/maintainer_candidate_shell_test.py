@@ -334,6 +334,69 @@ class MaintainerCandidateShellTest(unittest.TestCase):
         self.assertIs(left.session.screen, MaintainerScreen.CANDIDATE_DETAILS)
         self.assertFalse(left.file_diff)
 
+    def test_back_from_each_candidate_side_view_keeps_the_candidate_on_details(self) -> None:
+        candidate = self.by_alias["authors"].id
+        for side_view in (
+            MaintainerScreen.CANDIDATE_LIFECYCLE,
+            MaintainerScreen.PROVENANCE,
+            MaintainerScreen.VERSION_CONFLICT,
+        ):
+            with self.subTest(side_view=side_view):
+                state = dataclasses.replace(
+                    _on(side_view, focus=candidate),
+                    session=ConsumerSession(
+                        side_view,
+                        history=(
+                            MaintainerScreen.CANDIDATES,
+                            MaintainerScreen.CANDIDATE_DETAILS,
+                        ),
+                    ),
+                )
+
+                returned, _ = reduce_consumer_ui(state, ConsumerUiEvent(ConsumerUiEventKind.BACK))
+                drawn = "\n".join(frame(self.source, returned))
+
+                self.assertIs(returned.session.screen, MaintainerScreen.CANDIDATE_DETAILS)
+                self.assertEqual(returned.focus, candidate)
+                self.assertNotIn("That Candidate is not available.", drawn)
+
+    def test_the_reported_candidate_lifecycle_round_trip_keeps_its_candidate(self) -> None:
+        listed = _reload(self.source, _on(MaintainerScreen.CANDIDATES), entering=True)
+        candidate = listed.current_row
+
+        detail_event = key_event("enter", listed, detail=self.source.detail(listed))
+        assert detail_event is not None
+        detail, _ = reduce_consumer_ui(listed, detail_event)
+        detail = _reload(self.source, detail, entering=True)
+        lifecycle_event = key_event("r", detail, detail=self.source.detail(detail))
+        assert lifecycle_event is not None
+        lifecycle, _ = reduce_consumer_ui(detail, lifecycle_event)
+        returned, _ = reduce_consumer_ui(lifecycle, ConsumerUiEvent(ConsumerUiEventKind.BACK))
+
+        self.assertIs(returned.session.screen, MaintainerScreen.CANDIDATE_DETAILS)
+        self.assertEqual(returned.focus, candidate)
+        self.assertNotIn("That Candidate is not available.", frame(self.source, returned))
+
+    def test_back_through_nested_candidate_inspection_keeps_its_subject(self) -> None:
+        candidate = self.by_alias["authors"].id
+        for side_view, owner in (
+            (MaintainerScreen.PROVENANCE, MaintainerScreen.CANDIDATE_LIFECYCLE),
+            (MaintainerScreen.VERSION_CONFLICT, MaintainerScreen.PROVENANCE),
+        ):
+            with self.subTest(side_view=side_view, owner=owner):
+                state = dataclasses.replace(
+                    _on(side_view, focus=candidate),
+                    session=ConsumerSession(
+                        side_view,
+                        history=(MaintainerScreen.CANDIDATE_DETAILS, owner),
+                    ),
+                )
+
+                returned, _ = reduce_consumer_ui(state, ConsumerUiEvent(ConsumerUiEventKind.BACK))
+
+                self.assertIs(returned.session.screen, owner)
+                self.assertEqual(returned.focus, candidate)
+
     def test_drawing_the_three_screens_reads_nothing_from_the_machine(self) -> None:
         """Screens 35-37 draw the scans composition already read; drawing rescans nothing."""
 

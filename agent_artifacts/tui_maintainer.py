@@ -240,7 +240,17 @@ def render_source_sync_result(
             )
         )
     untouched = [f"Target registry observed: {view.target_registry}", "Registry mutations: none"]
-    return separate(outcome, found, untouched, [f"Review identity: {view.review_digest}"])
+    # `QA-063`: a manifest that would not compile is named here, with the file to open. Only when
+    # there is one -- a Source with nothing wrong has nothing to say, and an always-drawn empty
+    # section is the fault `QA-068` is about.
+    refused = (
+        [f"Could not read {len(view.refusals)} manifest:"]
+        if len(view.refusals) == 1
+        else [f"Could not read {len(view.refusals)} manifests:"]
+    )
+    refused.extend(f"  {path} — {reason}" for path, reason in view.refusals)
+    sections = [outcome, found, *([refused] if view.refusals else []), untouched]
+    return separate(*sections, [f"Review identity: {view.review_digest}"])
 
 
 def render_maintainer_candidates(
@@ -841,6 +851,8 @@ _WORKING_TREE_LABELS = {
 def render_maintainer_registry(
     view: MaintainerRegistryView,
     profile: PresentationProfile,
+    *,
+    show_working_tree: bool = True,
 ) -> tuple[str, ...]:
     if not isinstance(view, MaintainerRegistryView) or not isinstance(profile, PresentationProfile):
         raise ValueError("Maintainer registry rendering needs a typed view and profile")
@@ -857,12 +869,13 @@ def render_maintainer_registry(
         lines.append(
             "  " + "  ".join(f"{kind.value} {count}" for kind, count in view.artifact_counts)
         )
-    tree = view.working_tree
-    lines.append(f"Working tree: {_WORKING_TREE_LABELS[tree.state]}")
-    if tree.digest is not None:
-        lines.append(f"  observed {_short(tree.digest, profile)}")
-    if tree.detail is not None:
-        lines.append(f"  {tree.detail}")
+    if show_working_tree:
+        tree = view.working_tree
+        lines.append(f"Working tree: {_WORKING_TREE_LABELS[tree.state]}")
+        if tree.digest is not None:
+            lines.append(f"  observed {_short(tree.digest, profile)}")
+        if tree.detail is not None:
+            lines.append(f"  {tree.detail}")
     if not view.transactions:
         lines.append("No promotion has been recorded in this registry yet.")
         return tuple(lines)
@@ -879,18 +892,45 @@ def render_maintainer_registry(
 def render_maintainer_registries(
     views: tuple[MaintainerRegistryView, ...],
     profile: PresentationProfile,
+    *,
+    registry_workspace_present: bool = True,
 ) -> tuple[str, ...]:
     """Screen 46 covers every configured registry: an installation may maintain more than one."""
 
     if not isinstance(views, tuple) or not isinstance(profile, PresentationProfile):
         raise ValueError("Maintainer registries rendering needs typed views and a profile")
+    lines: list[str] = [
+        "Connected Registry snapshots",
+        "These approved snapshots determine what Marketplace can offer.",
+        "",
+    ]
     if not views:
-        return ("No registry is configured.",)
-    lines: list[str] = []
+        # `QA-075`: "No Registry is connected." sat above a five-stage initialization that had just
+        # succeeded, so it read as that run having failed. It refers to *subscribed* Registries, and
+        # a Registry created here is not one of them until it has been published and subscribed to
+        # -- which is the same two steps `QA-060` asks the Source Sync refusal to name (`D-228`).
+        lines.append("No Registry is subscribed in this project yet.")
+        if registry_workspace_present:
+            lines.append(
+                "A Registry created here becomes connectable once it is published to its "
+                "branch and subscribed to."
+            )
     for index, view in enumerate(views):
         if index:
             lines.append("")
-        lines.extend(render_maintainer_registry(view, profile))
+        lines.extend(
+            render_maintainer_registry(view, profile, show_working_tree=registry_workspace_present)
+        )
+    lines.extend(("", "Local Registry workspace"))
+    if registry_workspace_present:
+        lines.append("Current project contains a Registry. Rebuild updates its generated files.")
+    else:
+        lines.extend(
+            (
+                "Current project is not a Registry.",
+                "Initialize creates one here; Rebuild applies only after that.",
+            )
+        )
     return tuple(lines)
 
 

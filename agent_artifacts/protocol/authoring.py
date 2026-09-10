@@ -213,15 +213,36 @@ class CompiledAuthorCollection:
 
 
 @dataclass(frozen=True, slots=True)
+class ManifestRefusal:
+    """One manifest this Source contains and could not compile, and why (`QA-063`).
+
+    A manifest that will not compile is a fact about that manifest. Reporting it as a fact about
+    the Source spends `CandidateState.INVALID`, which exists precisely so a bad artifact can be
+    carried as a bad Candidate, and takes every healthy artifact beside it out of the scan.
+    The path is held separately from the diagnostics because it is what the operator opens.
+    """
+
+    manifest_path: SafeRelativePath
+    diagnostics: tuple[Diagnostic, ...]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.manifest_path, SafeRelativePath) or not self.diagnostics:
+            raise ValueError("a refused manifest needs its path and at least one diagnostic")
+
+
+@dataclass(frozen=True, slots=True)
 class CompiledAuthorSource:
-    """The two Candidate kinds one explicit authoring snapshot compiled."""
+    """The two Candidate kinds one explicit authoring snapshot compiled, and what it refused."""
 
     artifacts: tuple[CompiledAuthorArtifact, ...] = ()
     collections: tuple[CompiledAuthorCollection, ...] = ()
+    refusals: tuple[ManifestRefusal, ...] = ()
 
     def __post_init__(self) -> None:
-        if any(not isinstance(item, CompiledAuthorArtifact) for item in self.artifacts) or any(
-            not isinstance(item, CompiledAuthorCollection) for item in self.collections
+        if (
+            any(not isinstance(item, CompiledAuthorArtifact) for item in self.artifacts)
+            or any(not isinstance(item, CompiledAuthorCollection) for item in self.collections)
+            or any(not isinstance(item, ManifestRefusal) for item in self.refusals)
         ):
             raise ValueError("compiled author Source is invalid")
 
@@ -2013,15 +2034,20 @@ def _compile_one(
     )
 
 
-def compile_author_snapshot(
+def compile_author_manifests(
     snapshot: SourceSnapshot,
     *,
     source_alias: SourceAlias,
     source: str,
     revision: str,
     provenance_extensions: tuple[tuple[str, JsonValue], ...] = (),
-) -> Result[tuple[CompiledAuthorArtifact, ...]]:
-    """Discover and compile every explicit authoring manifest in one acquired source.
+) -> Result[tuple[tuple[CompiledAuthorArtifact, ...], tuple[ManifestRefusal, ...]]]:
+    """Compile every explicit authoring manifest in one acquired source, each on its own merits.
+
+    The answer is what compiled and what refused, because those are per-manifest facts and one bad
+    manifest is not a bad Source (`QA-063`). Only a fault in the tree itself -- an uncanonical or
+    duplicated path, an unreadable snapshot -- refuses the whole compilation, because there is no
+    manifest such a fault could be attributed to.
 
     A caller may add namespaced provenance metadata about the acquisition boundary. It becomes
     part of the immutable package but not the author's canonical input digest; the manifest and
@@ -2052,38 +2078,102 @@ def compile_author_snapshot(
     if isinstance(discovered, Err):
         return discovered
     compiled: list[CompiledAuthorArtifact] = []
-    diagnostics: list[Diagnostic] = []
+    refused: list[ManifestRefusal] = []
     for item in discovered.value:
-        schema = _document_schema(item)
-        if isinstance(schema, Err):
-            diagnostics.extend(schema.diagnostics)
-            continue
-        if schema.value == _COLLECTION_SCHEMA:
-            continue
-        manifest = parse_author_manifest(item)
-        if isinstance(manifest, Err):
-            diagnostics.extend(manifest.diagnostics)
-            continue
-        selected = _selected_payload(validated.value, discovered.value, item, manifest.value)
-        if isinstance(selected, Err):
-            diagnostics.extend(selected.diagnostics)
-            continue
-        artifact = _compile_one(
+        outcome = _compile_manifest(
             item,
-            manifest.value,
-            selected.value,
+            validated.value,
+            discovered.value,
             source_alias=source_alias,
             source=source,
             revision=revision,
             provenance_extensions=provenance_extensions,
         )
-        if isinstance(artifact, Err):
-            diagnostics.extend(artifact.diagnostics)
+        if outcome is None:
+            continue
+        if isinstance(outcome, ManifestRefusal):
+            refused.append(outcome)
         else:
-            compiled.append(artifact.value)
-    if diagnostics:
-        return Err(tuple(diagnostics))
-    return Ok(tuple(sorted(compiled, key=lambda item: str(item.manifest_path))))
+            compiled.append(outcome)
+    return Ok(
+        (
+            tuple(sorted(compiled, key=lambda item: str(item.manifest_path))),
+            tuple(sorted(refused, key=lambda item: str(item.manifest_path))),
+        )
+    )
+
+
+def _compile_manifest(
+    item: DiscoveredAuthorManifest,
+    entries: dict[str, SnapshotEntry],
+    discovered: tuple[DiscoveredAuthorManifest, ...],
+    *,
+    source_alias: SourceAlias,
+    source: str,
+    revision: str,
+    provenance_extensions: tuple[tuple[str, JsonValue], ...],
+) -> CompiledAuthorArtifact | ManifestRefusal | None:
+    """One manifest's own answer: the artifact, why it was refused, or None where it is not one.
+
+    A Collection manifest is discovered by the same walk and compiled by a different function, so
+    it is neither compiled nor refused here -- it is simply not this function's manifest.
+    """
+
+    def refused(diagnostics: tuple[Diagnostic, ...]) -> ManifestRefusal:
+        return ManifestRefusal(item.path, diagnostics)
+
+    schema = _document_schema(item)
+    if isinstance(schema, Err):
+        return refused(schema.diagnostics)
+    if schema.value == _COLLECTION_SCHEMA:
+        return None
+    manifest = parse_author_manifest(item)
+    if isinstance(manifest, Err):
+        return refused(manifest.diagnostics)
+    selected = _selected_payload(entries, discovered, item, manifest.value)
+    if isinstance(selected, Err):
+        return refused(selected.diagnostics)
+    artifact = _compile_one(
+        item,
+        manifest.value,
+        selected.value,
+        source_alias=source_alias,
+        source=source,
+        revision=revision,
+        provenance_extensions=provenance_extensions,
+    )
+    return refused(artifact.diagnostics) if isinstance(artifact, Err) else artifact.value
+
+
+def compile_author_snapshot(
+    snapshot: SourceSnapshot,
+    *,
+    source_alias: SourceAlias,
+    source: str,
+    revision: str,
+    provenance_extensions: tuple[tuple[str, JsonValue], ...] = (),
+) -> Result[tuple[CompiledAuthorArtifact, ...]]:
+    """The same compilation, refused whole if any manifest in it refused.
+
+    This is the answer a caller needs when the result is about to become registry state: adopting a
+    repository or publishing from one must not quietly leave out the manifest that would not
+    compile. Watching a Source somebody else edits is the opposite requirement, and takes
+    `compile_author_manifests` instead (`QA-063`).
+    """
+
+    compiled = compile_author_manifests(
+        snapshot,
+        source_alias=source_alias,
+        source=source,
+        revision=revision,
+        provenance_extensions=provenance_extensions,
+    )
+    if isinstance(compiled, Err):
+        return compiled
+    artifacts, refusals = compiled.value
+    if refusals:
+        return Err(tuple(item for refusal in refusals for item in refusal.diagnostics))
+    return Ok(artifacts)
 
 
 def compile_author_collections(
@@ -2139,9 +2229,16 @@ def compile_author_source(
     source: str,
     revision: str,
 ) -> Result[CompiledAuthorSource]:
-    """Compile artifact and Collection Candidate inputs through one Source boundary."""
+    """Compile artifact and Collection Candidate inputs through one Source boundary.
 
-    artifacts = compile_author_snapshot(
+    This is the watching boundary, so it takes the per-manifest answer: a manifest that will not
+    compile is carried as a refusal beside the artifacts that did, rather than taking the whole
+    Source down with it (`QA-063`). The refusal is a fact about this Sync against this revision
+    rather than about Candidate history, so it travels on the Sync result and is reported on the
+    screen the run lands on; nothing about it is persisted.
+    """
+
+    artifacts = compile_author_manifests(
         snapshot,
         source_alias=source_alias,
         source=source,
@@ -2149,6 +2246,7 @@ def compile_author_source(
     )
     if isinstance(artifacts, Err):
         return artifacts
+    compiled, refusals = artifacts.value
     collections = compile_author_collections(
         snapshot,
         source_alias=source_alias,
@@ -2158,6 +2256,6 @@ def compile_author_source(
     if isinstance(collections, Err):
         return collections
     try:
-        return Ok(CompiledAuthorSource(artifacts.value, collections.value))
+        return Ok(CompiledAuthorSource(compiled, collections.value, refusals))
     except ValueError as error:
         return _error(AUTHOR_MANIFEST_INVALID, str(error))

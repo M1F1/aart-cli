@@ -9,7 +9,7 @@ PYTHON ?= python
 REGISTRY ?=
 QUALITY = $(PYTHON) scripts/quality.py
 
-.PHONY: check test unit integration system-matrix release-freeze release-check wheel validate clean lint format format-check typecheck coverage packaging-check docs-check secret-shape-check quality mutants
+.PHONY: check test unit integration system-matrix release-freeze release-check wheel validate clean lint format format-check typecheck coverage packaging-check docs-check secret-shape-check quality mutants manual-test-setup manual-test-setup-empty manual-test-reset manual-test-maintainer manual-test-consumer manual-test-shell-maintainer manual-test-shell-consumer
 
 # Aggregate. The Python discovery is the broad unit/regression gate; integration is end to end.
 test: unit integration
@@ -88,6 +88,31 @@ mutants:
 #   make check SINCE=main   the whole branch's diff as well
 check:
 	$(QUALITY) --changed $(if $(SINCE),--since=$(SINCE),)
+
+# Fresh, marker-bounded manual acceptance. These targets inject HOME/XDG only into the launched
+# process; they never ask the operator to export session-global variables.
+manual-test-setup:
+	$(PYTHON) scripts/manual_test.py setup
+
+# The maintainer-first route: the Registry does not exist yet, so the TUI creates it.
+manual-test-setup-empty:
+	$(PYTHON) scripts/manual_test.py setup --empty-registry
+
+manual-test-reset:
+	$(PYTHON) scripts/manual_test.py reset
+
+# The CLI route: an interactive shell already inside the lab's isolated HOME/XDG.
+manual-test-shell-maintainer:
+	$(PYTHON) scripts/manual_test.py shell maintainer
+
+manual-test-shell-consumer:
+	$(PYTHON) scripts/manual_test.py shell consumer
+
+manual-test-maintainer:
+	$(PYTHON) scripts/manual_test.py open maintainer
+
+manual-test-consumer:
+	$(PYTHON) scripts/manual_test.py open consumer
 
 # Remove build leftovers (safe: only the dist/ wheels and build/ tree).
 clean:

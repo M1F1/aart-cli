@@ -1,6 +1,6 @@
 # CP-19 — Manual TUI acceptance hardening
 
-Status: IMPLEMENTED — awaiting a clean standalone integration gate (B-108) and operator retest
+Status: IMPLEMENTED — CLOSED; operator retest remains external acceptance
 
 ## Goal
 
@@ -21,7 +21,8 @@ internal state model.
 
 1. **Contextual footer (QA-026) — DONE.** Local bindings appear first, universal movement/back/help/
    quit second. Keyboard events and labels share one binding authority (D-202).
-2. **Complete the real discovery run — IN PROGRESS.** Continue from the MCP promotion after the
+2. **Complete the real discovery run — DONE.** The run reached the consumer installation feedback
+   batch now owned by CP-20. Continue from the MCP promotion after the
    prior Skill promotion is merged, the local checkout observes it and the configured Registry is
    synchronized. Every new finding goes immediately to root `TODO.md` and receives a bounded CP-19
    step or a backlog item; it is not implemented during the discovery pass.
@@ -101,7 +102,7 @@ internal state model.
 14. **Registry/Source row truth (QA-043) — DONE.** Screen 21 projects only `registry-git`
    connections. Registry Sync availability and command focus both use the visible row, so stale
    navigation focus cannot target or enable another subject (D-218).
-15. **Batch verification — PARTIAL.** Every increment has a real RED/targeted mutation and the
+15. **Batch verification — DONE WITH RECORDED TEST-ISOLATION FOLLOW-UP.** Every increment has a real RED/targeted mutation and the
    1513-test focused family is green. Final `make quality` is green across all nine gates: 3653
    tests, one skipped and 85.38% branch coverage. Two standalone `make integration` runs completed
    380/381 E2Es but the real macOS Keychain test failed in Security.framework with `errSecParam`;
@@ -236,7 +237,7 @@ retry recovery. B-108 records the remaining gate blocker without weakening or sk
 
 ## Exact next implementation action
 
-Resolve B-108 without skipping the real macOS test or weakening its assertions, then rerun
-`make integration`. Once that standalone gate is green, return QA-039 and QA-043 with the rest of
-the Fixed batch for the operator's manual retest. The implementation itself and full `make quality`
-are complete; do not reopen steps 13 or 14 unless the manual retest produces new evidence.
+None in CP-19. Its implementation is committed at `e9616dd`, its full quality gate is green and
+the operator's next findings opened CP-20. B-108 remains recorded and is assigned to CP-20's final
+integration verification; do not weaken or skip the real macOS test. QA-039 and QA-043 remain in
+the operator's manual-retest list rather than keeping this implementation slice open.

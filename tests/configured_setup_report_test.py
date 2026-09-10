@@ -92,9 +92,7 @@ class ConfiguredInstallCommandReportTest(unittest.TestCase):
                 ENTER,
                 ENTER,
                 ENTER,
-                ENTER,
                 ord("y"),
-                ENTER,
             )
 
             with mock.patch.dict(os.environ, env.xdg, clear=False):
@@ -248,7 +246,7 @@ class ConsumerShellReportTest(unittest.TestCase):
             self.assertIsInstance(composed, Ok, getattr(composed, "diagnostics", ()))
             assert isinstance(composed, Ok)
             handler = composed.value
-            terminal = FakeTerminal(SPACE, ord("i"), ENTER, ENTER, ENTER, ENTER, ord("n"))
+            terminal = FakeTerminal(SPACE, ord("i"), ENTER, ENTER, ENTER, ord("n"))
 
             with mock.patch.dict(os.environ, env.xdg, clear=False):
                 finished = run_consumer_shell(

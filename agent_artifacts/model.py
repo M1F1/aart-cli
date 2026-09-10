@@ -441,6 +441,11 @@ class Request:
     discovery_accept_all: bool = False
     vendor_manifest: Optional[str] = None
     publish_message: Optional[str] = None
+    # `D-228`: where a reviewed registry commit is published to.  The branch is required at the
+    # surface rather than defaulted, because the one branch AART must never push to is the one
+    # a subscriber reads, and a default would be a guess about which that is.
+    publication_branch: Optional[str] = None
+    publication_remote: str = "origin"
     artifact_version: Optional[str] = None
     # The licence the registry records for a vendored copy.  Stated by the maintainer, because a
     # licence read out of an upstream file is a reading of somebody else's document.

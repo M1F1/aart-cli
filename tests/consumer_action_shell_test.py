@@ -114,8 +114,8 @@ class ConsumerActionShellTest(unittest.TestCase):
 
         self.assertEqual(handler.commands[0].kind, ConsumerUiCommandKind.EXECUTE_ACTION)
         self.assertEqual(handler.commands[0].review_digest, REVIEW)
-        self.assertTrue(terminal.screen_containing("AART / Installing"))
-        self.assertTrue(terminal.screen_containing("AART / Success"))
+        self.assertTrue(terminal.screen_containing("/ Installing"))
+        self.assertTrue(terminal.screen_containing("/ Success"))
         self.assertEqual(finished.session.screen, ConsumerScreen.SUCCESS)
         self.assertEqual(finished.focus, RECORDED_AT)
         self.assertEqual(finished.selection, ())

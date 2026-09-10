@@ -167,6 +167,7 @@ class ConsumerScreen(str, Enum):
     # missing was a screen on which to state which registry and which ref are about to be fetched
     # before anything is.
     REGISTRY_SYNC = "21c-sync-registry"
+    REGISTRY_REMOVE = "21d-disconnect-registry"
     CREDENTIALS = "22-credentials"
     CREDENTIAL_DETAILS = "23-credential-details"
     CREDENTIAL_ACTION = "24-credential-action"
@@ -617,7 +618,9 @@ def consumer_plan_to_data(view: ConsumerPlanView) -> dict[str, object]:
 def install_flow_screens(view: ConsumerPlanView) -> tuple[ConsumerScreen, ...]:
     """Return the accepted install flow, inserting question screens only when necessary."""
 
-    screens = [ConsumerScreen.REVIEW_SELECTION, ConsumerScreen.AUTOMATIC_INSPECTION]
+    # Automatic inspection is work AART performs between these screens, not a decision the user
+    # must acknowledge. The projection remains available for diagnostics/Verbose presentation.
+    screens = [ConsumerScreen.REVIEW_SELECTION]
     if view.inputs:
         screens.append(ConsumerScreen.REQUIRED_INPUTS)
     if view.remediations:
@@ -651,10 +654,24 @@ class ConsumerSession:
         return replace(self, profile=profile)
 
     def navigate(self, screen: ApplicationScreen) -> ConsumerSession:
+        """Go to a screen, rewinding rather than pushing when it is somewhere already stood.
+
+        A journey that finishes lands on the list it started from, and pushing there would put that
+        list on the stack twice: Esc then walks back into the wizard that has already run, which is
+        what the operator hit from Initialize Registry and from an install (`QA-072`). `QA-027` gave
+        those journeys a forward exit and left the stack alone, so the fault outlived the fix.
+
+        Returning to a place already stood in is a return, not a step deeper. Rewinding to it drops
+        exactly the screens walked since -- the finished sequence -- and nothing else, so the stack
+        stays the honest record of where the reader still is rather than of everywhere they went.
+        """
+
         if not isinstance(screen, (ConsumerScreen, MaintainerScreen)):
             raise ValueError("application screen is invalid")
         if screen is self.screen:
             return self
+        if screen in self.history:
+            return replace(self, screen=screen, history=self.history[: self.history.index(screen)])
         return replace(self, screen=screen, history=(*self.history, self.screen))
 
     def back(self) -> ConsumerSession:
@@ -1515,7 +1532,12 @@ _NAVIGATION: dict[ConsumerScreen, tuple[ConsumerScreen, ...]] = {
         ConsumerScreen.REVIEW_SELECTION,
     ),
     ConsumerScreen.COLLECTION_CUSTOMIZE: (ConsumerScreen.REVIEW_SELECTION,),
-    ConsumerScreen.REVIEW_SELECTION: (ConsumerScreen.AUTOMATIC_INSPECTION,),
+    ConsumerScreen.REVIEW_SELECTION: (
+        ConsumerScreen.AUTOMATIC_INSPECTION,
+        ConsumerScreen.REQUIRED_INPUTS,
+        ConsumerScreen.REMEDIATION,
+        ConsumerScreen.READY,
+    ),
     ConsumerScreen.AUTOMATIC_INSPECTION: (
         ConsumerScreen.REQUIRED_INPUTS,
         ConsumerScreen.REMEDIATION,
@@ -1525,7 +1547,11 @@ _NAVIGATION: dict[ConsumerScreen, tuple[ConsumerScreen, ...]] = {
     ConsumerScreen.REMEDIATION: (ConsumerScreen.READY,),
     ConsumerScreen.READY: (ConsumerScreen.INSTALLING,),
     ConsumerScreen.INSTALLING: (ConsumerScreen.SUCCESS,),
-    ConsumerScreen.SUCCESS: (ConsumerScreen.INSTALLED, ConsumerScreen.RECEIPT_DETAILS),
+    ConsumerScreen.SUCCESS: (
+        ConsumerScreen.MARKETPLACE,
+        ConsumerScreen.INSTALLED,
+        ConsumerScreen.RECEIPT_DETAILS,
+    ),
     ConsumerScreen.INSTALLED: (
         ConsumerScreen.INSTALLED_ARTIFACT_DETAILS,
         ConsumerScreen.INSTALLED_COLLECTION_DETAILS,
@@ -1541,8 +1567,13 @@ _NAVIGATION: dict[ConsumerScreen, tuple[ConsumerScreen, ...]] = {
     ConsumerScreen.UNINSTALL_REVIEW: (ConsumerScreen.UNINSTALLING,),
     ConsumerScreen.UNINSTALLING: (ConsumerScreen.ACTIVITY_DETAILS,),
     ConsumerScreen.VERIFY_REPAIR: (ConsumerScreen.ACTIVITY_DETAILS,),
-    ConsumerScreen.REGISTRIES: (ConsumerScreen.REGISTRY_ADD, ConsumerScreen.REGISTRY_SYNC),
+    ConsumerScreen.REGISTRIES: (
+        ConsumerScreen.REGISTRY_ADD,
+        ConsumerScreen.REGISTRY_SYNC,
+        ConsumerScreen.REGISTRY_REMOVE,
+    ),
     ConsumerScreen.REGISTRY_SYNC: (ConsumerScreen.REGISTRIES,),
+    ConsumerScreen.REGISTRY_REMOVE: (ConsumerScreen.REGISTRIES,),
     ConsumerScreen.REGISTRY_ADD: (ConsumerScreen.REGISTRY_REVIEW,),
     ConsumerScreen.REGISTRY_REVIEW: (ConsumerScreen.REGISTRIES,),
     ConsumerScreen.CREDENTIALS: (ConsumerScreen.CREDENTIAL_DETAILS,),
@@ -1563,6 +1594,26 @@ _KEEPS_FOCUS: frozenset[tuple[ConsumerScreen, ConsumerScreen]] = frozenset(
         (ConsumerScreen.COLLECTION_CUSTOMIZE, ConsumerScreen.REVIEW_SELECTION),
     }
 )
+
+
+#: Every screen's own identifier, in one frozen set so the check cannot fall behind the catalogue.
+_SCREEN_IDENTIFIERS: frozenset[str] = frozenset(
+    {screen.value for screen in ConsumerScreen} | {screen.value for screen in MaintainerScreen}
+)
+
+
+def is_screen_identifier(value: str) -> bool:
+    """Whether this string is the name of a screen rather than the name of a thing (`QA-077`).
+
+    Screen identifiers are internal: `31-sources` is where the reader is, never what they are
+    looking at. One reached the operator as a Source alias, in a refusal that then named no Source
+    at all, so the two vocabularies are told apart here rather than by each caller remembering that
+    a dashboard's rows are destinations.
+    """
+
+    if not isinstance(value, str):
+        raise ValueError("a screen identifier is a string")
+    return value in _SCREEN_IDENTIFIERS
 
 
 def keeps_focus(current: ApplicationScreen, target: ApplicationScreen) -> bool:

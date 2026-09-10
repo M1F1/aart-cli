@@ -434,6 +434,8 @@ payload-free consumer projection. Both are generated and must pass their gates b
 ```text
 aart source add|list|sync|health
 aart marketplace list|search|health|install|update|uninstall|status|setup
+aart doctor
+aart reset
 aart registry init|scaffold|collection|discover|vendor|vendor-batch|revendor|promote-native|refresh-native|lock|build|validate|audit|publish|diff
 aart security scan|show|verify|analyzers|suites
 aart reporting validate-event|validate-issue|aggregate
@@ -443,6 +445,10 @@ aart upgrade --wheel FILE | --source-checkout DIR
 Running `aart` without a subcommand on a TTY opens the human-oriented TUI (curses or text
 fallback). The TUI submits the same canonical requests as flag mode; it is not a second command
 engine.
+
+`aart reset` is the CLI-only factory reset. It lists the exact AART-owned per-user configuration,
+managed state and cache paths, then requires two different typed confirmations. It never removes
+projects, harness files, organization policy or credentials owned by another application.
 
 ## Verification
 

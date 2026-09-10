@@ -19,6 +19,9 @@ import subprocess
 import unittest
 from unittest import mock
 
+from hypothesis import given
+from hypothesis import strategies as st
+
 from agent_artifacts.application.consumer_ui import (
     ConsumerActionKind,
     ConsumerUiCommand,
@@ -41,8 +44,10 @@ from agent_artifacts.io.registry_bootstrap import (
     RegistryBootstrapReport,
     RegistryBootstrapStage,
     bootstrap_registry_workspace,
+    registry_identity_refusal,
 )
 from agent_artifacts.tui_consumer import CanonicalScreenSource, frame
+from agent_artifacts.tui_layout import CONTENT_MEASURE
 from tests.consumer_shell_test import screens
 
 
@@ -55,6 +60,9 @@ def _state(screen, **changes) -> ConsumerUiState:
 
 
 _FORM_ROWS = ("id", "name", "reporting", "commit", "initialize")
+
+#: What screen 46a can put in a text row: one printable key at a time, never a line break.
+_TYPEABLE = " \t-abcMANUAL/.0"
 
 
 def _repository(root: str) -> None:
@@ -415,6 +423,23 @@ class MaintainerRegistryInitActionTest(unittest.TestCase):
         self.assertEqual(update.event.review_digest, "")
         self.assertNotIn("aart ", "\n".join(update.source.screens.notice))
 
+    def test_a_stray_space_around_an_answer_still_reviews_the_registry(self) -> None:
+        """`QA-058`: the identity is judged by what was named, not by the spaces around it."""
+
+        from tests.configured_install_command_e2e_test import _environment
+
+        with _environment() as env, mock.patch.dict(env.xdg, clear=False):
+            actions = self._composed(env)
+            prepared = self._prepare(
+                actions, RegistryInitDraft("acme-registry ", " ACME Registry", " ", False)
+            )
+
+        self.assertTrue(prepared.event.review_digest, "a stray space refused a usable identity")
+        notice = "\n".join(prepared.source.screens.notice)
+        self.assertIn("  registry ID: acme-registry\n", notice + "\n")
+        self.assertIn("  display name: ACME Registry\n", notice + "\n")
+        self.assertIn("usage reporting: not enabled", notice)
+
     def test_one_confirmation_really_creates_the_registry_in_this_project(self) -> None:
         """End to end through the action boundary: no stubbed port, real files afterwards."""
 
@@ -508,3 +533,110 @@ class MaintainerRegistryInitActionTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RegistryIdentityWhitespaceTest(unittest.TestCase):
+    """`QA-058`: a space keystroke must not be able to make the form refuse itself.
+
+    Screen 46a's status bar offers `[Space] Toggle`, and on a text row a printable key is text: the
+    space it types lands in the answer instead of toggling anything.  None of the three answers has
+    a space at either end -- an identifier is a slug, a display name is one line, a reporting
+    repository is `owner/name` -- so surrounding whitespace is not part of what the operator said
+    and the identity is judged without it.  It is settled at the boundary rather than while typing,
+    because `Manual Registry` has to remain typeable one key at a time.
+    """
+
+    def test_a_stray_space_is_not_part_of_what_the_operator_named(self) -> None:
+        draft = RegistryInitDraft("manual-registry ", "  Manual Registry ", " ", True)
+
+        self.assertEqual(
+            draft.settled(),
+            RegistryInitDraft("manual-registry", "Manual Registry", "", True),
+        )
+
+    def test_settling_an_already_settled_draft_changes_nothing(self) -> None:
+        settled = RegistryInitDraft("manual-registry", "Manual Registry", "acme/usage", False)
+
+        self.assertEqual(settled.settled(), settled)
+
+    @given(
+        st.text(alphabet=_TYPEABLE, max_size=24),
+        st.text(alphabet=_TYPEABLE, max_size=24),
+        st.text(alphabet=_TYPEABLE, max_size=24),
+        st.booleans(),
+    )
+    def test_settling_drops_the_edges_and_nothing_else(
+        self, identifier: str, name: str, reporting: str, commit: bool
+    ) -> None:
+        """Universal, so stated over generated input: whatever was typed, only the edges go."""
+
+        settled = RegistryInitDraft(identifier, name, reporting, commit).settled()
+
+        self.assertEqual(settled.registry_id, identifier.strip())
+        self.assertEqual(settled.display_name, name.strip())
+        self.assertEqual(settled.usage_reporting, reporting.strip())
+        self.assertEqual(settled.commit, commit)
+        self.assertEqual(settled.settled(), settled)
+
+
+class RegistryIdentityRefusalTest(unittest.TestCase):
+    """`QA-058`: three answers are on the screen, so a refusal has to say which one it means.
+
+    The form cannot answer with a command line (`QA-017`), which makes the refusal the operator's
+    only instrument for finding the mistake.  One that says the identity is unusable without saying
+    which of the three is unusable leaves them re-reading all three.
+    """
+
+    def test_the_refusal_names_the_identifier_when_the_identifier_is_the_fault(self) -> None:
+        refused = registry_identity_refusal(
+            registry_id="manual registry", display_name="Manual Registry"
+        )
+
+        self.assertIsNotNone(refused)
+        assert refused is not None
+        lines = "\n".join((refused.diagnostics[0].message, *refused.diagnostics[0].interactive))
+        self.assertIn("Registry ID", lines)
+        self.assertNotIn("Display name", lines)
+
+    def test_the_refusal_names_the_display_name_when_the_name_is_the_fault(self) -> None:
+        refused = registry_identity_refusal(registry_id="manual-registry", display_name="")
+
+        self.assertIsNotNone(refused)
+        assert refused is not None
+        lines = "\n".join((refused.diagnostics[0].message, *refused.diagnostics[0].interactive))
+        self.assertIn("Display name", lines)
+        self.assertNotIn("Registry ID", lines)
+
+    def test_the_refusal_names_usage_reporting_when_reporting_is_the_fault(self) -> None:
+        refused = registry_identity_refusal(
+            registry_id="manual-registry",
+            display_name="Manual Registry",
+            usage_reporting_repository="not enabled",
+        )
+
+        self.assertIsNotNone(refused)
+        assert refused is not None
+        lines = "\n".join((refused.diagnostics[0].message, *refused.diagnostics[0].interactive))
+        self.assertIn("Usage reporting", lines)
+        self.assertNotIn("Registry ID", lines)
+
+    def test_three_faults_are_all_named_and_all_fit_a_screen(self) -> None:
+        """`QA-017`: a fault the headline drops, or truncates mid-word, is one nobody can act on."""
+
+        refused = registry_identity_refusal(
+            registry_id="", display_name="", usage_reporting_repository="x"
+        )
+
+        self.assertIsNotNone(refused)
+        assert refused is not None
+        message = refused.diagnostics[0].message
+        self.assertEqual(
+            message, "Registry ID, Display name and Usage reporting cannot be used as written"
+        )
+        for line in (message, *refused.diagnostics[0].interactive):
+            self.assertLessEqual(len(line), CONTENT_MEASURE, line)
+
+    def test_a_usable_identity_is_not_refused(self) -> None:
+        self.assertIsNone(
+            registry_identity_refusal(registry_id="manual-registry", display_name="Manual Registry")
+        )

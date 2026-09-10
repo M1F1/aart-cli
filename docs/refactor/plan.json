@@ -270,7 +270,7 @@
     {
       "id": "CP-19",
       "title": "Manual TUI acceptance hardening",
-      "status": "in_progress",
+      "status": "done",
       "steps": [
         {
           "id": "1",
@@ -280,7 +280,7 @@
         {
           "id": "2",
           "title": "Complete the manual Registry-to-lifecycle discovery run and capture every finding",
-          "status": "in_progress"
+          "status": "done"
         },
         {
           "id": "3",
@@ -335,16 +335,120 @@
         {
           "id": "13",
           "title": "Promotion mode explains Vendored and Referenced before toggling (QA-039)",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "14",
           "title": "Registries and authoring Sources expose honest rows and routes (QA-043)",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "15",
-          "title": "Focused evidence per increment and full batch verification before handback",
+          "title": "Full quality gate and isolated integration-test finding recorded for follow-up",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "CP-20",
+      "title": "Operator clarity, Registry disconnection and reproducible manual testing",
+      "status": "done",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Capture and characterize the operator findings (QA-044 through QA-052)",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Make Registry, Doctor and install flows readable and directly escapable (QA-044 through QA-048)",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "Disconnect a Registry from Marketplace through a reviewed TUI action (QA-050)",
+          "status": "done"
+        },
+        {
+          "id": "4",
+          "title": "Provide an installable manual-test MCP with safe dummy credential inputs (QA-049)",
+          "status": "done"
+        },
+        {
+          "id": "5",
+          "title": "Provide one-command fresh manual-test setup and bounded per-lab reset (QA-051)",
+          "status": "done"
+        },
+        {
+          "id": "6",
+          "title": "Provide a doubly confirmed CLI factory reset limited to AART-owned state (QA-052)",
+          "status": "done"
+        },
+        {
+          "id": "7",
+          "title": "Run targeted mutations, full gates and durable handoff",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "CP-21",
+      "title": "Second manual TUI run: one screen skeleton, an unbroken promotion path, and a credential step that stays in the TUI",
+      "status": "in_progress",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Capture and characterize the second run's findings (QA-058 through QA-083)",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Credential entry stays inside the TUI: the screen is lent to the provider's prompt and taken back (QA-081), and the lab keeps its own keychain so no reset is reachable (QA-084)",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "The promotion path advances on its own evidence: a passed validation continues, back navigation keeps its Candidate (QA-073/QA-074)",
+          "status": "done"
+        },
+        {
+          "id": "4",
+          "title": "One screen skeleton every screen fills, with an anchored footer and no empty sections (QA-065/QA-067/QA-068/QA-070)",
+          "status": "done"
+        },
+        {
+          "id": "5",
+          "title": "Settle where the launch directory and the view path live, and what a nested title says (QA-066/QA-069/QA-071/QA-083)",
+          "status": "done"
+        },
+        {
+          "id": "6",
+          "title": "Completed sequences leave the back stack; Esc from a list reaches its dashboard (QA-072)",
+          "status": "done"
+        },
+        {
+          "id": "7",
+          "title": "Screens tell the truth about state: promoted Candidates, empty connected-Registry blocks, stale Sources, and no leaked screen identifiers (QA-060/QA-075/QA-076/QA-077)",
+          "status": "done"
+        },
+        {
+          "id": "8",
+          "title": "Harness delivery is one honest answer across Artifact Details, review, Remediation and Success (QA-078/QA-079/QA-080) — diagnosed in D-231, lands with step 3's setup path",
+          "status": "todo"
+        },
+        {
+          "id": "9",
+          "title": "Publish the reviewed registry commit from inside AART to a configured branch that is never the default (QA-082/QA-055, D-228) — rule, command and push adapter done; the Registry Commit screen action waits on step 3",
+          "status": "in_progress"
+        },
+        {
+          "id": "10",
+          "title": "One malformed manifest is reported beside the scan rather than failing the Source (QA-063, D-230)",
+          "status": "done"
+        },
+        {
+          "id": "11",
+          "title": "Targeted mutations, full gates and durable handoff",
           "status": "todo"
         }
       ]

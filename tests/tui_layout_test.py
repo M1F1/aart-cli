@@ -43,6 +43,20 @@ class WrapTests(unittest.TestCase):
         self.assertEqual(layout.wrap("", width=80), ("",))
 
 
+class SectionTests(unittest.TestCase):
+    def test_explanatory_text_breathes_between_both_rules(self) -> None:
+        self.assertEqual(
+            layout.section(("Choose detail, installation scope and optional Maintainer Mode.",)),
+            (
+                layout.SECTION_RULE,
+                "",
+                "Choose detail, installation scope and optional Maintainer Mode.",
+                "",
+                layout.SECTION_RULE,
+            ),
+        )
+
+
 class ColumnsTests(unittest.TestCase):
     ROWS = (
         ("mcp/github-docker", "registry", "unverified", "risk ?"),

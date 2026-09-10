@@ -196,6 +196,11 @@ class ConfiguredInstallationActionTest(unittest.TestCase):
         self.assertIsInstance(prepared, Ok, getattr(prepared, "diagnostics", ()))
         self.assertTrue(prepared.value.ready)
         self.assertIsNotNone(prepared.value.review_digest)
+        credential = next(
+            item for item in prepared.value.action.flow.plan.inputs if item.id == str(TOKEN)
+        )
+        self.assertEqual(credential.provider_state, ProviderState.AVAILABLE.value)
+        self.assertEqual(credential.health, CredentialState.PRESENT.value)
         self.assertFalse(
             pathlib.Path(self._installed_root(prepared.value)).exists(),
             "planning must not have created the tree it plans to write",

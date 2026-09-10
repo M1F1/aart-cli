@@ -20,7 +20,7 @@ from agent_artifacts.application.maintainer_views import (
     project_maintainer_provenance,
     project_maintainer_version_conflict,
 )
-from agent_artifacts.domain.candidates import assess_candidate
+from agent_artifacts.domain.candidates import CandidateState, assess_candidate
 from agent_artifacts.domain.identifiers import SourceAlias
 from agent_artifacts.domain.registry import PromotionMode, registry_version_from_candidate
 from agent_artifacts.domain.result import Ok
@@ -56,6 +56,99 @@ def _conflict():
     )
     assert isinstance(changed, Ok)
     return changed.value, published
+
+
+class PublishedCandidateSupersessionTest(unittest.TestCase):
+    """`QA-062`: an author editing an already-published version must not crash Source Sync.
+
+    Once a version is published, the next Sync records its Candidate as `promoted` -- the registry
+    is the authority on that (`supersede_candidate` refuses to move a promoted Candidate for
+    exactly that reason).  When the author then edits the payload without bumping the version,
+    reconciliation used to supersede whatever the previous record was, promoted or not, and the
+    domain refused with a `ValueError` that no boundary catches.  A published artifact getting an
+    edit at the same version is an ordinary upstream event and the answer to it is already
+    modelled: the new Candidate is `invalid` with `registry-version-immutable`, and the promoted
+    record stays exactly what the registry says it is.
+    """
+
+    def _promoted(self):
+        """One Source Sync over a version this registry has already published."""
+
+        first = reconcile_source_scan(
+            SourceAlias("authors"),
+            "a" * 40,
+            _compiled(),
+            previous=(),
+            approved=(),
+            target_registry=SourceAlias("company"),
+        )
+        assert isinstance(first, Ok)
+        published = registry_version_from_candidate(
+            assess_candidate(first.value.active[0].candidate),
+            object_digest=_digest("2"),
+            registry_snapshot=_digest("1"),
+            mode=PromotionMode.VENDORED,
+        )
+        synced = reconcile_source_scan(
+            SourceAlias("authors"),
+            "a" * 40,
+            _compiled(),
+            previous=(),
+            approved=(published,),
+            target_registry=SourceAlias("company"),
+        )
+        assert isinstance(synced, Ok)
+        return synced.value, published
+
+    def test_the_published_candidate_really_is_promoted_after_a_plain_resync(self) -> None:
+        scan, _ = self._promoted()
+
+        self.assertEqual(scan.active[0].candidate.state, CandidateState.PROMOTED)
+
+    def test_an_edit_at_a_published_version_is_refused_rather_than_raised(self) -> None:
+        scan, published = self._promoted()
+
+        changed = reconcile_source_scan(
+            SourceAlias("authors"),
+            "b" * 40,
+            _compiled(revision="b", server="print('different')\n"),
+            previous=scan.history,
+            approved=(published,),
+            target_registry=SourceAlias("company"),
+        )
+
+        self.assertIsInstance(changed, Ok)
+        assert isinstance(changed, Ok)
+        candidate = changed.value.active[0].candidate
+        self.assertEqual(candidate.state, CandidateState.INVALID)
+        self.assertIn("registry-version-immutable", tuple(item.code for item in candidate.findings))
+        self.assertEqual(
+            candidate.previous,
+            scan.active[0].candidate.id,
+            "the conflicting Candidate must name the published record it collides with",
+        )
+
+    def test_the_promoted_record_is_left_as_the_registry_states_it(self) -> None:
+        """The history keeps the published fact; only the new Candidate carries the conflict."""
+
+        scan, published = self._promoted()
+        promoted_id = scan.active[0].candidate.id
+
+        changed = reconcile_source_scan(
+            SourceAlias("authors"),
+            "b" * 40,
+            _compiled(revision="b", server="print('different')\n"),
+            previous=scan.history,
+            approved=(published,),
+            target_registry=SourceAlias("company"),
+        )
+
+        assert isinstance(changed, Ok)
+        kept = next(
+            bundle for bundle in changed.value.history if bundle.candidate.id == promoted_id
+        )
+        self.assertEqual(kept.candidate.state, CandidateState.PROMOTED)
+        self.assertIsNone(kept.candidate.successor)
 
 
 class MaintainerVersionConflictProjectionTest(unittest.TestCase):

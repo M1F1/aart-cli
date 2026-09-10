@@ -63,6 +63,12 @@ def _run_doctor(request: Request) -> int:
     return doctor.run(request)
 
 
+def _run_reset(request: Request) -> int:
+    from .commands import reset
+
+    return reset.run(request)
+
+
 # Command name -> handler. Value-keyed dispatch, not a class hierarchy (docs/design/DESIGN.md §14).
 DISPATCH: dict[str, Callable[[Request], int]] = {
     "upgrade": upgrade.run,
@@ -72,6 +78,7 @@ DISPATCH: dict[str, Callable[[Request], int]] = {
     "source": _run_source,
     "marketplace": _run_marketplace,
     "doctor": _run_doctor,
+    "reset": _run_reset,
 }
 
 # Structured results used by interactive frontends. Flag mode retains ``DISPATCH`` and its
@@ -128,6 +135,17 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--source", dest="source_dir", metavar="DIR", help=help_text)
 
     sub = parser.add_subparsers(dest="command", metavar="COMMAND")
+
+    sub.add_parser(
+        "reset",
+        formatter_class=_HELP_FORMATTER,
+        help="restore AART's per-user application state to factory defaults",
+        description=(
+            "Remove only AART-owned per-user configuration, managed source snapshots, receipts, "
+            "settings and caches after two exact typed confirmations. Projects, harness files, "
+            "organization policy and credentials owned by other applications are not removed."
+        ),
+    )
 
     # doctor ------------------------------------------------------------------ #
     p = sub.add_parser(
@@ -1288,6 +1306,32 @@ def build_parser() -> argparse.ArgumentParser:
     _add_registry_finalize(p_publish)
     _add_json(p_publish)
 
+    p_push = registry_sub.add_parser(
+        "push",
+        help="push the reviewed registry commit to its publication branch",
+        description=(
+            "Push the commit this checkout is on to a remote branch, so other people can review "
+            "it. The registry's default branch is refused by name: publication is a push to a "
+            "branch, and only a merge makes reviewed bytes the registry. AART never merges."
+        ),
+    )
+    _add_registry_source(p_push)
+    p_push.add_argument(
+        "--branch",
+        dest="publication_branch",
+        metavar="NAME",
+        required=True,
+        help="remote branch to publish to; the default branch is refused",
+    )
+    p_push.add_argument(
+        "--remote",
+        dest="publication_remote",
+        metavar="NAME",
+        default="origin",
+        help="Git remote to publish to (default: origin)",
+    )
+    _add_json(p_push)
+
     p_test = registry_sub.add_parser("test", help="run a compatibility validation fixture")
     _add_registry_source(p_test)
     p_test.add_argument(
@@ -1504,6 +1548,8 @@ def _to_request(args: argparse.Namespace) -> Request:
         discovery_accept_all=bool(getattr(args, "discovery_accept_all", False)),
         vendor_manifest=getattr(args, "vendor_manifest", None),
         publish_message=getattr(args, "publish_message", None),
+        publication_branch=getattr(args, "publication_branch", None),
+        publication_remote=getattr(args, "publication_remote", "origin"),
         artifact_version=getattr(args, "artifact_version", None),
         artifact_license=getattr(args, "artifact_license", None),
         minimum_version=getattr(args, "minimum_version", None),

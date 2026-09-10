@@ -134,6 +134,12 @@ def _refusal(message: str, *interactive: str) -> Err:
     )
 
 
+#: Two answers known to be usable, so one field at a time can be judged on its own without a
+#: second definition of what a registry identity is (`QA-058`).
+_SPECIMEN_ID = "aart-registry"
+_SPECIMEN_NAME = "AART Registry"
+
+
 def registry_identity_refusal(
     *,
     registry_id: str,
@@ -153,22 +159,54 @@ def registry_identity_refusal(
         return minimum
     if isinstance(maximum, Err):
         return maximum
-    try:
-        RegistryInitOptions(
-            registry_id,
-            display_name,
-            minimum.value,
-            maximum.value,
-            usage_reporting_repository,
+
+    def usable(identifier: str, name: str, reporting: str | None) -> bool:
+        try:
+            RegistryInitOptions(identifier, name, minimum.value, maximum.value, reporting)
+        except ValueError:
+            return False
+        return True
+
+    if usable(registry_id, display_name, usage_reporting_repository):
+        return None
+    # Each answer is judged beside two known-good ones, so the refusal can say which of the three
+    # on the screen is the one to change (`QA-058`).
+    faults = tuple(
+        (field, advice)
+        for field, advice, answered in (
+            (
+                "Registry ID",
+                "lowercase words joined by dashes, like acme-registry",
+                usable(registry_id, _SPECIMEN_NAME, None),
+            ),
+            (
+                "Display name",
+                "one line of text, like ACME Registry",
+                usable(_SPECIMEN_ID, display_name, None),
+            ),
+            (
+                "Usage reporting",
+                "owner/repository, or empty to leave it off",
+                usable(_SPECIMEN_ID, _SPECIMEN_NAME, usage_reporting_repository),
+            ),
         )
-    except ValueError:
-        return _refusal(
-            "this is not a usable registry identity",
-            "The identifier is lowercase words joined by dashes, like acme-registry. "
-            "The display name is one line of text. "
-            "Leave usage reporting empty unless you have an owner/repository to send to.",
-        )
-    return None
+        if not answered
+    )
+    if not faults:
+        return _refusal("this is not a usable registry identity")
+    named = _and_list(tuple(field for field, _ in faults))
+    return _refusal(
+        f"{named} cannot be used as written",
+        *(f"{field}: {advice}." for field, advice in faults),
+    )
+
+
+def _and_list(fields: tuple[str, ...]) -> str:
+    """`Registry ID and Display name`, so a refusal reads as a sentence rather than a list."""
+
+    if len(fields) == 1:
+        return fields[0]
+    return ", ".join(fields[:-1]) + f" and {fields[-1]}"
 
 
 def _git(root: str, *arguments: str) -> subprocess.CompletedProcess[str]:
@@ -329,8 +367,8 @@ def registry_absent_refusal(root: str) -> Err | None:
     if os.path.isfile(os.path.join(root, _REGISTRY_MARKER)):
         return None
     return _refusal(
-        "this project does not contain a registry to rebuild",
-        "Screen 46 offers Initialize Registry; a registry has to exist before it can be rebuilt.",
+        "the current project is not a Registry, so there is nothing here to rebuild",
+        "Choose Initialize Registry to create one in this project first.",
     )
 
 

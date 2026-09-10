@@ -108,7 +108,9 @@ class CanonicalConsumerEntryTest(unittest.TestCase):
             code = tui.run(project="/work/project", user_home="/users/alice")
 
         self.assertEqual(code, 0)
-        canonical.assert_called_once_with(actions)
+        # The launched directory travels with the application: it is what the frame names as
+        # the context every screen is read in (`QA-053`).
+        canonical.assert_called_once_with(actions, workspace="/work/project")
         degradation.assert_not_called()
 
     def test_the_application_is_run_through_its_own_injected_action_handler(self) -> None:
