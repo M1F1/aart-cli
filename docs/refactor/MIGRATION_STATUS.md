@@ -1375,3 +1375,34 @@ ignoring what the receipt served, the remediation row dropping its subject, and 
 its harness line. **The whole unit suite passes: 3915 passed, 1 skipped, 2091 subtests.** Gates:
 `ruff check`, `ruff format --check`, `make typecheck`, `make docs-check`, `make secret-shape-check`
 — all clean.
+
+### CP-21 step 11 — the batch's evidence, and what the mutation run said (2026-09-11)
+
+The full suites were deferred to the end of the batch at the operator's request, so this step pays
+that debt and reads the advisory mutation run over the module step 8 changed.
+
+`make mutants` over `agent_artifacts/io/artifact_placement.py` named three unheld claims inside
+step 8's own function and two more in the asymmetry it reused. The identity passed to
+`compile_native_package` was invisible to every test, so narrowing would have applied whatever
+manifest the stored object happened to hold. The refusal's promise to name the supported set was
+prose only. And `test_a_declaration_that_leaves_nothing_is_refused_rather_than_silently_empty` took
+the *typed* refusal instead of the branch it is named after, leaving the measured-set-empties branch
+with no test at all. In `_deliveries` and `_merges`, `continue` → `break` survived because every
+fixture put the unusable harness last, and `requested=None` survived because a typed unusable
+harness refuses either way — once by name, once for having narrowed to nothing.
+
+All five are `QA-078`'s shape one layer down: an install that reports success while reaching less
+than it says. Three tests were added and one corrected; eight targeted mutations were killed, each
+by the test whose name says it. The scoped run went from 99 survivors to 77 and left none at all in
+`_declared_narrowing`; what remains is recorded as `B-113` rather than swept — about sixty refusal
+sentences, about ten arguments on a hook path this scope never walks, and three real behavioural
+gaps in `placement_for` and `_merges` that predate this slice and are named there.
+
+Closing evidence: `make quality` passes all nine gates it ran, over 3,866 tests with one skipped, at
+85.43% branch coverage; it skips `integration` as redundant because all 381 of that gate's tests are
+among the 3,866, and the standalone `make integration` run passes all 381 separately.
+
+**CP-21 IMPLEMENTED — awaiting manual retest (2026-09-11).** All eleven plan steps are done and
+every finding from `QA-058` to `QA-084` is closed in the tree. None of it has been seen at a
+terminal by a person since the run that produced the findings, so CP-21 is implemented and not
+verified; `QA-044`…`QA-057` were already waiting and this batch joins that queue.

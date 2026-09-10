@@ -1,78 +1,56 @@
 # AART Refactor — Next Work
 
-## CP-21 current objective (2026-09-10)
+## CP-21 current objective (2026-09-11)
 
-**CP-21 is OPEN — 10 OF 11 STEPS DONE.** The operator's second manual TUI run walked the
-maintainer route from an empty Registry through initialization, Sources, Candidates, promotion and
-publication, then the consumer route through Marketplace, install and credentials. Its findings are
-`QA-058` through `QA-083` in [`TODO.md`](../../TODO.md); the slice document is
-[`slices/CP-21-second-manual-tui-run.md`](slices/CP-21-second-manual-tui-run.md) and the raw
+**CP-21 is IMPLEMENTED — AWAITING MANUAL RETEST.** All eleven steps in `docs/refactor/plan.json`
+are done. The operator's second manual TUI run walked the maintainer route from an empty Registry
+through initialization, Sources, Candidates, promotion and publication, then the consumer route
+through Marketplace, install and credentials; its findings are `QA-058` through `QA-084` in
+[`TODO.md`](../../TODO.md), the slice document is
+[`slices/CP-21-second-manual-tui-run.md`](slices/CP-21-second-manual-tui-run.md), and the raw
 transcripts are the operator's own `nowe bledy i znaleziska.txt` (untracked).
 
-Twenty-three findings are fixed and await the operator's retest: `QA-058` through `QA-077`, plus
-`QA-081`, `QA-083` and `QA-084`. The only open findings from this run are `QA-078`–`QA-080` and
-`QA-082`. The completed groups are recorded below and in the slice document rather than repeated
-finding by finding here.
+Every finding that run opened is closed in the tree. What that means and does not mean:
 
-The promotion path's blocking pair is closed. The next coupled findings set the order of the
-remaining screen work:
+- Credential entry stays inside the TUI — the screen is lent to the provider's prompt and taken
+  back — and the lab keeps its own keychain (`QA-081`/`QA-084`; `D-229`).
+- The promotion path advances on its own evidence, and back navigation keeps its Candidate
+  (`QA-073`/`QA-074`).
+- One screen skeleton composes every screen, with an anchored footer, no empty sections and a
+  Fast/Verbose toggle that means something (`QA-064`/`QA-065`/`QA-067`/`QA-068`/`QA-070`;
+  `D-233`, `D-234`).
+- The launch directory sits above the key legend and a nested title is a trail through session
+  history (`QA-066`/`QA-069`/`QA-071`/`QA-083`; `D-235`, `D-236`).
+- A completed sequence leaves the back stack, and Esc from a list reaches its dashboard
+  (`QA-072`; `D-237`).
+- Screens tell the truth about state: promoted Candidates, empty connected-Registry blocks, stale
+  Sources and no leaked screen identifiers (`QA-060`/`QA-075`/`QA-076`/`QA-077`; `D-238`, `D-239`).
+- Harness delivery is one honest answer across Artifact Details, review, Remediation and Success
+  (`QA-078`/`QA-079`/`QA-080`; `D-241`).
+- A reviewed Registry commit is published from inside AART to a configured branch that is never the
+  default (`QA-082`/`QA-055`; `D-228`, `D-240`).
+- One malformed manifest is reported beside the scan rather than failing the whole Source
+  (`QA-063`; `D-230`).
 
-Steps 4 through 7 are done and await the operator's retest: `QA-067`/`QA-068` (a screen skeleton —
-`screen_frame`/`anchor`/`footer_start` in `tui_layout.py` compose every consumer screen and the
-terminal, not the frame, places the footer; `D-233`, `D-234`), `QA-066`/`QA-069`/`QA-071`/`QA-083`
-(the launch directory moved to the footer and a nested title is the trail through session history;
-`D-235`, `D-236`), `QA-072` (returning to a place already stood in rewinds the stack, and Esc from a
-list reaches the dashboard that owns it; `D-237`), and `QA-060`/`QA-075`/`QA-077` (a refusal names
-publishing and subscribing before the default, an empty block says what it is empty of, and no
-screen identifier leaks into a focus; `D-238`). `QA-076` is also closed: unchanged artifact and
-Collection Candidates now re-derive exact approved Registry state without revisiting rejected or
-terminal history (`D-239`).
+Closing evidence: `make quality` passes all nine gates it ran, over 3,866 tests with one skipped, at
+85.43% branch coverage, and `make integration` passes all 381 end-to-end tests standalone — quality
+skips that gate as redundant, because all 381 of its tests are among the 3,866.
 
-**What to pick up next, in this order:**
+Step 11's mutation run found five unheld claims inside step 8's own code and the asymmetry it
+reused. All five are held now, eight targeted mutations were killed, and the scoped run went from 99
+survivors to 77 with none left in the new function. What remains predates this slice and is
+classified in `B-113`, including three behavioural gaps worth a test the next time `placement_for`
+or `_merges` is opened.
 
-**Steps 8 and 9 are now done too (2026-09-11).** Step 9 publishes a reviewed registry commit to a
-configured review branch from inside AART (`QA-082`/`QA-055`; `D-228`, `D-240`). Step 8 makes
-harness delivery one honest answer across Artifact Details, the review, Remediation and Success
-(`QA-078`/`QA-079`/`QA-080`; `D-241`) — `D-231`'s deferral was re-examined rather than re-deferred,
-because the step it was waiting for turned out to be a different step, and the refusal it had been
-backed out on was the second half of the same defect.
+**What is left is not code.** CP-21 is implemented and not verified: none of it has been seen at a
+terminal by a person since the run that produced the findings.
 
-1. **Step 11 is the only step left** — targeted mutations, the full gates (`make quality`,
-   `make integration`) and a durable handoff. Every finding CP-21 opened is closed in the tree; what
-   step 11 owes is the full-suite evidence the operator asked to defer to the end of the batch.
-   The whole unit suite already passes (3915 passed, 1 skipped, 2091 subtests) — `make integration`
-   and `make quality` have not been run in this batch, by the operator's own instruction.
-2. **The operator's manual retest is the real gate.** `QA-044`…`QA-057` were already waiting;
-   everything CP-21 closed joins them. None of it has been seen at a terminal by a person since the
-   run that produced the findings.
+**Exact next action:** run `make manual-test-setup`, follow the generated `START_HERE.md` through
+the TUI, and manually retest `QA-044` through `QA-057` (already outstanding from CP-20) together
+with `QA-058` through `QA-084`. Check those items only after the operator confirms them, then
+commit the retest result. The findings still genuinely open from earlier runs — `QA-025`, `QA-027`,
+`QA-028`, `QA-032`, `QA-033`, `QA-056`, `QA-057` — are outside CP-21's scope and remain in `Open`.
 
-`QA-082` asked AART to push a reviewed Registry commit to a non-default branch, and was recorded as
-needing a Product Specification decision first. **The product owner made that decision on
-2026-09-10 and 164.7 now says so (`D-228`):** AART pushes the reviewed registry commit, on an
-explicit action, to a remote branch the maintainer configures — any branch but the registry's
-default one, and a push to, merge into or fast-forward of the default branch is refused by AART
-itself. A consumer subscribing to a registry still reads its default branch, so what a consumer can
-install is still what somebody merged. Step 9 of CP-21 builds it, and it also settles `QA-055`.
-
-**Step 10 is also done, out of order, because it does not touch the screens the other steps are
-rebuilding.** `QA-063` is closed: `compile_author_manifests` compiles each manifest on its own
-merits and answers with `(artifacts, refusals)`; `compile_author_snapshot` stays strict so adoption
-and publication keep refusing whole; and a refusal rides `SourceSyncExecutionResult` to the Sync
-result screen as `Could not read N manifests:` with the path on the line. `D-230` records why a
-refusal is reported beside the scan rather than persisted as an `invalid` Candidate.
-
-**Step 9 is started and deliberately incomplete.** The rule, the command and the push adapter
-exist and are tested against a real bare remote: `agent_artifacts/domain/publication.py` refuses the
-default branch from two strings, `application/registry_publication.py` builds a command with no
-`force`, `merge`, `fast_forward` or `delete` field to set, and `io/registry_publication.py` pushes
-`<revision>:refs/heads/<branch>` and refuses again from the remote's own advertised `HEAD`. What is
-missing is the surface: the Registry Commit screen's action, the publication branch as configuration
-rather than an argument, and the receipt's place in the frame. Those live in `tui_maintainer.py` and
-the maintainer views; step 3 is complete, so this is now the next executable work.
-
-**Exact next action:** finish step 9's maintainer surface: persist the configured non-default
-publication branch, wire the Registry Commit action to the existing publication interpreter, and
-render its receipt. Do not rebuild the already-tested domain, application or Git adapter layers.
 
 
 ## CP-20 current objective (2026-09-09)

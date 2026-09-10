@@ -2889,3 +2889,46 @@ that the advisory tool did not and will not report on.
 Worth pinning down which shape mutmut is skipping, and either recording it in `DECISIONS.md` as a
 known blind spot the targeted mutation must cover, or configuring around it. Related to `B-110` and
 `B-111`, the other two ways this command misleads.
+
+## B-113 — `artifact_placement`'s refusals and its hook path are held only by their branching
+
+Found: 2026-09-11, during CP-21 step 11.
+
+The scoped run over `agent_artifacts/io/artifact_placement.py` generated 390 mutants and left 99
+alive. Step 11 read them and fixed everything inside CP-21's claims: the declaration narrowing, the
+skip that must not become a stop, and the request/capability asymmetry are held now, by tests whose
+names say so. The re-run leaves 77, and they fall into three groups.
+
+**Refusal wording (about sixty).** Each changes only the *text* of a refusal: a message replaced by
+`None`, a remediation dropped, a literal uppercased or wrapped in mutmut's `XX` markers. They cover
+`placement_for`'s guards on its own arguments, on a missing object and on a missing `harness_root`;
+the three "registers with / merges into / is read by none of these harnesses" refusals; and
+`_deliveries` and `_merges` on an undeliverable kind, a delivery-shape mismatch and a region of
+somebody else's file. Every one of those branches has a test that reaches it and asserts `Err` plus,
+at most, a code — enough to hold the branching and nothing about what the operator reads. `D-238`
+makes a remediation a sorted set of remedies rather than prose, so it is assertable directly, and
+`QA-078`'s test now does exactly that.
+
+**Arguments on paths these three test files never walk (about ten).** The `_settings` call for a
+hook, and the optional `sources` and `preferred_installer` passed through to `ArtifactPlacement`,
+survive dropping their arguments because no fixture in the mutation scope installs a hook or supplies
+either. Those claims may well be held elsewhere; the scope, not the suite, is what is silent here.
+
+**Three that are genuinely behavioural, and are not held anywhere in this scope:**
+
+- `placement_for`'s first guard, `not isinstance(artifact, …) or not isinstance(scope, …)`, survives
+  becoming `and`. A bad artifact with a good scope would then fall through to fail somewhere less
+  legible.
+- `_deliveries` and `_merges` both build `ArtifactEnvironment(str(identity), root)` and survive
+  `str(None)`. Either the identity does not reach the payload path, in which case the argument is
+  misleading, or it does and nothing checks it.
+- `_merges` builds its destination as `os.path.join(harness_root, target.destination)` and survives
+  losing the second half, which would merge into the harness root itself rather than into the file
+  the table names. The merge tests assert which harnesses were reached, never where.
+
+Not critical: no invariant depends on the refusal wording, the sentences are currently correct, and
+the three behavioural gaps are all on paths the end-to-end gate exercises for real. Worth doing the
+next time a slice touches these branches for a product reason rather than as a sweep — asserting
+sixty sentences nobody has read at a terminal would freeze wording that the manual runs keep
+improving. The third group deserves a test whenever `_merges` is next opened. Related to `B-110`,
+`B-111` and `B-112`.

@@ -461,3 +461,74 @@ saying which of the two failed for neither.
 Four targeted mutations, all killed. Tests: `tests/declared_harness_narrowing_test.py`,
 `tests/remediation_row_subject_test.py`, `tests/install_review_names_harnesses_test.py`. **Whole
 unit suite: 3915 passed, 1 skipped, 2091 subtests.** Gates all clean.
+
+### Step 11 — targeted mutations, full gates and durable handoff
+
+The operator asked for the full suites to be deferred to the end of the batch rather than run after
+every step, so this step is where that debt is paid, and where the advisory mutation run over the
+module step 8 changed is finally read rather than skimmed.
+
+**What `make mutants` found.** The scoped run over `agent_artifacts/io/artifact_placement.py`
+generated 390 mutants and left 99 alive. Fifteen of them were inside
+`_declared_narrowing`, the function step 8 added, and reading them named three claims the step had
+made in prose and held nowhere:
+
+- **`expected_identity=identity` was doing nothing any test could see.** Narrowing reads a package
+  out of the object store to find out what the artifact declares. Passing `None` there — mutants 3
+  and 5 — still delivered, using whatever manifest the object happened to hold. Every other
+  assertion in the file would have passed with somebody else's declaration; the identity check is
+  what makes "what the artifact declares" mean *this* artifact, and nothing said so.
+- **The refusal the operator reads was unasserted.** `_declared_narrowing`'s docstring promises that
+  a typed harness is refused *and* that the message names the set they can choose from — the same
+  set Artifact Details showed them. The test asserted only that the refused name appeared. Mutants
+  17–22 rewrote the remediation freely.
+- **One test did not hold what its name said.**
+  `test_a_declaration_that_leaves_nothing_is_refused_rather_than_silently_empty` passed
+  `profiles=("codex",)` with the default `profiles_requested=True`, so it took the *typed* refusal
+  and never reached the branch it was named after. That branch — the measured set narrowing to
+  nothing — had no test at all, which is why mutants 27–35 rewrote its message and remediation
+  untouched.
+
+Two more survivors sat in `_deliveries` and `_merges`, in the asymmetry step 8 reused rather than
+reinvented, and both are the same shape as `QA-078` one layer down:
+
+- **`continue` → `break` survived** because every existing assertion puts the unusable harness
+  *last* in the profile tuple. A loop that steps over it and a loop that stops at it agree on
+  `("claude", "codex", "opencode", "tabnine")`. Reversed, they do not: a stop delivers to nothing
+  and reports success.
+- **`requested=profiles_requested` → `requested=None` survived** because a typed unusable harness
+  produces an `Err` either way — once by name, once because nothing was left. Asserting `Err` and
+  the refused name cannot tell a refusal from a silent narrowing that then ran out of harnesses.
+  What separates them is whether the *usable* half is placed, so that is what is asserted now.
+
+Eight targeted mutations, all killed, each by the test whose name says it: the identity argument
+dropped from the narrowing call and from `_declared_narrowing` itself; the two refusal messages and
+both remediations rewritten; `continue` turned into `break` in both per-profile loops; and
+`requested` forced falsy at all four `_skippable` call sites.
+
+Three tests were added and one corrected. `tests/declared_harness_narrowing_test.py` gains
+`test_the_declaration_read_is_the_one_belonging_to_this_coordinate`, holds the supported-set half of
+the typed refusal, and its misnamed test now reaches the branch it is named after.
+`tests/measured_host_profiles_test.py` gains a pair for deliveries and a pair for merges: a skip is
+a skip and not a stop, and the same profiles typed rather than measured are refused instead of
+quietly reduced to the part of them that works.
+
+The rest of the survivors are outside CP-21's claims, and `B-113` classifies them rather than
+sweeping them up here. About sixty change only the *wording* of refusals that predate this slice,
+each reached by a test that asserts `Err` and a code and nothing about the sentence. About ten drop
+arguments on the hook `_settings` path or the optional `sources`/`preferred_installer` pass-through,
+which no fixture in this scope walks. Three are genuinely behavioural and genuinely unheld: the
+argument guard's `or`, the identity given to `ArtifactEnvironment` in both per-profile builders, and
+the second half of `_merges`' destination join. Naming them is the honest form of "advisory";
+asserting sixty sentences nobody has read at a terminal would work against the manual runs that keep
+improving them.
+
+**Gates.** `make integration` passes all 381 end-to-end tests standalone. `make quality` passes all
+nine gates it ran, over 3,866 tests with one skipped, at 85.43% branch coverage — it skips
+`integration` as redundant, because all 381 of those tests are among the 3,866, which is why the
+standalone run is quoted separately. `make mutants` re-run over the same scope after the new tests
+kills 22 more, leaves 77, and leaves none at all in `_declared_narrowing`.
+
+CP-21 is implemented. What it is not is verified: every finding from `QA-058` to `QA-084` is closed
+in the tree and none of it has been seen at a terminal by a person since the run that produced it.
+The operator's retest of `QA-044`…`QA-057` was already outstanding; this batch joins that queue.

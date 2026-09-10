@@ -206,6 +206,40 @@ class MachineProfileDeliveryPlacementTest(_PlacementFixture):
         self.assertIs(placed.diagnostics[0].code, PLACEMENT_UNAVAILABLE)
         self.assertIn("tabnine", placed.diagnostics[0].message)
 
+    def test_a_harness_left_out_does_not_take_the_rest_of_the_list_with_it(self) -> None:
+        """The skip is a skip, not a stop.
+
+        Every assertion above puts the unusable harness last, so a loop that stopped at it and a
+        loop that stepped over it would agree. Putting it first is what tells them apart, and the
+        difference is an install that silently reaches nothing.
+        """
+
+        placed = self._place(
+            scope=Scope.USER,
+            harness_root=self.home,
+            profiles=("tabnine", "claude"),
+            profiles_requested=False,
+        )
+
+        self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
+        self.assertEqual(["claude"], sorted(item.harness for item in placed.value.deliveries))
+
+    def test_and_the_same_pair_typed_is_refused_by_name_rather_than_narrowed(self) -> None:
+        """The whole distinction in one pair: same profiles, different origin, different answer.
+
+        Refusing the pair because nothing was left would produce an `Err` too, so asserting only
+        that would hold nothing. What is asserted is that the usable half is *not* placed: a
+        request is answered, not quietly reduced to the part of it that works.
+        """
+
+        placed = self._place(
+            scope=Scope.USER, harness_root=self.home, profiles=("tabnine", "claude")
+        )
+
+        self.assertIsInstance(placed, Err)
+        self.assertIs(placed.diagnostics[0].code, PLACEMENT_UNAVAILABLE)
+        self.assertIn("tabnine", placed.diagnostics[0].message)
+
     def test_a_machine_that_reads_this_kind_nowhere_is_refused(self) -> None:
         placed = self._place(
             scope=Scope.USER,
@@ -235,6 +269,28 @@ class MachineProfileMergePlacementTest(_PlacementFixture):
 
     def test_the_same_harness_named_by_the_operator_is_still_refused(self) -> None:
         placed = self._place(scope=Scope.USER, harness_root=self.home, profiles=("tabnine",))
+
+        self.assertIsInstance(placed, Err)
+        self.assertIs(placed.diagnostics[0].code, PLACEMENT_UNAVAILABLE)
+        self.assertIn("tabnine", placed.diagnostics[0].message)
+
+    def test_a_harness_left_out_does_not_take_the_rest_of_the_list_with_it(self) -> None:
+        """A merge is skipped the same way a delivery is, and stops at nothing either."""
+
+        placed = self._place(
+            scope=Scope.USER,
+            harness_root=self.home,
+            profiles=("tabnine", "claude"),
+            profiles_requested=False,
+        )
+
+        self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
+        self.assertEqual(["claude"], sorted(item.harness for item in placed.value.merges))
+
+    def test_and_the_same_pair_typed_is_refused_by_name_rather_than_narrowed(self) -> None:
+        placed = self._place(
+            scope=Scope.USER, harness_root=self.home, profiles=("tabnine", "claude")
+        )
 
         self.assertIsInstance(placed, Err)
         self.assertIs(placed.diagnostics[0].code, PLACEMENT_UNAVAILABLE)
