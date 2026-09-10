@@ -1,6 +1,6 @@
 # CP-21 — Second manual TUI run
 
-Status: OPEN — 3 OF 11 STEPS DONE
+Status: OPEN — 7 OF 11 STEPS DONE
 
 ## Goal
 
@@ -54,27 +54,27 @@ Fixed already, awaiting the operator's retest:
 | QA-081 | Credential entry dropped out of the TUI into a raw shell prompt (`D-229`) |
 | QA-084 | The manual lab borrowed the real default keychain, so macOS offered to reset it |
 | QA-063 | One malformed manifest failed the whole Source, with no path (`D-230`) |
+| QA-064 | `[v]` now visibly toggles Fast/Verbose cursor descriptions (`D-233`) |
+| QA-065 | Empty screen regions no longer draw duplicate rules (`D-232`) |
+| QA-066 | The launch directory no longer runs into the title (`D-235`) |
+| QA-067 | Every consumer screen uses one standard skeleton (`D-232`) |
+| QA-068 | Screen and universal keys are split in an anchored footer (`D-234`) |
+| QA-069 | The working directory is in the footer (`D-235`) |
+| QA-070 | Cursor descriptions are one toggleable mode (`D-233`) |
+| QA-071 | Nested views name the trail actually walked (`D-236`) |
+| QA-072 | Completed sequences leave the Back stack (`D-237`) |
 | QA-073 | Back through Validation keeps and restores the Candidate identity (`D-232`) |
 | QA-074 | Enter on Validation Details continues to Policy (`D-232`) |
+| QA-075 | Empty Registries says no Registry is *subscribed* yet (`D-228`) |
+| QA-076 | Registry approval refreshes unchanged Candidates as promoted (`D-239`) |
+| QA-077 | A screen identifier can no longer become a Source alias |
+| QA-060 | Source Sync names publication, subscription and defaulting in order (`D-238`) |
+| QA-083 | Nested Maintainer titles name Maintainer once (`D-236`) |
 
 Open, in the order the steps take them:
 
 | Item | Surface | Severity |
 |---|---|---|
-| QA-067 | No standard screen skeleton | high |
-| QA-068 | The key legend is not anchored, and mixes two kinds of key | high |
-| QA-065 | Two section rules with nothing between them; help shows before `?` | medium |
-| QA-070 | Cursor descriptions should be one toggleable mode | low |
-| QA-064 | `[v] Fast / Verbose` does nothing | medium |
-| QA-066 | Title and working directory run together | medium |
-| QA-069 | The working directory belongs in the footer | medium |
-| QA-071 | Nested views do not name their parent | medium |
-| QA-083 | Repeated "Maintainer" in nested Maintainer titles | low |
-| QA-072 | Esc after a finished sequence re-enters the wizard | high |
-| QA-076 | A promoted artifact still shows as a `New` Candidate | high |
-| QA-077 | `authoring Source 31-sources is not configured and enabled` | high |
-| QA-075 | "No Registry is connected." reads as a failure while one is created | medium |
-| QA-060 | The Source Sync refusal names a fix the screen offers no route to | medium |
 | QA-078 | A Skill reports three harnesses unsupported, then installs for all four | high |
 | QA-080 | Remediation lists "configure harness" three times, unactionably | high |
 | QA-079 | Install never asks which harness | medium |
@@ -219,10 +219,9 @@ a dropped `--`), plus one class that belongs to `Diagnostic` rather than here �
 
 **Still to do:** the Registry Commit screen's action, the publication branch as configuration rather
 than an argument, and the receipt's place in the maintainer's frame. All three live in
-`tui_maintainer.py` and the maintainer views, which step 3 is rebuilding. They are step 9's
-remainder and should be taken when step 3 lands, not beside it.
+`tui_maintainer.py` and the maintainer views. Step 3 has landed, so they are step 9's next surface.
 
-## Step 8 — diagnosed, not landed (2026-09-10): the fix belongs under step 3
+## Step 8 — diagnosed, not landed (2026-09-10): use the setup path established by step 3
 
 `QA-078` was measured to the line and the answer is `D-231`. Two screens, two sources: Artifact
 Details asks the manifest through `evaluate_compatibility`, the install plan asks the request through
@@ -235,11 +234,12 @@ declared harness. But the receipt then records the narrowed set while the host i
 against still carries every measured harness, so `configured_consumer_completion` refuses —
 `configured-setup-invalid: setup requires one exact configured installation receipt` — and the
 `CONFIGURED` marker is never written. That refusal is correct. Narrowing is a change to what is
-offered, and the offer is made in the consumer setup and remediation path that step 3 is rebuilding;
+offered, and the offer is made in the consumer setup and remediation path that step 3 established;
 doing it inside the placement that merely serves the offer makes the receipt disagree with the host.
 
-So step 8 waits for step 3, where it also settles `QA-080` for free: a plan for one harness cannot
-list "configure harness" three times. Two things the next agent should not re-derive — empty means
+Step 3 has landed, so step 8 can now make that setup-path change; it also settles `QA-080` for free:
+a plan for one harness cannot list "configure harness" three times. Two things the next agent should
+not re-derive — empty means
 unconstrained, because `allow_empty=True` makes an absent block and an explicit `[]` the same `()`;
 and `measured_host_profiles_test.py` and `git_backed_runtime_e2e_test.py` assert the defect rather
 than tolerate it, so they change with the fix and that is not a regression.
@@ -249,7 +249,7 @@ the `QA-078` entry of `TODO.md`.
 
 ## Step 4 — done (2026-09-10)
 
-Four findings, one cause. Every screen composed its own spacing, so the same kind of thing sat at a
+Five findings, one cause. Every screen composed its own spacing, so the same kind of thing sat at a
 different height depending on when that screen was written, and the doubled rule `QA-065` reported
 was the most visible thing that fell out of it.
 
@@ -367,7 +367,7 @@ same stack (`D-236`), so this also removed the trail that could name a place twi
 
 ### Step 7 — Screens tell the truth about state (`QA-060`/`QA-075`/`QA-076`/`QA-077`)
 
-Three of the four landed; the fourth is diagnosed and named below rather than half-built.
+All four landed and await the operator's retest.
 
 **`QA-077` — no internal screen identifier reaches the operator.** Measured before touching code,
 because the message (`authoring Source 31-sources is not configured and enabled`) named a thing that
@@ -397,21 +397,18 @@ exactly backwards. The steps that must happen in sequence are therefore one reme
 test fail on line order. The targeted mutation is the honest one for a claim about order: reversing
 the clauses turns the ordering test red and nothing else.
 
-**`QA-076` — diagnosed, deliberately not landed.** The Candidates screen is not reading a stale
-scan; the scan itself never re-derives. `reconcile_source_scan` short-circuits when the source has
-not moved (`if prior is not None and prior.candidate.id == candidate_id: active.append(prior);
-continue`) and that branch never consults `approved`. `_with_registry_state` — the only thing that
-can set `PROMOTED` for an artifact Candidate — runs solely on the freshly derived branch below it.
-So a Candidate that read `New` when last scanned reads `New` through every later Sync no matter what
-the registry did, which is precisely `skill/manual-check@1.0.0` being installable from Marketplace
-while Candidates called it new work. `QA-062`'s promoted/current split is not implicated: it only
-routes records whose state already is `PROMOTED`.
+**`QA-076` — registry state is re-derived even when the Source did not move.** The diagnosis was
+correct: the unchanged-artifact short circuit returned the prior before consulting `approved`.
+`reconcile_source_scan` now passes that unchanged Candidate through the same exact registry match as
+a freshly derived one. Collections take the same path because 164.10 makes them Candidates too
+(`D-239`). Exact coordinate, Candidate ID and content digests produce `PROMOTED`; different content
+at an approved coordinate remains `INVALID` with `registry-version-immutable`; unrelated Registry
+entries do nothing.
 
-It is left here because the fix is a change to reconciliation, not to a screen, and it needs a guard
-rather than a moved line: `assess_candidate` raises on a terminal state and `mark_candidate_promoted`
-accepts only `READY`/`WARNING`, so re-deriving an unchanged prior has to leave terminal and rejected
-records alone. That is a slice's worth of care and the budget for this segment is spent; it is a
-better handoff as a written diagnosis than as an untested branch.
+The refresh is guarded for `PROMOTED`, `SUPERSEDED`, `REJECTED` and `SOURCE_REMOVED`. Those records
+carry historical decisions or terminal facts, `assess_candidate` refuses terminal input, and
+INV-239 requires an unchanged rejected Candidate to stay rejected. `QA-062`'s promoted/current split
+therefore remains intact rather than being worked around.
 
 One existing test changed, and it is the ordinary kind:
 `maintainer_registry_view_test.py::test_an_installation_with_no_composed_registry_refuses_instead_of_raising`
@@ -419,6 +416,9 @@ asserted the old sentence while claiming to be about refusing rather than raisin
 new wording; nothing about what it holds moved. The broad run is what caught it, which is the reason
 that run exists.
 
-Tests: `tests/empty_state_truthfulness_test.py` (6), `tests/screen_identifier_leak_test.py`
-(6 + 86 subtests). Broad set: 1755 passed / 793 subtests. Gates: focused suites, `ruff check`, `ruff format --check`, `make typecheck`,
-`make docs-check` — all clean.
+Tests: `tests/empty_state_truthfulness_test.py`, `tests/screen_identifier_leak_test.py`,
+`tests/maintainer_version_conflict_test.py`, and `tests/maintainer_collection_history_test.py`.
+Two deliberate QA-076 mutations were killed. The scoped advisory run generated 472 mutants and
+killed 353; none survived in the registry matching helpers or the new refresh branches. Broad set:
+1767 passed / 799 subtests. Gates: focused suites, `ruff check`, `ruff format --check`,
+`make typecheck`, `make docs-check`, and `make secret-shape-check` — all clean.

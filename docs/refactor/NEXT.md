@@ -9,20 +9,10 @@ publication, then the consumer route through Marketplace, install and credential
 [`slices/CP-21-second-manual-tui-run.md`](slices/CP-21-second-manual-tui-run.md) and the raw
 transcripts are the operator's own `nowe bledy i znaleziska.txt` (untracked).
 
-Nine are already fixed and await the operator's retest: `QA-058` (a space typed into Initialize
-Registry made a usable identity unusable), `QA-059` (the walkthrough went from Add Source straight
-to Sync, which cannot work without a published and subscribed target Registry), `QA-061` (the
-default lab's Registry recorded different manifest bytes and different Source aliases than the
-Sources it claimed to have vendored, so the first Sync of an untouched lab reported every artifact
-invalid) and `QA-062` (an author editing an already-published version raised a `ValueError` out of
-`reconcile_source_scan`; `D-227` separates the published record from the Candidate under review),
-`QA-081` (the credential prompt was spoken over the drawn frame; `D-229` lends the screen to the
-provider for the length of the prompt and takes it back), `QA-084` (the lab home had no keychain,
-so macOS offered to reset one; the lab now creates and owns its own), `QA-063` (one malformed
-manifest failed the whole Source with no path in the message; `D-230` compiles each manifest alone
-and reports the refusals beside the scan), and `QA-073`/`QA-074` (Back keeps the Candidate through
-Lifecycle, Provenance, Version Conflict and Validation Details, while Enter on a check's details
-continues to Policy; `D-232`).
+Twenty-three findings are fixed and await the operator's retest: `QA-058` through `QA-077`, plus
+`QA-081`, `QA-083` and `QA-084`. The only open findings from this run are `QA-078`–`QA-080` and
+`QA-082`. The completed groups are recorded below and in the slice document rather than repeated
+finding by finding here.
 
 The promotion path's blocking pair is closed. The next coupled findings set the order of the
 remaining screen work:
@@ -34,21 +24,16 @@ terminal, not the frame, places the footer; `D-233`, `D-234`), `QA-066`/`QA-069`
 `D-235`, `D-236`), `QA-072` (returning to a place already stood in rewinds the stack, and Esc from a
 list reaches the dashboard that owns it; `D-237`), and `QA-060`/`QA-075`/`QA-077` (a refusal names
 publishing and subscribing before the default, an empty block says what it is empty of, and no
-screen identifier leaks into a focus; `D-238`).
+screen identifier leaks into a focus; `D-238`). `QA-076` is also closed: unchanged artifact and
+Collection Candidates now re-derive exact approved Registry state without revisiting rejected or
+terminal history (`D-239`).
 
 **What to pick up next, in this order:**
 
-1. `QA-076` — a promoted artifact still reads as a `New` Candidate. Diagnosed in full, not built:
-   `reconcile_source_scan` (`application/maintainer.py:207`) short-circuits when the source has not
-   moved and that branch never consults `approved`, so `_with_registry_state` — the only thing that
-   sets `PROMOTED` for an artifact Candidate — never runs for it. Re-derive that branch against the
-   registry, guarded: `assess_candidate` raises on a terminal state and `mark_candidate_promoted`
-   accepts only `READY`/`WARNING`, so terminal and rejected priors must be left alone. It is the one
-   piece of step 7 still open.
-2. Step 9's remainder — the publication branch as maintainer configuration, the Registry Commit
+1. Step 9's remainder — the publication branch as maintainer configuration, the Registry Commit
    screen action, and the receipt in the maintainer frame, all in `tui_maintainer.py`.
-3. Step 8 — `QA-078`, deferred by `D-231` to the setup path, where it also settles `QA-080`.
-4. Step 11 — mutations, full gates, durable handoff.
+2. Step 8 — `QA-078`, deferred by `D-231` to the setup path, where it also settles `QA-080`.
+3. Step 11 — mutations, full gates, durable handoff.
 
 `QA-082` asked AART to push a reviewed Registry commit to a non-default branch, and was recorded as
 needing a Product Specification decision first. **The product owner made that decision on
@@ -72,12 +57,11 @@ default branch from two strings, `application/registry_publication.py` builds a 
 `<revision>:refs/heads/<branch>` and refuses again from the remote's own advertised `HEAD`. What is
 missing is the surface: the Registry Commit screen's action, the publication branch as configuration
 rather than an argument, and the receipt's place in the frame. Those live in `tui_maintainer.py` and
-the maintainer views, which step 3 is rebuilding — take them once step 3 lands.
+the maintainer views; step 3 is complete, so this is now the next executable work.
 
-**Exact next action:** steps 1–3 and 10 are done; step 9 is half-built. Take step 4
-(`QA-065`/`QA-067`/`QA-068`/`QA-070`): establish one screen skeleton with an anchored split footer,
-no empty sections, and one cursor-description mode before changing individual screen wording.
-Steps 5–8 and 11 remain untouched.
+**Exact next action:** finish step 9's maintainer surface: persist the configured non-default
+publication branch, wire the Registry Commit action to the existing publication interpreter, and
+render its receipt. Do not rebuild the already-tested domain, application or Git adapter layers.
 
 
 ## CP-20 current objective (2026-09-09)

@@ -59,18 +59,43 @@ def _text(receipt: GitProcessReceipt) -> str:
     return receipt.stdout.decode("utf-8", errors="replace").strip()
 
 
-def _remote_default_branch(root: str, remote: str) -> str | None:
-    """What the remote itself calls default, read from its advertised `HEAD` rather than config."""
+def registry_remote_default_branch(root: str, remote: str) -> Result[str]:
+    """Read the remote's advertised default branch, or refuse when it cannot be established."""
+
+    if (
+        not isinstance(root, str)
+        or not os.path.isabs(root)
+        or os.path.normpath(root) != root
+        or not isinstance(remote, str)
+        or not remote
+    ):
+        return _error(
+            REGISTRY_PUBLICATION_FAILED,
+            "reading a publication target needs a normalized absolute checkout and remote name",
+        )
+    remotes = _git(root, "remote")
+    if isinstance(remotes, Err):
+        return remotes
+    if remote not in _text(remotes.value).split():
+        return _error(
+            REGISTRY_PUBLICATION_FAILED,
+            f"this registry checkout has no Git remote named {remote}",
+            "Add the remote to the registry checkout, then publish again.",
+        )
 
     shown = _git(root, "ls-remote", "--symref", "--", remote, "HEAD")
     if isinstance(shown, Err):
-        return None
+        return shown
     for line in _text(shown.value).splitlines():
         if line.startswith("ref:"):
             target = line[4:].strip().split()[0]
             if target.startswith("refs/heads/"):
-                return target[len("refs/heads/") :]
-    return None
+                return Ok(target[len("refs/heads/") :])
+    return _error(
+        REGISTRY_PUBLICATION_FAILED,
+        f"Git remote {remote} did not advertise a symbolic default branch",
+        "Set the remote HEAD to its default branch, then publish again.",
+    )
 
 
 def publish_registry_commit(
@@ -99,13 +124,15 @@ def publish_registry_commit(
             f"this registry checkout has no Git remote named {command.remote}",
             "Add the remote to the registry checkout, then publish again.",
         )
-    default_branch = _remote_default_branch(root, command.remote)
-    if default_branch is not None and default_branch.casefold() == branch.casefold():
+    default_branch = registry_remote_default_branch(root, command.remote)
+    if isinstance(default_branch, Err):
+        return default_branch
+    if default_branch.value.casefold() == branch.casefold():
         return _error(
             DEFAULT_BRANCH_PUBLICATION,
-            f"{command.remote} calls {default_branch} its default branch; "
+            f"{command.remote} calls {default_branch.value} its default branch; "
             "AART publishes to a branch and never to that one",
-            f"Publish to a different branch and open a pull request into {default_branch}.",
+            f"Publish to a different branch and open a pull request into {default_branch.value}.",
         )
     held = _git(root, "cat-file", "-e", f"{command.revision}^{{commit}}", max_output_bytes=1024)
     if isinstance(held, Err):
@@ -147,4 +174,8 @@ def _receipt(
         return _error(REGISTRY_PUBLICATION_FAILED, f"publication receipt is invalid: {error}")
 
 
-__all__ = ["REGISTRY_PUBLICATION_FAILED", "publish_registry_commit"]
+__all__ = [
+    "REGISTRY_PUBLICATION_FAILED",
+    "publish_registry_commit",
+    "registry_remote_default_branch",
+]

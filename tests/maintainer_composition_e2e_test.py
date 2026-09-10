@@ -691,8 +691,8 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
                 _digest_line(promotion), _digest_line(chosen), "mode must change the review"
             )
 
-    def test_validated_promotion_is_committed_locally_and_never_pushed(self) -> None:
-        """Screens 43–45 replan, validate, write, read back and commit one real checkout."""
+    def test_validated_promotion_is_committed_then_published_to_a_review_branch(self) -> None:
+        """Screens 43–45 review the local commit and a separate real publication push."""
 
         with _environment() as env:
             original_paths = source_store_paths(
@@ -763,6 +763,14 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             _git(registry_root, "add", "-A")
             _git(registry_root, "commit", "-m", "Initial approved registry")
             before_revision = _git(registry_root, "rev-parse", "HEAD")
+            remote = env.root / "registry-remote.git"
+            subprocess.run(
+                ("git", "init", "--bare", "-b", "main", str(remote)),
+                check=True,
+                capture_output=True,
+            )
+            _git(registry_root, "remote", "add", "origin", str(remote))
+            _git(registry_root, "push", "origin", "main")
 
             authors = configured_source("authors", SourceKind.SOURCE_GIT)
             pathlib.Path(env.paths.user_config_file).write_bytes(
@@ -836,6 +844,14 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
                 ENTER,
                 ENTER,
                 ENTER,
+                # The commit has landed. Publication is the second explicit action (`D-228`):
+                # `p` opens the target, and Enter reviews it before anything is pushed.
+                ord("p"),
+                DOWN,
+                *(ord(character) for character in "review/registry"),
+                DOWN,
+                ENTER,
+                ENTER,
                 ENTER,
             )
             finished = run_consumer_shell(
@@ -854,10 +870,19 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             validation = terminal.screen_containing("/ Registry Validation")
             self.assertIn("Registry validation: Passed", validation)
             self.assertIn("No approved registry state has been written", validation)
+            # The frame straight after the commit: the local write happened and publication,
+            # being the separate explicit action, has not (`D-228`).
             committed = terminal.screen_containing("Approved registry state written locally")
             self.assertIn("Local Git revision:", committed)
-            self.assertIn("Git push: no", committed)
-            self.assertIn("Canonical-branch publication remains external", committed)
+            self.assertIn("Git publication: not yet published", committed)
+
+            publication_review = terminal.screen_containing("Ready to push the reviewed commit")
+            self.assertIn("origin/review/registry", publication_review)
+            self.assertIn("Publication remote: origin", publication_review)
+            self.assertIn("Publication branch: review/registry", publication_review)
+            self.assertIn("Nothing will be merged", publication_review)
+            receipt = terminal.screen_containing("company: created origin/review/registry")
+            self.assertIn("Nothing was merged", receipt)
 
             # Registry Maintainer draws the local Registry the walk just wrote into.  The local
             # commit is deliberately not a sync, so the checkout is ahead of the synchronized
@@ -871,7 +896,10 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             after_revision = _git(registry_root, "rev-parse", "HEAD")
             self.assertNotEqual(after_revision, before_revision)
             self.assertEqual(_git(registry_root, "status", "--porcelain=v1"), "")
-            self.assertEqual(_git(registry_root, "remote", "-v"), "")
+            self.assertEqual(
+                _git(remote, "rev-parse", "refs/heads/review/registry"), after_revision
+            )
+            self.assertEqual(_git(remote, "rev-parse", "refs/heads/main"), before_revision)
             persisted = FilesystemPromotionOutput(str(registry_root)).current()
             assert isinstance(persisted, Ok), persisted
             versions = load_registry_versions(persisted.value)
@@ -1098,7 +1126,9 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             )
             committed = terminal.screen_containing("Approved registry state written locally")
             self.assertIn("Promote 2 candidates", committed)
-            self.assertIn("Git push: no", committed)
+            # This walk commits and stops. Publication is the separate explicit action (`D-228`),
+            # so what the screen owes the reader here is that it has not happened.
+            self.assertIn("Git publication: not yet published", committed)
 
             # One transaction, not two: a loop over single promotions would have made two commits
             # and two registry snapshots.

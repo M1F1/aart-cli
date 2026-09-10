@@ -5558,3 +5558,49 @@ So a sequence of steps that must happen in order is one remedy, written as one l
 comparisons depend on for a formatting convenience, and every other caller in the tree treats
 remediation as an unordered set. The constraint is recorded here because the next agent who wants
 ordered advice will otherwise rediscover it the same way.
+
+## D-239 — An unchanged Candidate re-derives Registry state, not review history
+
+Date: 2026-09-10 · Increment: QA-076 · Status: accepted
+
+`reconcile_source_scan` used Candidate identity as proof that nothing relevant changed. That is true
+of the observed Source but not of the target Registry: an operator can promote and publish the exact
+Candidate between two Source Syncs. Returning the prior record before consulting `approved` therefore
+left the Candidates screen saying `New` while Marketplace could already install the same version.
+
+An unchanged, nonterminal Candidate is now passed through the same exact Registry comparison as a
+freshly derived Candidate. Promotion requires the approved coordinate, Candidate ID, input digest
+and canonical/payload digest all to match; an approved coordinate containing different bytes stays
+the existing `registry-version-immutable` refusal, and approved entries for other coordinates do
+nothing. Product Specification 164.10 says Collections are Candidates too, so the same transition
+and immutability rule applies to unchanged Collection Candidates rather than leaving the same defect
+on a parallel path.
+
+The refresh deliberately does not reassess `PROMOTED`, `SUPERSEDED`, `REJECTED` or
+`SOURCE_REMOVED`. Those states carry terminal facts or durable review history, the candidate domain
+refuses several of their transitions, and INV-239 explicitly requires an unchanged rejected
+Candidate to remain rejected. Registry movement can update the derived state of current reviewable
+work; it does not rewrite historical decisions. This preserves `QA-062`'s separation between the
+published record and current work instead of weakening it.
+
+## D-240 — Screen 45 becomes a form only when it is opened as one
+
+Date: 2026-09-10 · Increment: CP-21 step 9 · Status: accepted
+
+Screen 45 now carries two explicit effects in sequence (`D-228`): the local commit, and then a push
+to a review branch the maintainer names. The second needs typed input, so the screen has a form in
+it — but only after `p` opens it. Interpreting keys for that form from the moment the commit merely
+*exists* made the screen swallow every key it did not recognise, `q` included, and a screen that
+cannot be quit is not a misprint: the shell asks for the next key forever, which is how three
+acceptance walks turned into a hang rather than a failed assertion.
+
+The rule is that a form owns the keyboard only while it is open. `registry_publication_configuring`
+already existed as the state saying so and the row source already consulted it; key interpretation
+did not, and the two disagreeing is the whole defect. Once they agree, the swallow is correct where
+it happens — `q` is a legal character in a branch name, so a reader typing `review/q` must not quit
+— and absent where it does not.
+
+The same increment fixes the mirror of `QA-058`. The committed screen tells the reader to press `p`
+while the legend listed no such key. `QA-058` was a legend advertising a key that did nothing; this
+is a key that did something and was advertised nowhere, and both leave the reader guessing, so the
+binding is now derived from the same state that enables the key.

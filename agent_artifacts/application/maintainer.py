@@ -34,6 +34,15 @@ from agent_artifacts.protocol.hashing import file_entry, tree_digest
 
 SOURCE_SCAN_INVALID = DiagnosticCode("source-scan-invalid")
 
+_REGISTRY_REFRESH_GUARDED_STATES = frozenset(
+    {
+        CandidateState.PROMOTED,
+        CandidateState.SUPERSEDED,
+        CandidateState.REJECTED,
+        CandidateState.SOURCE_REMOVED,
+    }
+)
+
 
 @dataclass(frozen=True, slots=True)
 class CandidateBundle:
@@ -131,6 +140,49 @@ def _with_registry_state(
     return assess_candidate(candidate, findings=(finding,))
 
 
+def _approved_collection_for(
+    collection: CompiledAuthorCollection,
+    target_registry: SourceAlias,
+    approved: tuple[RegistryArtifactVersion, ...],
+) -> RegistryArtifactVersion | None:
+    return next(
+        (
+            item
+            for item in approved
+            if item.coordinate.source == target_registry
+            and item.coordinate.artifact == ArtifactIdentity("collection", collection.name)
+            and item.coordinate.version == collection.version
+        ),
+        None,
+    )
+
+
+def _with_collection_registry_state(
+    candidate: CollectionCandidate,
+    approved: RegistryArtifactVersion | None,
+) -> CollectionCandidate:
+    if approved is None:
+        return candidate
+    if (
+        approved.candidate_id == candidate.id
+        and approved.input_digest == candidate.input_digest
+        and approved.canonical_digest == candidate.canonical_digest
+    ):
+        return replace(candidate, state=CandidateState.PROMOTED)
+    return replace(
+        candidate,
+        state=CandidateState.INVALID,
+        findings=(
+            CandidateFinding(
+                "registry-version-immutable",
+                FindingSeverity.ERROR,
+                "Published Collection coordinate/version already contains different "
+                "canonical content",
+            ),
+        ),
+    )
+
+
 def reconcile_source_scan(
     source_alias: SourceAlias,
     revision: str,
@@ -205,7 +257,15 @@ def reconcile_source_scan(
             return digest
         candidate_id = candidate_id_for(artifact.package, target_registry)
         if prior is not None and prior.candidate.id == candidate_id:
-            active.append(prior)
+            unchanged = prior
+            if prior.candidate.state not in _REGISTRY_REFRESH_GUARDED_STATES:
+                refreshed = _with_registry_state(
+                    prior.candidate,
+                    _approved_for(artifact, target_registry, approved),
+                )
+                unchanged = replace(prior, candidate=refreshed)
+                history[refreshed.id] = unchanged
+            active.append(unchanged)
             continue
         if prior is None and published is not None and published.candidate.id == candidate_id:
             # Nothing moved upstream at a version this registry published: the promoted record
@@ -280,8 +340,16 @@ def reconcile_source_scan(
             collection.input_digest,
             target_registry,
         )
+        approved_version = _approved_collection_for(collection, target_registry, approved)
         if collection_prior is not None and collection_prior.id == candidate_id:
-            collection_active.append(collection_prior)
+            unchanged_collection = collection_prior
+            if collection_prior.state not in _REGISTRY_REFRESH_GUARDED_STATES:
+                unchanged_collection = _with_collection_registry_state(
+                    collection_prior,
+                    approved_version,
+                )
+                collection_history[unchanged_collection.id] = unchanged_collection
+            collection_active.append(unchanged_collection)
             continue
         collection_candidate = CollectionCandidate(
             candidate_id,
@@ -299,40 +367,18 @@ def reconcile_source_scan(
             CandidateState.NEW if collection_prior is None else CandidateState.CHANGED,
             None if collection_prior is None else collection_prior.id,
         )
-        approved_version = next(
-            (
-                item
-                for item in approved
-                if item.coordinate.source == target_registry
-                and item.coordinate.artifact == ArtifactIdentity("collection", collection.name)
-                and item.coordinate.version == collection.version
-            ),
-            None,
+        collection_candidate = _with_collection_registry_state(
+            collection_candidate,
+            approved_version,
         )
-        if approved_version is not None:
-            if (
-                approved_version.candidate_id == collection_candidate.id
-                and approved_version.input_digest == collection_candidate.input_digest
-                and approved_version.canonical_digest == collection_candidate.canonical_digest
-            ):
-                collection_candidate = replace(collection_candidate, state=CandidateState.PROMOTED)
-            else:
-                collection_candidate = replace(
-                    collection_candidate,
-                    state=CandidateState.INVALID,
-                    findings=(
-                        CandidateFinding(
-                            "registry-version-immutable",
-                            FindingSeverity.ERROR,
-                            "Published Collection coordinate/version already contains different "
-                            "canonical content",
-                        ),
-                    ),
-                )
-        elif collection_prior is None and any(
-            item.coordinate.source == target_registry
-            and item.coordinate.artifact == ArtifactIdentity("collection", collection.name)
-            for item in approved
+        if (
+            approved_version is None
+            and collection_prior is None
+            and any(
+                item.coordinate.source == target_registry
+                and item.coordinate.artifact == ArtifactIdentity("collection", collection.name)
+                for item in approved
+            )
         ):
             collection_candidate = replace(collection_candidate, state=CandidateState.CHANGED)
         collection_history[collection_candidate.id] = collection_candidate

@@ -16,7 +16,10 @@ from agent_artifacts.application.registry_publication import (
 from agent_artifacts.domain.identifiers import ObjectDigest, SourceAlias
 from agent_artifacts.domain.publication import PublicationBranch
 from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.registry_publication import publish_registry_commit
+from agent_artifacts.io.registry_publication import (
+    publish_registry_commit,
+    registry_remote_default_branch,
+)
 
 _DIGEST = ObjectDigest("sha256", "d" * 64)
 
@@ -61,6 +64,12 @@ def _command(revision: str, branch: str = "registry-update") -> RegistryPublicat
 
 
 class PublishRegistryCommitTest(unittest.TestCase):
+    def test_the_remote_default_branch_is_read_from_its_advertised_head(self) -> None:
+        with _registry() as (root, _remote, _revision):
+            resolved = registry_remote_default_branch(str(root), "origin")
+            assert isinstance(resolved, Ok), resolved
+            self.assertEqual("main", resolved.value)
+
     def test_a_reviewed_commit_reaches_a_new_remote_branch(self) -> None:
         with _registry() as (root, remote, revision):
             published = publish_registry_commit(str(root), _command(revision))

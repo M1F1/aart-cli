@@ -20,8 +20,15 @@ from agent_artifacts.application.maintainer_views import (
     project_maintainer_provenance,
     project_maintainer_version_conflict,
 )
-from agent_artifacts.domain.candidates import CandidateState, assess_candidate
-from agent_artifacts.domain.identifiers import SourceAlias
+from agent_artifacts.domain.candidates import (
+    CandidateId,
+    CandidateState,
+    assess_candidate,
+    mark_candidate_promoted,
+    mark_source_removed,
+    reject_candidate,
+)
+from agent_artifacts.domain.identifiers import ArtifactIdentity, SourceAlias
 from agent_artifacts.domain.registry import PromotionMode, registry_version_from_candidate
 from agent_artifacts.domain.result import Ok
 from agent_artifacts.tui_consumer import CanonicalScreenSource, ConsumerScreens, _reload, frame
@@ -104,6 +111,171 @@ class PublishedCandidateSupersessionTest(unittest.TestCase):
         scan, _ = self._promoted()
 
         self.assertEqual(scan.active[0].candidate.state, CandidateState.PROMOTED)
+
+    def test_registry_approval_refreshes_an_unchanged_new_candidate_as_promoted(self) -> None:
+        initial = reconcile_source_scan(
+            SourceAlias("authors"),
+            "a" * 40,
+            _compiled(),
+            previous=(),
+            approved=(),
+            target_registry=SourceAlias("company"),
+        )
+        assert isinstance(initial, Ok)
+        candidate = initial.value.active[0]
+        published = registry_version_from_candidate(
+            assess_candidate(candidate.candidate),
+            object_digest=_digest("2"),
+            registry_snapshot=_digest("1"),
+            mode=PromotionMode.VENDORED,
+        )
+
+        synced = reconcile_source_scan(
+            SourceAlias("authors"),
+            "a" * 40,
+            _compiled(),
+            previous=initial.value.history,
+            approved=(published,),
+            target_registry=SourceAlias("company"),
+        )
+
+        assert isinstance(synced, Ok)
+        self.assertEqual(synced.value.active[0].candidate.id, candidate.candidate.id)
+        self.assertEqual(synced.value.active[0].candidate.state, CandidateState.PROMOTED)
+        self.assertEqual(synced.value.history[0].candidate.state, CandidateState.PROMOTED)
+        self.assertEqual(
+            project_maintainer_candidates((synced.value,))[0].state,
+            CandidateState.PROMOTED,
+        )
+
+    def test_registry_refresh_requires_the_exact_published_candidate_content(self) -> None:
+        initial = reconcile_source_scan(
+            SourceAlias("authors"),
+            "a" * 40,
+            _compiled(),
+            previous=(),
+            approved=(),
+            target_registry=SourceAlias("company"),
+        )
+        assert isinstance(initial, Ok)
+        candidate = initial.value.active[0]
+        published = registry_version_from_candidate(
+            assess_candidate(candidate.candidate),
+            object_digest=_digest("2"),
+            registry_snapshot=_digest("1"),
+            mode=PromotionMode.VENDORED,
+        )
+        conflicting = dataclasses.replace(published, candidate_id=CandidateId("f" * 64))
+
+        synced = reconcile_source_scan(
+            SourceAlias("authors"),
+            "a" * 40,
+            _compiled(),
+            previous=initial.value.history,
+            approved=(conflicting,),
+            target_registry=SourceAlias("company"),
+        )
+
+        assert isinstance(synced, Ok)
+        refreshed = synced.value.active[0].candidate
+        self.assertEqual(refreshed.state, CandidateState.INVALID)
+        self.assertEqual(len(refreshed.findings), 1)
+        self.assertEqual(refreshed.findings[0].code, "registry-version-immutable")
+        self.assertEqual(refreshed.findings[0].severity.value, "error")
+        self.assertEqual(
+            refreshed.findings[0].message,
+            "Published coordinate/version already contains different canonical content",
+        )
+
+    def test_registry_refresh_ignores_approved_entries_for_other_coordinates(self) -> None:
+        initial = reconcile_source_scan(
+            SourceAlias("authors"),
+            "a" * 40,
+            _compiled(),
+            previous=(),
+            approved=(),
+            target_registry=SourceAlias("company"),
+        )
+        assert isinstance(initial, Ok)
+        candidate = initial.value.active[0]
+        published = registry_version_from_candidate(
+            assess_candidate(candidate.candidate),
+            object_digest=_digest("2"),
+            registry_snapshot=_digest("1"),
+            mode=PromotionMode.VENDORED,
+        )
+        same_version_elsewhere = dataclasses.replace(
+            published,
+            coordinate=dataclasses.replace(
+                published.coordinate,
+                source=SourceAlias("other"),
+                artifact=ArtifactIdentity("skill", "other"),
+            ),
+        )
+        same_registry_other_coordinate = dataclasses.replace(
+            published,
+            coordinate=dataclasses.replace(
+                published.coordinate,
+                artifact=ArtifactIdentity("skill", "other"),
+                version="9.9.9",
+            ),
+        )
+
+        synced = reconcile_source_scan(
+            SourceAlias("authors"),
+            "a" * 40,
+            _compiled(),
+            previous=initial.value.history,
+            approved=(same_version_elsewhere, same_registry_other_coordinate),
+            target_registry=SourceAlias("company"),
+        )
+
+        assert isinstance(synced, Ok)
+        self.assertEqual(synced.value.active, initial.value.active)
+
+    def test_registry_refresh_does_not_reassess_guarded_unchanged_states(self) -> None:
+        initial = reconcile_source_scan(
+            SourceAlias("authors"),
+            "a" * 40,
+            _compiled(),
+            previous=(),
+            approved=(),
+            target_registry=SourceAlias("company"),
+        )
+        assert isinstance(initial, Ok)
+        candidate = initial.value.active[0]
+        ready = assess_candidate(candidate.candidate)
+        published = registry_version_from_candidate(
+            ready,
+            object_digest=_digest("2"),
+            registry_snapshot=_digest("1"),
+            mode=PromotionMode.VENDORED,
+        )
+        guarded = (
+            dataclasses.replace(
+                candidate,
+                candidate=reject_candidate(candidate.candidate, "Policy declined"),
+            ),
+            dataclasses.replace(candidate, candidate=mark_source_removed(candidate.candidate)),
+            dataclasses.replace(
+                candidate,
+                candidate=mark_candidate_promoted(ready, published.registry_snapshot),
+            ),
+        )
+
+        for prior in guarded:
+            with self.subTest(state=prior.candidate.state):
+                synced = reconcile_source_scan(
+                    SourceAlias("authors"),
+                    "a" * 40,
+                    _compiled(),
+                    previous=(prior,),
+                    approved=(published,),
+                    target_registry=SourceAlias("company"),
+                )
+
+                assert isinstance(synced, Ok)
+                self.assertEqual(synced.value.active, (prior,))
 
     def test_an_edit_at_a_published_version_is_refused_rather_than_raised(self) -> None:
         scan, published = self._promoted()

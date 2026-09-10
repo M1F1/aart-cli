@@ -1182,7 +1182,7 @@ when `ONLY` changes.
 
 The Registry Commit screen's action, the publication branch as configuration, and the receipt's
 place in the maintainer frame are not built. They live in `tui_maintainer.py` and the maintainer
-views, which CP-21 step 3 is rebuilding, so they wait for it rather than race it.
+views; CP-21 step 3 has landed, so they are now the next executable work.
 
 ### CP-21 step 8 — QA-078 diagnosed and deferred (2026-09-10)
 
@@ -1197,7 +1197,7 @@ The narrowing was implemented at the placement boundary, proven to deliver, and 
 the receipt records the narrowed harness set while the host still carries every measured one, and
 `configured_consumer_completion` refuses with `configured-setup-invalid: setup requires one exact
 configured installation receipt`, leaving the `CONFIGURED` marker unwritten. Narrowing changes what
-is offered, so it belongs in the consumer setup and remediation path CP-21 step 3 is rebuilding, not
+is offered, so it belongs in the consumer setup and remediation path CP-21 step 3 established, not
 in the placement that serves the offer. Landed there it also settles `QA-080`.
 
 ### CP-21 step 3 — QA-073/QA-074 done (2026-09-10)
@@ -1282,7 +1282,7 @@ result there says nothing about the session, settings and draft code that module
 
 ### CP-21 step 7 — screens tell the truth about state (2026-09-10)
 
-Three of the four findings closed; the fourth is diagnosed in writing rather than half-built.
+All four findings are closed and await the operator's retest.
 
 `QA-077` is fixed where the wrong value is made, not where it was seen. A dashboard's rows *are*
 screens, so `current_row` on one holds a screen identifier and `_navigate` carried it forward as the
@@ -1299,14 +1299,49 @@ maintainer had just created is not yet a *subscribed* one. Both now say so in th
 alphabetical is the only order they can have — backwards, here. Steps that must happen in sequence
 are one remedy on one line; `D-238` says why, so it is not rediscovered by watching a test fail.
 
-`QA-076` is open with a full diagnosis. The Candidates screen is not stale — the reconciliation
-never re-derives. `reconcile_source_scan` (`application/maintainer.py:207`) short-circuits when the
-source has not moved and that branch never consults `approved`, so `_with_registry_state`, the only
-thing that sets `PROMOTED` for an artifact Candidate, cannot run for it. A Candidate that read `New`
-when last scanned reads `New` through every later Sync regardless of what the registry did.
-`QA-062`'s promoted/current split is not implicated. The fix needs a guard, not a moved line —
-`assess_candidate` raises on a terminal state and `mark_candidate_promoted` accepts only
-`READY`/`WARNING` — and is the first thing to pick up.
+`QA-076` is fixed in reconciliation, not hidden in the screen (`D-239`). An unchanged artifact or
+Collection Candidate is now compared with the target Registry's exact approved coordinate,
+Candidate ID and content digests, so a Registry publication changes `New` to `Promoted` on the next
+Sync even when the Source revision did not move. A mismatch stays
+`registry-version-immutable`, unrelated approved records do nothing, and `PROMOTED`, `SUPERSEDED`,
+`REJECTED` and `SOURCE_REMOVED` history is retained rather than illegally reassessed. Collections
+take the same path because Product Specification 164.10 makes them Candidates too. `QA-062`'s
+promoted/current split remains intact.
 
-Tests: `tests/empty_state_truthfulness_test.py`, `tests/screen_identifier_leak_test.py`. Gates:
-focused suites, `ruff check`, `ruff format --check`, `make typecheck`, `make docs-check` — clean.
+Tests: `tests/empty_state_truthfulness_test.py`, `tests/screen_identifier_leak_test.py`,
+`tests/maintainer_version_conflict_test.py`, and `tests/maintainer_collection_history_test.py`.
+Two deliberate semantic mutations were killed. The scoped mutation run generated 472 mutants and
+killed 353; none survived in the exact Registry-match helpers or the new refresh branches. The
+agreed broad set passes 1767 tests / 799 subtests. `ruff check`, `ruff format --check`,
+`make typecheck`, and `make secret-shape-check` are clean; `make docs-check` follows the handoff
+updates.
+
+### CP-21 step 9 — publication to a review branch is finished (2026-09-10)
+
+Codex built most of this and stopped at its own rate limit with four acceptance tests red; this
+segment finished it. What was missing was not the effect — the push, its command, receipt and IO
+were done and passing — but the screen that drives it.
+
+`D-240` records the defect worth naming: key interpretation treated screen 45 as a form from the
+moment a commit existed, while the row source treated it as one only once `p` had opened it. The
+two disagreeing meant every unrecognised key was swallowed, `q` included, so three acceptance walks
+hung instead of failing. Gating both on `registry_publication_configuring` fixes it and leaves the
+swallow exactly where it belongs, since `q` is a legal branch character.
+
+Three test fixtures under-declared the same thing and were corrected rather than worked around:
+two built the form's rows without saying the form was open, and one asked the renderer for the
+configuration block without passing `configure_publication`. Two assertions were also placed on the
+wrong frame — `screen_containing` returns the *first* match, which after a commit is the screen that
+correctly says publication has not happened — so the publication-target claims moved to the review
+frame that actually makes them. The bulk-promotion walk never configures a remote at all, so its
+assertion now says what that walk really reaches: publication has not happened.
+
+The review line gained the joined target (`Ready to push the reviewed commit to origin/review/registry`)
+because that is the name a reader recognises, and the legend gained `[p] Publish to a review branch`
+— the mirror of `QA-058`, a key that worked and was advertised nowhere.
+
+Three targeted mutations, all killed: removing the form-open guard, dropping the joined target from
+the review line, and dropping `p` from the legend. Broad set: **1777 passed / 801 subtests**. Gates:
+`ruff check`, `ruff format --check`, `make typecheck`, `make docs-check`, `make secret-shape-check`
+— all clean. `mypy` needed one real change: the receipt-implies-command invariant is now nested
+rather than stated as two side-by-side conditions, which is what makes it visible.

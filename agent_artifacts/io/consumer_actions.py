@@ -49,6 +49,10 @@ from agent_artifacts.application.consumer_views import (
     project_lifecycle_plan,
 )
 from agent_artifacts.application.installed_setup import DeclaredArtifactSetup
+from agent_artifacts.application.maintainer_promotion import (
+    CandidatePromotionExecutionResult,
+    PreparedCandidatePromotionTransaction,
+)
 from agent_artifacts.application.maintainer_sync import PreparedSourceSync
 from agent_artifacts.application.maintainer_views import (
     REGISTRY_MAINTENANCE_STAGES,
@@ -65,6 +69,12 @@ from agent_artifacts.application.maintainer_views import (
     project_maintainer_registry_validation,
     project_source_sync_result,
     project_source_sync_review,
+)
+from agent_artifacts.application.registry_publication import (
+    PublishRegistryPort,
+    RegistryPublicationCommand,
+    RegistryPublicationReceipt,
+    prepare_registry_publication,
 )
 from agent_artifacts.configuration.model import ConfiguredSource, SourceKind
 from agent_artifacts.configuration.policy import EffectiveConfiguration, redact_text
@@ -377,6 +387,7 @@ RegistryRemovalPort = Callable[[ConfiguredSource], Result[RegistryConnectionSnap
 SourceConnectionPort = Callable[[SourceDraft], Result[RegistryConnectionSnapshot]]
 RegistryBootstrapPort = Callable[[RegistryInitDraft], Result[RegistryBootstrapCompletion]]
 RegistryRebuildPort = Callable[[tuple[str, ...]], Result[RegistryBootstrapCompletion]]
+RegistryDefaultBranchPort = Callable[[str], Result[str]]
 RepositoryScanPort = Callable[[RepositoryScanDraft], Result[RepositoryScan]]
 RepositoryUpstreamCheckPort = Callable[[str], Result[AdoptionUpstreamCheck]]
 RepositoryAdoptedListPort = Callable[[], Result[tuple[AdoptedArtifact, ...]]]
@@ -406,6 +417,7 @@ _Pending = (
     | _PendingSourceAddition
     | _PendingRegistryInit
     | _PendingRegistryRebuild
+    | RegistryPublicationCommand
     | PreparedAdoption
 )
 
@@ -443,6 +455,8 @@ class LocalConsumerActions:
         source_connection: SourceConnectionPort | None = None,
         registry_bootstrap: RegistryBootstrapPort | None = None,
         registry_rebuild: RegistryRebuildPort | None = None,
+        registry_default_branch: RegistryDefaultBranchPort | None = None,
+        registry_publication: PublishRegistryPort | None = None,
         repository_scan: RepositoryScanPort | None = None,
         repository_adoption: RepositoryAdoptionPort | None = None,
         adopted_artifacts: tuple[AdoptedArtifact, ...] = (),
@@ -468,6 +482,8 @@ class LocalConsumerActions:
         self._source_connection = source_connection
         self._registry_bootstrap = registry_bootstrap
         self._registry_rebuild = registry_rebuild
+        self._registry_default_branch = registry_default_branch
+        self._registry_publication = registry_publication
         self._repository_scan = repository_scan
         self._repository_adoption = repository_adoption
         self._adopted_artifacts = adopted_artifacts
@@ -480,6 +496,10 @@ class LocalConsumerActions:
         self._scanned_repository: RepositoryScan | None = None
         self._adoption_review: MaintainerAdoptionReviewView | None = None
         self._adoption_upstream: AdoptionUpstreamCheck | None = None
+        self._promotion_transaction: PreparedCandidatePromotionTransaction | None = None
+        self._promotion_result: CandidatePromotionExecutionResult | None = None
+        self._publication_command: RegistryPublicationCommand | None = None
+        self._publication_receipt: RegistryPublicationReceipt | None = None
 
     # -- preferences --------------------------------------------------------- #
 
@@ -559,6 +579,14 @@ class LocalConsumerActions:
         pending_setup: tuple[DeclaredArtifactSetup, ...] = (),
     ) -> CanonicalScreenSource:
         """The screens for the machine as it currently stands, plus whatever a flow is holding."""
+
+        if promotion_commit is None and self._promotion_transaction is not None:
+            promotion_commit = project_maintainer_registry_commit(
+                self._promotion_transaction,
+                result=self._promotion_result,
+                publication_command=self._publication_command,
+                publication_receipt=self._publication_receipt,
+            )
 
         return CanonicalScreenSource(
             screens_from(
@@ -659,6 +687,8 @@ class LocalConsumerActions:
             return self._prepare_candidate_promotion(command)
         if action is ConsumerActionKind.BULK_PROMOTION:
             return self._prepare_bulk_promotion(command)
+        if action is ConsumerActionKind.REGISTRY_PUBLICATION:
+            return self._prepare_registry_publication(command)
         return self._prepare_uninstall(command)
 
     def _prepare_repository_scan(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
@@ -1031,6 +1061,10 @@ class LocalConsumerActions:
         self._pending = prepared.value
         self._pending_action = command.action
         transaction = prepared.value.transaction
+        self._promotion_transaction = transaction
+        self._promotion_result = None
+        self._publication_command = None
+        self._publication_receipt = None
         return ConsumerActionUpdate(
             self.source(
                 promotion_validation=project_maintainer_registry_validation(transaction),
@@ -1087,11 +1121,57 @@ class LocalConsumerActions:
         self._pending = prepared.value
         self._pending_action = command.action
         transaction = prepared.value.transaction
+        self._promotion_transaction = transaction
+        self._promotion_result = None
+        self._publication_command = None
+        self._publication_receipt = None
         return ConsumerActionUpdate(
             self.source(
                 promotion_validation=project_maintainer_registry_validation(transaction),
                 promotion_commit=project_maintainer_registry_commit(transaction),
             ),
+            ConsumerUiEvent(
+                ConsumerUiEventKind.ACTION_PREPARED,
+                action=command.action,
+                review_digest=str(prepared.value.review_digest),
+            ),
+        )
+
+    def _prepare_registry_publication(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        draft = command.registry_publication_draft
+        result = self._promotion_result
+        transaction = self._promotion_transaction
+        if (
+            draft is None
+            or result is None
+            or transaction is None
+            or self._registry_default_branch is None
+            or self._registry_publication is None
+        ):
+            return self._declined(
+                command,
+                _lines("registry publication needs the local commit shown on this screen"),
+            )
+        settled = draft.settled()
+        default_branch = self._registry_default_branch(settled.remote)
+        if isinstance(default_branch, Err):
+            return self._declined(command, _refusal(default_branch.diagnostics))
+        prepared = prepare_registry_publication(
+            registry=transaction.target_registry,
+            remote=settled.remote,
+            default_branch=default_branch.value,
+            requested_branch=settled.branch,
+            revision=result.commit_revision,
+            review_digest=result.review_digest,
+        )
+        if isinstance(prepared, Err):
+            return self._declined(command, _refusal(prepared.diagnostics))
+        self._pending = prepared.value
+        self._pending_action = command.action
+        self._publication_command = prepared.value
+        self._publication_receipt = None
+        return ConsumerActionUpdate(
+            self.source(),
             ConsumerUiEvent(
                 ConsumerUiEventKind.ACTION_PREPARED,
                 action=command.action,
@@ -1473,6 +1553,8 @@ class LocalConsumerActions:
             return self._execute_source_sync(command, pending)
         if isinstance(pending, PreparedConfiguredCandidatePromotion):
             return self._execute_candidate_promotion(command, pending)
+        if isinstance(pending, RegistryPublicationCommand):
+            return self._execute_registry_publication(command, pending)
         assert isinstance(pending, PreparedConfiguredUninstall)
         return self._execute_uninstall(command, pending)
 
@@ -1775,6 +1857,20 @@ class LocalConsumerActions:
             ),
         )
 
+    def _execute_registry_publication(
+        self,
+        command: ConsumerUiCommand,
+        pending: RegistryPublicationCommand,
+    ) -> ConsumerActionUpdate:
+        assert self._registry_publication is not None
+        published = self._registry_publication(pending)
+        if isinstance(published, Err):
+            return self._failed(command, _refusal(published.diagnostics))
+        self._publication_command = pending
+        self._publication_receipt = published.value
+        recorded_at, _today = self._moment()
+        return self._recorded(command, recorded_at)
+
     def _execute_candidate_promotion(
         self,
         command: ConsumerUiCommand,
@@ -1788,6 +1884,10 @@ class LocalConsumerActions:
         )
         if isinstance(completed, Err):
             return self._failed(command, _refusal(completed.diagnostics))
+        self._promotion_transaction = pending.transaction
+        self._promotion_result = completed.value
+        self._publication_command = None
+        self._publication_receipt = None
         assert self._data_root is not None
         # The write just moved the registry checkout, so screen 46's working-tree observation and
         # every Candidate view planned against that tree are stale the moment the commit lands.

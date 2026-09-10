@@ -2839,6 +2839,10 @@ clear `mutants/` whenever the scope it is about to write differs from the one al
 there, which would make the tool honest about what it is measuring. The advisory nature of the gate
 is why this is backlog rather than critical: the misleading message costs a run, not a wrong answer.
 
+CP-21 `QA-076` reproduced the stale-copy condition again. Its runs moved each generated `mutants/`
+tree to a unique temporary directory before changing scope; no generated mutation checkout remains
+in the repository worktree.
+
 ## B-111 — `make mutants` aborts when a Hypothesis property test is in `TESTS`
 
 Found: 2026-09-10, during CP-21 step 5.

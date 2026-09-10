@@ -813,11 +813,21 @@ def render_maintainer_registry_validation(
 def render_maintainer_registry_commit(
     view: MaintainerRegistryCommitView,
     profile: PresentationProfile,
+    *,
+    publication_remote: str = "origin",
+    publication_branch: str = "",
+    cursor: str = "",
+    configure_publication: bool = False,
 ) -> tuple[str, ...]:
     if not isinstance(view, MaintainerRegistryCommitView) or not isinstance(
         profile, PresentationProfile
     ):
         raise ValueError("Maintainer registry commit rendering needs a typed view and profile")
+    if not isinstance(configure_publication, bool) or any(
+        not isinstance(value, str) or any(character in value for character in "\r\n")
+        for value in (publication_remote, publication_branch, cursor)
+    ):
+        raise ValueError("Maintainer registry publication rendering needs safe configuration")
     lines = [
         _transaction_heading(view.candidates, view.target_registry, view.mode),
         (
@@ -831,13 +841,57 @@ def render_maintainer_registry_commit(
         f"Approved versions: {view.approved_version_count}",
         f"Transaction digest: {_short(view.transaction_digest, profile)}",
         f"Commit subject: {view.commit_subject}",
-        "Git push: no",
     ]
-    if view.applied:
-        lines.append(f"Local Git revision: {_short(view.commit_revision or '', profile)}")
-        lines.append("Canonical-branch publication remains external.")
-    else:
+    if not view.applied:
+        lines.append("Git push: separate explicit action after this commit")
         return action_prompt(lines, "Enter commits this exact local transaction.")
+    lines.append(f"Local Git revision: {_short(view.commit_revision or '', profile)}")
+    if view.publication_remote is not None:
+        target = f"{view.publication_remote}/{view.publication_branch}"
+        if view.publication_outcome is not None:
+            moved = {
+                "created": f"created {target}",
+                "updated": f"updated {target}",
+                "already-current": f"{target} already held this revision",
+            }[view.publication_outcome]
+            lines.extend(
+                (
+                    f"{view.target_registry}: {moved} at {(view.commit_revision or '')[:12]}",
+                    "Nothing was merged. Open a pull request for the reviewer to merge it.",
+                )
+            )
+            return tuple(lines)
+        lines.extend(
+            (
+                # The reader recognises the target as one name, so the review says it as one.
+                f"Ready to push the reviewed commit to {target}",
+                f"Publication remote: {view.publication_remote}",
+                f"Publication branch: {view.publication_branch}",
+                "Nothing will be merged; the default branch is never a publication target.",
+            )
+        )
+        return action_prompt(lines, "Enter pushes this exact revision.")
+    if not configure_publication:
+        lines.append("Git publication: not yet published; press p to choose a review branch.")
+        return tuple(lines)
+    values = {
+        "publication-remote": publication_remote or "<type the Git remote>",
+        "publication-branch": publication_branch or "<type a non-default branch>",
+        "publish": "Review publication",
+    }
+    labels = {
+        "publication-remote": "Publication remote",
+        "publication-branch": "Publication branch",
+        "publish": "Continue",
+    }
+    rows = ("publication-remote", "publication-branch", "publish")
+    lines.extend(
+        (
+            "Configure where this reviewed commit is published:",
+            *(f"{'>' if row == cursor else ' '} {labels[row]}: {values[row]}" for row in rows),
+            "Nothing is pushed until this target is reviewed; nothing here can merge.",
+        )
+    )
     return tuple(lines)
 
 

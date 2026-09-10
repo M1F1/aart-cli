@@ -63,6 +63,10 @@ from .io.consumer_machine import read_consumer_machine
 from .io.consumer_settings import read_consumer_settings
 from .io.credentials import MacOsKeychainProvider
 from .io.maintainer_views import read_maintainer_views
+from .io.registry_publication import (
+    publish_registry_commit,
+    registry_remote_default_branch,
+)
 from .model import (
     Request,
 )
@@ -1272,6 +1276,10 @@ def _canonical_consumer_actions(
             source_connection=source_connection,
             registry_bootstrap=registry_bootstrap,
             registry_rebuild=registry_rebuild,
+            registry_default_branch=lambda remote: registry_remote_default_branch(
+                project_root, remote
+            ),
+            registry_publication=lambda command: publish_registry_commit(project_root, command),
             repository_scan=repository_scan,
             repository_adoption=RepositoryAdoption(),
             adopted_artifacts=initial_adoptions,

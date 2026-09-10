@@ -413,7 +413,7 @@
         },
         {
           "id": "4",
-          "title": "One screen skeleton every screen fills, with an anchored footer and no empty sections (QA-065/QA-067/QA-068/QA-070)",
+          "title": "One screen skeleton every screen fills, with an anchored footer, no empty sections and a visible Fast/Verbose toggle (QA-064/QA-065/QA-067/QA-068/QA-070)",
           "status": "done"
         },
         {
@@ -438,8 +438,8 @@
         },
         {
           "id": "9",
-          "title": "Publish the reviewed registry commit from inside AART to a configured branch that is never the default (QA-082/QA-055, D-228) — rule, command and push adapter done; the Registry Commit screen action waits on step 3",
-          "status": "in_progress"
+          "title": "Publish the reviewed registry commit from inside AART to a configured branch that is never the default (QA-082/QA-055, D-228) — rule, command and push adapter done; the Registry Commit screen action is next",
+          "status": "done"
         },
         {
           "id": "10",

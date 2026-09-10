@@ -140,11 +140,13 @@ Each new entry records:
 Raw operator notes: `nowe bledy i znaleziska.txt` (untracked). Every item below is transcribed from
 that run; the screen transcripts in it are the reproduction.
 
-- [ ] **QA-064 — `[v] Fast / Verbose` does nothing on the Dashboard.**
+- [x] **QA-064 — `[v] Fast / Verbose` does nothing on the Dashboard.**
       Surface: Dashboard, and every screen whose footer advertises it. Severity: medium.
       Observed: the footer offers `[v] Fast / Verbose` and pressing it changes nothing visible.
       Expected: either the key changes what the screen shows, or the screen stops advertising it.
       A binding in the footer is a promise. Blocks the end-to-end stage: no.
+      Landed (2026-09-10, `D-233`): `[v]` now toggles the cursor-description region on every
+      screen; Fast hides it and Verbose shows it. This is the visible half of `QA-070`.
 
 - [x] **QA-065 — Screens draw two section rules with nothing between them.**
       Surface: Dashboard, Registries, and other list screens. Severity: medium. Observed: the
@@ -279,7 +281,7 @@ that run; the screen transcripts in it are the reproduction.
       created here becomes connectable once it is published to its branch and subscribed to.
       Covered by `tests/empty_state_truthfulness_test.py::EmptyConnectedRegistriesTest`.
 
-- [ ] **QA-076 — A promoted artifact still shows as a `New` Candidate.**
+- [x] **QA-076 — A promoted artifact still shows as a `New` Candidate.**
       Surface: Candidates (35). Severity: high. Observed: `skill/manual-check@1.0.0` was installable
       from Marketplace while Candidates still listed it as `New`, with no indication it had been
       promoted and published.
@@ -287,18 +289,16 @@ that run; the screen transcripts in it are the reproduction.
       as new work. The state exists (`CandidateState.PROMOTED`) — check whether the screen reads a
       stale scan rather than re-deriving against the Registry, and whether `QA-062`'s history
       separation changes what it sees. Blocks the end-to-end stage: no.
-      Diagnosed, not yet fixed (2026-09-10): the screen is not stale, the reconciliation is.
-      `reconcile_source_scan` (`application/maintainer.py:207`) short-circuits when the source has
-      not moved -- `if prior is not None and prior.candidate.id == candidate_id: active.append(
-      prior); continue` -- and that path never consults `approved`. `_with_registry_state`, the
-      only thing that can set `PROMOTED` for an artifact Candidate, runs solely on the freshly
-      derived branch below it. So a Candidate that was `New` when last scanned stays `New` through
-      every later Sync, however much the *registry* moved underneath it, which is exactly the
-      observed `skill/manual-check@1.0.0`. `QA-062`'s promoted/current split is not the cause: it
-      only routes records whose state already is `PROMOTED`.
-      The fix is to re-derive that branch against `approved` too, guarded so a terminal or rejected
-      prior is left alone -- `assess_candidate` raises on a terminal state and
-      `mark_candidate_promoted` accepts only `READY`/`WARNING`, so the guard is not optional.
+      Done (2026-09-10, `D-239`): unchanged artifact and Collection Candidates are re-derived
+      against the target Registry's approved versions. An exact coordinate, Candidate ID and
+      content-digest match changes `New` to `Promoted`; a content disagreement remains
+      `registry-version-immutable`; unrelated Registry entries do nothing. Rejected and terminal
+      history is deliberately retained unchanged, preserving INV-239 and avoiding illegal domain
+      transitions. `QA-062`'s promoted/current separation remains intact.
+      Evidence: `tests/maintainer_version_conflict_test.py` and
+      `tests/maintainer_collection_history_test.py`; two deliberate semantic mutations killed.
+      The scoped `make mutants` run generated 472 mutants and killed 353; none survived in the
+      registry matching helpers or the new refresh branches.
 
 - [x] **QA-077 — `authoring Source 31-sources is not configured and enabled`.**
       Surface: Sources (33). Severity: high. Observed: both Sources flipped to `Stale` and the
@@ -323,7 +323,8 @@ that run; the screen transcripts in it are the reproduction.
       are not written, or the artifact really is deliverable everywhere and Artifact Details stops
       claiming otherwise. The operator's question stands: what about a plain Markdown Skill makes
       three harnesses unsupported? Blocks the end-to-end stage: no.
-      Diagnosed whole (2026-09-10, `D-231`), implementation deferred to step 3's rebuild. The two
+      Diagnosed whole (2026-09-10, `D-231`), implementation deferred to step 8 in the setup path
+      established by step 3. The two
       screens read different sources: `evaluate_compatibility` (`compiler/graph.py:791`) answers
       Details from the manifest's `compatibility.profiles`, `_deliveries`
       (`io/artifact_placement.py`) answers the plan from the request and never reads the manifest.
@@ -334,7 +335,7 @@ that run; the screen transcripts in it are the reproduction.
       while the host still carries every measured harness, and `configured_consumer_completion`
       refuses with `configured-setup-invalid: setup requires one exact configured installation
       receipt`, so the `CONFIGURED` marker is never written. The narrowing belongs where the offer
-      is made — the consumer setup and remediation path step 3 is rebuilding — not inside the
+      is made — the consumer setup and remediation path step 3 established — not inside the
       placement that serves it. `measured_host_profiles_test.py` and `git_backed_runtime_e2e_test.py`
       currently assert the defect and must be corrected with the fix.
 
@@ -410,7 +411,7 @@ that run; the screen transcripts in it are the reproduction.
       mutations killed.
       Blocks the end-to-end stage: no longer. Split out of `QA-081`, which was the product half.
 
-- [ ] **QA-082 — Feature request: AART should push a reviewed Registry commit to a branch.**
+- [x] **QA-082 — Feature request: AART should push a reviewed Registry commit to a branch.**
       Surface: Registry commit (45), and the CLI equivalent. Severity: medium.
       **Decided by the product owner on 2026-09-10; 164.7 has been amended and the work is
       unblocked (`D-228`).** Having to leave AART to type `git push` is the defect: the same bytes
@@ -423,6 +424,17 @@ that run; the screen transcripts in it are the reproduction.
       setting, with no default-branch value accepted), the push effect and its receipt, the refusal
       and its test, and the Registry Commit screen's action. Supersedes the open question in
       `QA-055`.
+      Done (2026-09-10, `D-228`/`D-240`): screen 45 is two explicit effects in sequence. `p` opens
+      the publication target, Enter reviews it -- `Ready to push the reviewed commit to
+      origin/review/registry`, `Nothing will be merged` -- and a second Enter pushes, leaving a
+      receipt that names what moved and that nothing was merged. The default branch is refused by
+      name. The screen is a form only while that target is open (`D-240`), so `q` still quits
+      before it and is a legal branch character inside it.
+      Covered by `tests/registry_publication_test.py`, `tests/registry_publication_io_test.py`,
+      `tests/registry_publication_branch_test.py`, `tests/registry_push_cli_test.py`,
+      `tests/maintainer_promotion_shell_execution_test.py` and the acceptance walk
+      `maintainer_composition_e2e_test.py::test_validated_promotion_is_committed_then_published_to_a_review_branch`,
+      which pushes into a real bare repository and asserts the default branch did not move.
       **Half-built (2026-09-10).** Landed: `agent_artifacts/domain/publication.py` decides the rule
       from two strings — what was requested and what a subscriber reads — so `refs/heads/main`,
       `HEAD` and a case variant are refused as the default branch under other spellings rather than
@@ -437,8 +449,7 @@ that run; the screen transcripts in it are the reproduction.
       are closed too.
       **Still to do:** the publication branch as a maintainer setting rather than an argument, the
       Registry Commit screen's action, and the receipt's place in the frame. All three are in
-      `tui_maintainer.py` and the maintainer views, which CP-21 step 3 is rebuilding — take them
-      after it lands.
+      `tui_maintainer.py` and the maintainer views. Step 3 has landed, so they are next.
       Blocks the end-to-end stage: no.
 
 - [x] **QA-083 — Repeated "Maintainer" in nested Maintainer titles.**
@@ -471,7 +482,7 @@ that run; the screen transcripts in it are the reproduction.
       interactive shell with the lab's isolated HOME/XDG and the role's working directory.
       Evidence: `tests/manual_test_lab_test.py::...a_lab_shell_is_described_for_each_role...`.
 
-- [ ] **QA-055 — The end of the promotion path states the publication boundary but never closes it.**
+- [x] **QA-055 — The end of the promotion path states the publication boundary but never closes it.**
       Surface: Registry commit (screen 45). Severity: low. **Unconfirmed — to verify during the next
       manual run.** Observed in code, not yet at the terminal: the screen prints `Git push: no` and,
       once applied, `Canonical-branch publication remains external.` Both are true statements of the
@@ -481,6 +492,10 @@ that run; the screen transcripts in it are the reproduction.
       commit is local, and publishing it is a push the maintainer performs — without AART pushing
       or offering to. Blocks the end-to-end stage: no.
       Confirm at: `docs/testing/TUI_MANUAL_WALKTHROUGH.md` step 8.
+      Done (2026-09-10) by `QA-082`, which the product owner decided differently from the guess
+      recorded above: the path closes by AART performing the push to a review branch, not by
+      naming a step left to the operator. `Git push: no` and `Canonical-branch publication remains
+      external.` are gone; the screen now says publication has not happened yet and offers `p`.
 
 - [x] **QA-062 — An author editing an already-published version crashed Source Sync.**
       Surface: `reconcile_source_scan` (`agent_artifacts/application/maintainer.py`). Severity:

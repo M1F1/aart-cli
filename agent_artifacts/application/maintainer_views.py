@@ -43,6 +43,10 @@ from agent_artifacts.application.promotion import (
     promotion_source_provenance,
     registry_state_digest,
 )
+from agent_artifacts.application.registry_publication import (
+    RegistryPublicationCommand,
+    RegistryPublicationReceipt,
+)
 from agent_artifacts.configuration.model import ConfiguredSource, SourceKind
 from agent_artifacts.configuration.policy import redact_text
 from agent_artifacts.domain.artifacts import ArtifactKind
@@ -3235,6 +3239,9 @@ class MaintainerRegistryCommitView:
     applied: bool
     commit_subject: str
     commit_revision: str | None
+    publication_remote: str | None = None
+    publication_branch: str | None = None
+    publication_outcome: str | None = None
 
     def __post_init__(self) -> None:
         if not self.candidates or any(
@@ -3271,6 +3278,26 @@ class MaintainerRegistryCommitView:
                 )
             )
             or (self.applied != (self.commit_revision is not None))
+            or ((self.publication_remote is None) != (self.publication_branch is None))
+            or (
+                self.publication_remote is not None
+                and (
+                    not self.applied
+                    or not self.publication_remote
+                    or not self.publication_branch
+                    or any(
+                        character in f"{self.publication_remote}{self.publication_branch}"
+                        for character in "\r\n"
+                    )
+                )
+            )
+            or (
+                self.publication_outcome is not None
+                and (
+                    self.publication_remote is None
+                    or self.publication_outcome not in {"created", "updated", "already-current"}
+                )
+            )
         ):
             raise ValueError("Maintainer registry commit view is invalid")
 
@@ -3312,11 +3339,22 @@ def project_maintainer_registry_commit(
     prepared: PreparedCandidatePromotionTransaction,
     *,
     result: CandidatePromotionExecutionResult | None = None,
+    publication_command: RegistryPublicationCommand | None = None,
+    publication_receipt: RegistryPublicationReceipt | None = None,
 ) -> MaintainerRegistryCommitView:
     """Project screen 45's exact local write before confirmation or after verified readback."""
 
-    if not isinstance(prepared, PreparedCandidatePromotionTransaction) or not (
-        result is None or isinstance(result, CandidatePromotionExecutionResult)
+    if (
+        not isinstance(prepared, PreparedCandidatePromotionTransaction)
+        or not (result is None or isinstance(result, CandidatePromotionExecutionResult))
+        or not (
+            publication_command is None
+            or isinstance(publication_command, RegistryPublicationCommand)
+        )
+        or not (
+            publication_receipt is None
+            or isinstance(publication_receipt, RegistryPublicationReceipt)
+        )
     ):
         raise ValueError("registry commit projection needs a prepared promotion transaction")
     plan = prepared.plan
@@ -3328,6 +3366,27 @@ def project_maintainer_registry_commit(
         or result.approved_version_count != prepared.approved_version_count
     ):
         raise ValueError("registry commit result does not match the reviewed transaction")
+    # A receipt only exists for a command, so the checks nest rather than sit side by side:
+    # that is the invariant itself, and stating it this way lets the reader (and the checker)
+    # see that the receipt comparison always has a command to compare against.
+    if publication_command is None:
+        if publication_receipt is not None:
+            raise ValueError("registry publication receipt needs its reviewed command")
+    elif (
+        result is None
+        or publication_command.registry != prepared.target_registry
+        or publication_command.revision != result.commit_revision
+        or publication_command.review_digest != result.review_digest
+    ):
+        raise ValueError("registry publication command does not match the committed transaction")
+    elif publication_receipt is not None and (
+        publication_receipt.registry != publication_command.registry
+        or publication_receipt.remote != publication_command.remote
+        or publication_receipt.branch != publication_command.branch
+        or publication_receipt.revision != publication_command.revision
+        or publication_receipt.review_digest != publication_command.review_digest
+    ):
+        raise ValueError("registry publication receipt does not match its reviewed command")
     return MaintainerRegistryCommitView(
         _transaction_candidates(prepared),
         prepared.target_registry.value,
@@ -3340,6 +3399,9 @@ def project_maintainer_registry_commit(
         result is not None,
         promotion_commit_subject(prepared),
         None if result is None else result.commit_revision,
+        None if publication_command is None else publication_command.remote,
+        None if publication_command is None else publication_command.branch.value,
+        None if publication_receipt is None else publication_receipt.outcome.value,
     )
 
 

@@ -1950,6 +1950,14 @@ class CanonicalScreenSource:
             return ("alias", "kind", "location", "ref", "connect")
         if screen is MaintainerScreen.REGISTRY_INIT:
             return ("id", "name", "reporting", "commit", "initialize")
+        if (
+            screen is MaintainerScreen.REGISTRY_COMMIT
+            and state.registry_commit_applied
+            and state.registry_publication_configuring
+            and not state.registry_publication_completed
+            and state.action is None
+        ):
+            return ("publication-remote", "publication-branch", "publish")
         if screen is MaintainerScreen.REGISTRY_REBUILD:
             # Derived from the sequence itself: a stage the run gains is a row the picker offers.
             return (REGISTRY_REBUILD_EVERYTHING, *REGISTRY_MAINTENANCE_STAGES)
@@ -2434,7 +2442,14 @@ class CanonicalScreenSource:
             return (
                 ("That registry commit is not available.",)
                 if screens.promotion_commit is None
-                else render_maintainer_registry_commit(screens.promotion_commit, profile)
+                else render_maintainer_registry_commit(
+                    screens.promotion_commit,
+                    profile,
+                    publication_remote=state.registry_publication_draft.remote,
+                    publication_branch=state.registry_publication_draft.branch,
+                    cursor=state.current_row,
+                    configure_publication=state.registry_publication_configuring,
+                )
             )
         if screen in (MaintainerScreen.PROMOTION_REVIEW, MaintainerScreen.PROMOTION_MODE):
             # Screen 42 asks which promotion, so it draws the review of the mode currently chosen
