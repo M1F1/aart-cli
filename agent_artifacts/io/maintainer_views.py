@@ -51,6 +51,7 @@ from .configured_selection import load_configured_approved_marketplace
 from .maintainer_sync import read_approved_registry_state
 from .registry_bootstrap import registry_absent_refusal
 from .registry_promotion import FilesystemPromotionOutput
+from .registry_workspace import read_registry_workspace
 from .source_store import read_current_source
 
 __all__ = ["MAINTAINER_COMPOSITION_INVALID", "read_maintainer_views"]
@@ -183,6 +184,14 @@ def read_maintainer_views(
         registry_workspace_present = (
             registry_root is not None and registry_absent_refusal(registry_root) is None
         )
+        # Screen 46 names the registry this project publishes, not only the ones it subscribes to,
+        # and says where publishing that registry has got to (`QA-098`). The answer is read here,
+        # with every other durable observation, because a renderer may not run Git.
+        published_registry = (
+            read_registry_workspace(registry_root)
+            if registry_root is not None and registry_workspace_present
+            else None
+        )
         checkout: SourceSnapshot | None = None
         if (
             registry_root is not None
@@ -298,6 +307,7 @@ def read_maintainer_views(
                 collection_candidates,
                 collection_validations,
                 registry_workspace_present,
+                published_registry,
             )
         )
     except ValueError as error:

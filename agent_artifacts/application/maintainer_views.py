@@ -113,6 +113,10 @@ __all__ = [
     "MaintainerBulkCandidateView",
     "project_maintainer_registry",
     "MaintainerWorkingTreeView",
+    "REGISTRY_WORKSPACE_ROW",
+    "MaintainerPublicationState",
+    "MaintainerRegistryWorkspaceView",
+    "project_registry_workspace",
     "MaintainerWorkingTreeState",
     "MaintainerRegistryTransactionView",
     "MaintainerRegistryView",
@@ -2174,12 +2178,19 @@ class MaintainerViews:
     # Whether the project this TUI was opened in is itself a Registry workspace. Connected
     # registries are Marketplace inputs and do not establish this fact.
     registry_workspace_present: bool = True
+    #: Where that workspace's registry has got to, when one was read (`QA-098`). `None` is "this
+    #: project publishes no registry", which is not the same as a registry nothing is known about.
+    registry_workspace: MaintainerRegistryWorkspaceView | None = None
 
     def __post_init__(self) -> None:
         aliases = tuple(source.alias for source in self.sources)
         if (
             not isinstance(self.dashboard, MaintainerDashboardView)
             or not isinstance(self.registry_workspace_present, bool)
+            or not (
+                self.registry_workspace is None
+                or isinstance(self.registry_workspace, MaintainerRegistryWorkspaceView)
+            )
             or any(not isinstance(source, MaintainerSourceView) for source in self.sources)
             or len(set(aliases)) != len(aliases)
             or self.dashboard.source_count != len(self.sources)
@@ -3403,6 +3414,100 @@ def project_maintainer_registry_commit(
         None if publication_command is None else publication_command.remote,
         None if publication_command is None else publication_command.branch.value,
         None if publication_receipt is None else publication_receipt.outcome.value,
+    )
+
+
+REGISTRY_WORKSPACE_ROW = "registry-workspace"
+"""Screen 46's row for the registry this project publishes, rather than one it subscribes to.
+
+A reserved identity rather than the registry's own name (`QA-098`): a subscribed registry could be
+called the same thing, and a row identity that two different subjects can answer to is a cursor
+that acts on whichever the screen looked up first.
+"""
+
+
+class MaintainerPublicationState(str, Enum):
+    """Where the registry this project publishes has got to, as far as its checkout knows.
+
+    `QA-098`. Whether a branch exists on the remote *right now* is a network answer, and drawing a
+    frame does no I/O -- so what is stated here is the checkout's own knowledge of its remote, which
+    `[u] Check upstream` is the key that refreshes. Saying it that way keeps the screen truthful
+    about the difference between "there is no such branch" and "nobody has looked lately".
+    """
+
+    #: Nothing could be read, or a remote branch is known but not where this checkout stands.
+    UNOBSERVED = "unobserved"
+    #: This checkout knows of no remote branch for the branch it is on: nothing has been pushed.
+    UNPUBLISHED = "unpublished"
+    #: A remote branch is known and this checkout holds commits it does not.
+    AHEAD = "ahead"
+    #: A remote branch is known and there is nothing waiting to go to it.
+    PUBLISHED = "published"
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerRegistryWorkspaceView:
+    """Screen 46: the registry this project publishes, as where it is in its life.
+
+    The name and the commit are the row -- *"> manual-registry"* with its sha, so two checkouts of
+    one name on different branches or remotes are told apart. Everything else is what the cursor
+    description carries: which repository, which branch, what the checkout knows of its remote, and
+    what is waiting to go there.
+    """
+
+    name: str
+    commit: str | None = None
+    origin: str | None = None
+    branch: str | None = None
+    remote_branch: str | None = None
+    unpushed: int | None = None
+    state: MaintainerPublicationState = MaintainerPublicationState.UNOBSERVED
+
+    def __post_init__(self) -> None:
+        if (
+            not self.name
+            or not isinstance(self.state, MaintainerPublicationState)
+            or any(
+                not (value is None or isinstance(value, str))
+                for value in (self.commit, self.origin, self.branch, self.remote_branch)
+            )
+            or not (
+                self.unpushed is None or (isinstance(self.unpushed, int) and self.unpushed >= 0)
+            )
+        ):
+            raise ValueError("Maintainer registry workspace view is invalid")
+
+
+def project_registry_workspace(
+    name: str,
+    *,
+    commit: str | None = None,
+    origin: str | None = None,
+    branch: str | None = None,
+    remote_branch: str | None = None,
+    unpushed: int | None = None,
+) -> MaintainerRegistryWorkspaceView:
+    """One read of the registry checkout as the state it puts the registry in (`QA-098`).
+
+    The state is derived here rather than recorded by the reader, so a caller cannot report
+    "published" from evidence that does not establish it. Each step down is a thing genuinely not
+    known: no commit means no checkout was read at all; no remote branch means this checkout has
+    never seen one; and a remote branch whose distance could not be counted leaves the screen with
+    nothing to claim about whether anything is waiting.
+    """
+
+    if commit is None:
+        state = MaintainerPublicationState.UNOBSERVED
+    elif remote_branch is None:
+        state = MaintainerPublicationState.UNPUBLISHED
+    elif unpushed is None:
+        state = MaintainerPublicationState.UNOBSERVED
+    elif unpushed > 0:
+        state = MaintainerPublicationState.AHEAD
+    else:
+        state = MaintainerPublicationState.PUBLISHED
+    return MaintainerRegistryWorkspaceView(
+        name, commit, origin, branch, remote_branch, unpushed, state
     )
 
 

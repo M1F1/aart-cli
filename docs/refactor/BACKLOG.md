@@ -2932,3 +2932,23 @@ next time a slice touches these branches for a product reason rather than as a s
 sixty sentences nobody has read at a terminal would freeze wording that the manual runs keep
 improving. The third group deserves a test whenever `_merges` is next opened. Related to `B-110`,
 `B-111` and `B-112`.
+
+## The Registry initialization stage report on screen 46 (`QA-098`)
+
+The operator asked Registry Maintainer to show the run that produced the current snapshot: `init`,
+`lock`, `build`, `validate`, `audit`, `commit`, ending in `committed <sha> locally; not pushed and
+not merged`. CP-22 step 17 built everything else in that finding — the registry as a row, and its
+lifecycle as the cursor's description (`D-247`) — and left this out for a reason worth writing down.
+
+`RegistryBootstrapStage` already models exactly those stages, but nothing keeps them. A bootstrap
+run reports its stages to whoever asked for it and they are gone when that screen is left; screen 46
+is drawn from durable observation, and there is no durable record to draw from. Showing the stages
+would therefore mean either re-running the bootstrap to draw a frame, which CP-22 forbids outright,
+or inventing stages from the checkout's current state, which would be the screen reporting a run
+that never happened.
+
+The work is to record the last bootstrap run as a receipt beside the registry — what ran, whether it
+passed, what it said, and the commit it ended on — and project that. Not critical: the lifecycle the
+screen now carries already answers the question the finding opens with (where has this registry got
+to), and the stage report is the history behind it. Worth doing when a slice next opens
+`io/registry_bootstrap.py` for a product reason.

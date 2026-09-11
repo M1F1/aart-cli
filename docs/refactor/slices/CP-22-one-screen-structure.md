@@ -216,12 +216,59 @@ reads like a row.
     - `QA-097`: Settings had four rows that change behaviour and no row that said what it changed.
       `SETTING_PURPOSE` answers each one under `[v]`, the way the rebuild stages have since
       `QA-089`.
-    - `QA-098`: HELD. The Registry Maintainer lifecycle redesign — the registry as a cursor row with
-      its sha, the repo URL, the branch, the state of the remote branch and what is unpushed, the
-      initialization stage report, and that a change is only available once pushed and AART will not
-      push it. The operator's message ends mid-sentence, and one design question is open: whether a
-      remote branch exists is a network answer, and drawing a frame does no I/O — so the screen can
-      only report what the last `[u] Check upstream` established, and say when that was.
+    - `QA-098`, `D-247`: Registry Maintainer said what a registry *is* and never where this one had
+      got to. The registry this project publishes is now a row the cursor can be on --
+      `> manual-registry  88d3082`, so two checkouts of the same registry on different branches or
+      remotes are told apart -- and its description is the lifecycle: the repository, the branch,
+      the remote branch, what is waiting to be pushed, that a change only reaches subscribers once
+      the branch is pushed and that AART will not push it, and who may subscribe to what. Whether a
+      remote branch exists is a network question and drawing a frame does no I/O, so the reader
+      projects the checkout's own knowledge of its remote -- `@{u}` and `rev-list --count`, all
+      local -- and `MaintainerPublicationState.UNOBSERVED` keeps *"nobody has looked"* apart from
+      *"there is no such branch"*. The initialization stage report is deferred: it needs a durable
+      record of the last bootstrap run, which does not exist yet (`BACKLOG`).
+
+      Screen 46's workspace row and description, read off the real composition against a real
+      checkout. Before, there was no row at all and nothing below named a branch or a remote. After,
+      just initialized, with no remote yet:
+
+      ```
+      > manual-registry  88d3082
+
+      - Branch: main
+
+      - Remote branch: none -- this branch has not been pushed yet.
+
+      - Changes become available to subscribers once this branch is pushed. AART does not push it
+        for you.
+
+      - A maintainer may subscribe to this branch; everyone else subscribes to the repository's
+        main.
+      ```
+
+      And after a push followed by one promotion on top of it:
+
+      ```
+      > manual-registry  e2f9cf3
+
+      - Repository: git@github.com:example/manual-registry.git
+
+      - Branch: main
+
+      - Remote branch: origin/main
+
+      - 1 commit here is not on origin/main yet.
+      ```
+
+      The operator's message for this finding ends mid-sentence -- *"chcialbym zeby tez byla"* -- so
+      one addition is still unknown and is to be asked. Everything the sentence was an addition to
+      is built.
+
+      Mutations, both in `tests/registry_workspace_reader_test.py`: dropping the detached-`HEAD`
+      guard so `branch=branch` reports Git's literal `HEAD` failed
+      `test_a_detached_head_names_no_branch_anybody_could_push` alone, and making the projection
+      pass `None` instead of what it read failed
+      `test_the_registry_this_project_publishes_reaches_the_views` alone.
 
 ## Evidence discipline
 

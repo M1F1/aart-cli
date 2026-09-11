@@ -17,10 +17,12 @@ from agent_artifacts.application.maintainer_views import (
     MaintainerPolicyReviewView,
     MaintainerPromotionReviewView,
     MaintainerProvenanceView,
+    MaintainerPublicationState,
     MaintainerRegistryCommitView,
     MaintainerRegistryDiffView,
     MaintainerRegistryValidationView,
     MaintainerRegistryView,
+    MaintainerRegistryWorkspaceView,
     MaintainerRepositoryScanView,
     MaintainerSourceSyncResultView,
     MaintainerSourceSyncReviewView,
@@ -65,6 +67,8 @@ __all__ = [
     "render_maintainer_version_conflict",
     "render_maintainer_bulk_promotion",
     "maintainer_registry_descriptor",
+    "maintainer_workspace_detail",
+    "maintainer_workspace_row",
     "maintainer_registry_rows",
     "maintainer_registry_status",
     "render_maintainer_registry",
@@ -968,6 +972,83 @@ def maintainer_registry_rows(
             render_maintainer_registry(view, profile, show_working_tree=registry_workspace_present)
         )
     return tuple(lines)
+
+
+def maintainer_workspace_row(
+    view: MaintainerRegistryWorkspaceView,
+    *,
+    selected: bool = False,
+) -> str:
+    """The registry this project publishes, as one row a cursor can stand on (`QA-098`).
+
+    The sha is part of the row rather than part of the description because it is what tells two
+    checkouts of one name apart -- different branches, different remotes, the same registry id --
+    and that is a distinction the reader needs while scanning, not after opening something.
+    """
+
+    if not isinstance(view, MaintainerRegistryWorkspaceView) or not isinstance(selected, bool):
+        raise ValueError("a registry workspace row needs a workspace view")
+    marker = "> " if selected else "  "
+    return f"{marker}{view.name}" + (f"  {view.commit}" if view.commit else "")
+
+
+#: 164.7 in the words the decision is made in: a maintainer may point a subscription at the branch
+#: they publish to, and everybody else reads the repository's default. Saying it here is what stops
+#: the branch on the row above from reading like something a consumer could subscribe to.
+_WHO_SUBSCRIBES = (
+    "A maintainer may subscribe to this branch; everyone else subscribes to the repository's main."
+)
+
+#: The operator asked for this sentence by name -- *"dopisz ze zeby zmiany byly dostepne to nalezy
+#: zpushowac zmiany na remote brancha, ale aart tego za Ciebie nie zrobi, musisz to zrobic sam"*.
+#: It stands only while something is actually waiting, so it stays an instruction rather than
+#: becoming decoration on a screen with nothing to do.
+_NOBODY_PUSHES_FOR_YOU = (
+    "Changes become available to subscribers once this branch is pushed. "
+    "AART does not push it for you."
+)
+
+
+def maintainer_workspace_detail(view: MaintainerRegistryWorkspaceView) -> tuple[str, ...]:
+    """Where this registry stands: its repository, its branch, and what is waiting (`QA-098`).
+
+    Each statement is its own group, because the status and notice blocks read a blank line as the
+    boundary between list items (`QA-096`). What the checkout knows of its remote is stated as
+    knowledge rather than as fact: a frame does no I/O, so "there is no such branch" and "nobody has
+    looked lately" are different sentences and never the same one.
+    """
+
+    if not isinstance(view, MaintainerRegistryWorkspaceView):
+        raise ValueError("a registry workspace description needs a workspace view")
+    where = [(f"Repository: {view.origin}",)] if view.origin else []
+    if view.branch:
+        where.append((f"Branch: {view.branch}",))
+    if view.state is MaintainerPublicationState.UNPUBLISHED:
+        where.append(("Remote branch: none — this branch has not been pushed yet.",))
+    elif view.remote_branch:
+        where.append((f"Remote branch: {view.remote_branch}",))
+    if view.state is MaintainerPublicationState.AHEAD:
+        count = view.unpushed or 0
+        where.append(
+            (
+                f"{count} {_noun(count, 'commit')} here "
+                f"{'is' if count == 1 else 'are'} not on {view.remote_branch} yet.",
+            )
+        )
+    elif view.state is MaintainerPublicationState.PUBLISHED:
+        where.append(("Nothing here is waiting to be pushed.",))
+    elif view.remote_branch:
+        where.append(
+            (
+                "Whether anything is waiting to be pushed was not established; "
+                "press u to check upstream.",
+            )
+        )
+    if view.state in {MaintainerPublicationState.UNPUBLISHED, MaintainerPublicationState.AHEAD}:
+        where.append((_NOBODY_PUSHES_FOR_YOU,))
+    if view.branch:
+        where.append((_WHO_SUBSCRIBES,))
+    return separate(*where)
 
 
 def maintainer_registry_descriptor(

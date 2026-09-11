@@ -1,13 +1,16 @@
 # AART Refactor Migration Status
 
-**CP-22 is 15 of 17 steps done — one screen structure (2026-09-11).** The full `make quality`
+**CP-22 is 16 of 17 steps done — one screen structure (2026-09-11).** The full `make quality`
 half of step 16 is green on `d60bdd5`: two discovery runs each passed 3,924 tests (one skipped),
 branch coverage is 85.47%, and every format, lint, type, repository validation, packaging, docs
 and secret-shape gate passed. The operator then walked the built screens and reported seven more
-findings, which are step 17: `QA-092`…`QA-097` have landed and `QA-098` is held — the Registry
-Maintainer lifecycle redesign needs a sentence the operator's message broke off in, and it needs
-fields the registry view does not carry yet (repository URL, branch, remote-branch state), so it is
-projection work rather than a rendering change.
+findings, which are step 17 and are now all landed: `QA-092`…`QA-097` say one thing per statement
+and say it in its own block (`8f5605b`, `D-245`, `D-246`), and `QA-098` makes the registry this
+project publishes a row whose description is its lifecycle — repository, branch, remote branch,
+what is unpushed, and that AART will not push it for you (`D-247`). Two things are deliberately
+left: the initialization stage report needs a durable record of the last bootstrap run and is in
+`BACKLOG.md`, and the operator's message for `QA-098` ended mid-sentence, so one addition of theirs
+is still to be asked for. Step 16 stays open on the operator's next manual run.
 
 The operator walked CP-21's skeleton and reported that it is real but filled differently by every
 screen, with the rule stated by name: actions and view status never share a block. The first two

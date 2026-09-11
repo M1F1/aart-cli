@@ -2,10 +2,15 @@
 
 ## CP-22 current objective (2026-09-11)
 
-**CP-22 is OPEN — step 17 carries the third manual run's findings; six of seven are landed.** The
-one held is `QA-098`, the Registry Maintainer lifecycle redesign: the operator's message ends
-mid-sentence, and whether a remote branch exists is a network answer a frame cannot go and get, so
-the screen can only report what the last `[u] Check upstream` established. Slice document:
+**CP-22 is OPEN — step 17 is landed, and step 16 waits on the operator's next manual run.** The
+third manual run's seven findings are all built: `QA-092`…`QA-097` (`8f5605b`) and `QA-098`, which
+makes the registry this project publishes a row and its description the lifecycle (`D-247`). Whether
+a remote branch exists is still a network answer a frame cannot go and get, so what the screen
+reports is the checkout's own knowledge of its remote, refreshed by `[u] Check upstream`, and
+`MaintainerPublicationState.UNOBSERVED` keeps *"nobody has looked"* apart from *"there is no such
+branch"*. Two things are open and neither blocks: the initialization stage report is in
+`BACKLOG.md`, and the operator's `QA-098` message ended mid-sentence — *"chcialbym zeby tez byla"* —
+so one addition is to be asked for. Slice document:
 [`slices/CP-22-one-screen-structure.md`](slices/CP-22-one-screen-structure.md).
 
 CP-21 gave every screen one skeleton; the operator walked it and found the skeleton real but filled

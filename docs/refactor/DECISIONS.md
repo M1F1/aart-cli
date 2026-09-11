@@ -5775,3 +5775,33 @@ The consequence worth stating: a producer that runs two statements together now 
 item with a continuation, which is visible rather than silent. `doctor_status`, the Registries empty
 state, the Maintainer Dashboard counts and `_refusal` were each separated for that reason, and a
 screen that forgets will look like a paragraph rather than silently reading as one.
+
+## D-247 — A registry's row says which registry, and its description says where it has got to
+
+`QA-098`. Registry Maintainer described what a Registry is and never said where this project's had
+got to. The fix makes the registry a row, because everything else on that screen the cursor can
+reach is one, and it carries the short commit beside the name: two checkouts of the same registry on
+different branches or remotes are the same name and a different thing.
+
+The description is the lifecycle rather than a definition -- repository, branch, remote branch, what
+is unpushed -- and it carries two sentences the operator dictated, which are kept as named constants
+because they are claims about how AART behaves rather than phrasing: a change only reaches
+subscribers once the branch is pushed and AART will not push it for you, and a maintainer may
+subscribe to a branch while everyone else subscribes to the repository's `main`.
+
+The hard part was the remote. Whether a branch exists on a remote is a network question, and drawing
+a frame does no I/O -- CP-22's whole point is that a renderer composes and never observes. So the
+reader answers from refs the checkout already holds: `@{u}` for the tracking branch and
+`rev-list --count @{u}..HEAD` for what is waiting, both local, read once with every other durable
+observation in `io/maintainer_views`. What the screen reports is therefore this checkout's
+*knowledge* of its remote, and `[u] Check upstream` is the key that refreshes it.
+
+That distinction needs a name, or the screen invents facts it never observed.
+`MaintainerPublicationState` has four: `UNOBSERVED` (no Git answered, or nobody has counted),
+`UNPUBLISHED` (a commit exists and no remote knows the branch), `AHEAD` (the remote knows it and is
+behind), `PUBLISHED` (the remote has everything). A detached `HEAD` names no branch anybody could
+push, so it reports none rather than reporting the literal `HEAD` Git prints.
+
+The registry's name comes from `aart-registry.json` through `parse_registry_manifest`, the one
+parser the rest of the repository reads that file with. A half-written or invalid marker therefore
+names nothing and the directory answers instead, rather than the screen naming something wrong.

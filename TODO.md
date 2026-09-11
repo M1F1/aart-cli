@@ -168,19 +168,22 @@ Each new entry records:
       `[Type] Edit`, `[Backspace] Delete` and `[Enter] Next / continue`, and `_FORM_TOGGLE_LABELS`
       names what Space changes per screen so the word the prose carried is not lost with it.
 
-- [ ] **QA-098 — Registry Maintainer says what a registry *is*, never where it is in its life.**
+- [x] **QA-098 — Registry Maintainer says what a registry *is*, never where it is in its life.**
       Surface: Registry Maintainer (46). Severity: high. Observed: the screen has no rows at all,
       so the registry this project publishes is prose rather than something the cursor can be on,
       and nothing on it names the repository, the branch the snapshot was taken from, whether that
       branch exists on the remote, or whether anything is waiting to be pushed. Expected: the
       registry is a row — `> manual-registry` with its sha, so two checkouts of the same name on
       different branches or remotes are told apart — and the cursor description carries the repo
-      URL, the branch, the state of the remote branch and what is unpushed; the initialization
-      stage report (init, lock, build, validate, audit, commit) lives under it, ending in
-      `committed <sha> locally; not pushed and not merged`; and the screen says plainly that a
-      change only becomes available once it is pushed, and that AART will not push it for you.
-      A maintainer may later subscribe to a remote branch; a user only ever subscribes to a
-      repository's `main`. Waiting on the operator: their message ended mid-sentence.
+      URL, the branch, the state of the remote branch and what is unpushed; and the screen says
+      plainly that a change only becomes available once it is pushed, and that AART will not push
+      it for you. A maintainer may later subscribe to a remote branch; a user only ever subscribes
+      to a repository's `main`. Fixed in CP-22 step 17 (`D-247`): `MaintainerRegistryWorkspaceView`
+      and `MaintainerPublicationState` in the application layer, `read_registry_workspace` reading
+      the checkout's own knowledge of its remote with no network, and screen 46 carrying the row
+      and its lifecycle description. Two parts remain: the initialization stage report needs a
+      durable record of the last bootstrap run and is in `BACKLOG.md`, and the operator's message
+      ended mid-sentence (*"chcialbym zeby tez byla"*), so one addition is still to be asked for.
 
 - [ ] **QA-097 — Settings has four rows that change behaviour and no row that says what it changes.**
       Surface: Settings (28). Severity: medium. Observed: `[v]` opens nothing for `Detail level`,

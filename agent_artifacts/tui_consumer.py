@@ -61,6 +61,7 @@ from agent_artifacts.application.maintainer_views import (
     REGISTRY_MAINTENANCE_STAGES,
     REGISTRY_REBUILD_EVERYTHING,
     REGISTRY_STAGE_PURPOSE,
+    REGISTRY_WORKSPACE_ROW,
     MaintainerAdoptedArtifactView,
     MaintainerAdoptionReviewView,
     MaintainerAdoptionUpstreamView,
@@ -76,6 +77,7 @@ from agent_artifacts.application.maintainer_views import (
     MaintainerRegistryDiffView,
     MaintainerRegistryValidationView,
     MaintainerRegistryView,
+    MaintainerRegistryWorkspaceView,
     MaintainerRepositoryScanView,
     MaintainerScreen,
     MaintainerSourceSyncResultView,
@@ -109,6 +111,8 @@ from agent_artifacts.tui_maintainer import (
     maintainer_registry_descriptor,
     maintainer_registry_rows,
     maintainer_registry_status,
+    maintainer_workspace_detail,
+    maintainer_workspace_row,
     render_adopted_artifacts,
     render_adoption_upstream_check,
     render_maintainer_bulk_promotion,
@@ -2123,7 +2127,12 @@ class CanonicalScreenSource:
                 else tuple(source.alias for source in self._screens.maintainer.sources)
             )
         if screen is MaintainerScreen.REGISTRY:
-            return tuple(item.alias for item in self._screens.maintainer_registries())
+            # `QA-098`: the registry this project publishes is a row, above the ones it subscribes
+            # to. It had been prose, so the screen had nothing for a cursor to stand on at all.
+            workspace = self._registry_workspace()
+            return (() if workspace is None else (REGISTRY_WORKSPACE_ROW,)) + tuple(
+                item.alias for item in self._screens.maintainer_registries()
+            )
         if screen is MaintainerScreen.SCAN_RESULT:
             scan = self._screens.repository_scan
             return (
@@ -2280,6 +2289,10 @@ class CanonicalScreenSource:
             )
         if screen is MaintainerScreen.REGISTRY:
             # Screen 46's rows are registries; opening one is where its transaction is assembled.
+            # The registry this project *publishes* is not one of them: it has no candidates to
+            # promote through it, so Enter on it opens nothing (`QA-098`).
+            if row == REGISTRY_WORKSPACE_ROW:
+                return None
             return MaintainerScreen.BULK_PROMOTION if self._screens.bulk_promotions() else None
         if screen is MaintainerScreen.SOURCES:
             maintainer = self._screens.maintainer
@@ -2468,6 +2481,12 @@ class CanonicalScreenSource:
             purpose = SETTING_PURPOSE.get(state.current_row or "")
             return () if purpose is None else (purpose,)
         if state.session.screen is MaintainerScreen.REGISTRY:
+            # `QA-098`: with the cursor on the registry this project publishes, the description is
+            # where that registry has got to -- repository, branch, what its checkout knows of the
+            # remote, and what is waiting to be pushed.
+            workspace = self._registry_workspace()
+            if workspace is not None and state.current_row == REGISTRY_WORKSPACE_ROW:
+                return maintainer_workspace_detail(workspace)
             # `QA-095`: the screen's one explanation, which is about registry snapshots rather
             # than about the row under the cursor -- so it answers from the screen. `[v]` still
             # gates it, because `_described` is the only caller.
@@ -2493,6 +2512,12 @@ class CanonicalScreenSource:
         selected = next((target for target in targets if target.value == state.current_row), None)
         described = None if selected is None else _DASHBOARD_DESCRIPTIONS.get(selected)
         return () if described is None else (described,)
+
+    def _registry_workspace(self) -> MaintainerRegistryWorkspaceView | None:
+        """The registry this project publishes, when one was read from it (`QA-098`)."""
+
+        maintainer = self._screens.maintainer
+        return None if maintainer is None else maintainer.registry_workspace
 
     def _form_prose(self, state: ConsumerUiState) -> tuple[str, ...]:
         """What a form has to say about itself, which is never a row a cursor can stand on.
@@ -2744,10 +2769,23 @@ class CanonicalScreenSource:
                 if screens.maintainer is None
                 else screens.maintainer.registry_workspace_present
             )
-            return maintainer_registry_rows(
-                screens.maintainer_registries(),
-                profile,
-                registry_workspace_present=present,
+            workspace = self._registry_workspace()
+            published = (
+                ()
+                if workspace is None
+                else (
+                    maintainer_workspace_row(
+                        workspace, selected=state.current_row == REGISTRY_WORKSPACE_ROW
+                    ),
+                )
+            )
+            return separate(
+                published,
+                maintainer_registry_rows(
+                    screens.maintainer_registries(),
+                    profile,
+                    registry_workspace_present=present,
+                ),
             )
         if screen is MaintainerScreen.SCAN_RESULT:
             return (
