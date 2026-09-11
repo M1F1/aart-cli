@@ -168,6 +168,24 @@ Each new entry records:
       `[Type] Edit`, `[Backspace] Delete` and `[Enter] Next / continue`, and `_FORM_TOGGLE_LABELS`
       names what Space changes per screen so the word the prose carried is not lost with it.
 
+- [x] **QA-091 — a screen with no rows still drew its report inside the actions block.**
+      Surface: every result, review and refusal screen. Severity: medium. Observed: `actions`
+      returned whatever `_body` produced whether or not the cursor had anything to move over, so
+      an install result and a stopped run were drawn in the block reserved for what can be acted
+      on. Expected: the rule, not a list — a screen with no rows has no actions block.
+      Landed (2026-09-11, `D-244`): `actions` reads the row model and returns nothing when there
+      are no rows; `status` carries the body, the view's own statement and then the notice.
+
+- [x] **QA-090 — a confirmation screen never said what it was confirming.**
+      Surface: Review Registry, Review Source, Review Init, Review Rebuild, Refresh, Disconnect.
+      Severity: high. Observed: between a filled-in form and an irreversible action the screen drew
+      one line — *"Press Enter to connect this registry."* — over a legend that already offered
+      `[Enter] Confirm`, so it said nothing at all about what was about to happen. Expected: 161.4
+      — a screen states what it is and what state it is in without the reader deriving either.
+      Landed (2026-09-11): `_review_facts` states the subject from the draft the reader just filled
+      in; a stopped run replaces it rather than joining it, since the plan it described was
+      discarded when the run stopped (`QA-033`).
+
 - [x] **QA-089 — a row carried its own explanation, so five choices read as five sentences.**
       Surface: Rebuild Registry (46h). Severity: medium. Observed: every row read
       `Lock only: pin everything the registry references`, gluing the choice to its purpose, so

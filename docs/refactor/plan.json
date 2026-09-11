@@ -526,12 +526,12 @@
         {
           "id": "14",
           "title": "Review and result screens: the decision offered is the actions block, what it is about is view status (QA-087)",
-          "status": "in_progress"
+          "status": "done"
         },
         {
           "id": "15",
           "title": "A manual-test lab that lost its marker can be cleared (QA-085)",
-          "status": "todo"
+          "status": "in_progress"
         },
         {
           "id": "16",

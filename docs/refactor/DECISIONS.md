@@ -5711,3 +5711,20 @@ choices: the first-run welcome panel and the installed counts are two answers to
 this in*, so they are one `status` that picks between them instead of a panel that replaces the
 body; and the `Navigation:` and `Maintainer navigation:` labels are gone, because a block whose
 contents are the navigation does not need to announce that it is the navigation.
+
+## D-244 — A screen with no rows has no actions block, and the row model says so
+
+`QA-091`. `CP-22` moved each screen's prose out of the block its rows live in, screen by screen,
+and the review and result screens were the last group left. They are also the group where the
+distinction is not a judgement call at all: a result, a review and a refusal have nothing a cursor
+can move over, so everything they draw is the state of the view by definition.
+
+Naming them in a set would have worked and would have been wrong in the way the operator asked us
+to stop being wrong — *"zeby nie bylo zbyt wielu wyjatkow od reguly"*. `ConsumerScreenSource.rows`
+already answers the question the set would have encoded, so `actions` returns nothing when there
+are no rows and `status` carries the body, the view's own statement and then the notice.
+
+The consequence worth stating: a screen that gains rows tomorrow moves its body back into the
+actions block without anyone editing a list, and a screen that loses them stops mixing without
+anyone noticing it should. This extends `D-243`, which gave a screen somewhere to say what each
+block contains; this says where a screen with nothing to act on puts everything else.

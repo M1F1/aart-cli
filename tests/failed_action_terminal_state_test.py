@@ -193,6 +193,8 @@ class FailedActionFrameTest(unittest.TestCase):
         )
 
     def test_a_review_nobody_has_confirmed_still_reads_as_a_review(self) -> None:
+        """`QA-090` moved where a review asks: the legend offers the key, not a sentence."""
+
         drawn = frame(
             CanonicalScreenSource(screens()),
             _confirmed(
@@ -201,7 +203,8 @@ class FailedActionFrameTest(unittest.TestCase):
             ),
         )
 
-        self.assertIn("Press Enter to start this run.", drawn)
+        self.assertIn("[Enter] Confirm", " ".join(drawn))
+        self.assertNotIn("This run stopped", " ".join(drawn))
         self.assertNotIn("did not run", drawn[0])
 
 

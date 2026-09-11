@@ -57,10 +57,18 @@ Landed so far:
   labels and the stage purpose follows the cursor into the description block, so `[v]` opens and
   closes it like every other cursor description (`QA-070`).
 
-**Exact next action: step 14** — the review and result screens. The decision being offered is the
-actions block; what the review is about is view status. Then step 15 (`QA-085`, the lab that lost
-its marker) and step 16, the full quality gate and the operator's third manual run over
-`QA-044`…`QA-087`.
+- Review and result screens: a review states its subject from the draft the reader just filled in
+  (`QA-090`) — the reviews used to draw one line telling the reader to press a key the legend
+  already advertised, and nothing about what was about to happen. And a screen with no rows now
+  draws no actions block at all, read off the row model rather than off a set of named screens
+  (`QA-091`, `D-244`).
+
+**Exact next action: step 15** — `QA-085`, the manual-test lab that lost its marker. `reset_lab`
+removes the marker last and the refusal prints a recovery that works; what is still open is that
+there is no supported way to clear a lab directory that has already lost it. Partial work is
+uncommitted in `scripts/manual_test.py`, `tests/manual_test_lab_test.py` and
+`docs/testing/END_TO_END_ACCEPTANCE.md`. Then step 16: the full quality gate and the operator's
+third manual run over `QA-044`…`QA-091`.
 
 The screen steps move one concrete view at a time and never in the abstract:
 *"musimy rozmawiac zawsze o konkretnych widokach"*.

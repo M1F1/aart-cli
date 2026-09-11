@@ -1198,6 +1198,21 @@ _HELP_LINES: tuple[str, ...] = (
     "[q] Quit",
 )
 
+#: The screens that stand between a decision and the thing it does: a filled-in form or a chosen
+#: row on one side, an irreversible run on the other. They hold no rows, because the only decision
+#: on offer is a key -- so the legend advertises it (`QA-088`) and the screen states its subject
+#: (`QA-090`).
+_REVIEW_SCREENS: frozenset[ApplicationScreen] = frozenset(
+    {
+        ConsumerScreen.REGISTRY_REVIEW,
+        ConsumerScreen.REGISTRY_REMOVE,
+        MaintainerScreen.SOURCE_ADD_REVIEW,
+        MaintainerScreen.REGISTRY_INIT_REVIEW,
+        MaintainerScreen.REGISTRY_REBUILD_REVIEW,
+        ConsumerScreen.REGISTRY_SYNC,
+    }
+)
+
 _DESCRIBED_SCREENS: frozenset[ApplicationScreen] = frozenset(
     {ConsumerScreen.DASHBOARD, MaintainerScreen.DASHBOARD}
 )
@@ -1337,22 +1352,89 @@ def _workflow_chrome(state: ConsumerUiState) -> tuple[str, ...]:
     return tuple(lines)
 
 
-def _review_prompt(state: ConsumerUiState, prompt: str) -> tuple[str, ...]:
-    """A review's own instruction, or -- once its confirmed run stopped -- what happened instead.
+def _review_facts(state: ConsumerUiState, screens: "ConsumerScreens") -> tuple[str, ...]:
+    """What a review is about, or -- once its confirmed run stopped -- what happened instead.
 
-    The screen keeps its name and its place, because the refusal below answers a question asked
-    here. What it may not keep is the instruction to press a key that would start the run: the run
-    was already attempted, its plan was discarded when it stopped, and the only thing that key can
-    do now is leave (`QA-033`).
+    `QA-090`: a review used to draw one line, *"Press Enter to connect this registry."*, over a
+    legend that already offered `[Enter] Confirm`. The screen standing between a filled-in form and
+    an irreversible action therefore said nothing about what was about to happen, which 161.4
+    forbids: a screen states what it is and what state it is in without the reader deriving either.
+    The decision is the legend's to advertise (`QA-088`); this is the review's subject, and it
+    reads as view status because it is a statement rather than something to act on (`QA-087`).
+
+    A refusal replaces it rather than joining it. The screen keeps its name and its place, because
+    the notice below answers a question asked here, but the plan it described was discarded when
+    the run stopped and describing it still would be describing something that no longer exists
+    (`QA-033`).
     """
 
-    if state.failed_action is None:
-        return (prompt,)
-    return (
-        "This run stopped, so nothing here was changed. Why it stopped is below.",
-        "",
-        "Enter returns to the list.",
-    )
+    if state.failed_action is not None:
+        return ("This run stopped, so nothing here was changed. Why it stopped is below.",)
+    screen = state.session.screen
+    if screen is ConsumerScreen.REGISTRY_REVIEW:
+        draft = state.registry_draft
+        if not draft.alias and not draft.location:
+            return ()
+        return (
+            f"Connect {draft.alias} from {draft.location}",
+            f"Branch or tag: {draft.ref or 'repository default'}",
+            "",
+            "It becomes the default registry."
+            if draft.make_default
+            else "The default registry does not change.",
+        )
+    if screen is MaintainerScreen.SOURCE_ADD_REVIEW:
+        authoring = state.source_draft
+        if not authoring.alias and not authoring.location:
+            return ()
+        git = authoring.kind == "source-git"
+        return (
+            f"Subscribe to {authoring.alias} at {authoring.location}",
+            f"Branch or tag: {authoring.ref or 'repository default'}"
+            if git
+            else "A local authoring checkout, read where it stands.",
+        )
+    if screen is MaintainerScreen.REGISTRY_INIT_REVIEW:
+        init = state.registry_init_draft
+        if not init.registry_id:
+            return ()
+        return (
+            f"Create {init.registry_id}, called {init.display_name}, in this project."
+            if init.display_name
+            else f"Create {init.registry_id} in this project.",
+            f"Stages, in order: {', '.join(REGISTRY_MAINTENANCE_STAGES)}.",
+            "",
+            "The files are written and committed locally."
+            if init.commit
+            else "The files are written and left staged.",
+        )
+    if screen is MaintainerScreen.REGISTRY_REBUILD_REVIEW:
+        stage = state.focus
+        if stage == REGISTRY_REBUILD_EVERYTHING:
+            return (f"Run every stage in order: {', '.join(REGISTRY_MAINTENANCE_STAGES)}.",)
+        purpose = REGISTRY_STAGE_PURPOSE.get(stage or "")
+        return () if purpose is None else (f"Run {stage} only: {purpose}.",)
+    if screen is ConsumerScreen.REGISTRY_REMOVE:
+        return () if not state.focus else (f"Disconnect {state.focus} from this project.",)
+    if screen is ConsumerScreen.REGISTRY_SYNC:
+        connected = next(
+            (item for item in screens.registries if item.alias == state.focus),
+            None,
+        )
+        if connected is None:
+            return ("That registry is not connected here.",)
+        return (
+            f"Refresh {connected.alias} from {connected.origin}",
+            f"Branch or tag: {connected.ref or 'repository default'}",
+            "",
+            "This fetches a fresh approved snapshot and reloads what Marketplace can offer.",
+            # 161.7, stated where the decision is made rather than only in the specification.
+            "It does not update anything installed: a newer version becomes available to",
+            "choose, and every installed artifact stays exactly as it is.",
+            "",
+            "If the fetch fails, the snapshot you already have is kept.",
+        )
+    return ()
 
 
 def _binding_text(binding: KeyBinding) -> str:
@@ -2331,6 +2413,12 @@ class CanonicalScreenSource:
         stale explanation standing over a screen that never ran anything.
         """
 
+        # `QA-091`: a screen with no rows has nothing the cursor can act on, so its actions block
+        # is empty and whatever it has to say is the state of the view. The rule is read off the
+        # row model rather than off a list of screens, because a list of screens is the thing the
+        # operator asked us to stop maintaining -- *"zeby nie bylo zbyt wielu wyjatkow od reguly"*.
+        if not self.rows(state):
+            return ()
         body = self._body(state)
         notice = self._screens.notice if state.session.screen in _ANSWERABLE else ()
         # `QA-029`: the one line addressed to the reader goes last, under everything it is about,
@@ -2395,10 +2483,24 @@ class CanonicalScreenSource:
         drawn as a boundary around nothing, which is the fault `QA-065` reported.
         """
 
+        spoken = self._view_status(state)
+        if self.rows(state):
+            return spoken
+        # `QA-091`: with no rows there is no actions block, so the report a result screen draws and
+        # the refusal a stopped run left behind are both view status. The notice reads last because
+        # what stands above it says it is coming -- *"Why it stopped is below."*
+        notice = self._screens.notice if state.session.screen in _ANSWERABLE else ()
+        return separate(self._body(state), spoken, notice)
+
+    def _view_status(self, state: ConsumerUiState) -> tuple[str, ...]:
+        """What this particular screen has to say about itself."""
+
         screen, screens = state.session.screen, self._screens
         prose = self._form_prose(state)
         if prose:
             return prose
+        if screen in _REVIEW_SCREENS:
+            return _review_facts(state, screens)
         if screen is ConsumerScreen.DASHBOARD:
             # `QA-087`: first-run guidance and the counts are both answers to "what state is this
             # in", so they belong here rather than above the rows, inside the rows' own block.
@@ -2843,36 +2945,10 @@ class CanonicalScreenSource:
                 f"{'>' if row == (state.current_row or rows[0]) else ' '} {labels[row]}"
                 for row in rows
             )
-        if screen is MaintainerScreen.REGISTRY_REBUILD_REVIEW:
-            return _review_prompt(state, "Press Enter to start this run.")
-        if screen is MaintainerScreen.REGISTRY_INIT_REVIEW:
-            return _review_prompt(state, "Press Enter to create this registry.")
-        if screen is MaintainerScreen.SOURCE_ADD_REVIEW:
-            return _review_prompt(state, "Press Enter to connect this Source.")
-        if screen is ConsumerScreen.REGISTRY_REVIEW:
-            return _review_prompt(state, "Press Enter to connect this registry.")
-        if screen is ConsumerScreen.REGISTRY_SYNC:
-            connected = next(
-                (item for item in screens.registries if item.alias == state.focus),
-                None,
-            )
-            if connected is None:
-                return ("That registry is not connected here.",)
-            return (
-                f"Refresh {connected.alias} from {connected.origin}",
-                f"Branch or tag: {connected.ref or 'repository default'}",
-                "",
-                "This fetches a fresh approved snapshot and reloads what Marketplace can offer.",
-                # 161.7, stated where the decision is made rather than only in the specification.
-                "It does not update anything installed: a newer version becomes available to",
-                "choose, and every installed artifact stays exactly as it is.",
-                "",
-                "If the fetch fails, the snapshot you already have is kept.",
-                "",
-                "Press Enter to refresh.",
-            )
-        if screen is ConsumerScreen.REGISTRY_REMOVE:
-            return _review_prompt(state, "Press Enter to disconnect this Registry.")
+        if screen in _REVIEW_SCREENS:
+            # A review has nothing the cursor can move over: the one decision it offers is a key,
+            # and a key is advertised in the legend (`QA-088`). What it is about is view status.
+            return ()
         if not isinstance(screen, ConsumerScreen):
             return (f"{_title(screen)} is not available yet.",)
         if screen in _PLAN_SCREENS:

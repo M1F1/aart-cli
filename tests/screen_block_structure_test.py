@@ -16,7 +16,12 @@ from __future__ import annotations
 from dataclasses import replace
 from unittest import TestCase
 
-from agent_artifacts.application.consumer_ui import ConsumerUiState
+from agent_artifacts.application.consumer_ui import (
+    ConsumerUiState,
+    RegistryDraft,
+    RegistryInitDraft,
+    SourceDraft,
+)
 from agent_artifacts.application.consumer_views import (
     ConsumerScreen,
     ConsumerSession,
@@ -619,6 +624,90 @@ class RebuildRegistryRowsTest(TestCase):
         self.assertTrue(_spoken(everything[2])[0].startswith("Re-run this registry's"))
 
 
+class ReviewScreenBlockTest(TestCase):
+    """`QA-090`: a confirmation screen has to say what it is confirming.
+
+    Every review drew exactly one line -- *"Press Enter to connect this registry."* -- over a legend
+    that already said `[Enter] Confirm`, so the screen between a filled-in form and an irreversible
+    action said nothing at all about what was about to happen. `CP-22` step 14 places it: the
+    decision is what the legend offers, and what the review is about is view status.
+    """
+
+    def _frame(self, screen, **changes) -> tuple[str, ...]:
+        source = CanonicalScreenSource(screens())
+        state = ConsumerUiState(
+            ConsumerSession(screen),
+            settings=ConsumerSettings().with_maintainer_mode(True),
+            workspace="/lab",
+            **changes,
+        )
+        state = replace(state, rows=source.rows(state), cursor=0)
+        return frame(source, state)
+
+    def test_connecting_a_registry_says_which_one_and_from_where(self) -> None:
+        rendered = self._frame(
+            ConsumerScreen.REGISTRY_REVIEW,
+            registry_draft=RegistryDraft(
+                "company", "https://git.example.test/company/registry.git", "stable", True
+            ),
+        )
+
+        self.assertIn(
+            "Connect company from https://git.example.test/company/registry.git", rendered
+        )
+        self.assertIn("Branch or tag: stable", rendered)
+        self.assertIn("It becomes the default registry.", rendered)
+
+    def test_a_registry_that_is_not_made_default_says_so_rather_than_staying_silent(self) -> None:
+        """Silence would read as "no opinion", and the form has a yes/no the reader chose."""
+
+        rendered = self._frame(
+            ConsumerScreen.REGISTRY_REVIEW,
+            registry_draft=RegistryDraft(
+                "company", "https://git.example.test/company/registry.git", "", False
+            ),
+        )
+
+        self.assertIn("Branch or tag: repository default", rendered)
+        self.assertIn("The default registry does not change.", rendered)
+
+    def test_connecting_a_source_says_its_kind_and_location(self) -> None:
+        rendered = self._frame(
+            MaintainerScreen.SOURCE_ADD_REVIEW,
+            source_draft=SourceDraft(
+                "kit", "source-git", "https://git.example.test/kit.git", "main"
+            ),
+        )
+
+        self.assertIn("Subscribe to kit at https://git.example.test/kit.git", rendered)
+        self.assertIn("Branch or tag: main", rendered)
+
+    def test_creating_a_registry_names_it_and_says_whether_a_commit_is_made(self) -> None:
+        rendered = self._frame(
+            MaintainerScreen.REGISTRY_INIT_REVIEW,
+            registry_init_draft=RegistryInitDraft("acme-registry", "Acme", "", True),
+        )
+
+        self.assertIn("Create acme-registry, called Acme, in this project.", rendered)
+        self.assertIn("The files are written and committed locally.", rendered)
+
+    def test_a_review_offers_its_decision_in_the_legend_and_not_in_a_sentence(self) -> None:
+        """`QA-088` again: the key is advertised, so describing it is saying the same thing twice."""
+
+        for screen, changes in (
+            (ConsumerScreen.REGISTRY_REVIEW, {}),
+            (MaintainerScreen.SOURCE_ADD_REVIEW, {}),
+            (MaintainerScreen.REGISTRY_INIT_REVIEW, {}),
+            (MaintainerScreen.REGISTRY_REBUILD_REVIEW, {}),
+        ):
+            with self.subTest(screen=screen):
+                rendered = self._frame(screen, **changes)
+
+                for line in rendered:
+                    self.assertNotRegex(line, r"^Press Enter to ")
+                self.assertTrue(any("[Enter] " in line for line in rendered[-2:]))
+
+
 class EveryScreenBlockTest(TestCase):
     """The enforcement: a migrated screen's actions block holds only what the cursor acts on."""
 
@@ -642,6 +731,26 @@ class EveryScreenBlockTest(TestCase):
                         line.endswith(".") and not line.startswith(("> ", "  ")),
                         f"{screen.value}: prose in the actions block -- {line!r}",
                     )
+
+    def test_a_screen_with_no_rows_draws_no_actions_block_at_all(self) -> None:
+        """`QA-091`: the rule the row model already knows, instead of a list of screens.
+
+        A result, a review and a refusal have nothing the cursor can move over, so everything they
+        draw is the state of the view. Read off `rows` rather than off a set, because a set of
+        named exceptions is what the operator asked us to stop maintaining -- *"zeby nie bylo zbyt
+        wielu wyjatkow od reguly"*.
+        """
+
+        for screen in (*ConsumerScreen, *MaintainerScreen):
+            state = ConsumerUiState(
+                ConsumerSession(screen),
+                settings=ConsumerSettings().with_maintainer_mode(True),
+            )
+            state = replace(state, rows=self.source.rows(state), cursor=0)
+            if state.rows:
+                continue
+            with self.subTest(screen=screen):
+                self.assertEqual(self.source.actions(state), ())
 
     def test_no_screen_is_exempt_from_the_structure_any_more(self) -> None:
         """The list is empty, and the sweep above now speaks for every screen there is.

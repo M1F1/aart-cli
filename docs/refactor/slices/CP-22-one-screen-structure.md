@@ -1,6 +1,6 @@
 # CP-22 — One screen structure, and the third manual run
 
-Status: OPEN — 13 OF 16 STEPS DONE
+Status: OPEN — 14 OF 16 STEPS DONE
 
 ## Goal
 
@@ -61,6 +61,8 @@ reads like a row.
 | QA-087 | Every view fills the skeleton differently; actions and view status share a block | in progress |
 | QA-088 | A form described in prose the keys the footer directly below it advertises | landed |
 | QA-089 | A row glued its own explanation onto itself, so five choices read as five sentences | landed |
+| QA-090 | A confirmation screen never said what it was confirming | landed |
+| QA-091 | A screen with no rows still drew its report inside the actions block | landed, `D-244` |
 
 ## Steps
 
@@ -152,8 +154,22 @@ reads like a row.
     like every other cursor description (`QA-070`). The whole-sequence row names its four stages in
     its own label and so says nothing here, which costs the block rather than drawing an empty one.
 
-14. **Review and result screens.** The decision being offered is the actions block; what the review
-    is about is view status.
+14. **Review and result screens.** DONE. Reading the reviews back showed a worse fault than the
+    one this step was opened for: between a filled-in form and an irreversible action, every review
+    drew exactly one line — *"Press Enter to connect this registry."* — over a legend that already
+    offered `[Enter] Confirm`. It said nothing about what was about to happen, which 161.4 forbids
+    (`QA-090`). `_review_facts` now states the subject from the draft the reader just filled in:
+    which registry from where and whether it becomes the default, which Source at which location,
+    which registry is created and whether the files are committed, which stage a rebuild runs, what
+    a refresh fetches and what it leaves alone. A stopped run replaces that rather than joining it,
+    because the plan it described was discarded when the run stopped (`QA-033`).
+
+    The result screens then settled the other half by rule rather than by list (`QA-091`, `D-244`).
+    A result, a review and a refusal have no rows, so there is nothing for a cursor to act on and
+    everything they draw is the state of the view — which `actions` reads off the row model
+    instead of off a set of named screens. That is the operator's own constraint applied to the
+    fix: *"zeby nie bylo zbyt wielu wyjatkow od reguly"*. The notice reads last there, under the
+    line that says it is coming.
 
 15. **`QA-085` — a lab that lost its marker.** `reset_lab` now removes the marker last and the
     refusal prints a recovery that works. Still open: there is no supported way to clear a lab
