@@ -204,8 +204,9 @@ class MaintainerScreen(str, Enum):
     REGISTRY = "46-registry-maintainer"
     # 46a/46b are the Initialize Registry form and its review, lettered the way 21a/21b and 31a/31b
     # are (B-090).  Screen 46 is where a maintainer looks at the registry this project publishes, so
-    # it is where the registry that does not exist yet is created; the run is local, and 161.7's
-    # separation of publication from approval is why it never pushes or merges.
+    # it is where the registry that does not exist yet is created, and the run stays local.  AART
+    # does push a *reviewed* registry commit now (164.7, `D-228`), but only from screen 45: there is
+    # nothing here a maintainer has reviewed as bytes to publish, and merging is never AART's.
     REGISTRY_INIT = "46a-init-registry"
     REGISTRY_INIT_REVIEW = "46b-review-init"
     # A repository scan is artifact-scoped adoption, not another Source subscription.  Keeping its

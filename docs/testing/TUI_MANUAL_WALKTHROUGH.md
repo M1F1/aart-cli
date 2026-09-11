@@ -9,8 +9,11 @@ then a consumer who subscribes to what you just published and installs from it.
 Everything here happens in the TUI. There are exactly two exceptions, both deliberate:
 
 - one command to create the disposable lab, and one to open the application;
-- one `git push` after the maintainer's Registry commit, because AART separates publication from
-  approval on purpose — screen 45 commits and never pushes or merges (Product Specification 161.7).
+- two Git commands the TUI does not own: the first push of the *initialization* commit, so the
+  Registry is subscribable at all, and the **merge** of what you publish from screen 45. AART
+  pushes a reviewed registry commit to a review branch and refuses the default one; only the merge
+  makes those bytes the Registry, and that step is never AART's (Product Specification 164.7,
+  `D-228`).
 
 There are two routes through the same product, and this is one of them:
 
@@ -69,15 +72,34 @@ exercises the real Git acquisition path without any GitHub account.
 
 ## Reading the screens
 
-Every frame names where you are and what the directory context is:
+Every frame is built from the same skeleton (`D-234`). The top line is the trail you walked, each
+place named once (`D-236`); the launch directory is the last fact before the keys rather than a
+second line under the title (`D-235`):
 
 ```
-AART / Registry Maintainer
-Working in /private/tmp/aart-cli-manual-lab/repositories/registry
+AART / Maintainer / Sources
+
+  …the screen…
+
+working at /private/tmp/aart-cli-manual-lab/repositories/registry
+────────────────────────────────────────────────────────────────
+[↑↓] Move  [Enter] Open  [s] Sync  [v] Fast / Verbose  [Esc] Back  [?] Help  [q] Quit
 ```
 
-The footer lists the keys that screen actually accepts. `Esc` is always Back, `?` is always Help,
-`q` is always Quit. If a key is in the footer and does nothing, that is a finding.
+The footer lists the keys that screen actually accepts, and the terminal pins it: a tall body
+scrolls under it instead of pushing it off. `Esc` is always Back, `?` is always Help, `q` is always
+Quit. If a key is in the footer and does nothing, that is a finding — and so is the other way round,
+a key a screen tells you to press that the footer never offers (`QA-058`).
+
+Three behaviours are new since the run that produced `QA-058`…`QA-084`, and each is worth one
+deliberate press:
+
+- [ ] `[v]` toggles Fast/Verbose on **every** screen: Fast hides the cursor-description region,
+      Verbose shows it (`QA-064`/`QA-070`, `D-233`).
+- [ ] `Esc` from a list reaches the dashboard that owns it, not the previous screen you happened to
+      come from, and a sequence you finished by returning is off the back stack (`QA-072`, `D-237`).
+- [ ] No screen shows an empty section and no screen names an internal identifier such as
+      `Screen 46` (`QA-067`/`QA-077`).
 
 ---
 
@@ -129,7 +151,9 @@ authors published against what the **target Registry already approved**, so it n
 target Registry to compare with. The Registry you just created exists only as a local commit, and
 a subscription reads a remote — so publishing it comes before syncing, not only after promotion.
 
-- [ ] Push the initialization commit yourself. AART did not and will not (161.7):
+- [ ] Push the initialization commit yourself. Initialize Registry writes a local commit and
+      nothing more; publishing from inside AART exists only on the Registry Commit screen, which
+      this path has not reached yet (164.7):
 
 ```sh
 git -C /tmp/aart-cli-manual-lab/repositories/registry push origin HEAD
@@ -192,6 +216,23 @@ and no Registry content.
 Expected: the Skill and the MCP appear exactly once each. Columns keep their positions between
 rows, and the focused value is readable in full (`QA-030`).
 
+One malformed manifest must not fail the whole Source (`QA-063`, `D-230`). It takes a minute to
+prove and nothing else in the run tests it:
+
+- [ ] Break one author manifest, push it, and sync that Source again:
+
+```sh
+cd /tmp/aart-cli-manual-lab/repositories/skill
+printf 'not json' > manual-check/aart.json
+git commit -am 'break one manifest' && git push
+```
+
+Expected: the Source still reports its commit and its other manifests, and the result screen adds
+`Could not read N manifests:` with the path on the line. The Source is not failed whole, and
+nothing is recorded as an `invalid` Candidate.
+
+- [ ] Put it back (`git revert --no-edit HEAD && git push`) before continuing.
+
 ## 6 — Review a Candidate
 
 - [ ] Open a Candidate. Press `d` (**Diff**), then `f` (**Files**) to fold raw file changes in and
@@ -218,17 +259,51 @@ confirmation (`QA-033`).
 
 - [ ] After the commit, you land back on **Registry Maintainer**, one key from the next promotion.
 
-## 8 — Publish the promotion
+## 8 — Publish the promotion, from inside AART
 
-The TUI has committed and deliberately not pushed. Screen 45 says so — `Git push: no`, and after
-the write `Canonical-branch publication remains external.` This is the second push of the run: the
-first made the Registry subscribable, this one publishes what you just promoted into it.
+This step changed. `QA-055` asked whether the commit screen closed the path and `QA-082` asked for
+the push itself; the product owner settled both in Product Specification 164.7, and AART now
+performs the push (`D-228`). Having to drop out of the surface to type `git push` was a gap, not a
+safeguard — you had already reviewed exactly these bytes here.
 
-- [ ] While you are on that screen, judge whether it **closes the path**: it states the boundary,
-      but does it tell you that publishing is now yours to do? This is `QA-055`, recorded as
-      unconfirmed — decide it here, at the terminal.
+The screen tells you so:
 
-Publish the branch yourself:
+```
+Git publication: not yet published; press p to choose a review branch.
+```
+
+- [ ] Press `p`. Check the footer offered it too — a key a screen names and the legend hides is
+      `QA-058` the other way round (`D-240`).
+
+| row | what to enter |
+|---|---|
+| Publication remote | `origin` |
+| Publication branch | `review/manual-check` — any name **but** the registry's default |
+| Continue | `Enter` — *Review publication* |
+
+Expected on the review frame: the target reads as one name a person recognises —
+`Ready to push the reviewed commit to origin/review/manual-check` — with `Publication remote:` and
+`Publication branch:` beneath it, and the line *"Nothing will be merged; the default branch is
+never a publication target."*
+
+- [ ] Confirm, and check the branch really landed:
+
+```sh
+git -C /tmp/aart-cli-manual-lab/remotes/registry.git branch --list
+```
+
+Now prove the refusal, because a boundary nobody tested is a claim:
+
+- [ ] Press `p` again and type this lab's run branch — the ref from `START_HERE.md`. That is the
+      bare remote's default branch, so it is what a subscriber reads.
+
+Expected: a refusal naming it, not a push — *"… is the branch this registry's subscribers read;
+AART publishes to a branch and never to that one"*, with *"Publish to a different branch and open a
+pull request into …"* as the remedy. Typing `HEAD` must be refused the same way.
+
+**Then merge it yourself.** AART pushes; only the merge makes the bytes the Registry, and AART never
+performs that step (164.7). Act II subscribes at the run branch, so nothing you publish to a review
+branch is installable until you land it there:
 
 ```sh
 git -C /tmp/aart-cli-manual-lab/repositories/registry push origin HEAD
@@ -236,10 +311,11 @@ git -C /tmp/aart-cli-manual-lab/repositories/registry push origin HEAD
 
 Checkpoint for Act I:
 
-- [ ] The Registry was created, filled and committed without leaving the TUI.
+- [ ] The Registry was created, filled, committed **and published** without leaving the TUI.
 - [ ] Every destructive or writing step was reviewed first and cancellable.
 - [ ] No screen leaked an internal screen identifier.
-- [ ] Promotion records are visible in the pushed branch.
+- [ ] The default branch was refused by name, and only the merge was yours to do.
+- [ ] Promotion records are visible in the merged branch.
 
 ---
 
@@ -279,8 +355,19 @@ escapability of these flows).
 - [ ] Confirm nothing was written. Install it for real.
 - [ ] Install `dummy-mcp`. At the provider prompt, enter **disposable test text only**.
 
-Expected: AART binds an isolated credential reference; the macOS Keychain owns value entry. The MCP
-reports only whether the variable is present and never echoes it.
+Expected: AART binds an isolated credential reference; the macOS Keychain owns value entry, the
+screen is lent to its prompt and taken back, and no reset dialog is reachable (`QA-081`/`QA-084`,
+`D-229`). The MCP reports only whether the variable is present and never echoes it.
+
+Harness delivery must be one answer everywhere it is said (`QA-078`…`QA-080`, `D-241`):
+
+- [ ] On the review, read the `Harnesses:` line. It names the set and says where it came from —
+      every harness this machine measured that the artifact declares support for.
+- [ ] Compare it with what **Artifact Details** refused and with what **Success** reports. A harness
+      the details screen called unsupported must not appear as a delivery.
+- [ ] If **Remediation** lists rows, each must name its own subject rather than repeat one summary.
+- [ ] Setup steps are owed only for a harness the artifact actually reached: `dummy-mcp` installed
+      into one harness must not produce four `configure harness` rows.
 
 ## 12 — Inspect
 

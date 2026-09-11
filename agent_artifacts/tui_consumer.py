@@ -2687,9 +2687,11 @@ class CanonicalScreenSource:
                     for row in state.rows
                 ),
                 "",
-                # 161.7, said where the decision is made rather than only in the specification.
-                "Nothing is pushed and nothing is merged. Publishing the registry stays a decision",
-                "you make through this repository's own review.",
+                # 164.7, said where the decision is made rather than only in the specification.
+                # AART does publish a reviewed commit, from screen 45 -- but not this run, and never
+                # a merge, so the sentence has to name the boundary it actually holds.
+                "Nothing is pushed and nothing is merged here. Once a promotion is committed,",
+                "Registry Commit can publish it to a review branch; the merge is always yours.",
                 "",
                 "Type to edit; Backspace removes; Space toggles the commit; Enter advances.",
             )

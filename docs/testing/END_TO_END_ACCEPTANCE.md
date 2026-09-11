@@ -139,8 +139,10 @@ with *"Reviewed only. Re-run with --yes to write, validate, audit, and commit."*
 - [ ] Confirm with `git log` that exactly one commit was created, and with `git status` that
       nothing was pushed.
 
-Then publish the branch yourself — AART separates publication from approval and never pushes
-(Product Specification 161.7):
+Then publish the branch yourself. On the CLI route this is still your job: `registry publish`
+commits every listed change and stops there, which its own `--help` says in those words. Pushing a
+reviewed registry commit from inside AART is a **TUI** action, added under `D-228` for Product
+Specification 164.7, and it is not on this route.
 
 ```sh
 git push origin HEAD
@@ -248,7 +250,10 @@ Checkpoint for Act II:
 
 These are correct behavior, not findings:
 
-- AART never pushes or merges; publication is external by design (161.7).
+- The CLI never pushes or merges: `registry publish` commits and stops. Pushing a reviewed
+  registry commit to a configured non-default branch is a TUI action (164.7, `D-228`); the default
+  branch is refused there rather than delegated, and merging is always the reviewer's work through
+  `gh` or the forge.
 - `file://` origins are refused; origins must be credential-free HTTPS/SSH.
 - A vendored artifact does not track upstream — the Registry owns the copy until re-vendored.
 - Security assessments reduce uncertainty and are not safety guarantees.

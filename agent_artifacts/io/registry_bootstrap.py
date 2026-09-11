@@ -11,8 +11,9 @@ This module is the ordering, and nothing else.  Every stage is the same authorit
 read -- so there is no second implementation of what a registry is.  What it adds is fail-fast
 sequencing, a per-stage record of what happened, and one boundary the CLI states in prose and this
 has to state in code: the run is local.  It may create a commit when the operator asked for one,
-and it never pushes and never merges, because publishing a registry is a decision made through the
-repository's own review process rather than by a key press (161.7).
+and it never pushes and never merges.  Publication is a key press now, but a different one: 164.7
+gives it to the Registry Commit screen, for a commit a maintainer reviewed as bytes.  There is no
+such commit here, and the merge is nobody's key press at all.
 """
 
 from __future__ import annotations

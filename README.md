@@ -264,8 +264,12 @@ with what is wrong, rather than being omitted because no repair for it exists.
 ## Maintaining a registry
 
 A registry is an ordinary Git checkout. Maintainer mutations prepare reviewed files and stop. The
-explicit `registry publish --yes` flow runs every publisher gate and creates the listed commit; AART
-never pushes. An empty Git repository is not a registry until its `aart-registry.json` marker exists.
+explicit `registry publish --yes` flow runs every publisher gate and creates the listed commit, and
+the CLI stops there. From the TUI's Registry Commit screen that reviewed commit can also be pushed
+to a branch the maintainer configures — never the registry's default one, which is refused rather
+than delegated, because a subscriber reads the default branch and only a merge should change what
+it can install. Merging is the reviewer's work, through `gh` or the forge. An empty Git repository
+is not a registry until its `aart-registry.json` marker exists.
 
 AART reaches every remote by running system Git, with an allowlisted environment rather than the
 operator's. If a repository clones at a shell prompt but not through AART, the environment is where
