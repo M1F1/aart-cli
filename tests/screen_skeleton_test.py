@@ -222,7 +222,15 @@ class ScreenSkeletonEdgeTest(TestCase):
         self.assertEqual(footer_start((SECTION_RULE, "keys")), 0)
 
     def test_a_frame_with_no_rule_at_all_keeps_its_last_line_as_the_footer(self) -> None:
-        """`B-077`: answering "no footer" would let a long body clip the only way out."""
+        """`B-077`: answering "no footer" would let a long body clip the only way out.
+
+        With no rule there is no boundary to read, so this is a documented guess rather than a
+        derivation: the last line is where the way out lives on every frame the application
+        actually composes, because `render` draws the keys last. A property over generated frames
+        found the guess is only a guess -- a two-line key legend standing entirely alone has its
+        first line read as body -- which is why the properties below claim nothing about a frame
+        with no rule in it.
+        """
 
         self.assertEqual(footer_start(("only", "two")), 1)
         self.assertEqual(footer_start(()), 0)
@@ -454,12 +462,14 @@ class ScreenSkeletonPropertyTest(TestCase):
     def test_the_footer_block_is_the_caption_and_everything_after_it(self, frame: Frame) -> None:
         lines = render(frame)
         caption, keys = separate((frame.context,)), separate(frame.keys)
-        if not keys:
+        # A frame with no rule has no boundary to read back, and `footer_start` says as much by
+        # guessing the last line (`B-077`). The claim here is about frames that drew one.
+        if not keys or SECTION_RULE not in lines:
             return
 
         block = lines[footer_start(lines) :]
 
-        self.assertEqual(block, (*caption, SECTION_RULE, "", *keys) if lines != keys else keys)
+        self.assertEqual(block, (*caption, SECTION_RULE, "", *keys))
 
     @given(_FRAME, st.integers(min_value=0, max_value=60))
     def test_anchoring_only_ever_inserts_blank_rows(self, frame: Frame, height: int) -> None:

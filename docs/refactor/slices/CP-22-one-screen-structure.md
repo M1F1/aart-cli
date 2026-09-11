@@ -1,6 +1,6 @@
 # CP-22 — One screen structure, and the third manual run
 
-Status: OPEN — 14 OF 16 STEPS DONE
+Status: OPEN — 15 OF 16 STEPS DONE
 
 ## Goal
 
@@ -171,9 +171,17 @@ reads like a row.
     fix: *"zeby nie bylo zbyt wielu wyjatkow od reguly"*. The notice reads last there, under the
     line that says it is coming.
 
-15. **`QA-085` — a lab that lost its marker.** `reset_lab` now removes the marker last and the
-    refusal prints a recovery that works. Still open: there is no supported way to clear a lab
-    directory that has already lost it.
+15. **`QA-085` — a lab that lost its marker.** DONE. Two halves. A lab stops arriving here:
+    `reset_lab` empties the root and removes the marker only once nothing else is left, so a
+    removal that fails partway through always leaves a lab that is still owned and still
+    resettable — a single `rmtree` walks in directory order and could unlink the marker first.
+    And a lab that is already unmarked has a way out: refusing stays right, because an unmarked
+    directory is not the tool's to delete, but the refusal now prints `chmod -R u+w <root> && rm
+    -rf <root>` with the exact path, and `docs/testing/END_TO_END_ACCEPTANCE.md` carries the same
+    line under *If the lab loses its marker*. The `chmod` is not decoration: an installed payload
+    is delivered read-only, directories included, so `rm -rf` alone stops at the first artifact
+    root. The test runs both commands against a real read-only lab — the blunt one to show it
+    fails, then the printed one — so the recovery is checked rather than described.
 
 16. **Full quality gate, and the operator's third manual run** over `QA-044`…`QA-087`.
 

@@ -22,7 +22,7 @@ The Product Specification remains the product authority. Findings go to the firs
 ## Build the lab
 
 ```sh
-cd /absolute/path/to/aart-cli
+cd "$(git rev-parse --show-toplevel)"   # from anywhere inside your aart-cli checkout
 make manual-test-setup-empty
 ```
 
@@ -44,6 +44,22 @@ with `exit`; throw the run away with `make manual-test-reset`.
 
 > `make manual-test-setup` (without `-empty`) arrives with the Registry already published. Use it
 > when you only want the consumer half; it skips all of Act I.
+
+### If the lab loses its marker
+
+`make manual-test-reset` only ever removes a directory that carries `.aart-manual-lab.json`, and
+setup resets before it builds, so a lab whose marker is gone blocks both. That refusal is correct —
+an unmarked directory is not the tool's to delete — but it leaves the directory to you. Look at it
+first, then take the write bit back before removing it: an installed payload is delivered
+read-only, directories included, so `rm -rf` on its own stops at the first artifact root.
+
+```sh
+chmod -R u+w /tmp/aart-cli-manual-lab && rm -rf /tmp/aart-cli-manual-lab
+```
+
+The refusal prints this same line with the exact path it refused, and `tests/manual_test_lab_test.py`
+runs it against a read-only lab, so it is a recovery that is checked rather than one that is
+described (`QA-085`).
 
 ## About `https://manual.aart.test/...`
 

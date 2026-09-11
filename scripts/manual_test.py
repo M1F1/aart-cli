@@ -79,7 +79,18 @@ def _safe_root(raw: Path) -> Path:
 def _marker(root: Path) -> dict[str, object]:
     marker = root / MARKER
     if not marker.is_file() or marker.is_symlink():
-        raise ValueError(f"refusing to remove unmarked directory: {root}")
+        # The way out has to be in the message, and it has to be a way out that works.  An
+        # installed payload is delivered read-only, directories included, so a bare `rm -rf` stops
+        # at the first artifact root with "Permission denied" -- after it has already removed the
+        # marker, which is how a lab arrives here in the first place.  `reset_lab` restores the
+        # write bit as it goes; a human doing this by hand has to be told to do the same.
+        raise ValueError(
+            f"refusing to touch unmarked directory: {root}\n"
+            f"Nothing here is owned by a manual-test lab, so it is not this tool's to remove. "
+            f"If it is a leftover lab, look at it and then remove it yourself -- installed "
+            f"payloads are read-only, so the write bit has to come back first:\n"
+            f"  chmod -R u+w {root} && rm -rf {root}"
+        )
     data = json.loads(marker.read_text(encoding="utf-8"))
     if data.get("schema") != SCHEMA or data.get("root") != str(root):
         raise ValueError(f"manual-test marker does not own this exact directory: {root}")
@@ -102,6 +113,18 @@ def reset_lab(raw_root: Path) -> None:
         os.chmod(path, observed.st_mode | stat.S_IWUSR)
         function(path)
 
+    # The marker goes last.  `rmtree` walks in directory order, so a removal that fails partway
+    # through -- one unreadable file, one mount that went away -- could take the marker with it and
+    # leave a half-deleted lab that this function then refuses to finish, permanently.  Removing
+    # the contents first and the marker only once they are gone means a failed reset always leaves
+    # a lab that is still owned and still resettable.
+    for entry in root.iterdir():
+        if entry.name == MARKER:
+            continue
+        if entry.is_dir() and not entry.is_symlink():
+            shutil.rmtree(entry, onerror=remove_read_only)
+        else:
+            entry.unlink()
     shutil.rmtree(root, onerror=remove_read_only)
 
 

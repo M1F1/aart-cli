@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import json
 import pathlib
+import shutil
 import stat
 import subprocess
 import sys
 import tempfile
 import textwrap
 import unittest
+from unittest import mock
 
 
 def _first_sync_states(
@@ -345,6 +347,78 @@ class ManualTestLabTest(unittest.TestCase):
         immutable.write_text("owned\n")
         immutable.chmod(stat.S_IRUSR)
         reset_lab(self.root)
+        self.assertFalse(self.root.exists())
+
+    def test_the_marker_is_the_last_thing_a_reset_removes(self) -> None:
+        """The ordering that decides whether a failed reset is recoverable.
+
+        A single `shutil.rmtree(root)` walks the whole tree in directory order, so it can unlink
+        the marker and *then* fail on some later entry -- leaving a half-deleted lab that nothing
+        owns. Reset refuses it, and setup refuses it too because setup resets first, so the
+        operator's only way forward is an unguarded `rm -rf` on a path the tool has just told them
+        not to trust.
+
+        What makes that impossible is that the root is only ever swept once nothing but the marker
+        is left in it, which is what this observes.
+        """
+
+        from scripts.manual_test import MARKER, reset_lab, setup_lab
+
+        setup_lab(self.root)
+        real = shutil.rmtree
+        root = self.root.resolve()
+        remaining: list[set[str]] = []
+
+        def recording(target, **keywords):
+            if pathlib.Path(target).resolve() == root:
+                remaining.append({entry.name for entry in root.iterdir()})
+            real(target, **keywords)
+
+        with mock.patch("scripts.manual_test.shutil.rmtree", recording):
+            reset_lab(self.root)
+
+        self.assertFalse(root.exists())
+        self.assertEqual([{MARKER}], remaining)
+
+    def test_the_refusal_hands_back_a_recovery_that_actually_clears_the_lab(self) -> None:
+        """`QA-085`: the way out of an unmarked lab has to be a way out that works.
+
+        The operator hit a lab that had lost its marker and could neither reset it nor set up over
+        it, because setup resets first. Refusing is right -- an unmarked directory is not this
+        tool's to delete -- but a refusal with no way forward leaves an unguarded `rm -rf` on a
+        path the tool has just said not to trust as the only move.
+
+        So the refusal prints a command, and this runs it. It also runs the obvious command first,
+        to show why the printed one says more than that: an installed payload is delivered
+        read-only, directories included, so `rm -rf` alone stops at the first artifact root.
+        """
+
+        from scripts.manual_test import MARKER, reset_lab, setup_lab
+
+        setup_lab(self.root)
+        sealed = self.root / "consumer-home/.local/share/agent-artifacts/sealed"
+        sealed.mkdir(parents=True, exist_ok=True)
+        (sealed / "payload.json").write_text("owned\n")
+        sealed.chmod(stat.S_IRUSR | stat.S_IXUSR)
+        # Only so a failure partway through this test does not also break the tempdir's own
+        # cleanup, which is exactly the trap the test is about.
+        self.addCleanup(lambda: sealed.is_dir() and sealed.chmod(stat.S_IRWXU))
+        (self.root / MARKER).unlink()
+
+        with self.assertRaises(ValueError) as refusal:
+            reset_lab(self.root)
+
+        blunt = subprocess.run(
+            ["rm", "-rf", str(self.root)], capture_output=True, text=True, check=False
+        )
+        self.assertNotEqual(blunt.returncode, 0, blunt.stderr)
+        self.assertTrue(self.root.exists())
+
+        recovery = str(refusal.exception).splitlines()[-1].strip()
+        self.assertIn(str(self.root), recovery)
+        carried = subprocess.run(recovery, shell=True, capture_output=True, text=True, check=False)
+
+        self.assertEqual(carried.returncode, 0, carried.stderr)
         self.assertFalse(self.root.exists())
 
 

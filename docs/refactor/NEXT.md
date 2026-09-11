@@ -63,12 +63,20 @@ Landed so far:
   draws no actions block at all, read off the row model rather than off a set of named screens
   (`QA-091`, `D-244`).
 
-**Exact next action: step 15** — `QA-085`, the manual-test lab that lost its marker. `reset_lab`
-removes the marker last and the refusal prints a recovery that works; what is still open is that
-there is no supported way to clear a lab directory that has already lost it. Partial work is
-uncommitted in `scripts/manual_test.py`, `tests/manual_test_lab_test.py` and
-`docs/testing/END_TO_END_ACCEPTANCE.md`. Then step 16: the full quality gate and the operator's
-third manual run over `QA-044`…`QA-091`.
+- `QA-085` is closed: a reset empties the root before it removes the marker, so a failed reset
+  always leaves a lab that is still resettable, and an already-unmarked lab has a checked recovery
+  — the refusal prints `chmod -R u+w <root> && rm -rf <root>` and the acceptance document carries
+  it under *If the lab loses its marker*.
+
+**Exact next action: step 16**, the last one — `make quality` end to end, then the operator's third
+manual run over `QA-044`…`QA-091` through `docs/testing/END_TO_END_ACCEPTANCE.md`. Everything CP-22
+changed is in the TUI's composition, so the run is the evidence that matters: the screens are what
+the finding was about.
+
+One thing to raise on that run rather than decide alone: on three forms the key legend now wraps to
+three lines with `[v] Fast / Verbose` alone on the middle one. Moving `v` down to the row with
+`[↑/↓] [Esc] [?] [q]` would close it up, and `v` is arguably universal in the same way they are —
+but it changes the footer on every screen, so it waits for the operator.
 
 The screen steps move one concrete view at a time and never in the abstract:
 *"musimy rozmawiac zawsze o konkretnych widokach"*.

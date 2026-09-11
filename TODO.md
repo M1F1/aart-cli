@@ -207,7 +207,7 @@ Each new entry records:
       lands above the caption and the terminal keeps it on screen when a long body is clipped.
       `D-242`, revising `D-235`.
 
-- [ ] **QA-085 — A lab that loses its marker can be neither reset nor set up over.**
+- [x] **QA-085 — A lab that loses its marker can be neither reset nor set up over.**
       Surface: `make manual-test-setup-empty`, `make manual-test-reset`. Severity: high. Observed:
       setup refused with `refusing to remove unmarked directory: /private/tmp/aart-cli-manual-lab`,
       and so did reset, because setup resets first. The operator's `rm -rf` on that path then
@@ -220,12 +220,14 @@ Each new entry records:
       at the first artifact root, which is exactly how the directory became unowned.
       Expected: the refusal names a recovery that works, and a reset that fails partway leaves the
       lab still owned.
-      Partly landed (2026-09-11): `reset_lab` now removes the marker last, so a failed reset always
-      leaves a lab that can still be reset, and the refusal prints
-      `chmod -R u+w <root> && rm -rf <root>` instead of an `rm -rf` that cannot finish. **Still
-      open:** there is no supported way to clear a lab directory that already lost its marker —
-      the operator has to run that `chmod`/`rm` pair by hand. Blocks the end-to-end stage: it
-      blocked the start of one.
+      Landed (2026-09-11): `reset_lab` empties the root and removes the marker only once nothing
+      else is left, so a removal that fails partway through always leaves a lab that is still
+      owned and still resettable. Refusing an unmarked directory stays right — it is not the
+      tool's to delete — but the refusal now prints `chmod -R u+w <root> && rm -rf <root>` with
+      the exact path, and `docs/testing/END_TO_END_ACCEPTANCE.md` carries the same line under
+      *If the lab loses its marker*. `tests/manual_test_lab_test.py` runs both commands against a
+      real read-only lab, the blunt one to show it fails and the printed one to show it works, so
+      the recovery is checked rather than described.
 
 #### CP-21 — second manual TUI run (2026-09-10)
 

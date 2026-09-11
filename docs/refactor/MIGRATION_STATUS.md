@@ -11,7 +11,7 @@ Hypothesis properties over generated frames rather than examples (`QA-087`, `486
 
 The source now answers blocks rather than lines: `ConsumerScreenSource.lines` is `actions`, what
 only reads moved to `status`, and `tests/screen_block_structure_test.py` holds that over every
-screen with `MIXED_SCREENS` as a named, shrinking allow-list that nothing may be added to. Fourteen of
+screen with `MIXED_SCREENS` as a named, shrinking allow-list that nothing may be added to. Fifteen of
 its sixteen steps are done — both dashboards, Registries, Settings, Doctor, Registry Maintainer,
 and all five forms. That form carried the slice's one open question, and the operator
 settled it on the rendered frame: *"Wszystko pod pola (jak reszta)"* — a form is not an exception,
@@ -26,8 +26,12 @@ them (`QA-088`). A rebuild row glued its purpose onto its label, so five choices
 sentences; the purpose now follows the cursor under `[v]` (`QA-089`). And every review drew one
 line telling the reader to press a key, and nothing about what it was confirming — `_review_facts`
 states the subject now (`QA-090`), and a screen with no rows draws no actions block at all, read
-off the row model rather than off a set of named screens (`QA-091`, `D-244`). What is left is
-`QA-085` and the operator's third manual run. Slice: `docs/refactor/slices/CP-22-one-screen-structure.md`; epic
+off the row model rather than off a set of named screens (`QA-091`, `D-244`). `QA-085` closed with
+them: a reset empties the lab before it removes the marker, so a failed reset always leaves a lab
+that is still resettable, and an already-unmarked one has a recovery the tests actually run.
+
+What is left is step 16 — the full quality gate and the operator's third manual run over
+`QA-044`…`QA-091`. Slice: `docs/refactor/slices/CP-22-one-screen-structure.md`; epic
 `CP-22` in `plan.json`.
 
 **CP-20 IMPLEMENTED — awaiting manual retest (2026-09-09).** All seven machine-readable plan steps

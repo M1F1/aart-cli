@@ -531,12 +531,12 @@
         {
           "id": "15",
           "title": "A manual-test lab that lost its marker can be cleared (QA-085)",
-          "status": "in_progress"
+          "status": "done"
         },
         {
           "id": "16",
           "title": "Full quality gate and the operator's third manual run over QA-044..QA-087",
-          "status": "todo"
+          "status": "in_progress"
         }
       ]
     }
