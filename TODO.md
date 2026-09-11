@@ -135,6 +135,39 @@ Each new entry records:
 
 ### Open
 
+#### CP-22 — third manual TUI run (2026-09-11)
+
+- [x] **QA-086 — `working at` floated above the terminal's blank space instead of sitting on the
+      footer.** Surface: every screen. Severity: medium. Observed: the frame padded a short screen
+      immediately above the key legend's rule, so the launch directory was pushed to the top of
+      that gap and a variable stretch of nothing stood between it and the keys — *"chce zeby
+      working at bylo tu - to sie tyczy wszystkich widokow"*. Expected: the directory is the
+      footer's caption, flush on its rule, with the padding above it.
+      Landed (2026-09-11): `screen_frame` takes the line as `context=` and draws it flush on the
+      footer rule; `footer_start` reaches back over whatever stands flush there, so the padding
+      lands above the caption and the terminal keeps it on screen when a long body is clipped.
+      `D-242`, revising `D-235`.
+
+- [ ] **QA-085 — A lab that loses its marker can be neither reset nor set up over.**
+      Surface: `make manual-test-setup-empty`, `make manual-test-reset`. Severity: high. Observed:
+      setup refused with `refusing to remove unmarked directory: /private/tmp/aart-cli-manual-lab`,
+      and so did reset, because setup resets first. The operator's `rm -rf` on that path then
+      failed too — `Permission denied` on every `SKILL.md`, `server.py`, `mcp.json` and object-store
+      file — leaving the lab still there and still unowned.
+      Cause, measured: an installed payload is delivered read-only, **directories included**
+      (`dr-x------` on `.claude/skills/manual-check`), so nothing inside can be unlinked until the
+      write bit comes back. `reset_lab` knows this and restores it as it goes; a bare `rm -rf` does
+      not. An earlier `rm -rf` therefore removed what it could — the marker among it — and stopped
+      at the first artifact root, which is exactly how the directory became unowned.
+      Expected: the refusal names a recovery that works, and a reset that fails partway leaves the
+      lab still owned.
+      Partly landed (2026-09-11): `reset_lab` now removes the marker last, so a failed reset always
+      leaves a lab that can still be reset, and the refusal prints
+      `chmod -R u+w <root> && rm -rf <root>` instead of an `rm -rf` that cannot finish. **Still
+      open:** there is no supported way to clear a lab directory that already lost its marker —
+      the operator has to run that `chmod`/`rm` pair by hand. Blocks the end-to-end stage: it
+      blocked the start of one.
+
 #### CP-21 — second manual TUI run (2026-09-10)
 
 Raw operator notes: `nowe bledy i znaleziska.txt` (untracked). Every item below is transcribed from

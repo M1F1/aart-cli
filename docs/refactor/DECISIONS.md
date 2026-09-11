@@ -5642,3 +5642,33 @@ saying where the narrowing is held instead. And `QA-079` is closed by explanatio
 picker: the set is derived from the machine and the manifest together, so there is nothing left to
 choose, and the review now names it and says so instead of leaving the operator to find out after
 the install.
+
+## D-242 — The launch directory is the footer's caption, flush on its rule
+
+Date: 2026-09-11 · Increment: QA-086 · Status: accepted, revises `D-235`
+
+`D-235` moved `working at <path>` out of the header and made it a region of its own immediately
+before the key legend. That answered where it belongs relative to the *content* and got where it
+belongs relative to the *terminal* wrong, which only shows on a screen shorter than the terminal.
+`anchor` pads above the footer, the footer began at the last rule, and the directory sat above that
+rule — so the padding landed between the directory and the keys. The operator saw the line floating
+at the top of a gap of eight blank rows and drew what they wanted instead: *"chce zeby working at
+bylo tu - to sie tyczy wszystkich widokow"*.
+
+So the directory is not a section that happens to be last. It is the **footer's caption**: the
+first line of the footer block, standing flush on the rule with no blank between them. Flushness is
+the claim, not a nicety — a blank would read as a section that merely sits last, and touching the
+rule is what says the line belongs to the block below it, next to the keys that act on it.
+
+Three things follow from putting it inside the block rather than above it, and they are the reason
+this is a better answer rather than a differently-shaped one. The terminal's padding lands above
+the caption for free, because padding has always gone above the footer. A body long enough to be
+clipped keeps the directory the way it keeps the keys, instead of losing the one line that says
+which checkout the keys would act on. And the frame still tells the terminal where its own footer
+starts, without being told: `screen_frame` leaves a blank above every rule except the one under a
+caption, so `footer_start` reaches back over text touching the last rule and needs no new argument,
+no row number and no knowledge of what a screen contains (`D-234` holds).
+
+`D-235`'s reasoning survives again, unchanged and one step further: the directory is frame chrome
+every screen carries rather than a line a screen remembers to print, and it is grouped with the
+keys because both are true of the session rather than of the view. Only its place changed.

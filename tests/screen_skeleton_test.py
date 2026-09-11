@@ -80,6 +80,60 @@ class ScreenSkeletonKernelTest(TestCase):
 
         self.assertEqual(lines[footer_start(lines) :], (SECTION_RULE, "", "local", "global"))
 
+    def test_the_context_line_stands_flush_on_the_footer_rule(self) -> None:
+        """`QA-086`: the launch directory is the footer's caption, not a section above it.
+
+        The operator drew it -- *"chce zeby working at bylo tu - to sie tyczy wszystkich
+        widokow"*. A blank between the line and the rule would read as a section that happens to
+        sit last; touching the rule is what says it belongs to the block below it.
+        """
+
+        lines = screen_frame(("title",), ("body",), context=("at /lab",), footer=("keys",))
+
+        self.assertEqual(
+            lines,
+            (
+                "title",
+                "",
+                SECTION_RULE,
+                "",
+                "body",
+                "",
+                SECTION_RULE,
+                "",
+                "at /lab",
+                SECTION_RULE,
+                "",
+                "keys",
+            ),
+        )
+
+    def test_the_footer_block_starts_at_the_context_line_so_padding_lands_above_it(self) -> None:
+        lines = screen_frame(("title",), ("body",), context=("at /lab",), footer=("keys",))
+
+        self.assertEqual(lines[footer_start(lines) :], ("at /lab", SECTION_RULE, "", "keys"))
+
+        placed = anchor(lines, height=len(lines) + 3)
+
+        self.assertEqual(placed[-4:], ("at /lab", SECTION_RULE, "", "keys"))
+        self.assertEqual(placed[len(lines) - 4 : len(lines) - 1], ("", "", ""))
+
+    def test_a_frame_given_no_context_is_composed_exactly_as_before(self) -> None:
+        self.assertEqual(
+            screen_frame(("title",), ("body",), context=(), footer=("keys",)),
+            screen_frame(("title",), ("body",), footer=("keys",)),
+        )
+
+    def test_a_context_line_of_nothing_but_blanks_draws_no_rule_of_its_own(self) -> None:
+        lines = screen_frame(("title",), context=("", "  "), footer=("keys",))
+
+        self.assertEqual(lines, ("title", "", SECTION_RULE, "", "keys"))
+
+    def test_a_screen_with_nothing_but_context_still_shows_it_above_the_keys(self) -> None:
+        lines = screen_frame((), context=("at /lab",), footer=("keys",))
+
+        self.assertEqual(lines, ("at /lab", SECTION_RULE, "", "keys"))
+
     def test_a_short_frame_is_padded_so_the_footer_sits_on_the_bottom_row(self) -> None:
         """`QA-068`: the legend floated under the body with the terminal blank beneath it."""
 

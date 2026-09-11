@@ -1307,8 +1307,9 @@ def frame(source: ConsumerScreenSource, state: ConsumerUiState) -> tuple[str, ..
         status.append(f"{len(state.selection)} selected")
     if state.quit_pending:
         status.append(f"Discard {len(state.selection)} selected item(s) and quit? y/n")
-    # `QA-069`: the launch directory is the last fact before the keys, separated from them by the
-    # skeleton's own rule, rather than a second line under the title (`QA-066`, revising `D-224`).
+    # `QA-086`: the launch directory is the footer's caption -- the last line before the keys'
+    # rule and flush on it, with the terminal's padding above it rather than under it (revising
+    # `QA-069`/`D-235`, which had it as a section of its own; `QA-066` had moved it off the title).
     workspace = (f"working at {state.workspace}",) if state.workspace else ()
     return screen_frame(
         header,
@@ -1316,7 +1317,7 @@ def frame(source: ConsumerScreenSource, state: ConsumerUiState) -> tuple[str, ..
         _described(source, state),
         _HELP_LINES if state.help_visible else (),
         status,
-        workspace,
+        context=workspace,
         footer=_key_legend(source, state),
     )
 

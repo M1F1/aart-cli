@@ -31,7 +31,7 @@ template* gives.
 ## Build the lab
 
 ```sh
-cd /absolute/path/to/aart-cli
+cd "$(git rev-parse --show-toplevel)"   # from anywhere inside your aart-cli checkout
 make manual-test-setup-empty
 ```
 
@@ -73,8 +73,8 @@ exercises the real Git acquisition path without any GitHub account.
 ## Reading the screens
 
 Every frame is built from the same skeleton (`D-234`). The top line is the trail you walked, each
-place named once (`D-236`); the launch directory is the last fact before the keys rather than a
-second line under the title (`D-235`):
+place named once (`D-236`); the launch directory is the footer's caption, flush on the rule above
+the keys rather than a second line under the title (`D-242`, revising `D-235`):
 
 ```
 AART / Maintainer / Sources
@@ -87,7 +87,9 @@ working at /private/tmp/aart-cli-manual-lab/repositories/registry
 ```
 
 The footer lists the keys that screen actually accepts, and the terminal pins it: a tall body
-scrolls under it instead of pushing it off. `Esc` is always Back, `?` is always Help, `q` is always
+scrolls under it instead of pushing it off, and a short one is padded **above** the `working at`
+line so the whole block — directory, rule, keys — sits on the bottom rows (`QA-086`). Blank space
+between `working at` and the keys is a finding. `Esc` is always Back, `?` is always Help, `q` is always
 Quit. If a key is in the footer and does nothing, that is a finding — and so is the other way round,
 a key a screen tells you to press that the footer never offers (`QA-058`).
 

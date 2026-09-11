@@ -340,7 +340,11 @@ def action_prompt(facts: Sequence[str], prompt: str) -> Tuple[str, ...]:
     return (*body, "", prompt)
 
 
-def screen_frame(*regions: Sequence[str], footer: Sequence[str]) -> Tuple[str, ...]:
+def screen_frame(
+    *regions: Sequence[str],
+    footer: Sequence[str],
+    context: Sequence[str] = (),
+) -> Tuple[str, ...]:
     """The one skeleton every screen fills: regions in order, rules only between the ones that spoke.
 
     The operator's complaint was that each screen composed itself -- *"teraz to jest wolna
@@ -357,22 +361,43 @@ def screen_frame(*regions: Sequence[str], footer: Sequence[str]) -> Tuple[str, .
     The footer is a region that is always drawn, because a screen with no documented way out is the
     first-run trap the legend exists to remove. It is passed separately rather than as the last
     region for exactly that reason: the others may all be empty and it still appears.
+
+    ``context`` is the footer's caption -- the standing fact a reader needs in order to know what
+    the keys below it would act on, which today is the directory the session was launched in. It is
+    the one line drawn *flush* on a rule, with no blank between them, and that is the whole point
+    (`QA-086`): a blank would read as a section that merely happens to sit last, where touching the
+    rule says it belongs to the block beneath it. Being part of the footer block is also what puts
+    the terminal's padding above it rather than under it, and what keeps it on screen when a long
+    body is clipped.
     """
 
     kept: list[Tuple[str, ...]] = []
-    for region in (*regions, footer):
-        lines = tuple(region)
-        if any(not isinstance(line, str) for line in lines):
-            raise ValueError("a screen region is lines of text")
-        trimmed = separate(lines)
-        if trimmed:
-            kept.append(trimmed)
-    if not kept:
-        return ()
-    composed: list[str] = list(kept[0])
-    for region in kept[1:]:
-        composed.extend(("", SECTION_RULE, "", *region))
+    for region in regions:
+        kept.append(_region(region))
+    caption, keys = _region(context), _region(footer)
+    composed: list[str] = []
+    for region in (*kept, caption):
+        if not region:
+            continue
+        if composed:
+            composed.extend(("", SECTION_RULE, ""))
+        composed.extend(region)
+    if keys:
+        if caption:
+            composed.extend((SECTION_RULE, ""))
+        elif composed:
+            composed.extend(("", SECTION_RULE, ""))
+        composed.extend(keys)
     return tuple(composed)
+
+
+def _region(region: Sequence[str]) -> Tuple[str, ...]:
+    """One region of a frame, checked and trimmed, or nothing at all."""
+
+    lines = tuple(region)
+    if any(not isinstance(line, str) for line in lines):
+        raise ValueError("a screen region is lines of text")
+    return separate(lines)
 
 
 def footer_start(lines: Sequence[str]) -> int:
@@ -386,11 +411,19 @@ def footer_start(lines: Sequence[str]) -> int:
     A frame with no rule at all still has a last line, and the last line is where the way out
     lives, so that is what is returned rather than "no footer". Answering "nothing" would let a
     body long enough to fill the terminal clip the only documented exit off the screen (`B-077`).
+
+    The block reaches back over whatever stands flush on that rule, because ``screen_frame`` leaves
+    a blank above every rule it draws except the one under a caption (`QA-086`). So the frame says
+    where its own footer begins without the terminal being told: text touching the last rule is the
+    footer's caption and belongs to the block, and padding lands above it rather than between them.
     """
 
     for index in range(len(lines) - 1, -1, -1):
         if lines[index] == SECTION_RULE:
-            return index
+            start = index
+            while start and lines[start - 1] != "":
+                start -= 1
+            return start
     return max(len(lines) - 1, 0)
 
 

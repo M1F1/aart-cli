@@ -63,15 +63,16 @@ class LaunchDirectoryPlacementTest(TestCase):
         self.assertNotIn("/work/project", lines[0])
         self.assertEqual(lines[1], "")
 
-    def test_the_directory_sits_in_the_footer_above_the_keys(self) -> None:
+    def test_the_directory_opens_the_footer_block_flush_on_its_rule(self) -> None:
+        """`QA-086`: the caption is the footer's first line, not a section standing above it."""
+
         lines = self._frame()
 
         directory = lines.index("working at /work/project")
-        footer = footer_start(lines)
 
-        self.assertLess(directory, footer)
-        self.assertEqual(lines[directory + 1], "")
-        self.assertEqual(lines[directory + 2], SECTION_RULE)
+        self.assertEqual(directory, footer_start(lines))
+        self.assertEqual(lines[directory + 1], SECTION_RULE)
+        self.assertEqual(lines[directory - 1], "")
         self.assertTrue(lines[-1].startswith("["))
 
     def test_a_session_with_no_workspace_draws_no_directory_line_and_no_rule_for_it(self) -> None:

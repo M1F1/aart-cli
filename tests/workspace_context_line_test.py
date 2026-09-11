@@ -8,8 +8,10 @@ jakiej odpalilem aart zeby wiedziec w jakim konteksie jestem".
 The path is context for everything a screen offers, so it is frame chrome rather than a line one
 screen remembers to print. **Where** that chrome sits was revised by `QA-066`/`QA-069` (`D-235`):
 the operator, having lived with the directory directly under the title, moved it into the footer
-above the keys, so the top line carries only the trail. What these tests hold is unchanged -- every
-screen names the directory, a session without one prints no line -- and only the place changed.
+above the keys, so the top line carries only the trail. `QA-086` then moved it the last step: it is
+the footer block's own first line, flush on the rule, with the terminal's padding above it rather
+than between it and the keys. What these tests hold is unchanged -- every screen names the
+directory, a session without one prints no line -- and only the place changed.
 
 These tests render the real frame, and hold the abbreviation to a property: a shown path is
 bounded, and it always keeps the segment that identifies it.
@@ -53,7 +55,7 @@ class WorkspaceContextLineTest(unittest.TestCase):
 
         self.assertTrue(lines[0].startswith("AART / "))
         self.assertNotIn("aart-cli", lines[0])
-        self.assertEqual("working at ~/code/aart-cli", lines[footer_start(lines) - 2])
+        self.assertEqual("working at ~/code/aart-cli", lines[footer_start(lines)])
 
     def test_every_screen_carries_the_same_context(self) -> None:
         for screen in (
@@ -65,7 +67,7 @@ class WorkspaceContextLineTest(unittest.TestCase):
             with self.subTest(screen=screen):
                 lines = frame(self.source, _state(screen, workspace="~/lab/seven"))
 
-                self.assertEqual("working at ~/lab/seven", lines[footer_start(lines) - 2])
+                self.assertEqual("working at ~/lab/seven", lines[footer_start(lines)])
 
     def test_a_session_without_a_directory_prints_no_context_line(self) -> None:
         lines = frame(self.source, _state(ConsumerScreen.DASHBOARD, workspace=""))
