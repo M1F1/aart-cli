@@ -1645,13 +1645,16 @@ _FORM_SCREENS = frozenset(
         MaintainerScreen.REPOSITORY_SCAN,
     }
 )
-_FORM_TOGGLE_SCREENS = frozenset(
-    {
-        ConsumerScreen.REGISTRY_ADD,
-        MaintainerScreen.SOURCE_ADD,
-        MaintainerScreen.REGISTRY_INIT,
-    }
-)
+#: What Space changes on each form that has something to change, said by name.
+#:
+#: `QA-088`: the sentence that used to carry this -- "Space toggles default", "Space switches
+#: kind" -- is gone from the screen, so a shared "Toggle" would have dropped the only word that
+#: said what the key is for.
+_FORM_TOGGLE_LABELS: dict[ApplicationScreen, str] = {
+    ConsumerScreen.REGISTRY_ADD: "Make default",
+    MaintainerScreen.SOURCE_ADD: "Switch kind",
+    MaintainerScreen.REGISTRY_INIT: "Local commit",
+}
 _CONFIRM_SCREENS = frozenset(
     {
         ConsumerScreen.READY,
@@ -1740,9 +1743,15 @@ def key_bindings(
         # the other way round: a key advertised nowhere is as unusable as one that does nothing.
         bindings.append(KeyBinding("p", "Publish to a review branch"))
     elif state.session.screen in _FORM_SCREENS:
+        # `QA-088`: a form accepts four keys and used to describe them in a sentence above a
+        # legend that advertised two. They are all keys, so they are all in the legend, in the
+        # order a reader uses them: change a field, then move on.
+        bindings.append(KeyBinding("Type", "Edit"))
+        bindings.append(KeyBinding("Backspace", "Delete"))
+        toggle = _FORM_TOGGLE_LABELS.get(state.session.screen)
+        if toggle is not None:
+            bindings.append(KeyBinding("Space", toggle))
         bindings.append(KeyBinding("Enter", "Next / continue"))
-        if state.session.screen in _FORM_TOGGLE_SCREENS:
-            bindings.append(KeyBinding("Space", "Toggle"))
     elif state.session.screen is ConsumerScreen.SETTINGS:
         bindings.append(KeyBinding("Space/Enter", "Change"))
     elif state.session.screen is MaintainerScreen.CANDIDATE_FILTERS:

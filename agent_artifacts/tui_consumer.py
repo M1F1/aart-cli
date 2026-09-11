@@ -1266,32 +1266,18 @@ _REGISTRY_REBUILD_INTRO: tuple[str, ...] = (
 )
 """Why a rebuild is offered, and the boundary it stops at (`QA-087`)."""
 
-_FORM_PROSE: dict[ConsumerScreen | MaintainerScreen, tuple[tuple[str, ...], str]] = {
-    ConsumerScreen.REGISTRY_ADD: (
-        _REGISTRY_ADD_INTRO,
-        "Type to edit; Backspace removes; Space toggles default; Enter advances.",
-    ),
-    MaintainerScreen.SOURCE_ADD: (
-        _SOURCE_ADD_INTRO,
-        "Type to edit; Backspace removes; Space switches kind; Enter advances.",
-    ),
-    MaintainerScreen.REGISTRY_INIT: (
-        _REGISTRY_INIT_INTRO,
-        "Type to edit; Backspace removes; Space toggles the commit; Enter advances.",
-    ),
-    MaintainerScreen.REPOSITORY_SCAN: (
-        _REPOSITORY_SCAN_INTRO,
-        "Type to edit; Backspace removes; Enter advances.",
-    ),
-    MaintainerScreen.REGISTRY_REBUILD: (
-        _REGISTRY_REBUILD_INTRO,
-        "Enter reviews the run under the cursor.",
-    ),
+_FORM_PROSE: dict[ConsumerScreen | MaintainerScreen, tuple[str, ...]] = {
+    ConsumerScreen.REGISTRY_ADD: _REGISTRY_ADD_INTRO,
+    MaintainerScreen.SOURCE_ADD: _SOURCE_ADD_INTRO,
+    MaintainerScreen.REGISTRY_INIT: _REGISTRY_INIT_INTRO,
+    MaintainerScreen.REPOSITORY_SCAN: _REPOSITORY_SCAN_INTRO,
+    MaintainerScreen.REGISTRY_REBUILD: _REGISTRY_REBUILD_INTRO,
 }
-"""Every form, as what it says about itself and the one line addressed to the reader.
+"""Every form, as what it says about itself -- and nothing it says about the keyboard.
 
 A table rather than a branch: `QA-087` is one rule for five screens, and a screen that wants a
-sixth adds a row here instead of a shape of its own.
+sixth adds a row here instead of a shape of its own. `QA-088` is why no key line is in here: a key
+the screen accepts is advertised in the legend, which is the block that exists to answer that.
 """
 
 _FIRST_RUN_LINES: tuple[str, ...] = (
@@ -2380,8 +2366,7 @@ class CanonicalScreenSource:
         prompt last with a blank above it -- it moved block, not position.
         """
 
-        prose = _FORM_PROSE.get(state.session.screen)
-        return () if prose is None else action_prompt(*prose)
+        return _FORM_PROSE.get(state.session.screen, ())
 
     def _first_run(self) -> bool:
         """A machine that has nothing, not merely a machine with no source configured (`B-080`).

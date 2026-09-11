@@ -157,6 +157,17 @@ Each new entry records:
       Scan Repository and Rebuild Registry followed through one table, `_FORM_PROSE`, and
       `MIXED_SCREENS` is now empty. **Still open:** the review and result screens. `CP-22` step 14.
 
+- [x] **QA-088 — a form described in prose the keys the footer advertises two lines below.**
+      Surface: Add Registry, Add Source, Initialize Registry, Scan Repository, Rebuild Registry.
+      Severity: medium. Observed: every form closed with a line such as *"Type to edit; Backspace
+      removes; Space toggles default; Enter advances."* while the legend directly below it already
+      offered `[Enter]` and `[Space]` — *"duzo z tego powinno byc w klawiszach u dolu a nie w
+      informacji"*, and of the Rebuild screen's own version, *"ta informacja jest zbedna"*.
+      Expected: a key the screen accepts belongs in the block that exists to answer that.
+      Landed (2026-09-11): the sentence is gone from all five forms; `key_bindings` gives a form
+      `[Type] Edit`, `[Backspace] Delete` and `[Enter] Next / continue`, and `_FORM_TOGGLE_LABELS`
+      names what Space changes per screen so the word the prose carried is not lost with it.
+
 - [x] **QA-086 — `working at` floated above the terminal's blank space instead of sitting on the
       footer.** Surface: every screen. Severity: medium. Observed: the frame padded a short screen
       immediately above the key legend's rule, so the launch directory was pushed to the top of

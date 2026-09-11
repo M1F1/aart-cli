@@ -59,6 +59,7 @@ reads like a row.
 | QA-085 | A lab that loses its marker can be neither reset nor set up over | partly landed |
 | QA-086 | `working at` floated above the terminal's blank space instead of sitting on the footer | landed, `D-242` |
 | QA-087 | Every view fills the skeleton differently; actions and view status share a block | in progress |
+| QA-088 | A form described in prose the keys the footer directly below it advertises | landed |
 
 ## Steps
 
@@ -130,6 +131,16 @@ reads like a row.
     prose that can be lost. `MIXED_SCREENS` is now empty; the assertion on it stays, because an
     empty set that something asserts on is what stands between a future exception and nobody
     noticing.
+
+13a. **A key is advertised, not described (`QA-088`).** DONE. Moving each form's prose below the
+    rule put four keys described in a sentence directly above a legend that advertised two of
+    them, and the operator read it back: *"duzo z tego powinno byc w klawiszach u dolu a nie w
+    informacji"*, then *"ta informacja jest zbedna: Enter reviews the run under the cursor"*. The
+    sentence is gone from all five forms. `key_bindings` now gives a form `[Type] Edit`,
+    `[Backspace] Delete` and `[Enter] Next / continue`, and `_FORM_TOGGLE_LABELS` names what Space
+    changes on each screen that has something to change — a shared "Toggle" would have dropped the
+    only word that said what the key is for. This is the canonical structure's last line read
+    strictly: *the keys this screen accepts, and no key it does not* — and, now, no key said twice.
 
 14. **Review and result screens.** The decision being offered is the actions block; what the review
     is about is view status.

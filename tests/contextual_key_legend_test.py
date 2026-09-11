@@ -105,6 +105,42 @@ class ContextualKeyLegendTest(unittest.TestCase):
         self.assertIn("[/] Search", marketplace)
         self.assertIn("[i] Install", marketplace)
 
+    def test_a_form_advertises_the_keys_that_edit_it(self) -> None:
+        """`QA-088`: a key the screen accepts belongs in the legend, not in a sentence.
+
+        Every form used to close with a line spelling out what typing, Backspace, Space and Enter
+        do -- four keys described in prose while the footer directly below advertised two of them.
+        The operator read it and said so: *"duzo z tego powinno byc w klawiszach u dolu a nie w
+        informacji"*.
+        """
+
+        for screen in (
+            ConsumerScreen.REGISTRY_ADD,
+            MaintainerScreen.SOURCE_ADD,
+            MaintainerScreen.REGISTRY_INIT,
+            MaintainerScreen.REPOSITORY_SCAN,
+        ):
+            with self.subTest(screen=screen):
+                footer = self._footer(_state(screen))
+
+                self.assertIn("[Type] Edit", footer)
+                self.assertIn("[Backspace] Delete", footer)
+                self.assertIn("[Enter] Next / continue", footer)
+
+    def test_a_form_toggle_is_advertised_by_what_it_changes(self) -> None:
+        """The prose that said what Space does is gone, so the legend has to carry its meaning."""
+
+        expected = {
+            ConsumerScreen.REGISTRY_ADD: "[Space] Make default",
+            MaintainerScreen.SOURCE_ADD: "[Space] Switch kind",
+            MaintainerScreen.REGISTRY_INIT: "[Space] Local commit",
+        }
+        for screen, binding in expected.items():
+            with self.subTest(screen=screen):
+                self.assertIn(binding, self._footer(_state(screen)))
+
+        self.assertNotIn("Space", self._footer(_state(MaintainerScreen.REPOSITORY_SCAN)))
+
     def test_global_exit_and_help_keys_remain_visible_on_every_screen(self) -> None:
         for screen in (ConsumerScreen.DASHBOARD, MaintainerScreen.REGISTRY):
             with self.subTest(screen=screen):

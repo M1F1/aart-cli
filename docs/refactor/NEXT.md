@@ -48,6 +48,11 @@ Landed so far:
   (`QA-087`, `QA-029`; `D-243`). **`MIXED_SCREENS` is empty**; the assertion on it stays as the
   only thing that would notice a future exception.
 
+- A key is advertised, not described (`QA-088`): the prose that moved below the rule turned out to
+  describe four keys two lines above a legend that advertised two of them. All five forms lost the
+  sentence; a form's legend now reads `[Type] Edit   [Backspace] Delete   [Space] <what it changes>
+  [Enter] Next / continue`, with `_FORM_TOGGLE_LABELS` carrying the word the prose used to.
+
 **Exact next action: step 14** — the review and result screens. The decision being offered is the
 actions block; what the review is about is view status. Then step 15 (`QA-085`, the lab that lost
 its marker) and step 16, the full quality gate and the operator's third manual run over

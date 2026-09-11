@@ -83,17 +83,6 @@ def _spoken(block: tuple[str, ...]) -> tuple[str, ...]:
     return tuple(line for line in block if line.strip())
 
 
-def _trimmed(block: tuple[str, ...]) -> tuple[str, ...]:
-    """A block without the blanks the composition sets it off with, so its own blanks show."""
-
-    lines = list(block)
-    while lines and not lines[0].strip():
-        lines.pop(0)
-    while lines and not lines[-1].strip():
-        lines.pop()
-    return tuple(lines)
-
-
 class DashboardBlockTest(TestCase):
     """The Dashboard the operator drew, read off the real composition."""
 
@@ -425,8 +414,9 @@ class AddRegistryFormBlockTest(TestCase):
     """Screen 22, the first form. The operator settled it: everything explanatory below the rule.
 
     *"Wszystko pod pola"* -- so a form is not an exception, and `Frame` gains no block above the
-    rows. The introduction, the reassurance about what is not being changed, and the line saying
-    what a key press does are all things that only read, and they read below what they are about.
+    rows. The introduction and the reassurance about what is not being changed only read, and they
+    read below what they are about. What a key press does is not one of them: `QA-088` sends that
+    to the legend, which is the block that exists to answer it.
     """
 
     def _frame(self) -> tuple[str, ...]:
@@ -453,7 +443,7 @@ class AddRegistryFormBlockTest(TestCase):
             ),
         )
 
-    def test_the_introduction_and_the_key_prompt_read_below_the_fields(self) -> None:
+    def test_the_introduction_reads_below_the_fields(self) -> None:
         blocks = _blocks(self._frame())
 
         self.assertEqual(
@@ -462,20 +452,21 @@ class AddRegistryFormBlockTest(TestCase):
                 "Connect an approved registry. AART validates a fresh snapshot before saving it.",
                 "Local folders are authoring Sources, not Marketplace registries.",
                 "This adds another registry. Nothing already connected is changed.",
-                "Type to edit; Backspace removes; Space toggles default; Enter advances.",
             ),
         )
 
-    def test_the_key_prompt_is_still_the_last_line_with_a_blank_above_it(self) -> None:
-        """`QA-029`: the one line addressed to the reader must not be buried."""
+    def test_the_screen_says_nothing_about_the_keyboard(self) -> None:
+        """`QA-088`: the four keys this form accepts are advertised, not described."""
 
-        status = _trimmed(_blocks(self._frame())[2])
+        rendered = self._frame()
 
-        self.assertEqual(
-            status[-1],
-            "Type to edit; Backspace removes; Space toggles default; Enter advances.",
+        self.assertNotIn(
+            "Type to edit; Backspace removes; Space toggles default; Enter advances.", rendered
         )
-        self.assertEqual(status[-2], "")
+        self.assertIn(
+            "[Type] Edit   [Backspace] Delete   [Space] Make default   [Enter] Next / continue",
+            rendered,
+        )
 
 
 class MaintainerFormBlockTest(TestCase):
@@ -525,25 +516,27 @@ class MaintainerFormBlockTest(TestCase):
 
                 self.assertTrue(status[0].startswith(starts), status[:1])
 
-    def test_each_form_keeps_its_key_prompt_last_with_a_blank_above_it(self) -> None:
-        """`QA-029`: moving the prompt into view status must not bury it there."""
+    def test_no_form_spells_out_in_prose_what_the_legend_already_advertises(self) -> None:
+        """`QA-088`: a key the screen accepts is a key in the footer, not a sentence above it.
 
-        prompts = {
-            MaintainerScreen.SOURCE_ADD: (
-                "Type to edit; Backspace removes; Space switches kind; Enter advances."
-            ),
-            MaintainerScreen.REGISTRY_INIT: (
-                "Type to edit; Backspace removes; Space toggles the commit; Enter advances."
-            ),
-            MaintainerScreen.REPOSITORY_SCAN: "Type to edit; Backspace removes; Enter advances.",
-            MaintainerScreen.REGISTRY_REBUILD: "Enter reviews the run under the cursor.",
-        }
-        for screen, prompt in prompts.items():
+        *"duzo z tego powinno byc w klawiszach u dolu a nie w informacji"* -- and the one the
+        operator named twice, *"Enter reviews the run under the cursor"*, said nothing the footer's
+        `[Enter] Review run` was not already saying two lines below it.
+        """
+
+        for screen in (
+            MaintainerScreen.SOURCE_ADD,
+            MaintainerScreen.REGISTRY_INIT,
+            MaintainerScreen.REPOSITORY_SCAN,
+            MaintainerScreen.REGISTRY_REBUILD,
+        ):
             with self.subTest(screen=screen):
-                status = _trimmed(_blocks(self._frame(screen))[2])
-
-                self.assertEqual(status[-1], prompt)
-                self.assertEqual(status[-2], "")
+                for line in _spoken(_blocks(self._frame(screen))[2]):
+                    self.assertNotRegex(
+                        line,
+                        r"\b(Type to edit|Backspace|Enter (advances|reviews)|Space (toggles|switches))\b",
+                        f"{screen.value}: the footer already says this -- {line!r}",
+                    )
 
     def test_the_boundary_a_run_holds_is_still_stated_where_the_run_is_chosen(self) -> None:
         """`161.7`/`164.7`: the sentence moved block, and must not have been lost with the move."""
