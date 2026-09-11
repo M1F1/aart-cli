@@ -433,12 +433,12 @@
         },
         {
           "id": "8",
-          "title": "Harness delivery is one honest answer across Artifact Details, review, Remediation and Success (QA-078/QA-079/QA-080) — diagnosed in D-231, lands with step 3's setup path",
+          "title": "Harness delivery is one honest answer across Artifact Details, review, Remediation and Success (QA-078/QA-079/QA-080) \u2014 diagnosed in D-231, lands with step 3's setup path",
           "status": "done"
         },
         {
           "id": "9",
-          "title": "Publish the reviewed registry commit from inside AART to a configured branch that is never the default (QA-082/QA-055, D-228) — rule, command and push adapter done; the Registry Commit screen action is next",
+          "title": "Publish the reviewed registry commit from inside AART to a configured branch that is never the default (QA-082/QA-055, D-228) \u2014 rule, command and push adapter done; the Registry Commit screen action is next",
           "status": "done"
         },
         {
@@ -450,6 +450,58 @@
           "id": "11",
           "title": "Targeted mutations, full gates and durable handoff",
           "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "CP-22",
+      "title": "One screen structure, and the third manual run",
+      "status": "in_progress",
+      "steps": [
+        {
+          "id": "1",
+          "title": "The launch directory is the footer's caption, flush on its rule (QA-086)",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "The screen skeleton is a type whose field order is the layout (QA-087)",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "The screen source answers blocks rather than lines, held over every screen (QA-087)",
+          "status": "todo"
+        },
+        {
+          "id": "4",
+          "title": "Dashboard and Maintainer Dashboard: rows alone, guidance and counts in view status (QA-087)",
+          "status": "todo"
+        },
+        {
+          "id": "5",
+          "title": "Registries, Sources, Candidates and the other lists (QA-087)",
+          "status": "todo"
+        },
+        {
+          "id": "6",
+          "title": "Forms and sequences: Add Registry, Add Source, Initialize Registry, Repository Scan, Registry Rebuild (QA-087)",
+          "status": "todo"
+        },
+        {
+          "id": "7",
+          "title": "Review and result screens (QA-087)",
+          "status": "todo"
+        },
+        {
+          "id": "8",
+          "title": "A manual-test lab that lost its marker can be cleared (QA-085)",
+          "status": "todo"
+        },
+        {
+          "id": "9",
+          "title": "Full quality gate and the operator's third manual run over QA-044..QA-087",
+          "status": "todo"
         }
       ]
     }

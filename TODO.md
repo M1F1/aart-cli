@@ -137,6 +137,20 @@ Each new entry records:
 
 #### CP-22 — third manual TUI run (2026-09-11)
 
+- [ ] **QA-087 — every view fills the skeleton differently, and actions share a block with the
+      view's status.** Surface: every screen. Severity: high. Observed: on Registries the one
+      actionable row `> [ Add Registry ]` stands in the same block as four lines of prose about
+      registries; on the Dashboard the first-run panel sits above the navigation rows inside their
+      block. *"nigdy akcja i menu do wyboru nie powinno byc w jednym bloku z statusem widoku"*;
+      *"kazdy widok powinien miec ta strukture … bo teraz co widok jest inaczej mam wrazenie"*.
+      Expected: one structure for every view — trail, actions, cursor description, view status,
+      `working at`, keys — enforced in code rather than by convention, *"zeby nie bylo zbyt wielu
+      wyjatkow od reguly"*.
+      Partly landed (2026-09-11): the skeleton is a type (`Frame`, `4869c10`) whose field order is
+      the layout, with the arrangement derived from the declaration and held as properties over
+      generated frames. **Still open:** the screens themselves — the source still answers one
+      undifferentiated body, so `actions` currently receives prose. `CP-22` steps 3-7.
+
 - [x] **QA-086 — `working at` floated above the terminal's blank space instead of sitting on the
       footer.** Surface: every screen. Severity: medium. Observed: the frame padded a short screen
       immediately above the key legend's rule, so the launch directory was pushed to the top of

@@ -1,5 +1,21 @@
 # AART Refactor Migration Status
 
+**CP-22 opened — one screen structure (2026-09-11).** The operator walked CP-21's skeleton and
+reported that it is real but filled differently by every screen, with the rule stated by name:
+actions and view status never share a block. Two steps have landed. `working at` is the footer's
+caption, drawn flush on its rule so the terminal's padding falls above it rather than between it
+and the keys (`QA-086`, `D-242` revising `D-235`, `f43e9ff`). And the skeleton is now a type rather
+than a call convention: `Frame` names the blocks, its field order is the layout, `render` derives
+the arrangement from `dataclasses.fields` so no second place can disagree, and the claims are
+Hypothesis properties over generated frames rather than examples (`QA-087`, `4869c10`).
+
+What is left is the screens. `ConsumerScreenSource.lines` still answers one undifferentiated body,
+so the block named `actions` currently receives prose — the type is honest about where things go
+and not yet about what is in them. Step 3 replaces `lines` with `actions`, moves the rest to
+`status`, and holds it with a test over every screen; steps 4-7 then move the screens themselves,
+one concrete view at a time. Slice: `docs/refactor/slices/CP-22-one-screen-structure.md`; epic
+`CP-22` in `plan.json`.
+
 **CP-20 IMPLEMENTED — awaiting manual retest (2026-09-09).** All seven machine-readable plan steps
 are done. Connected Registry snapshots and the current local project are distinct; internal route
 identifiers no longer leak through the reported paths; Fast installation omits a no-decision

@@ -1,5 +1,36 @@
 # AART Refactor — Next Work
 
+## CP-22 current objective (2026-09-11)
+
+**CP-22 is OPEN — 2 of 9 steps done.** Slice document:
+[`slices/CP-22-one-screen-structure.md`](slices/CP-22-one-screen-structure.md).
+
+CP-21 gave every screen one skeleton; the operator walked it and found the skeleton real but filled
+differently by every screen — *"kazdy widok powinien miec ta strukture … bo teraz co widok jest
+inaczej mam wrazenie"*, and *"to powinno byc w kodzie zeby nie bylo zbyt wielu wyjatkow od
+reguly"*. The rule they stated by name: **actions and view status never share a block.**
+
+Landed so far:
+
+- The launch directory is the footer's caption, flush on its rule, with the terminal's padding
+  above it rather than between it and the keys (`QA-086`; `D-242` revising `D-235`, `f43e9ff`).
+- The skeleton is a type: `Frame` names the blocks, its field order *is* the layout, `render`
+  derives the arrangement from the declaration, and the claims are Hypothesis properties over
+  generated frames rather than examples (`QA-087`, `4869c10`).
+
+**Exact next action: step 3.** `ConsumerScreenSource.lines` returns one undifferentiated body,
+which is the hole the prose falls through — a screen has nowhere to put "what this view is" except
+the block the cursor rows live in. Replace it with `actions`, let `status` carry the rest, and hold
+it with a test over *every* screen that nothing in the actions block is something the cursor cannot
+act on. Without that test the split is a convention again, which is exactly what the operator asked
+to stop.
+
+Steps 4 through 7 then move the screens, one concrete view at a time and never in the abstract:
+*"musimy rozmawiac zawsze o konkretnych widokach"*. Step 6 carries an open question for the
+operator about form introductions, to be asked on a rendered frame.
+
+CP-21 remains **IMPLEMENTED — AWAITING MANUAL RETEST**; its retest folds into CP-22 step 9.
+
 ## CP-21 current objective (2026-09-11)
 
 **CP-21 is IMPLEMENTED — AWAITING MANUAL RETEST.** All eleven steps in `docs/refactor/plan.json`
