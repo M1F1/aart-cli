@@ -1,6 +1,6 @@
 # CP-22 — One screen structure, and the third manual run
 
-Status: OPEN — 6 OF 16 STEPS DONE
+Status: OPEN — 7 OF 16 STEPS DONE
 
 ## Goal
 
@@ -99,9 +99,11 @@ reads like a row.
    toggle currently implies is a consequence of a setting rather than a setting, so it is view
    status: `settings_consequence`. A sentence standing under four toggles reads like a fifth.
 
-7. **Screen 29 Doctor.** The artifact rows alone; the ready/attention counts and the line about
-   repairing with minimal reconciliation plans into the view status. Its body also repeats the
-   title as a first line, which the trail already carries.
+7. **Screen 29 Doctor.** DONE. `doctor_rows` is one row per artifact with whatever drifted on it;
+   `doctor_status` is the counts, what repair would do, and Verbose's independently-repairable
+   list — all facts about the set rather than about any row. `render_doctor` composes both plus
+   the title for the command line, which has no blocks to put them in; the TUI drops that title,
+   since the trail already says where this is (`QA-077`).
 
 8. **Screen 46 Registry Maintainer.** The rows alone; the two workspace explanations — connected
    snapshots, local workspace — into the view status.

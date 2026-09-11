@@ -158,6 +158,8 @@ __all__ = [
     "render_credential",
     "render_credential_action",
     "render_dashboard",
+    "doctor_rows",
+    "doctor_status",
     "render_doctor",
     "render_inspection",
     "render_install_plan",
@@ -909,27 +911,47 @@ def settings_consequence(view: ConsumerSettings) -> tuple[str, ...]:
     return ("Maintainer Mode off hides Sources, Candidates, Promotion and Publish.",)
 
 
-def render_doctor(view: DoctorView, profile: PresentationProfile) -> tuple[str, ...]:
-    if not isinstance(view, DoctorView) or not isinstance(profile, PresentationProfile):
-        raise ValueError("Doctor rendering needs a Doctor view and presentation profile")
-    lines = ["AART / Check system"]
+def doctor_rows(view: DoctorView) -> tuple[str, ...]:
+    """One row per installed artifact, with whatever drifted on it underneath (`QA-087`)."""
+
+    if not isinstance(view, DoctorView):
+        raise ValueError("Doctor rendering needs a Doctor view")
+    lines: list[str] = []
     for item in view.artifacts:
         marker = "✓" if item.health in {"ready", "update"} else "⚠"
         lines.append(f"{marker} {item.coordinate}")
         if item.health in {"attention", "broken"}:
             lines.extend(f"  {drift.component}: {_human(drift.kind)}" for drift in item.drift)
-    lines.extend(
-        (
-            f"{view.ready_count} ready",
-            f"{view.attention_count} needs attention",
-        )
-    )
+    return tuple(lines)
+
+
+def doctor_status(view: DoctorView, profile: PresentationProfile) -> tuple[str, ...]:
+    """How the machine is, rather than how any one artifact is.
+
+    Counts summarise the rows, and repair acts on the whole set rather than on the row under the
+    cursor, so neither is a row. Verbose adds to this and not to the list, because what it adds --
+    which issues can be repaired on their own -- is also a fact about the set (`QA-087`).
+    """
+
+    if not isinstance(view, DoctorView) or not isinstance(profile, PresentationProfile):
+        raise ValueError("Doctor rendering needs a Doctor view and presentation profile")
+    lines = [f"{view.ready_count} ready", f"{view.attention_count} needs attention"]
     if view.actions:
         lines.append("Actions: repair issues using minimal reconciliation plans.")
     if profile is PresentationProfile.VERBOSE and view.repairable_issues:
         lines.append("Independently repairable:")
         lines.extend(f"  - {item}" for item in view.repairable_issues)
     return tuple(lines)
+
+
+def render_doctor(view: DoctorView, profile: PresentationProfile) -> tuple[str, ...]:
+    """The whole report, top to bottom, for a command line that has no blocks to put it in.
+
+    The TUI takes the two halves separately and the frame names the screen, so the title here is
+    the command line's alone (`QA-077`).
+    """
+
+    return ("AART / Check system", *doctor_rows(view), *doctor_status(view, profile))
 
 
 def render_required_inputs(
@@ -2302,6 +2324,12 @@ class CanonicalScreenSource:
             # `QA-087`: first-run guidance and the counts are both answers to "what state is this
             # in", so they belong here rather than above the rows, inside the rows' own block.
             return _FIRST_RUN_LINES if self._first_run() else render_dashboard(screens.dashboard)
+        if screen is ConsumerScreen.DOCTOR:
+            return (
+                ()
+                if screens.doctor is None
+                else doctor_status(screens.doctor, state.session.profile)
+            )
         if screen is ConsumerScreen.SETTINGS:
             # From the session's own settings, not the machine snapshot: the same reason the rows
             # are drawn from `state.settings`.
@@ -2839,7 +2867,7 @@ class CanonicalScreenSource:
             return (
                 ("Nothing has been checked yet.",)
                 if screens.doctor is None
-                else render_doctor(screens.doctor, profile)
+                else doctor_rows(screens.doctor)
             )
         # A screen added to the catalog without a body reaches here. It is a guard against drawing
         # a blank frame, not a statement about the accepted catalog: no accepted screen reaches it.

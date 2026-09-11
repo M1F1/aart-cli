@@ -491,12 +491,12 @@
         {
           "id": "7",
           "title": "Screen 29 Doctor: the artifact rows alone, counts and repair note in view status (QA-087)",
-          "status": "in_progress"
+          "status": "done"
         },
         {
           "id": "8",
           "title": "Screen 46 Registry Maintainer: the rows alone, the two workspace explanations in view status (QA-087)",
-          "status": "todo"
+          "status": "in_progress"
         },
         {
           "id": "9",

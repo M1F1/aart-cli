@@ -30,7 +30,12 @@ from agent_artifacts.application.maintainer_views import (
     project_maintainer_candidates,
     project_maintainer_dashboard,
 )
-from agent_artifacts.tui_consumer import CanonicalScreenSource, ConsumerScreens, frame
+from agent_artifacts.tui_consumer import (
+    CanonicalScreenSource,
+    ConsumerScreens,
+    frame,
+    render_doctor,
+)
 from agent_artifacts.tui_layout import SECTION_RULE
 from tests.consumer_shell_test import screens
 from tests.screen_skeleton_test import _registry
@@ -40,7 +45,6 @@ from tests.screen_skeleton_test import _registry
 MIXED_SCREENS = frozenset(
     {
         ConsumerScreen.REGISTRY_ADD,
-        ConsumerScreen.DOCTOR,
         MaintainerScreen.SOURCE_ADD,
         MaintainerScreen.REGISTRY,
         MaintainerScreen.REGISTRY_INIT,
@@ -281,6 +285,70 @@ class SettingsBlockTest(TestCase):
         )
 
 
+class DoctorBlockTest(TestCase):
+    """Screen 29: what is installed and how it is, then how the whole machine is."""
+
+    def _frame(self, *, verbose: bool = False) -> tuple[str, ...]:
+        profile = PresentationProfile.VERBOSE if verbose else PresentationProfile.FAST
+        source = CanonicalScreenSource(screens())
+        state = ConsumerUiState(
+            ConsumerSession(ConsumerScreen.DOCTOR, profile=profile),
+            settings=ConsumerSettings(profile=profile),
+            workspace="/lab",
+        )
+        state = replace(state, rows=source.rows(state), cursor=0)
+        return frame(source, state)
+
+    def test_the_actions_block_holds_the_artifacts_and_what_drifted_on_them(self) -> None:
+        blocks = _blocks(self._frame())
+
+        self.assertEqual(
+            _spoken(blocks[1]),
+            (
+                "✓ public/mcp/github@1.6.0",
+                "⚠ public/mcp/jira@2.2.0",
+                "  launcher: missing",
+            ),
+        )
+
+    def test_the_counts_and_what_repair_would_do_are_the_state_of_the_view(self) -> None:
+        blocks = _blocks(self._frame())
+
+        self.assertEqual(
+            _spoken(blocks[2]),
+            (
+                "1 ready",
+                "1 needs attention",
+                "Actions: repair issues using minimal reconciliation plans.",
+            ),
+        )
+
+    def test_verbose_adds_to_the_state_of_the_view_not_to_the_rows(self) -> None:
+        blocks = _blocks(self._frame(verbose=True))
+
+        self.assertEqual(_spoken(blocks[1])[-1], "  launcher: missing")
+        self.assertEqual(
+            _spoken(blocks[2])[-2:], ("Independently repairable:", "  - public/mcp/jira@2.2.0")
+        )
+
+    def test_the_screen_does_not_name_itself_again_under_the_trail(self) -> None:
+        """`QA-077`: the trail already says where this is; a second title is noise."""
+
+        lines = self._frame()
+
+        self.assertEqual(lines[0], "AART / Doctor")
+        self.assertNotIn("AART / Check system", lines)
+
+    def test_the_command_line_still_gets_the_whole_report(self) -> None:
+        """`render_doctor` is the CLI's output too, and a report is read top to bottom."""
+
+        rendered = render_doctor(screens().doctor, PresentationProfile.FAST)
+
+        self.assertEqual(rendered[0], "AART / Check system")
+        self.assertIn("✓ public/mcp/github@1.6.0", rendered)
+        self.assertIn("1 needs attention", rendered)
+
+
 class EveryScreenBlockTest(TestCase):
     """The enforcement: a migrated screen's actions block holds only what the cursor acts on."""
 
@@ -306,6 +374,6 @@ class EveryScreenBlockTest(TestCase):
                     )
 
     def test_the_list_of_screens_that_still_mix_only_ever_shrinks(self) -> None:
-        """A reminder in the only place that would notice: seven left, and no route to add one."""
+        """A reminder in the only place that would notice: six left, and no route to add one."""
 
-        self.assertEqual(len(MIXED_SCREENS), 7)
+        self.assertEqual(len(MIXED_SCREENS), 6)
