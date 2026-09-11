@@ -23,6 +23,7 @@ from agent_artifacts.tui_consumer import (
     render_doctor,
     render_registry,
     render_settings,
+    settings_consequence,
 )
 from tests.marketplace_fixtures import (
     artifact,
@@ -159,7 +160,13 @@ class ConsumerOverviewTest(unittest.TestCase):
         self.assertIn("Maintainer Mode: off", rendered)
         self.assertIn("Experience\n  Detail level: Fast\n\nInstallation", rendered)
         self.assertIn("Updates\n  Show available updates: on\n\nAdvanced", rendered)
-        self.assertIn("Maintainer Mode: off\n\nMaintainer Mode off hides", rendered)
+        # `QA-087`: what the toggle implies is the state of the view, not a fifth row under the
+        # four toggles, so it is no longer part of what the rows render to.
+        self.assertNotIn("Maintainer Mode off hides", rendered)
+        self.assertEqual(
+            settings_consequence(settings),
+            ("Maintainer Mode off hides Sources, Candidates, Promotion and Publish.",),
+        )
 
 
 if __name__ == "__main__":

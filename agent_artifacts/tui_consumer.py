@@ -176,6 +176,7 @@ __all__ = [
     "render_required_inputs",
     "render_review_selection",
     "render_settings",
+    "settings_consequence",
     "render_success",
     "run_consumer_shell",
 ]
@@ -891,13 +892,21 @@ def render_settings(view: ConsumerSettings, focus: str = "") -> tuple[str, ...]:
     groups: list[tuple[str, ...]] = []
     for row in SETTING_ROWS:
         groups.append((headings[row], f"{'> ' if row == focus else '  '}{values[row]}"))
-    lines = list(separate(*groups))
-    lines.append("")
+    return separate(*groups)
+
+
+def settings_consequence(view: ConsumerSettings) -> tuple[str, ...]:
+    """What the Maintainer Mode toggle currently implies for the rest of the application.
+
+    It is a consequence of a setting rather than a setting, so it is the state of the view rather
+    than a row -- and a sentence standing under four toggles reads like a fifth one (`QA-087`).
+    """
+
+    if not isinstance(view, ConsumerSettings):
+        raise ValueError("settings rendering needs consumer settings")
     if view.maintainer_mode:
-        lines.append("Maintainer screens are reachable from the Dashboard.")
-    else:
-        lines.append("Maintainer Mode off hides Sources, Candidates, Promotion and Publish.")
-    return tuple(lines)
+        return ("Maintainer screens are reachable from the Dashboard.",)
+    return ("Maintainer Mode off hides Sources, Candidates, Promotion and Publish.",)
 
 
 def render_doctor(view: DoctorView, profile: PresentationProfile) -> tuple[str, ...]:
@@ -2293,6 +2302,10 @@ class CanonicalScreenSource:
             # `QA-087`: first-run guidance and the counts are both answers to "what state is this
             # in", so they belong here rather than above the rows, inside the rows' own block.
             return _FIRST_RUN_LINES if self._first_run() else render_dashboard(screens.dashboard)
+        if screen is ConsumerScreen.SETTINGS:
+            # From the session's own settings, not the machine snapshot: the same reason the rows
+            # are drawn from `state.settings`.
+            return settings_consequence(state.settings)
         if screen is ConsumerScreen.REGISTRIES:
             return (
                 _REGISTRY_EXPLANATION

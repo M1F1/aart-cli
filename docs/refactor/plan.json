@@ -486,12 +486,12 @@
         {
           "id": "6",
           "title": "Screen 27 Settings: the toggles alone, the Maintainer Mode note in view status (QA-087)",
-          "status": "in_progress"
+          "status": "done"
         },
         {
           "id": "7",
           "title": "Screen 29 Doctor: the artifact rows alone, counts and repair note in view status (QA-087)",
-          "status": "todo"
+          "status": "in_progress"
         },
         {
           "id": "8",

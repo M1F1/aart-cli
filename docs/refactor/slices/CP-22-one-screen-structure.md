@@ -1,6 +1,6 @@
 # CP-22 — One screen structure, and the third manual run
 
-Status: OPEN — 5 OF 16 STEPS DONE
+Status: OPEN — 6 OF 16 STEPS DONE
 
 ## Goal
 
@@ -94,8 +94,10 @@ reads like a row.
    questions, so both went to the view status, the second only while there is nothing connected.
    This is the screen the operator drew.
 
-6. **Screen 27 Settings.** The toggles alone; the note that Maintainer screens are reachable from
-   the Dashboard into the view status.
+6. **Screen 27 Settings.** DONE. The four toggles alone, keeping the group headings that organise
+   them — a heading is how rows are arranged, not prose about them. What the Maintainer Mode
+   toggle currently implies is a consequence of a setting rather than a setting, so it is view
+   status: `settings_consequence`. A sentence standing under four toggles reads like a fifth.
 
 7. **Screen 29 Doctor.** The artifact rows alone; the ready/attention counts and the line about
    repairing with minimal reconciliation plans into the view status. Its body also repeats the

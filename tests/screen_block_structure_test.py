@@ -40,7 +40,6 @@ from tests.screen_skeleton_test import _registry
 MIXED_SCREENS = frozenset(
     {
         ConsumerScreen.REGISTRY_ADD,
-        ConsumerScreen.SETTINGS,
         ConsumerScreen.DOCTOR,
         MaintainerScreen.SOURCE_ADD,
         MaintainerScreen.REGISTRY,
@@ -239,6 +238,49 @@ class RegistriesBlockTest(TestCase):
         )
 
 
+class SettingsBlockTest(TestCase):
+    """Screen 27: four toggles under their group headings, and what the last one implies."""
+
+    def _frame(self, *, maintainer: bool) -> tuple[str, ...]:
+        source = CanonicalScreenSource(ConsumerScreens(project_dashboard((), registry_count=0)))
+        state = ConsumerUiState(
+            ConsumerSession(ConsumerScreen.SETTINGS),
+            settings=ConsumerSettings().with_maintainer_mode(maintainer),
+            workspace="/lab",
+        )
+        state = replace(state, rows=source.rows(state), cursor=0)
+        return frame(source, state)
+
+    def test_the_actions_block_holds_the_toggles_and_the_headings_that_group_them(self) -> None:
+        """A group heading is how the rows are organised, not prose about them."""
+
+        blocks = _blocks(self._frame(maintainer=True))
+
+        self.assertEqual(
+            _spoken(blocks[1]),
+            (
+                "Experience",
+                "> Detail level: Fast",
+                "Installation",
+                "  Default scope: Project",
+                "Updates",
+                "  Show available updates: on",
+                "Advanced",
+                "  Maintainer Mode: on",
+            ),
+        )
+
+    def test_what_the_maintainer_toggle_implies_is_the_state_of_the_view(self) -> None:
+        on = _blocks(self._frame(maintainer=True))
+        off = _blocks(self._frame(maintainer=False))
+
+        self.assertEqual(_spoken(on[2]), ("Maintainer screens are reachable from the Dashboard.",))
+        self.assertEqual(
+            _spoken(off[2]),
+            ("Maintainer Mode off hides Sources, Candidates, Promotion and Publish.",),
+        )
+
+
 class EveryScreenBlockTest(TestCase):
     """The enforcement: a migrated screen's actions block holds only what the cursor acts on."""
 
@@ -264,6 +306,6 @@ class EveryScreenBlockTest(TestCase):
                     )
 
     def test_the_list_of_screens_that_still_mix_only_ever_shrinks(self) -> None:
-        """A reminder in the only place that would notice: eight left, and no route to add one."""
+        """A reminder in the only place that would notice: seven left, and no route to add one."""
 
-        self.assertEqual(len(MIXED_SCREENS), 8)
+        self.assertEqual(len(MIXED_SCREENS), 7)

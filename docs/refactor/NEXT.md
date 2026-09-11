@@ -27,8 +27,12 @@ Landed so far:
 - Screen 21 Registries: the Add row alone, what a registry is and what this machine has both in
   view status, the second only while nothing is connected (`QA-087`; `D-243`).
 
-**Exact next action: step 6** — screen 27 Settings. `MIXED_SCREENS` is the worklist and holds
-eight: `REGISTRY_ADD`, `SETTINGS`, `DOCTOR`, `SOURCE_ADD`, `REGISTRY`, `REGISTRY_INIT`,
+- Screen 27 Settings: the toggles and their group headings alone, the Maintainer Mode consequence
+  as view status (`QA-087`; `D-243`).
+
+**Exact next action: step 7** — screen 29 Doctor, whose body also repeats the title the trail
+already carries, and whose renderer is shared with the CLI. `MIXED_SCREENS` is the worklist and
+holds seven: `REGISTRY_ADD`, `DOCTOR`, `SOURCE_ADD`, `REGISTRY`, `REGISTRY_INIT`,
 `REPOSITORY_SCAN`, `REGISTRY_REBUILD`. Each screen ends with the frame rendered before and after;
 the list shrinks by one per screen and nothing may be added to it.
 
