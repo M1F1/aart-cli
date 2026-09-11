@@ -103,6 +103,8 @@ from agent_artifacts.tui_layout import (
     separate,
 )
 from agent_artifacts.tui_maintainer import (
+    maintainer_registry_rows,
+    maintainer_registry_status,
     render_adopted_artifacts,
     render_adoption_upstream_check,
     render_maintainer_bulk_promotion,
@@ -117,7 +119,6 @@ from agent_artifacts.tui_maintainer import (
     render_maintainer_policy_review,
     render_maintainer_promotion_review,
     render_maintainer_provenance,
-    render_maintainer_registries,
     render_maintainer_registry_commit,
     render_maintainer_registry_diff,
     render_maintainer_registry_validation,
@@ -2324,6 +2325,15 @@ class CanonicalScreenSource:
             # `QA-087`: first-run guidance and the counts are both answers to "what state is this
             # in", so they belong here rather than above the rows, inside the rows' own block.
             return _FIRST_RUN_LINES if self._first_run() else render_dashboard(screens.dashboard)
+        if screen is MaintainerScreen.REGISTRY:
+            present = (
+                True
+                if screens.maintainer is None
+                else screens.maintainer.registry_workspace_present
+            )
+            return maintainer_registry_status(
+                screens.maintainer_registries(), registry_workspace_present=present
+            )
         if screen is ConsumerScreen.DOCTOR:
             return (
                 ()
@@ -2515,7 +2525,7 @@ class CanonicalScreenSource:
                 if screens.maintainer is None
                 else screens.maintainer.registry_workspace_present
             )
-            return render_maintainer_registries(
+            return maintainer_registry_rows(
                 screens.maintainer_registries(),
                 profile,
                 registry_workspace_present=present,

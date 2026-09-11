@@ -496,12 +496,12 @@
         {
           "id": "8",
           "title": "Screen 46 Registry Maintainer: the rows alone, the two workspace explanations in view status (QA-087)",
-          "status": "in_progress"
+          "status": "done"
         },
         {
           "id": "9",
           "title": "Screen 22 Add Registry: fields alone, introduction and key prompt out of the fields' block (QA-087)",
-          "status": "todo"
+          "status": "in_progress"
         },
         {
           "id": "10",

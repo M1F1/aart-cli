@@ -64,6 +64,8 @@ __all__ = [
     "render_maintainer_provenance",
     "render_maintainer_version_conflict",
     "render_maintainer_bulk_promotion",
+    "maintainer_registry_rows",
+    "maintainer_registry_status",
     "render_maintainer_registries",
     "render_maintainer_registry",
     "render_maintainer_registry_diff",
@@ -951,30 +953,68 @@ def render_maintainer_registries(
 ) -> tuple[str, ...]:
     """Screen 46 covers every configured registry: an installation may maintain more than one."""
 
+    return separate(
+        maintainer_registry_rows(
+            views, profile, registry_workspace_present=registry_workspace_present
+        ),
+        maintainer_registry_status(views, registry_workspace_present=registry_workspace_present),
+    )
+
+
+def maintainer_registry_rows(
+    views: tuple[MaintainerRegistryView, ...],
+    profile: PresentationProfile,
+    *,
+    registry_workspace_present: bool = True,
+) -> tuple[str, ...]:
+    """The subscribed snapshots, under the heading that introduces them (`QA-087`).
+
+    A heading belongs with what it introduces, so when nothing is subscribed there is no heading
+    and no block: what is missing is the state of the view, and `maintainer_registry_status` says
+    it.
+    """
+
     if not isinstance(views, tuple) or not isinstance(profile, PresentationProfile):
         raise ValueError("Maintainer registries rendering needs typed views and a profile")
-    lines: list[str] = [
-        "Connected Registry snapshots",
-        "These approved snapshots determine what Marketplace can offer.",
-        "",
-    ]
+    if not views:
+        return ()
+    lines: list[str] = ["Connected Registry snapshots"]
+    for view in views:
+        lines.append("")
+        lines.extend(
+            render_maintainer_registry(view, profile, show_working_tree=registry_workspace_present)
+        )
+    return tuple(lines)
+
+
+def maintainer_registry_status(
+    views: tuple[MaintainerRegistryView, ...],
+    *,
+    registry_workspace_present: bool = True,
+) -> tuple[str, ...]:
+    """What connected snapshots are for, and what the local checkout is (`QA-087`).
+
+    Both are standing facts about the project rather than things the cursor acts on. The screen has
+    two subjects and only one of them has rows, which is why the second one lives here whole.
+    """
+
+    if not isinstance(views, tuple):
+        raise ValueError("Maintainer registries rendering needs typed views")
+    lines: list[str] = []
     if not views:
         # `QA-075`: "No Registry is connected." sat above a five-stage initialization that had just
         # succeeded, so it read as that run having failed. It refers to *subscribed* Registries, and
         # a Registry created here is not one of them until it has been published and subscribed to
         # -- which is the same two steps `QA-060` asks the Source Sync refusal to name (`D-228`).
+        lines.append("Connected Registry snapshots")
+    lines.append("These approved snapshots determine what Marketplace can offer.")
+    if not views:
         lines.append("No Registry is subscribed in this project yet.")
         if registry_workspace_present:
             lines.append(
                 "A Registry created here becomes connectable once it is published to its "
                 "branch and subscribed to."
             )
-    for index, view in enumerate(views):
-        if index:
-            lines.append("")
-        lines.extend(
-            render_maintainer_registry(view, profile, show_working_tree=registry_workspace_present)
-        )
     lines.extend(("", "Local Registry workspace"))
     if registry_workspace_present:
         lines.append("Current project contains a Registry. Rebuild updates its generated files.")

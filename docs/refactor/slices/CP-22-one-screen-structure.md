@@ -1,6 +1,6 @@
 # CP-22 — One screen structure, and the third manual run
 
-Status: OPEN — 7 OF 16 STEPS DONE
+Status: OPEN — 8 OF 16 STEPS DONE
 
 ## Goal
 
@@ -105,8 +105,12 @@ reads like a row.
    the title for the command line, which has no blocks to put them in; the TUI drops that title,
    since the trail already says where this is (`QA-077`).
 
-8. **Screen 46 Registry Maintainer.** The rows alone; the two workspace explanations — connected
-   snapshots, local workspace — into the view status.
+8. **Screen 46 Registry Maintainer.** DONE. The screen has two subjects and rows for only one of
+   them, so `maintainer_registry_rows` is the subscribed snapshots under the heading that
+   introduces them — and nothing at all when nothing is subscribed, since a heading over nothing
+   is the empty section `QA-065` reported. `maintainer_registry_status` carries what connected
+   snapshots are for, what is missing while nothing is subscribed, and the local checkout whole.
+   `render_maintainer_registries` still composes both for the command line.
 
 9. **Screen 22 Add Registry.** The first form. Three kinds of text: the fields, an introduction
    above them, and the line saying what a key press does (`action_prompt`, from `QA-029`).

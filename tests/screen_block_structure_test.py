@@ -25,8 +25,11 @@ from agent_artifacts.application.consumer_views import (
     project_dashboard,
 )
 from agent_artifacts.application.maintainer_views import (
+    MaintainerRegistryView,
     MaintainerScreen,
     MaintainerViews,
+    MaintainerWorkingTreeState,
+    MaintainerWorkingTreeView,
     project_maintainer_candidates,
     project_maintainer_dashboard,
 )
@@ -37,6 +40,7 @@ from agent_artifacts.tui_consumer import (
     render_doctor,
 )
 from agent_artifacts.tui_layout import SECTION_RULE
+from agent_artifacts.tui_maintainer import maintainer_registry_rows, maintainer_registry_status
 from tests.consumer_shell_test import screens
 from tests.screen_skeleton_test import _registry
 
@@ -46,12 +50,26 @@ MIXED_SCREENS = frozenset(
     {
         ConsumerScreen.REGISTRY_ADD,
         MaintainerScreen.SOURCE_ADD,
-        MaintainerScreen.REGISTRY,
         MaintainerScreen.REGISTRY_INIT,
         MaintainerScreen.REPOSITORY_SCAN,
         MaintainerScreen.REGISTRY_REBUILD,
     }
 )
+
+
+def _maintainer_registry() -> MaintainerRegistryView:
+    """One subscribed snapshot, valid and observed, with nothing promoted through it yet."""
+
+    return MaintainerRegistryView(
+        "company",
+        True,
+        "a" * 40,
+        "sha256:" + "b" * 64,
+        2,
+        (),
+        MaintainerWorkingTreeView(MaintainerWorkingTreeState.MATCHES_SNAPSHOT, "c" * 40),
+        (),
+    )
 
 
 def _blocks(lines: tuple[str, ...]) -> list[tuple[str, ...]]:
@@ -349,6 +367,57 @@ class DoctorBlockTest(TestCase):
         self.assertIn("1 needs attention", rendered)
 
 
+class RegistryMaintainerBlockTest(TestCase):
+    """Screen 46, which has two subjects and rows for only one of them."""
+
+    def _frame(self) -> tuple[str, ...]:
+        source = CanonicalScreenSource(screens())
+        state = ConsumerUiState(
+            ConsumerSession(MaintainerScreen.REGISTRY),
+            settings=ConsumerSettings().with_maintainer_mode(True),
+            workspace="/lab",
+        )
+        state = replace(state, rows=source.rows(state), cursor=0)
+        return frame(source, state)
+
+    def test_nothing_subscribed_means_no_rows_block_at_all(self) -> None:
+        """A heading over nothing is the empty section `QA-065` reported."""
+
+        blocks = _blocks(self._frame())
+
+        # trail, view status, the `working at` caption, the keys -- no block of rows.
+        self.assertEqual(len(blocks), 4)
+        self.assertEqual(
+            _spoken(blocks[1]),
+            (
+                "Connected Registry snapshots",
+                "These approved snapshots determine what Marketplace can offer.",
+                "No Registry is subscribed in this project yet.",
+                "A Registry created here becomes connectable once it is published to its "
+                "branch and subscribed to.",
+                "Local Registry workspace",
+                "Current project contains a Registry. Rebuild updates its generated files.",
+            ),
+        )
+
+    def test_a_subscribed_snapshot_is_a_row_under_the_heading_that_introduces_it(self) -> None:
+        rows = maintainer_registry_rows((_maintainer_registry(),), PresentationProfile.FAST)
+
+        self.assertEqual(rows[0], "Connected Registry snapshots")
+        self.assertTrue([line for line in rows if "company" in line])
+
+    def test_the_local_workspace_is_state_whether_or_not_anything_is_subscribed(self) -> None:
+        for views in ((), (_maintainer_registry(),)):
+            with self.subTest(subscribed=bool(views)):
+                status = maintainer_registry_status(views)
+
+                self.assertIn("Local Registry workspace", status)
+                self.assertIn(
+                    "These approved snapshots determine what Marketplace can offer.", status
+                )
+                self.assertFalse([line for line in status if "company" in line])
+
+
 class EveryScreenBlockTest(TestCase):
     """The enforcement: a migrated screen's actions block holds only what the cursor acts on."""
 
@@ -374,6 +443,6 @@ class EveryScreenBlockTest(TestCase):
                     )
 
     def test_the_list_of_screens_that_still_mix_only_ever_shrinks(self) -> None:
-        """A reminder in the only place that would notice: six left, and no route to add one."""
+        """A reminder in the only place that would notice: five left, and no route to add one."""
 
-        self.assertEqual(len(MIXED_SCREENS), 6)
+        self.assertEqual(len(MIXED_SCREENS), 5)

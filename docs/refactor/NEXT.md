@@ -33,9 +33,13 @@ Landed so far:
 - Screen 29 Doctor: `doctor_rows` and `doctor_status`, with `render_doctor` still composing the
   whole report for the command line and the TUI dropping its repeated title (`QA-087`; `D-243`).
 
-**Exact next action: step 8** — screen 46 Registry Maintainer. `MIXED_SCREENS` is the worklist and
-holds six: `REGISTRY_ADD`, `SOURCE_ADD`, `REGISTRY`, `REGISTRY_INIT`, `REPOSITORY_SCAN`,
-`REGISTRY_REBUILD`. Each screen ends with the frame rendered before and after;
+- Screen 46 Registry Maintainer: rows only where there are rows, both explanations as view status
+  (`QA-087`; `D-243`).
+
+**Exact next action: step 9** — screen 22 Add Registry, the first form, which carries the open
+question for the operator: whether a form's introduction drops below the rule with the rest of the
+prose, or is the one named exception. Ask it on a rendered frame. `MIXED_SCREENS` holds five:
+`REGISTRY_ADD`, `SOURCE_ADD`, `REGISTRY_INIT`, `REPOSITORY_SCAN`, `REGISTRY_REBUILD`. Each screen ends with the frame rendered before and after;
 the list shrinks by one per screen and nothing may be added to it.
 
 Steps 5 through 7 move the screens one concrete view at a time and never in the abstract:
