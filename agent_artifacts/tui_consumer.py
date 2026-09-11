@@ -2349,6 +2349,11 @@ class CanonicalScreenSource:
         rows tomorrow says something here without the frame changing.
         """
 
+        if state.session.screen is MaintainerScreen.REGISTRY_REBUILD:
+            # The whole-sequence row names its four stages in its own label, so it has nothing
+            # left to add here and says nothing rather than repeating itself.
+            purpose = REGISTRY_STAGE_PURPOSE.get(state.current_row or "")
+            return () if purpose is None else (purpose,)
         if state.session.screen not in _DESCRIBED_SCREENS:
             return ()
         targets = navigation_targets(
@@ -2826,13 +2831,13 @@ class CanonicalScreenSource:
             )
         if screen is MaintainerScreen.REGISTRY_REBUILD:
             rows = (REGISTRY_REBUILD_EVERYTHING, *REGISTRY_MAINTENANCE_STAGES)
+            # `QA-089`: a row is the choice alone. Gluing the purpose on turned five things to
+            # choose between into five sentences to read, and the purpose is exactly what the
+            # cursor description exists to say -- under `[v]`, for whichever row is selected.
             labels = {
                 REGISTRY_REBUILD_EVERYTHING: "Everything, in order: "
                 + ", ".join(REGISTRY_MAINTENANCE_STAGES),
-                **{
-                    stage: f"{stage.title()} only: {REGISTRY_STAGE_PURPOSE[stage]}"
-                    for stage in REGISTRY_MAINTENANCE_STAGES
-                },
+                **{stage: f"{stage.title()} only" for stage in REGISTRY_MAINTENANCE_STAGES},
             }
             return tuple(
                 f"{'>' if row == (state.current_row or rows[0]) else ' '} {labels[row]}"

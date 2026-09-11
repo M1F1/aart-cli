@@ -551,6 +551,74 @@ class MaintainerFormBlockTest(TestCase):
                 )
 
 
+class RebuildRegistryRowsTest(TestCase):
+    """Screen 46h: a row is a choice, and what the choice is for is the cursor description.
+
+    `QA-089`. Each row read `Lock only: pin everything the registry references` -- the choice and
+    its explanation glued into one line, so the five things a reader is choosing between could not
+    be scanned as five things. The operator drew it apart: bare labels above the rule, the purpose
+    of the one under the cursor in the block `[v]` opens. *"z czego to wyjasnienie powinno
+    oczywiscie byc collapsed albo uncollapsed jak sie klika v"*.
+    """
+
+    def _frame(self, *, verbose: bool, cursor: int = 1) -> tuple[str, ...]:
+        source = CanonicalScreenSource(screens())
+        state = ConsumerUiState(
+            ConsumerSession(
+                MaintainerScreen.REGISTRY_REBUILD,
+                profile=PresentationProfile.VERBOSE if verbose else PresentationProfile.FAST,
+            ),
+            settings=ConsumerSettings().with_maintainer_mode(True),
+            workspace="/lab",
+        )
+        state = replace(state, rows=source.rows(state), cursor=cursor)
+        return frame(source, state)
+
+    def test_a_row_is_the_choice_without_the_explanation(self) -> None:
+        rows = _spoken(_blocks(self._frame(verbose=False))[1])
+
+        self.assertEqual(
+            rows,
+            (
+                "  Everything, in order: lock, build, validate, audit",
+                "> Lock only",
+                "  Build only",
+                "  Validate only",
+                "  Audit only",
+            ),
+        )
+
+    def test_verbose_says_what_the_stage_under_the_cursor_is_for(self) -> None:
+        described = _spoken(_blocks(self._frame(verbose=True))[2])
+
+        self.assertEqual(described, ("pin everything the registry references",))
+
+    def test_the_explanation_follows_the_cursor(self) -> None:
+        described = _spoken(_blocks(self._frame(verbose=True, cursor=4))[2])
+
+        self.assertEqual(described, ("report the registry's security evidence",))
+
+    def test_fast_is_the_same_screen_without_it(self) -> None:
+        """`QA-070`: the description is a mode, not a fixture, and `[v]` is the key that owns it."""
+
+        for purpose in ("pin everything", "report the registry's"):
+            self.assertNotIn(purpose, "\n".join(self._frame(verbose=False)))
+
+    def test_the_whole_sequence_row_describes_itself_and_needs_no_second_line(self) -> None:
+        """Its label already names the four stages in order; a description would repeat them.
+
+        Saying nothing costs the block rather than drawing an empty one, which is the `QA-065`
+        fault the skeleton already refuses: the frame here is one block shorter than the one a
+        stage row draws, and the block after the rows is the view status.
+        """
+
+        everything = _blocks(self._frame(verbose=True, cursor=0))
+        stage = _blocks(self._frame(verbose=True, cursor=1))
+
+        self.assertEqual(len(everything), len(stage) - 1)
+        self.assertTrue(_spoken(everything[2])[0].startswith("Re-run this registry's"))
+
+
 class EveryScreenBlockTest(TestCase):
     """The enforcement: a migrated screen's actions block holds only what the cursor acts on."""
 

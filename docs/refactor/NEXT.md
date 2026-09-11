@@ -53,6 +53,10 @@ Landed so far:
   sentence; a form's legend now reads `[Type] Edit   [Backspace] Delete   [Space] <what it changes>
   [Enter] Next / continue`, with `_FORM_TOGGLE_LABELS` carrying the word the prose used to.
 
+- A row is the choice, not the choice plus its explanation (`QA-089`): screen 46h's rows are bare
+  labels and the stage purpose follows the cursor into the description block, so `[v]` opens and
+  closes it like every other cursor description (`QA-070`).
+
 **Exact next action: step 14** — the review and result screens. The decision being offered is the
 actions block; what the review is about is view status. Then step 15 (`QA-085`, the lab that lost
 its marker) and step 16, the full quality gate and the operator's third manual run over

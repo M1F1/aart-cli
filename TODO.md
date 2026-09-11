@@ -168,6 +168,16 @@ Each new entry records:
       `[Type] Edit`, `[Backspace] Delete` and `[Enter] Next / continue`, and `_FORM_TOGGLE_LABELS`
       names what Space changes per screen so the word the prose carried is not lost with it.
 
+- [x] **QA-089 — a row carried its own explanation, so five choices read as five sentences.**
+      Surface: Rebuild Registry (46h). Severity: medium. Observed: every row read
+      `Lock only: pin everything the registry references`, gluing the choice to its purpose, so
+      the list could not be scanned as a list. Expected: bare labels above the rule and the
+      purpose of the row under the cursor in the block `[v]` opens — *"z czego to wyjasnienie
+      powinno oczywiscie byc collapsed albo uncollapsed jak sie klika v"*.
+      Landed (2026-09-11): the labels are bare and `description` answers `REGISTRY_STAGE_PURPOSE`
+      for the selected row, so the explanation follows the cursor and obeys `[v]` like every other
+      cursor description (`QA-070`).
+
 - [x] **QA-086 — `working at` floated above the terminal's blank space instead of sitting on the
       footer.** Surface: every screen. Severity: medium. Observed: the frame padded a short screen
       immediately above the key legend's rule, so the launch directory was pushed to the top of

@@ -60,6 +60,7 @@ reads like a row.
 | QA-086 | `working at` floated above the terminal's blank space instead of sitting on the footer | landed, `D-242` |
 | QA-087 | Every view fills the skeleton differently; actions and view status share a block | in progress |
 | QA-088 | A form described in prose the keys the footer directly below it advertises | landed |
+| QA-089 | A row glued its own explanation onto itself, so five choices read as five sentences | landed |
 
 ## Steps
 
@@ -141,6 +142,15 @@ reads like a row.
     changes on each screen that has something to change — a shared "Toggle" would have dropped the
     only word that said what the key is for. This is the canonical structure's last line read
     strictly: *the keys this screen accepts, and no key it does not* — and, now, no key said twice.
+
+13b. **A row is the choice; the explanation follows the cursor (`QA-089`).** DONE. Screen 46h's
+    rows read `Lock only: pin everything the registry references` -- the choice and its purpose in
+    one line, so five things to choose between could not be scanned as five things. The operator
+    drew it apart and named where the purpose goes: *"z czego to wyjasnienie powinno oczywiscie byc
+    collapsed albo uncollapsed jak sie klika v"*. The labels are bare now and `description`
+    answers `REGISTRY_STAGE_PURPOSE` for the row under the cursor, so `[v]` opens and closes it
+    like every other cursor description (`QA-070`). The whole-sequence row names its four stages in
+    its own label and so says nothing here, which costs the block rather than drawing an empty one.
 
 14. **Review and result screens.** The decision being offered is the actions block; what the review
     is about is view status.
