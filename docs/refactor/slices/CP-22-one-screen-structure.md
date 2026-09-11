@@ -1,6 +1,6 @@
 # CP-22 — One screen structure, and the third manual run
 
-Status: OPEN — 4 OF 9 STEPS DONE
+Status: OPEN — 4 OF 16 STEPS DONE
 
 ## Goal
 
@@ -89,24 +89,36 @@ reads like a row.
    `Maintainer navigation:` are gone, because a block whose contents are the navigation does not
    need to announce that it is the navigation.
 
-5. **Registries, Sources, Candidates and the other lists.** The rows alone; the empty-state
-   guidance and the per-screen explanation into the view status.
+5. **Screen 21 Registries.** The `[ Add Registry ]` row alone; its explanation and the empty-state
+   guidance into the view status. This is the screen the operator drew.
 
-6. **Forms and sequences: Add Registry, Add Source, Initialize Registry, Repository Scan, Registry
-   Rebuild.** These carry three kinds of text — the fields, an introduction above them, and the
-   line saying what a key press does (`action_prompt`, `D-` chain from `QA-029`). **Open question,
-   to be settled on a concrete frame with the operator before the step is written:** whether the
-   introduction drops below the rule with the rest of the prose, or whether a form's introduction
-   is the one named exception.
+6. **Screen 27 Settings.** The toggles alone; the note that Maintainer screens are reachable from
+   the Dashboard into the view status.
 
-7. **Review and result screens.** The same split, where "actions" is the decision being offered and
-   "status" is what the review is about.
+7. **Screen 29 Doctor.** The artifact rows alone; the ready/attention counts and the line about
+   repairing with minimal reconciliation plans into the view status. Its body also repeats the
+   title as a first line, which the trail already carries.
 
-8. **`QA-085` — a lab that lost its marker.** `reset_lab` now removes the marker last and the
-   refusal prints a recovery that works. Still open: there is no supported way to clear a lab
-   directory that has already lost it.
+8. **Screen 46 Registry Maintainer.** The rows alone; the two workspace explanations — connected
+   snapshots, local workspace — into the view status.
 
-9. **Full quality gate, and the operator's third manual run** over `QA-044`…`QA-087`.
+9. **Screen 22 Add Registry.** The first form. Three kinds of text: the fields, an introduction
+   above them, and the line saying what a key press does (`action_prompt`, from `QA-029`).
+   **Open question, to be settled on a rendered frame with the operator before this step is
+   written:** whether the introduction drops below the rule with the rest of the prose, or whether
+   a form's introduction is the one named exception.
+
+10. **Screen 31 Add Source**, **11. Screen 46a Initialize Registry**, **12. Screen 46c Scan
+    Repository**, **13. Screen 46h Rebuild Registry.** The same split, on whatever step 9 settles.
+
+14. **Review and result screens.** The decision being offered is the actions block; what the review
+    is about is view status.
+
+15. **`QA-085` — a lab that lost its marker.** `reset_lab` now removes the marker last and the
+    refusal prints a recovery that works. Still open: there is no supported way to clear a lab
+    directory that has already lost it.
+
+16. **Full quality gate, and the operator's third manual run** over `QA-044`…`QA-087`.
 
 ## Evidence discipline
 

@@ -480,26 +480,61 @@
         },
         {
           "id": "5",
-          "title": "Registries, Sources, Candidates and the other lists (QA-087)",
-          "status": "todo"
+          "title": "Screen 21 Registries: the Add row alone, its explanation and empty-state guidance in view status (QA-087)",
+          "status": "in_progress"
         },
         {
           "id": "6",
-          "title": "Forms and sequences: Add Registry, Add Source, Initialize Registry, Repository Scan, Registry Rebuild (QA-087)",
+          "title": "Screen 27 Settings: the toggles alone, the Maintainer Mode note in view status (QA-087)",
           "status": "todo"
         },
         {
           "id": "7",
-          "title": "Review and result screens (QA-087)",
+          "title": "Screen 29 Doctor: the artifact rows alone, counts and repair note in view status (QA-087)",
           "status": "todo"
         },
         {
           "id": "8",
-          "title": "A manual-test lab that lost its marker can be cleared (QA-085)",
+          "title": "Screen 46 Registry Maintainer: the rows alone, the two workspace explanations in view status (QA-087)",
           "status": "todo"
         },
         {
           "id": "9",
+          "title": "Screen 22 Add Registry: fields alone, introduction and key prompt out of the fields' block (QA-087)",
+          "status": "todo"
+        },
+        {
+          "id": "10",
+          "title": "Screen 31 Add Source: the same split, once the form question is settled with the operator (QA-087)",
+          "status": "todo"
+        },
+        {
+          "id": "11",
+          "title": "Screen 46a Initialize Registry: the same split (QA-087)",
+          "status": "todo"
+        },
+        {
+          "id": "12",
+          "title": "Screen 46c Scan Repository: the same split (QA-087)",
+          "status": "todo"
+        },
+        {
+          "id": "13",
+          "title": "Screen 46h Rebuild Registry: the run choices alone, the two warnings in view status (QA-087)",
+          "status": "todo"
+        },
+        {
+          "id": "14",
+          "title": "Review and result screens: the decision offered is the actions block, what it is about is view status (QA-087)",
+          "status": "todo"
+        },
+        {
+          "id": "15",
+          "title": "A manual-test lab that lost its marker can be cleared (QA-085)",
+          "status": "todo"
+        },
+        {
+          "id": "16",
           "title": "Full quality gate and the operator's third manual run over QA-044..QA-087",
           "status": "todo"
         }
