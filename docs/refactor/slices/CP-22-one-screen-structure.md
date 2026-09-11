@@ -1,6 +1,6 @@
 # CP-22 — One screen structure, and the third manual run
 
-Status: OPEN — 2 OF 9 STEPS DONE
+Status: OPEN — 4 OF 9 STEPS DONE
 
 ## Goal
 
@@ -74,16 +74,20 @@ reads like a row.
    being the caption and everything after it, anchoring inserting nothing but blanks, and the keys
    holding the bottom rows at any height.
 
-3. **The screen source answers blocks rather than lines.** `ConsumerScreenSource.lines` returns one
-   undifferentiated body, which is the hole the prose keeps falling through: a screen has nowhere
-   to put "what this view is" except the block the cursor rows live in. Replace it with `actions`
-   and let `status` carry the rest, then hold it with a test over **every** screen: nothing in the
-   actions block that the cursor cannot act on. That test is the enforcement the operator asked
-   for — without it this slice is a convention again.
+3. **The screen source answers blocks rather than lines.** DONE — `D-243`.
+   `ConsumerScreenSource.lines` returned one undifferentiated body, which is the hole the prose
+   kept falling through: a screen had nowhere to put "what this view is" except the block the
+   cursor rows live in. It is `actions` now, `status` carries the rest, and
+   `tests/screen_block_structure_test.py` holds it over every screen with `MIXED_SCREENS` naming
+   the nine that still mix. That list is the enforcement — without it this slice is a convention
+   again — and nothing may be added to it.
 
-4. **Dashboard and Maintainer Dashboard.** The navigation rows alone in the actions block; the
-   first-run guidance and the installed/registry counts into the view status; the `Navigation:`
-   label removed, since a block whose contents are the actions does not need to announce itself.
+4. **Dashboard and Maintainer Dashboard.** DONE — `D-243`.
+   The navigation rows alone in the actions block; the first-run guidance and the installed
+   counts are one `status` that picks between them rather than a panel that replaces the body;
+   the maintainer overview and the unavailable-composition notice likewise. `Navigation:` and
+   `Maintainer navigation:` are gone, because a block whose contents are the navigation does not
+   need to announce that it is the navigation.
 
 5. **Registries, Sources, Candidates and the other lists.** The rows alone; the empty-state
    guidance and the per-screen explanation into the view status.

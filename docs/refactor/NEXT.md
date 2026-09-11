@@ -18,14 +18,18 @@ Landed so far:
   derives the arrangement from the declaration, and the claims are Hypothesis properties over
   generated frames rather than examples (`QA-087`, `4869c10`).
 
-**Exact next action: step 3.** `ConsumerScreenSource.lines` returns one undifferentiated body,
-which is the hole the prose falls through — a screen has nowhere to put "what this view is" except
-the block the cursor rows live in. Replace it with `actions`, let `status` carry the rest, and hold
-it with a test over *every* screen that nothing in the actions block is something the cursor cannot
-act on. Without that test the split is a convention again, which is exactly what the operator asked
-to stop.
+- The source answers blocks rather than lines: `ConsumerScreenSource.lines` is `actions`, `status`
+  carries what only reads, and `tests/screen_block_structure_test.py` holds it over every screen
+  with `MIXED_SCREENS` naming the nine that still mix (`QA-087`; `D-243`).
+- Both dashboards: rows alone in the actions block, first-run guidance and counts as one `status`,
+  the `Navigation:` labels gone (`QA-087`; `D-243`).
 
-Steps 4 through 7 then move the screens, one concrete view at a time and never in the abstract:
+**Exact next action: step 5** — Registries, then the other lists. `MIXED_SCREENS` is the worklist:
+`REGISTRIES`, `REGISTRY_ADD`, `SETTINGS`, `DOCTOR`, `SOURCE_ADD`, `REGISTRY`, `REGISTRY_INIT`,
+`REPOSITORY_SCAN`, `REGISTRY_REBUILD`. Each one ends with the frame rendered before and after; the
+list shrinks by one per screen and nothing may be added to it.
+
+Steps 5 through 7 move the screens one concrete view at a time and never in the abstract:
 *"musimy rozmawiac zawsze o konkretnych widokach"*. Step 6 carries an open question for the
 operator about form introductions, to be asked on a rendered frame.
 

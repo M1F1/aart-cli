@@ -166,7 +166,10 @@ class ConsumerShellTest(unittest.TestCase):
         self.assertIn("→ Start here", first)
         self.assertIn("open Registries", first)
         self.assertIn("Add Registry", first)
-        self.assertLess(first.index("Welcome to AART"), first.index("Navigation:"))
+        # `QA-087`: the guidance is the state of the view, so it stands in its own block below the
+        # rows rather than above them inside theirs, and the block needs no `Navigation:` label.
+        self.assertNotIn("Navigation:", first)
+        self.assertLess(first.index("> Marketplace"), first.index("Welcome to AART"))
 
     def test_a_machine_with_something_installed_is_not_offered_first_run_guidance(self):
         """No source and one installation is not a first run, and must still count what is there.

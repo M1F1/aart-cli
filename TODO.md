@@ -148,8 +148,10 @@ Each new entry records:
       wyjatkow od reguly"*.
       Partly landed (2026-09-11): the skeleton is a type (`Frame`, `4869c10`) whose field order is
       the layout, with the arrangement derived from the declaration and held as properties over
-      generated frames. **Still open:** the screens themselves — the source still answers one
-      undifferentiated body, so `actions` currently receives prose. `CP-22` steps 3-7.
+      generated frames; the source answers `actions` rather than one undifferentiated body, and
+      both dashboards are split — rows alone, guidance and counts as view status, the
+      `Navigation:` labels gone (`D-243`). **Still open:** nine screens named in `MIXED_SCREENS`
+      still mix prose with their rows. `CP-22` steps 5-7.
 
 - [x] **QA-086 — `working at` floated above the terminal's blank space instead of sitting on the
       footer.** Surface: every screen. Severity: medium. Observed: the frame padded a short screen

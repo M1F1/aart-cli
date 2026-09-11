@@ -176,7 +176,7 @@ class EveryScreenSeparatesItsPromptTest(unittest.TestCase):
         for screen in (*ConsumerScreen, *MaintainerScreen):
             with self.subTest(screen=screen.value):
                 state = ConsumerUiState(ConsumerSession(screen), settings=settings)
-                _assert_prompt_is_separated(self, source.lines(state), screen.value)
+                _assert_prompt_is_separated(self, source.actions(state), screen.value)
 
     def test_no_screen_buries_its_prompt(self) -> None:
         self._sweep(())

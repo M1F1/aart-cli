@@ -1095,8 +1095,13 @@ class ConsumerScreenSource(Protocol):
     def rows(self, state: ConsumerUiState) -> tuple[str, ...]:
         """The row identities the screen is currently showing, already filtered by the search."""
 
-    def lines(self, state: ConsumerUiState) -> tuple[str, ...]:
-        """The body of the screen, rendered at the profile `state` holds."""
+    def actions(self, state: ConsumerUiState) -> tuple[str, ...]:
+        """What the cursor can act on: rows, toggles, commands, at the profile `state` holds.
+
+        Nothing that only reads belongs here (`QA-087`). A screen that wants to say what it is or
+        what state it is in has `description` and `status` to say it in, and saying it here puts
+        prose between two rows, where it reads like a row.
+        """
 
     def description(self, state: ConsumerUiState) -> tuple[str, ...]:
         """What the thing under the cursor is, for the skeleton's second section (`QA-067`)."""
@@ -1315,7 +1320,7 @@ def frame(source: ConsumerScreenSource, state: ConsumerUiState) -> tuple[str, ..
     return render(
         Frame(
             trail=header,
-            actions=source.lines(state),
+            actions=source.actions(state),
             described=_described(source, state),
             help=_HELP_LINES if state.help_visible else (),
             status=tuple(status),
@@ -2221,8 +2226,8 @@ class CanonicalScreenSource:
             return None
         return target
 
-    def lines(self, state: ConsumerUiState) -> tuple[str, ...]:
-        """The screen's body, and on the screens an action lands on, why it could not run.
+    def actions(self, state: ConsumerUiState) -> tuple[str, ...]:
+        """What the cursor acts on, and on the screens an action lands on, why it could not run.
 
         The notice is confined to those screens deliberately. It answers a question somebody just
         asked, so it belongs where they asked it; carrying it onto the dashboard would leave a
@@ -2256,6 +2261,21 @@ class CanonicalScreenSource:
         described = None if selected is None else _DASHBOARD_DESCRIPTIONS.get(selected)
         return () if described is None else (described,)
 
+    def _first_run(self) -> bool:
+        """A machine that has nothing, not merely a machine with no source configured (`B-080`).
+
+        Somebody who installed an artifact from a source they have since removed -- or through a
+        direct install -- is not seeing AART for the first time, and replacing their real counts
+        with the welcome panel hides the one thing the Dashboard exists to state.
+        """
+
+        screens = self._screens
+        return (
+            not screens.registries
+            and screens.dashboard.registry_count == 0
+            and screens.dashboard.installed_count == 0
+        )
+
     def status(self, state: ConsumerUiState) -> tuple[str, ...]:
         """The state of the whole view, or nothing at all (`QA-067`).
 
@@ -2263,14 +2283,17 @@ class CanonicalScreenSource:
         drawn as a boundary around nothing, which is the fault `QA-065` reported.
         """
 
-        if state.session.screen is ConsumerScreen.DASHBOARD:
-            screens = self._screens
-            first_run = (
-                not screens.registries
-                and screens.dashboard.registry_count == 0
-                and screens.dashboard.installed_count == 0
-            )
-            return () if first_run else render_dashboard(screens.dashboard)
+        screen, screens = state.session.screen, self._screens
+        if screen is ConsumerScreen.DASHBOARD:
+            # `QA-087`: first-run guidance and the counts are both answers to "what state is this
+            # in", so they belong here rather than above the rows, inside the rows' own block.
+            return _FIRST_RUN_LINES if self._first_run() else render_dashboard(screens.dashboard)
+        if screen is MaintainerScreen.DASHBOARD:
+            # An unavailable composition is the state of the view, not something to put a cursor
+            # on -- and saying so here keeps the rows' block holding only rows.
+            if screens.maintainer is None:
+                return ("Maintainer state is not available yet.",)
+            return render_maintainer_dashboard(screens.maintainer.dashboard, state.session.profile)
         return ()
 
     def _body(self, state: ConsumerUiState) -> tuple[str, ...]:
@@ -2286,22 +2309,12 @@ class CanonicalScreenSource:
                     strict=False,
                 )
             )
-            # A first run is a machine that has nothing, not merely a machine that has no source
-            # configured.  A person who installed an artifact from a source they have since
-            # removed -- or through a direct install -- is not seeing AART for the first time, and
-            # replacing their real counts with the welcome panel hides the one thing the Dashboard
-            # exists to state: what is installed right now (B-080).
-            first_run = (
-                not screens.registries
-                and screens.dashboard.registry_count == 0
-                and screens.dashboard.installed_count == 0
-            )
-            if first_run:
-                return (*_FIRST_RUN_LINES, "", "Navigation:", *menu)
-            return ("Navigation:", *menu)
+            # `QA-087`: the rows, and nothing else. The label went with the prose -- a block whose
+            # contents are the navigation does not need to announce that it is the navigation.
+            return menu
         if screen is MaintainerScreen.DASHBOARD:
             if screens.maintainer is None:
-                return ("Maintainer state is not available yet.",)
+                return ()
             menu = tuple(
                 f"{'>' if row == state.current_row else ' '} {_title(target)}"
                 for row, target in zip(
@@ -2310,12 +2323,7 @@ class CanonicalScreenSource:
                     strict=False,
                 )
             )
-            return (
-                "Maintainer navigation:",
-                *menu,
-                "",
-                *render_maintainer_dashboard(screens.maintainer.dashboard, profile),
-            )
+            return menu
         if screen is MaintainerScreen.SOURCES:
             return (
                 ("Maintainer state is not available yet.",)

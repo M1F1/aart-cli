@@ -5672,3 +5672,42 @@ no row number and no knowledge of what a screen contains (`D-234` holds).
 `D-235`'s reasoning survives again, unchanged and one step further: the directory is frame chrome
 every screen carries rather than a line a screen remembers to print, and it is grouped with the
 keys because both are true of the session rather than of the view. Only its place changed.
+
+## D-243 — A screen says what each block contains; it has nowhere to say where a block goes
+
+Date: 2026-09-11 · Increment: QA-087 · Status: accepted, extends `D-234`
+
+`D-234` gave every screen one skeleton and `screen_frame` composed it. The operator walked the
+result and found the skeleton real but filled differently by every screen — *"kazdy widok powinien
+miec ta strukture … bo teraz co widok jest inaczej mam wrazenie"* — and asked for the structure to
+live in the code: *"to powinno byc w kodzie zeby nie bylo zbyt wielu wyjatkow od reguly"*.
+
+The hole was that `screen_frame(*regions, footer=…)` composed positionally. What a region *was*
+lived at the call site and nowhere else, so a screen could pass its prose as the region the cursor
+rows were supposed to occupy and nothing could notice. One composer, and still every screen
+arranged differently.
+
+So the skeleton is a type. `Frame` names the blocks — trail, actions, described, help, status,
+context, keys — and **the field order is the layout**: `render` derives the arrangement from
+`dataclasses.fields` rather than repeating it, so there is no second place that could disagree and
+a block added later cannot land somewhere else by accident. Its claims are stated as properties
+over generated frames rather than examples, because they are claims about every screen: blocks
+drawn whole and in declared order, a rule only between two blocks that both spoke, text touching a
+rule only under a caption, the footer block being the caption and everything after it, anchoring
+inserting nothing but blanks, and the keys holding the bottom rows at any height.
+
+The block the operator named is the seam between `actions` and `status`: **"nigdy akcja i menu do
+wyboru nie powinno byc w jednym bloku z statusem widoku"**. A reader scanning for something to press
+should not have to read prose to find it, and prose standing between two rows reads like a row. So
+`ConsumerScreenSource.lines` — one undifferentiated body, which is the hole the prose kept falling
+through — becomes `actions`, and everything that only reads has `description` and `status` to be
+said in.
+
+Naming the blocks is not yet enough, because a screen can still answer the wrong thing. The
+enforcement is a test over every screen with an explicit list of the ones that still mix, so the
+exceptions are named in one place and shrink on purpose rather than being rediscovered one manual
+run at a time. Two consequences on the dashboards, both of which follow rather than being separate
+choices: the first-run welcome panel and the installed counts are two answers to *what state is
+this in*, so they are one `status` that picks between them instead of a panel that replaces the
+body; and the `Navigation:` and `Maintainer navigation:` labels are gone, because a block whose
+contents are the navigation does not need to announce that it is the navigation.

@@ -471,12 +471,12 @@
         {
           "id": "3",
           "title": "The screen source answers blocks rather than lines, held over every screen (QA-087)",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "4",
           "title": "Dashboard and Maintainer Dashboard: rows alone, guidance and counts in view status (QA-087)",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "5",
