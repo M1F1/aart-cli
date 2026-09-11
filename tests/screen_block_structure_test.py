@@ -33,12 +33,12 @@ from agent_artifacts.application.maintainer_views import (
 from agent_artifacts.tui_consumer import CanonicalScreenSource, ConsumerScreens, frame
 from agent_artifacts.tui_layout import SECTION_RULE
 from tests.consumer_shell_test import screens
+from tests.screen_skeleton_test import _registry
 
 #: Screens whose body still answers prose and rows together. Every entry is work, not a decision;
 #: `CP-22` steps 5-7 empty this set. Nothing may be added to it.
 MIXED_SCREENS = frozenset(
     {
-        ConsumerScreen.REGISTRIES,
         ConsumerScreen.REGISTRY_ADD,
         ConsumerScreen.SETTINGS,
         ConsumerScreen.DOCTOR,
@@ -183,6 +183,62 @@ class MaintainerDashboardBlockTest(TestCase):
         self.assertNotIn("Maintainer navigation:", self._frame())
 
 
+class RegistriesBlockTest(TestCase):
+    """Screen 21, which is the one the operator drew."""
+
+    def _frame(self, *, connected: bool) -> tuple[str, ...]:
+        source = CanonicalScreenSource(
+            ConsumerScreens(
+                project_dashboard((), registry_count=2 if connected else 0),
+                registries=(_registry("company"), _registry("team")) if connected else (),
+            )
+        )
+        state = ConsumerUiState(
+            ConsumerSession(ConsumerScreen.REGISTRIES),
+            settings=ConsumerSettings(),
+            workspace="/lab/consumer-project",
+        )
+        state = replace(state, rows=source.rows(state), cursor=0)
+        return frame(source, state)
+
+    def test_the_actions_block_holds_the_add_row_and_nothing_else(self) -> None:
+        blocks = _blocks(self._frame(connected=False))
+
+        self.assertEqual(_spoken(blocks[1]), ("> [ Add Registry ]",))
+
+    def test_what_a_registry_is_and_what_this_machine_has_are_the_state_of_the_view(self) -> None:
+        blocks = _blocks(self._frame(connected=False))
+
+        self.assertEqual(
+            _spoken(blocks[2]),
+            (
+                "Connect an approved Git registry by URL. Local authoring Sources belong in "
+                "Maintainer Mode.",
+                "No sources are configured.",
+                "Marketplace needs an approved registry before it can offer tools.",
+                "Choose Add Registry above to connect the first one.",
+            ),
+        )
+
+    def test_a_connected_registry_is_a_row_and_keeps_the_add_row_above_it(self) -> None:
+        blocks = _blocks(self._frame(connected=True))
+        rows = _spoken(blocks[1])
+
+        self.assertEqual(rows[0], "> [ Add Registry ]")
+        self.assertTrue([line for line in rows if "company" in line])
+        self.assertFalse([line for line in rows if line.startswith("Connect an approved")])
+
+    def test_the_empty_state_guidance_is_gone_once_something_is_connected(self) -> None:
+        blocks = _blocks(self._frame(connected=True))
+
+        self.assertNotIn("No sources are configured.", _spoken(blocks[2]))
+        self.assertEqual(
+            _spoken(blocks[2])[0],
+            "Connect an approved Git registry by URL. Local authoring Sources belong in "
+            "Maintainer Mode.",
+        )
+
+
 class EveryScreenBlockTest(TestCase):
     """The enforcement: a migrated screen's actions block holds only what the cursor acts on."""
 
@@ -208,6 +264,6 @@ class EveryScreenBlockTest(TestCase):
                     )
 
     def test_the_list_of_screens_that_still_mix_only_ever_shrinks(self) -> None:
-        """A reminder in the only place that would notice: nine left, and no route to add one."""
+        """A reminder in the only place that would notice: eight left, and no route to add one."""
 
-        self.assertEqual(len(MIXED_SCREENS), 9)
+        self.assertEqual(len(MIXED_SCREENS), 8)

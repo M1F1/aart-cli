@@ -1183,6 +1183,11 @@ _DASHBOARD_DESCRIPTIONS: dict[ApplicationScreen, str] = {
     MaintainerScreen.DASHBOARD: "Open advanced source, validation and promotion workflows.",
 }
 
+_REGISTRY_EXPLANATION: tuple[str, ...] = (
+    "Connect an approved Git registry by URL. Local authoring Sources belong in Maintainer Mode.",
+)
+"""What a registry is, said on the screen that offers to connect one (`QA-043`)."""
+
 _FIRST_RUN_LINES: tuple[str, ...] = (
     "Welcome to AART — this looks like your first run.",
     "AART installs and keeps your team's approved AI tools:",
@@ -2288,6 +2293,17 @@ class CanonicalScreenSource:
             # `QA-087`: first-run guidance and the counts are both answers to "what state is this
             # in", so they belong here rather than above the rows, inside the rows' own block.
             return _FIRST_RUN_LINES if self._first_run() else render_dashboard(screens.dashboard)
+        if screen is ConsumerScreen.REGISTRIES:
+            return (
+                _REGISTRY_EXPLANATION
+                if screens.registries
+                else (
+                    *_REGISTRY_EXPLANATION,
+                    "No sources are configured.",
+                    "Marketplace needs an approved registry before it can offer tools.",
+                    "Choose Add Registry above to connect the first one.",
+                )
+            )
         if screen is MaintainerScreen.DASHBOARD:
             # An unavailable composition is the state of the view, not something to put a cursor
             # on -- and saying so here keeps the rows' block holding only rows.
@@ -2590,17 +2606,11 @@ class CanonicalScreenSource:
                 else render_receipt_detail(receipt, profile)
             )
         if screen is ConsumerScreen.REGISTRIES:
-            add = (
-                f"{'>' if state.current_row == 'add-registry' else ' '} [ Add Registry ]",
-                "Connect an approved Git registry by URL. Local authoring Sources belong in Maintainer Mode.",
-            )
+            # `QA-087`: the row, and the rows of whatever is connected. What a registry *is*, and
+            # what this machine has, are answers to different questions and live in `status`.
+            add = (f"{'>' if state.current_row == 'add-registry' else ' '} [ Add Registry ]",)
             if not screens.registries:
-                return (
-                    *add,
-                    "No sources are configured.",
-                    "Marketplace needs an approved registry before it can offer tools.",
-                    "Choose Add Registry above to connect the first one.",
-                )
+                return add
             return cards(
                 add,
                 *(

@@ -1,6 +1,6 @@
 # CP-22 — One screen structure, and the third manual run
 
-Status: OPEN — 4 OF 16 STEPS DONE
+Status: OPEN — 5 OF 16 STEPS DONE
 
 ## Goal
 
@@ -89,8 +89,10 @@ reads like a row.
    `Maintainer navigation:` are gone, because a block whose contents are the navigation does not
    need to announce that it is the navigation.
 
-5. **Screen 21 Registries.** The `[ Add Registry ]` row alone; its explanation and the empty-state
-   guidance into the view status. This is the screen the operator drew.
+5. **Screen 21 Registries.** DONE. The `[ Add Registry ]` row alone, with connected registries as
+   rows below it; what a registry *is* and what this machine *has* are answers to different
+   questions, so both went to the view status, the second only while there is nothing connected.
+   This is the screen the operator drew.
 
 6. **Screen 27 Settings.** The toggles alone; the note that Maintainer screens are reachable from
    the Dashboard into the view status.

@@ -24,10 +24,13 @@ Landed so far:
 - Both dashboards: rows alone in the actions block, first-run guidance and counts as one `status`,
   the `Navigation:` labels gone (`QA-087`; `D-243`).
 
-**Exact next action: step 5** — Registries, then the other lists. `MIXED_SCREENS` is the worklist:
-`REGISTRIES`, `REGISTRY_ADD`, `SETTINGS`, `DOCTOR`, `SOURCE_ADD`, `REGISTRY`, `REGISTRY_INIT`,
-`REPOSITORY_SCAN`, `REGISTRY_REBUILD`. Each one ends with the frame rendered before and after; the
-list shrinks by one per screen and nothing may be added to it.
+- Screen 21 Registries: the Add row alone, what a registry is and what this machine has both in
+  view status, the second only while nothing is connected (`QA-087`; `D-243`).
+
+**Exact next action: step 6** — screen 27 Settings. `MIXED_SCREENS` is the worklist and holds
+eight: `REGISTRY_ADD`, `SETTINGS`, `DOCTOR`, `SOURCE_ADD`, `REGISTRY`, `REGISTRY_INIT`,
+`REPOSITORY_SCAN`, `REGISTRY_REBUILD`. Each screen ends with the frame rendered before and after;
+the list shrinks by one per screen and nothing may be added to it.
 
 Steps 5 through 7 move the screens one concrete view at a time and never in the abstract:
 *"musimy rozmawiac zawsze o konkretnych widokach"*. Step 6 carries an open question for the

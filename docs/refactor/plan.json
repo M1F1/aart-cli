@@ -481,12 +481,12 @@
         {
           "id": "5",
           "title": "Screen 21 Registries: the Add row alone, its explanation and empty-state guidance in view status (QA-087)",
-          "status": "in_progress"
+          "status": "done"
         },
         {
           "id": "6",
           "title": "Screen 27 Settings: the toggles alone, the Maintainer Mode note in view status (QA-087)",
-          "status": "todo"
+          "status": "in_progress"
         },
         {
           "id": "7",
