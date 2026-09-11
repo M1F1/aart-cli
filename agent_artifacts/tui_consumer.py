@@ -1230,6 +1230,70 @@ _REGISTRY_ADD_INTRO: tuple[str, ...] = (
 )
 """What connecting a registry does, said under the fields rather than over them (`QA-087`)."""
 
+_SOURCE_ADD_INTRO: tuple[str, ...] = (
+    "Subscribe to an authoring repository. AART discovers only the aart.yaml and",
+    "aart.json manifests its authors committed; nothing here is approved content yet.",
+    "",
+    "This adds another Source. Nothing already connected is changed.",
+)
+"""What subscribing to an authoring repository does, and what it does not approve (`QA-087`)."""
+
+_REGISTRY_INIT_INTRO: tuple[str, ...] = (
+    "Create the registry this project publishes. AART writes its skeleton, pins what",
+    "it references, builds its index, then validates and audits the result.",
+    "",
+    # 164.7, said where the decision is made rather than only in the specification. AART does
+    # publish a reviewed commit, from screen 45 -- but not this run, and never a merge, so the
+    # sentence has to name the boundary it actually holds.
+    "Nothing is pushed and nothing is merged here. Once a promotion is committed,",
+    "Registry Commit can publish it to a review branch; the merge is always yours.",
+)
+"""What initializing a registry writes, and the boundary the run stops at (`QA-087`)."""
+
+_REPOSITORY_SCAN_INTRO: tuple[str, ...] = (
+    "Look at one repository for explicit aart.yaml and aart.json manifests.",
+    "This is a one-off read: the repository is not saved as a Source or monitored.",
+)
+"""What a scan reads, and what it deliberately does not keep (`QA-087`)."""
+
+_REGISTRY_REBUILD_INTRO: tuple[str, ...] = (
+    "Re-run this registry's generated files. Promoting, adopting or editing anything",
+    "leaves the lock and the index describing the registry as it was.",
+    "",
+    # 161.7 again: the run writes into the checkout and stops there.
+    "Nothing is pushed and nothing is merged. What this writes is reviewed in the",
+    "repository like any other change.",
+)
+"""Why a rebuild is offered, and the boundary it stops at (`QA-087`)."""
+
+_FORM_PROSE: dict[ConsumerScreen | MaintainerScreen, tuple[tuple[str, ...], str]] = {
+    ConsumerScreen.REGISTRY_ADD: (
+        _REGISTRY_ADD_INTRO,
+        "Type to edit; Backspace removes; Space toggles default; Enter advances.",
+    ),
+    MaintainerScreen.SOURCE_ADD: (
+        _SOURCE_ADD_INTRO,
+        "Type to edit; Backspace removes; Space switches kind; Enter advances.",
+    ),
+    MaintainerScreen.REGISTRY_INIT: (
+        _REGISTRY_INIT_INTRO,
+        "Type to edit; Backspace removes; Space toggles the commit; Enter advances.",
+    ),
+    MaintainerScreen.REPOSITORY_SCAN: (
+        _REPOSITORY_SCAN_INTRO,
+        "Type to edit; Backspace removes; Enter advances.",
+    ),
+    MaintainerScreen.REGISTRY_REBUILD: (
+        _REGISTRY_REBUILD_INTRO,
+        "Enter reviews the run under the cursor.",
+    ),
+}
+"""Every form, as what it says about itself and the one line addressed to the reader.
+
+A table rather than a branch: `QA-087` is one rule for five screens, and a screen that wants a
+sixth adds a row here instead of a shape of its own.
+"""
+
 _FIRST_RUN_LINES: tuple[str, ...] = (
     "Welcome to AART — this looks like your first run.",
     "AART installs and keeps your team's approved AI tools:",
@@ -2316,12 +2380,8 @@ class CanonicalScreenSource:
         prompt last with a blank above it -- it moved block, not position.
         """
 
-        if state.session.screen is ConsumerScreen.REGISTRY_ADD:
-            return action_prompt(
-                _REGISTRY_ADD_INTRO,
-                "Type to edit; Backspace removes; Space toggles default; Enter advances.",
-            )
-        return ()
+        prose = _FORM_PROSE.get(state.session.screen)
+        return () if prose is None else action_prompt(*prose)
 
     def _first_run(self) -> bool:
         """A machine that has nothing, not merely a machine with no source configured (`B-080`).
@@ -2739,18 +2799,9 @@ class CanonicalScreenSource:
                 "ref": "Branch or tag",
                 "connect": "Continue",
             }
-            return (
-                "Subscribe to an authoring repository. AART discovers only the aart.yaml and",
-                "aart.json manifests its authors committed; nothing here is approved content yet.",
-                "",
-                "This adds another Source. Nothing already connected is changed.",
-                "",
-                *(
-                    f"{'>' if row == state.current_row else ' '} {labels[row]}: {values[row]}"
-                    for row in state.rows
-                ),
-                "",
-                "Type to edit; Backspace removes; Space switches kind; Enter advances.",
+            return tuple(
+                f"{'>' if row == state.current_row else ' '} {labels[row]}: {values[row]}"
+                for row in state.rows
             )
         if screen is MaintainerScreen.REGISTRY_INIT:
             init = state.registry_init_draft
@@ -2768,22 +2819,9 @@ class CanonicalScreenSource:
                 "commit": "Local commit",
                 "initialize": "Continue",
             }
-            return (
-                "Create the registry this project publishes. AART writes its skeleton, pins what",
-                "it references, builds its index, then validates and audits the result.",
-                "",
-                *(
-                    f"{'>' if row == state.current_row else ' '} {labels[row]}: {values[row]}"
-                    for row in state.rows
-                ),
-                "",
-                # 164.7, said where the decision is made rather than only in the specification.
-                # AART does publish a reviewed commit, from screen 45 -- but not this run, and never
-                # a merge, so the sentence has to name the boundary it actually holds.
-                "Nothing is pushed and nothing is merged here. Once a promotion is committed,",
-                "Registry Commit can publish it to a review branch; the merge is always yours.",
-                "",
-                "Type to edit; Backspace removes; Space toggles the commit; Enter advances.",
+            return tuple(
+                f"{'>' if row == state.current_row else ' '} {labels[row]}: {values[row]}"
+                for row in state.rows
             )
         if screen is MaintainerScreen.REPOSITORY_SCAN:
             scan = state.repository_scan_draft
@@ -2797,16 +2835,9 @@ class CanonicalScreenSource:
                 "ref": "Branch or tag",
                 "scan": "Continue",
             }
-            return (
-                "Look at one repository for explicit aart.yaml and aart.json manifests.",
-                "This is a one-off read: the repository is not saved as a Source or monitored.",
-                "",
-                *(
-                    f"{'>' if row == state.current_row else ' '} {labels[row]}: {values[row]}"
-                    for row in state.rows
-                ),
-                "",
-                "Type to edit; Backspace removes; Enter advances.",
+            return tuple(
+                f"{'>' if row == state.current_row else ' '} {labels[row]}: {values[row]}"
+                for row in state.rows
             )
         if screen is MaintainerScreen.REGISTRY_REBUILD:
             rows = (REGISTRY_REBUILD_EVERYTHING, *REGISTRY_MAINTENANCE_STAGES)
@@ -2818,20 +2849,9 @@ class CanonicalScreenSource:
                     for stage in REGISTRY_MAINTENANCE_STAGES
                 },
             }
-            return (
-                "Re-run this registry's generated files. Promoting, adopting or editing anything",
-                "leaves the lock and the index describing the registry as it was.",
-                "",
-                *(
-                    f"{'>' if row == (state.current_row or rows[0]) else ' '} {labels[row]}"
-                    for row in rows
-                ),
-                "",
-                # 161.7 again: the run writes into the checkout and stops there.
-                "Nothing is pushed and nothing is merged. What this writes is reviewed in the",
-                "repository like any other change.",
-                "",
-                "Enter reviews the run under the cursor.",
+            return tuple(
+                f"{'>' if row == (state.current_row or rows[0]) else ' '} {labels[row]}"
+                for row in rows
             )
         if screen is MaintainerScreen.REGISTRY_REBUILD_REVIEW:
             return _review_prompt(state, "Press Enter to start this run.")

@@ -1,6 +1,6 @@
 # CP-22 — One screen structure, and the third manual run
 
-Status: OPEN — 9 OF 16 STEPS DONE
+Status: OPEN — 13 OF 16 STEPS DONE
 
 ## Goal
 
@@ -121,8 +121,15 @@ reads like a row.
    position.
 
 10. **Screen 31 Add Source**, **11. Screen 46a Initialize Registry**, **12. Screen 46c Scan
-    Repository**, **13. Screen 46h Rebuild Registry.** The same split step 9 settled: fields alone
-    in the actions block, every explanatory line below the rule, the key prompt last.
+    Repository**, **13. Screen 46h Rebuild Registry.** DONE. The same split step 9 settled: fields
+    alone in the actions block, every explanatory line below the rule, the key prompt last. Five
+    screens saying one rule is a table rather than five branches, so `_form_prose` reads
+    `_FORM_PROSE` — screen to introduction and the one line addressed to the reader — and a sixth
+    form adds a row instead of a shape of its own. The sentences `161.7` and `164.7` require where
+    a run stops changed block with the rest and are held there by name, since prose that moves is
+    prose that can be lost. `MIXED_SCREENS` is now empty; the assertion on it stays, because an
+    empty set that something asserts on is what stands between a future exception and nobody
+    noticing.
 
 14. **Review and result screens.** The decision being offered is the actions block; what the review
     is about is view status.

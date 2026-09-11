@@ -42,12 +42,16 @@ Landed so far:
   settled the open question on the rendered frame — *"Wszystko pod pola (jak reszta)"* — so a form
   is not an exception and `Frame` gains no block above the rows.
 
-**Exact next action: step 10** — screen 31 Add Source, then 46a Initialize Registry, 46c Scan
-Repository and 46h Rebuild Registry. Step 9 settled the shape for all four: `_body` returns only
-the fields, the prose moves into a named constant, and `_form_prose` wraps it in `action_prompt`
-so the key line stays last. `MIXED_SCREENS` holds four: `SOURCE_ADD`, `REGISTRY_INIT`,
-`REPOSITORY_SCAN`, `REGISTRY_REBUILD`. Each screen ends with the frame rendered before and after;
-the list shrinks by one per screen and nothing may be added to it.
+- Screens 31 Add Source, 46a Initialize Registry, 46c Scan Repository and 46h Rebuild Registry:
+  the same split, and the rule is now a table — `_FORM_PROSE` maps each form to its introduction
+  and its one line addressed to the reader, so a sixth form adds a row rather than a shape
+  (`QA-087`, `QA-029`; `D-243`). **`MIXED_SCREENS` is empty**; the assertion on it stays as the
+  only thing that would notice a future exception.
+
+**Exact next action: step 14** — the review and result screens. The decision being offered is the
+actions block; what the review is about is view status. Then step 15 (`QA-085`, the lab that lost
+its marker) and step 16, the full quality gate and the operator's third manual run over
+`QA-044`…`QA-087`.
 
 The screen steps move one concrete view at a time and never in the abstract:
 *"musimy rozmawiac zawsze o konkretnych widokach"*.

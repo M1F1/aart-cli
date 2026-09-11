@@ -506,27 +506,27 @@
         {
           "id": "10",
           "title": "Screen 31 Add Source: the same split, once the form question is settled with the operator (QA-087)",
-          "status": "in_progress"
+          "status": "done"
         },
         {
           "id": "11",
           "title": "Screen 46a Initialize Registry: the same split (QA-087)",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "12",
           "title": "Screen 46c Scan Repository: the same split (QA-087)",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "13",
           "title": "Screen 46h Rebuild Registry: the run choices alone, the two warnings in view status (QA-087)",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "14",
           "title": "Review and result screens: the decision offered is the actions block, what it is about is view status (QA-087)",
-          "status": "todo"
+          "status": "in_progress"
         },
         {
           "id": "15",

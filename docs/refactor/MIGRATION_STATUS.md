@@ -11,14 +11,15 @@ Hypothesis properties over generated frames rather than examples (`QA-087`, `486
 
 The source now answers blocks rather than lines: `ConsumerScreenSource.lines` is `actions`, what
 only reads moved to `status`, and `tests/screen_block_structure_test.py` holds that over every
-screen with `MIXED_SCREENS` as a named, shrinking allow-list that nothing may be added to. Nine of
+screen with `MIXED_SCREENS` as a named, shrinking allow-list that nothing may be added to. Thirteen of
 its sixteen steps are done — both dashboards, Registries, Settings, Doctor, Registry Maintainer,
-and Add Registry, the first form. That form carried the slice's one open question, and the operator
+and all five forms. That form carried the slice's one open question, and the operator
 settled it on the rendered frame: *"Wszystko pod pola (jak reszta)"* — a form is not an exception,
 so `Frame` gains no block above the rows and the introduction, the reassurance and the key prompt
 all read below the rule, with `QA-029` preserved by moving the prompt's block rather than its
-position. What is left is the four remaining forms, the review and result screens, `QA-085`, and
-the operator's third manual run. Slice: `docs/refactor/slices/CP-22-one-screen-structure.md`; epic
+position. The four remaining forms followed through one table rather than four branches, so
+`MIXED_SCREENS` is now empty and the sweep speaks for every screen there is. What is left is the
+review and result screens, `QA-085`, and the operator's third manual run. Slice: `docs/refactor/slices/CP-22-one-screen-structure.md`; epic
 `CP-22` in `plan.json`.
 
 **CP-20 IMPLEMENTED — awaiting manual retest (2026-09-09).** All seven machine-readable plan steps

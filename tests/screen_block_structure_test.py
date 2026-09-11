@@ -45,15 +45,8 @@ from tests.consumer_shell_test import screens
 from tests.screen_skeleton_test import _registry
 
 #: Screens whose body still answers prose and rows together. Every entry is work, not a decision;
-#: `CP-22` steps 5-7 empty this set. Nothing may be added to it.
-MIXED_SCREENS = frozenset(
-    {
-        MaintainerScreen.SOURCE_ADD,
-        MaintainerScreen.REGISTRY_INIT,
-        MaintainerScreen.REPOSITORY_SCAN,
-        MaintainerScreen.REGISTRY_REBUILD,
-    }
-)
+#: `CP-22` empties this set. Nothing may be added to it.
+MIXED_SCREENS: frozenset[ConsumerScreen | MaintainerScreen] = frozenset()
 
 
 def _maintainer_registry() -> MaintainerRegistryView:
@@ -485,6 +478,86 @@ class AddRegistryFormBlockTest(TestCase):
         self.assertEqual(status[-2], "")
 
 
+class MaintainerFormBlockTest(TestCase):
+    """Screens 31, 46a, 46c and 46h: the four forms that followed screen 22.
+
+    Each had the same fault and takes the same shape the operator settled -- fields alone above the
+    rule, everything that only reads below it, the key prompt last with a blank above it.
+    """
+
+    def _frame(self, screen: MaintainerScreen) -> tuple[str, ...]:
+        source = CanonicalScreenSource(screens())
+        state = ConsumerUiState(
+            ConsumerSession(screen),
+            settings=ConsumerSettings().with_maintainer_mode(True),
+            workspace="/lab",
+        )
+        state = replace(state, rows=source.rows(state), cursor=0)
+        return frame(source, state)
+
+    def test_each_form_holds_only_its_fields_where_the_cursor_moves(self) -> None:
+        for screen in (
+            MaintainerScreen.SOURCE_ADD,
+            MaintainerScreen.REGISTRY_INIT,
+            MaintainerScreen.REPOSITORY_SCAN,
+            MaintainerScreen.REGISTRY_REBUILD,
+        ):
+            with self.subTest(screen=screen):
+                actions = _spoken(_blocks(self._frame(screen))[1])
+
+                self.assertTrue(actions)
+                for line in actions:
+                    self.assertTrue(
+                        line.startswith(("> ", "  ")),
+                        f"{screen.value}: not a row -- {line!r}",
+                    )
+
+    def test_each_form_says_what_it_does_below_the_rule(self) -> None:
+        opening = {
+            MaintainerScreen.SOURCE_ADD: "Subscribe to an authoring repository.",
+            MaintainerScreen.REGISTRY_INIT: "Create the registry this project publishes.",
+            MaintainerScreen.REPOSITORY_SCAN: "Look at one repository for explicit",
+            MaintainerScreen.REGISTRY_REBUILD: "Re-run this registry's generated files.",
+        }
+        for screen, starts in opening.items():
+            with self.subTest(screen=screen):
+                status = _spoken(_blocks(self._frame(screen))[2])
+
+                self.assertTrue(status[0].startswith(starts), status[:1])
+
+    def test_each_form_keeps_its_key_prompt_last_with_a_blank_above_it(self) -> None:
+        """`QA-029`: moving the prompt into view status must not bury it there."""
+
+        prompts = {
+            MaintainerScreen.SOURCE_ADD: (
+                "Type to edit; Backspace removes; Space switches kind; Enter advances."
+            ),
+            MaintainerScreen.REGISTRY_INIT: (
+                "Type to edit; Backspace removes; Space toggles the commit; Enter advances."
+            ),
+            MaintainerScreen.REPOSITORY_SCAN: "Type to edit; Backspace removes; Enter advances.",
+            MaintainerScreen.REGISTRY_REBUILD: "Enter reviews the run under the cursor.",
+        }
+        for screen, prompt in prompts.items():
+            with self.subTest(screen=screen):
+                status = _trimmed(_blocks(self._frame(screen))[2])
+
+                self.assertEqual(status[-1], prompt)
+                self.assertEqual(status[-2], "")
+
+    def test_the_boundary_a_run_holds_is_still_stated_where_the_run_is_chosen(self) -> None:
+        """`161.7`/`164.7`: the sentence moved block, and must not have been lost with the move."""
+
+        for screen in (MaintainerScreen.REGISTRY_INIT, MaintainerScreen.REGISTRY_REBUILD):
+            with self.subTest(screen=screen):
+                status = _spoken(_blocks(self._frame(screen))[2])
+
+                self.assertTrue(
+                    any("Nothing is pushed and nothing is merged" in line for line in status),
+                    status,
+                )
+
+
 class EveryScreenBlockTest(TestCase):
     """The enforcement: a migrated screen's actions block holds only what the cursor acts on."""
 
@@ -509,7 +582,11 @@ class EveryScreenBlockTest(TestCase):
                         f"{screen.value}: prose in the actions block -- {line!r}",
                     )
 
-    def test_the_list_of_screens_that_still_mix_only_ever_shrinks(self) -> None:
-        """A reminder in the only place that would notice: four left, and no route to add one."""
+    def test_no_screen_is_exempt_from_the_structure_any_more(self) -> None:
+        """The list is empty, and the sweep above now speaks for every screen there is.
 
-        self.assertEqual(len(MIXED_SCREENS), 4)
+        It stays here rather than being deleted with the last entry: an empty set that something
+        asserts on is the only thing standing between a future exception and nobody noticing.
+        """
+
+        self.assertEqual(MIXED_SCREENS, frozenset())

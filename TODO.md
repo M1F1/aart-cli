@@ -153,8 +153,9 @@ Each new entry records:
       `Navigation:` labels gone (`D-243`). Registries, Settings, Doctor, Registry Maintainer and
       Add Registry have followed; on the first form the operator settled that a form is no
       exception — *"Wszystko pod pola (jak reszta)"* — so the fields stand alone and every
-      explanatory line reads below the rule, key prompt last. **Still open:** four screens named
-      in `MIXED_SCREENS` still mix prose with their rows. `CP-22` steps 10-14.
+      explanatory line reads below the rule, key prompt last. Add Source, Initialize Registry,
+      Scan Repository and Rebuild Registry followed through one table, `_FORM_PROSE`, and
+      `MIXED_SCREENS` is now empty. **Still open:** the review and result screens. `CP-22` step 14.
 
 - [x] **QA-086 — `working at` floated above the terminal's blank space instead of sitting on the
       footer.** Surface: every screen. Severity: medium. Observed: the frame padded a short screen
