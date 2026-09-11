@@ -1,6 +1,6 @@
 # CP-22 — One screen structure, and the third manual run
 
-Status: OPEN — 8 OF 16 STEPS DONE
+Status: OPEN — 9 OF 16 STEPS DONE
 
 ## Goal
 
@@ -112,14 +112,17 @@ reads like a row.
    snapshots are for, what is missing while nothing is subscribed, and the local checkout whole.
    `render_maintainer_registries` still composes both for the command line.
 
-9. **Screen 22 Add Registry.** The first form. Three kinds of text: the fields, an introduction
-   above them, and the line saying what a key press does (`action_prompt`, from `QA-029`).
-   **Open question, to be settled on a rendered frame with the operator before this step is
-   written:** whether the introduction drops below the rule with the rest of the prose, or whether
-   a form's introduction is the one named exception.
+9. **Screen 22 Add Registry.** DONE. The operator settled the open question on the rendered frame:
+   *"Wszystko pod pola (jak reszta)"* — a form is not an exception and `Frame` gains no block above
+   the rows. `_body` returns the five fields and nothing else; `_REGISTRY_ADD_INTRO` holds what
+   connecting a registry does and what it does not change; `_form_prose` wraps that in
+   `action_prompt` so the key line stays last with a blank above it, and `status` answers with it
+   ahead of the per-screen cases. `QA-029` was preserved by moving the prompt's block, not its
+   position.
 
 10. **Screen 31 Add Source**, **11. Screen 46a Initialize Registry**, **12. Screen 46c Scan
-    Repository**, **13. Screen 46h Rebuild Registry.** The same split, on whatever step 9 settles.
+    Repository**, **13. Screen 46h Rebuild Registry.** The same split step 9 settled: fields alone
+    in the actions block, every explanatory line below the rule, the key prompt last.
 
 14. **Review and result screens.** The decision being offered is the actions block; what the review
     is about is view status.

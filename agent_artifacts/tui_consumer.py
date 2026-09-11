@@ -1220,6 +1220,16 @@ _REGISTRY_EXPLANATION: tuple[str, ...] = (
 )
 """What a registry is, said on the screen that offers to connect one (`QA-043`)."""
 
+_REGISTRY_ADD_INTRO: tuple[str, ...] = (
+    "Connect an approved registry. AART validates a fresh snapshot before saving it.",
+    "Local folders are authoring Sources, not Marketplace registries.",
+    "",
+    # `QA-028`: the empty form says a new one is being made; this says the old ones are not being
+    # replaced by it, which is the question the operator actually asked.
+    "This adds another registry. Nothing already connected is changed.",
+)
+"""What connecting a registry does, said under the fields rather than over them (`QA-087`)."""
+
 _FIRST_RUN_LINES: tuple[str, ...] = (
     "Welcome to AART — this looks like your first run.",
     "AART installs and keeps your team's approved AI tools:",
@@ -2298,6 +2308,21 @@ class CanonicalScreenSource:
         described = None if selected is None else _DASHBOARD_DESCRIPTIONS.get(selected)
         return () if described is None else (described,)
 
+    def _form_prose(self, state: ConsumerUiState) -> tuple[str, ...]:
+        """What a form has to say about itself, which is never a row a cursor can stand on.
+
+        `QA-087`: the fields are the actions block on their own; the introduction, the reassurance
+        and the key prompt read below the rule as the state of the view. `QA-029` still puts the
+        prompt last with a blank above it -- it moved block, not position.
+        """
+
+        if state.session.screen is ConsumerScreen.REGISTRY_ADD:
+            return action_prompt(
+                _REGISTRY_ADD_INTRO,
+                "Type to edit; Backspace removes; Space toggles default; Enter advances.",
+            )
+        return ()
+
     def _first_run(self) -> bool:
         """A machine that has nothing, not merely a machine with no source configured (`B-080`).
 
@@ -2321,6 +2346,9 @@ class CanonicalScreenSource:
         """
 
         screen, screens = state.session.screen, self._screens
+        prose = self._form_prose(state)
+        if prose:
+            return prose
         if screen is ConsumerScreen.DASHBOARD:
             # `QA-087`: first-run guidance and the counts are both answers to "what state is this
             # in", so they belong here rather than above the rows, inside the rows' own block.
@@ -2685,20 +2713,9 @@ class CanonicalScreenSource:
                 "default": "Make default registry",
                 "connect": "Continue",
             }
-            return (
-                "Connect an approved registry. AART validates a fresh snapshot before saving it.",
-                "Local folders are authoring Sources, not Marketplace registries.",
-                "",
-                # `QA-028`: the empty form says a new one is being made; this says the old ones
-                # are not being replaced by it, which is the question the operator actually asked.
-                "This adds another registry. Nothing already connected is changed.",
-                "",
-                *(
-                    f"{'>' if row == state.current_row else ' '} {labels[row]}: {values[row]}"
-                    for row in state.rows
-                ),
-                "",
-                "Type to edit; Backspace removes; Space toggles default; Enter advances.",
+            return tuple(
+                f"{'>' if row == state.current_row else ' '} {labels[row]}: {values[row]}"
+                for row in state.rows
             )
         if screen is MaintainerScreen.SOURCE_ADD:
             authoring = state.source_draft

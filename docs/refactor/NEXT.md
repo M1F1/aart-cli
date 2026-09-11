@@ -36,17 +36,25 @@ Landed so far:
 - Screen 46 Registry Maintainer: rows only where there are rows, both explanations as view status
   (`QA-087`; `D-243`).
 
-**Exact next action: step 9** — screen 22 Add Registry, the first form, which carries the open
-question for the operator: whether a form's introduction drops below the rule with the rest of the
-prose, or is the one named exception. Ask it on a rendered frame. `MIXED_SCREENS` holds five:
-`REGISTRY_ADD`, `SOURCE_ADD`, `REGISTRY_INIT`, `REPOSITORY_SCAN`, `REGISTRY_REBUILD`. Each screen ends with the frame rendered before and after;
+- Screen 22 Add Registry: the five fields alone in the actions block; the introduction, the
+  reassurance that nothing connected is changed, and the key prompt all below the rule as view
+  status, the prompt still last with a blank above it (`QA-087`, `QA-029`; `D-243`). The operator
+  settled the open question on the rendered frame — *"Wszystko pod pola (jak reszta)"* — so a form
+  is not an exception and `Frame` gains no block above the rows.
+
+**Exact next action: step 10** — screen 31 Add Source, then 46a Initialize Registry, 46c Scan
+Repository and 46h Rebuild Registry. Step 9 settled the shape for all four: `_body` returns only
+the fields, the prose moves into a named constant, and `_form_prose` wraps it in `action_prompt`
+so the key line stays last. `MIXED_SCREENS` holds four: `SOURCE_ADD`, `REGISTRY_INIT`,
+`REPOSITORY_SCAN`, `REGISTRY_REBUILD`. Each screen ends with the frame rendered before and after;
 the list shrinks by one per screen and nothing may be added to it.
 
-Steps 5 through 7 move the screens one concrete view at a time and never in the abstract:
-*"musimy rozmawiac zawsze o konkretnych widokach"*. Step 6 carries an open question for the
-operator about form introductions, to be asked on a rendered frame.
+The screen steps move one concrete view at a time and never in the abstract:
+*"musimy rozmawiac zawsze o konkretnych widokach"*.
 
-CP-21 remains **IMPLEMENTED — AWAITING MANUAL RETEST**; its retest folds into CP-22 step 9.
+CP-21 remains **IMPLEMENTED — AWAITING MANUAL RETEST**; its retest folds into CP-22 step 16. Its
+plan entry is now `done` — all eleven steps were evidenced — so the status line advances to CP-22
+rather than sitting on a finished epic.
 
 ## CP-21 current objective (2026-09-11)
 

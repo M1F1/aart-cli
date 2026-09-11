@@ -48,7 +48,6 @@ from tests.screen_skeleton_test import _registry
 #: `CP-22` steps 5-7 empty this set. Nothing may be added to it.
 MIXED_SCREENS = frozenset(
     {
-        ConsumerScreen.REGISTRY_ADD,
         MaintainerScreen.SOURCE_ADD,
         MaintainerScreen.REGISTRY_INIT,
         MaintainerScreen.REPOSITORY_SCAN,
@@ -89,6 +88,17 @@ def _blocks(lines: tuple[str, ...]) -> list[tuple[str, ...]]:
 
 def _spoken(block: tuple[str, ...]) -> tuple[str, ...]:
     return tuple(line for line in block if line.strip())
+
+
+def _trimmed(block: tuple[str, ...]) -> tuple[str, ...]:
+    """A block without the blanks the composition sets it off with, so its own blanks show."""
+
+    lines = list(block)
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    while lines and not lines[-1].strip():
+        lines.pop()
+    return tuple(lines)
 
 
 class DashboardBlockTest(TestCase):
@@ -418,6 +428,63 @@ class RegistryMaintainerBlockTest(TestCase):
                 self.assertFalse([line for line in status if "company" in line])
 
 
+class AddRegistryFormBlockTest(TestCase):
+    """Screen 22, the first form. The operator settled it: everything explanatory below the rule.
+
+    *"Wszystko pod pola"* -- so a form is not an exception, and `Frame` gains no block above the
+    rows. The introduction, the reassurance about what is not being changed, and the line saying
+    what a key press does are all things that only read, and they read below what they are about.
+    """
+
+    def _frame(self) -> tuple[str, ...]:
+        source = CanonicalScreenSource(ConsumerScreens(project_dashboard((), registry_count=0)))
+        state = ConsumerUiState(
+            ConsumerSession(ConsumerScreen.REGISTRY_ADD),
+            settings=ConsumerSettings(),
+            workspace="/lab",
+        )
+        state = replace(state, rows=source.rows(state), cursor=0)
+        return frame(source, state)
+
+    def test_the_actions_block_holds_the_fields_and_nothing_else(self) -> None:
+        blocks = _blocks(self._frame())
+
+        self.assertEqual(
+            _spoken(blocks[1]),
+            (
+                "> Alias: <type a short name>",
+                "  Registry URL: <type an HTTPS or SSH Git URL>",
+                "  Branch or tag: <repository default>",
+                "  Make default registry: yes",
+                "  Continue: Validate and review",
+            ),
+        )
+
+    def test_the_introduction_and_the_key_prompt_read_below_the_fields(self) -> None:
+        blocks = _blocks(self._frame())
+
+        self.assertEqual(
+            _spoken(blocks[2]),
+            (
+                "Connect an approved registry. AART validates a fresh snapshot before saving it.",
+                "Local folders are authoring Sources, not Marketplace registries.",
+                "This adds another registry. Nothing already connected is changed.",
+                "Type to edit; Backspace removes; Space toggles default; Enter advances.",
+            ),
+        )
+
+    def test_the_key_prompt_is_still_the_last_line_with_a_blank_above_it(self) -> None:
+        """`QA-029`: the one line addressed to the reader must not be buried."""
+
+        status = _trimmed(_blocks(self._frame())[2])
+
+        self.assertEqual(
+            status[-1],
+            "Type to edit; Backspace removes; Space toggles default; Enter advances.",
+        )
+        self.assertEqual(status[-2], "")
+
+
 class EveryScreenBlockTest(TestCase):
     """The enforcement: a migrated screen's actions block holds only what the cursor acts on."""
 
@@ -443,6 +510,6 @@ class EveryScreenBlockTest(TestCase):
                     )
 
     def test_the_list_of_screens_that_still_mix_only_ever_shrinks(self) -> None:
-        """A reminder in the only place that would notice: five left, and no route to add one."""
+        """A reminder in the only place that would notice: four left, and no route to add one."""
 
-        self.assertEqual(len(MIXED_SCREENS), 5)
+        self.assertEqual(len(MIXED_SCREENS), 4)

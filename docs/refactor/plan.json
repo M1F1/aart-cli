@@ -394,7 +394,7 @@
     {
       "id": "CP-21",
       "title": "Second manual TUI run: one screen skeleton, an unbroken promotion path, and a credential step that stays in the TUI",
-      "status": "in_progress",
+      "status": "done",
       "steps": [
         {
           "id": "1",
@@ -433,12 +433,12 @@
         },
         {
           "id": "8",
-          "title": "Harness delivery is one honest answer across Artifact Details, review, Remediation and Success (QA-078/QA-079/QA-080) \u2014 diagnosed in D-231, lands with step 3's setup path",
+          "title": "Harness delivery is one honest answer across Artifact Details, review, Remediation and Success (QA-078/QA-079/QA-080) — diagnosed in D-231, lands with step 3's setup path",
           "status": "done"
         },
         {
           "id": "9",
-          "title": "Publish the reviewed registry commit from inside AART to a configured branch that is never the default (QA-082/QA-055, D-228) \u2014 rule, command and push adapter done; the Registry Commit screen action is next",
+          "title": "Publish the reviewed registry commit from inside AART to a configured branch that is never the default (QA-082/QA-055, D-228) — rule, command and push adapter done; the Registry Commit screen action is next",
           "status": "done"
         },
         {
@@ -501,12 +501,12 @@
         {
           "id": "9",
           "title": "Screen 22 Add Registry: fields alone, introduction and key prompt out of the fields' block (QA-087)",
-          "status": "in_progress"
+          "status": "done"
         },
         {
           "id": "10",
           "title": "Screen 31 Add Source: the same split, once the form question is settled with the operator (QA-087)",
-          "status": "todo"
+          "status": "in_progress"
         },
         {
           "id": "11",
