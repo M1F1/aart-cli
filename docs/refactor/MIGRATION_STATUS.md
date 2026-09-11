@@ -1,9 +1,18 @@
 # AART Refactor Migration Status
 
-**CP-22 opened — one screen structure (2026-09-11).** The operator walked CP-21's skeleton and
-reported that it is real but filled differently by every screen, with the rule stated by name:
-actions and view status never share a block. Two steps have landed. `working at` is the footer's
-caption, drawn flush on its rule so the terminal's padding falls above it rather than between it
+**CP-22 is 15 of 17 steps done — one screen structure (2026-09-11).** The full `make quality`
+half of step 16 is green on `d60bdd5`: two discovery runs each passed 3,924 tests (one skipped),
+branch coverage is 85.47%, and every format, lint, type, repository validation, packaging, docs
+and secret-shape gate passed. The operator then walked the built screens and reported seven more
+findings, which are step 17: `QA-092`…`QA-097` have landed and `QA-098` is held — the Registry
+Maintainer lifecycle redesign needs a sentence the operator's message broke off in, and it needs
+fields the registry view does not carry yet (repository URL, branch, remote-branch state), so it is
+projection work rather than a rendering change.
+
+The operator walked CP-21's skeleton and reported that it is real but filled differently by every
+screen, with the rule stated by name: actions and view status never share a block. The first two
+steps established the structure: `working at` is the footer's caption, drawn flush on its rule so
+the terminal's padding falls above it rather than between it
 and the keys (`QA-086`, `D-242` revising `D-235`, `f43e9ff`). And the skeleton is now a type rather
 than a call convention: `Frame` names the blocks, its field order is the layout, `render` derives
 the arrangement from `dataclasses.fields` so no second place can disagree, and the claims are
@@ -30,9 +39,15 @@ off the row model rather than off a set of named screens (`QA-091`, `D-244`). `Q
 them: a reset empties the lab before it removes the marker, so a failed reset always leaves a lab
 that is still resettable, and an already-unmarked one has a recovery the tests actually run.
 
-What is left is step 16 — the full quality gate and the operator's third manual run over
-`QA-044`…`QA-091`. Slice: `docs/refactor/slices/CP-22-one-screen-structure.md`; epic
-`CP-22` in `plan.json`.
+Step 17 settled how a screen states anything. A notice — what an action left behind — is a block
+of its own rather than a paragraph inside whichever block the screen happened to have (`QA-093`,
+`D-245`), and a view's status is a list of statements rather than a paragraph, marked always and
+capitalised where the words become a screen rather than where a diagnostic is written (`QA-096`,
+`D-246`). Screen 46 lost its duplicate statements and its headings, and gained its explanation
+under `[v]`; Settings gained one explanation per row.
+
+What is left is step 16's manual half — the operator's run over `QA-044`…`QA-098` — and `QA-098`
+itself. Slice: `docs/refactor/slices/CP-22-one-screen-structure.md`; epic `CP-22` in `plan.json`.
 
 **CP-20 IMPLEMENTED — awaiting manual retest (2026-09-09).** All seven machine-readable plan steps
 are done. Connected Registry snapshots and the current local project are distinct; internal route

@@ -207,7 +207,13 @@ def _refusal(diagnostics: tuple[Diagnostic, ...]) -> tuple[str, ...]:
                 steps.append(step)
     if withheld and not steps:
         steps.append(_ELSEWHERE)
-    return _lines(*lines, *steps)
+    # `QA-096`: a refusal is a list of statements, not a paragraph. The blank line is what the
+    # notice block reads to tell one from the next, so a reason and its next step are separated
+    # here rather than run together into a single wrapped sentence.
+    said = _lines(*lines, *steps)
+    return tuple(
+        line for index, item in enumerate(said) for line in (("",) if index else ()) + (item,)
+    )
 
 
 def _rebuild_stages(focus: str) -> tuple[str, ...]:

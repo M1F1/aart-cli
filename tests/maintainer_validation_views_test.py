@@ -392,7 +392,7 @@ class ValidationShellTest(unittest.TestCase):
         self.assertIs(diff_again.session.screen, MaintainerScreen.CANDIDATE_DIFF)
         self.assertEqual(diff_again.focus, self.candidate)
         self.assertNotIn("That Candidate is not available.", frame(self.source, diff_again))
-        self.assertIn("Semantic changes:", frame(self.source, diff_again))
+        self.assertIn("- Semantic changes:", frame(self.source, diff_again))
 
     def test_back_from_any_validation_check_restores_the_bare_candidate_identity(self) -> None:
         # ValidationCheck is a finite closed enum, so exhaust every member instead of sampling it.

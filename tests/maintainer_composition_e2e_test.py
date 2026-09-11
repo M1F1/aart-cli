@@ -270,7 +270,7 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
 
             self.assertIs(finished.session.screen, MaintainerScreen.SOURCE_DETAILS)
             self.assertTrue(terminal.screen_containing("/ Maintainer Dashboard"))
-            self.assertIn("Candidates: 1", terminal.screen_containing("Maintainer overview"))
+            self.assertIn("Candidates: 1", terminal.screen_containing("Ready for promotion:"))
             self.assertIn("authors", terminal.screen_containing("/ Sources"))
             detail = terminal.screen_containing("/ Source Details")
             self.assertIn("branch: main", detail)

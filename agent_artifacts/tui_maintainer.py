@@ -64,9 +64,9 @@ __all__ = [
     "render_maintainer_provenance",
     "render_maintainer_version_conflict",
     "render_maintainer_bulk_promotion",
+    "maintainer_registry_descriptor",
     "maintainer_registry_rows",
     "maintainer_registry_status",
-    "render_maintainer_registries",
     "render_maintainer_registry",
     "render_maintainer_registry_diff",
     "render_maintainer_registry_commit",
@@ -96,18 +96,18 @@ def render_maintainer_dashboard(
         profile, PresentationProfile
     ):
         raise ValueError("Maintainer Dashboard rendering needs a view and profile")
-    lines = [
-        "Maintainer overview",
-        f"Sources: {view.source_count}",
-        f"Candidates: {view.candidate_count}",
-        f"Validation failures: {view.validation_failure_count}",
-        f"Ready for promotion: {view.ready_count}",
-        "Recent maintainer activity:",
-    ]
-    lines.extend(f"  - {item}" for item in view.recent_activity)
-    if not view.recent_activity:
-        lines.append("  - none yet")
-    return tuple(lines)
+    # `QA-092`: no heading. Four counts and a list of activity are an overview already, and a line
+    # that says so is the fault `QA-067` removed from `Navigation:` wearing another name.
+    # `QA-096`: each count is a separate statement, so each is separated -- the blank line is what
+    # the status block reads to tell one list item from the next.
+    activity = [f"  - {item}" for item in view.recent_activity] or ["  - none yet"]
+    return separate(
+        (f"Sources: {view.source_count}",),
+        (f"Candidates: {view.candidate_count}",),
+        (f"Validation failures: {view.validation_failure_count}",),
+        (f"Ready for promotion: {view.ready_count}",),
+        ("Recent maintainer activity:", *activity),
+    )
 
 
 def render_maintainer_sources(
@@ -945,44 +945,58 @@ def render_maintainer_registry(
     return tuple(lines)
 
 
-def render_maintainer_registries(
-    views: tuple[MaintainerRegistryView, ...],
-    profile: PresentationProfile,
-    *,
-    registry_workspace_present: bool = True,
-) -> tuple[str, ...]:
-    """Screen 46 covers every configured registry: an installation may maintain more than one."""
-
-    return separate(
-        maintainer_registry_rows(
-            views, profile, registry_workspace_present=registry_workspace_present
-        ),
-        maintainer_registry_status(views, registry_workspace_present=registry_workspace_present),
-    )
-
-
 def maintainer_registry_rows(
     views: tuple[MaintainerRegistryView, ...],
     profile: PresentationProfile,
     *,
     registry_workspace_present: bool = True,
 ) -> tuple[str, ...]:
-    """The subscribed snapshots, under the heading that introduces them (`QA-087`).
+    """The subscribed snapshots, and nothing that introduces them.
 
-    A heading belongs with what it introduces, so when nothing is subscribed there is no heading
-    and no block: what is missing is the state of the view, and `maintainer_registry_status` says
-    it.
+    `QA-092`: a row of a registry snapshot does not need a line above it saying that snapshots are
+    what follows. What a subscribed snapshot *is for* is an explanation rather than a state, so it
+    collapses under `[v]` with the rest of them (`QA-095`, `maintainer_registry_descriptor`).
     """
 
     if not isinstance(views, tuple) or not isinstance(profile, PresentationProfile):
         raise ValueError("Maintainer registries rendering needs typed views and a profile")
-    if not views:
-        return ()
-    lines: list[str] = ["Connected Registry snapshots"]
+    lines: list[str] = []
     for view in views:
-        lines.append("")
+        if lines:
+            lines.append("")
         lines.extend(
             render_maintainer_registry(view, profile, show_working_tree=registry_workspace_present)
+        )
+    return tuple(lines)
+
+
+def maintainer_registry_descriptor(
+    views: tuple[MaintainerRegistryView, ...],
+    *,
+    registry_workspace_present: bool = True,
+) -> tuple[str, ...]:
+    """What a connected snapshot is for, which never changes and so is never news (`QA-095`).
+
+    The operator found it drawn on every frame although it describes the idea of a registry
+    snapshot rather than this project's -- *"powinno byc collapsed albo uncollapsed jak sie klika
+    v"*. It is an explanation, so it obeys `[v]` like every other one (`QA-070`).
+    """
+
+    if not isinstance(views, tuple):
+        raise ValueError("Maintainer registries rendering needs typed views")
+    lines = [
+        "Connected Registry snapshots",
+        "These approved snapshots determine what Marketplace can offer.",
+    ]
+    if not views and registry_workspace_present:
+        # `QA-075`/`QA-060`: a Registry created here is not a subscribed one until it has been
+        # published to its branch and subscribed to (`D-228`).
+        lines.extend(
+            (
+                "",
+                "A Registry created here becomes connectable once it is published to its "
+                "branch and subscribed to.",
+            )
         )
     return tuple(lines)
 
@@ -992,40 +1006,25 @@ def maintainer_registry_status(
     *,
     registry_workspace_present: bool = True,
 ) -> tuple[str, ...]:
-    """What connected snapshots are for, and what the local checkout is (`QA-087`).
+    """The state of this project, said once each (`QA-094`).
 
-    Both are standing facts about the project rather than things the cursor acts on. The screen has
-    two subjects and only one of them has rows, which is why the second one lives here whole.
+    Two standing facts and no headings: what the local checkout is, and whether anything is
+    subscribed here. `QA-075` is why the second is phrased about *subscribed* registries -- "No
+    Registry is connected." had sat above an initialization that just succeeded, and read as that
+    run having failed. What a snapshot is for moved to `maintainer_registry_descriptor`, and why a
+    rebuild was refused is the notice's block rather than a second telling of the first line here.
     """
 
     if not isinstance(views, tuple):
         raise ValueError("Maintainer registries rendering needs typed views")
-    lines: list[str] = []
-    if not views:
-        # `QA-075`: "No Registry is connected." sat above a five-stage initialization that had just
-        # succeeded, so it read as that run having failed. It refers to *subscribed* Registries, and
-        # a Registry created here is not one of them until it has been published and subscribed to
-        # -- which is the same two steps `QA-060` asks the Source Sync refusal to name (`D-228`).
-        lines.append("Connected Registry snapshots")
-    lines.append("These approved snapshots determine what Marketplace can offer.")
-    if not views:
-        lines.append("No Registry is subscribed in this project yet.")
-        if registry_workspace_present:
-            lines.append(
-                "A Registry created here becomes connectable once it is published to its "
-                "branch and subscribed to."
-            )
-    lines.extend(("", "Local Registry workspace"))
-    if registry_workspace_present:
-        lines.append("Current project contains a Registry. Rebuild updates its generated files.")
-    else:
-        lines.extend(
-            (
-                "Current project is not a Registry.",
-                "Initialize creates one here; Rebuild applies only after that.",
-            )
-        )
-    return tuple(lines)
+    local = (
+        "Current project contains a Registry. Rebuild updates its generated files."
+        if registry_workspace_present
+        else "Current project is not a Registry. Initialize creates one here."
+    )
+    if views:
+        return (local,)
+    return separate((local,), ("No Registry is subscribed in this project yet.",))
 
 
 def render_repository_scan(

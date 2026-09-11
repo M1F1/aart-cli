@@ -2,7 +2,10 @@
 
 ## CP-22 current objective (2026-09-11)
 
-**CP-22 is OPEN — 2 of 9 steps done.** Slice document:
+**CP-22 is OPEN — step 17 carries the third manual run's findings; six of seven are landed.** The
+one held is `QA-098`, the Registry Maintainer lifecycle redesign: the operator's message ends
+mid-sentence, and whether a remote branch exists is a network answer a frame cannot go and get, so
+the screen can only report what the last `[u] Check upstream` established. Slice document:
 [`slices/CP-22-one-screen-structure.md`](slices/CP-22-one-screen-structure.md).
 
 CP-21 gave every screen one skeleton; the operator walked it and found the skeleton real but filled
@@ -68,10 +71,13 @@ Landed so far:
   — the refusal prints `chmod -R u+w <root> && rm -rf <root>` and the acceptance document carries
   it under *If the lab loses its marker*.
 
-**Exact next action: step 16**, the last one — `make quality` end to end, then the operator's third
-manual run over `QA-044`…`QA-091` through `docs/testing/END_TO_END_ACCEPTANCE.md`. Everything CP-22
-changed is in the TUI's composition, so the run is the evidence that matters: the screens are what
-the finding was about.
+**Exact next action: finish step 16** with the operator's third manual run over
+`QA-044`…`QA-091`, using the lab procedure in `docs/testing/END_TO_END_ACCEPTANCE.md` and the
+screen walk in `docs/testing/TUI_MANUAL_WALKTHROUGH.md`. The full `make quality` half passed on
+`d60bdd5`: both discovery runs passed 3,924 tests (one skipped), branch coverage was 85.47%, and
+format, lint, type, repository validation, packaging, docs and secret-shape gates were green.
+Everything CP-22 changed is in the TUI's composition, so the manual run is the remaining evidence:
+the screens are what the findings were about.
 
 One thing to raise on that run rather than decide alone: on three forms the key legend now wraps to
 three lines with `[v] Fast / Verbose` alone on the middle one. Moving `v` down to the row with
@@ -1617,6 +1623,21 @@ Do not re-derive `QA-078`. `D-231` holds the rule and the slice file holds the m
 is a change to what the install *offers*, so it lands with CP-21 step 3's consumer setup and
 remediation path, where it also settles `QA-080`. Building it at the placement boundary was tried and
 backed out — the receipt and the host then disagree and `configured_consumer_completion` refuses.
+
+## The immediate next move
+
+1. Ask the operator to finish *"chcialbym zeby tez byla"* — the last of the seven findings is a
+   sentence short.
+2. Build `QA-098` on the answer: the registry as a cursor row carrying its sha, the repo URL and
+   branch and remote-branch state in the block `[v]` opens, the initialization stage report ending
+   in `committed <sha> locally; not pushed and not merged`, and the sentence that a change becomes
+   available only once pushed — by the operator, never by AART. A maintainer may subscribe to a
+   remote branch; a user only ever subscribes to a repository's `main`.
+3. Re-run the operator's manual walk over `QA-044`…`QA-098` and close step 16.
+
+Still open from step 13b: on three forms the key legend wraps to three lines with `[v] Fast /
+Verbose` orphaned on the middle one. Moving `v` into the universal row closes it up and changes
+every screen's footer, which is the operator's call rather than ours.
 
 ## Critical boundaries for this slice
 

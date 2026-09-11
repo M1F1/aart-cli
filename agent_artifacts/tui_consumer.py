@@ -29,6 +29,7 @@ from agent_artifacts.application.consumer_ui import (
     workflow_progress,
 )
 from agent_artifacts.application.consumer_views import (
+    SETTING_PURPOSE,
     SETTING_ROWS,
     ActivityView,
     ApplicationScreen,
@@ -97,12 +98,15 @@ from agent_artifacts.tui_layout import (
     STAGE_PENDING,
     Frame,
     action_prompt,
+    bulleted,
     cards,
     is_action_prompt,
     render,
     separate,
+    stated,
 )
 from agent_artifacts.tui_maintainer import (
+    maintainer_registry_descriptor,
     maintainer_registry_rows,
     maintainer_registry_status,
     render_adopted_artifacts,
@@ -936,13 +940,19 @@ def doctor_status(view: DoctorView, profile: PresentationProfile) -> tuple[str, 
 
     if not isinstance(view, DoctorView) or not isinstance(profile, PresentationProfile):
         raise ValueError("Doctor rendering needs a Doctor view and presentation profile")
-    lines = [f"{view.ready_count} ready", f"{view.attention_count} needs attention"]
-    if view.actions:
-        lines.append("Actions: repair issues using minimal reconciliation plans.")
-    if profile is PresentationProfile.VERBOSE and view.repairable_issues:
-        lines.append("Independently repairable:")
-        lines.extend(f"  - {item}" for item in view.repairable_issues)
-    return tuple(lines)
+    # `QA-096`: separate statements, separately -- the blank line is what the status block reads
+    # to tell one list item from the next, and a count is not a continuation of the count above it.
+    repairable = (
+        ("Independently repairable:", *(f"  - {item}" for item in view.repairable_issues))
+        if profile is PresentationProfile.VERBOSE and view.repairable_issues
+        else ()
+    )
+    return separate(
+        (f"{view.ready_count} ready",),
+        (f"{view.attention_count} needs attention",),
+        ("Actions: repair issues using minimal reconciliation plans.",) if view.actions else (),
+        repairable,
+    )
 
 
 def render_doctor(view: DoctorView, profile: PresentationProfile) -> tuple[str, ...]:
@@ -1137,6 +1147,9 @@ class ConsumerScreenSource(Protocol):
 
     def description(self, state: ConsumerUiState) -> tuple[str, ...]:
         """What the thing under the cursor is, for the skeleton's second section (`QA-067`)."""
+
+    def notice(self, state: ConsumerUiState) -> tuple[str, ...]:
+        """Why the last action was refused, if this screen is one an action lands on."""
 
     def status(self, state: ConsumerUiState) -> tuple[str, ...]:
         """The state of the whole view -- counts, errors, steps left -- or nothing (`QA-067`)."""
@@ -1363,13 +1376,13 @@ def _review_facts(state: ConsumerUiState, screens: "ConsumerScreens") -> tuple[s
     reads as view status because it is a statement rather than something to act on (`QA-087`).
 
     A refusal replaces it rather than joining it. The screen keeps its name and its place, because
-    the notice below answers a question asked here, but the plan it described was discarded when
-    the run stopped and describing it still would be describing something that no longer exists
-    (`QA-033`).
+    the notice answers a question asked here, but the plan it described was discarded when the run
+    stopped and describing it still would be describing something that no longer exists (`QA-033`).
+    The reason now stands *above* this, in the block `QA-093` gave it, so the sentence points up.
     """
 
     if state.failed_action is not None:
-        return ("This run stopped, so nothing here was changed. Why it stopped is below.",)
+        return ("This run stopped, so nothing here was changed. Why it stopped is above.",)
     screen = state.session.screen
     if screen is ConsumerScreen.REGISTRY_REVIEW:
         draft = state.registry_draft
@@ -1483,15 +1496,19 @@ def frame(source: ConsumerScreenSource, state: ConsumerUiState) -> tuple[str, ..
     heading = _heading(state)
     progress = _workflow_chrome(state)
     header = (heading, *(("", *progress) if progress else ()))
-    status: list[str] = list(source.status(state))
+    # `QA-096`: the view's status is a list of statements, not a paragraph. What counts as one
+    # statement is the blank line the screen composed with, and the session's own lines are
+    # statements of their own rather than a continuation of whatever the screen said last.
+    session: list[tuple[str, ...]] = []
     if state.searching:
-        status.append(f"Search: {state.search}_")
+        session.append((f"Search: {state.search}_",))
     elif state.search:
-        status.append(f"Filter: {state.search} (esc to clear)")
+        session.append((f"Filter: {state.search} (esc to clear)",))
     if state.selection:
-        status.append(f"{len(state.selection)} selected")
+        session.append((f"{len(state.selection)} selected",))
     if state.quit_pending:
-        status.append(f"Discard {len(state.selection)} selected item(s) and quit? y/n")
+        session.append((f"Discard {len(state.selection)} selected item(s) and quit? y/n",))
+    status = bulleted(stated(separate(source.status(state), *session)))
     # `QA-086`: the launch directory is the footer's caption -- the last line before the keys'
     # rule and flush on it, with the terminal's padding above it rather than under it (revising
     # `QA-069`/`D-235`, which had it as a section of its own; `QA-066` had moved it off the title).
@@ -1501,8 +1518,9 @@ def frame(source: ConsumerScreenSource, state: ConsumerUiState) -> tuple[str, ..
             trail=header,
             actions=source.actions(state),
             described=_described(source, state),
+            notice=source.notice(state),
             help=_HELP_LINES if state.help_visible else (),
-            status=tuple(status),
+            status=status,
             context=workspace,
             keys=_key_legend(source, state),
         )
@@ -2406,12 +2424,7 @@ class CanonicalScreenSource:
         return target
 
     def actions(self, state: ConsumerUiState) -> tuple[str, ...]:
-        """What the cursor acts on, and on the screens an action lands on, why it could not run.
-
-        The notice is confined to those screens deliberately. It answers a question somebody just
-        asked, so it belongs where they asked it; carrying it onto the dashboard would leave a
-        stale explanation standing over a screen that never ran anything.
-        """
+        """What the cursor acts on, and nothing else at all."""
 
         # `QA-091`: a screen with no rows has nothing the cursor can act on, so its actions block
         # is empty and whatever it has to say is the state of the view. The rule is read off the
@@ -2420,15 +2433,29 @@ class CanonicalScreenSource:
         if not self.rows(state):
             return ()
         body = self._body(state)
-        notice = self._screens.notice if state.session.screen in _ANSWERABLE else ()
         # `QA-029`: the one line addressed to the reader goes last, under everything it is about,
-        # separated by a blank. A notice is the thing being asked about, so it lands above the ask
-        # rather than under it -- which is where an answered review used to leave the reader.
+        # separated by a blank.
         prompt = body[-1] if body and is_action_prompt(body[-1]) else ""
-        facts = separate(body[:-1] if prompt else body, notice)
+        facts = separate(body[:-1] if prompt else body)
         if not prompt:
             return facts
         return action_prompt(facts, prompt)
+
+    def notice(self, state: ConsumerUiState) -> tuple[str, ...]:
+        """Why the last action could not run, on the screens where somebody asked for it.
+
+        `QA-093`: a block of its own, because the operator found it drawn among the five stages a
+        reader was choosing between -- *"powiadomienie o bledzie nie powinno byc w jednym bloku z
+        akcja"*. It is confined to the answerable screens deliberately: it answers a question
+        somebody just asked, so it belongs where they asked it, and carrying it onto the dashboard
+        would leave a stale explanation standing over a screen that never ran anything.
+        """
+
+        if state.session.screen not in _ANSWERABLE:
+            return ()
+        # `QA-096`: a diagnostic is written lower-case everywhere it is produced; on a screen it
+        # is a sentence like every other statement, and `stated` is the one place that settles it.
+        return bulleted(stated(self._screens.notice))
 
     def description(self, state: ConsumerUiState) -> tuple[str, ...]:
         """What the row under the cursor is, as bare lines the skeleton will bound (`QA-067`).
@@ -2437,6 +2464,22 @@ class CanonicalScreenSource:
         rows tomorrow says something here without the frame changing.
         """
 
+        if state.session.screen is ConsumerScreen.SETTINGS:
+            purpose = SETTING_PURPOSE.get(state.current_row or "")
+            return () if purpose is None else (purpose,)
+        if state.session.screen is MaintainerScreen.REGISTRY:
+            # `QA-095`: the screen's one explanation, which is about registry snapshots rather
+            # than about the row under the cursor -- so it answers from the screen. `[v]` still
+            # gates it, because `_described` is the only caller.
+            screens = self._screens
+            present = (
+                True
+                if screens.maintainer is None
+                else screens.maintainer.registry_workspace_present
+            )
+            return maintainer_registry_descriptor(
+                screens.maintainer_registries(), registry_workspace_present=present
+            )
         if state.session.screen is MaintainerScreen.REGISTRY_REBUILD:
             # The whole-sequence row names its four stages in its own label, so it has nothing
             # left to add here and says nothing rather than repeating itself.
@@ -2486,11 +2529,9 @@ class CanonicalScreenSource:
         spoken = self._view_status(state)
         if self.rows(state):
             return spoken
-        # `QA-091`: with no rows there is no actions block, so the report a result screen draws and
-        # the refusal a stopped run left behind are both view status. The notice reads last because
-        # what stands above it says it is coming -- *"Why it stopped is below."*
-        notice = self._screens.notice if state.session.screen in _ANSWERABLE else ()
-        return separate(self._body(state), spoken, notice)
+        # `QA-091`: with no rows there is no actions block, so the report a result screen draws is
+        # the state of the view. The refusal is not: `QA-093` gives it its own block above.
+        return separate(self._body(state), spoken)
 
     def _view_status(self, state: ConsumerUiState) -> tuple[str, ...]:
         """What this particular screen has to say about itself."""
@@ -2525,15 +2566,13 @@ class CanonicalScreenSource:
             # are drawn from `state.settings`.
             return settings_consequence(state.settings)
         if screen is ConsumerScreen.REGISTRIES:
-            return (
-                _REGISTRY_EXPLANATION
-                if screens.registries
-                else (
-                    *_REGISTRY_EXPLANATION,
-                    "No sources are configured.",
-                    "Marketplace needs an approved registry before it can offer tools.",
-                    "Choose Add Registry above to connect the first one.",
-                )
+            if screens.registries:
+                return _REGISTRY_EXPLANATION
+            return separate(
+                _REGISTRY_EXPLANATION,
+                ("No sources are configured.",),
+                ("Marketplace needs an approved registry before it can offer tools.",),
+                ("Choose Add Registry above to connect the first one.",),
             )
         if screen is MaintainerScreen.DASHBOARD:
             # An unavailable composition is the state of the view, not something to put a cursor

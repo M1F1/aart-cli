@@ -22,6 +22,7 @@ from agent_artifacts.application.consumer_ui import ConsumerUiState
 from agent_artifacts.application.consumer_views import (
     ConsumerSession,
     ConsumerSettings,
+    PresentationProfile,
     project_dashboard,
 )
 from agent_artifacts.application.maintainer import reconcile_source_scan
@@ -330,11 +331,18 @@ class MaintainerRegistryShellTest(unittest.TestCase):
 
         drawn = "\n".join(frame(source, _reload(source, state, entering=True)))
 
-        self.assertIn("Connected Registry snapshots", drawn)
-        self.assertIn("determine what Marketplace can offer", drawn)
-        self.assertIn("Current project is not a Registry", drawn)
-        self.assertIn("Initialize creates", drawn)
+        self.assertIn("Current project is not a Registry. Initialize creates one here.", drawn)
         self.assertNotIn("Working tree: differs", drawn)
+        # `QA-095`: what a connected snapshot is *for* never changes, so Fast does not say it.
+        self.assertNotIn("determine what Marketplace can offer", drawn)
+
+        verbose = replace(
+            state, session=replace(state.session, profile=PresentationProfile.VERBOSE)
+        )
+        opened = "\n".join(frame(source, _reload(source, verbose, entering=True)))
+
+        self.assertIn("Connected Registry snapshots", opened)
+        self.assertIn("determine what Marketplace can offer", opened)
 
     def test_an_installation_with_no_composed_registry_refuses_instead_of_raising(self) -> None:
         source = CanonicalScreenSource(

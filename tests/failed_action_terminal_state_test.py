@@ -187,8 +187,10 @@ class FailedActionFrameTest(unittest.TestCase):
             ConsumerActionKind.REGISTRY_REBUILD, MaintainerScreen.REGISTRY_REBUILD_REVIEW
         )
 
+        # `QA-096`: the refusal is a statement in the notice block, so it is marked and its case
+        # is settled where the words become a screen rather than where the diagnostic is written.
         self.assertIn(
-            "registry rebuild stopped at lock: required file is missing",
+            "Registry rebuild stopped at lock: required file is missing.",
             " ".join(drawn),
         )
 

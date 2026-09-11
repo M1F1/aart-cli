@@ -343,8 +343,13 @@ class SourceRefusalWayOutTests(unittest.TestCase):
     def test_the_refusal_keeps_its_remediation_rather_than_only_the_complaint(self) -> None:
         lines = _refusal(self.IDENTITY_CHANGE)
 
+        # `QA-096`: a reason and its next step are separate statements, separated by the blank
+        # line the notice block reads to tell one list item from the next.
         self.assertEqual(lines[0], "resolved source changed its declared source identity")
-        self.assertEqual(lines[1:], self.IDENTITY_CHANGE[0].interactive)
+        self.assertEqual(
+            tuple(line for line in lines[1:] if line), self.IDENTITY_CHANGE[0].interactive
+        )
+        self.assertEqual(lines[1], "")
         self.assertNotIn("\u2026", " ".join(lines))
         self.assertFalse(any("aart " in line for line in lines), lines)
 
@@ -358,7 +363,9 @@ class SourceRefusalWayOutTests(unittest.TestCase):
             remediation=("do the thing",),
         )
 
-        self.assertEqual(_refusal((wrapped,)), ("first line", "second line", "do the thing"))
+        self.assertEqual(
+            _refusal((wrapped,)), ("first line", "", "second line", "", "do the thing")
+        )
 
 
 if __name__ == "__main__":

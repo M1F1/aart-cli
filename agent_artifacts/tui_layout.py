@@ -311,6 +311,87 @@ def separate(*blocks: Sequence[str]) -> Tuple[str, ...]:
     return tuple(joined)
 
 
+def stated(lines: Sequence[str]) -> Tuple[str, ...]:
+    """Each statement as a sentence, so a screen does not start two of them two ways.
+
+    The operator found the same block starting some statements with a capital and others without
+    -- *"zdecyduj sie czy zaczynamy to z duzej litery czy z malej bo tu sa rozne"* (`QA-096`) -- and
+    the split runs along where the text came from: a view writes prose, a refused run carries a
+    diagnostic, and diagnostics are written lower-case everywhere else in this codebase for good
+    reasons of their own. Settling it in the diagnostics would be settling it in the wrong place,
+    so it is settled here, where the words become a screen.
+
+    Only the first line of a statement is touched, and only when it opens with a plain lower-case
+    word: a continuation is not a sentence start, and a line opening on an identifier -- a
+    coordinate, a file name, an alias -- is a name rather than a word, and names keep their case.
+    """
+
+    if any(not isinstance(line, str) for line in lines):
+        raise ValueError("a block is lines of text")
+    said = list(lines)
+    opening: int | None = None
+    for index, line in enumerate(said + [""]):
+        if line.strip():
+            if opening is None:
+                opening = index
+            continue
+        if opening is not None:
+            _speak(said, opening, index - 1)
+        opening = None
+    return tuple(said)
+
+
+def _speak(said: list[str], first: int, last: int) -> None:
+    """One statement as a sentence, in place, or left exactly as it is."""
+
+    head = said[first].lstrip()
+    word = head.split(" ", 1)[0].rstrip(",;:.")
+    if not word.isalpha() or not word.islower():
+        return
+    said[first] = said[first].replace(head, head[0].upper() + head[1:], 1)
+    tail = said[last].rstrip()
+    if tail and tail[-1].isalnum():
+        said[last] = tail + "."
+
+
+BULLET = "- "
+"""What marks one statement in a block of them."""
+
+_BULLET_INDENT = " " * len(BULLET)
+
+
+def bulleted(lines: Sequence[str]) -> Tuple[str, ...]:
+    """Statements as a list: one ``-`` each, one blank line between them.
+
+    The operator read a view's status as a paragraph, because three unrelated facts were three
+    consecutive lines -- *"kazda linia statusu/informacji powinna byc oznaczona jako element
+    listy"* (`QA-096`), and *"zawsze, nawet pojedyncze"*: a lone statement is a list of one rather
+    than an exception, so nothing has to decide which it is.
+
+    What counts as one statement is the blank line, which is already how every composed block in
+    this module says "different thing" (`separate`). A statement that runs to several lines keeps
+    them, indented under its own marker, so a wrapped sentence never reads as a second item.
+    """
+
+    if any(not isinstance(line, str) for line in lines):
+        raise ValueError("a block is lines of text")
+    groups: list[list[str]] = []
+    for line in lines:
+        if not line.strip():
+            if groups and groups[-1]:
+                groups.append([])
+            continue
+        if not groups:
+            groups.append([])
+        groups[-1].append(line)
+    items = [
+        (BULLET + group[0], *(_BULLET_INDENT + line for line in group[1:]))
+        for group in groups
+        if group
+    ]
+    return separate(*items)
+
+
 def section(lines: Sequence[str]) -> Tuple[str, ...]:
     """Put one explanatory region between the shared restrained boundaries."""
 
@@ -366,6 +447,10 @@ class Frame:
     ``trail``       where the reader is, and the sequence of steps they are walking.
     ``actions``     what the cursor can act on -- rows, toggles, commands. Nothing that only reads.
     ``described``   what the cursor is on right now (Verbose only, `QA-070`).
+    ``notice``      what the last action left behind: why it was refused, or why it could not be
+                    prepared. `QA-093` gives it a block because it answers none of the other
+                    questions -- it is not a row, it is not what the cursor points at, and it is
+                    not the state of the view but of one run that has already finished.
     ``help``        the key documentation, while it is open.
     ``status``      the state of the whole view: counts, guidance, what went wrong.
     ``context``     what is true of the session rather than the view: the launch directory. It is
@@ -383,6 +468,7 @@ class Frame:
     trail: Tuple[str, ...] = ()
     actions: Tuple[str, ...] = ()
     described: Tuple[str, ...] = ()
+    notice: Tuple[str, ...] = ()
     help: Tuple[str, ...] = ()
     status: Tuple[str, ...] = ()
     context: str = dataclasses.field(default="", metadata=CAPTION)
@@ -483,6 +569,7 @@ BOX_MARKERS: Mapping[str, str] = {
 }
 
 __all__ = [
+    "BULLET",
     "BOX_CHECKED",
     "BOX_DISABLED",
     "BOX_EMPTY",
@@ -508,6 +595,7 @@ __all__ = [
     "abbreviate_path",
     "action_prompt",
     "anchor",
+    "bulleted",
     "cards",
     "columns",
     "field_block",
@@ -518,6 +606,7 @@ __all__ = [
     "render",
     "section",
     "separate",
+    "stated",
     "status_bar",
     "wrap",
 ]

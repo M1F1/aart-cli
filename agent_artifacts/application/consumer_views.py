@@ -76,6 +76,7 @@ __all__ = [
     "ConsumerSession",
     "CONSUMER_SETTINGS_INVALID",
     "ConsumerSettings",
+    "SETTING_PURPOSE",
     "SETTING_ROWS",
     "CredentialInputView",
     "CredentialRecordView",
@@ -1704,6 +1705,23 @@ SETTING_ROWS: tuple[str, ...] = (
     "show-updates",
     "maintainer-mode",
 )
+
+SETTING_PURPOSE: dict[str, str] = {
+    "detail-level": "How much every screen says: Fast hides the per-row explanations, "
+    "Verbose shows them.",
+    "default-scope": "Where an install lands when nothing asks for somewhere else: "
+    "Project writes into this checkout, User writes into your home.",
+    "show-updates": "Whether the Dashboard counts the installed artifacts a registry "
+    "offers a newer version of.",
+    "maintainer-mode": "Whether this installation authors artifacts as well as installing "
+    "them, which is what puts Sources, Candidates and Registry Maintainer on the Dashboard.",
+}
+"""What each setting changes, for the block `[v]` opens (`QA-097`).
+
+Every row a cursor can sit on describes itself, the way the rebuild stages have since `QA-089`.
+Four rows that change behaviour and no row that says what it changes left the reader toggling a
+setting to find out what it did.
+"""
 
 
 def settings_to_data(view: ConsumerSettings) -> dict[str, object]:

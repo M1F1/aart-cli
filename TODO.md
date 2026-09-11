@@ -168,6 +168,58 @@ Each new entry records:
       `[Type] Edit`, `[Backspace] Delete` and `[Enter] Next / continue`, and `_FORM_TOGGLE_LABELS`
       names what Space changes per screen so the word the prose carried is not lost with it.
 
+- [ ] **QA-098 — Registry Maintainer says what a registry *is*, never where it is in its life.**
+      Surface: Registry Maintainer (46). Severity: high. Observed: the screen has no rows at all,
+      so the registry this project publishes is prose rather than something the cursor can be on,
+      and nothing on it names the repository, the branch the snapshot was taken from, whether that
+      branch exists on the remote, or whether anything is waiting to be pushed. Expected: the
+      registry is a row — `> manual-registry` with its sha, so two checkouts of the same name on
+      different branches or remotes are told apart — and the cursor description carries the repo
+      URL, the branch, the state of the remote branch and what is unpushed; the initialization
+      stage report (init, lock, build, validate, audit, commit) lives under it, ending in
+      `committed <sha> locally; not pushed and not merged`; and the screen says plainly that a
+      change only becomes available once it is pushed, and that AART will not push it for you.
+      A maintainer may later subscribe to a remote branch; a user only ever subscribes to a
+      repository's `main`. Waiting on the operator: their message ended mid-sentence.
+
+- [ ] **QA-097 — Settings has four rows that change behaviour and no row that says what it changes.**
+      Surface: Settings (28). Severity: medium. Observed: `[v]` opens nothing for `Detail level`,
+      `Default scope` or `Show available updates`, so the reader toggles a setting to find out what
+      it does. Expected: every row the cursor can sit on describes itself under `[v]`, like the
+      rebuild stages do since `QA-089`.
+
+- [ ] **QA-096 — a view's status reads as a paragraph, and starts its sentences both ways.**
+      Surface: every screen. Severity: medium. Observed: separate statements about the view are
+      drawn as consecutive lines, so three unrelated facts read as one wrapped sentence; and the
+      first word is capitalised on some (`No authoring Sources are configured.`) and not on others
+      (`the current project is not a Registry, so there is nothing here to rebuild`). Expected:
+      each statement is a list item — `- ` with a blank line between items, always, including when
+      there is only one — and every statement is a sentence: capital first letter, full stop.
+
+- [ ] **QA-095 — an explanation that never changes is drawn on every frame.**
+      Surface: Registry Maintainer (46). Severity: low. Observed: `Connected Registry snapshots` /
+      `These approved snapshots determine what Marketplace can offer.` stands in the status block
+      in both profiles, although it describes what a registry snapshot is rather than what this
+      project's is. Expected: it collapses under `[v]` like every other explanation (`QA-070`).
+
+- [ ] **QA-094 — Registry Maintainer says the project is not a Registry twice.**
+      Surface: Registry Maintainer (46). Severity: medium. Observed: the same fact is stated once
+      as the state of the local workspace and once as the notice left by an action, so the reader
+      is told twice and can tell neither statement is the same one.
+
+- [ ] **QA-093 — what an action left behind shares a block with the action.**
+      Surface: Rebuild Registry (46h), and every screen that carries a notice. Severity: high.
+      Observed: `actions` composes the notice into the block reserved for what the cursor can act
+      on, so `the current project is not a Registry, so there is nothing here to rebuild` is drawn
+      among the five stages a reader is choosing between. Expected: the notice is a block of its
+      own, after a rule — it is neither a row, nor what the cursor points at, nor the state of the
+      view, so it is a block the skeleton does not have yet.
+
+- [ ] **QA-092 — a heading that repeats what the lines below it already say.**
+      Surface: Maintainer Dashboard (30). Severity: low. Observed: `Maintainer overview` labels
+      four counts and a list of recent activity, none of which needs telling that it is an
+      overview — the same fault `QA-067` removed from `Navigation:`.
+
 - [x] **QA-091 — a screen with no rows still drew its report inside the actions block.**
       Surface: every result, review and refusal screen. Severity: medium. Observed: `actions`
       returned whatever `_body` produced whether or not the cursor had anything to move over, so

@@ -296,7 +296,7 @@ class ConsumerApplicationRefusalTest(unittest.TestCase):
             # on a review that would go on offering to uninstall something that is not there.
             self.assertEqual(finished.session.screen, ConsumerScreen.INSTALLED_ARTIFACT_DETAILS)
             self.assertTrue(
-                terminal.screen_containing("nothing canonical is installed here"),
+                terminal.screen_containing("Nothing canonical is installed here"),
                 terminal.last,
             )
             self.assertIsNone(finished.session.review_digest)
@@ -321,7 +321,7 @@ class ConsumerApplicationRefusalTest(unittest.TestCase):
             self.assertIsNone(finished.action)
             self.assertFalse(_delivered(env).exists())
             self.assertTrue(
-                terminal.screen_containing("no approved published version of skill/code-review"),
+                terminal.screen_containing("No approved published version of skill/code-review"),
                 terminal.last,
             )
 

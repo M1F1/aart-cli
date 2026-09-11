@@ -535,7 +535,12 @@
         },
         {
           "id": "16",
-          "title": "Full quality gate and the operator's third manual run over QA-044..QA-087",
+          "title": "Full quality gate and the operator's third manual run over QA-044..QA-091",
+          "status": "blocked"
+        },
+        {
+          "id": "17",
+          "title": "The third manual run's findings QA-092..QA-098",
           "status": "in_progress"
         }
       ]

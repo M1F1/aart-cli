@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from unittest import TestCase
 
-from agent_artifacts.application.consumer_views import PresentationProfile
 from agent_artifacts.configuration.model import (
     ConfiguredSource,
     OrganizationPolicy,
@@ -23,15 +22,22 @@ from agent_artifacts.configuration.policy import EffectiveConfiguration
 from agent_artifacts.domain.identifiers import SourceAlias
 from agent_artifacts.domain.result import Err
 from agent_artifacts.io.maintainer_sync import prepare_configured_source_sync
-from agent_artifacts.tui_maintainer import render_maintainer_registries
+from agent_artifacts.tui_layout import separate
+from agent_artifacts.tui_maintainer import (
+    maintainer_registry_descriptor,
+    maintainer_registry_status,
+)
 
 
 class EmptyConnectedRegistriesTest(TestCase):
     """`QA-075`: after a successful initialization the block read as a failure."""
 
     def _lines(self, *, workspace: bool) -> tuple[str, ...]:
-        return render_maintainer_registries(
-            (), PresentationProfile.FAST, registry_workspace_present=workspace
+        """Everything screen 46 says with nothing subscribed: the `[v]` block and the status."""
+
+        return separate(
+            maintainer_registry_descriptor((), registry_workspace_present=workspace),
+            maintainer_registry_status((), registry_workspace_present=workspace),
         )
 
     def test_the_empty_block_says_what_it_is_empty_of(self) -> None:
@@ -51,7 +57,7 @@ class EmptyConnectedRegistriesTest(TestCase):
 
         lines = self._lines(workspace=False)
 
-        self.assertIn("Initialize creates one here; Rebuild applies only after that.", lines)
+        self.assertIn("Current project is not a Registry. Initialize creates one here.", lines)
 
     def test_the_block_still_says_what_the_snapshots_are_for(self) -> None:
         lines = self._lines(workspace=True)

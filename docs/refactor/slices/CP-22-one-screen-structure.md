@@ -56,9 +56,9 @@ reads like a row.
 
 | Item | Surface | State |
 |---|---|---|
-| QA-085 | A lab that loses its marker can be neither reset nor set up over | partly landed |
+| QA-085 | A lab that loses its marker can be neither reset nor set up over | landed; awaiting manual retest |
 | QA-086 | `working at` floated above the terminal's blank space instead of sitting on the footer | landed, `D-242` |
-| QA-087 | Every view fills the skeleton differently; actions and view status share a block | in progress |
+| QA-087 | Every view fills the skeleton differently; actions and view status share a block | landed; awaiting manual retest |
 | QA-088 | A form described in prose the keys the footer directly below it advertises | landed |
 | QA-089 | A row glued its own explanation onto itself, so five choices read as five sentences | landed |
 | QA-090 | A confirmation screen never said what it was confirming | landed |
@@ -183,7 +183,45 @@ reads like a row.
     root. The test runs both commands against a real read-only lab — the blunt one to show it
     fails, then the printed one — so the recovery is checked rather than described.
 
-16. **Full quality gate, and the operator's third manual run** over `QA-044`…`QA-087`.
+16. **Full quality gate, and the operator's third manual run** over `QA-044`…`QA-091`.
+    IN PROGRESS — the automated half passed on `d60bdd5`: `make quality` ran two complete
+    discovery passes of 3,924 tests (one skipped), measured 85.47% branch coverage, and passed
+    format, lint, type, repository validation, packaging, docs and secret-shape checks. The
+    operator's manual TUI run is the remaining evidence; this step and CP-22 stay open until it is
+    recorded.
+
+17. **The third manual run's findings, `QA-092`…`QA-098`.** IN PROGRESS. The operator walked the
+    built screens and reported seven things; six are landed and the seventh is recorded and held.
+
+    - `QA-092`: `Maintainer overview` labelled four counts and a list of recent activity. It is the
+      same fault `QA-067` removed from `Navigation:` — a heading whose contents already say what it
+      says — so it is gone, and `maintainer_registry_rows` lost its own for the same reason.
+    - `QA-093`, `D-245`: the notice was composed into whichever block the screen happened to have,
+      which put *"the current project is not a Registry, so there is nothing here to rebuild"*
+      among the five stages a reader was choosing between. It answers none of the skeleton's
+      questions, so `Frame` gained a block for it between `described` and `help`, and `actions` and
+      `status` each lost a branch rather than gaining one.
+    - `QA-094`: screen 46 said the project was not a Registry twice and named Initialize twice. Its
+      status now states each fact once — what the local checkout is, and whether anything is
+      subscribed — and the refusal stands in its own block rather than repeating it.
+    - `QA-095`: *"Connected Registry snapshots / These approved snapshots determine what Marketplace
+      can offer."* describes what a registry snapshot is, not what this project's is, so it is an
+      explanation and collapses under `[v]` like every other one (`QA-070`).
+    - `QA-096`, `D-246`: a view's status read as a paragraph and started its sentences both ways.
+      `bulleted` marks each statement — always, including a lone one, *"zawsze, nawet pojedyncze"* —
+      reading the blank line as the boundary `separate` already means by it; `stated` settles case
+      where the words become a screen rather than where a diagnostic is written. `doctor_status`,
+      the Registries empty state, the Maintainer Dashboard counts and `_refusal` were separated so
+      their statements are items rather than one wrapped sentence.
+    - `QA-097`: Settings had four rows that change behaviour and no row that said what it changed.
+      `SETTING_PURPOSE` answers each one under `[v]`, the way the rebuild stages have since
+      `QA-089`.
+    - `QA-098`: HELD. The Registry Maintainer lifecycle redesign — the registry as a cursor row with
+      its sha, the repo URL, the branch, the state of the remote branch and what is unpushed, the
+      initialization stage report, and that a change is only available once pushed and AART will not
+      push it. The operator's message ends mid-sentence, and one design question is open: whether a
+      remote branch exists is a network answer, and drawing a frame does no I/O — so the screen can
+      only report what the last `[u] Check upstream` established, and say when that was.
 
 ## Evidence discipline
 

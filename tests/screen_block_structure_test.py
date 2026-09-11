@@ -23,6 +23,8 @@ from agent_artifacts.application.consumer_ui import (
     SourceDraft,
 )
 from agent_artifacts.application.consumer_views import (
+    SETTING_PURPOSE,
+    SETTING_ROWS,
     ConsumerScreen,
     ConsumerSession,
     ConsumerSettings,
@@ -44,8 +46,12 @@ from agent_artifacts.tui_consumer import (
     frame,
     render_doctor,
 )
-from agent_artifacts.tui_layout import SECTION_RULE
-from agent_artifacts.tui_maintainer import maintainer_registry_rows, maintainer_registry_status
+from agent_artifacts.tui_layout import BULLET, SECTION_RULE
+from agent_artifacts.tui_maintainer import (
+    maintainer_registry_descriptor,
+    maintainer_registry_rows,
+    maintainer_registry_status,
+)
 from tests.consumer_shell_test import screens
 from tests.screen_skeleton_test import _registry
 
@@ -86,6 +92,18 @@ def _blocks(lines: tuple[str, ...]) -> list[tuple[str, ...]]:
 
 def _spoken(block: tuple[str, ...]) -> tuple[str, ...]:
     return tuple(line for line in block if line.strip())
+
+
+def _statements(block: tuple[str, ...]) -> tuple[str, ...]:
+    """A status block as what it says, with the list marking `QA-096` adds taken back off.
+
+    A test about what a screen states should fail when the statement changes, not when the way a
+    list of them is drawn does. That claim is held once, by `BulletedStatusTest`.
+    """
+
+    return tuple(
+        line.removeprefix(BULLET).removeprefix(" " * len(BULLET)) for line in _spoken(block)
+    )
 
 
 class DashboardBlockTest(TestCase):
@@ -130,7 +148,7 @@ class DashboardBlockTest(TestCase):
         )
 
         self.assertNotIn(guidance, blocks[:2])
-        self.assertIn("SETUP REQUIRED", guidance)
+        self.assertIn("SETUP REQUIRED", _statements(guidance))
         self.assertNotIn("> Marketplace", guidance)
 
     def test_the_counts_are_the_state_of_the_view_on_a_machine_past_its_first_run(self) -> None:
@@ -147,7 +165,7 @@ class DashboardBlockTest(TestCase):
             _spoken(blocks[2]),
             ("Browse and install approved tools from configured registries.",),
         )
-        self.assertIn("Welcome to AART — this looks like your first run.", blocks[3])
+        self.assertIn("Welcome to AART — this looks like your first run.", _statements(blocks[3]))
 
     def test_no_block_announces_itself_now_that_it_holds_only_actions(self) -> None:
         """`Navigation:` labelled a block whose contents are the navigation."""
@@ -179,10 +197,13 @@ class MaintainerDashboardBlockTest(TestCase):
             self.assertTrue(line.startswith(("> ", "  ")), line)
 
     def test_the_maintainer_overview_is_the_state_of_the_view(self) -> None:
-        blocks = _blocks(self._frame())
-        overview = _spoken(blocks[2])
+        """`QA-092`: the counts are the overview, so nothing has to say that they are one."""
 
-        self.assertEqual(overview[0], "Maintainer overview")
+        blocks = _blocks(self._frame())
+        overview = _statements(blocks[2])
+
+        self.assertEqual(overview[0], "Sources: 0")
+        self.assertNotIn("Maintainer overview", overview)
         self.assertFalse([line for line in overview if line.startswith("> ")])
 
     def test_an_unavailable_composition_is_state_rather_than_something_to_put_a_cursor_on(
@@ -228,7 +249,7 @@ class RegistriesBlockTest(TestCase):
         blocks = _blocks(self._frame(connected=False))
 
         self.assertEqual(
-            _spoken(blocks[2]),
+            _statements(blocks[2]),
             (
                 "Connect an approved Git registry by URL. Local authoring Sources belong in "
                 "Maintainer Mode.",
@@ -249,9 +270,9 @@ class RegistriesBlockTest(TestCase):
     def test_the_empty_state_guidance_is_gone_once_something_is_connected(self) -> None:
         blocks = _blocks(self._frame(connected=True))
 
-        self.assertNotIn("No sources are configured.", _spoken(blocks[2]))
+        self.assertNotIn("No sources are configured.", _statements(blocks[2]))
         self.assertEqual(
-            _spoken(blocks[2])[0],
+            _statements(blocks[2])[0],
             "Connect an approved Git registry by URL. Local authoring Sources belong in "
             "Maintainer Mode.",
         )
@@ -260,15 +281,34 @@ class RegistriesBlockTest(TestCase):
 class SettingsBlockTest(TestCase):
     """Screen 27: four toggles under their group headings, and what the last one implies."""
 
-    def _frame(self, *, maintainer: bool) -> tuple[str, ...]:
+    def _frame(
+        self, *, maintainer: bool = True, verbose: bool = False, cursor: int = 0
+    ) -> tuple[str, ...]:
+        profile = PresentationProfile.VERBOSE if verbose else PresentationProfile.FAST
         source = CanonicalScreenSource(ConsumerScreens(project_dashboard((), registry_count=0)))
         state = ConsumerUiState(
-            ConsumerSession(ConsumerScreen.SETTINGS),
-            settings=ConsumerSettings().with_maintainer_mode(maintainer),
+            ConsumerSession(ConsumerScreen.SETTINGS, profile=profile),
+            settings=ConsumerSettings(profile=profile).with_maintainer_mode(maintainer),
             workspace="/lab",
         )
-        state = replace(state, rows=source.rows(state), cursor=0)
+        state = replace(state, rows=source.rows(state), cursor=cursor)
         return frame(source, state)
+
+    def test_every_setting_says_what_it_changes_under_the_key_that_opens_it(self) -> None:
+        """`QA-097`: four rows that change behaviour and no row that said what it changed."""
+
+        for cursor, row in enumerate(SETTING_ROWS):
+            with self.subTest(row=row):
+                described = _spoken(_blocks(self._frame(verbose=True, cursor=cursor))[2])
+
+                self.assertEqual(described, (SETTING_PURPOSE[row],))
+
+    def test_a_setting_keeps_its_explanation_collapsed_in_fast(self) -> None:
+        """`QA-070`: `[v]` is what opens every explanation, and this is not an exception."""
+
+        blocks = _blocks(self._frame(verbose=False))
+
+        self.assertNotIn(SETTING_PURPOSE["detail-level"], _spoken(blocks[2]))
 
     def test_the_actions_block_holds_the_toggles_and_the_headings_that_group_them(self) -> None:
         """A group heading is how the rows are organised, not prose about them."""
@@ -293,9 +333,11 @@ class SettingsBlockTest(TestCase):
         on = _blocks(self._frame(maintainer=True))
         off = _blocks(self._frame(maintainer=False))
 
-        self.assertEqual(_spoken(on[2]), ("Maintainer screens are reachable from the Dashboard.",))
         self.assertEqual(
-            _spoken(off[2]),
+            _statements(on[2]), ("Maintainer screens are reachable from the Dashboard.",)
+        )
+        self.assertEqual(
+            _statements(off[2]),
             ("Maintainer Mode off hides Sources, Candidates, Promotion and Publish.",),
         )
 
@@ -330,7 +372,7 @@ class DoctorBlockTest(TestCase):
         blocks = _blocks(self._frame())
 
         self.assertEqual(
-            _spoken(blocks[2]),
+            _statements(blocks[2]),
             (
                 "1 ready",
                 "1 needs attention",
@@ -343,7 +385,7 @@ class DoctorBlockTest(TestCase):
 
         self.assertEqual(_spoken(blocks[1])[-1], "  launcher: missing")
         self.assertEqual(
-            _spoken(blocks[2])[-2:], ("Independently repairable:", "  - public/mcp/jira@2.2.0")
+            _statements(blocks[2])[-2:], ("Independently repairable:", "  - public/mcp/jira@2.2.0")
         )
 
     def test_the_screen_does_not_name_itself_again_under_the_trail(self) -> None:
@@ -387,32 +429,49 @@ class RegistryMaintainerBlockTest(TestCase):
         self.assertEqual(
             _spoken(blocks[1]),
             (
-                "Connected Registry snapshots",
-                "These approved snapshots determine what Marketplace can offer.",
-                "No Registry is subscribed in this project yet.",
-                "A Registry created here becomes connectable once it is published to its "
-                "branch and subscribed to.",
-                "Local Registry workspace",
-                "Current project contains a Registry. Rebuild updates its generated files.",
+                "- Current project contains a Registry. Rebuild updates its generated files.",
+                "- No Registry is subscribed in this project yet.",
             ),
         )
 
-    def test_a_subscribed_snapshot_is_a_row_under_the_heading_that_introduces_it(self) -> None:
+    def test_a_subscribed_snapshot_is_a_row_and_nothing_introduces_it(self) -> None:
+        """`QA-092`: a registry snapshot does not need a line above it saying so."""
+
         rows = maintainer_registry_rows((_maintainer_registry(),), PresentationProfile.FAST)
 
-        self.assertEqual(rows[0], "Connected Registry snapshots")
-        self.assertTrue([line for line in rows if "company" in line])
+        self.assertNotIn("Connected Registry snapshots", rows)
+        self.assertTrue(rows[0].startswith("company"))
 
     def test_the_local_workspace_is_state_whether_or_not_anything_is_subscribed(self) -> None:
         for views in ((), (_maintainer_registry(),)):
             with self.subTest(subscribed=bool(views)):
                 status = maintainer_registry_status(views)
 
-                self.assertIn("Local Registry workspace", status)
                 self.assertIn(
-                    "These approved snapshots determine what Marketplace can offer.", status
+                    "Current project contains a Registry. Rebuild updates its generated files.",
+                    status,
                 )
                 self.assertFalse([line for line in status if "company" in line])
+
+    def test_what_a_snapshot_is_for_is_an_explanation_rather_than_a_state(self) -> None:
+        """`QA-095`: it never changes, so it collapses under `[v]` like every other one."""
+
+        for views in ((), (_maintainer_registry(),)):
+            with self.subTest(subscribed=bool(views)):
+                sentence = "These approved snapshots determine what Marketplace can offer."
+
+                self.assertNotIn(sentence, maintainer_registry_status(views))
+                self.assertIn(sentence, maintainer_registry_descriptor(views))
+
+    def test_the_project_is_told_it_is_not_a_registry_exactly_once(self) -> None:
+        """`QA-094`: the status said it, and the refusal standing beside it said it again."""
+
+        status = maintainer_registry_status((), registry_workspace_present=False)
+
+        self.assertEqual(
+            len([line for line in status if "not a Registry" in line]),
+            1,
+        )
 
 
 class AddRegistryFormBlockTest(TestCase):
@@ -452,7 +511,7 @@ class AddRegistryFormBlockTest(TestCase):
         blocks = _blocks(self._frame())
 
         self.assertEqual(
-            _spoken(blocks[2]),
+            _statements(blocks[2]),
             (
                 "Connect an approved registry. AART validates a fresh snapshot before saving it.",
                 "Local folders are authoring Sources, not Marketplace registries.",
@@ -517,7 +576,7 @@ class MaintainerFormBlockTest(TestCase):
         }
         for screen, starts in opening.items():
             with self.subTest(screen=screen):
-                status = _spoken(_blocks(self._frame(screen))[2])
+                status = _statements(_blocks(self._frame(screen))[2])
 
                 self.assertTrue(status[0].startswith(starts), status[:1])
 
@@ -621,7 +680,7 @@ class RebuildRegistryRowsTest(TestCase):
         stage = _blocks(self._frame(verbose=True, cursor=1))
 
         self.assertEqual(len(everything), len(stage) - 1)
-        self.assertTrue(_spoken(everything[2])[0].startswith("Re-run this registry's"))
+        self.assertTrue(_statements(everything[2])[0].startswith("Re-run this registry's"))
 
 
 class ReviewScreenBlockTest(TestCase):
@@ -642,7 +701,9 @@ class ReviewScreenBlockTest(TestCase):
             **changes,
         )
         state = replace(state, rows=source.rows(state), cursor=0)
-        return frame(source, state)
+        # A review has no rows, so every line it draws is a statement: read them as what they say
+        # rather than as how `QA-096` marks them.
+        return _statements(frame(source, state))
 
     def test_connecting_a_registry_says_which_one_and_from_where(self) -> None:
         rendered = self._frame(
@@ -760,3 +821,139 @@ class EveryScreenBlockTest(TestCase):
         """
 
         self.assertEqual(MIXED_SCREENS, frozenset())
+
+
+class NoticeBlockTest(TestCase):
+    """`QA-093`: what an action left behind is not one of the things it was left among."""
+
+    #: What a refused rebuild actually leaves behind: two statements, separated the way
+    #: `_refusal` separates a reason from its next step (`QA-096`).
+    _NOTICE = (
+        "The current project is not a Registry, so there is nothing here to rebuild.",
+        "",
+        "Choose Initialize Registry to create one in this project first.",
+    )
+
+    def _frame(self, screen: MaintainerScreen) -> tuple[str, ...]:
+        views = MaintainerViews(
+            project_maintainer_dashboard(()), (), project_maintainer_candidates(()), ()
+        )
+        source = CanonicalScreenSource(
+            replace(
+                ConsumerScreens(project_dashboard((), registry_count=0), maintainer=views),
+                notice=self._NOTICE,
+            )
+        )
+        state = ConsumerUiState(
+            ConsumerSession(screen),
+            settings=ConsumerSettings().with_maintainer_mode(True),
+            workspace="/lab/registry",
+        )
+        state = replace(state, rows=source.rows(state), cursor=0)
+        return frame(source, state)
+
+    def test_a_notice_never_stands_among_the_rows_it_was_left_over(self) -> None:
+        blocks = _blocks(self._frame(MaintainerScreen.REGISTRY_REBUILD))
+
+        for line in _spoken(blocks[1]):
+            self.assertTrue(line.startswith(("> ", "  ")), line)
+        self.assertNotIn(self._NOTICE[0], _statements(blocks[1]))
+
+    def test_the_notice_is_a_block_of_its_own(self) -> None:
+        blocks = _blocks(self._frame(MaintainerScreen.REGISTRY_REBUILD))
+        carrying = [block for block in blocks if self._NOTICE[0] in _statements(block)]
+
+        self.assertEqual(len(carrying), 1)
+        self.assertEqual(_statements(carrying[0]), _spoken(self._NOTICE))
+        self.assertTrue(all(line.startswith(BULLET) for line in _spoken(carrying[0])))
+
+    def test_a_screen_with_no_rows_gives_its_notice_the_same_block(self) -> None:
+        """`QA-091` had folded it into view status, which is a different question again."""
+
+        blocks = _blocks(self._frame(MaintainerScreen.REGISTRY))
+        carrying = [block for block in blocks if self._NOTICE[0] in _statements(block)]
+
+        self.assertEqual(len(carrying), 1)
+        self.assertEqual(_statements(carrying[0]), _spoken(self._NOTICE))
+
+
+class BulletedStatusTest(TestCase):
+    """`QA-096`: every statement about a view is marked as one, on every screen.
+
+    *"kazda linia statusu/informacji powinna byc oznaczona jako element listy"*, and *"zawsze,
+    nawet pojedyncze"* -- so no screen has to decide whether it has enough to say to be a list.
+    The claim lives here alone: every other test in this file reads statements through
+    `_statements` and fails on what a screen says rather than on how the list is drawn.
+    """
+
+    def _status(self, frame_lines: tuple[str, ...]) -> tuple[str, ...]:
+        blocks = _blocks(frame_lines)
+        # The status block is the last one before the `working at` caption and the keys.
+        return _spoken(blocks[-3])
+
+    def test_a_lone_statement_is_still_marked(self) -> None:
+        source = CanonicalScreenSource(screens())
+        state = ConsumerUiState(
+            ConsumerSession(ConsumerScreen.SETTINGS),
+            settings=ConsumerSettings().with_maintainer_mode(True),
+            workspace="/lab",
+        )
+        state = replace(state, rows=source.rows(state), cursor=0)
+
+        self.assertEqual(
+            self._status(frame(source, state)),
+            ("- Maintainer screens are reachable from the Dashboard.",),
+        )
+
+    def test_separate_facts_are_separate_items_with_a_blank_line_between_them(self) -> None:
+        views = MaintainerViews(
+            project_maintainer_dashboard(()), (), project_maintainer_candidates(()), ()
+        )
+        source = CanonicalScreenSource(
+            ConsumerScreens(project_dashboard((), registry_count=0), maintainer=views)
+        )
+        state = ConsumerUiState(
+            ConsumerSession(MaintainerScreen.DASHBOARD),
+            settings=ConsumerSettings().with_maintainer_mode(True),
+            workspace="/lab",
+        )
+        state = replace(state, rows=source.rows(state), cursor=0)
+        blocks = _blocks(frame(source, state))
+
+        self.assertEqual(
+            blocks[2],
+            (
+                "",
+                "- Sources: 0",
+                "",
+                "- Candidates: 0",
+                "",
+                "- Validation failures: 0",
+                "",
+                "- Ready for promotion: 0",
+                "",
+                "- Recent maintainer activity:",
+                "    - none yet",
+                "",
+            ),
+        )
+
+    def test_no_screen_states_anything_without_marking_it(self) -> None:
+        """Read off every screen the shell can reach, so a new one cannot quietly opt out."""
+
+        source = CanonicalScreenSource(screens())
+        for screen in (*ConsumerScreen, *MaintainerScreen):
+            state = ConsumerUiState(
+                ConsumerSession(screen),
+                settings=ConsumerSettings().with_maintainer_mode(True),
+                workspace="/lab",
+            )
+            state = replace(state, rows=source.rows(state), cursor=0)
+            status = source.status(state)
+            if not status:
+                continue
+            with self.subTest(screen=screen):
+                drawn = self._status(frame(source, state))
+                self.assertTrue(drawn)
+                for line in drawn:
+                    self.assertTrue(line.startswith((BULLET, "  ")), (screen, line))

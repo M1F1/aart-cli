@@ -31,6 +31,7 @@ from agent_artifacts.tui_layout import (
     SECTION_RULE,
     Frame,
     anchor,
+    bulleted,
     footer_start,
     render,
     separate,
@@ -390,6 +391,7 @@ _FRAME = st.builds(
     trail=_BLOCK,
     actions=_BLOCK,
     described=_BLOCK,
+    notice=_BLOCK,
     help=_BLOCK,
     status=_BLOCK,
     context=_LINE,
@@ -497,3 +499,63 @@ class ScreenSkeletonPropertyTest(TestCase):
         placed = anchor(render(frame), height=height)
 
         self.assertEqual(placed[-len(keys) :], keys)
+
+
+class BulletedStatementsTest(TestCase):
+    """`QA-096`: a view's status is a list of statements, not a paragraph."""
+
+    def test_each_blank_separated_group_becomes_one_item(self) -> None:
+        self.assertEqual(
+            bulleted(("Sources: 0", "", "Candidates: 0")),
+            ("- Sources: 0", "", "- Candidates: 0"),
+        )
+
+    def test_a_statement_that_runs_on_keeps_its_lines_under_its_own_marker(self) -> None:
+        """A wrapped sentence must never read as a second item."""
+
+        self.assertEqual(
+            bulleted(("Re-run this registry's generated files.", "  Nothing is pushed.")),
+            ("- Re-run this registry's generated files.", "    Nothing is pushed."),
+        )
+
+    def test_a_lone_statement_is_a_list_of_one(self) -> None:
+        """*"zawsze, nawet pojedyncze"* -- nothing has to decide which kind of block this is."""
+
+        self.assertEqual(bulleted(("Only one thing to say.",)), ("- Only one thing to say.",))
+
+    def test_nothing_to_say_stays_nothing(self) -> None:
+        self.assertEqual(bulleted(()), ())
+        self.assertEqual(bulleted(("", "   ")), ())
+
+    def test_a_block_is_lines_of_text(self) -> None:
+        with self.assertRaises(ValueError):
+            bulleted((1, 2))  # type: ignore[arg-type]
+
+
+class BulletedPropertyTest(TestCase):
+    @given(_BLOCK)
+    def test_every_item_is_marked_and_nothing_said_is_lost(self, block: tuple[str, ...]) -> None:
+        drawn = bulleted(block)
+
+        spoken = [line for line in drawn if line.strip()]
+        for line in spoken:
+            self.assertTrue(line.startswith(("- ", "  ")), line)
+        # The marker comes off first: `bulleted` keeps whatever indent a line arrived with, so
+        # stripping before removing it would read that indent as part of the marker.
+        self.assertEqual(
+            [line.removeprefix("- ").strip() for line in spoken],
+            [line.strip() for line in block if line.strip()],
+        )
+
+    @given(_BLOCK)
+    def test_bulleting_a_list_again_changes_nothing_about_how_many_items_it_has(
+        self, block: tuple[str, ...]
+    ) -> None:
+        """A marked item's continuations are indented, so they cannot become items of their own."""
+
+        once = bulleted(block)
+
+        self.assertEqual(
+            len([line for line in bulleted(once) if line.startswith("- ")]),
+            len([line for line in once if line.startswith("- ")]),
+        )

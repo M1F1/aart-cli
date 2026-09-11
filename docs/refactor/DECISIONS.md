@@ -5728,3 +5728,50 @@ The consequence worth stating: a screen that gains rows tomorrow moves its body 
 actions block without anyone editing a list, and a screen that loses them stops mixing without
 anyone noticing it should. This extends `D-243`, which gave a screen somewhere to say what each
 block contains; this says where a screen with nothing to act on puts everything else.
+
+## D-245 — What an action left behind is a block, not a paragraph in somebody else's
+
+`QA-093`. The notice — why a run was refused, or could not be prepared — had been composed into
+whichever block the screen happened to have: into `actions` when the screen had rows, into `status`
+when it did not (`D-244`). On Rebuild Registry that put *"the current project is not a Registry, so
+there is nothing here to rebuild"* among the five stages the reader was choosing between, which is
+the fault `QA-087` exists to prevent, reached from the other side.
+
+The reason it kept landing somewhere wrong is that it answers a question the skeleton did not have.
+It is not a row; it is not what the cursor points at; and it is not the state of the view, because
+the view is fine and one finished run is not. So `Frame` gains a `notice` field between `described`
+and `help`, and `ConsumerScreenSource` gains the method that fills it. `actions` and `status` each
+lost a branch rather than gaining one.
+
+Placement is after `described` rather than directly under the rows, although the operator's sketch
+drew it higher: `described` annotates the row under the cursor, and a notice standing between them
+separates a row from its own explanation. The operator asked for it *"between the actions block and
+the view-status block"*, and this is the slot inside that range which leaves the rest of the
+skeleton intact.
+
+## D-246 — A view's status is a list of statements, and one place decides how they read
+
+`QA-096`. Two findings from the same manual run, settled together because they are the same
+question: the operator read a status block as a paragraph — three unrelated facts drawn as three
+consecutive lines — and found the same block starting some statements with a capital and others
+without: *"zdecyduj sie czy zaczynamy to z duzej litery czy z malej bo tu sa rozne"*.
+
+Marking is `bulleted`, and what counts as one statement is the blank line, which is already how
+every composed block in `tui_layout` says "different thing" (`separate`). Continuations are
+indented under their own marker, so a wrapped sentence can never read as a second item, and
+`bulleted` is idempotent in the only sense that matters: bulleting a list again does not change how
+many items it has. The operator chose *"zawsze, nawet pojedyncze"* — a lone statement is a list of
+one, so no screen has to decide which kind of block it is.
+
+Case is `stated`, and the interesting part is where it is *not*. The split ran along where the text
+came from: a view writes prose, a refused run carries a diagnostic, and diagnostics are lower-case
+everywhere they are produced for reasons of their own — they are also read by machines and printed
+by the command line. Settling it in the diagnostics would be settling it in the wrong place. So it
+is settled at the boundary where words become a screen, and conservatively: only a statement's first
+line, and only when it opens on a plain lower-case word. A line opening on a coordinate, a file name
+or an alias is a name rather than a word, and names keep their case.
+
+The consequence worth stating: a producer that runs two statements together now renders them as one
+item with a continuation, which is visible rather than silent. `doctor_status`, the Registries empty
+state, the Maintainer Dashboard counts and `_refusal` were each separated for that reason, and a
+screen that forgets will look like a paragraph rather than silently reading as one.
