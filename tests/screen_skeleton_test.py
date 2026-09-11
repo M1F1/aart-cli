@@ -9,8 +9,12 @@ screen looks like.
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import replace
 from unittest import TestCase
+
+from hypothesis import given
+from hypothesis import strategies as st
 
 from agent_artifacts import tui
 from agent_artifacts.application.consumer_ui import ConsumerUiState, key_bindings
@@ -23,7 +27,14 @@ from agent_artifacts.application.consumer_views import (
     project_dashboard,
 )
 from agent_artifacts.tui_consumer import CanonicalScreenSource, ConsumerScreens, frame
-from agent_artifacts.tui_layout import SECTION_RULE, anchor, footer_start, screen_frame
+from agent_artifacts.tui_layout import (
+    SECTION_RULE,
+    Frame,
+    anchor,
+    footer_start,
+    render,
+    separate,
+)
 
 
 def _registry(alias: str) -> RegistryView:
@@ -46,7 +57,7 @@ class ScreenSkeletonKernelTest(TestCase):
     """The composition rule, decided without a terminal."""
 
     def test_one_rule_separates_two_regions_and_a_blank_stands_either_side_of_it(self) -> None:
-        lines = screen_frame(("title",), ("body",), footer=("keys",))
+        lines = render(Frame(trail=("title",), actions=("body",), keys=("keys",)))
 
         self.assertEqual(
             lines,
@@ -56,7 +67,7 @@ class ScreenSkeletonKernelTest(TestCase):
     def test_an_empty_region_takes_its_rule_with_it(self) -> None:
         """`QA-065`: an empty section was drawn as two rules with nothing between them."""
 
-        lines = screen_frame(("title",), (), ("body",), footer=("keys",))
+        lines = render(Frame(trail=("title",), actions=(), described=("body",), keys=("keys",)))
 
         self.assertEqual(
             lines,
@@ -68,15 +79,15 @@ class ScreenSkeletonKernelTest(TestCase):
         )
 
     def test_a_region_of_nothing_but_blanks_counts_as_empty(self) -> None:
-        lines = screen_frame(("title",), ("", "   ", ""), footer=("keys",))
+        lines = render(Frame(trail=("title",), actions=("", "   ", ""), keys=("keys",)))
 
         self.assertEqual(lines.count(SECTION_RULE), 1)
 
     def test_the_footer_is_always_drawn_even_when_every_region_is_empty(self) -> None:
-        self.assertEqual(screen_frame((), (), footer=("keys",)), ("keys",))
+        self.assertEqual(render(Frame(keys=("keys",))), ("keys",))
 
     def test_the_footer_begins_at_the_last_rule_so_the_terminal_can_place_it_whole(self) -> None:
-        lines = screen_frame(("title",), ("body",), footer=("local", "global"))
+        lines = render(Frame(trail=("title",), actions=("body",), keys=("local", "global")))
 
         self.assertEqual(lines[footer_start(lines) :], (SECTION_RULE, "", "local", "global"))
 
@@ -88,7 +99,9 @@ class ScreenSkeletonKernelTest(TestCase):
         sit last; touching the rule is what says it belongs to the block below it.
         """
 
-        lines = screen_frame(("title",), ("body",), context=("at /lab",), footer=("keys",))
+        lines = render(
+            Frame(trail=("title",), actions=("body",), context=("at /lab",), keys=("keys",))
+        )
 
         self.assertEqual(
             lines,
@@ -109,7 +122,9 @@ class ScreenSkeletonKernelTest(TestCase):
         )
 
     def test_the_footer_block_starts_at_the_context_line_so_padding_lands_above_it(self) -> None:
-        lines = screen_frame(("title",), ("body",), context=("at /lab",), footer=("keys",))
+        lines = render(
+            Frame(trail=("title",), actions=("body",), context=("at /lab",), keys=("keys",))
+        )
 
         self.assertEqual(lines[footer_start(lines) :], ("at /lab", SECTION_RULE, "", "keys"))
 
@@ -120,24 +135,24 @@ class ScreenSkeletonKernelTest(TestCase):
 
     def test_a_frame_given_no_context_is_composed_exactly_as_before(self) -> None:
         self.assertEqual(
-            screen_frame(("title",), ("body",), context=(), footer=("keys",)),
-            screen_frame(("title",), ("body",), footer=("keys",)),
+            render(Frame(trail=("title",), actions=("body",), context=(), keys=("keys",))),
+            render(Frame(trail=("title",), actions=("body",), keys=("keys",))),
         )
 
     def test_a_context_line_of_nothing_but_blanks_draws_no_rule_of_its_own(self) -> None:
-        lines = screen_frame(("title",), context=("", "  "), footer=("keys",))
+        lines = render(Frame(trail=("title",), context=("", "  "), keys=("keys",)))
 
         self.assertEqual(lines, ("title", "", SECTION_RULE, "", "keys"))
 
     def test_a_screen_with_nothing_but_context_still_shows_it_above_the_keys(self) -> None:
-        lines = screen_frame((), context=("at /lab",), footer=("keys",))
+        lines = render(Frame(context=("at /lab",), keys=("keys",)))
 
         self.assertEqual(lines, ("at /lab", SECTION_RULE, "", "keys"))
 
     def test_a_short_frame_is_padded_so_the_footer_sits_on_the_bottom_row(self) -> None:
         """`QA-068`: the legend floated under the body with the terminal blank beneath it."""
 
-        lines = screen_frame(("title",), ("body",), footer=("local", "global"))
+        lines = render(Frame(trail=("title",), actions=("body",), keys=("local", "global")))
 
         placed = anchor(lines, height=12)
 
@@ -146,12 +161,14 @@ class ScreenSkeletonKernelTest(TestCase):
         self.assertEqual(placed[: footer_start(lines)], lines[: footer_start(lines)])
 
     def test_a_frame_taller_than_the_terminal_is_left_alone_for_the_terminal_to_clip(self) -> None:
-        lines = screen_frame(("title",), tuple(f"row {n}" for n in range(40)), footer=("keys",))
+        lines = render(
+            Frame(trail=("title",), actions=tuple(f"row {n}" for n in range(40)), keys=("keys",))
+        )
 
         self.assertEqual(anchor(lines, height=10), tuple(lines))
 
     def test_padding_goes_above_the_footer_rather_than_below_it(self) -> None:
-        lines = screen_frame(("title",), footer=("keys",))
+        lines = render(Frame(trail=("title",), keys=("keys",)))
 
         placed = anchor(lines, height=8)
 
@@ -164,10 +181,10 @@ class ScreenSkeletonEdgeTest(TestCase):
 
     def test_a_region_that_is_not_lines_of_text_is_refused(self) -> None:
         with self.assertRaises(ValueError):
-            screen_frame(("title",), (1, 2), footer=("keys",))  # type: ignore[arg-type]
+            render(Frame(trail=("title",), actions=(1, 2)))  # type: ignore[arg-type]
 
     def test_a_height_that_is_not_a_count_of_rows_is_refused(self) -> None:
-        lines = screen_frame(("title",), footer=("keys",))
+        lines = render(Frame(trail=("title",), keys=("keys",)))
 
         for height in (-1, True, "12", 1.5):
             with self.subTest(height=height), self.assertRaises(ValueError):
@@ -176,13 +193,13 @@ class ScreenSkeletonEdgeTest(TestCase):
     def test_a_frame_that_exactly_fills_the_terminal_is_padded_by_nothing(self) -> None:
         """The boundary between padding and leaving alone is the exact fit, not one either side."""
 
-        lines = screen_frame(("title",), ("body",), footer=("keys",))
+        lines = render(Frame(trail=("title",), actions=("body",), keys=("keys",)))
 
         self.assertEqual(anchor(lines, height=len(lines)), lines)
         self.assertEqual(len(anchor(lines, height=len(lines) + 1)), len(lines) + 1)
 
     def test_what_is_inserted_above_the_footer_is_blank_rows(self) -> None:
-        lines = screen_frame(("title",), footer=("keys",))
+        lines = render(Frame(trail=("title",), keys=("keys",)))
 
         placed = anchor(lines, height=9)
 
@@ -192,7 +209,7 @@ class ScreenSkeletonEdgeTest(TestCase):
         self.assertEqual(set(inserted), {""})
 
     def test_a_terminal_with_no_rows_to_give_pads_nothing(self) -> None:
-        lines = screen_frame(("title",), footer=("keys",))
+        lines = render(Frame(trail=("title",), keys=("keys",)))
 
         self.assertEqual(anchor(lines, height=0), lines)
 
@@ -329,7 +346,9 @@ class AnchoredFooterTest(TestCase):
 
     def test_a_short_screen_puts_the_whole_legend_on_the_bottom_rows(self) -> None:
         screen = _Screen(height=24)
-        lines = screen_frame(("heading",), ("one", "two"), footer=("[a] Add", "[q] Quit"))
+        lines = render(
+            Frame(trail=("heading",), actions=("one", "two"), keys=("[a] Add", "[q] Quit"))
+        )
 
         tui._CursesTerminal(screen).draw(lines)
 
@@ -340,8 +359,12 @@ class AnchoredFooterTest(TestCase):
 
     def test_a_body_taller_than_the_terminal_is_clipped_and_the_legend_survives_whole(self) -> None:
         screen = _Screen(height=8)
-        lines = screen_frame(
-            ("heading",), tuple(f"row {n}" for n in range(40)), footer=("[a] Add", "[q] Quit")
+        lines = render(
+            Frame(
+                trail=("heading",),
+                actions=tuple(f"row {n}" for n in range(40)),
+                keys=("[a] Add", "[q] Quit"),
+            )
         )
 
         tui._CursesTerminal(screen).draw(lines)
@@ -350,3 +373,117 @@ class AnchoredFooterTest(TestCase):
         self.assertEqual(painted[-2:], ["[a] Add", "[q] Quit"])
         self.assertIn(SECTION_RULE, painted)
         self.assertEqual(len(painted), 7)
+
+
+_LINE = st.text(alphabet=st.characters(blacklist_categories=("Cs", "Cc")), min_size=0, max_size=12)
+_BLOCK = st.lists(_LINE, max_size=4).map(tuple)
+_FRAME = st.builds(
+    Frame,
+    trail=_BLOCK,
+    actions=_BLOCK,
+    described=_BLOCK,
+    help=_BLOCK,
+    status=_BLOCK,
+    context=_LINE,
+    keys=_BLOCK,
+)
+
+
+def _drawn(frame: Frame) -> tuple[tuple[str, ...], ...]:
+    """The blocks that will actually be shown, in the order the type declares them."""
+
+    values = (getattr(frame, field.name) for field in dataclasses.fields(frame))
+    trimmed = (separate((value,) if isinstance(value, str) else value) for value in values)
+    return tuple(block for block in trimmed if block)
+
+
+class ScreenSkeletonPropertyTest(TestCase):
+    """The skeleton's claims as properties, because they are claims about *every* screen.
+
+    Example-based tests hold the arrangement for the frames somebody thought to write down. What
+    the operator asked for is stronger -- *"kazdy widok powinien miec ta strukture"* (`QA-087`) --
+    so the arrangement is stated over generated frames instead: any blocks, any of them empty, in
+    any combination.
+    """
+
+    @given(_FRAME)
+    def test_blocks_are_drawn_whole_and_in_the_order_the_type_declares_them(
+        self, frame: Frame
+    ) -> None:
+        lines = render(frame)
+
+        cursor = 0
+        for block in _drawn(frame):
+            window = [
+                index
+                for index in range(cursor, len(lines) - len(block) + 1)
+                if lines[index : index + len(block)] == block
+            ]
+            self.assertTrue(window, f"{block} is not drawn whole after row {cursor}")
+            cursor = window[0] + len(block)
+
+    @given(_FRAME)
+    def test_a_rule_always_separates_two_blocks_that_both_spoke(self, frame: Frame) -> None:
+        """`QA-065`: an empty section was drawn as two rules with nothing between them."""
+
+        lines = render(frame)
+        blocks = _drawn(frame)
+
+        self.assertEqual(lines.count(SECTION_RULE), max(len(blocks) - 1, 0))
+        if lines:
+            self.assertNotEqual(lines[0], SECTION_RULE)
+            self.assertNotEqual(lines[-1], SECTION_RULE)
+        for above, below in zip(lines, lines[1:], strict=False):
+            self.assertFalse(above == SECTION_RULE and below == SECTION_RULE)
+
+    @given(_FRAME)
+    def test_text_touches_a_rule_only_where_a_caption_stands_on_it(self, frame: Frame) -> None:
+        """`QA-086`: flushness is the one exception, and it means "this belongs below"."""
+
+        lines = render(frame)
+        caption = separate((frame.context,))
+
+        for index, line in enumerate(lines):
+            if line != SECTION_RULE:
+                continue
+            self.assertEqual(lines[index + 1], "", "text under a rule")
+            if lines[index - 1] != "":
+                self.assertEqual(lines[index - len(caption) : index], caption)
+
+    @given(_FRAME)
+    def test_the_footer_block_is_the_caption_and_everything_after_it(self, frame: Frame) -> None:
+        lines = render(frame)
+        caption, keys = separate((frame.context,)), separate(frame.keys)
+        if not keys:
+            return
+
+        block = lines[footer_start(lines) :]
+
+        self.assertEqual(block, (*caption, SECTION_RULE, "", *keys) if lines != keys else keys)
+
+    @given(_FRAME, st.integers(min_value=0, max_value=60))
+    def test_anchoring_only_ever_inserts_blank_rows(self, frame: Frame, height: int) -> None:
+        lines = render(frame)
+
+        placed = anchor(lines, height=height)
+
+        self.assertEqual(
+            tuple(line for line in placed if line != ""),
+            tuple(line for line in lines if line != ""),
+        )
+        self.assertEqual(len(placed), max(len(lines), height))
+        self.assertEqual(anchor(placed, height=height), placed)
+
+    @given(_FRAME, st.integers(min_value=0, max_value=60))
+    def test_the_keys_stay_on_the_bottom_rows_whatever_the_terminal_gives(
+        self, frame: Frame, height: int
+    ) -> None:
+        """`QA-068`: the legend used to float under the body at a different height per screen."""
+
+        keys = separate(frame.keys)
+        if not keys:
+            return
+
+        placed = anchor(render(frame), height=height)
+
+        self.assertEqual(placed[-len(keys) :], keys)

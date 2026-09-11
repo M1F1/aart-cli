@@ -95,10 +95,11 @@ from agent_artifacts.tui_layout import (
     STAGE_CURRENT,
     STAGE_JOIN,
     STAGE_PENDING,
+    Frame,
     action_prompt,
     cards,
     is_action_prompt,
-    screen_frame,
+    render,
     separate,
 )
 from agent_artifacts.tui_maintainer import (
@@ -1310,15 +1311,17 @@ def frame(source: ConsumerScreenSource, state: ConsumerUiState) -> tuple[str, ..
     # `QA-086`: the launch directory is the footer's caption -- the last line before the keys'
     # rule and flush on it, with the terminal's padding above it rather than under it (revising
     # `QA-069`/`D-235`, which had it as a section of its own; `QA-066` had moved it off the title).
-    workspace = (f"working at {state.workspace}",) if state.workspace else ()
-    return screen_frame(
-        header,
-        source.lines(state),
-        _described(source, state),
-        _HELP_LINES if state.help_visible else (),
-        status,
-        context=workspace,
-        footer=_key_legend(source, state),
+    workspace = f"working at {state.workspace}" if state.workspace else ""
+    return render(
+        Frame(
+            trail=header,
+            actions=source.lines(state),
+            described=_described(source, state),
+            help=_HELP_LINES if state.help_visible else (),
+            status=tuple(status),
+            context=workspace,
+            keys=_key_legend(source, state),
+        )
     )
 
 

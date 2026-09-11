@@ -13,7 +13,9 @@ Two rules from the design are enforced structurally rather than by convention:
 
 from __future__ import annotations
 
+import dataclasses
 import textwrap
+from dataclasses import dataclass
 from typing import Mapping, Sequence, Tuple
 
 # --------------------------------------------------------------------------- #
@@ -340,54 +342,80 @@ def action_prompt(facts: Sequence[str], prompt: str) -> Tuple[str, ...]:
     return (*body, "", prompt)
 
 
-def screen_frame(
-    *regions: Sequence[str],
-    footer: Sequence[str],
-    context: Sequence[str] = (),
-) -> Tuple[str, ...]:
-    """The one skeleton every screen fills: regions in order, rules only between the ones that spoke.
+#: A block whose rule is drawn flush against it, with no blank between the two.
+CAPTION = {"caption": True}
 
-    The operator's complaint was that each screen composed itself -- *"teraz to jest wolna
-    amerykanka odnosnie UI"* (`QA-067`) -- so sections, spacing and the legend landed at different
-    heights depending on which screen had been written when. Composing here makes the arrangement a
-    property of the frame rather than a habit each screen has to remember.
 
-    A rule is a *separator*, which is the whole reason the empty-section fault disappears. It is
-    drawn between two regions that both have something to say, never around a region, so a region
-    that turns out empty takes its rule with it instead of leaving the pair of rules with nothing
-    between them that `QA-065` reported. The blank either side of a rule comes from the same place,
-    so text never touches a boundary.
+@dataclass(frozen=True)
+class Frame:
+    """One screen as the blocks it is made of, rather than as lines it composed for itself.
 
-    The footer is a region that is always drawn, because a screen with no documented way out is the
-    first-run trap the legend exists to remove. It is passed separately rather than as the last
-    region for exactly that reason: the others may all be empty and it still appears.
+    The operator's complaint was that each screen arranged itself -- *"teraz to jest wolna
+    amerykanka odnosnie UI"* (`QA-067`), and then again *"co widok jest inaczej"* (`QA-087`) -- so
+    sections, spacing and the legend landed wherever the screen that was written last had put them.
+    The answer is not a better convention. It is to take the arrangement away from screens: a
+    screen says *what each block contains* and has nowhere to say *where a block goes*.
 
-    ``context`` is the footer's caption -- the standing fact a reader needs in order to know what
-    the keys below it would act on, which today is the directory the session was launched in. It is
-    the one line drawn *flush* on a rule, with no blank between them, and that is the whole point
-    (`QA-086`): a blank would read as a section that merely happens to sit last, where touching the
-    rule says it belongs to the block beneath it. Being part of the footer block is also what puts
-    the terminal's padding above it rather than under it, and what keeps it on screen when a long
-    body is clipped.
+    **The order of these fields is the order on the screen.** ``render`` derives the layout from
+    the declaration rather than repeating it, so there is no second place that could disagree, and
+    a block added here cannot land somewhere else by accident.
+
+    The blocks answer different questions, which is why they are separate and not a matter of
+    taste:
+
+    ``trail``       where the reader is, and the sequence of steps they are walking.
+    ``actions``     what the cursor can act on -- rows, toggles, commands. Nothing that only reads.
+    ``described``   what the cursor is on right now (Verbose only, `QA-070`).
+    ``help``        the key documentation, while it is open.
+    ``status``      the state of the whole view: counts, guidance, what went wrong.
+    ``context``     what is true of the session rather than the view: the launch directory. It is
+                    a line rather than a block, because a caption that ran to several lines would
+                    be a section again, and `footer_start` reads the footer's start back off the
+                    frame by finding what stands flush on the last rule.
+    ``keys``        the keys this screen accepts, and no key it does not.
+
+    Splitting ``actions`` from ``status`` is the one the operator asked for by name -- *"nigdy
+    akcja i menu do wyboru nie powinno byc w jednym bloku z statusem widoku"*. A reader scanning
+    for something to press should not have to read prose to find it, and prose standing between two
+    rows reads like a row.
     """
 
-    kept: list[Tuple[str, ...]] = []
-    for region in regions:
-        kept.append(_region(region))
-    caption, keys = _region(context), _region(footer)
+    trail: Tuple[str, ...] = ()
+    actions: Tuple[str, ...] = ()
+    described: Tuple[str, ...] = ()
+    help: Tuple[str, ...] = ()
+    status: Tuple[str, ...] = ()
+    context: str = dataclasses.field(default="", metadata=CAPTION)
+    keys: Tuple[str, ...] = ()
+
+
+def render(frame: Frame) -> Tuple[str, ...]:
+    """The frame as lines: blocks in declared order, rules only between the ones that spoke.
+
+    A rule is a *separator*, which is the whole reason the empty-section fault disappears. It is
+    drawn between two blocks that both have something to say, never around a block, so a block that
+    turns out empty takes its rule with it instead of leaving the pair of rules with nothing between
+    them that `QA-065` reported. The blank either side of a rule comes from the same place, so text
+    never touches a boundary -- except under a caption, where touching it is the claim (`QA-086`,
+    `D-242`): the line belongs to the block below rather than being a section that happens to sit
+    last.
+    """
+
+    if not isinstance(frame, Frame):
+        raise ValueError("a screen is a Frame of blocks")
+    blocks = []
+    for field in dataclasses.fields(frame):
+        value = getattr(frame, field.name)
+        # A caption is a line, not a block, and the type says so by holding a `str`.
+        lines = (value,) if isinstance(value, str) else value
+        blocks.append((bool(field.metadata.get("caption")), _region(lines)))
+    drawn = [(caption, lines) for caption, lines in blocks if lines]
     composed: list[str] = []
-    for region in (*kept, caption):
-        if not region:
-            continue
+    for index, (_, lines) in enumerate(drawn):
         if composed:
-            composed.extend(("", SECTION_RULE, ""))
-        composed.extend(region)
-    if keys:
-        if caption:
-            composed.extend((SECTION_RULE, ""))
-        elif composed:
-            composed.extend(("", SECTION_RULE, ""))
-        composed.extend(keys)
+            flush = drawn[index - 1][0]
+            composed.extend((SECTION_RULE, "") if flush else ("", SECTION_RULE, ""))
+        composed.extend(lines)
     return tuple(composed)
 
 
@@ -403,8 +431,8 @@ def _region(region: Sequence[str]) -> Tuple[str, ...]:
 def footer_start(lines: Sequence[str]) -> int:
     """Where the persistent key footer begins: the last rule, and everything after it.
 
-    ``screen_frame`` separates regions with rules and draws the footer last, so the final rule is
-    the footer's own boundary by construction. Reading it back off the composed frame keeps the
+    ``render`` separates blocks with rules and draws the keys last, so the final rule is the
+    footer's own boundary by construction. Reading it back off the composed frame keeps the
     terminal free of any knowledge of what a screen contains -- it places a block it can find,
     rather than being told a row number by something that would have to guess the height.
 
@@ -412,8 +440,8 @@ def footer_start(lines: Sequence[str]) -> int:
     lives, so that is what is returned rather than "no footer". Answering "nothing" would let a
     body long enough to fill the terminal clip the only documented exit off the screen (`B-077`).
 
-    The block reaches back over whatever stands flush on that rule, because ``screen_frame`` leaves
-    a blank above every rule it draws except the one under a caption (`QA-086`). So the frame says
+    The block reaches back over whatever stands flush on that rule, because ``render`` leaves a
+    blank above every rule it draws except the one under a caption (`QA-086`). So the frame says
     where its own footer begins without the terminal being told: text touching the last rule is the
     footer's caption and belongs to the block, and padding lands above it rather than between them.
     """
@@ -469,6 +497,8 @@ __all__ = [
     "PROTECTED_HINTS",
     "READABLE_MEASURE",
     "SECTION_RULE",
+    "CAPTION",
+    "Frame",
     "STAGE_CONFIRMED",
     "STAGE_CURRENT",
     "STAGE_JOIN",
@@ -485,7 +515,7 @@ __all__ = [
     "is_action_prompt",
     "measure",
     "pane_budget",
-    "screen_frame",
+    "render",
     "section",
     "separate",
     "status_bar",
