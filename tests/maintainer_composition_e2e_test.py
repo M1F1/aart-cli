@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import time
 import unittest
+from unittest import mock
 
 from agent_artifacts.application.consumer_ui import (
     ConsumerActionKind,
@@ -695,8 +696,8 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
                 _digest_line(promotion), _digest_line(chosen), "mode must change the review"
             )
 
-    def test_validated_promotion_is_committed_then_published_to_a_review_branch(self) -> None:
-        """Screens 43–45 review the local commit and a separate real publication push."""
+    def test_validated_promotion_is_committed_locally_and_no_tui_key_pushes_it(self) -> None:
+        """Screens 43–45 review and write the local commit; publication is manual Git (D-255)."""
 
         with _environment() as env:
             original_paths = source_store_paths(
@@ -850,23 +851,26 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
                 ENTER,
                 ENTER,
                 ENTER,
-                # The commit has landed. Publication is the second explicit action (`D-228`):
-                # `p` opens the target, and Enter reviews it before anything is pushed.
+                # The commit has landed. D-228's `p` publication form is gone: the old key and
+                # the branch it used to take are typed anyway, and Enter goes on to the Registry.
                 ord("p"),
-                DOWN,
+                ord("P"),
                 *(ord(character) for character in "review/registry"),
-                DOWN,
-                ENTER,
-                ENTER,
                 ENTER,
             )
-            finished = run_consumer_shell(
-                handler.source(),
-                terminal,
-                state=opening_state(handler.settings),
-                action_handler=handler,
-                settings_writer=handler.save_settings,
-            )
+            # The recording transport: every process the shell starts is still started, and its
+            # argv is kept, so a push from any TUI event path is visible here whatever built it.
+            with mock.patch("subprocess.run", wraps=subprocess.run) as spawned:
+                finished = run_consumer_shell(
+                    handler.source(),
+                    terminal,
+                    state=opening_state(handler.settings),
+                    action_handler=handler,
+                    settings_writer=handler.save_settings,
+                )
+            argvs = [tuple(map(str, call.args[0])) for call in spawned.call_args_list if call.args]
+            self.assertTrue(any("commit" in argv for argv in argvs), argvs)
+            self.assertFalse([argv for argv in argvs if "push" in argv], argvs)
 
             self.assertIs(
                 finished.session.screen,
@@ -876,19 +880,14 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             validation = terminal.screen_containing("/ Registry Validation")
             self.assertIn("Registry validation: Passed", validation)
             self.assertIn("No approved registry state has been written", validation)
-            # The frame straight after the commit: the local write happened and publication,
-            # being the separate explicit action, has not (`D-228`).
+            # The frame straight after the commit: the local write happened, and what makes it
+            # visible to anyone else is named as Git work the reader does (D-255).
             committed = terminal.screen_containing("Approved registry state written locally")
             self.assertIn("Local Git revision:", committed)
-            self.assertIn("Git publication: not yet published", committed)
-
-            publication_review = terminal.screen_containing("Ready to push the reviewed commit")
-            self.assertIn("origin/review/registry", publication_review)
-            self.assertIn("Publication remote: origin", publication_review)
-            self.assertIn("Publication branch: review/registry", publication_review)
-            self.assertIn("Nothing will be merged", publication_review)
-            receipt = terminal.screen_containing("company: created origin/review/registry")
-            self.assertIn("Nothing was merged", receipt)
+            self.assertIn("AART does not push it", committed)
+            self.assertIn("run Registry Sync", committed)
+            self.assertNotIn("[p]", committed)
+            self.assertFalse(any("Ready to push" in "\n".join(frame) for frame in terminal.frames))
 
             # Registry Maintainer draws the local Registry the walk just wrote into.  The local
             # commit is deliberately not a sync, so the checkout is ahead of the synchronized
@@ -902,9 +901,7 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             after_revision = _git(registry_root, "rev-parse", "HEAD")
             self.assertNotEqual(after_revision, before_revision)
             self.assertEqual(_git(registry_root, "status", "--porcelain=v1"), "")
-            self.assertEqual(
-                _git(remote, "rev-parse", "refs/heads/review/registry"), after_revision
-            )
+            self.assertEqual(_git(remote, "for-each-ref", "--format=%(refname)"), "refs/heads/main")
             self.assertEqual(_git(remote, "rev-parse", "refs/heads/main"), before_revision)
             persisted = FilesystemPromotionOutput(str(registry_root)).current()
             assert isinstance(persisted, Ok), persisted
@@ -1132,9 +1129,9 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             )
             committed = terminal.screen_containing("Approved registry state written locally")
             self.assertIn("Promote 2 candidates", committed)
-            # This walk commits and stops. Publication is the separate explicit action (`D-228`),
-            # so what the screen owes the reader here is that it has not happened.
-            self.assertIn("Git publication: not yet published", committed)
+            # This walk commits and stops. Publication is manual Git (D-255), so what the screen
+            # owes the reader here is the steps that make the commit visible.
+            self.assertIn("Subscribers cannot see this commit yet", committed)
 
             # One transaction, not two: a loop over single promotions would have made two commits
             # and two registry snapshots.

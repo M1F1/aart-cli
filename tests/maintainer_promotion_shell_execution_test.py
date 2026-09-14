@@ -14,7 +14,6 @@ from agent_artifacts.application.consumer_ui import (
     ConsumerUiEvent,
     ConsumerUiEventKind,
     ConsumerUiState,
-    RegistryPublicationDraft,
     key_event,
     reduce_consumer_ui,
 )
@@ -159,112 +158,14 @@ class PromotionShellExecutionTest(unittest.TestCase):
         self.assertIsNone(recorded.action)
         self.assertTrue(recorded.registry_commit_applied)
 
-    def test_applied_screen_45_collects_the_publication_target_and_requests_review(self) -> None:
-        state = dataclasses.replace(
-            _on(MaintainerScreen.REGISTRY_COMMIT),
-            rows=("publication-remote", "publication-branch", "publish"),
-            cursor=1,
-            registry_commit_applied=True,
-            registry_publication_configuring=True,
-            registry_publication_draft=RegistryPublicationDraft("origin", "review/registry"),
-        )
-
-        event = key_event("enter", state)
-        self.assertEqual(event, ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="down"))
-        assert event is not None
-        on_publish, _ = reduce_consumer_ui(state, event)
-        event = key_event("enter", on_publish)
-        self.assertEqual(
-            event,
-            ConsumerUiEvent(
-                ConsumerUiEventKind.REQUEST_ACTION,
-                action=ConsumerActionKind.REGISTRY_PUBLICATION,
-            ),
-        )
-        assert event is not None
-        reviewing, commands = reduce_consumer_ui(on_publish, event)
-
-        self.assertIs(reviewing.session.screen, MaintainerScreen.REGISTRY_COMMIT)
-        self.assertIs(reviewing.action, ConsumerActionKind.REGISTRY_PUBLICATION)
-        self.assertEqual(
-            commands,
-            (
-                ConsumerUiCommand(
-                    ConsumerUiCommandKind.PREPARE_ACTION,
-                    action=ConsumerActionKind.REGISTRY_PUBLICATION,
-                    registry_publication_draft=RegistryPublicationDraft(
-                        "origin", "review/registry"
-                    ),
-                ),
-            ),
-        )
-
-    def test_publication_receipt_stays_on_screen_45_then_enter_opens_registry(self) -> None:
-        state = dataclasses.replace(
-            _on(
-                MaintainerScreen.REGISTRY_COMMIT,
-                action=ConsumerActionKind.REGISTRY_PUBLICATION,
-                digest=str(self.prepared.review_digest),
-            ),
-            registry_commit_applied=True,
-        )
-
-        recorded, _ = reduce_consumer_ui(
-            state,
-            ConsumerUiEvent(
-                ConsumerUiEventKind.ACTION_RECORDED,
-                action=ConsumerActionKind.REGISTRY_PUBLICATION,
-                text="published",
-            ),
-        )
-        self.assertTrue(recorded.registry_publication_completed)
-        self.assertIsNone(recorded.action)
-        self.assertIs(recorded.session.screen, MaintainerScreen.REGISTRY_COMMIT)
-
-        event = key_event("enter", recorded)
-        self.assertEqual(
-            event,
-            ConsumerUiEvent(
-                ConsumerUiEventKind.NAVIGATE,
-                screen=MaintainerScreen.REGISTRY,
-            ),
-        )
-
-    def test_refused_publication_target_stays_on_the_filled_commit_screen(self) -> None:
-        state = dataclasses.replace(
-            _on(
-                MaintainerScreen.REGISTRY_COMMIT,
-                action=ConsumerActionKind.REGISTRY_PUBLICATION,
-            ),
-            registry_commit_applied=True,
-            registry_publication_draft=RegistryPublicationDraft("origin", "main"),
-        )
-
-        refused, commands = reduce_consumer_ui(
-            state,
-            ConsumerUiEvent(
-                ConsumerUiEventKind.ACTION_PREPARED,
-                action=ConsumerActionKind.REGISTRY_PUBLICATION,
-            ),
-        )
-
-        self.assertIs(refused.session.screen, MaintainerScreen.REGISTRY_COMMIT)
-        self.assertIsNone(refused.action)
-        self.assertTrue(refused.registry_commit_applied)
-        self.assertEqual(
-            RegistryPublicationDraft("origin", "main"), refused.registry_publication_draft
-        )
-        self.assertEqual((), commands)
-
 
 class CommittedRegistryScreenIsNotAFormTest(unittest.TestCase):
-    """A written commit that has not been sent to publication is a screen, not a form.
+    """A written commit is a reading screen, and it answers the global keys like every other one.
 
-    Screen 45 becomes a form only once the operator presses `p`. Before that it is an ordinary
-    reading screen and has to answer the global keys like every other one. Interpreting keys for
-    the publication form whenever the commit merely *exists* swallowed all of them -- `q`
-    included -- and a screen that cannot be quit is a hang, not a misprint: the shell asks for
-    the next key forever.
+    Under D-228 screen 45 grew a publication form after the commit, and interpreting keys for it
+    whenever the commit merely *existed* swallowed all of them -- `q` included, which is a hang
+    rather than a misprint. The form is gone (D-255), and these keep the screen from growing
+    another key trap in its place.
     """
 
     def _committed(self, **overrides) -> ConsumerUiState:
@@ -274,12 +175,12 @@ class CommittedRegistryScreenIsNotAFormTest(unittest.TestCase):
             **overrides,
         )
 
-    def test_quit_still_quits_before_the_publication_form_is_opened(self) -> None:
+    def test_quit_still_quits_after_the_commit(self) -> None:
         event = key_event("q", self._committed())
 
         self.assertEqual(event, ConsumerUiEvent(ConsumerUiEventKind.QUIT))
 
-    def test_the_global_keys_still_answer_before_the_form_is_opened(self) -> None:
+    def test_the_global_keys_still_answer_after_the_commit(self) -> None:
         state = self._committed()
 
         for key, kind in (
@@ -289,65 +190,15 @@ class CommittedRegistryScreenIsNotAFormTest(unittest.TestCase):
             with self.subTest(key=key):
                 event = key_event(key, state)
 
-                self.assertIsNotNone(event, f"{key} was swallowed by the publication form")
+                self.assertIsNotNone(event, f"{key} was swallowed on the committed screen")
                 assert event is not None
                 self.assertIs(event.kind, kind)
 
-    def test_p_opens_the_form_and_then_typing_reaches_the_draft(self) -> None:
-        opened = key_event("p", self._committed())
-
+    def test_enter_after_the_commit_goes_on_to_the_registry(self) -> None:
         self.assertEqual(
-            opened, ConsumerUiEvent(ConsumerUiEventKind.CONFIGURE_REGISTRY_PUBLICATION)
+            key_event("enter", self._committed()),
+            ConsumerUiEvent(ConsumerUiEventKind.NAVIGATE, screen=MaintainerScreen.REGISTRY),
         )
-
-        typing = self._committed(
-            registry_publication_configuring=True,
-            rows=("publication-remote", "publication-branch", "publish"),
-            cursor=1,
-        )
-        event = key_event("r", typing)
-
-        self.assertEqual(
-            event,
-            ConsumerUiEvent(ConsumerUiEventKind.EDIT_REGISTRY_PUBLICATION, key="branch", text="r"),
-        )
-
-    def test_the_form_owns_q_once_it_is_open_because_a_branch_may_contain_one(self) -> None:
-        """The swallow is right here and wrong before: `q` is a legal character in a branch."""
-
-        typing = self._committed(
-            registry_publication_configuring=True,
-            rows=("publication-remote", "publication-branch", "publish"),
-            cursor=1,
-        )
-
-        event = key_event("q", typing)
-
-        self.assertEqual(
-            event,
-            ConsumerUiEvent(ConsumerUiEventKind.EDIT_REGISTRY_PUBLICATION, key="branch", text="q"),
-        )
-
-    def test_the_legend_offers_the_key_the_screen_tells_the_reader_to_press(self) -> None:
-        """`QA-058` inverted: a key that works but is advertised nowhere is as unusable as one
-        that is advertised and does not work. The body says `press p`, so the legend must too."""
-
-        from agent_artifacts.application.consumer_ui import key_bindings
-
-        legend = key_bindings(self._committed(), detail=None)
-
-        self.assertIn(
-            "p",
-            {binding.key.lower() for binding in legend},
-            [binding.key for binding in legend],
-        )
-
-    def test_the_legend_drops_it_again_once_publication_is_done(self) -> None:
-        from agent_artifacts.application.consumer_ui import key_bindings
-
-        legend = key_bindings(self._committed(registry_publication_completed=True), detail=None)
-
-        self.assertNotIn("p", {binding.key.lower() for binding in legend})
 
 
 if __name__ == "__main__":

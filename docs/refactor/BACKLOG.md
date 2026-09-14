@@ -3006,3 +3006,12 @@ at Promotion Review turned only `test_enter_on_validation_details_continues_to_p
 calls `detail` directly). The key-path walk stayed green. Pointing the binding there turned five
 tests red, including both E2E walks. Noncritical: both routes currently agree. Pick one owner for
 Enter on screen 39 when task 14 audits advertised keys against dispatch.
+
+## B-116 — `registry_remote_default_branch` has no production caller after D-255
+
+Found 2026-09-14 during CP-23 task 05. The TUI's publication preparation was the only production
+caller of `io/registry_publication.registry_remote_default_branch`; `aart registry push` resolves
+the default branch through `_configured_registry_branch` instead. The function and its IO test
+still pass. Noncritical: it is harmless, and deleting it is a CLI-module cleanup rather than part of
+removing the TUI capability. Decide whether the CLI should use it (the remote's actual default)
+or whether it should be removed.

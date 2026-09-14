@@ -5955,3 +5955,31 @@ unchanged. No evaluation moved: Policy Review is composed from the same validati
 reports unmet required checks such as `live-acceptance`. `p` on screen 38 now maps to no event and
 the footer no longer offers it. The two composed E2E walks replace their `p` with Enter, Enter.
 The post-commit publication `p` is untouched here; task 05 removes TUI publication.
+
+## D-255 — TUI promotion ends at the local commit; publication is manual Git
+
+Date: 2026-09-14 · Status: implemented · Scope: CP-23 task 05 · Supersedes: D-228 for the TUI
+
+Remove the whole D-228 terminal publication path rather than hiding its key: the
+`REGISTRY_PUBLICATION` action, the configure/edit events, `RegistryPublicationDraft`, the
+configuring/completed state flags, the publication form rows, the action handler's publish and
+default-branch ports, the commit view's publication fields and the renderer's form arguments. A key
+that is not bound but whose reducer still prepares a push would be a hidden route, so the
+vocabulary itself no longer contains one. `registry_commit_applied` stays: it is what makes Enter
+commit before the write and go on to Registry Maintainer after it.
+
+Screen 45 keeps the exact reviewed local commit and baseline check unchanged. Before the write it
+says AART does not push. After the write it lists, in order: push this Registry branch; where the
+Registry is reviewed, open a pull request and merge into the branch subscribers read; update the
+local checkout; run Registry Sync to observe the approved state. It never says "published", and it
+does not mention Source Sync, which reads authoring Sources rather than an approved Registry.
+
+The audit of related prose changed two sentences. Registry initialization no longer promises that
+Registry Commit can publish. Screen 46's operator-requested sentence now says changes reach
+subscribers *of this branch* once it is pushed. That scopes it next to the existing "everyone else
+subscribes to the repository's main" line, so a pushed review branch is not presented as
+consumer-visible. "AART does not push it for you" is kept verbatim.
+
+The `aart registry push` CLI command, `application/registry_publication.py`,
+`io/registry_publication.py` and their tests are an independently supported contract and are
+untouched. `registry_remote_default_branch` lost its only production caller (B-116).

@@ -573,7 +573,7 @@
         {
           "id": "5",
           "title": "Remove TUI push capability and explain manual Registry publication",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "6",

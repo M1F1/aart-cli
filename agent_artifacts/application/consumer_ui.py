@@ -45,7 +45,6 @@ __all__ = [
     "KeyBinding",
     "RegistryDraft",
     "RegistryInitDraft",
-    "RegistryPublicationDraft",
     "RepositoryScanDraft",
     "SourceDraft",
     "WorkflowProgressStep",
@@ -68,7 +67,6 @@ class ConsumerActionKind(str, Enum):
     SOURCE_SYNC = "source-sync"
     CANDIDATE_PROMOTION = "candidate-promotion"
     BULK_PROMOTION = "bulk-promotion"
-    REGISTRY_PUBLICATION = "registry-publication"
     REGISTRY_ADD = "registry-add"
     REGISTRY_SYNC = "registry-sync"
     REGISTRY_REMOVE = "registry-remove"
@@ -106,8 +104,6 @@ class ConsumerUiEventKind(str, Enum):
     EDIT_REGISTRY = "edit-registry"
     EDIT_SOURCE = "edit-source"
     EDIT_REGISTRY_INIT = "edit-registry-init"
-    CONFIGURE_REGISTRY_PUBLICATION = "configure-registry-publication"
-    EDIT_REGISTRY_PUBLICATION = "edit-registry-publication"
     EDIT_REPOSITORY_SCAN = "edit-repository-scan"
 
 
@@ -219,24 +215,6 @@ class RegistryInitDraft:
 
 
 @dataclass(frozen=True, slots=True)
-class RegistryPublicationDraft:
-    """The remote branch screen 45 will publish one reviewed commit to (`D-228`)."""
-
-    remote: str = "origin"
-    branch: str = ""
-
-    def __post_init__(self) -> None:
-        if any(
-            not isinstance(value, str) or any(character in value for character in "\r\n")
-            for value in (self.remote, self.branch)
-        ):
-            raise ValueError("registry publication draft is invalid")
-
-    def settled(self) -> RegistryPublicationDraft:
-        return replace(self, remote=self.remote.strip(), branch=self.branch.strip())
-
-
-@dataclass(frozen=True, slots=True)
 class RepositoryScanDraft:
     """The credential-free remote identity read once for artifact-scoped adoption."""
 
@@ -326,7 +304,6 @@ class ConsumerUiCommand:
     registry_draft: RegistryDraft | None = None
     source_draft: SourceDraft | None = None
     registry_init_draft: RegistryInitDraft | None = None
-    registry_publication_draft: RegistryPublicationDraft | None = None
     repository_scan_draft: RepositoryScanDraft | None = None
 
     def __post_init__(self) -> None:
@@ -353,10 +330,6 @@ class ConsumerUiCommand:
             or (
                 self.registry_init_draft is not None
                 and not isinstance(self.registry_init_draft, RegistryInitDraft)
-            )
-            or (
-                self.registry_publication_draft is not None
-                and not isinstance(self.registry_publication_draft, RegistryPublicationDraft)
             )
             or (
                 self.repository_scan_draft is not None
@@ -446,12 +419,10 @@ class ConsumerUiState:
     registry_draft: RegistryDraft = RegistryDraft()
     source_draft: SourceDraft = SourceDraft()
     registry_init_draft: RegistryInitDraft = RegistryInitDraft()
-    registry_publication_draft: RegistryPublicationDraft = RegistryPublicationDraft()
-    #: Screen 45 is two explicit effects in sequence. These flags let key interpretation know
-    #: whether Enter commits, reviews the push, or leaves the completed receipt.
+    #: Screen 45 confirms one local commit and then keeps its receipt on screen. This flag lets key
+    #: interpretation know whether Enter commits or leaves for the Registry: publication is manual
+    #: Git and has no state here (D-255).
     registry_commit_applied: bool = False
-    registry_publication_configuring: bool = False
-    registry_publication_completed: bool = False
     repository_scan_draft: RepositoryScanDraft = RepositoryScanDraft()
     #: The directory this session was launched from, already written for a reader. It is context
     #: for every screen -- an install and a Registry edit land relative to it -- so it is carried
@@ -495,12 +466,7 @@ class ConsumerUiState:
             or not isinstance(self.registry_draft, RegistryDraft)
             or not isinstance(self.source_draft, SourceDraft)
             or not isinstance(self.registry_init_draft, RegistryInitDraft)
-            or not isinstance(self.registry_publication_draft, RegistryPublicationDraft)
             or not isinstance(self.registry_commit_applied, bool)
-            or not isinstance(self.registry_publication_configuring, bool)
-            or not isinstance(self.registry_publication_completed, bool)
-            or (self.registry_publication_completed and not self.registry_commit_applied)
-            or (self.registry_publication_configuring and not self.registry_commit_applied)
             or not isinstance(self.repository_scan_draft, RepositoryScanDraft)
         ):
             raise ValueError("consumer UI state is invalid")
@@ -930,10 +896,6 @@ _ACTION_REVIEW: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
         ConsumerActionKind.BULK_PROMOTION,
         MaintainerScreen.BULK_PROMOTION,
     ): MaintainerScreen.REGISTRY_VALIDATION,
-    (
-        ConsumerActionKind.REGISTRY_PUBLICATION,
-        MaintainerScreen.REGISTRY_COMMIT,
-    ): MaintainerScreen.REGISTRY_COMMIT,
 }
 
 #: The screens an action can be asked from, which are also the screens a declined preparation
@@ -968,21 +930,6 @@ def _request_action(
     if action is None:
         return state, ()
     target = _ACTION_REVIEW.get((action, state.session.screen))
-    if action is ConsumerActionKind.REGISTRY_PUBLICATION:
-        if (
-            target is not state.session.screen
-            or not state.registry_commit_applied
-            or state.registry_publication_completed
-        ):
-            return state, ()
-        prepared = replace(state, action=action, quit_pending=False, failed_action=None)
-        return prepared, (
-            ConsumerUiCommand(
-                ConsumerUiCommandKind.PREPARE_ACTION,
-                action=action,
-                registry_publication_draft=state.registry_publication_draft,
-            ),
-        )
     focus = (
         state.current_row or state.focus
         if action in _ROW_IS_THE_REQUEST
@@ -1027,11 +974,6 @@ def _request_action(
             if action in (ConsumerActionKind.CANDIDATE_PROMOTION, ConsumerActionKind.BULK_PROMOTION)
             else moved.registry_commit_applied
         ),
-        registry_publication_completed=(
-            False
-            if action in (ConsumerActionKind.CANDIDATE_PROMOTION, ConsumerActionKind.BULK_PROMOTION)
-            else moved.registry_publication_completed
-        ),
     )
     command = ConsumerUiCommand(
         ConsumerUiCommandKind.PREPARE_ACTION,
@@ -1072,8 +1014,6 @@ def _declined_preparation(
     """
 
     cleared = replace(state, action=None, quit_pending=False)
-    if state.action is ConsumerActionKind.REGISTRY_PUBLICATION:
-        return cleared, ()
     session = state.session.back()
     if session is state.session:
         return cleared, ()
@@ -1134,10 +1074,6 @@ _ACTION_RUNNING: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationS
     ): None,
     (
         ConsumerActionKind.BULK_PROMOTION,
-        MaintainerScreen.REGISTRY_COMMIT,
-    ): None,
-    (
-        ConsumerActionKind.REGISTRY_PUBLICATION,
         MaintainerScreen.REGISTRY_COMMIT,
     ): None,
 }
@@ -1257,21 +1193,6 @@ def _action_recorded(
             quit_pending=False,
             action=None,
             registry_commit_applied=True,
-            registry_publication_configuring=False,
-            registry_publication_completed=False,
-        ), (ConsumerUiCommand(ConsumerUiCommandKind.LOAD_SCREEN, state.session.screen),)
-    if (
-        action is ConsumerActionKind.REGISTRY_PUBLICATION
-        and state.session.screen is MaintainerScreen.REGISTRY_COMMIT
-    ):
-        return replace(
-            state,
-            selection=(),
-            quit_pending=False,
-            action=None,
-            registry_commit_applied=True,
-            registry_publication_configuring=False,
-            registry_publication_completed=True,
         ), (ConsumerUiCommand(ConsumerUiCommandKind.LOAD_SCREEN, state.session.screen),)
     target = _owning_screen(action, state.session.screen)
     if target is None:
@@ -1396,42 +1317,6 @@ def reduce_consumer_ui(
         else:
             return state, ()
         return replace(state, registry_init_draft=init_draft, quit_pending=False), ()
-    if event.kind is ConsumerUiEventKind.EDIT_REGISTRY_PUBLICATION:
-        if (
-            state.session.screen is not MaintainerScreen.REGISTRY_COMMIT
-            or not state.registry_commit_applied
-            or not state.registry_publication_configuring
-            or state.registry_publication_completed
-            or state.action is not None
-        ):
-            return state, ()
-        publication = state.registry_publication_draft
-        if event.key == "remote":
-            publication = replace(publication, remote=event.text)
-        elif event.key == "branch":
-            publication = replace(publication, branch=event.text)
-        else:
-            return state, ()
-        return replace(
-            state,
-            registry_publication_draft=publication,
-            quit_pending=False,
-            failed_action=None,
-        ), ()
-    if event.kind is ConsumerUiEventKind.CONFIGURE_REGISTRY_PUBLICATION:
-        if (
-            state.session.screen is not MaintainerScreen.REGISTRY_COMMIT
-            or not state.registry_commit_applied
-            or state.registry_publication_completed
-            or state.action is not None
-        ):
-            return state, ()
-        return replace(
-            state,
-            registry_publication_configuring=True,
-            quit_pending=False,
-            failed_action=None,
-        ), (ConsumerUiCommand(ConsumerUiCommandKind.LOAD_SCREEN, state.session.screen),)
     if event.kind is ConsumerUiEventKind.EDIT_REPOSITORY_SCAN:
         if state.session.screen is not MaintainerScreen.REPOSITORY_SCAN:
             return state, ()
@@ -1706,30 +1591,7 @@ def key_bindings(
         if _binding_enabled(binding, state)
     ]
     keys = {binding.key.lower() for binding in bindings}
-    if (
-        state.session.screen is MaintainerScreen.REGISTRY_COMMIT
-        and state.registry_commit_applied
-        and state.registry_publication_configuring
-        and not state.registry_publication_completed
-        and state.action is None
-    ):
-        bindings.extend(
-            (
-                KeyBinding("Type", "Edit publication target"),
-                KeyBinding("Backspace", "Edit"),
-                KeyBinding("Enter", "Next / review publication"),
-            )
-        )
-    elif (
-        state.session.screen is MaintainerScreen.REGISTRY_COMMIT
-        and state.registry_commit_applied
-        and not state.registry_publication_completed
-        and state.action is None
-    ):
-        # The screen tells the reader to press `p`, so the legend has to offer it -- `QA-058`
-        # the other way round: a key advertised nowhere is as unusable as one that does nothing.
-        bindings.append(KeyBinding("p", "Publish to a review branch"))
-    elif state.session.screen in _FORM_SCREENS:
+    if state.session.screen in _FORM_SCREENS:
         # `QA-088`: a form accepts four keys and used to describe them in a sentence above a
         # legend that advertised two. They are all keys, so they are all in the legend, in the
         # order a reader uses them: change a field, then move on.
@@ -1816,16 +1678,6 @@ def key_event(
             return ConsumerUiEvent(ConsumerUiEventKind.CONFIRM_QUIT, accepted=False)
         return None
 
-    if (
-        state.session.screen is MaintainerScreen.REGISTRY_COMMIT
-        and state.registry_commit_applied
-        and not state.registry_publication_configuring
-        and not state.registry_publication_completed
-        and state.action is None
-        and key in ("p", "P")
-    ):
-        return ConsumerUiEvent(ConsumerUiEventKind.CONFIGURE_REGISTRY_PUBLICATION)
-
     if state.searching:
         if key == "escape":
             return ConsumerUiEvent(ConsumerUiEventKind.SEARCH_CLOSE, accepted=False)
@@ -1835,49 +1687,6 @@ def key_event(
             return ConsumerUiEvent(ConsumerUiEventKind.SEARCH, text=state.search[:-1])
         if len(key) == 1 and key.isprintable():
             return ConsumerUiEvent(ConsumerUiEventKind.SEARCH, text=state.search + key)
-        return None
-
-    # Screen 45 is a form only once `p` has opened it.  A written commit that has merely not been
-    # published yet is an ordinary reading screen, and interpreting keys here for the form would
-    # swallow every one of them -- `q` included, which is a hang rather than a misprint.
-    if (
-        state.session.screen is MaintainerScreen.REGISTRY_COMMIT
-        and state.registry_commit_applied
-        and state.registry_publication_configuring
-        and not state.registry_publication_completed
-        and state.action is None
-    ):
-        row = cursor or state.current_row
-        values = {
-            "publication-remote": state.registry_publication_draft.remote,
-            "publication-branch": state.registry_publication_draft.branch,
-        }
-        if key == "escape":
-            return ConsumerUiEvent(ConsumerUiEventKind.BACK)
-        if key == "up":
-            return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="up")
-        if key == "down":
-            return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="down")
-        if key == "enter":
-            if row == "publish":
-                return ConsumerUiEvent(
-                    ConsumerUiEventKind.REQUEST_ACTION,
-                    action=ConsumerActionKind.REGISTRY_PUBLICATION,
-                )
-            return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="down")
-        if row in values and key == "backspace":
-            return ConsumerUiEvent(
-                ConsumerUiEventKind.EDIT_REGISTRY_PUBLICATION,
-                key="remote" if row == "publication-remote" else "branch",
-                text=values[row][:-1],
-            )
-        if row in values and key.isprintable():
-            text = key if len(key) > 1 else values[row] + key
-            return ConsumerUiEvent(
-                ConsumerUiEventKind.EDIT_REGISTRY_PUBLICATION,
-                key="remote" if row == "publication-remote" else "branch",
-                text=text,
-            )
         return None
 
     if state.session.screen is MaintainerScreen.REGISTRY_INIT:

@@ -1275,11 +1275,10 @@ _REGISTRY_INIT_INTRO: tuple[str, ...] = (
     "Create the registry this project publishes. AART writes its skeleton, pins what",
     "it references, builds its index, then validates and audits the result.",
     "",
-    # 164.7, said where the decision is made rather than only in the specification. AART does
-    # publish a reviewed commit, from screen 45 -- but not this run, and never a merge, so the
-    # sentence has to name the boundary it actually holds.
-    "Nothing is pushed and nothing is merged here. Once a promotion is committed,",
-    "Registry Commit can publish it to a review branch; the merge is always yours.",
+    # 164.7, said where the decision is made rather than only in the specification. The terminal
+    # surface never pushes (D-255): not this run, and not a promotion committed later either.
+    "Nothing is pushed and nothing is merged here, or when a promotion is committed:",
+    "pushing and merging this registry are steps you take in Git yourself.",
 )
 """What initializing a registry writes, and the boundary the run stops at (`QA-087`)."""
 
@@ -2218,14 +2217,6 @@ class CanonicalScreenSource:
             return ("alias", "kind", "location", "ref", "connect")
         if screen is MaintainerScreen.REGISTRY_INIT:
             return ("id", "name", "reporting", "commit", "initialize")
-        if (
-            screen is MaintainerScreen.REGISTRY_COMMIT
-            and state.registry_commit_applied
-            and state.registry_publication_configuring
-            and not state.registry_publication_completed
-            and state.action is None
-        ):
-            return ("publication-remote", "publication-branch", "publish")
         if screen is MaintainerScreen.REGISTRY_REBUILD:
             # Derived from the sequence itself: a stage the run gains is a row the picker offers.
             return (REGISTRY_REBUILD_EVERYTHING, *REGISTRY_MAINTENANCE_STAGES)
@@ -2839,14 +2830,7 @@ class CanonicalScreenSource:
             return (
                 ("That registry commit is not available.",)
                 if screens.promotion_commit is None
-                else render_maintainer_registry_commit(
-                    screens.promotion_commit,
-                    profile,
-                    publication_remote=state.registry_publication_draft.remote,
-                    publication_branch=state.registry_publication_draft.branch,
-                    cursor=state.current_row,
-                    configure_publication=state.registry_publication_configuring,
-                )
+                else render_maintainer_registry_commit(screens.promotion_commit, profile)
             )
         if screen in (MaintainerScreen.PROMOTION_REVIEW, MaintainerScreen.PROMOTION_MODE):
             # Screen 42 asks which promotion, so it draws the review of the mode currently chosen

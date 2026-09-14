@@ -142,7 +142,7 @@ class RegistryWorkspaceFrameTest(TestCase):
 
         self.assertIn("Remote branch: none — this branch has not been pushed yet.", described)
         self.assertIn(
-            "Changes become available to subscribers once this branch is pushed. "
+            "Changes reach subscribers of this branch once it is pushed. "
             "AART does not push it for you.",
             described,
         )
@@ -169,7 +169,7 @@ class RegistryWorkspaceFrameTest(TestCase):
 
         self.assertIn("Nothing here is waiting to be pushed.", described)
         self.assertNotIn(
-            "Changes become available to subscribers once this branch is pushed. "
+            "Changes reach subscribers of this branch once it is pushed. "
             "AART does not push it for you.",
             described,
         )

@@ -829,24 +829,28 @@ def render_maintainer_registry_validation(
     return tuple(lines)
 
 
+#: 164.7 as revised by the owner (D-249/D-255): the terminal surface stops at the local commit, and
+#: what makes that commit visible to anyone else is Git work AART does not do. Each step is named in
+#: the order it has to happen, because pushing alone is not approval: a review branch that has been
+#: pushed is still invisible to a subscriber reading the Registry's default branch.
+_AFTER_THE_LOCAL_COMMIT = (
+    "Subscribers cannot see this commit yet, and AART does not push it. In Git, you:",
+    "1. push this Registry branch to its remote;",
+    "2. where the Registry is reviewed, open a pull request and merge it into the branch",
+    "   subscribers read;",
+    "3. update this local checkout to that merged branch;",
+    "4. run Registry Sync to observe the approved state.",
+)
+
+
 def render_maintainer_registry_commit(
     view: MaintainerRegistryCommitView,
     profile: PresentationProfile,
-    *,
-    publication_remote: str = "origin",
-    publication_branch: str = "",
-    cursor: str = "",
-    configure_publication: bool = False,
 ) -> tuple[str, ...]:
     if not isinstance(view, MaintainerRegistryCommitView) or not isinstance(
         profile, PresentationProfile
     ):
         raise ValueError("Maintainer registry commit rendering needs a typed view and profile")
-    if not isinstance(configure_publication, bool) or any(
-        not isinstance(value, str) or any(character in value for character in "\r\n")
-        for value in (publication_remote, publication_branch, cursor)
-    ):
-        raise ValueError("Maintainer registry publication rendering needs safe configuration")
     lines = [
         _transaction_heading(view.candidates, view.target_registry, view.mode),
         (
@@ -862,56 +866,10 @@ def render_maintainer_registry_commit(
         f"Commit subject: {view.commit_subject}",
     ]
     if not view.applied:
-        lines.append("Git push: separate explicit action after this commit")
+        lines.append("Git push: AART does not push; this commit stays local until you push it")
         return action_prompt(lines, "Enter commits this exact local transaction.")
     lines.append(f"Local Git revision: {_short(view.commit_revision or '', profile)}")
-    if view.publication_remote is not None:
-        target = f"{view.publication_remote}/{view.publication_branch}"
-        if view.publication_outcome is not None:
-            moved = {
-                "created": f"created {target}",
-                "updated": f"updated {target}",
-                "already-current": f"{target} already held this revision",
-            }[view.publication_outcome]
-            lines.extend(
-                (
-                    f"{view.target_registry}: {moved} at {(view.commit_revision or '')[:12]}",
-                    "Nothing was merged. Open a pull request for the reviewer to merge it.",
-                )
-            )
-            return tuple(lines)
-        lines.extend(
-            (
-                # The reader recognises the target as one name, so the review says it as one.
-                f"Ready to push the reviewed commit to {target}",
-                f"Publication remote: {view.publication_remote}",
-                f"Publication branch: {view.publication_branch}",
-                "Nothing will be merged; the default branch is never a publication target.",
-            )
-        )
-        return action_prompt(lines, "Enter pushes this exact revision.")
-    if not configure_publication:
-        lines.append("Git publication: not yet published; press p to choose a review branch.")
-        return tuple(lines)
-    values = {
-        "publication-remote": publication_remote or "<type the Git remote>",
-        "publication-branch": publication_branch or "<type a non-default branch>",
-        "publish": "Review publication",
-    }
-    labels = {
-        "publication-remote": "Publication remote",
-        "publication-branch": "Publication branch",
-        "publish": "Continue",
-    }
-    rows = ("publication-remote", "publication-branch", "publish")
-    lines.extend(
-        (
-            "Configure where this reviewed commit is published:",
-            *(f"{'>' if row == cursor else ' '} {labels[row]}: {values[row]}" for row in rows),
-            "Nothing is pushed until this target is reviewed; nothing here can merge.",
-        )
-    )
-    return tuple(lines)
+    return (*lines, "", *_AFTER_THE_LOCAL_COMMIT)
 
 
 _WORKING_TREE_LABELS = {
@@ -1017,8 +975,7 @@ _WHO_SUBSCRIBES = (
 #: It stands only while something is actually waiting, so it stays an instruction rather than
 #: becoming decoration on a screen with nothing to do.
 _NOBODY_PUSHES_FOR_YOU = (
-    "Changes become available to subscribers once this branch is pushed. "
-    "AART does not push it for you."
+    "Changes reach subscribers of this branch once it is pushed. AART does not push it for you."
 )
 
 

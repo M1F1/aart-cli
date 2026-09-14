@@ -26,16 +26,10 @@ from agent_artifacts.application.promotion import (
     project_promotion,
     validate_promoted_registry,
 )
-from agent_artifacts.application.registry_publication import (
-    PublicationOutcome,
-    RegistryPublicationCommand,
-    RegistryPublicationReceipt,
-)
 from agent_artifacts.domain.candidates import assess_candidate
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.identifiers import ObjectDigest, SourceAlias
 from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.publication import PublicationBranch
 from agent_artifacts.domain.registry import PromotionMode
 from agent_artifacts.domain.result import Err, Ok
 from agent_artifacts.protocol.native_tree import SnapshotOrigin, SourceSnapshot
@@ -299,13 +293,13 @@ class CandidatePromotionScreenProjectionTest(unittest.TestCase):
         self.assertIn("Canonical package digests", drawn)
         self.assertIn("No approved registry state has been written", drawn)
 
-    def test_screen_45_keeps_commit_and_publication_as_two_explicit_actions(self) -> None:
+    def test_screen_45_commits_locally_and_leaves_publication_to_git(self) -> None:
         ready = project_maintainer_registry_commit(self.prepared)
         drawn = "\n".join(render_maintainer_registry_commit(ready, PresentationProfile.FAST))
 
         self.assertFalse(ready.applied)
         self.assertIn("Ready to write approved registry state", drawn)
-        self.assertIn("Git push: separate explicit action", drawn)
+        self.assertIn("AART does not push", drawn)
         self.assertIn("Enter commits this exact local transaction", drawn)
 
         completed = CandidatePromotionExecutionResult(
@@ -318,60 +312,11 @@ class CandidatePromotionScreenProjectionTest(unittest.TestCase):
             "Promote mcp/github-mcp@1.0.0 to company",
         )
         applied = project_maintainer_registry_commit(self.prepared, result=completed)
-        persisted = "\n".join(
-            render_maintainer_registry_commit(
-                applied,
-                PresentationProfile.FAST,
-                publication_remote="origin",
-                publication_branch="review/registry",
-                cursor="publication-branch",
-                configure_publication=True,
-            )
-        )
+        persisted = "\n".join(render_maintainer_registry_commit(applied, PresentationProfile.FAST))
         self.assertTrue(applied.applied)
         self.assertIn("Approved registry state written locally", persisted)
-        self.assertIn("Publication remote: origin", persisted)
-        self.assertIn("Publication branch: review/registry", persisted)
-        self.assertIn("Review publication", persisted)
-
-        command = RegistryPublicationCommand(
-            self.prepared.target_registry,
-            "origin",
-            PublicationBranch("review/registry"),
-            completed.commit_revision,
-            completed.review_digest,
-        )
-        reviewed = project_maintainer_registry_commit(
-            self.prepared,
-            result=completed,
-            publication_command=command,
-        )
-        review_text = "\n".join(
-            render_maintainer_registry_commit(reviewed, PresentationProfile.FAST)
-        )
-        self.assertIn("Ready to push the reviewed commit", review_text)
-        self.assertIn("Nothing will be merged", review_text)
-        self.assertIn("Enter pushes this exact revision", review_text)
-
-        receipt = RegistryPublicationReceipt(
-            command.registry,
-            command.remote,
-            command.branch,
-            command.revision,
-            command.review_digest,
-            PublicationOutcome.CREATED,
-        )
-        published = project_maintainer_registry_commit(
-            self.prepared,
-            result=completed,
-            publication_command=command,
-            publication_receipt=receipt,
-        )
-        receipt_text = "\n".join(
-            render_maintainer_registry_commit(published, PresentationProfile.FAST)
-        )
-        self.assertIn("created origin/review/registry", receipt_text)
-        self.assertIn("Nothing was merged", receipt_text)
+        self.assertIn("Subscribers cannot see this commit yet", persisted)
+        self.assertIn("run Registry Sync", persisted)
 
 
 if __name__ == "__main__":

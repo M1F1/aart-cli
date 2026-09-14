@@ -9,11 +9,11 @@ then a consumer who subscribes to what you just published and installs from it.
 Everything here happens in the TUI. There are exactly two exceptions, both deliberate:
 
 - one command to create the disposable lab, and one to open the application;
-- two Git commands the TUI does not own: the first push of the *initialization* commit, so the
-  Registry is subscribable at all, and the **merge** of what you publish from screen 45. AART
-  pushes a reviewed registry commit to a review branch and refuses the default one; only the merge
-  makes those bytes the Registry, and that step is never AART's (Product Specification 164.7,
-  `D-228`).
+- the Git work the TUI does not own: the first push of the *initialization* commit, so the
+  Registry is subscribable at all, and — after the local commit on screen 45 — pushing the
+  promotion, getting it reviewed and merged into the branch subscribers read, and updating your
+  checkout. The TUI never pushes; it ends at the reviewed local commit and says what comes next
+  (Product Specification 164.7, `D-249`/`D-255`, which supersede `D-228` for the TUI).
 
 There are two routes through the same product, and this is one of them:
 
@@ -154,8 +154,7 @@ target Registry to compare with. The Registry you just created exists only as a 
 a subscription reads a remote — so publishing it comes before syncing, not only after promotion.
 
 - [ ] Push the initialization commit yourself. Initialize Registry writes a local commit and
-      nothing more; publishing from inside AART exists only on the Registry Commit screen, which
-      this path has not reached yet (164.7):
+      nothing more, and no TUI screen pushes anything (164.7, `D-255`):
 
 ```sh
 git -C /tmp/aart-cli-manual-lab/repositories/registry push origin HEAD
@@ -273,64 +272,57 @@ context rather than resetting it (`QA-036`/`QA-037`). A refused or failed run le
 screen saying the run did not happen, offering `Enter` back to the list — never a stale
 confirmation (`QA-033`).
 
-- [ ] After the commit, you land back on **Registry Maintainer**, one key from the next promotion.
+- [ ] After the commit, **Registry commit** stays on screen with its receipt; `Enter` goes on to
+      **Registry Maintainer**, one key from the next promotion.
 
-## 8 — Publish the promotion, from inside AART
+## 8 — Publish the promotion yourself, in Git
 
-This step changed. `QA-055` asked whether the commit screen closed the path and `QA-082` asked for
-the push itself; the product owner settled both in Product Specification 164.7, and AART now
-performs the push (`D-228`). Having to drop out of the surface to type `git push` was a gap, not a
-safeguard — you had already reviewed exactly these bytes here.
+This step changed again. `D-228` once had AART push a reviewed commit to a review branch from this
+screen; the product owner reversed that for the TUI (Product Specification 164.7, `D-249`), and
+CP-23 task 05 removed it (`D-255`). The supported `aart registry push` CLI is unchanged — this
+walkthrough is TUI-only, so it does not use it.
 
-The screen tells you so:
+The committed **Registry commit** screen says what comes next, in order:
 
 ```
-Git publication: not yet published; press p to choose a review branch.
+Subscribers cannot see this commit yet, and AART does not push it. In Git, you:
+1. push this Registry branch to its remote;
+2. where the Registry is reviewed, open a pull request and merge it into the branch
+   subscribers read;
+3. update this local checkout to that merged branch;
+4. run Registry Sync to observe the approved state.
 ```
 
-- [ ] Press `p`. Check the footer offered it too — a key a screen names and the legend hides is
-      `QA-058` the other way round (`D-240`).
-
-| row | what to enter |
-|---|---|
-| Publication remote | `origin` |
-| Publication branch | `review/manual-check` — any name **but** the registry's default |
-| Continue | `Enter` — *Review publication* |
-
-Expected on the review frame: the target reads as one name a person recognises —
-`Ready to push the reviewed commit to origin/review/manual-check` — with `Publication remote:` and
-`Publication branch:` beneath it, and the line *"Nothing will be merged; the default branch is
-never a publication target."*
-
-- [ ] Confirm, and check the branch really landed:
+- [ ] Before leaving screen 45, press `p`, then type a few letters. Expected: nothing happens —
+      no form, no review, no push — and the footer offers no `p` (`D-255`).
+- [ ] Check nothing reached the remote yet:
 
 ```sh
-git -C /tmp/aart-cli-manual-lab/remotes/registry.git branch --list
+git -C /tmp/aart-cli-manual-lab/remotes/registry.git log --oneline -1
 ```
 
-Now prove the refusal, because a boundary nobody tested is a claim:
+Expected: the initialization commit, not your promotion.
 
-- [ ] Press `p` again and type this lab's run branch — the ref from `START_HERE.md`. That is the
-      bare remote's default branch, so it is what a subscriber reads.
-
-Expected: a refusal naming it, not a push — *"… is the branch this registry's subscribers read;
-AART publishes to a branch and never to that one"*, with *"Publish to a different branch and open a
-pull request into …"* as the remedy. Typing `HEAD` must be refused the same way.
-
-**Then merge it yourself.** AART pushes; only the merge makes the bytes the Registry, and AART never
-performs that step (164.7). Act II subscribes at the run branch, so nothing you publish to a review
-branch is installable until you land it there:
+**Then publish it yourself.** Act II subscribes at the run branch. In this lab the lab's run branch
+is the one subscribers read and there is no reviewer, so pushing `HEAD` to it is the push and the
+merge in one; in a real Registry you would push a review branch, open a pull request, and get it
+merged first:
 
 ```sh
 git -C /tmp/aart-cli-manual-lab/repositories/registry push origin HEAD
 ```
 
+A pushed review branch that has not been merged is **not** published: a subscriber reading the
+default branch cannot see it.
+
 Checkpoint for Act I:
 
-- [ ] The Registry was created, filled, committed **and published** without leaving the TUI.
+- [ ] The Registry was created, filled and committed in the TUI, and published by your own Git
+      push — no TUI key pushed anything.
 - [ ] Every destructive or writing step was reviewed first and cancellable.
 - [ ] No screen leaked an internal screen identifier.
-- [ ] The default branch was refused by name, and only the merge was yours to do.
+- [ ] Screen 45 listed push → review/merge → update checkout → Registry Sync, and never called
+      the local commit published.
 - [ ] Promotion records are visible in the merged branch.
 
 ---

@@ -1,6 +1,6 @@
 # CP-23 — Actionable TUI workflows after the fourth manual run
 
-Status: IN PROGRESS — TASKS 01–04 DONE; TASK 05 NEXT
+Status: IN PROGRESS — TASKS 01–05 DONE; TASK 06 NEXT
 
 Date: 2026-09-14. Authority: the product owner's manual screen reports and request to create CP-23
 and close CP-22, followed by the all-screen audit and credential guidance requirements.
@@ -539,3 +539,53 @@ Evidence:
   at Promotion Review, skipping policy (**5 red**, including the new walk and both E2E walks). A
   first mutation of the `source.detail` branch left the key walk green because that branch is
   shadowed (B-115). The binding is the path a key takes, so the binding mutation is the evidence.
+
+### Task 05 — TUI promotion ends at the local commit (2026-09-14)
+
+Done. D-255 records the choice; B-116 records the default-branch reader left without a caller.
+
+Characterized first: after the commit, screen 45 said `Git publication: not yet published; press p
+to choose a review branch`. `p` opened a remote/branch form, Enter prepared a
+`RegistryPublicationCommand` through the handler's default-branch port, and a second Enter pushed
+through `publish_registry_commit`. The CLI `aart registry push` uses the same application/IO
+modules through its own path.
+
+After: the TUI vocabulary has no publication action, event, draft, state flag or handler port. The
+committed screen lists push → pull request/merge where required → update checkout → Registry Sync,
+never says "published", and does not mention Source Sync. `p` maps to no event and the footer
+offers none. Registry initialization and screen 46's push sentence no longer overpromise (D-255).
+The CLI contract and its tests are untouched.
+
+Evidence:
+
+- New `registry_commit_manual_publication_test.py` (9 tests):
+  - wording in both profiles, with the manual steps in order and within `CONTENT_MEASURE`;
+  - no "published", `press p` or Source Sync after the commit;
+  - the view, projection and renderer carry no publication fields or arguments;
+  - the initialization intro;
+  - the UI vocabulary and `LocalConsumerActions` signature;
+  - `p`/`P`, including the legend;
+  - a Hypothesis property: no key sequence on committed screen 45 emits `REQUEST_ACTION`/`CONFIRM_ACTION`
+    or a `PREPARE_ACTION`/`EXECUTE_ACTION` command.
+- Recording transport: `maintainer_composition_e2e_test.py`'s real walk now wraps `subprocess.run`
+  for the whole shell session. After the commit it presses `p`, `P` and types `review/registry`,
+  then asserts that a `git commit` argv was recorded and no argv contains `push`. The bare
+  remote's refs are exactly `refs/heads/main` at the pre-promotion revision. The bulk walk asserts
+  the manual-steps text.
+- Reworked: `maintainer_promotion_shell_execution_test.py` drops the form tests. It keeps `q`/`?`/`v`
+  after the commit and adds Enter → Registry. `maintainer_promotion_execution_test.py` ends at
+  the local commit, and `registry_workspace_lifecycle_test.py` carries the scoped sentence.
+- Focused runs: the five changed modules (**54 OK**); 25 modules touching screen 45, init prose,
+  legends or the workspace (**369 OK**); UI state/actions, shell, application E2E, skeleton and
+  the CLI `registry_publication*`/`registry_push_cli` modules (**172 OK**).
+  `make typecheck format-check lint`: OK.
+- Targeted mutations, all killed:
+  - `p` requesting an action on committed 45 (**red**, including the Hypothesis property alone,
+    which shrinks to `['p']`);
+  - steps out of order (**2 red**);
+  - steps dropped (**5 red**, including both E2E walks);
+  - init promising Registry Commit publication (**1 red**);
+  - the promotion handler running `git push --dry-run` after the commit (**1 red**, the recording
+    transport).
+- Walkthrough step 8 is now the external Git step. Scoped `make mutants` and the full suite are
+  left to task 15. No human terminal retest is claimed.

@@ -1,6 +1,8 @@
 # AART Refactor Migration Status
 
-**2026-09-14: CP-22 CLOSED; CP-23 tasks 01–04 done, task 05 next.**
+**2026-09-14: CP-22 CLOSED; CP-23 tasks 01–05 done, task 06 next.**
+Task 05 (D-255): TUI push removed entirely; screen 45 ends at the local commit and lists the
+manual Git steps before Registry Sync. A recording transport proves no push; five mutations killed.
 Task 04 (D-254): Validation reaches Policy only through Enter; `p` removed; two mutations killed.
 Task 03 (D-253): Candidate file diffs are screen 37's Verbose projection; `f` and its state are
 removed; five targeted mutations killed.
@@ -14,8 +16,8 @@ and 193 subtests pass, including a Hypothesis row-selection property and real lo
 Scoped mutation analysis is recorded; format, lint, typecheck, unit (3,978 OK) and validate
 passed. Per-task work runs only the verifying gates; the full suite is task 15.
 
-Tasks 05–15 remain pending in [`CP-23`](slices/CP-23-actionable-tui-workflows.md); the next product
-step is ending TUI promotion at the local commit. The entire batch and its manual acceptance are still
+Tasks 06–15 remain pending in [`CP-23`](slices/CP-23-actionable-tui-workflows.md); the next product
+step is making installation Success actions real. The entire batch and its manual acceptance are still
 open. Owner requirements in §167/D-249–D-250 retain manual publication, explicit target choice,
 credential acquisition guidance, and complete Frame/Verbose compliance with no standard in-TUI
 exceptions. No human retest, all-screen audit, or new CP-22 gate result is claimed.

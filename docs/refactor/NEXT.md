@@ -2,11 +2,13 @@
 
 ## Current objective — CP-23 (2026-09-14)
 
-**CP-22 is CLOSED. CP-23 tasks 01–04 are done; task 05 is next.**
+**CP-22 is CLOSED. CP-23 tasks 01–05 are done; task 06 is next.**
 Task 02 (D-252) made the Candidates table the actions block and the focused Candidate its
 Verbose-only cursor description; task 03 (D-253) made Candidate file diffs the Verbose projection
 of screen 37 and removed `f`; task 04 (D-254) removed Validation's `p` so Enter is the only route
-to Policy. Evidence is in the slice.
+to Policy; task 05 (D-255) removed TUI push entirely, so screen 45 ends at the local commit and
+lists push → review/merge → update checkout → Registry Sync. The CLI `registry push` is kept.
+Evidence is in the slice.
 The unfinished Source onboarding changes from the previous run are completed in the working tree.
 Add Source names the new Source and explains explicit Candidate discovery, retaining its row for
 `[s] Sync`. Returning from Source Details or cancelling its Sync review also preserves that Source.
@@ -20,14 +22,15 @@ Per-task work runs only the verifying gates; the full suite is task 15 (owner in
 Task 01's detailed evidence is in
 [`slices/CP-23-actionable-tui-workflows.md`](slices/CP-23-actionable-tui-workflows.md).
 
-**Next product action: task 05**, ending TUI promotion at the local commit: characterize the
-D-228 publication path first (screen 45 `p`, publication form/review, push transport), then remove
-it from the TUI without deleting a supported CLI API, and explain manual push/review/Registry Sync. Continue the ordered fifteen-task plan; CP-23 as a whole is not
+**Next product action: task 06**, making installation Success actions real (`View installed`,
+`View receipt`, `Undo` only when supported, `Done`) and explaining their destinations. Treat the
+printed names as a control gap, not as working buttons. Continue the ordered fifteen-task plan;
+CP-23 as a whole is not
 implemented or verified. Task 15 retains the full-batch/manual acceptance requirement, and task 14
 retains the complete screen/state audit. No human manual acceptance is claimed for task 01.
 
 The accepted owner revisions remain Product Specification §167 and D-249–D-250: remove TUI push
-capability in task 05, offer explicit Skill harness choice in task 10, carry credential guidance
+capability (done, D-255), offer explicit Skill harness choice in task 10, carry credential guidance
 through approved metadata in task 13, and enforce the shared frame without in-TUI exceptions in
 task 14. All cursor descriptions are Verbose-only; essential input guidance stays in Fast.
 Preserve the exact Registry baseline and the distinction between local promotion and publication.
