@@ -484,10 +484,14 @@ Harness delivery must be one answer everywhere it is said (`QA-078`…`QA-080`, 
 - [ ] Edit one harness's file by hand, then reopen the area. That harness reads
       `changed outside AART`, and an edit of it is refused until you put the file back.
 - [ ] On `dummy-user`, `Enter` opens **Choose Configuration Harnesses** with every installed
-      harness ticked. Untick all of them: `Enter` does not advance. Tick only Tabnine, then type
-      a new disposable value and press `Enter` on it, then **Continue**. On that edit form the
-      artifact, `Harnesses:` and the explanation are the status below the rule, not rows (D-270).
-- [ ] The review names only `configuration:tabnine`. Confirm it. Back on the area, Tabnine shows
+      harness ticked. Untick all of them: `Enter` does not advance. Tick only Tabnine, then
+      **Continue**. The field opens holding Tabnine's current value, not yet accepted (D-273).
+      Clear it with `Backspace`, type a new disposable value, press `Enter` on it, then
+      **Continue**. On that edit form the artifact, `Harnesses:` and the explanation are the status
+      below the rule, not rows (D-270). Ticking harnesses that hold different values opens the field
+      empty, and the status lists what each one holds.
+- [ ] The review reads `Change dummy-user for …` and `tabnine: <old> → <new>`, with no other
+      harness and no review identity until `v` (D-273). Confirm it. Back on the area, Tabnine shows
       the new value `matched` while OpenCode keeps the old one. Only `config/tabnine.conf`
       changed on disk, and **Activity** records `Reconfigured` without the value (D-267).
 - [ ] Repeat with both harnesses ticked, which changes all of them. Ask the MCP from each harness:

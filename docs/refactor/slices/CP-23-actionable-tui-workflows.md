@@ -1709,7 +1709,37 @@ The six previously owed 16.1 targeted mutations were also run and killed:
 - The UI modules pass. The only errors are Hypothesis's differing-executors check from listing two
   modules twice in one run, which also fails at HEAD. The static gates pass.
 - **Still open for task 14:**
-  - 22c not prefilling the current value;
-  - 22d's generic review text;
+  - 22c not prefilling the current value (fixed in 14.7);
+  - 22d's generic review text (fixed in 14.7);
   - the recorded matrix.
+
+#### 14.7 — 22c opens on the value held; 22d names the change (DONE, D-273)
+
+- **Findings fixed:**
+  - **22c** opens holding the value the chosen harnesses share, unaccepted. Differing values open it
+    empty, and the status lists each harness's value.
+  - **22d** Fast shows `Change <input> for <artifact>`, `harness: old → new` for each of the plan's
+    configuration components, and the risks. The review identity is Verbose.
+- **Mechanism:** `ConsumerScreenSource.drafted`, seeded once by `_reload(entering=True)` through
+  `EDIT_CONFIGURATION`. `ConsumerScreens.held_configuration` reads the per-harness values.
+- **Tests:**
+  - `tests/configuration_edit_test.py` covers:
+    - the shared value prefilled and unaccepted;
+    - differing values opening empty and listed;
+    - a reload keeping what was typed;
+    - 22d's Fast and Verbose status under the frame laws.
+  - The existing interaction tests clear the field before typing.
+  - `configured_configuration_action_e2e_test` drives the real handler through the prefilled field
+    and the `old → new` review.
+- **Targeted mutations, all killed:**
+  - no prefill;
+  - prefill when values differ;
+  - prefill on every reload (hangs `_cleared`, stopped by a timeout);
+  - the differing values not stated;
+  - the generic review back;
+  - the 22b ticks instead of the planned components;
+  - the review identity in Fast.
+- 1187 tests pass across the UI modules and the configuration E2E. The static gates pass.
+- **Still open for task 14:** the recorded matrix, with catalog coverage of every screen, laws over
+  recorded states, `v` properties and text/curses equivalence.
 

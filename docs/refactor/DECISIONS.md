@@ -6627,3 +6627,41 @@ frame laws were clean:
 
 **Consequences.** The history is unchanged, so Esc still walks back through every elided place. The
 frame checker's self-naming rule reads the last trail segment, which elision never removes.
+
+## D-273 — An edit opens on the value held, and its review names the change
+
+Date: 2026-09-15 (CP-23 task 14, seventh increment).
+
+**Context.** Task 16's close-out recorded two findings for task 14 in the per-harness configuration
+edit:
+
+- **22c** opened with an empty field, although the harnesses chosen on 22b already hold a value.
+  The only way to see that value was to go back to 22a.
+- **22d's Fast review** was the generic lifecycle text: `Review configure for …`,
+  `Components changing: configuration:claude.` and a review identity digest. It named neither the
+  input nor what the value becomes.
+
+**Decision.**
+
+- **22c opens holding the value when every chosen harness holds the same one.** The value is not
+  accepted, using screen 07's default contract: Enter must accept it before Continue.
+  - When the chosen harnesses hold different values, or some hold none, the field opens empty. The
+    screen has no business choosing one of their values for the reader. The status says they
+    differ and lists what each harness holds.
+  - The value is seeded once, on the way into the screen, through a new
+    `ConsumerScreenSource.drafted` beside `selected`. `_reload` sends it as an ordinary
+    `EDIT_CONFIGURATION` event, so the reducer stays pure and a later reload never overwrites what
+    was typed.
+- **22d names the change.**
+  - Fast shows `Change <input> for <artifact>`, one `harness: old → new` line per harness and the
+    plan's risks.
+  - The harnesses are the prepared plan's own `configuration:` components, not the 22b ticks, so
+    the review states exactly what confirming writes.
+  - The review identity is Verbose's: it pins the plan rather than describing the change.
+  - If the accepted value is unavailable, the generic lifecycle review is still drawn.
+
+**Consequences.**
+
+- Typing on a freshly opened 22c appends to the current value. The configuration shell E2E now
+  clears the field before typing, and asserts both the prefilled row and the `old → new` line.
+- 22a's values are shown as held, so 22c and 22d show them the same way.

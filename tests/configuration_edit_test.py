@@ -16,6 +16,8 @@ from agent_artifacts.application.consumer_ui import (
     ConsumerActionKind,
     ConsumerUiCommandKind,
     ConsumerUiState,
+    InstallationConfigDraft,
+    InstallationConfigField,
     key_event,
     reduce_consumer_ui,
 )
@@ -23,6 +25,9 @@ from agent_artifacts.application.consumer_views import (
     ConfigurationFileView,
     ConsumerScreen,
     ConsumerSession,
+    LifecycleDriftView,
+    LifecyclePlanView,
+    PresentationProfile,
 )
 from agent_artifacts.domain.configuration_files import (
     ConfigurationFileRecord,
@@ -33,9 +38,16 @@ from agent_artifacts.domain.identifiers import InputId
 from agent_artifacts.domain.inputs import InputValidation
 from agent_artifacts.domain.result import Err, Ok
 from agent_artifacts.protocol.hashing import sha256_bytes
-from agent_artifacts.tui_consumer import CanonicalScreenSource, _reload, frame, screens_from
+from agent_artifacts.tui_consumer import (
+    CanonicalScreenSource,
+    _reload,
+    compose_frame,
+    frame,
+    screens_from,
+)
 from tests.consumer_session_test import inspection, receipt
 from tests.credential_fixtures import access_token
+from tests.frame_contract import frame_violations
 
 INPUT = InputId("github-org")
 
@@ -154,28 +166,44 @@ class ConfigurationEditPlanningTest(unittest.TestCase):
         self.assertIn("declared pattern rule", planned.diagnostics[0].message)
 
 
-def _source_and_state():
+def _source_and_state(values: dict[str, str] | None = None, *, lifecycle=None):
     coordinate = str(inspection().record.coordinate)
+    held = values or {harness: "old-team" for harness in ("claude", "opencode", "tabnine")}
     configurations = tuple(
         ConfigurationFileView(
             coordinate,
             harness,
             f"/opt/agents/mcp/github/config/{harness}.conf",
             "matched",
-            ((INPUT.value, "old-team"),),
+            ((INPUT.value, value),),
         )
-        for harness in ("claude", "opencode", "tabnine")
+        for harness, value in held.items()
     )
     machine = assemble_consumer_machine(
         (inspection(),), configurations=configurations, today=dt.date(2026, 9, 14)
     )
-    source = CanonicalScreenSource(screens_from(machine))
+    source = CanonicalScreenSource(replace(screens_from(machine), lifecycle=lifecycle))
     state = ConsumerUiState(
         ConsumerSession(ConsumerScreen.USER_INPUT_DETAILS),
         focus=coordinate,
         user_inputs_artifact=coordinate,
     )
     return source, _reload(source, state, entering=True)
+
+
+def _cleared(source, state):
+    while state.configuration_draft.value(INPUT.value):
+        state, _ = _key(source, state, "backspace")
+    return state
+
+
+def _editing(source, state):
+    """From 22a on the value row, through 22b with every harness ticked, onto 22c."""
+
+    state, _ = _key(source, state, "enter")
+    state, _ = _key(source, state, "enter")
+    assert state.session.screen is ConsumerScreen.CONFIGURATION_VALUE
+    return state
 
 
 def _key(source, state, key):
@@ -211,6 +239,7 @@ class ConfigurationEditInteractionTest(unittest.TestCase):
         state, _ = _key(source, state, "enter")
         self.assertIs(state.session.screen, ConsumerScreen.CONFIGURATION_VALUE)
 
+        state = _cleared(source, state)
         state, _ = _key(source, state, "new-team")
         state, _ = _key(source, state, "enter")
         self.assertTrue(state.configuration_draft.ready)
@@ -232,6 +261,7 @@ class ConfigurationEditInteractionTest(unittest.TestCase):
         state, _ = _key(source, state, "enter")
         credential = access_token("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 
+        state = _cleared(source, state)
         state, _ = _key(source, state, credential)
         state, _ = _key(source, state, "enter")
         drawn = "\n".join(frame(source, state))
@@ -239,6 +269,97 @@ class ConfigurationEditInteractionTest(unittest.TestCase):
         self.assertFalse(state.configuration_draft.ready)
         self.assertNotIn(credential, drawn)
         self.assertIn("looks like a credential", drawn)
+
+
+class ConfigurationValueOpensOnWhatIsHeldTest(unittest.TestCase):
+    """CP-23 task 14: 22c opened empty although the chosen harnesses already hold a value."""
+
+    def test_the_field_opens_holding_the_value_the_chosen_harnesses_share(self) -> None:
+        source, state = _source_and_state()
+
+        state = _editing(source, state)
+
+        self.assertEqual(state.configuration_draft.value(INPUT.value), "old-team")
+        self.assertFalse(state.configuration_draft.ready)
+        self.assertIn(f"> {INPUT.value} [old-team]", source.actions(state))
+
+    def test_harnesses_holding_different_values_open_an_empty_field_and_say_so(self) -> None:
+        source, state = _source_and_state({"claude": "team-a", "opencode": "team-b"})
+
+        state = _editing(source, state)
+
+        self.assertEqual(state.configuration_draft.value(INPUT.value), "")
+        status = "\n".join(source.status(state))
+        self.assertIn("claude: team-a", status)
+        self.assertIn("opencode: team-b", status)
+
+    def test_entering_the_field_again_does_not_undo_what_was_typed(self) -> None:
+        source, state = _source_and_state()
+        state = _editing(source, state)
+        state = _cleared(source, state)
+        state, _ = _key(source, state, "typed")
+
+        self.assertEqual(_reload(source, state).configuration_draft.value(INPUT.value), "typed")
+
+
+_DIGEST = "sha256:" + "f" * 64
+
+
+def _configure_plan(*harnesses: str) -> LifecyclePlanView:
+    return LifecyclePlanView(
+        "configure",
+        str(inspection().record.coordinate),
+        False,
+        (),
+        (),
+        tuple(LifecycleDriftView(f"configuration:{item}", "changed", True) for item in harnesses),
+        (),
+        (),
+        ("local-mutation",),
+        True,
+        _DIGEST,
+    )
+
+
+class ConfigurationReviewNamesTheChangeTest(unittest.TestCase):
+    """CP-23 task 14: 22d said `Review configure for …` and a digest instead of the change."""
+
+    def _review(self, profile: PresentationProfile = PresentationProfile.FAST):
+        source, state = _source_and_state(
+            {"claude": "old-team", "opencode": "old-team", "tabnine": "other-team"},
+            lifecycle=_configure_plan("claude", "tabnine"),
+        )
+        draft = InstallationConfigDraft((InstallationConfigField(INPUT.value, "new-team"),))
+        state = replace(
+            state,
+            session=ConsumerSession(ConsumerScreen.CONFIGURATION_REVIEW, profile),
+            configuration_input=INPUT.value,
+            configuration_targets=("claude", "tabnine"),
+            configuration_draft=draft.accept(INPUT.value),
+        )
+        return source, _reload(source, state)
+
+    def test_fast_names_the_input_and_each_harness_old_and_new_value(self) -> None:
+        source, state = self._review()
+
+        status = "\n".join(compose_frame(source, state).status)
+
+        self.assertIn(f"Change {INPUT.value} for {inspection().record.coordinate}", status)
+        self.assertIn("claude: old-team → new-team", status)
+        self.assertIn("tabnine: other-team → new-team", status)
+        self.assertNotIn("opencode", status)
+        self.assertNotIn("Review configure", status)
+        self.assertNotIn(_DIGEST, status)
+        self.assertIn("Risks: local mutation.", status)
+        self.assertEqual(frame_violations(source, state), ())
+
+    def test_verbose_adds_the_review_identity(self) -> None:
+        source, state = self._review(PresentationProfile.VERBOSE)
+
+        status = "\n".join(compose_frame(source, state).status)
+
+        self.assertIn(f"Review identity: {_DIGEST}", status)
+        self.assertIn("claude: old-team → new-team", status)
 
 
 if __name__ == "__main__":

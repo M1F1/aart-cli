@@ -50,7 +50,7 @@ from agent_artifacts.tui_consumer import run_consumer_shell
 from tests.artifact_installation_e2e_test import MANIFEST, MOMENT, ORG, TOKEN
 from tests.configured_installation_action_e2e_test import _FileCredentials
 from tests.configured_installation_draft_e2e_test import AUTHORED_MCP, _published_registry
-from tests.consumer_shell_test import DOWN, ENTER, SPACE, FakeTerminal
+from tests.consumer_shell_test import BACKSPACE, DOWN, ENTER, SPACE, FakeTerminal
 from tests.marketplace_fixtures import configured_source, effective_configuration
 from tests.mcp_stdio_e2e_test import speak
 
@@ -445,6 +445,8 @@ class ConfiguredConfigurationActionE2ETest(unittest.TestCase):
             DOWN,
             SPACE,
             ENTER,
+            # 22c opens holding the value the chosen harness has now; it is cleared, then replaced.
+            *(BACKSPACE for _ in "original-team"),
             *(ord(character) for character in value),
             ENTER,
             ENTER,
@@ -458,9 +460,10 @@ class ConfiguredConfigurationActionE2ETest(unittest.TestCase):
         self.assertTrue(finished.exited)
         self.assertIs(finished.session.screen, ConsumerScreen.USER_INPUT_DETAILS)
         self.assertTrue(
-            terminal.screen_containing("Review configure"),
+            terminal.screen_containing(f"claude: original-team → {value}"),
             "\n---\n".join("\n".join(item) for item in terminal.frames),
         )
+        self.assertTrue(terminal.screen_containing(f"> {ORG} [original-team]"))
         after = self._inspection().record.receipt.configuration_files
         values = {
             item.harness: pathlib.Path(item.path).read_text(encoding="utf-8") for item in after

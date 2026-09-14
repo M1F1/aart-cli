@@ -220,6 +220,7 @@ __all__ = [
     "render_installation_config_form",
     "installation_config_status",
     "installation_config_purpose",
+    "configuration_review_status",
     "configuration_value_status",
     "render_review_selection",
     "render_settings",
@@ -465,15 +466,70 @@ def render_configuration_value_form(
 
 
 def configuration_value_status(
-    coordinate: str, input_id: str, harnesses: tuple[str, ...]
+    coordinate: str,
+    input_id: str,
+    harnesses: tuple[str, ...],
+    held: tuple[tuple[str, str | None], ...] = (),
 ) -> tuple[str, ...]:
-    """Screen 22c's state: which value of which artifact, for which harnesses, and what it is."""
+    """Screen 22c's state: which value of which artifact, for which harnesses, and what it is.
 
+    `held` is what each chosen harness holds now. When they agree the field opens holding it
+    (`CanonicalScreenSource.drafted`), so only a disagreement needs saying.
+    """
+
+    differing = len({value for _harness, value in held}) > 1
     return separate(
         (f"Change {input_id} for {coordinate}", "Harnesses: " + ", ".join(harnesses)),
         (
+            (
+                "The chosen harnesses hold different values, so the field starts empty:",
+                *(f"  {harness}: {_held(value)}" for harness, value in held),
+            )
+            if differing
+            else ()
+        ),
+        (
             "This is ordinary configuration stored beside the artifact.",
             "Credentials stay with their provider and are not accepted here.",
+        ),
+    )
+
+
+def _held(value: str | None) -> str:
+    return "not set" if value is None else value
+
+
+def configuration_review_status(
+    view: LifecyclePlanView,
+    input_id: str,
+    held: tuple[tuple[str, str | None], ...],
+    value: str,
+    profile: PresentationProfile,
+) -> tuple[str, ...]:
+    """Screen 22d: the one value, and what each harness in the plan holds before and after.
+
+    The harnesses are the plan's own `configuration:` components rather than the ones ticked on
+    22b, so the review says exactly what confirming writes. The review identity is how the plan is
+    pinned, not what it changes, so it is Verbose's (CP-23 task 14, D-273).
+    """
+
+    before = dict(held)
+    harnesses = tuple(
+        item.component.removeprefix("configuration:")
+        for item in view.drift
+        if item.component.startswith("configuration:")
+    )
+    risks = ", ".join(_human(item) for item in view.risks) or "read only"
+    return separate(
+        (
+            f"Change {input_id} for {view.artifact}",
+            *(f"  {harness}: {_held(before.get(harness))} → {value}" for harness in harnesses),
+        ),
+        (f"Risks: {risks}.",),
+        (
+            (f"Review identity: {view.review_digest}",)
+            if profile is PresentationProfile.VERBOSE
+            else ()
         ),
     )
 
@@ -1682,6 +1738,9 @@ class ConsumerScreenSource(Protocol):
     def selected(self, state: ConsumerUiState) -> tuple[str, ...] | None:
         """What this screen opens with ticked, or `None` where it has no opinion."""
 
+    def drafted(self, state: ConsumerUiState) -> str | None:
+        """What the field this screen edits opens holding, or `None` where it opens empty."""
+
 
 class ConsumerActionCompletion(Protocol):
     """A post-payload terminal conversation that returns the truthful result screen."""
@@ -1962,7 +2021,16 @@ def _review_facts(state: ConsumerUiState, screens: "ConsumerScreens") -> tuple[s
     if screen is ConsumerScreen.CONFIGURATION_REVIEW:
         if screens.lifecycle is None:
             return ("That configuration change is not prepared any more.",)
-        return render_lifecycle_plan(screens.lifecycle, state.session.profile)
+        answers = dict(state.configuration_draft.answers)
+        if state.configuration_input not in answers:
+            return render_lifecycle_plan(screens.lifecycle, state.session.profile)
+        return configuration_review_status(
+            screens.lifecycle,
+            state.configuration_input,
+            screens.held_configuration(state.user_inputs_artifact, state.configuration_input),
+            answers[state.configuration_input],
+            state.session.profile,
+        )
     if screen is ConsumerScreen.REGISTRY_SYNC:
         connected = next(
             (item for item in screens.registries if item.alias == state.focus),
@@ -2269,12 +2337,20 @@ def _reload(
         state, ConsumerUiEvent(ConsumerUiEventKind.SET_ROWS, rows=source.rows(state))
     )
     seed = source.selected(reloaded) if entering else None
-    if seed is None:
+    if seed is not None:
+        reloaded, _ = reduce_consumer_ui(
+            reloaded, ConsumerUiEvent(ConsumerUiEventKind.SET_SELECTION, rows=seed)
+        )
+    text = source.drafted(reloaded) if entering else None
+    if text is None:
         return reloaded
-    seeded, _ = reduce_consumer_ui(
-        reloaded, ConsumerUiEvent(ConsumerUiEventKind.SET_SELECTION, rows=seed)
+    drafted, _ = reduce_consumer_ui(
+        reloaded,
+        ConsumerUiEvent(
+            ConsumerUiEventKind.EDIT_CONFIGURATION, key=reloaded.configuration_input, text=text
+        ),
     )
-    return seeded
+    return drafted
 
 
 @dataclass(frozen=True, slots=True)
@@ -2394,6 +2470,16 @@ class ConsumerScreens:
 
     def configurations_for(self, coordinate: str) -> tuple[ConfigurationFileView, ...]:
         return tuple(item for item in self.configurations if item.coordinate == coordinate)
+
+    def held_configuration(
+        self, coordinate: str, input_id: str
+    ) -> tuple[tuple[str, str | None], ...]:
+        """What each harness of one installed artifact holds now for one ordinary value."""
+
+        return tuple(
+            (item.harness, next((value for name, value in item.values if name == input_id), None))
+            for item in self.configurations_for(coordinate)
+        )
 
     def credentials_for(self, coordinate: str) -> tuple[CredentialRecordView, ...]:
         return tuple(item for item in self.credentials if coordinate in item.dependants)
@@ -2952,6 +3038,33 @@ class CanonicalScreenSource:
             raise ValueError(f"no Collection is offered as {key}")
         return entry.view(selected)
 
+    def drafted(self, state: ConsumerUiState) -> str | None:
+        """22c opens holding the value the chosen harnesses share, unaccepted (CP-23 task 14).
+
+        Harnesses that disagree, or that hold nothing, open it empty: choosing one of their values
+        for the reader would be a decision the screen has no business making.
+        """
+
+        if state.session.screen is not ConsumerScreen.CONFIGURATION_VALUE:
+            return None
+        held = {value for _harness, value in self._held(state, state.configuration_targets)}
+        if len(held) != 1:
+            return None
+        (value,) = held
+        return value
+
+    def _held(
+        self, state: ConsumerUiState, harnesses: tuple[str, ...]
+    ) -> tuple[tuple[str, str | None], ...]:
+        chosen = frozenset(harnesses)
+        return tuple(
+            item
+            for item in self._screens.held_configuration(
+                state.user_inputs_artifact, state.configuration_input
+            )
+            if item[0] in chosen
+        )
+
     def selected(self, state: ConsumerUiState) -> tuple[str, ...] | None:
         """A Collection opens with every member ticked; nothing else has an opinion."""
 
@@ -3439,6 +3552,7 @@ class CanonicalScreenSource:
                 state.user_inputs_artifact,
                 state.configuration_input,
                 state.configuration_targets,
+                self._held(state, state.configuration_targets),
             )
         if screen in _REVIEW_SCREENS:
             return _review_facts(state, screens)
