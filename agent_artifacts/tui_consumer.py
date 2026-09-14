@@ -104,6 +104,7 @@ from agent_artifacts.tui_layout import (
     action_prompt,
     bulleted,
     cards,
+    field_block,
     is_action_prompt,
     render,
     separate,
@@ -2086,6 +2087,43 @@ def _candidate_filter(state: ConsumerUiState) -> MaintainerCandidateFilter:
     )
 
 
+_NO_APPROVED_DESCRIPTION = "No description was approved for this offer."
+
+
+def marketplace_offer_description(
+    entry: MarketplaceEntry | MarketplaceCollectionEntry,
+) -> tuple[str, ...]:
+    """The Marketplace offer under the cursor, as its approved Registry metadata states it.
+
+    A cursor description (D-250, D-257): the frame draws it below the list's rule in Verbose only.
+    Every value comes from the projected offer; an offer whose summary carries no words says so
+    rather than borrowing a description from anywhere else.
+    """
+
+    if isinstance(entry, MarketplaceEntry):
+        row = entry.row
+        fields = (
+            ("Artifact", row.identity.name),
+            ("Kind", _human(row.identity.kind).capitalize()),
+            ("Version", row.version),
+            ("Source", str(row.source_alias)),
+            ("Description", row.summary.strip() or _NO_APPROVED_DESCRIPTION),
+        )
+    elif isinstance(entry, MarketplaceCollectionEntry):
+        offered = entry.collection
+        count = len(offered.members)
+        fields = (
+            ("Collection", offered.coordinate.name),
+            ("Version", offered.coordinate.version),
+            ("Source", str(offered.coordinate.source)),
+            ("Includes", f"{count} artifact{'' if count == 1 else 's'}"),
+            ("Description", offered.summary.strip() or _NO_APPROVED_DESCRIPTION),
+        )
+    else:
+        raise ValueError("a Marketplace description needs an offered artifact or Collection")
+    return field_block(fields, indent=2, width=CONTENT_MEASURE)
+
+
 def _matches(query: str, *fields: str) -> bool:
     lowered = query.strip().lower()
     return not lowered or any(lowered in field.lower() for field in fields)
@@ -2519,6 +2557,19 @@ class CanonicalScreenSource:
             # left to add here and says nothing rather than repeating itself.
             purpose = REGISTRY_STAGE_PURPOSE.get(state.current_row or "")
             return () if purpose is None else (purpose,)
+        if state.session.screen is ConsumerScreen.MARKETPLACE:
+            # CP-23 task 07: the offer under the cursor, read from the same filtered list the rows
+            # were, so a row the search removed is never described.
+            focused = next(
+                (
+                    item
+                    for item in self._offers()
+                    if item.key == state.current_row
+                    and _matches(state.search, item.key, self._summary(item))
+                ),
+                None,
+            )
+            return () if focused is None else marketplace_offer_description(focused)
         if state.session.screen is MaintainerScreen.CANDIDATES:
             # CP-23 task 02: the table is the actions block; the Candidate it points at is this
             # description, read from the same filtered list the rows were, so a row the search

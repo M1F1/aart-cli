@@ -1,6 +1,6 @@
 # CP-23 — Actionable TUI workflows after the fourth manual run
 
-Status: IN PROGRESS — TASKS 01–06 DONE; TASK 07 NEXT
+Status: IN PROGRESS — TASKS 01–07 DONE; TASK 08 NEXT
 
 Date: 2026-09-14. Authority: the product owner's manual screen reports and request to create CP-23
 and close CP-22, followed by the all-screen audit and credential guidance requirements.
@@ -638,3 +638,45 @@ Evidence:
   - `detail` ignoring the cursor (**7 red**).
 - Walkthrough section 11 checks the rows, the exact receipt and Esc. Scoped `make mutants` and the
   full suite are left to task 15. No human terminal retest is claimed.
+
+### Task 07 — The focused Marketplace offer is described (2026-09-14)
+
+Done. D-257 records the choice.
+
+Characterized first: `description()` had no Marketplace branch, so screen 02 described nothing in
+either profile. The only words about an offer were the `key  summary` row, which a narrow terminal
+clips. Approved metadata carries exactly one description field, the manifest `summary`, which is
+already on `MarketplaceArtifactRow` and `Collection`.
+
+After: `marketplace_offer_description` renders the focused artifact (Artifact/Kind/Version/Source/
+Description) or Collection (Collection/Version/Source/Includes/Description) as a field block.
+`CanonicalScreenSource.description` answers from the same search filter as the rows. There is a
+fallback for an offer without usable words, and there are no reads at render time.
+
+Evidence:
+
+- New `marketplace_cursor_description_test.py` (14 tests):
+  - Verbose draws the block directly below the list's rule, and Fast draws none;
+  - `v` round-trips the same offer and emits only `PERSIST_SETTINGS`;
+  - each row is described with its own summary, and ticked rows do not move the description;
+  - a long summary is described in full within the measure;
+  - a blank summary gets the fallback and borrows no other summary;
+  - Collection rows are described with their own member count, and the Collection Preview they
+    open carries no Marketplace description;
+  - search narrows, empties, or leaves a stale cursor undescribed;
+  - a Hypothesis property over cursor and search: a description exists exactly when the cursor is
+    on a listed offer, and names that offer;
+  - describing and drawing every row with `open`, `subprocess`, `socket.create_connection` and
+    `urlopen` patched to fail.
+- Focused runs: 20 Marketplace/shell/legend/skeleton modules (**196 OK**); 54 modules exercising
+  `description`/`frame`/Verbose plus the application and flow E2Es (**723 OK**).
+  `make typecheck format-check lint`: OK.
+- Targeted mutations, all killed:
+  - ignoring the search (**2 red**, including the property);
+  - a fallback that borrows a summary (**1 red**);
+  - truncating the summary (**1 red**);
+  - a fixed Collection count (**1 red**);
+  - Collections undescribed (**4 red**);
+  - describing the first row instead of the cursor (**5 red**).
+- Walkthrough section 11 checks the description. Scoped `make mutants` and the full suite are left
+  to task 15. No human terminal retest is claimed.

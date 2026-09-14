@@ -6012,3 +6012,23 @@ the effects are reversible, that no reviewed undo is offered here. Receipt Detai
 reversible case the same way instead of "Undo: available", so the two screens do not disagree.
 The CLI install/update output shares `render_transaction_success` and loses the button line too.
 Offering a real installation undo is B-117.
+
+## D-257 — Marketplace describes the focused offer from its approved summary
+
+Date: 2026-09-14 · Status: implemented · Scope: CP-23 task 07
+
+The canonical approved metadata already has one description field: the manifest `summary`. It is
+compiled into the Registry index and projected onto `MarketplaceArtifactRow.summary` and
+`Collection.summary`. No new field or schema change is added. The live Source is not consulted.
+
+The offer under the Marketplace cursor becomes the shared cursor description (D-250, §167). The
+frame draws it below the list's rule in Verbose and collapses it with `v` in Fast. An artifact is
+described by Artifact, Kind, Version, Source and Description; a Collection by Collection, Version,
+Source, Includes (its own member count) and Description. Values wrap within `CONTENT_MEASURE`, so
+a summary that the row line clips is readable in full. The rows keep their `key  summary` line.
+
+The description reads the same search filter as the rows, so a row the search removed is never
+described, even before the rows reload. It reads only the already-projected offers. An offer whose
+summary carries no words says "No description was approved for this offer." rather than
+inventing text. Manifests require a non-empty summary, so this fallback is defensive. Collection
+Preview and Customize describe nothing from the Marketplace.

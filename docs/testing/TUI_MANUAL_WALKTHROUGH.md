@@ -359,6 +359,10 @@ escapability of these flows).
 
 ## 11 — Install
 
+- [ ] On **Marketplace**, press `v` for Verbose. Below the list's rule, the row under the cursor is
+      described: Artifact, Kind, Version, Source and its approved Description (a Collection row
+      shows what it Includes). Move the cursor and it follows; search it away and nothing stale
+      remains; `v` again hides it.
 - [ ] **Marketplace** → select the Skill → `i` (**Install**). Review, then **cancel once**.
 - [ ] Confirm nothing was written. Install it for real.
 - [ ] Install `dummy-mcp`. At the provider prompt, enter **disposable test text only**.

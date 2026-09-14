@@ -583,7 +583,7 @@
         {
           "id": "7",
           "title": "Show the focused Marketplace artifact description under Verbose",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "8",
