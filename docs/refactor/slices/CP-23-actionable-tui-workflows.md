@@ -1743,3 +1743,41 @@ The six previously owed 16.1 targeted mutations were also run and killed:
 - **Still open for task 14:** the recorded matrix, with catalog coverage of every screen, laws over
   recorded states, `v` properties and text/curses equivalence.
 
+
+#### 14.8 — the recorded matrix (IN PROGRESS, nothing committed in code yet)
+
+- **Plan:**
+  - `tests/screen_cases.py` collects the drawn states by walking real keys from each fixture
+    source's Dashboard. Every advertised non-universal key is pressed on every cursor. A
+    PREPARE_ACTION is answered with ACTION_PREPARED (or ACTION_FAILED to cover refusals), and an
+    EXECUTE_ACTION with ACTION_RECORDED. Each step is followed by `_reload`. Screens the walk
+    cannot reach start from fixture-seeded states.
+  - `tests/frame_matrix_test.py` checks:
+    - the set of screens reached equals `ConsumerScreen ∪ MaintainerScreen`, so a new screen
+      fails coverage;
+    - `frame_violations`, `key_violations`, `literal_violations` and `toggle_violations` on
+      every recorded state and every cursor, in both profiles;
+    - every offered row acting;
+    - help, quit-pending and searching states;
+    - text/curses equivalence (`_CursesTerminal` with a fake stdscr, tall and clipped, where the
+      footer stays whole) and `_TextTerminal`;
+    - Hypothesis over move/toggle sequences.
+- **Walk probe so far:** this scratch walk is not committed. Over the sources of
+  `consumer_install_flow_shell_test.screens()`, `consumer_marketplace_shell_test.screens()`,
+  `maintainer_candidate_shell_test._views()`, `MaintainerRegistryShellTest`,
+  `maintainer_validation_views_test._views(required live-acceptance)` and
+  `maintainer_bulk_promotion_test._views`, it reaches 52 of 74 screens in about a second.
+- **Not reached, with the fixture to seed each:**
+  - **06–11 and 17:** ACTION_PREPARED for INSTALL/UPDATE needs `semantic_identity` and
+    `selection_identity`, and INSTALL with `config_draft` goes to 07.
+  - **21c/21d:** `consumer_registry_refresh_test`.
+  - **22b–22d:** `configuration_edit_test` helpers.
+  - **26/27:** `consumer_shell_test.screens()` (Activity records).
+  - **34:** `MaintainerSourceSyncResultView`, as in `action_prompt_layout_test.py:216`.
+  - **41–45:** `maintainer_promotion_test.PromotionShellTest`.
+  - **49:** `MaintainerProvenanceShellTest`.
+  - **50:** `MaintainerVersionConflictShellTest._conflict()`.
+  - **52:** `MaintainerCollectionCandidateShellTest`.
+- **Candidate findings to confirm under the matrix:**
+  - 22b offering `[Space] Select` with no rows;
+  - 21d's focus when entered from 21 with no registry row.
