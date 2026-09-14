@@ -64,6 +64,7 @@ from agent_artifacts.application.consumer_views import (
     target_row,
     targets_confirmed,
 )
+from agent_artifacts.application.credential_guidance import credential_guidance_lines
 from agent_artifacts.application.installed_setup import DeclaredArtifactSetup
 from agent_artifacts.application.maintainer_views import (
     REGISTRY_MAINTENANCE_STAGES,
@@ -1110,8 +1111,10 @@ def render_required_inputs(
         raise ValueError("required input rendering needs input views and a presentation profile")
     lines = ["A few things are needed before installation"]
     for item in inputs:
-        lines.append(item.label)
         if isinstance(item, CredentialInputView):
+            # What it is for, who needs it and how to get it are what a person needs before the
+            # provider asks, so they are Fast facts, worded as the lent terminal words them (D-263).
+            lines.extend(credential_guidance_lines(item.guidance))
             if item.health == "present":
                 status = "Configured securely"
             elif item.provider_reference is not None:
@@ -1119,10 +1122,6 @@ def render_required_inputs(
             else:
                 status = "Required"
             lines.append(f"  {status}")
-            if item.format_hint:
-                lines.append(f"  Format: {item.format_hint}")
-            if item.obtain_from:
-                lines.append(f"  {item.obtain_from[0]} → {item.obtain_from[1]}")
             if profile is PresentationProfile.VERBOSE:
                 lines.extend(
                     (
@@ -1132,6 +1131,7 @@ def render_required_inputs(
                     )
                 )
             continue
+        lines.append(item.label)
         shown = item.current if item.current is not None else item.default
         lines.append(f"  [{shown or ''}]")
         if item.example:

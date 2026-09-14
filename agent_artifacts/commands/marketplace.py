@@ -31,6 +31,11 @@ from agent_artifacts.application.consumer_views import (
     consumer_plan_to_data,
     receipt_detail_to_data,
 )
+from agent_artifacts.application.credential_guidance import (
+    credential_guidance_lines,
+    credential_guidance_to_data,
+    guidance_by_input,
+)
 from agent_artifacts.application.installed_setup import declared_setup_to_data
 from agent_artifacts.configuration.model import SourceKind
 from agent_artifacts.configuration.policy import EffectiveConfiguration
@@ -1080,14 +1085,36 @@ def _configured_lifecycle(
     if isinstance(prepared, Err):
         return _emit_error(request, prepared, operation)
     if not prepared.value.ready:
+        composition = prepared.value.draft.inputs
+        # A credential the command line cannot take is still explained here, in the words the TUI
+        # and the provider prompt use: what it is, who needs it and how to get it (D-263).
+        guidance = guidance_by_input((str(use.owner), use.input) for use in composition.uses)
         unanswered = [
             {
                 "id": field.input.id.value,
                 "kind": "credential" if isinstance(field.input, SecretInput) else "config",
                 "dependants": [str(item) for item in field.dependants],
+                **(
+                    {"guidance": credential_guidance_to_data(guidance[field.input.id.value])}
+                    if isinstance(field.input, SecretInput)
+                    else {}
+                ),
             }
-            for field in prepared.value.draft.inputs.unanswered
+            for field in composition.unanswered
         ]
+        explained = tuple(
+            line
+            for field in composition.unanswered
+            for line in (
+                (f"  - {field.input.id.value} (credential)",)
+                + tuple(
+                    "    " + text
+                    for text in credential_guidance_lines(guidance[field.input.id.value])
+                )
+                if isinstance(field.input, SecretInput)
+                else (f"  - {field.input.id.value} (config)",)
+            )
+        )
         diagnostic = Diagnostic(
             CONSUMER_INVALID,
             Severity.ERROR,
@@ -1105,10 +1132,7 @@ def _configured_lifecycle(
                 "diagnostics": [diagnostic_to_data(diagnostic)],
                 "inputs": unanswered,
             },
-            (
-                f"{diagnostic.severity.value}: {diagnostic.message}",
-                *(f"  - {item['id']} ({item['kind']})" for item in unanswered),
-            ),
+            (f"{diagnostic.severity.value}: {diagnostic.message}", *explained),
         )
         return _common.ERROR
 

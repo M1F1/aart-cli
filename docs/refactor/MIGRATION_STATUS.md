@@ -1,6 +1,15 @@
 # AART Refactor Migration Status
 
-**2026-09-14: CP-22 CLOSED; CP-23 tasks 01–12 done, task 13 next (owner task 16 follows 13).**
+**2026-09-14: CP-22 CLOSED; CP-23 tasks 01–13 done, owner task 16 next (then 14 and 15).**
+Task 13 (D-263): credential guidance reaches screen 07 (Fast), the lent terminal before the
+provider's prompt, and the CLI refusal. It proves the author's `help` survives compile, promotion and
+the vendored Registry. Other changes:
+- missing guidance falls back to the maintainer;
+- manual issuance needs no link;
+- control and format characters are refused;
+- a shared credential keeps each owner's help.
+A pre-existing shared-credential transaction defect is B-121. Fourteen targeted mutations were
+killed.
 Task 12 (D-262): Credential Action's actions are rows. Replace and Delete open review 24a. Confirm
 plans with the credential lifecycle, executes the reviewed digest with the provider holding the
 terminal, then re-inspects. Verify answers in place. The lifecycle had named effects by input only,
@@ -44,8 +53,8 @@ and 193 subtests pass, including a Hypothesis row-selection property and real lo
 Scoped mutation analysis is recorded; format, lint, typecheck, unit (3,978 OK) and validate
 passed. Per-task work runs only the verifying gates; the full suite is task 15.
 
-Tasks 13, 16, 14 and 15 remain pending in [`CP-23`](slices/CP-23-actionable-tui-workflows.md); the
-next product step is credential acquisition guidance from Source to the installation prompt. The entire batch and its manual acceptance are still
+Tasks 16, 14 and 15 remain pending in [`CP-23`](slices/CP-23-actionable-tui-workflows.md); the
+next product step is owner task 16, user variables and credentials per artifact and harness. The entire batch and its manual acceptance are still
 open. Owner requirements in §167/D-249–D-250 retain manual publication, explicit target choice,
 credential acquisition guidance, and complete Frame/Verbose compliance with no standard in-TUI
 exceptions. No human retest, all-screen audit, or new CP-22 gate result is claimed.

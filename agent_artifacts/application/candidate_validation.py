@@ -357,7 +357,8 @@ def _secret_metadata(description: InstallDescription | None) -> ValidationCheckR
     )
     warnings = tuple(
         ValidationDetail(
-            f"secret input {item.id.value} says nothing about where its value is obtained",
+            f"secret input {item.id.value} says nothing about where its value is obtained; "
+            "add help.obtain_from with a label, and a url when there is one",
             declared=item.id.value,
             expected="acquisition guidance",
         )
@@ -427,7 +428,7 @@ def _security(
     if description is not None and policy.allowed_network_hosts is not None:
         for item in description.inputs:
             obtain = None if item.guidance is None else item.guidance.obtain_from
-            if obtain is None:
+            if obtain is None or obtain.url is None:
                 continue
             host = obtain.url.split("/")[2].split("@")[-1].split(":")[0].lower()
             if host not in policy.allowed_network_hosts:

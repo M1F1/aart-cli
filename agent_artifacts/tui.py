@@ -18,7 +18,7 @@ from __future__ import annotations
 import os
 import sys
 import traceback
-from contextlib import contextmanager, nullcontext
+from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from datetime import date
 from typing import Callable, List, Literal, Mapping, Optional, Sequence, Tuple
@@ -731,28 +731,63 @@ class _CursesHandover:
     top of its own loop, so this only has to give the terminal back in the mode a subprocess can
     use and restore curses' idea of it afterwards.  Unbound -- the text terminal, the CLI, a test
     -- it lends nothing, because there is no screen to lend.
+
+    What the provider says is only that it wants a password. So whatever the loan is handed to say
+    -- what the credential is, who needs it, how to get it -- is written on the released terminal
+    before the provider speaks, bound or not, wrapped to the terminal's width without ever breaking
+    a link (D-263).
     """
 
-    def __init__(self) -> None:
+    def __init__(self, *, stream=None, columns=None) -> None:
         self._stdscr = None
+        self._stream = stream
+        self._columns = columns
 
     def bind(self, stdscr) -> None:
         """Name the screen this will lend out; called once, by whoever drew it."""
 
         self._stdscr = stdscr
 
-    def __call__(self):
+    def __call__(self, briefing: Tuple[str, ...] = ()):
         if self._stdscr is None:
-            return nullcontext()
-        return self._lent(self._stdscr)
+            return self._briefed(briefing)
+        return self._lent(self._stdscr, briefing)
+
+    def _say(self, briefing: Tuple[str, ...]) -> None:
+        if not briefing:
+            return
+        import shutil
+        import sys
+        import textwrap
+
+        stream = self._stream if self._stream is not None else sys.stdout
+        width = self._columns() if self._columns is not None else shutil.get_terminal_size().columns
+        for line in briefing:
+            indent = line[: len(line) - len(line.lstrip(" "))]
+            wrapped = textwrap.wrap(
+                line.strip(),
+                width=max(width - 1, 20),
+                initial_indent=indent,
+                subsequent_indent=indent + "  ",
+                break_long_words=False,
+                break_on_hyphens=False,
+            )
+            stream.write("\n".join(wrapped or [""]) + "\n")
+        stream.flush()
 
     @contextmanager
-    def _lent(self, stdscr):
+    def _briefed(self, briefing: Tuple[str, ...]):
+        self._say(briefing)
+        yield
+
+    @contextmanager
+    def _lent(self, stdscr, briefing: Tuple[str, ...] = ()):
         import curses  # stdlib; only reachable once a curses screen exists to lend.
 
         curses.def_prog_mode()
         curses.endwin()
         try:
+            self._say(briefing)
             yield
         finally:
             curses.reset_prog_mode()

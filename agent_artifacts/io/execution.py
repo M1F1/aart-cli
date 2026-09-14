@@ -22,6 +22,11 @@ import stat
 from contextlib import AbstractContextManager, nullcontext
 from typing import Callable, Mapping
 
+from agent_artifacts.application.credential_guidance import (
+    CredentialGuidance,
+    credential_prompt_briefing,
+    gather_credential_guidance,
+)
 from agent_artifacts.domain.credentials import CredentialReference
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.effects import (
@@ -821,9 +826,10 @@ class DeliveryEffectInterpreter:
 
 
 #: What a terminal adapter does around an effect only a person at the keyboard can carry out: it
-#: gives the screen up on the way in and takes it back on the way out.  A caller that has no drawn
-#: screen -- the CLI, a test -- supplies nothing and nothing happens (`QA-081`).
-TerminalHandover = Callable[[], AbstractContextManager[None]]
+#: gives the screen up on the way in, says the briefing it is handed on the terminal it gave up,
+#: and takes the screen back on the way out.  A caller that has no drawn screen -- the CLI, a test
+#: -- supplies nothing and nothing happens (`QA-081`, D-263).
+TerminalHandover = Callable[[tuple[str, ...]], AbstractContextManager[None]]
 
 
 class CredentialEffectInterpreter:
@@ -842,6 +848,11 @@ class CredentialEffectInterpreter:
 
     References are supplied at construction, like the harness registrations are, so an effect that
     names a credential this executor was not given is refused rather than resolved by guesswork.
+
+    `guidance` is what the artifacts needing each reference say about it, keyed by reference. The
+    provider's own prompt says only that it wants a password, so before it asks, the lent terminal
+    is given what the credential is, who needs it and how to get it (D-263). A reference nobody
+    described is still briefed, with the honest fallback.
     """
 
     def __init__(
@@ -851,11 +862,13 @@ class CredentialEffectInterpreter:
         *,
         interactive_store: bool = False,
         terminal_handover: TerminalHandover | None = None,
+        guidance: Mapping[str, tuple[CredentialGuidance, ...]] | None = None,
     ) -> None:
         self.provider = provider
         self.references = tuple(references)
         self.interactive_store = interactive_store
         self.terminal_handover = terminal_handover
+        self.guidance = dict(guidance or {})
 
     def supports(self, effect: Effect) -> bool:
         """Whether this interpreter was given the reference `effect` names (see the harness one)."""
@@ -895,7 +908,17 @@ class CredentialEffectInterpreter:
                 f"nothing here knows the credential reference {effect.reference}",
             )
         if isinstance(effect, (StoreCredential, ReplaceCredential)):
-            lent = nullcontext() if self.terminal_handover is None else self.terminal_handover()
+            briefing = credential_prompt_briefing(
+                self.guidance.get(effect.reference)
+                or gather_credential_guidance(reference.input.value, ()),
+                provider=self.provider.provider,
+                replacing=isinstance(effect, ReplaceCredential),
+            )
+            lent = (
+                nullcontext()
+                if self.terminal_handover is None
+                else self.terminal_handover(briefing)
+            )
             with lent:
                 stored = self.provider.store(
                     reference,

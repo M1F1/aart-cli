@@ -24,6 +24,10 @@ interpreter built from it can verify or delete the value through the provider bu
 
 from __future__ import annotations
 
+from agent_artifacts.application.credential_guidance import (
+    CredentialGuidance,
+    gather_credential_guidance,
+)
 from agent_artifacts.application.execution import EffectInterpreter
 from agent_artifacts.application.installation_proposal import (
     PlannedArtifact,
@@ -33,6 +37,7 @@ from agent_artifacts.application.installation_proposal import (
 )
 from agent_artifacts.domain.credentials import CredentialReference
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from agent_artifacts.domain.inputs import InputGuidance, SecretProviderReference
 from agent_artifacts.domain.result import Err, Ok, Result
 
 from .credentials import CredentialProviderPort
@@ -90,6 +95,8 @@ def interpreters_for(
 
     interpreters: list[EffectInterpreter] = []
     references: dict[str, list[CredentialReference]] = {}
+    # What every artifact needing a reference says about it, so the prompt can be briefed (D-263).
+    declared: dict[CredentialReference, list[tuple[str, InputGuidance | None]]] = {}
     for installation in installations:
         if isinstance(installation, PlannedPlacement):
             interpreters.append(FileEffectInterpreter(installation.environment))
@@ -132,6 +139,12 @@ def interpreters_for(
                 artifact=installation.environment.artifact,
             )
         )
+        owner = str(installation.artifact.version.coordinate)
+        for bound in installation.bound.inputs:
+            if isinstance(bound.source, SecretProviderReference):
+                declared.setdefault(bound.source.reference, []).append(
+                    (owner, bound.input.guidance)
+                )
         for reference in intended_receipt(installation).credentials:
             held = references.setdefault(reference.provider.provider, [])
             if reference not in held:
@@ -144,12 +157,17 @@ def interpreters_for(
             + ", ".join(missing)
             + "; no adapter for that provider was supplied"
         )
+    guidance: dict[str, tuple[CredentialGuidance, ...]] = {
+        str(reference): gather_credential_guidance(reference.input.value, owned)
+        for reference, owned in declared.items()
+    }
     interpreters.extend(
         CredentialEffectInterpreter(
             providers[name],
             tuple(references[name]),
             interactive_store=interactive_credentials,
             terminal_handover=credential_handover,
+            guidance=guidance,
         )
         for name in sorted(references)
     )

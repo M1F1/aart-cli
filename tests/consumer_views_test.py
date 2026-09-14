@@ -453,8 +453,11 @@ class HarnessTargetChoiceTest(unittest.TestCase):
         self.assertIn("prefix followed by opaque characters", fast)
         self.assertIn("https://forge.example/settings", fast)
         self.assertIn("(e.g. pl847362)", fast)
-        # Compact: the explanatory prose is what Fast leaves out, not the actionable part.
-        self.assertNotIn("Authenticates to the internal forge.", fast)
+        # What a credential is needed for is essential at the point of entry (§167, D-263): the
+        # owner asked that Fast name it, so a person is not left guessing which value to fetch.
+        # Fast stays compact elsewhere: the binding and provider detail are Verbose only.
+        self.assertIn("Authenticates to the internal forge.", fast)
+        self.assertNotIn("Binding:", fast)
 
     def test_marketplace_fast_uses_outcome_language_and_verbose_discloses_evidence(self) -> None:
         catalog = marketplace_catalog()

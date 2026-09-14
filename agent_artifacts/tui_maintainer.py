@@ -375,7 +375,7 @@ def render_maintainer_candidate(
             lines.append(f"    format: {item.format_hint}")
         if item.obtain_from is not None:
             lines.append(f"    obtain from: {item.obtain_from}")
-            if profile is PresentationProfile.VERBOSE:
+            if profile is PresentationProfile.VERBOSE and item.obtain_from_url is not None:
                 lines.append(f"    guidance URL: {item.obtain_from_url}")
     lines.append("Validation findings:")
     lines.extend(f"  - {item}" for item in view.findings)

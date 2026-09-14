@@ -45,6 +45,11 @@ from agent_artifacts.domain.selection import Collection, OwnershipReason, Resolv
 from agent_artifacts.domain.serialization import CanonicalValue, canonical_json_bytes
 from agent_artifacts.marketplace.model import MarketplaceCatalog
 
+from .credential_guidance import (
+    CredentialGuidance,
+    gather_credential_guidance,
+    guidance_by_input,
+)
 from .execution import (
     InstallationExecutionOutcome,
     InstallationExecutionStatus,
@@ -390,7 +395,7 @@ class ConfigInputView:
     description: str
     example: str | None
     format_hint: str | None
-    obtain_from: tuple[str, str] | None
+    obtain_from: tuple[str, str | None] | None
     validation_hint: str
     default: str | None
     current: str | None
@@ -409,12 +414,14 @@ class CredentialInputView:
     exposure: str
     description: str
     format_hint: str | None
-    obtain_from: tuple[str, str] | None
+    obtain_from: tuple[str, str | None] | None
     provider_reference: str | None
     provider: str | None
     provider_state: str
     health: str
     detail: str
+    #: What each artifact needing it says about it, grouped by what they say (D-263).
+    guidance: tuple[CredentialGuidance, ...] = ()
 
 
 InputView = ConfigInputView | CredentialInputView
@@ -443,8 +450,13 @@ def project_required_inputs(
     *,
     bound_inputs: BoundInputs = _EMPTY_BOUND_INPUTS,
     credential_observations: tuple[CredentialObservation, ...] = (),
+    declared_by: tuple[tuple[str, RuntimeInput], ...] = (),
 ) -> tuple[InputView, ...]:
-    """Project input guidance and binding state without ever projecting credential material."""
+    """Project input guidance and binding state without ever projecting credential material.
+
+    `declared_by` names which artifact declared each input, so a credential can say who needs it
+    and keep each owner's own instructions. Without it the single declaration explains itself.
+    """
 
     if any(not isinstance(item, (SecretInput, ConfigInput)) for item in inputs):
         raise ValueError("required input projection received an invalid input")
@@ -454,6 +466,7 @@ def project_required_inputs(
         raise ValueError("required input projection received invalid binding evidence")
     bound_by_id = {item.input.id: item for item in bound_inputs.inputs}
     observations = {item.reference: item for item in credential_observations}
+    owned_guidance = guidance_by_input(declared_by)
     projected: list[InputView] = []
     for runtime_input in sorted(inputs, key=lambda item: item.id.value):
         guidance = runtime_input.guidance
@@ -489,6 +502,10 @@ def project_required_inputs(
                     "unknown" if observation is None else observation.provider_state.value,
                     "unknown" if observation is None else observation.state.value,
                     "" if observation is None else observation.detail,
+                    owned_guidance.get(runtime_input.id.value)
+                    or gather_credential_guidance(
+                        runtime_input.id.value, (("", runtime_input.guidance),)
+                    ),
                 )
             )
             continue
@@ -558,6 +575,7 @@ def project_install_plan(
     inputs: tuple[RuntimeInput, ...] = (),
     bound_inputs: BoundInputs = _EMPTY_BOUND_INPUTS,
     credential_observations: tuple[CredentialObservation, ...] = (),
+    declared_by: tuple[tuple[str, RuntimeInput], ...] = (),
 ) -> ConsumerPlanView:
     if not isinstance(plan, InstallPlan):
         raise ValueError("consumer plan projection needs a canonical install plan")
@@ -609,6 +627,7 @@ def project_install_plan(
             inputs,
             bound_inputs=bound_inputs,
             credential_observations=credential_observations,
+            declared_by=declared_by,
         ),
         str(plan.review_digest),
         str(plan.policy_digest),

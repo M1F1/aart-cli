@@ -321,6 +321,19 @@ def _declared(installations: tuple[PlannedArtifact, ...]) -> tuple[RuntimeInput,
     return tuple(seen.values())
 
 
+def _declared_by(
+    installations: tuple[PlannedArtifact, ...],
+) -> tuple[tuple[str, RuntimeInput], ...]:
+    """Each input with the artifact that declared it, so a credential can say who needs it."""
+
+    return tuple(
+        (str(planned.artifact.version.coordinate), item)
+        for planned in installations
+        if not isinstance(planned, PlannedPlacement)
+        for item in planned.declared
+    )
+
+
 def _bound(installations: tuple[PlannedArtifact, ...]) -> BoundInputs:
     seen: dict[InputId, BoundInput] = {}
     for planned in installations:
@@ -365,6 +378,7 @@ def begin_installation(
             proposed.value.plan,
             inputs=_declared(installations),
             bound_inputs=_bound(installations),
+            declared_by=_declared_by(installations),
             credential_observations=credential_observations,
         )
         return Ok(ConsumerFlow(proposed.value, plan))

@@ -10,6 +10,7 @@ and no combination of them produces a domain value holding the secret itself.
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass
 from enum import IntEnum
 from typing import TypeAlias
@@ -73,6 +74,12 @@ def _safe(value: str, label: str) -> str:
     # credential-shaped so approved help can never carry a usable value (INV-161).
     if contains_credential_shape(value):
         raise ValueError(f"{label} must not contain a credential shape")
+    # Guidance is written to a real terminal, including the one lent to a credential prompt, so a
+    # control or format character is a command to that terminal rather than text. An escape, a C1
+    # CSI or a bidi override could repaint, retitle or reorder the words a person is about to act
+    # on. None of them is needed to explain an input, so they are refused (D-263).
+    if any(unicodedata.category(character) in {"Cc", "Cf", "Cs"} for character in value):
+        raise ValueError(f"{label} must not contain terminal control or format characters")
     return value
 
 
@@ -156,11 +163,20 @@ def binding_kind(binding: ProcessBinding) -> str:
 
 @dataclass(frozen=True, slots=True)
 class ObtainFrom:
+    """Where or how a value is obtained.
+
+    The label is the instruction and is always present. The URL is optional, because a manually
+    issued credential ("ask the platform team") has no self-service page, and inventing one would
+    send people somewhere wrong (D-263).
+    """
+
     label: str
-    url: str
+    url: str | None = None
 
     def __post_init__(self) -> None:
         _safe(_line(self.label, "obtain-from label"), "obtain-from label")
+        if self.url is None:
+            return
         _safe(_line(self.url, "obtain-from url"), "obtain-from url")
         if _url_host(self.url) is None:
             raise ValueError("obtain-from url must be a plain http or https url")

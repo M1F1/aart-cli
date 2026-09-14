@@ -476,7 +476,8 @@ def _parse_obtain_from(value: JsonValue, *, path: str) -> Result[ObtainFrom]:
         return parsed
     fields = _fields(
         parsed.value,
-        required=frozenset({"label", "url"}),
+        required=frozenset({"label"}),
+        optional=frozenset({"url"}),
         path=path,
         label="help.obtain_from",
         extensions=True,
@@ -484,11 +485,13 @@ def _parse_obtain_from(value: JsonValue, *, path: str) -> Result[ObtainFrom]:
     if isinstance(fields, Err):
         return fields
     label = _string(fields.value["label"], "help.obtain_from.label", path=path)
+    if isinstance(label, Err):
+        return label
+    if "url" not in fields.value:
+        return _built(lambda: ObtainFrom(label.value), "help.obtain_from", path=path)
     url = _string(fields.value["url"], "help.obtain_from.url", path=path)
-    for item in (label, url):
-        if isinstance(item, Err):
-            return item
-    assert isinstance(label, Ok) and isinstance(url, Ok)
+    if isinstance(url, Err):
+        return url
     return _built(lambda: ObtainFrom(label.value, url.value), "help.obtain_from", path=path)
 
 

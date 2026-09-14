@@ -3066,3 +3066,17 @@ subject-less record for an unused reference. Two other items were noticed and le
 Noncritical: no receipt is claimed, the outcome is stated where the action lands, and no value is
 involved.
 
+
+## B-121 — Two artifacts sharing one credential in one installation: the second fails its pre-check
+
+Found 2026-09-14 during CP-23 task 13 (D-263), and reproduced on the unchanged code before it.
+Selecting two MCP servers that declare the same secret input id binds both to one reference.
+Screen 07 correctly asks once and the provider is prompted once. After the first artifact stores
+the credential, though, the second artifact fails with `installed state changed after Review;
+inspect and review a fresh plan`: its reviewed observation said the credential was absent, and the
+first artifact's effect changed that within the same transaction. The install ends Partial.
+
+Likely fix: the transaction attributes the shared credential component to one owner and lets later
+owners depend on it, or re-inspects shared references between members. It needs its own review of
+receipts and repair ownership. Noncritical to task 13: the guidance for both owners is shown on
+screen 07 and on the lent terminal, and the second artifact fails visibly rather than silently.

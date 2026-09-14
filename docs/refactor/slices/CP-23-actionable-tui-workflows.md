@@ -1,6 +1,6 @@
 # CP-23 — Actionable TUI workflows after the fourth manual run
 
-Status: IN PROGRESS — TASKS 01–12 DONE; TASK 13 NEXT (owner task 16 follows 13)
+Status: IN PROGRESS — TASKS 01–13 DONE; OWNER TASK 16 NEXT (then 14, 15)
 
 Date: 2026-09-14. Authority: the product owner's manual screen reports and request to create CP-23
 and close CP-22, followed by the all-screen audit and credential guidance requirements.
@@ -1166,3 +1166,126 @@ Evidence:
     that no longer existed. The helper is now bounded by the rows, so it fails instead of hanging.
 - Walkthrough section 12 adds the credential action checks. Scoped `make mutants` and the full suite
   are left to task 15. No human terminal retest is claimed.
+
+### Task 13 — Credential guidance from Source to the point of entry (DONE 2026-09-14)
+
+Link check against the real pipeline (compile → scan → assess → promote → publish → vendored
+Registry → shell install, recording fake provider):
+
+- The author's `help` already survived compilation and promotion into installation.
+- Three display links were incomplete, plus a safety gap in guidance text (below).
+
+Before, screen 07 for an MCP whose `help` declares a label, description, format and link:
+
+```text
+- A few things are needed before installation
+  GitHub token
+    Enter securely during installation
+    Format: ghp_...
+    GitHub token settings → https://github.com/settings/tokens
+```
+
+At the prompt, the journal read `released → prompted → restored` and nothing was written. The
+operator's `password data for new item:` stood alone. The CLI printed:
+
+```text
+error: required installation inputs are unanswered
+  - github-token (credential)
+```
+
+After, from the same pipeline (Fast):
+
+```text
+AART / Marketplace / Review Selection / Required Inputs
+- A few things are needed before installation
+  GitHub token — needed by company/mcp/github@1.5.0
+    Lets the server read the repositories you choose.
+    Get it: Create a token in GitHub settings → https://github.com/settings/tokens
+    Format: fine-grained personal access token
+    Grant read-only access to Contents and Metadata.
+    Enter securely during installation
+```
+
+On the lent terminal, immediately before the provider's prompt:
+
+```text
+AART needs a credential to continue.
+GitHub token — needed by company/mcp/github@1.5.0
+  Lets the server read the repositories you choose.
+  Get it: Create a token in GitHub settings → https://github.com/settings/tokens
+  Format: fine-grained personal access token
+  Grant read-only access to Contents and Metadata.
+macos-keychain asks for it next. Type it there; AART never sees or keeps it.
+```
+
+The CLI's refusal now carries the same lines under `- github-token (credential)`, and its JSON
+carries `inputs[].guidance`.
+
+Design (D-263):
+
+- `application/credential_guidance.py` makes the words for all three places. It groups by what
+  owners say, so identical help is shared, differing help is kept per owner, and no owner is lost.
+- Missing guidance says `Where to get it is not stated; ask the maintainer of <owner>.`
+- `help.obtain_from.url` is optional, for manual issuance. The domain refuses Cc/Cf/Cs characters
+  in guidance.
+- Composition no longer treats a help difference as a declaration conflict.
+- The author warning names the fix.
+- The lab's `dummy-mcp` declares complete guidance with a disposable manual instruction.
+- An older test held that Fast leaves a secret's description out. It now holds the owner's newer
+  requirement that Fast says what the credential is for.
+
+Found and deferred:
+
+- B-121: two artifacts sharing a credential in one transaction fail the second's pre-check. It
+  reproduces on the unchanged code.
+- Screen 07's `[Enter] Open` legend and Ready's duplicated `credential(s) stored securely` line are
+  left for task 14's audit.
+
+Evidence:
+
+- `tests/credential_guidance_test.py` (30 tests) covers:
+  - exact Fast lines; manual issuance with no link; the honest fallback with no invented URL;
+  - shared and conflicting owners, with a Hypothesis property that no owner is lost or repeated;
+  - the stored and replacing briefing; screen 07 Fast vs Verbose; a projection without owners;
+  - a Hypothesis property that Cc/Cf characters are refused in every guidance field; unsafe links
+    (`javascript:`, `file:`, userinfo, embedded OSC, `ftp:`) refused; parser refusal before
+    compilation; the optional link but required instruction;
+  - the actionable author warning, and that a manual instruction clears it;
+  - the interpreter briefing before the prompt, as a replacement, for an undescribed reference,
+    and never for Verify/Delete;
+  - the curses loan writing after `endwin` and before the prompt; narrow-terminal wrapping that
+    never breaks a link longer than the width; an unbound loan still briefing;
+  - composition keeping help per owner while a binding difference still conflicts.
+- Real-pipeline E2Es:
+  - guided help on 07 and in the briefing before `prompted`;
+  - an unguided artifact's fallback on both;
+  - a stored credential is neither prompted nor briefed;
+  - two artifacts sharing a credential: one prompt, both owners' instructions;
+  - no frame or briefing holds a credential shape;
+  - the CLI text and JSON guidance, with the provider never prompted.
+- Updated tests:
+  - `consumer_views_test` now holds the new Fast rule;
+  - the handover fakes accept the briefing;
+  - `manual_test_lab_test` asserts the lab's complete manual guidance.
+- Focused runs:
+  - 118 related modules (1,344 tests) plus the lab module: OK. A second run failed only because I
+    passed the new module twice, which trips Hypothesis's `differing_executors` check.
+  - `make typecheck format-check lint docs-check`: OK.
+- Targeted mutations, all killed:
+  - purpose dropped (**2 red**);
+  - prompt not briefed (**6**);
+  - installation guidance dropped (**3**);
+  - owners dropped from 07 (**3**);
+  - CLI guidance dropped (**1**);
+  - control characters allowed (**2**);
+  - link required again (**3**);
+  - authoring drops `obtain_from` (**4**);
+  - help counted as a conflict (**2**);
+  - loan says nothing (**2**);
+  - fallback silent (**3**);
+  - owners merged across differing help (**9**);
+  - warning not actionable (**1**);
+  - links broken when wrapped (**1**). This one first survived: at 40 columns the link fit
+    anyway. The test now uses 30 columns, and the mutant is killed.
+- Scoped mutmut and the full suite belong to task 15. No human terminal retest is claimed.
+

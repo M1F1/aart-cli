@@ -2,10 +2,20 @@
 
 ## Current objective — CP-23 (2026-09-14)
 
-**CP-22 is CLOSED. CP-23 tasks 01–12 are done; task 13 is next** (credential purpose and
-acquisition guidance from Source to the installation prompt). The owner added task 16 (user
-variables and credentials per artifact and harness), which runs after 13 and before the task 14
-audit; its requirements are in the slice.
+**CP-22 is CLOSED. CP-23 tasks 01–13 are done; owner task 16 is next** (user variables and
+credentials per artifact and harness, in one TUI area). Task 14's all-screen audit follows 16, and
+task 15 closes the batch. Task 16's requirements are in the slice.
+Task 13 (D-263): an author's credential help reaches every place the value is asked for, in the
+same words from `application/credential_guidance.py`:
+- Screen 07 in Fast shows the name, which artifact needs it, what it is for, how to get it, the
+  format and the permissions hint.
+- On the terminal lent to the provider, the same lines come just before its prompt.
+- The CLI's unanswered-credential refusal, text and JSON, carries them too.
+- Missing guidance says to ask the named artifact's maintainer. `help.obtain_from.url` is optional
+  for manually issued credentials.
+- Guidance with control or format characters is refused.
+- Differing help on a shared credential is kept per owner instead of refusing the install.
+- Two artifacts sharing a credential still fail the second's pre-check (B-121).
 Task 12 (D-262): Credential Action's permitted actions (Verify, Replace, and Delete when unused) are
 rows. Enter's label follows the row, and Verbose describes the focused row. Replace and Delete open
 review 24a, which names what uses the credential and says nothing is kept. Confirming plans through

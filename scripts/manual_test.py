@@ -456,6 +456,11 @@ def setup_lab(raw_root: Path, *, empty_registry: bool = False) -> ManualLab:
                     "label": "Disposable dummy credential",
                     "description": "Use test text only; this server checks presence and never prints it.",
                     "format_hint": "any non-empty disposable test text",
+                    # Manually issued: there is no page to visit, so the instruction is the label
+                    # and no link is invented (D-263).
+                    "obtain_from": {
+                        "label": "Nothing issues it; make up disposable text such as lab-only-test",
+                    },
                 },
             }
         ],

@@ -613,7 +613,7 @@
         {
           "id": "13",
           "title": "Carry explicit credential acquisition guidance from Source to installation prompts",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "16",

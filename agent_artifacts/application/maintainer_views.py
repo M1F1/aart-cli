@@ -667,7 +667,7 @@ class MaintainerCandidateInputView:
                 )
                 for item in optional
             )
-            or (self.obtain_from is None) != (self.obtain_from_url is None)
+            or (self.obtain_from is None and self.obtain_from_url is not None)
             or (self.kind == "SECRET" and self.example is not None)
         ):
             raise ValueError("Maintainer Candidate input view is invalid")

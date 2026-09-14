@@ -326,7 +326,7 @@ class _Journal:
     def __init__(self) -> None:
         self.entries: list[str] = []
 
-    def handover(self):
+    def handover(self, briefing=()):
         @contextlib.contextmanager
         def _lent():
             self.entries.append("released")

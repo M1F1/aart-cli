@@ -6200,3 +6200,62 @@ those labels promised. Nothing in the runtime could replace or delete a credenti
   installation receipts, so every listed reference has at least one dependant. Unused deletion is
   held at the projection, reducer and planner, and the adapter refuses in-use deletion. The row
   appears when a list source can report unused references.
+
+## D-263 — Credential guidance is said where the value is asked for: screen 07, the lent terminal and the CLI
+
+Date: 2026-09-14 (CP-23 task 13).
+
+**Context.** An author's `help` for a secret input already survived compile, promotion and the
+vendored Registry into installation. Three of the places that ask for the value were incomplete:
+
+- Screen 07 printed the label, format and link. It dropped what the credential is for and which
+  artifact needs it, and had no fallback when there was no guidance.
+- When the terminal was lent to the provider (QA-081), nothing at all was written. The operator
+  met a bare `password data for new item:`.
+- The CLI's refusal for an unanswered credential listed only `github-token (credential)`.
+
+Guidance strings only refused line breaks, so an escape sequence, a C1 CSI or a bidi override in
+approved help would have been written straight to a real terminal. `help.obtain_from` required a
+URL, so a manually issued credential could not say how to get it without inventing one.
+
+**Decision.**
+
+- `application/credential_guidance.py` is the one place these words are made. It groups what
+  each owner declares about a credential by what they say. Owners with identical help share one
+  explanation; owners whose help differs each keep their own, and every owner appears exactly once
+  (a Hypothesis property). The lines are:
+  - `<label> — needed by <owners>`;
+  - the description (what it is for);
+  - `Get it: <instruction>[ → <url>]`;
+  - `Format: …`;
+  - the validation/permissions hint.
+
+  With no acquisition guidance they say `Where to get it is not stated; ask the maintainer of
+  <owners>.` and no link is invented. A secret's example is never used (INV-168).
+- Screen 07 draws these lines in Fast, because they are essential form information (§167). The
+  earlier test that Fast leaves a secret's description out was changed to the owner's newer
+  requirement. Provider, reference and binding stay Verbose.
+- `TerminalHandover` now receives a briefing. `CredentialEffectInterpreter` builds one for Store
+  and Replace from the per-reference guidance `interpreters_for` gathers from every installation's
+  bound inputs: a heading, the lines above, and `<provider> asks for it (the new value) next. Type it
+  there; AART never sees or keeps it.` `_CursesHandover` writes it after `endwin` and before the
+  provider speaks, wrapped to the terminal width with links never broken. It writes it too when
+  unbound (a text terminal), because the prompt still happens there. Verify and Delete brief nobody.
+- The CLI refusal prints the same lines under each unanswered credential. Its JSON gains
+  `inputs[].guidance`.
+- Input composition treats help as each owner's explanation, not part of the input's identity. Two
+  artifacts that word a shared credential differently no longer refuse the install; a different
+  kind, binding or requirement is still a conflict.
+- The domain refuses Unicode Cc/Cf/Cs characters in every guidance string. `help.obtain_from.url` is
+  optional (the label is the instruction); when present it is still a plain http(s) URL with no
+  userinfo.
+- The author warning for missing acquisition guidance now names the fix: `add help.obtain_from with
+  a label, and a url when there is one`. A label-only instruction satisfies it.
+- The lab's `dummy-mcp` declares complete guidance, including a manual instruction that says the
+  value is disposable text.
+
+**Consequences.** A person entering a credential through either frontend reads the same author
+words, in Fast, immediately before entry. Emoji joiners and other format characters are no longer
+accepted in guidance text; nothing that explains an input needs them. Sharing one credential across
+two artifacts in one transaction still fails the second artifact's pre-check. That defect already
+existed without these changes and is B-121.

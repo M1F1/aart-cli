@@ -413,6 +413,12 @@ Harness delivery must be one answer everywhere it is said (`QA-078`…`QA-080`, 
 - [ ] If **Remediation** appears, it says what AART will change after the final review, and each
       change names its own subject. `Continue` is its row, never `[ Continue ]` text. A Skill that
       only configures a harness goes straight to **Ready**, which lists that change (D-258).
+- [ ] Installing `dummy-mcp`: **Required Inputs** shows, in Fast, `Disposable dummy credential —
+      needed by manual-registry/mcp/dummy-mcp@1.0.0`, what it is for, `Get it: Nothing issues it;
+      make up disposable text …` and its format (D-263).
+- [ ] When the Keychain asks, the same lines appear just above its prompt. The screen is released,
+      nothing is drawn over the footer, and it ends with `macos-keychain asks for it next. Type it
+      there; AART never sees or keeps it.` Type disposable text only.
 - [ ] Setup steps are owed only for a harness the artifact actually reached: `dummy-mcp` installed
       into one harness must not produce four `configure harness` rows.
 

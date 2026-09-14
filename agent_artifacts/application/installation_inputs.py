@@ -8,7 +8,7 @@ secret-value channel.  Secret fields can become configured only through ``Secret
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from agent_artifacts.domain.credentials import CredentialObservation
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
@@ -120,6 +120,7 @@ class InstallationInputComposition:
             tuple(item.input for item in self.fields),
             bound_inputs=self.bound,
             credential_observations=credential_observations,
+            declared_by=tuple((str(item.owner), item.input) for item in self.uses),
         )
 
 
@@ -158,7 +159,12 @@ def compose_installation_inputs(
     dependants: dict[InputId, list[ArtifactCoordinate]] = {}
     for use in ordered:
         existing = declarations.get(use.input.id)
-        if existing is not None and existing != use.input:
+        # Help is each owner's own explanation, not part of what the input is: two artifacts may
+        # word the same credential differently, and both explanations are kept per owner (D-263).
+        # A different kind, binding or requirement is still a different input.
+        if existing is not None and replace(existing, guidance=None) != replace(
+            use.input, guidance=None
+        ):
             owners = tuple(
                 sorted(
                     {*dependants[use.input.id], use.owner},

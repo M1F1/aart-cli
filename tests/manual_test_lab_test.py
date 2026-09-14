@@ -100,6 +100,12 @@ class ManualTestLabTest(unittest.TestCase):
         manifest = json.loads((self.root / "repositories/mcp/dummy-mcp/aart.json").read_text())
         self.assertEqual(manifest["inputs"][0]["kind"], "secret")
         self.assertEqual(manifest["inputs"][0]["id"], "dummy-token")
+        # CP-23 task 13: the lab credential demonstrates complete guidance, including how a
+        # manually issued value is obtained without a link (D-263).
+        guidance = manifest["inputs"][0]["help"]
+        self.assertEqual(set(guidance), {"label", "description", "format_hint", "obtain_from"})
+        self.assertNotIn("url", guidance["obtain_from"])
+        self.assertIn("disposable", guidance["obtain_from"]["label"])
         self.assertEqual(
             manifest["compatibility"]["harnesses"],
             ["claude", "opencode", "tabnine"],
