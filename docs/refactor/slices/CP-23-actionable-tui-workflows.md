@@ -1,6 +1,6 @@
 # CP-23 — Actionable TUI workflows after the fourth manual run
 
-Status: IN PROGRESS — TASKS 01–07 DONE; TASK 08 NEXT
+Status: IN PROGRESS — TASKS 01–08 DONE; TASK 09 NEXT
 
 Date: 2026-09-14. Authority: the product owner's manual screen reports and request to create CP-23
 and close CP-22, followed by the all-screen audit and credential guidance requirements.
@@ -680,3 +680,59 @@ Evidence:
   - describing the first row instead of the cursor (**5 red**).
 - Walkthrough section 11 checks the description. Scoped `make mutants` and the full suite are left
   to task 15. No human terminal retest is claimed.
+
+### Task 08 — Remediation states the changes AART proposes (2026-09-14)
+
+Done. D-258 records the choice.
+
+Characterized first: `render_remediation` printed `N thing(s) need preparing first`, rows as
+`configure credential: macos-keychain (credential mutation)`, the unestablished `Nothing outside
+this installation will be modified.` and `[ Continue ]` as prose. Screen 08 had no rows, so the
+legend said `Enter Open`. Every plan with any remediation stopped there, including plans that
+only configure a harness. The TUI accepts the whole remediation offer, so there was never a picker.
+
+After:
+
+- The status is the outcome list, then its material impacts; effect terms and owners are Verbose.
+- Continue is the row, with the `Enter Continue` legend and a Verbose description.
+- `remediation_needs_decision` is the single rule; configure-harness is routine.
+- Ready discloses every remediation in the same wording.
+
+Evidence:
+
+- New `remediation_changes_test.py` (13 tests):
+  - the heading, singular and plural, with no "need preparing";
+  - an outcome naming its subject for each of the seven kinds;
+  - harness rows told apart;
+  - Fast impact against Verbose effect terms and owners;
+  - no isolation guarantee in either profile;
+  - Continue is the only row and absent from the status;
+  - the legend;
+  - Continue lands on Ready with no action and only `LOAD_SCREEN`;
+  - the Verbose description;
+  - harness-only routes from Required Inputs and Review Selection go to Ready;
+  - Ready discloses them;
+  - every non-routine kind stops;
+  - a Hypothesis property: `install_flow_screens` and the screen route agree on one rule.
+- Reworked:
+  - `remediation_row_subject_test.py` holds QA-080 in the new wording and adds an unknown kind;
+  - `consumer_properties_test.py`: the Ready property checks each remediation's outcome sentence;
+  - real-install key sequences in `consumer_application_e2e_test.py`,
+    `configured_setup_gap_test.py` and `configured_setup_report_test.py` lose the Remediation
+    Enter, because their plans are harness-only.
+- Focused runs: 90 modules touching remediation, Ready, install key sequences or the fake terminal
+  (**1,012 run**; the one failure was the Ready property, reworked above); after rework, 12 core
+  modules (**126 OK**). `make typecheck format-check lint`: OK.
+- Targeted mutations, all killed:
+  - no kind routine (**2 red**);
+  - never stopping (**3 red**);
+  - the Required Inputs route diverging (**1 red**);
+  - `[ Continue ]` restored (**1 red**);
+  - Ready reduced to a count (**2 red**, including the property);
+  - impact Verbose-only (**1 red**);
+  - effect terms in Fast (**1 red**);
+  - an unnamed harness (**5 red**);
+  - the legend back to Open (**1 red**);
+  - the isolation claim restored (**1 red**).
+- Walkthrough section 11 checks the wording, Continue and the skipped stop. Scoped `make mutants`
+  and the full suite are left to task 15. No human terminal retest is claimed.

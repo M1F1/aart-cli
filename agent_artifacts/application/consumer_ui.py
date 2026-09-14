@@ -1620,9 +1620,12 @@ def key_bindings(
             bindings.append(KeyBinding("Enter", label))
         elif detail is not None and "enter" not in keys:
             # Success's rows are choices rather than things to open, so Enter says which one.
-            choices: dict[ConsumerScreen | MaintainerScreen, str] = (
-                dict(SUCCESS_CHOICES) if state.session.screen is ConsumerScreen.SUCCESS else {}
-            )
+            choices: dict[ConsumerScreen | MaintainerScreen, str] = {}
+            if state.session.screen is ConsumerScreen.SUCCESS:
+                choices = dict(SUCCESS_CHOICES)
+            elif state.session.screen is ConsumerScreen.REMEDIATION:
+                # CP-23 task 08: its one row goes on to the final review; nothing is opened.
+                choices = {ConsumerScreen.READY: "Continue"}
             label = choices.get(detail, "Open")
             bindings.append(KeyBinding("Enter", label))
         elif (

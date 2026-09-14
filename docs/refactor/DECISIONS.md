@@ -6032,3 +6032,32 @@ described, even before the rows reload. It reads only the already-projected offe
 summary carries no words says "No description was approved for this offer." rather than
 inventing text. Manifests require a non-empty summary, so this fallback is defensive. Collection
 Preview and Customize describe nothing from the Marketplace.
+
+## D-258 — Remediation states AART's changes; Continue is a row; harness-only plans skip the stop
+
+Date: 2026-09-14 · Status: implemented · Scope: CP-23 task 08
+
+Remediations are the resolutions AART itself can apply to an unmet requirement, filtered by
+policy. The TUI accepts the whole offer (`selected_remediations=None`), so screen 08 has never
+been a picker. It is the point where somebody sees and agrees to material changes before the final
+review. The screen now says so. Its heading is "AART will make these changes after you confirm the
+final review:", replacing "N thing(s) need preparing first". Each change is an outcome that names
+its subject (`remediation_change`), for example "Configure the claude integration for this
+artifact" or "Store the credential it needs securely in macos keychain". Fast keeps material impact
+in plain words: a credential will be stored, software will be installed on this machine, network
+access will be configured. The effect vocabulary, risk class and owners are Verbose. "Nothing
+outside this installation will be modified." is removed because no plan establishes that
+guarantee.
+
+Continue is the screen's only row (target Ready), with an `Enter Continue` legend and a Verbose
+description saying that nothing has changed yet. It emits only `LOAD_SCREEN`; the mutation is
+still confirmed on Ready.
+
+The stop is conditional under one rule, `remediation_needs_decision`, which `install_flow_screens`
+and every `detail` route share. Configure-harness is routine: it is derived from where the
+artifact is delivered, and task 10 makes that choice explicit. A plan whose only remediations are
+harness configuration goes straight to Ready. Every other kind (credential, alternative provider,
+runtime, executable, Python packages, network) still stops. Ready discloses every remediation in
+the same outcome wording ("AART will also: …"), and the Fast-risk property now checks that
+wording. The real composed installs in the E2Es are harness-only, so their key sequences lose the
+Remediation Enter.

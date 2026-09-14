@@ -57,6 +57,7 @@ from agent_artifacts.application.consumer_views import (
     navigation_targets,
     project_collection,
     project_registries,
+    remediation_needs_decision,
 )
 from agent_artifacts.application.installed_setup import DeclaredArtifactSetup
 from agent_artifacts.application.maintainer_views import (
@@ -187,6 +188,7 @@ __all__ = [
     "render_ready",
     "render_receipt_detail",
     "render_registry",
+    "remediation_change",
     "render_remediation",
     "render_required_inputs",
     "render_review_selection",
@@ -434,44 +436,92 @@ def render_inspection(view: ConsumerPlanView, profile: PresentationProfile) -> t
     return tuple(lines)
 
 
-def _remediation_subject(item: RemediationView) -> str:
+def _remediation_values(item: RemediationView) -> dict[str, str]:
     """What one remediation is *about*, read off the summary the projection already builds.
 
-    `_summary` renders `<kind>: key=value, key=value` and every remediation kind carries exactly
-    one identifying value -- the harness, the host, the provider. Taking the values keeps the row
-    truthful without the view gaining a field each kind would have to fill in separately.
+    `_summary` renders `<kind>: key=value, key=value`, and every remediation kind carries its
+    identifying values there -- the harness, the provider, the runtime and its constraint
+    (`QA-080`). Reading them back keeps each change naming its own subject without the view
+    gaining a field each kind would have to fill in separately.
     """
 
     _, separator, details = item.summary.partition(": ")
     if not separator:
-        return ""
-    return ", ".join(
-        part.split("=", 1)[1]
-        for part in details.split(", ")
-        if "=" in part and not part.startswith("requirement=")
-    )
+        return {}
+    pairs = (part.split("=", 1) for part in details.split(", ") if "=" in part)
+    return {key: value for key, value in pairs if key != "requirement"}
+
+
+def remediation_change(item: RemediationView) -> str:
+    """One remediation as the change AART will make, naming its subject (CP-23 task 08)."""
+
+    values = _remediation_values(item)
+    kind = item.kind
+    if kind == "configure-harness" and "harness" in values:
+        return f"Configure the {values['harness']} integration for this artifact"
+    if kind == "configure-credential":
+        where = f" in {_human(values['provider'])}" if "provider" in values else ""
+        return f"Store the credential it needs securely{where}"
+    if kind == "select-alternative-provider" and "provider" in values:
+        return f"Keep the credential it needs in {_human(values['provider'])} instead"
+    if kind == "install-runtime" and "runtime" in values:
+        constraint = f" {values['constraint']}" if "constraint" in values else ""
+        return f"Install the {values['runtime']}{constraint} runtime it runs on"
+    if kind == "install-executable" and "executable" in values:
+        return f"Install the {values['executable']} program it runs"
+    if kind == "install-python-packages" and "installer" in values:
+        return f"Install its Python dependencies with {values['installer']}"
+    if kind == "configure-network" and "host" in values:
+        return f"Configure network access to {values['host']}"
+    subject = ", ".join(values.values())
+    named = _human(kind).capitalize()
+    return f"{named}: {subject}" if subject else named
+
+
+#: What a change touches that somebody must not miss, kept in Fast in plain words. Harness
+#: configuration is absent: it is routine and derived (D-258), and the change itself names it.
+_REMEDIATION_IMPACT: dict[str, str] = {
+    "configure-credential": "A credential will be stored; AART never shows its value.",
+    "select-alternative-provider": "A credential will be kept by a different provider.",
+    "install-runtime": "Software will be installed on this machine.",
+    "install-executable": "Software will be installed on this machine.",
+    "install-python-packages": "Software will be installed on this machine.",
+    "configure-network": "Network access will be configured.",
+}
 
 
 def render_remediation(view: ConsumerPlanView, profile: PresentationProfile) -> tuple[str, ...]:
-    """Screen 08. Only meaningful choices are surfaced, with what they will not touch."""
+    """Screen 08: the changes AART will make once the final review is confirmed.
+
+    CP-23 task 08 (D-258). Outcomes, not chores: the reader is not asked to prepare anything.
+    The effect vocabulary and owners are Verbose; material impact stays in Fast. Nothing here
+    promises what the plan does not establish, and Continue is the screen's row, not a line here.
+    """
 
     if not isinstance(view, ConsumerPlanView) or not isinstance(profile, PresentationProfile):
         raise ValueError("remediation rendering needs a consumer plan and presentation profile")
     if not view.remediations:
-        lines = ["Nothing needs to be prepared."]
-    else:
-        lines = [f"{len(view.remediations)} thing(s) need preparing first"]
-        for item in view.remediations:
-            # `QA-080`: the kind alone repeated `configure harness` once per harness and named
-            # none of them, so the rows were indistinguishable and none was actionable. The
-            # identifying value is already in the summary; the row it is read from now carries it.
-            subject = _remediation_subject(item)
-            named = f"{_human(item.kind)}: {subject}" if subject else _human(item.kind)
-            lines.append(f"  {named} ({_human(item.risk)})")
-            if profile is PresentationProfile.VERBOSE:
-                lines.append(f"    {item.summary}; owners: {', '.join(item.owners)}")
-        lines.append("Nothing outside this installation will be modified.")
-    lines.append("[ Continue ]")
+        return ("Nothing needs to be prepared.",)
+    lines = [
+        "AART will make this change after you confirm the final review:"
+        if len(view.remediations) == 1
+        else "AART will make these changes after you confirm the final review:"
+    ]
+    for item in view.remediations:
+        lines.append(f"  {remediation_change(item)}")
+        if profile is PresentationProfile.VERBOSE:
+            lines.append(
+                f"    {item.summary} ({_human(item.risk)}); owners: {', '.join(item.owners)}"
+            )
+    impacts = tuple(
+        dict.fromkeys(
+            _REMEDIATION_IMPACT[item.kind]
+            for item in view.remediations
+            if item.kind in _REMEDIATION_IMPACT
+        )
+    )
+    if impacts:
+        lines.extend(("", *impacts))
     return tuple(lines)
 
 
@@ -518,10 +568,12 @@ def render_ready(view: ConsumerPlanView, profile: PresentationProfile) -> tuple[
         )
     # Compressed, never quieter: this is the screen somebody confirms from, so every risk the plan
     # carries and every remediation it decided is named here as well as in the full plan.
+    # CP-23 task 08: in the outcome wording Remediation uses, because a plan with only routine
+    # harness configuration skips that screen and this is where those changes are disclosed.
     if view.remediations:
         lines.append(
-            "Remediation: "
-            + ", ".join(f"{_human(item.kind)} ({_human(item.risk)})" for item in view.remediations)
+            "AART will also: "
+            + "; ".join(remediation_change(item) for item in view.remediations)
             + "."
         )
     risks = ", ".join(_human(item) for item in view.risks) or "read only"
@@ -2087,6 +2139,11 @@ def _candidate_filter(state: ConsumerUiState) -> MaintainerCandidateFilter:
     )
 
 
+_REMEDIATION_CONTINUE = (
+    "Opens Ready to install, the final review: nothing has changed yet, and nothing will "
+    "until you confirm there."
+)
+
 _NO_APPROVED_DESCRIPTION = "No description was approved for this offer."
 
 
@@ -2148,6 +2205,9 @@ class CanonicalScreenSource:
 
     def rows(self, state: ConsumerUiState) -> tuple[str, ...]:
         screen, query = state.session.screen, state.search
+        if screen is ConsumerScreen.REMEDIATION:
+            # CP-23 task 08: Continue is a row, so it is a control rather than a printed string.
+            return () if self._screens.plan is None else (ConsumerScreen.READY.value,)
         if screen is ConsumerScreen.SUCCESS:
             # CP-23 task 06: the choices exist once something ran; before that there is nothing
             # to view, and a row that opens nothing is the gap this replaced.
@@ -2451,7 +2511,7 @@ class CanonicalScreenSource:
             # available as a detailed projection, but is not a mandatory click-through step.
             if plan.inputs:
                 return ConsumerScreen.REQUIRED_INPUTS
-            if plan.remediations:
+            if remediation_needs_decision(plan):
                 return ConsumerScreen.REMEDIATION
             return ConsumerScreen.READY
         if screen is ConsumerScreen.AUTOMATIC_INSPECTION:
@@ -2460,14 +2520,18 @@ class CanonicalScreenSource:
                 return None
             if plan.inputs:
                 return ConsumerScreen.REQUIRED_INPUTS
-            if plan.remediations:
+            if remediation_needs_decision(plan):
                 return ConsumerScreen.REMEDIATION
             return ConsumerScreen.READY
         if screen is ConsumerScreen.REQUIRED_INPUTS:
             plan = self._screens.plan
             if plan is None:
                 return None
-            return ConsumerScreen.REMEDIATION if plan.remediations else ConsumerScreen.READY
+            return (
+                ConsumerScreen.REMEDIATION
+                if remediation_needs_decision(plan)
+                else ConsumerScreen.READY
+            )
         if screen is ConsumerScreen.REMEDIATION:
             return ConsumerScreen.READY if self._screens.plan is not None else None
         if not isinstance(screen, ConsumerScreen):
@@ -2530,6 +2594,10 @@ class CanonicalScreenSource:
         if state.session.screen is ConsumerScreen.SETTINGS:
             purpose = SETTING_PURPOSE.get(state.current_row or "")
             return () if purpose is None else (purpose,)
+        if state.session.screen is ConsumerScreen.REMEDIATION:
+            if state.current_row != ConsumerScreen.READY.value or self.detail(state) is None:
+                return ()
+            return (_REMEDIATION_CONTINUE,)
         if state.session.screen is ConsumerScreen.SUCCESS:
             chosen = self.detail(state)
             return () if not isinstance(chosen, ConsumerScreen) else (SUCCESS_PURPOSE[chosen],)
@@ -2666,6 +2734,10 @@ class CanonicalScreenSource:
             # From the session's own settings, not the machine snapshot: the same reason the rows
             # are drawn from `state.settings`.
             return settings_consequence(state.settings)
+        if screen is ConsumerScreen.REMEDIATION and self.rows(state):
+            # CP-23 task 08: the changes are what this view states; Continue is its row.
+            assert screens.plan is not None
+            return render_remediation(screens.plan, state.session.profile)
         if screen is ConsumerScreen.SUCCESS and self.rows(state):
             # CP-23 task 06: what happened is the state of the view; the choices are the rows.
             if screens.transaction is not None:
@@ -2694,6 +2766,8 @@ class CanonicalScreenSource:
     def _body(self, state: ConsumerUiState) -> tuple[str, ...]:
         screen, profile = state.session.screen, state.session.profile
         screens = self._screens
+        if screen is ConsumerScreen.REMEDIATION and self.rows(state):
+            return (f"{'>' if state.current_row == ConsumerScreen.READY.value else ' '} Continue",)
         if screen is ConsumerScreen.SUCCESS and self.rows(state):
             return tuple(
                 f"{'>' if target.value == state.current_row else ' '} {label}"

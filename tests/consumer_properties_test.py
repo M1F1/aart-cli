@@ -83,7 +83,12 @@ from agent_artifacts.domain.selection import (
     ResolvedSelection,
     VersionConstraint,
 )
-from agent_artifacts.tui_consumer import render_activity, render_install_plan, render_ready
+from agent_artifacts.tui_consumer import (
+    remediation_change,
+    render_activity,
+    render_install_plan,
+    render_ready,
+)
 from tests.consumer_activity_test import lifecycle_outcome
 
 from agent_artifacts.application.consumer_views import ActivityRecord  # isort: skip
@@ -299,8 +304,10 @@ class FastHidesNoMaterialRiskTest(unittest.TestCase):
 
         for risk in plan.mutation.risks:
             self.assertIn(_human(risk.name), rendered)
+        # CP-23 task 08 (D-258): named as the change AART will make, subject included, because a
+        # plan whose only remediation is routine reaches this screen without passing screen 08.
         for remediation in view.remediations:
-            self.assertIn(_human(remediation.kind), rendered)
+            self.assertIn(remediation_change(remediation).lower(), rendered)
         self.assertIn(view.review_digest, rendered)
 
 

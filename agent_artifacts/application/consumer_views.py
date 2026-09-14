@@ -110,6 +110,7 @@ __all__ = [
     "settings_from_data",
     "settings_to_data",
     "install_flow_screens",
+    "remediation_needs_decision",
     "keeps_focus",
     "navigation_targets",
     "project_activity",
@@ -618,6 +619,19 @@ def consumer_plan_to_data(view: ConsumerPlanView) -> dict[str, object]:
     }
 
 
+#: CP-23 task 08 (D-258): harness configuration is derived from where the artifact is delivered,
+#: so it is disclosed on the final review rather than stopping the flow. Every other remediation
+#: installs software, stores or redirects a credential, or opens network access -- a material
+#: change somebody agrees to on screen 08 before the final review.
+ROUTINE_REMEDIATION_KINDS = frozenset({"configure-harness"})
+
+
+def remediation_needs_decision(view: ConsumerPlanView) -> bool:
+    """Whether this plan stops at Remediation (§161.5, INV-197): one rule for every route there."""
+
+    return any(item.kind not in ROUTINE_REMEDIATION_KINDS for item in view.remediations)
+
+
 def install_flow_screens(view: ConsumerPlanView) -> tuple[ConsumerScreen, ...]:
     """Return the accepted install flow, inserting question screens only when necessary."""
 
@@ -626,7 +640,7 @@ def install_flow_screens(view: ConsumerPlanView) -> tuple[ConsumerScreen, ...]:
     screens = [ConsumerScreen.REVIEW_SELECTION]
     if view.inputs:
         screens.append(ConsumerScreen.REQUIRED_INPUTS)
-    if view.remediations:
+    if remediation_needs_decision(view):
         screens.append(ConsumerScreen.REMEDIATION)
     screens.extend((ConsumerScreen.READY, ConsumerScreen.INSTALLING, ConsumerScreen.SUCCESS))
     return tuple(screens)

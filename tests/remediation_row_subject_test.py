@@ -9,7 +9,8 @@ sees in Fast dropped it.
 
 `QA-078`'s narrowing removes most of the duplication by not planning setup for harnesses the
 artifact was never installed into. This holds the other half: where several rows legitimately
-remain, they say which is which.
+remain, they say which is which. CP-23 task 08 reworded each row as the change AART will make
+(D-258); the claim is unchanged.
 """
 
 from __future__ import annotations
@@ -49,7 +50,7 @@ class RemediationRowNamesItsSubjectTest(unittest.TestCase):
         rows = self._rows(
             self._harness("claude"), self._harness("codex"), self._harness("opencode")
         )
-        named = [line for line in rows if "configure harness" in line]
+        named = [line for line in rows if "integration" in line]
 
         self.assertEqual(3, len(named))
         self.assertEqual(3, len(set(named)), named)
@@ -58,13 +59,14 @@ class RemediationRowNamesItsSubjectTest(unittest.TestCase):
         """Nothing gains a stray separator because its kind carries no identifying value."""
 
         plain = RemediationView(
-            "configure-credential", "credential mutation", ("keychain",), "configure-credential"
+            "configure-credential", "credential-mutation", ("keychain",), "configure-credential"
         )
+        unknown = RemediationView("tune-cache", "local-mutation", ("keychain",), "tune-cache")
 
-        rows = self._rows(plain)
-        row = next(line for line in rows if "configure credential" in line)
+        rows = self._rows(plain, unknown)
 
-        self.assertEqual("  configure credential (credential mutation)", row)
+        self.assertIn("  Store the credential it needs securely", rows)
+        self.assertIn("  Tune cache", rows)
 
 
 if __name__ == "__main__":

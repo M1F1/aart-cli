@@ -148,7 +148,7 @@ machine-readable task list. No product fix is claimed by creating this plan.
 - [x] 05 — Remove TUI push and explain manual publication before Registry Sync.
 - [x] 06 — Make Success controls functional, including exact receipt and supported Undo.
 - [x] 07 — Show the focused Marketplace artifact description.
-- [ ] 08 — Explain proposed Remediation effects and separate Continue from facts.
+- [x] 08 — Explain proposed Remediation effects and separate Continue from facts.
 - [ ] 09 — Refresh Candidate state immediately and durably after local promotion.
 - [ ] 10 — Select one or multiple eligible harnesses explicitly.
 - [ ] 11 — Fix Artifact Details controls and compatibility messaging.

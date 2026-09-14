@@ -382,7 +382,9 @@ Harness delivery must be one answer everywhere it is said (`QA-078`…`QA-080`, 
       every harness this machine measured that the artifact declares support for.
 - [ ] Compare it with what **Artifact Details** refused and with what **Success** reports. A harness
       the details screen called unsupported must not appear as a delivery.
-- [ ] If **Remediation** lists rows, each must name its own subject rather than repeat one summary.
+- [ ] If **Remediation** appears, it says what AART will change after the final review, and each
+      change names its own subject. `Continue` is its row, never `[ Continue ]` text. A Skill that
+      only configures a harness goes straight to **Ready**, which lists that change (D-258).
 - [ ] Setup steps are owed only for a harness the artifact actually reached: `dummy-mcp` installed
       into one harness must not produce four `configure harness` rows.
 
