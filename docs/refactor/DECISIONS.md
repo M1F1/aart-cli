@@ -5943,3 +5943,15 @@ was added for it (task 03/14 forbid both). The status list's statement boundary 
 shared separation. If task 14's frame-order audit gives prompts a block of their own, this hint
 moves with that shared rule. `d returns to summary` is removed. Enter still continues to Validation
 in both profiles; the review stepper and focus are unchanged by toggling.
+
+## D-254 — Validation reaches Policy only through Enter
+
+Date: 2026-09-14 · Status: implemented · Scope: CP-23 task 04
+
+Remove screen 38's `[p] Policy` binding. It was a second route to the same screen that also let
+a Maintainer skip every check detail, and the owner asked for Enter alone. The route is Validation
+→ Enter on a check → Validation Details → Enter → Policy Review → Enter → Promotion Review,
+unchanged. No evaluation moved: Policy Review is composed from the same validation run and still
+reports unmet required checks such as `live-acceptance`. `p` on screen 38 now maps to no event and
+the footer no longer offers it. The two composed E2E walks replace their `p` with Enter, Enter.
+The post-commit publication `p` is untouched here; task 05 removes TUI publication.

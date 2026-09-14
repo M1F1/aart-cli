@@ -2996,3 +2996,13 @@ the appropriate scope when the later CP-23 tasks touch those existing contracts,
 Candidate transitions (tasks 04/09) and publication/completion (tasks 05/06). Do not treat these
 scoped figures as full-module mutation adequacy. B-110/B-111 record the runner limitations met
 before successful runs; neither was resolved by changing product tests or weakening a gate.
+
+## B-115 — Validation Details' `source.detail` branch is shadowed by its Enter binding
+
+Found 2026-09-14 during CP-23 task 04's targeted mutation. On screen 39 the `Enter → Policy`
+screen binding decides what the real Enter key does, so `CanonicalScreenSource.detail`'s
+`VALIDATION_DETAILS → POLICY_REVIEW` branch is never reached by a key press. Pointing that branch
+at Promotion Review turned only `test_enter_on_validation_details_continues_to_policy` red (it
+calls `detail` directly). The key-path walk stayed green. Pointing the binding there turned five
+tests red, including both E2E walks. Noncritical: both routes currently agree. Pick one owner for
+Enter on screen 39 when task 14 audits advertised keys against dispatch.

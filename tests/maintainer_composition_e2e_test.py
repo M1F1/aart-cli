@@ -436,7 +436,9 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
                 ENTER,
                 ord("d"),
                 ENTER,
-                ord("p"),
+                # CP-23 task 04: Validation has no `p`; Enter opens a check, Enter again its policy.
+                ENTER,
+                ENTER,
                 ENTER,
                 ENTER,
                 ENTER,
@@ -839,7 +841,9 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
                 ENTER,
                 ord("d"),
                 ENTER,
-                ord("p"),
+                # CP-23 task 04: Validation has no `p`; Enter opens a check, Enter again its policy.
+                ENTER,
+                ENTER,
                 ENTER,
                 ENTER,
                 ENTER,

@@ -81,7 +81,6 @@ class ContextualKeyLegendTest(unittest.TestCase):
             MaintainerScreen.ADOPTED_ARTIFACTS: ("[Enter] Check upstream",),
             MaintainerScreen.UPSTREAM_CHECK: ("[a] Review new version",),
             MaintainerScreen.PROMOTION_MODE: ("[m] Toggle mode",),
-            MaintainerScreen.VALIDATION: ("[p] Policy",),
             MaintainerScreen.VALIDATION_DETAILS: ("[Enter] Policy",),
         }
 

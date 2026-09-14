@@ -1,6 +1,6 @@
 # CP-23 — Actionable TUI workflows after the fourth manual run
 
-Status: IN PROGRESS — TASKS 01–03 DONE; TASK 04 NEXT
+Status: IN PROGRESS — TASKS 01–04 DONE; TASK 05 NEXT
 
 Date: 2026-09-14. Authority: the product owner's manual screen reports and request to create CP-23
 and close CP-22, followed by the all-screen audit and credential guidance requirements.
@@ -514,3 +514,28 @@ Evidence:
   (**2 red**); diff lines left unredacted in the projection (**1 red**).
 - Scoped `make mutants` and the full suite are left to task 15 (owner instruction). No human
   terminal retest is claimed.
+
+### Task 04 — Validation without the `p` shortcut (2026-09-14)
+
+Done. D-254 records the choice; B-115 records a shadowed branch the mutation run exposed.
+
+Before, screen 38's footer read `[p] Policy   [v] Fast / Verbose` ahead of the global keys, and `p`
+navigated straight to Policy Review. After, the footer offers `[Enter] Open   [v] Fast / Verbose`
+and `p` means nothing there. Enter still opens a check, and Enter on the check opens Policy Review.
+
+Evidence:
+
+- `maintainer_validation_views_test.py`: `test_validation_offers_no_p_shortcut` checks the
+  composed footer, `key_bindings` and `key_event`. `test_enter_walks_a_failing_check_to_the_policy_that_judges_it`
+  uses real key events from a Validation screen showing `Unmet requirements: live-acceptance`
+  through the failing check's detail to Policy Review, which still says `Approval required`.
+- `maintainer_composition_e2e_test.py`: the two real walks (Source Sync → promotion commit, and
+  diff → promotion review) press Enter twice where they pressed `p`; both still commit/review.
+  `contextual_key_legend_test.py` no longer expects `[p] Policy`.
+- Focused run: validation views, key legend, composition E2E, promotion shell execution, workflow
+  progress, back stack, block structure and CLI-command leak modules: **130 tests OK**.
+  `make format-check lint`: OK (no production types changed).
+- Targeted mutations: restoring the `p` binding (**1 red**); pointing screen 39's Enter binding
+  at Promotion Review, skipping policy (**5 red**, including the new walk and both E2E walks). A
+  first mutation of the `source.detail` branch left the key walk green because that branch is
+  shadowed (B-115). The binding is the path a key takes, so the binding mutation is the evidence.

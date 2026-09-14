@@ -258,8 +258,9 @@ separated, with the action prompt last (`QA-029`).
 
 ## 7 — Validate and promote
 
-- [ ] From the Candidate, reach **Validation**. Press `p` (**Promote**).
-- [ ] Walk **Policy review** → **Promotion review** → **Promotion mode**.
+- [ ] From the Candidate, reach **Validation**. Press `Enter` on a check to open it, then `Enter`
+      again for **Policy review** (CP-23 task 04: `p` does nothing on Validation).
+- [ ] Walk on to **Promotion review** → **Promotion mode**.
 - [ ] On Promotion mode, press `m` to toggle **Vendored** / **Referenced**.
 
 Expected: the screen explains what each mode means *before* you toggle it, not after (`QA-039`).

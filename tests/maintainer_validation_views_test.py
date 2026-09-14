@@ -57,6 +57,7 @@ from agent_artifacts.protocol.native_tree import (
 )
 from agent_artifacts.protocol.paths import parse_relative_path
 from agent_artifacts.tui_consumer import CanonicalScreenSource, ConsumerScreens, _reload, frame
+from agent_artifacts.tui_layout import footer_start
 from agent_artifacts.tui_maintainer import (
     render_maintainer_policy_review,
     render_maintainer_validation,
@@ -454,15 +455,44 @@ class ValidationShellTest(unittest.TestCase):
         self.assertIs(dashboard.session.screen, MaintainerScreen.DASHBOARD)
         self.assertEqual(dashboard.focus, "")
 
-    def test_p_opens_the_policy_review_from_validation(self) -> None:
-        validation = _on(MaintainerScreen.VALIDATION, focus=self.candidate)
+    def test_validation_offers_no_p_shortcut(self) -> None:
+        """CP-23 task 04: `[p] Policy` duplicated the Enter path and could skip the check detail."""
 
-        self.assertIn(KeyBinding("p", "Policy"), key_bindings(validation))
-        self.assertEqual(
-            key_event("p", validation),
-            ConsumerUiEvent(ConsumerUiEventKind.NAVIGATE, screen=MaintainerScreen.POLICY_REVIEW),
+        validation = _reload(
+            self.source, _on(MaintainerScreen.VALIDATION, focus=self.candidate), entering=True
         )
-        self.assertIsNone(key_event("p", _on(MaintainerScreen.SOURCES)))
+        drawn = frame(self.source, validation)
+
+        self.assertNotIn(KeyBinding("p", "Policy"), key_bindings(validation))
+        self.assertTrue(all(binding.key != "p" for binding in key_bindings(validation)))
+        self.assertIsNone(key_event("p", validation))
+        self.assertNotIn("[p]", "\n".join(drawn[footer_start(drawn) :]))
+        self.assertIn("[Enter] Open", "\n".join(drawn[footer_start(drawn) :]))
+
+    def test_enter_walks_a_failing_check_to_the_policy_that_judges_it(self) -> None:
+        """Removing the shortcut must leave one route to policy, and that route must evaluate it."""
+
+        state = _reload(
+            self.source, _on(MaintainerScreen.VALIDATION, focus=self.candidate), entering=True
+        )
+        row = f"{self.candidate}:live-acceptance"
+        state = dataclasses.replace(state, cursor=state.rows.index(row))
+        self.assertIn("Unmet requirements: live-acceptance", "\n".join(frame(self.source, state)))
+
+        visited = []
+        for _ in range(2):
+            event = key_event("enter", state, detail=self.source.detail(state))
+            assert event is not None, state.session.screen
+            state, _ = reduce_consumer_ui(state, event)
+            state = _reload(self.source, state, entering=True)
+            visited.append(state.session.screen)
+
+        self.assertEqual(
+            visited, [MaintainerScreen.VALIDATION_DETAILS, MaintainerScreen.POLICY_REVIEW]
+        )
+        policy = "\n".join(frame(self.source, state))
+        self.assertIn("Approval required", policy)
+        self.assertIn("live-acceptance", policy)
 
     def test_the_policy_review_opens_from_a_candidate_or_from_a_check_row(self) -> None:
         by_candidate = "\n".join(

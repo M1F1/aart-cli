@@ -1581,9 +1581,6 @@ _SCREEN_BINDINGS: dict[ApplicationScreen, tuple[_ScreenBinding, ...]] = {
         _navigate_binding("d", "Diff", MaintainerScreen.CANDIDATE_DIFF),
         _navigate_binding("r", "Lifecycle", MaintainerScreen.CANDIDATE_LIFECYCLE),
     ),
-    MaintainerScreen.VALIDATION: (
-        _navigate_binding("p", "Policy", MaintainerScreen.POLICY_REVIEW),
-    ),
     # Screen 39 is a drill-down, not a dead end. The evidence was already produced before the
     # screen opened, so continuing to the policy that judges it needs no second action (`QA-074`).
     MaintainerScreen.VALIDATION_DETAILS: (

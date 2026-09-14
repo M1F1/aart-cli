@@ -2,10 +2,11 @@
 
 ## Current objective — CP-23 (2026-09-14)
 
-**CP-22 is CLOSED. CP-23 tasks 01–03 are done; task 04 is next.**
+**CP-22 is CLOSED. CP-23 tasks 01–04 are done; task 05 is next.**
 Task 02 (D-252) made the Candidates table the actions block and the focused Candidate its
 Verbose-only cursor description; task 03 (D-253) made Candidate file diffs the Verbose projection
-of screen 37 and removed `f`. Evidence is in the slice.
+of screen 37 and removed `f`; task 04 (D-254) removed Validation's `p` so Enter is the only route
+to Policy. Evidence is in the slice.
 The unfinished Source onboarding changes from the previous run are completed in the working tree.
 Add Source names the new Source and explains explicit Candidate discovery, retaining its row for
 `[s] Sync`. Returning from Source Details or cancelling its Sync review also preserves that Source.
@@ -19,8 +20,9 @@ Per-task work runs only the verifying gates; the full suite is task 15 (owner in
 Task 01's detailed evidence is in
 [`slices/CP-23-actionable-tui-workflows.md`](slices/CP-23-actionable-tui-workflows.md).
 
-**Next product action: task 04**, removing Validation's redundant `[p] Policy` shortcut while Enter
-keeps the Validation → check detail → Policy → Promotion Review path intact. Continue the ordered fifteen-task plan; CP-23 as a whole is not
+**Next product action: task 05**, ending TUI promotion at the local commit: characterize the
+D-228 publication path first (screen 45 `p`, publication form/review, push transport), then remove
+it from the TUI without deleting a supported CLI API, and explain manual push/review/Registry Sync. Continue the ordered fifteen-task plan; CP-23 as a whole is not
 implemented or verified. Task 15 retains the full-batch/manual acceptance requirement, and task 14
 retains the complete screen/state audit. No human manual acceptance is claimed for task 01.
 
