@@ -6424,3 +6424,22 @@ asked for a replacement of nothing.
   edited unilaterally.
 - The manual lab's `dummy-mcp` gains an ordinary `dummy-user` input, so the manual run exercises
   the install form, the grouped area and a per-harness edit.
+
+## D-268 — The shared Frame draws view status before notices, as §167 orders them
+
+Date: 2026-09-14 (CP-23 task 14, first increment).
+
+**Context.** §167's shared frame names the order: trail and stepper, action rows, cursor
+description, view status, notices, workspace caption, key legend. `Frame` (D-243, QA-093) declared
+`notice` and `help` before `status`, so on every screen a refusal was drawn above the state of the
+view it was about, and the view's state stood between the refusal and the keys that answer it.
+
+**Decision.** `Frame` declares `trail, actions, described, status, notice, help, context, keys`.
+`render` already derives the drawn order from the declaration, so no screen changes. Help, which
+§167 does not place, is the open key reference and stands after the notice, next to the legend it
+documents. A test holds the declaration to the specified order, and a rendered Registry frame with
+a notice holds it on a real screen.
+
+**Consequences.** Every consumer and maintainer screen and both terminals change together, because
+the order lives in one type. Existing structure tests needed no changes: none depended on a notice
+standing above the status.

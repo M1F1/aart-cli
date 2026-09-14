@@ -867,6 +867,23 @@ class NoticeBlockTest(TestCase):
         self.assertEqual(_statements(carrying[0]), _spoken(self._NOTICE))
         self.assertTrue(all(line.startswith(BULLET) for line in _spoken(carrying[0])))
 
+    def test_the_notice_follows_the_view_status_and_precedes_the_caption(self) -> None:
+        """§167 orders them: description, view status, notices, caption, keys (D-268)."""
+
+        drawn = self._frame(MaintainerScreen.REGISTRY)
+        blocks = _blocks(drawn)
+        notice = next(
+            index for index, block in enumerate(blocks) if self._NOTICE[0] in _statements(block)
+        )
+        status = next(
+            index
+            for index, block in enumerate(blocks)
+            if index != notice and any(line.startswith(BULLET) for line in _spoken(block))
+        )
+
+        self.assertLess(status, notice)
+        self.assertIn("working at /lab/registry", blocks[notice + 1])
+
     def test_a_screen_with_no_rows_gives_its_notice_the_same_block(self) -> None:
         """`QA-091` had folded it into view status, which is a different question again."""
 

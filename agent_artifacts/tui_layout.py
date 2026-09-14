@@ -447,12 +447,14 @@ class Frame:
     ``trail``       where the reader is, and the sequence of steps they are walking.
     ``actions``     what the cursor can act on -- rows, toggles, commands. Nothing that only reads.
     ``described``   what the cursor is on right now (Verbose only, `QA-070`).
+    ``status``      the state of the whole view: counts, guidance, what went wrong.
     ``notice``      what the last action left behind: why it was refused, or why it could not be
                     prepared. `QA-093` gives it a block because it answers none of the other
                     questions -- it is not a row, it is not what the cursor points at, and it is
-                    not the state of the view but of one run that has already finished.
-    ``help``        the key documentation, while it is open.
-    ``status``      the state of the whole view: counts, guidance, what went wrong.
+                    not the state of the view but of one run that has already finished. It follows
+                    the view's status, as §167 orders them, so it stands nearest the keys that
+                    answer it (D-268).
+    ``help``        the key documentation, while it is open, next to the legend it documents.
     ``context``     what is true of the session rather than the view: the launch directory. It is
                     a line rather than a block, because a caption that ran to several lines would
                     be a section again, and `footer_start` reads the footer's start back off the
@@ -468,9 +470,9 @@ class Frame:
     trail: Tuple[str, ...] = ()
     actions: Tuple[str, ...] = ()
     described: Tuple[str, ...] = ()
+    status: Tuple[str, ...] = ()
     notice: Tuple[str, ...] = ()
     help: Tuple[str, ...] = ()
-    status: Tuple[str, ...] = ()
     context: str = dataclasses.field(default="", metadata=CAPTION)
     keys: Tuple[str, ...] = ()
 

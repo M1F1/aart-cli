@@ -416,6 +416,20 @@ class ScreenSkeletonPropertyTest(TestCase):
     any combination.
     """
 
+    def test_the_declared_order_is_the_one_the_specification_names(self) -> None:
+        """§167's shared frame: trail, rows, cursor description, view status, notices, caption, keys.
+
+        The property below proves the frame is drawn in the order the type declares. This proves the
+        declaration is the specified one, so a view's state is read before what an action left
+        behind -- the notice sits next to the keys that answer it. Help is the open key reference,
+        so it stands last before the caption, nearest the legend it documents (D-268).
+        """
+
+        self.assertEqual(
+            [field.name for field in dataclasses.fields(Frame)],
+            ["trail", "actions", "described", "status", "notice", "help", "context", "keys"],
+        )
+
     @given(_FRAME)
     def test_blocks_are_drawn_whole_and_in_the_order_the_type_declares_them(
         self, frame: Frame

@@ -1,6 +1,6 @@
 # CP-23 — Actionable TUI workflows after the fourth manual run
 
-Status: IN PROGRESS — TASKS 01–13 AND OWNER TASK 16 DONE; TASK 14 NEXT, then 15
+Status: IN PROGRESS — TASKS 01–13 AND OWNER TASK 16 DONE; TASK 14 IN PROGRESS, then 15
 
 Date: 2026-09-14. Authority: the product owner's manual screen reports and request to create CP-23
 and close CP-22, followed by the all-screen audit and credential guidance requirements.
@@ -1506,3 +1506,14 @@ The six previously owed 16.1 targeted mutations were also run and killed:
   - `make secret-shape-check typecheck format-check lint docs-check` passes.
 
   The full suite and scoped mutmut remain task 15's.
+
+### Task 14 — Frame and Verbose contract on every view (IN PROGRESS)
+
+#### 14.1 — The shared order is §167's (DONE, D-268)
+
+- `Frame` now declares view status before notices, with help after them, next to the legend.
+- `tests/screen_skeleton_test.py` holds the declaration to §167's order.
+- `tests/screen_block_structure_test.py` holds it on a rendered Registry frame carrying a notice.
+- Targeted mutation: restoring the old order failed both tests.
+- 1041 tests pass across every module that draws a frame (85 modules).
+
