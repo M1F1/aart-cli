@@ -6303,3 +6303,32 @@ process through the harness's file instead. That is a candidate Product Specific
 (like §167) and is recorded with task 16's evidence. Hand-built fixtures that register a
 configured artifact now pass the harness argument, and tests that start a server start it with the
 recorded command and its arguments, as a harness does.
+
+## D-265 — Required configuration is an explicit pre-review screen-07 form
+
+Date: 2026-09-14 (CP-23 task 16, second increment).
+
+**Context.** The installation review digest binds the exact non-secret configuration projected
+into each chosen harness file. Collecting a value after screen 05 would therefore make the reviewed
+plan differ from the plan eventually executed. A declared default is guidance rather than consent,
+and SecretInputs must retain their provider-reference path even when the same artifact also has an
+unanswered ConfigInput.
+
+**Decision.** The first INSTALL preparation resolves and materializes immutable source content,
+auto-binds available credential-provider references, and, when ConfigInputs remain, returns screen
+07 in form mode instead of declining. Its rows are the input ids and a final Continue control. The
+session holds a non-persistent `InstallationConfigDraft`: defaults are prefilled, typing and paste
+edit them, Backspace trims them, and each field becomes an answer only after Enter accepts it.
+Acceptance calls both `configuration_value_problem` and the declaration's `validate_config_value`;
+a credential-shaped accidental paste is refused and masked in the rendered frame. Continue
+re-issues the same PREPARE_ACTION with `PromptedConfigValue` answers, then screen 05 receives the
+value-bound plan and the established 05 → 07 summary → remediation/Ready route continues. Harness
+selection re-prepares with the same accepted answers, so narrowing the target set cannot fall back
+to defaults or lose configuration.
+
+**Consequences.** No configuration value is durably written before confirmation and no value is
+added to AART's state model, receipt, object store or logs. Screen 07 has two modes with one
+identity: a pre-review editable form when no InstallPlan exists, and the existing read-only summary
+of the immutable plan after screen 05. Configuration and Credentials are rendered as visibly
+separate sections; the credential provider still owns entry and storage and AART carries only its
+reference.

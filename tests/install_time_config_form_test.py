@@ -1,0 +1,348 @@
+"""CP-23 task 16.2: screen 07 collects ordinary configuration before review."""
+
+from __future__ import annotations
+
+import unittest
+from dataclasses import replace
+
+from agent_artifacts.application.consumer_ui import (
+    CONFIG_CONTINUE_ROW,
+    ConsumerActionKind,
+    ConsumerUiCommand,
+    ConsumerUiCommandKind,
+    ConsumerUiEvent,
+    ConsumerUiEventKind,
+    ConsumerUiState,
+    InstallationConfigDraft,
+    InstallationConfigField,
+    key_event,
+    reduce_consumer_ui,
+)
+from agent_artifacts.application.consumer_views import (
+    ConfigInputView,
+    ConsumerScreen,
+    ConsumerSession,
+    CredentialInputView,
+)
+from agent_artifacts.domain.credentials import (
+    CredentialObservation,
+    CredentialState,
+    ProviderState,
+)
+from agent_artifacts.domain.inputs import InputValidation, PromptedConfigValue
+from agent_artifacts.domain.result import Ok
+from agent_artifacts.tui_consumer import CanonicalScreenSource, frame
+from tests.artifact_installation_e2e_test import ORG
+from tests.configured_install_command_e2e_test import _environment
+from tests.configured_installation_draft_e2e_test import AUTHORED_MCP
+from tests.consumer_application_e2e_test import _actions, _at, _drive
+from tests.consumer_shell_test import DOWN, ENTER, SPACE, screens
+
+
+def _config_view() -> ConfigInputView:
+    return ConfigInputView(
+        "organization",
+        "GitHub organization",
+        True,
+        "environment",
+        "process",
+        "Organization used for GitHub requests.",
+        "platform-team",
+        None,
+        None,
+        "letters, digits and dashes",
+        "acme",
+        None,
+        False,
+        None,
+        InputValidation("identifier"),
+    )
+
+
+def _credential_view() -> CredentialInputView:
+    return CredentialInputView(
+        "github-token",
+        "GitHub token",
+        True,
+        "environment",
+        "process",
+        "Token used for GitHub requests.",
+        "opaque token",
+        ("GitHub settings", "https://github.example.test/settings/tokens"),
+        "github-token@test-keychain:aart:github-token",
+        "test-keychain",
+        "available",
+        "absent",
+        "",
+    )
+
+
+def _draft() -> InstallationConfigDraft:
+    return InstallationConfigDraft(
+        (
+            InstallationConfigField(
+                "organization",
+                "acme",
+                InputValidation("identifier"),
+            ),
+        )
+    )
+
+
+def _state(draft: InstallationConfigDraft | None = None) -> ConsumerUiState:
+    current = _draft() if draft is None else draft
+    return ConsumerUiState(
+        ConsumerSession(
+            ConsumerScreen.REQUIRED_INPUTS,
+            history=(ConsumerScreen.MARKETPLACE,),
+        ),
+        selection=("company/mcp/github@1.0.0",),
+        action=ConsumerActionKind.INSTALL,
+        config_draft=current,
+        config_form_active=True,
+        rows=("organization", CONFIG_CONTINUE_ROW),
+    )
+
+
+class InstallTimeConfigFormInteractionTest(unittest.TestCase):
+    def test_default_is_prefilled_but_continue_submits_nothing_until_enter_accepts_it(self) -> None:
+        state = _state()
+        self.assertFalse(state.config_draft.ready)
+        self.assertIsNone(key_event("enter", replace(state, cursor=1)))
+
+        state, commands = reduce_consumer_ui(
+            state,
+            ConsumerUiEvent(
+                ConsumerUiEventKind.EDIT_INSTALL_CONFIG,
+                key="organization",
+                accepted=True,
+            ),
+        )
+
+        self.assertEqual(commands, ())
+        self.assertTrue(state.config_draft.ready)
+        self.assertEqual(state.cursor, 1)
+        event = key_event("enter", state)
+        self.assertIsNotNone(event)
+        reviewed, commands = reduce_consumer_ui(state, event)  # type: ignore[arg-type]
+        self.assertIs(reviewed.session.screen, ConsumerScreen.REVIEW_SELECTION)
+        self.assertEqual(commands[0].config_answers, (("organization", "acme"),))
+        self.assertIs(commands[0].action, ConsumerActionKind.INSTALL)
+
+    def test_editing_an_accepted_field_requires_enter_again(self) -> None:
+        accepted = _draft().accept("organization")
+        state = _state(accepted)
+
+        event = key_event("backspace", state)
+        self.assertIsNotNone(event)
+        edited, _ = reduce_consumer_ui(state, event)  # type: ignore[arg-type]
+
+        self.assertEqual(edited.config_draft.value("organization"), "acm")
+        self.assertFalse(edited.config_draft.ready)
+
+    def test_invalid_and_credential_shaped_values_stay_on_the_field(self) -> None:
+        for value, expected in (
+            ("not an identifier", "expected an identifier"),
+            ("ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", "looks like a credential"),
+        ):
+            with self.subTest(value=value):
+                draft = _draft().edit("organization", value)
+                state = _state(draft)
+                event = key_event("enter", state)
+                self.assertIsNotNone(event)
+                refused, commands = reduce_consumer_ui(state, event)  # type: ignore[arg-type]
+                self.assertEqual(commands, ())
+                self.assertFalse(refused.config_draft.ready)
+                self.assertEqual(refused.cursor, 0)
+                self.assertIn(expected, refused.config_draft.problem("organization") or "")
+
+    def test_printable_keys_and_whole_paste_follow_the_existing_form_pattern(self) -> None:
+        state = _state(_draft().edit("organization", ""))
+        for character in "team-a":
+            event = key_event(character, state)
+            state, _ = reduce_consumer_ui(state, event)  # type: ignore[arg-type]
+        self.assertEqual(state.config_draft.value("organization"), "team-a")
+
+        pasted = key_event("platform-team", state)
+        state, _ = reduce_consumer_ui(state, pasted)  # type: ignore[arg-type]
+        self.assertEqual(state.config_draft.value("organization"), "platform-team")
+
+
+class InstallTimeConfigFormRenderingTest(unittest.TestCase):
+    def _source(self) -> CanonicalScreenSource:
+        base = screens()
+        return CanonicalScreenSource(
+            replace(base, installation_inputs=(_config_view(), _credential_view()))
+        )
+
+    def test_form_has_config_rows_continue_and_a_visibly_separate_credential_section(self) -> None:
+        source = self._source()
+        state = _state()
+        state = replace(state, rows=source.rows(state))
+
+        drawn = "\n".join(frame(source, state))
+
+        self.assertEqual(source.rows(state), ("organization", CONFIG_CONTINUE_ROW))
+        self.assertIn("Configuration", drawn)
+        self.assertIn("GitHub organization", drawn)
+        self.assertIn("[acme]", drawn)
+        self.assertIn("Credentials", drawn)
+        self.assertIn("GitHub token", drawn)
+        self.assertIn("Enter securely during installation", drawn)
+        self.assertIn("Continue", drawn)
+        self.assertIn("[Type] Edit", drawn)
+
+    def test_problem_is_inline_and_a_credential_shaped_value_is_not_drawn(self) -> None:
+        secret_like = "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        state = _state(_draft().edit("organization", secret_like))
+        source = self._source()
+
+        drawn = "\n".join(frame(source, state))
+
+        self.assertIn("looks like a credential", drawn)
+        self.assertNotIn(secret_like, drawn)
+
+    def test_successful_preparation_turns_screen_07_back_into_a_summary(self) -> None:
+        state = _state(_draft().accept("organization"))
+        prepared, _ = reduce_consumer_ui(
+            state,
+            ConsumerUiEvent(
+                ConsumerUiEventKind.ACTION_PREPARED,
+                action=ConsumerActionKind.INSTALL,
+                semantic_identity="semantic",
+                selection_identity="selection",
+                review_digest="sha256:" + "1" * 64,
+            ),
+        )
+
+        self.assertFalse(prepared.config_form_active)
+
+
+class _MemoryCredentialProvider:
+    """A provider reference/observation fake; it never receives or stores credential material."""
+
+    provider = "test-keychain"
+
+    def __init__(self) -> None:
+        self.state = CredentialState.ABSENT
+
+    def available(self) -> ProviderState:
+        return ProviderState.AVAILABLE
+
+    def inspect(self, reference) -> Ok:
+        return Ok(
+            CredentialObservation(
+                reference,
+                ProviderState.AVAILABLE,
+                self.state,
+            )
+        )
+
+    def resolution_argv(self, reference) -> tuple[str, ...]:
+        return ("/usr/bin/false",)
+
+    def store(self, reference, secret=None, *, replace: bool = False) -> Ok:
+        if secret is not None:
+            raise AssertionError("the application handed credential material to the provider fake")
+        self.state = CredentialState.PRESENT
+        return self.inspect(reference)
+
+    def delete(self, reference) -> Ok:
+        self.state = CredentialState.ABSENT
+        return self.inspect(reference)
+
+
+class InstallTimeConfigPreparationE2ETest(unittest.TestCase):
+    def test_answer_reissues_the_real_preparation_as_a_prompted_source(self) -> None:
+        with _environment(authored=AUTHORED_MCP) as env:
+            handler = _actions(env)
+            handler._context = replace(  # noqa: SLF001 - production composition under test
+                handler._context,
+                credential_providers=(_MemoryCredentialProvider(),),
+            )
+            first = handler.handle(
+                ConsumerUiCommand(
+                    ConsumerUiCommandKind.PREPARE_ACTION,
+                    action=ConsumerActionKind.INSTALL,
+                    selection=("company/mcp/github@1.5.0",),
+                )
+            )
+
+            self.assertFalse(first.event.review_digest)
+            self.assertIsNotNone(first.event.config_draft)
+            assert first.event.config_draft is not None
+            self.assertEqual(first.event.config_draft.value(ORG.value), "acme")
+            self.assertFalse(first.event.config_draft.ready)
+            self.assertTrue(first.source.screens.installation_inputs)
+            credential = next(
+                item
+                for item in first.source.screens.installation_inputs
+                if isinstance(item, CredentialInputView)
+            )
+            self.assertIsNotNone(credential.provider_reference)
+
+            second = handler.handle(
+                ConsumerUiCommand(
+                    ConsumerUiCommandKind.PREPARE_ACTION,
+                    action=ConsumerActionKind.INSTALL,
+                    selection=("company/mcp/github@1.5.0",),
+                    config_answers=((ORG.value, "platform-team"),),
+                )
+            )
+
+        self.assertTrue(second.event.review_digest)
+        pending = handler._pending  # noqa: SLF001 - held reviewed action is the assertion subject
+        self.assertIsNotNone(pending)
+        self.assertIn(
+            PromptedConfigValue(ORG, "platform-team"),
+            pending.prepared.draft.inputs.sources,  # type: ignore[union-attr]
+        )
+
+    def test_form_to_success_writes_only_the_two_chosen_harness_files(self) -> None:
+        value = "platform-team-form-e2e"
+        with _environment(authored=AUTHORED_MCP) as env:
+            handler = _actions(env)
+            provider = _MemoryCredentialProvider()
+            handler._context = replace(  # noqa: SLF001 - production composition under test
+                handler._context,
+                credential_providers=(provider,),
+            )
+            finished, terminal, _ = _drive(
+                env,
+                _at(ConsumerScreen.MARKETPLACE),
+                SPACE,
+                ord("i"),
+                value,
+                ENTER,
+                ENTER,
+                DOWN,
+                SPACE,
+                DOWN,
+                SPACE,
+                ENTER,
+                ENTER,
+                ENTER,
+                ENTER,
+                actions=handler,
+            )
+
+            self.assertIs(finished.session.screen, ConsumerScreen.SUCCESS, terminal.last)
+            config = env.project / ".agent-artifacts/runtimes/company/mcp/github/config"
+            self.assertFalse((config / "claude.conf").exists())
+            for harness in ("opencode", "tabnine"):
+                path = config / f"{harness}.conf"
+                self.assertTrue(path.is_file(), f"{harness} configuration was not written")
+                self.assertIn(f"{ORG}={value}\n", path.read_text(encoding="utf-8"))
+
+            aart_state = env.paths.data_root
+            leaked = [
+                path
+                for path in __import__("pathlib").Path(aart_state).rglob("*")
+                if path.is_file() and value in path.read_text(encoding="utf-8", errors="replace")
+            ]
+            self.assertEqual(leaked, [])
+            self.assertIs(provider.state, CredentialState.PRESENT)
+
+
+if __name__ == "__main__":
+    unittest.main()

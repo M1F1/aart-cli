@@ -16,12 +16,14 @@ from itertools import groupby
 from typing import cast
 
 from agent_artifacts.configuration.model import SourceKind
+from agent_artifacts.domain.configuration_files import configuration_value_problem
 from agent_artifacts.domain.credentials import CredentialObservation, CredentialReference
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.effects import RiskClass, effect_to_data
 from agent_artifacts.domain.inputs import (
     BoundInputs,
     ConfigInput,
+    InputValidation,
     PersistedConfigValue,
     PolicyProvidedValue,
     PromptedConfigValue,
@@ -29,6 +31,7 @@ from agent_artifacts.domain.inputs import (
     SecretInput,
     SecretProviderReference,
     binding_kind,
+    validate_config_value,
 )
 from agent_artifacts.domain.plans import InstallPlan, install_plan_to_data
 from agent_artifacts.domain.receipts import RECEIPT_INVALID
@@ -82,6 +85,7 @@ __all__ = [
     "ActivityView",
     "ApplicationScreen",
     "ConfigInputView",
+    "config_input_value_problem",
     "ConsumerPlanView",
     "ConsumerScreen",
     "ConsumerSession",
@@ -401,6 +405,18 @@ class ConfigInputView:
     current: str | None
     configured: bool
     source: str | None
+    #: The domain validation rule is retained for an interactive adapter. It is deliberately
+    #: omitted from serialized output: the public projection already carries its human hint, while
+    #: the form needs the actual rule to refuse every invalid value rather than reimplement it.
+    validation: InputValidation | None = None
+
+
+def config_input_value_problem(view: ConfigInputView, value: str) -> str | None:
+    """Return the first domain-owned reason this screen-07 answer cannot be accepted."""
+
+    if not isinstance(view, ConfigInputView) or not isinstance(value, str):
+        raise ValueError("config input validation needs a projected field and text")
+    return configuration_value_problem(value) or validate_config_value(view.validation, value)
 
 
 @dataclass(frozen=True, slots=True)
@@ -525,6 +541,7 @@ def project_required_inputs(
                 None if bound is None else _config_current(bound.source),
                 bound is not None,
                 None if bound is None else _source_name(bound.source),
+                runtime_input.validation,
             )
         )
     return tuple(projected)

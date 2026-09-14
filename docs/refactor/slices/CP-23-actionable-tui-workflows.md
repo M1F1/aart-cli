@@ -1291,7 +1291,7 @@ Evidence:
 
 ### Task 16 — User variables and credentials (IN PROGRESS, handed off 2026-09-14)
 
-Increment 16.1 is done (D-264). Increments 16.2–16.5 are not started.
+Increments 16.1 and 16.2 are done (D-264–D-265). Increments 16.3–16.5 are not started.
 
 #### 16.1 — Configuration lives per harness beside the installed artifact (DONE)
 
@@ -1341,21 +1341,49 @@ Increment 16.1 is done (D-264). Increments 16.2–16.5 are not started.
   - drop the launcher's duplicate check;
   - drop the receipt record.
 
+#### 16.2 — Install-time configuration form (DONE)
+
+- D-265 makes screen 07 a pre-review form when preparation finds unanswered ConfigInputs. Its
+  rows are input ids plus Continue; defaults are prefilled but remain unaccepted until Enter.
+  Printable input and whole-paste follow the existing forms, Backspace trims, and editing an
+  accepted value makes it require Enter again.
+- Inline refusal uses both the declared `validate_config_value` rule and
+  `configuration_value_problem`. Credential-shaped accidental input is not drawn back into the
+  frame.
+- Secret inputs are auto-bound to an available provider even while config inputs are unanswered.
+  They are shown under a distinct Credentials section and no credential value crosses the form.
+- Continue re-issues INSTALL preparation with `PromptedConfigValue` answers before screen 05.
+  Harness toggles carry the answers into each narrowed plan, after which the existing screen-07
+  summary and Ready/remediation flow use the value-bound review digest.
+- `tests/install_time_config_form_test.py` covers the pure draft/reducer, form rendering, inline
+  validation, paste/backspace, reference separation, the real configured preparation and a shell
+  E2E. The E2E selects OpenCode and Tabnine and proves only their real per-harness files contain the
+  value while AART's isolated data root contains none.
+- Focused evidence: 110 tests pass across the new module, installation-input/draft/action suites,
+  action shell, task-10 harness choice, UI state, form lifecycle, frame structure and key legends.
+  `make typecheck format-check lint docs-check` passes.
+- Targeted mutations killed for 16.2:
+  - treating a visible default as accepted was killed by
+    `test_default_is_prefilled_but_continue_submits_nothing_until_enter_accepts_it`;
+  - dropping `config_answers` from the continuation command was killed by the same reducer test;
+  - bypassing declared validation was killed by
+    `test_invalid_and_credential_shaped_values_stay_on_the_field`;
+  - drawing a credential-shaped refused paste was killed by
+    `test_problem_is_inline_and_a_credential_shaped_value_is_not_drawn`;
+  - waiting to bind credentials until *all* unanswered fields were secrets was killed by
+    `test_answer_reissues_the_real_preparation_as_a_prompted_source`.
+
+The six previously owed 16.1 targeted mutations were also run and killed:
+
+- dropping the harness registration argument;
+- skipping credential-shape refusal;
+- not offering configuration content to the file interpreter;
+- reporting an edited file as MATCHED;
+- dropping the launcher's duplicate-value refusal;
+- omitting configuration-file records from the receipt.
+
 #### Remaining increments (design; not implemented)
 
-- **16.2 — install-time form.** Today, unanswered ConfigInputs in `LocalConsumerActions._offer_installation`
-  decline with "waiting for answers this screen cannot collect yet". The review digest binds
-  config values, so the values must come before screen 05. The design:
-  - Route to screen 07 in *form* mode first. Its rows are the config input ids, with any default
-    prefilled as editable text that is never submitted without Enter. A final continue row follows.
-  - Use the existing form-key pattern: REGISTRY_ADD/SOURCE_ADD rows, printable keys and paste
-    append, Backspace trims.
-  - Show inline problems from `validate_config_value` and `configuration_value_problem`.
-  - Continue re-issues PREPARE_ACTION INSTALL with the answers on the command. They become
-    `PromptedConfigValue` sources, and the flow then runs 05 → 07 summary → Ready.
-  - Secrets keep the auto-bound provider reference and the task 12/13 handoff.
-  - Record this as D-265.
-  - E2E: real isolated files for each chosen harness (task 10 selection), no value in AART state.
 - **16.3 — area.** Add one "User variables and credentials" area grouped by installed artifact,
   with separate Configuration and Credentials sections (INV-067).
   - Configuration is read from each receipt's `configuration_files`, via parse plus digest:

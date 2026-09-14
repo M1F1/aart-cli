@@ -2,9 +2,15 @@
 
 ## Current objective — CP-23 (2026-09-14)
 
-**CP-22 is CLOSED. CP-23 tasks 01–13 are done; owner task 16 is in progress (16.1 done, D-264; 16.2–16.5 designed in the slice)** (user variables and
+**CP-22 is CLOSED. CP-23 tasks 01–13 are done; owner task 16 is in progress (16.1–16.2 done, D-264–D-265; 16.3–16.5 designed in the slice)** (user variables and
 credentials per artifact and harness, in one TUI area). Task 14's all-screen audit follows 16, and
 task 15 closes the batch. Task 16's requirements are in the slice.
+Task 16.2 (D-265): screen 07 is now a working pre-review config form. Defaults require Enter,
+domain validation and credential-shape refusal are inline, credentials remain provider references
+in their own section, and Continue re-prepares the value-bound plan before screen 05. A real shell
+E2E writes only the two chosen harness files and finds the value nowhere under AART's data root.
+The next action is 16.3: project the grouped User variables and credentials area from installed
+configuration files and credential observations.
 Task 13 (D-263): an author's credential help reaches every place the value is asked for, in the
 same words from `application/credential_guidance.py`:
 - Screen 07 in Fast shows the name, which artifact needs it, what it is for, how to get it, the

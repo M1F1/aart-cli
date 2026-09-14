@@ -38,6 +38,8 @@ from agent_artifacts.application.consumer_ui import (
     ConsumerUiCommandKind,
     ConsumerUiEvent,
     ConsumerUiEventKind,
+    InstallationConfigDraft,
+    InstallationConfigField,
     RegistryDraft,
     RegistryInitDraft,
     RepositoryScanDraft,
@@ -90,8 +92,14 @@ from agent_artifacts.domain.credentials import (
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.effects import VerifyCredential
 from agent_artifacts.domain.harness import Scope
-from agent_artifacts.domain.identifiers import ArtifactCoordinate, SourceAlias
-from agent_artifacts.domain.inputs import SecretInput, SecretProviderReference
+from agent_artifacts.domain.identifiers import ArtifactCoordinate, InputId, SourceAlias
+from agent_artifacts.domain.inputs import (
+    ConfigInput,
+    InputValueSource,
+    PromptedConfigValue,
+    SecretInput,
+    SecretProviderReference,
+)
 from agent_artifacts.domain.policies import EffectivePolicy
 from agent_artifacts.domain.receipts import ArtifactReceipt
 from agent_artifacts.domain.reconciliation import DesiredState
@@ -632,6 +640,7 @@ class LocalConsumerActions:
         promotion_commit=None,
         notice: tuple[str, ...] = (),
         pending_setup: tuple[DeclaredArtifactSetup, ...] = (),
+        installation_inputs=(),
     ) -> CanonicalScreenSource:
         """The screens for the machine as it currently stands, plus whatever a flow is holding."""
 
@@ -673,6 +682,7 @@ class LocalConsumerActions:
                     if self._adoption_upstream is None
                     else _project_adoption_upstream(self._adoption_upstream)
                 ),
+                installation_inputs=installation_inputs,
             )
         )
 
@@ -1396,7 +1406,10 @@ class LocalConsumerActions:
     ) -> ConsumerActionUpdate:
         context = self._context
         host = self._host()
-        sources: tuple[SecretProviderReference, ...] = ()
+        sources: tuple[InputValueSource, ...] = tuple(
+            PromptedConfigValue(InputId(identifier), value)
+            for identifier, value in command.config_answers
+        )
         prepared = prepare_configured_installation(
             context.effective,
             selection,
@@ -1420,23 +1433,27 @@ class LocalConsumerActions:
                 ),
                 None,
             )
-            if provider is not None and all(
-                isinstance(field.input, SecretInput) for field in unanswered
-            ):
+            secret_fields = tuple(
+                field for field in unanswered if isinstance(field.input, SecretInput)
+            )
+            if provider is not None and secret_fields:
                 # The reference is safe application state, never a value. It is stable inside one
                 # AART home and separate across disposable/manual homes, so test runs and users do
                 # not silently share a Keychain item merely because an author reused an input id.
                 service = "aart." + hashlib.sha256(host.user_home.encode("utf-8")).hexdigest()[:12]
-                sources = tuple(
-                    SecretProviderReference(
-                        field.input.id,
-                        CredentialProviderRef(
-                            provider.provider,
-                            service,
-                            field.input.id.value,
-                        ),
-                    )
-                    for field in unanswered
+                sources = (
+                    *sources,
+                    *(
+                        SecretProviderReference(
+                            field.input.id,
+                            CredentialProviderRef(
+                                provider.provider,
+                                service,
+                                field.input.id.value,
+                            ),
+                        )
+                        for field in secret_fields
+                    ),
                 )
                 prepared = prepare_configured_installation(
                     context.effective,
@@ -1457,8 +1474,47 @@ class LocalConsumerActions:
             else ()
         )
         if not prepared.value.ready:
-            # Config values still need an editable field. Secret values never do: the shell binds
-            # only their provider reference above and the provider itself owns entry/storage.
+            config_inputs = tuple(
+                field.input
+                for field in prepared.value.draft.inputs.unanswered
+                if isinstance(field.input, ConfigInput)
+            )
+            if config_inputs:
+                observations = []
+                for reference in prepared.value.draft.inputs.bound.credential_references:
+                    owner = next(
+                        (
+                            item
+                            for item in context.credential_providers
+                            if item.provider == reference.provider.provider
+                        ),
+                        None,
+                    )
+                    if owner is None:
+                        continue
+                    observed = owner.inspect(reference)
+                    if isinstance(observed, Ok):
+                        observations.append(observed.value)
+                draft = InstallationConfigDraft(
+                    tuple(
+                        InstallationConfigField(
+                            runtime_input.id.value,
+                            runtime_input.default or "",
+                            runtime_input.validation,
+                        )
+                        for runtime_input in config_inputs
+                    )
+                )
+                return ConsumerActionUpdate(
+                    self.source(
+                        installation_inputs=prepared.value.draft.inputs.views(tuple(observations))
+                    ),
+                    ConsumerUiEvent(
+                        ConsumerUiEventKind.ACTION_PREPARED,
+                        action=command.action,
+                        config_draft=draft,
+                    ),
+                )
             waiting = ", ".join(
                 item.input.id.value for item in prepared.value.draft.inputs.unanswered
             )

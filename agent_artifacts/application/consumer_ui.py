@@ -16,6 +16,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 from enum import Enum
 
+from agent_artifacts.domain.configuration_files import configuration_value_problem
+from agent_artifacts.domain.inputs import InputValidation, validate_config_value
 from agent_artifacts.domain.registry import PromotionMode
 
 from .consumer_views import (
@@ -44,6 +46,9 @@ __all__ = [
     "ConsumerUiEvent",
     "ConsumerUiEventKind",
     "ConsumerUiState",
+    "CONFIG_CONTINUE_ROW",
+    "InstallationConfigDraft",
+    "InstallationConfigField",
     "KeyBinding",
     "RegistryDraft",
     "RegistryInitDraft",
@@ -110,6 +115,7 @@ class ConsumerUiEventKind(str, Enum):
     EDIT_SOURCE = "edit-source"
     EDIT_REGISTRY_INIT = "edit-registry-init"
     EDIT_REPOSITORY_SCAN = "edit-repository-scan"
+    EDIT_INSTALL_CONFIG = "edit-install-config"
 
 
 @dataclass(frozen=True, slots=True)
@@ -176,6 +182,94 @@ class SourceDraft:
             for value in (self.alias, self.kind, self.location, self.ref)
         ):
             raise ValueError("source draft is invalid")
+
+
+#: Screen 07's final control is not an input id. Angle brackets cannot occur in an InputId, so an
+#: authored field can never collide with it while rows remain the actual config input ids.
+CONFIG_CONTINUE_ROW = "<continue>"
+
+
+@dataclass(frozen=True, slots=True)
+class InstallationConfigField:
+    """One non-secret answer held only for the lifetime of the interactive form."""
+
+    id: str
+    value: str = ""
+    validation: InputValidation | None = None
+    accepted: bool = False
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.id, str)
+            or not self.id
+            or any(character in self.id for character in "\r\n")
+            or not isinstance(self.value, str)
+            or any(character in self.value for character in "\r\n")
+            or not (self.validation is None or isinstance(self.validation, InputValidation))
+            or not isinstance(self.accepted, bool)
+        ):
+            raise ValueError("installation config field is invalid")
+
+    @property
+    def problem(self) -> str | None:
+        return configuration_value_problem(self.value) or validate_config_value(
+            self.validation, self.value
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class InstallationConfigDraft:
+    """Editable config values, including which defaults a person explicitly accepted."""
+
+    fields: tuple[InstallationConfigField, ...] = ()
+
+    def __post_init__(self) -> None:
+        if any(not isinstance(item, InstallationConfigField) for item in self.fields) or len(
+            {item.id for item in self.fields}
+        ) != len(self.fields):
+            raise ValueError("installation config draft is invalid")
+
+    @property
+    def ready(self) -> bool:
+        return bool(self.fields) and all(
+            item.accepted and item.problem is None for item in self.fields
+        )
+
+    @property
+    def answers(self) -> tuple[tuple[str, str], ...]:
+        return tuple((item.id, item.value) for item in self.fields if item.accepted)
+
+    def value(self, identifier: str) -> str:
+        field = next((item for item in self.fields if item.id == identifier), None)
+        if field is None:
+            raise ValueError(f"installation config has no field {identifier}")
+        return field.value
+
+    def problem(self, identifier: str) -> str | None:
+        field = next((item for item in self.fields if item.id == identifier), None)
+        if field is None:
+            raise ValueError(f"installation config has no field {identifier}")
+        return field.problem
+
+    def edit(self, identifier: str, value: str) -> "InstallationConfigDraft":
+        if all(item.id != identifier for item in self.fields):
+            raise ValueError(f"installation config has no field {identifier}")
+        return InstallationConfigDraft(
+            tuple(
+                replace(item, value=value, accepted=False) if item.id == identifier else item
+                for item in self.fields
+            )
+        )
+
+    def accept(self, identifier: str) -> "InstallationConfigDraft":
+        if all(item.id != identifier for item in self.fields):
+            raise ValueError(f"installation config has no field {identifier}")
+        return InstallationConfigDraft(
+            tuple(
+                replace(item, accepted=item.problem is None) if item.id == identifier else item
+                for item in self.fields
+            )
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -275,6 +369,7 @@ class ConsumerUiEvent:
     semantic_identity: str = ""
     selection_identity: str = ""
     review_digest: str = ""
+    config_draft: InstallationConfigDraft | None = None
 
     def __post_init__(self) -> None:
         if (
@@ -293,6 +388,10 @@ class ConsumerUiEvent:
             or not _safe_identity(self.semantic_identity)
             or not _safe_identity(self.selection_identity)
             or not _safe_identity(self.review_digest)
+            or (
+                self.config_draft is not None
+                and not isinstance(self.config_draft, InstallationConfigDraft)
+            )
         ):
             raise ValueError("consumer UI event is invalid")
 
@@ -311,6 +410,7 @@ class ConsumerUiCommand:
     registry_init_draft: RegistryInitDraft | None = None
     repository_scan_draft: RepositoryScanDraft | None = None
     targets: tuple[str, ...] = ()
+    config_answers: tuple[tuple[str, str], ...] = ()
 
     def __post_init__(self) -> None:
         if (
@@ -322,6 +422,7 @@ class ConsumerUiCommand:
             or (self.action is not None and not isinstance(self.action, ConsumerActionKind))
             or not _rows_valid(self.selection)
             or not _rows_valid(self.targets)
+            or not _config_answers_valid(self.config_answers)
             or not isinstance(self.focus, str)
             or any(character in self.focus for character in "\r\n")
             or not _safe_identity(self.review_digest)
@@ -402,6 +503,23 @@ def _safe_identity(value: str) -> bool:
     return isinstance(value, str) and not any(character in value for character in "\r\n")
 
 
+def _config_answers_valid(values: tuple[tuple[str, str], ...]) -> bool:
+    return (
+        isinstance(values, tuple)
+        and len({item[0] for item in values if isinstance(item, tuple) and len(item) == 2})
+        == len(values)
+        and all(
+            isinstance(item, tuple)
+            and len(item) == 2
+            and isinstance(item[0], str)
+            and bool(item[0])
+            and isinstance(item[1], str)
+            and not any(character in item[0] + item[1] for character in "\r\n")
+            for item in values
+        )
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class ConsumerUiState:
     session: ConsumerSession = _INITIAL_SESSION
@@ -441,6 +559,11 @@ class ConsumerUiState:
     #: Harnesses explicitly chosen on screen 05. These are separate from artifact rows because
     #: changing delivery intent must never change which artifacts the request contains (D-260).
     targets: tuple[str, ...] = ()
+    #: Non-secret text lives only in this session until it is reviewed and written beside the
+    #: artifact. ``config_form_active`` distinguishes the pre-review form from screen 07's later
+    #: summary of the immutable plan.
+    config_draft: InstallationConfigDraft = InstallationConfigDraft()
+    config_form_active: bool = False
 
     def __post_init__(self) -> None:
         if (
@@ -455,6 +578,8 @@ class ConsumerUiState:
             or not isinstance(self.searching, bool)
             or not _rows_valid(self.selection)
             or not _rows_valid(self.targets)
+            or not isinstance(self.config_draft, InstallationConfigDraft)
+            or not isinstance(self.config_form_active, bool)
             or not isinstance(self.search, str)
             or any(character in self.search for character in "\r\n")
             or not isinstance(self.help_visible, bool)
@@ -855,6 +980,7 @@ def _toggle_selection(
                 selection=state.selection,
                 targets=targets,
                 focus=request_focus,
+                config_answers=state.config_draft.answers,
             ),
         )
     if key in state.selection:
@@ -983,6 +1109,45 @@ def _request_action(
 ) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
     if action is None:
         return state, ()
+    if (
+        action is ConsumerActionKind.INSTALL
+        and state.session.screen is ConsumerScreen.REQUIRED_INPUTS
+        and state.config_form_active
+    ):
+        if not state.config_draft.ready:
+            return state, ()
+        # The form precedes screen 05 and is not part of its later summary route. Removing it from
+        # history here means Review -> Required Inputs remains a forward step over the immutable
+        # plan rather than rewinding into the editable form.
+        session = replace(
+            state.session,
+            screen=ConsumerScreen.REVIEW_SELECTION,
+            semantic_identity=None,
+            selection_identity=None,
+            review_digest=None,
+        )
+        prepared = replace(
+            state,
+            session=session,
+            action=action,
+            config_form_active=False,
+            quit_pending=False,
+        )
+        command = ConsumerUiCommand(
+            ConsumerUiCommandKind.PREPARE_ACTION,
+            action=action,
+            selection=state.selection,
+            targets=state.targets,
+            focus=state.focus,
+            config_answers=state.config_draft.answers,
+        )
+        return prepared, (
+            command,
+            ConsumerUiCommand(
+                ConsumerUiCommandKind.LOAD_SCREEN,
+                ConsumerScreen.REVIEW_SELECTION,
+            ),
+        )
     target = _ACTION_REVIEW.get((action, state.session.screen))
     focus = (
         state.current_row or state.focus
@@ -1050,6 +1215,7 @@ def _request_action(
         repository_scan_draft=(
             state.repository_scan_draft if action is ConsumerActionKind.REPOSITORY_SCAN else None
         ),
+        config_answers=(state.config_draft.answers if action is ConsumerActionKind.INSTALL else ()),
     )
     return prepared, (command, *navigation)
 
@@ -1084,6 +1250,31 @@ def _action_prepared(
     action = event.action
     if action is None or action is not state.action:
         return state, ()
+    if action is ConsumerActionKind.INSTALL and event.config_draft is not None:
+        if state.session.screen is not ConsumerScreen.REVIEW_SELECTION:
+            return state, ()
+        session = replace(
+            state.session,
+            screen=ConsumerScreen.REQUIRED_INPUTS,
+            semantic_identity=None,
+            selection_identity=None,
+            review_digest=None,
+        )
+        return (
+            replace(
+                state,
+                session=session,
+                config_draft=event.config_draft,
+                config_form_active=True,
+                quit_pending=False,
+            ),
+            (
+                ConsumerUiCommand(
+                    ConsumerUiCommandKind.LOAD_SCREEN,
+                    ConsumerScreen.REQUIRED_INPUTS,
+                ),
+            ),
+        )
     if not event.review_digest:
         return _declined_preparation(state)
     # Scanning is the completed read-only action: the result is now on screen and there is no
@@ -1106,7 +1297,7 @@ def _action_prepared(
         selection_identity=event.selection_identity or None,
         review_digest=event.review_digest,
     )
-    return replace(state, session=session, quit_pending=False), ()
+    return replace(state, session=session, config_form_active=False, quit_pending=False), ()
 
 
 _ACTION_RUNNING: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationScreen | None] = {
@@ -1155,6 +1346,7 @@ def _confirm_action(
         targets=state.targets if action is ConsumerActionKind.INSTALL else (),
         focus=state.focus,
         review_digest=review_digest,
+        config_answers=(state.config_draft.answers if action is ConsumerActionKind.INSTALL else ()),
     )
     target = _ACTION_RUNNING[key]
     if target is None:
@@ -1277,6 +1469,8 @@ def _action_recorded(
         moved,
         selection=(),
         targets=(),
+        config_draft=InstallationConfigDraft(),
+        config_form_active=False,
         focus=focus,
         quit_pending=False,
         action=None,
@@ -1337,6 +1531,28 @@ def reduce_consumer_ui(
         return _action_recorded(state, event)
     if event.kind is ConsumerUiEventKind.ACTION_FAILED:
         return _action_failed(state, event)
+    if event.kind is ConsumerUiEventKind.EDIT_INSTALL_CONFIG:
+        if (
+            state.session.screen is not ConsumerScreen.REQUIRED_INPUTS
+            or not state.config_form_active
+            or all(item.id != event.key for item in state.config_draft.fields)
+        ):
+            return state, ()
+        if event.accepted is True:
+            edited_config = state.config_draft.accept(event.key)
+            if not any(item.id == event.key and item.accepted for item in edited_config.fields):
+                return replace(state, config_draft=edited_config, quit_pending=False), ()
+            return (
+                replace(
+                    state,
+                    config_draft=edited_config,
+                    cursor=(state.cursor + 1) % max(len(state.rows), 1),
+                    quit_pending=False,
+                ),
+                (),
+            )
+        edited_config = state.config_draft.edit(event.key, event.text)
+        return replace(state, config_draft=edited_config, quit_pending=False), ()
     if event.kind is ConsumerUiEventKind.EDIT_REGISTRY:
         if state.session.screen is not ConsumerScreen.REGISTRY_ADD:
             return state, ()
@@ -1582,6 +1798,7 @@ _SCREEN_BINDINGS: dict[ApplicationScreen, tuple[_ScreenBinding, ...]] = {
 _FORM_SCREENS = frozenset(
     {
         ConsumerScreen.REGISTRY_ADD,
+        ConsumerScreen.REQUIRED_INPUTS,
         MaintainerScreen.SOURCE_ADD,
         MaintainerScreen.REGISTRY_INIT,
         MaintainerScreen.REPOSITORY_SCAN,
@@ -1687,7 +1904,9 @@ def key_bindings(
         if _binding_enabled(binding, state)
     ]
     keys = {binding.key.lower() for binding in bindings}
-    if state.session.screen in _FORM_SCREENS:
+    if state.session.screen in _FORM_SCREENS and (
+        state.session.screen is not ConsumerScreen.REQUIRED_INPUTS or state.config_form_active
+    ):
         # `QA-088`: a form accepts four keys and used to describe them in a sentence above a
         # legend that advertised two. They are all keys, so they are all in the legend, in the
         # order a reader uses them: change a field, then move on.
@@ -1782,6 +2001,7 @@ def key_event(
             and state.session.screen
             not in (
                 ConsumerScreen.REGISTRY_ADD,
+                ConsumerScreen.REQUIRED_INPUTS,
                 MaintainerScreen.REGISTRY_INIT,
                 MaintainerScreen.REPOSITORY_SCAN,
             )
@@ -1806,6 +2026,46 @@ def key_event(
             return ConsumerUiEvent(ConsumerUiEventKind.SEARCH, text=state.search[:-1])
         if len(key) == 1 and key.isprintable():
             return ConsumerUiEvent(ConsumerUiEventKind.SEARCH, text=state.search + key)
+        return None
+
+    if state.session.screen is ConsumerScreen.REQUIRED_INPUTS and state.config_form_active:
+        row = cursor or state.current_row
+        if key == "escape":
+            return ConsumerUiEvent(ConsumerUiEventKind.BACK)
+        if key == "up":
+            return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="up")
+        if key == "down":
+            return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="down")
+        if key == "enter":
+            if row == CONFIG_CONTINUE_ROW:
+                return (
+                    ConsumerUiEvent(
+                        ConsumerUiEventKind.REQUEST_ACTION,
+                        action=ConsumerActionKind.INSTALL,
+                    )
+                    if state.config_draft.ready
+                    else None
+                )
+            if any(item.id == row for item in state.config_draft.fields):
+                return ConsumerUiEvent(
+                    ConsumerUiEventKind.EDIT_INSTALL_CONFIG,
+                    key=row,
+                    accepted=True,
+                )
+            return None
+        if any(item.id == row for item in state.config_draft.fields) and key == "backspace":
+            return ConsumerUiEvent(
+                ConsumerUiEventKind.EDIT_INSTALL_CONFIG,
+                key=row,
+                text=state.config_draft.value(row)[:-1],
+            )
+        if any(item.id == row for item in state.config_draft.fields) and key.isprintable():
+            value = key if len(key) > 1 else state.config_draft.value(row) + key
+            return ConsumerUiEvent(
+                ConsumerUiEventKind.EDIT_INSTALL_CONFIG,
+                key=row,
+                text=value,
+            )
         return None
 
     if state.session.screen is MaintainerScreen.REGISTRY_INIT:

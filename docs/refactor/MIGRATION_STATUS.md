@@ -1,6 +1,11 @@
 # AART Refactor Migration Status
 
-**2026-09-14: CP-22 CLOSED; CP-23 tasks 01–13 done, owner task 16 in progress (16.1 per-harness configuration files done), then 14 and 15.**
+**2026-09-14: CP-22 CLOSED; CP-23 tasks 01–13 done, owner task 16 in progress (16.1 per-harness files and 16.2 install form done), then 14 and 15.**
+Task 16.2 (D-265): screen 07 collects required ConfigInputs before screen 05, with defaults that
+require Enter, domain-owned inline validation, masked credential-shaped mistakes, and a separate
+credential-provider section. Continue re-prepares INSTALL with PromptedConfigValues; target changes
+carry the same answers. A real OpenCode+Tabnine shell E2E writes only those configuration files and
+finds no value in AART state. Five 16.2 mutations and the six owed 16.1 mutations were killed.
 Task 13 (D-263): credential guidance reaches screen 07 (Fast), the lent terminal before the
 provider's prompt, and the CLI refusal. It proves the author's `help` survives compile, promotion and
 the vendored Registry. Other changes:

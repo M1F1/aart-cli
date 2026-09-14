@@ -16,12 +16,14 @@ from agent_artifacts.application.consumer_session import ConsumerMachine
 from agent_artifacts.application.consumer_ui import (
     ACTION_ANSWER_SCREENS,
     ACTION_REQUEST_SCREENS,
+    CONFIG_CONTINUE_ROW,
     ConsumerActionKind,
     ConsumerUiCommand,
     ConsumerUiCommandKind,
     ConsumerUiEvent,
     ConsumerUiEventKind,
     ConsumerUiState,
+    InstallationConfigDraft,
     KeyBinding,
     WorkflowStepStatus,
     key_bindings,
@@ -199,6 +201,7 @@ __all__ = [
     "remediation_change",
     "render_remediation",
     "render_required_inputs",
+    "render_installation_config_form",
     "render_review_selection",
     "render_settings",
     "settings_consequence",
@@ -1148,6 +1151,69 @@ def render_required_inputs(
     return tuple(lines)
 
 
+def render_installation_config_form(
+    inputs: tuple[InputView, ...],
+    draft: InstallationConfigDraft,
+    current_row: str,
+    profile: PresentationProfile,
+) -> tuple[str, ...]:
+    """Draw editable non-secrets beside read-only credential-provider guidance (INV-067)."""
+
+    if (
+        any(not isinstance(item, (ConfigInputView, CredentialInputView)) for item in inputs)
+        or not isinstance(draft, InstallationConfigDraft)
+        or not isinstance(current_row, str)
+        or not isinstance(profile, PresentationProfile)
+    ):
+        raise ValueError("installation config form needs projected inputs and a safe draft")
+    projected = {item.id: item for item in inputs if isinstance(item, ConfigInputView)}
+    lines = [
+        "A few things are needed before installation",
+        "Configuration",
+        "  These ordinary values will be kept beside the installed artifact, per harness.",
+    ]
+    for field in draft.fields:
+        view = projected.get(field.id)
+        label = field.id if view is None else view.label
+        problem = field.problem
+        shown = (
+            "<credential-shaped value refused>"
+            if problem is not None and "credential" in problem
+            else field.value
+        )
+        mark = ">" if current_row == field.id else " "
+        accepted = "  accepted" if field.accepted and problem is None else ""
+        lines.append(f"{mark} {label} ({field.id}): [{shown}]{accepted}")
+        if view is not None and view.example:
+            lines.append(f"    (e.g. {view.example})")
+        if problem is not None:
+            lines.append(f"    Problem: {problem}")
+        elif view is not None and view.validation_hint:
+            lines.append(f"    {view.validation_hint}")
+        if profile is PresentationProfile.VERBOSE and view is not None:
+            lines.append(f"    Binding: {_human(view.binding)} ({_human(view.exposure)})")
+    credentials = tuple(item for item in inputs if isinstance(item, CredentialInputView))
+    if credentials:
+        lines.append("Credentials")
+        lines.append("  Values stay with the credential provider; AART keeps only references.")
+        for item in credentials:
+            lines.extend(credential_guidance_lines(item.guidance))
+            status = (
+                "Configured securely"
+                if item.health == "present"
+                else (
+                    "Enter securely during installation"
+                    if item.provider_reference is not None
+                    else "Required"
+                )
+            )
+            lines.append(f"  {item.label}: {status}")
+    mark = ">" if current_row == CONFIG_CONTINUE_ROW else " "
+    readiness = "Review selection" if draft.ready else "Accept every configuration value first"
+    lines.append(f"{mark} Continue: {readiness}")
+    return tuple(lines)
+
+
 def render_marketplace_artifact(
     row: MarketplaceArtifactRow,
     profile: PresentationProfile,
@@ -1771,7 +1837,11 @@ def run_consumer_shell(
         terminal.draw(frame(active_source, current))
         name = key_name(
             terminal.key(),
-            literal=current.session.screen
+            literal=(
+                current.session.screen is ConsumerScreen.REQUIRED_INPUTS
+                and current.config_form_active
+            )
+            or current.session.screen
             in (
                 ConsumerScreen.REGISTRY_ADD,
                 MaintainerScreen.SOURCE_ADD,
@@ -1933,6 +2003,9 @@ class ConsumerScreens:
     adoption_review: MaintainerAdoptionReviewView | None = None
     adopted_artifacts: tuple[MaintainerAdoptedArtifactView, ...] = ()
     adoption_upstream: MaintainerAdoptionUpstreamView | None = None
+    #: The pre-review screen-07 projection. It is separate from ``plan.inputs`` because no plan
+    #: exists until these values have been accepted and bound.
+    installation_inputs: tuple[InputView, ...] = ()
 
     def offered(self, key: str) -> MarketplaceEntry | None:
         return next((item for item in self.marketplace if item.key == key), None)
@@ -2127,6 +2200,7 @@ def screens_from(
     adoption_review: MaintainerAdoptionReviewView | None = None,
     adopted_artifacts: tuple[MaintainerAdoptedArtifactView, ...] = (),
     adoption_upstream: MaintainerAdoptionUpstreamView | None = None,
+    installation_inputs: tuple[InputView, ...] = (),
 ) -> ConsumerScreens:
     """The screens for one assembled machine, plus whatever the current flow is holding.
 
@@ -2175,6 +2249,7 @@ def screens_from(
         adoption_review,
         adopted_artifacts,
         adoption_upstream,
+        installation_inputs,
     )
 
 
@@ -2302,6 +2377,13 @@ class CanonicalScreenSource:
 
     def rows(self, state: ConsumerUiState) -> tuple[str, ...]:
         screen, query = state.session.screen, state.search
+        if screen is ConsumerScreen.REQUIRED_INPUTS and state.config_form_active:
+            fields = tuple(
+                item.id
+                for item in self._screens.installation_inputs
+                if isinstance(item, ConfigInputView)
+            )
+            return (*fields, CONFIG_CONTINUE_ROW) if fields else ()
         if screen is ConsumerScreen.REVIEW_SELECTION:
             plan = self._screens.plan
             if plan is None:
@@ -3344,6 +3426,13 @@ class CanonicalScreenSource:
             # A review has nothing the cursor can move over: the one decision it offers is a key,
             # and a key is advertised in the legend (`QA-088`). What it is about is view status.
             return ()
+        if screen is ConsumerScreen.REQUIRED_INPUTS and state.config_form_active:
+            return render_installation_config_form(
+                screens.installation_inputs,
+                state.config_draft,
+                state.current_row,
+                profile,
+            )
         if not isinstance(screen, ConsumerScreen):
             return (f"{_title(screen)} is not available yet.",)
         if screen in _PLAN_SCREENS:
