@@ -8,6 +8,7 @@ from agent_artifacts.application.consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     CredentialInputView,
+    HarnessTargetView,
     PresentationProfile,
     SelectionMode,
     consumer_plan_to_data,
@@ -16,6 +17,10 @@ from agent_artifacts.application.consumer_views import (
     project_install_plan,
     project_required_inputs,
     project_selection,
+    target_choice_problems,
+    target_from_row,
+    target_row,
+    targets_confirmed,
 )
 from agent_artifacts.domain.candidates import CandidateId
 from agent_artifacts.domain.credentials import (
@@ -238,6 +243,105 @@ class ConsumerPlanProjectionTest(unittest.TestCase):
         self.assertNotIn('"value"', encoded)
         self.assertIn("macos-keychain", encoded)
         self.assertIn("present", encoded)
+
+
+class HarnessTargetChoiceTest(unittest.TestCase):
+    def _view(self, *targets: HarnessTargetView, chosen: tuple[str, ...] = ()):
+        return dataclasses.replace(
+            project_install_plan(_plan()),
+            targets=targets,
+            chosen_targets=chosen,
+        )
+
+    def test_target_rows_round_trip_without_confusing_other_rows(self) -> None:
+        self.assertEqual(target_row("opencode"), "target:opencode")
+        self.assertEqual(target_from_row("target:opencode"), "opencode")
+        self.assertIsNone(target_from_row("company/skill/code-review@1.0.0"))
+
+    def test_zero_eligible_harnesses_do_not_create_a_choice_gate(self) -> None:
+        view = self._view()
+
+        self.assertEqual(target_choice_problems(view, ()), ())
+        self.assertTrue(targets_confirmed(view, ()))
+
+    def test_one_eligible_harness_still_requires_an_explicit_choice(self) -> None:
+        artifact = project_install_plan(_plan()).selection.resolved[0]
+        view = self._view(HarnessTargetView("claude", (artifact,)))
+
+        self.assertEqual(
+            target_choice_problems(view, ()),
+            ("Choose at least one harness to install into.",),
+        )
+        self.assertFalse(targets_confirmed(view, ()))
+        self.assertFalse(targets_confirmed(view, ("claude",)))
+        self.assertTrue(
+            targets_confirmed(
+                dataclasses.replace(view, chosen_targets=("claude",)),
+                ("claude",),
+            )
+        )
+
+    def test_many_eligible_harnesses_accept_one_or_many_when_the_plan_matches(self) -> None:
+        artifact = project_install_plan(_plan()).selection.resolved[0]
+        targets = tuple(
+            HarnessTargetView(harness, (artifact,)) for harness in ("claude", "opencode", "tabnine")
+        )
+
+        for chosen in (("opencode",), ("claude", "tabnine"), ("claude", "opencode", "tabnine")):
+            with self.subTest(chosen=chosen):
+                view = self._view(*targets, chosen=chosen)
+                self.assertEqual(target_choice_problems(view, chosen), ())
+                self.assertTrue(targets_confirmed(view, chosen))
+
+    def test_stale_and_incomplete_multi_artifact_choices_are_explained(self) -> None:
+        first = project_install_plan(_plan()).selection.resolved[0]
+        second = "company/mcp/issue-tracker@2.0.0"
+        base = self._view(
+            HarnessTargetView("claude", (first, second)),
+            HarnessTargetView("opencode", (first,)),
+            HarnessTargetView("tabnine", (second,)),
+        )
+        view = dataclasses.replace(
+            base,
+            selection=dataclasses.replace(base.selection, resolved=(first, second)),
+        )
+
+        self.assertEqual(target_choice_problems(view, ("claude",)), ())
+        self.assertEqual(
+            target_choice_problems(view, ("opencode",)),
+            (
+                "None of the chosen harnesses can host company/mcp/issue-tracker@2.0.0; "
+                "it can go into claude, tabnine.",
+            ),
+        )
+        self.assertEqual(
+            target_choice_problems(view, ("removed-harness",)),
+            (
+                "removed-harness cannot host anything in this selection; untick it.",
+                f"None of the chosen harnesses can host {first}; it can go into claude, opencode.",
+                "None of the chosen harnesses can host company/mcp/issue-tracker@2.0.0; "
+                "it can go into claude, tabnine.",
+            ),
+        )
+
+    def test_machine_projection_carries_eligible_and_chosen_targets(self) -> None:
+        artifact = project_install_plan(_plan()).selection.resolved[0]
+        view = self._view(
+            HarnessTargetView("opencode", (artifact,)),
+            HarnessTargetView("tabnine", (artifact,)),
+            chosen=("tabnine",),
+        )
+
+        projected = consumer_plan_to_data(view)
+
+        self.assertEqual(
+            projected["targets"],
+            [
+                {"harness": "opencode", "artifacts": [artifact]},
+                {"harness": "tabnine", "artifacts": [artifact]},
+            ],
+        )
+        self.assertEqual(projected["chosen_targets"], ["tabnine"])
 
     def test_exact_collection_and_customized_selection_stay_distinct(self) -> None:
         collection = CollectionCoordinate(SourceAlias("company"), "developer", "1.0.0")

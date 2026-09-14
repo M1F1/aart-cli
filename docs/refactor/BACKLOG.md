@@ -3034,3 +3034,14 @@ screen 53's Status facet still count the stored state, so they say `ready=1` unt
 after Registry Sync. Noncritical: nothing there is actionable, and no promotion is offered from
 those counts. Fixing it means projecting the record into the Source view and adding a Status facet
 value for it.
+
+## B-119 — Updates keep recorded harnesses and do not offer target reselection
+
+Found 2026-09-14 during CP-23 task 10. Explicit harness choice applies to a new installation.
+The update path continues to build `previous` from installed receipts and keeps the harness
+components that installation recorded; it does not expose screen 05's target picker. This is the
+smallest conservative choice under INV-179: changing configuration is not reinstall, and an update
+must not silently add or remove harness delivery. A future supported harness-migration workflow
+needs its own explicit reconciliation intent, review, effects and receipt rather than overloading
+artifact update. Noncritical: current updates retain the installed targets and task 10 changes no
+update behavior.

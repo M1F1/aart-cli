@@ -100,6 +100,17 @@ class ManualTestLabTest(unittest.TestCase):
         manifest = json.loads((self.root / "repositories/mcp/dummy-mcp/aart.json").read_text())
         self.assertEqual(manifest["inputs"][0]["kind"], "secret")
         self.assertEqual(manifest["inputs"][0]["id"], "dummy-token")
+        self.assertEqual(
+            manifest["compatibility"]["harnesses"],
+            ["claude", "opencode", "tabnine"],
+        )
+        skill_manifest = json.loads(
+            (self.root / "repositories/skill/manual-check/aart.json").read_text()
+        )
+        self.assertEqual(
+            skill_manifest["compatibility"]["harnesses"],
+            ["claude", "opencode", "tabnine"],
+        )
         registry_files = tuple(
             (self.root / "repositories/registry/registry/versions").rglob("*.json")
         )

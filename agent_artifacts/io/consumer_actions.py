@@ -45,8 +45,10 @@ from agent_artifacts.application.consumer_ui import (
 )
 from agent_artifacts.application.consumer_views import (
     ConsumerSettings,
+    HarnessTargetView,
     LifecyclePlanView,
     project_lifecycle_plan,
+    target_choice_problems,
 )
 from agent_artifacts.application.installed_setup import DeclaredArtifactSetup
 from agent_artifacts.application.maintainer_promotion import (
@@ -300,6 +302,34 @@ class ConsumerActionContext:
 class _PendingInstall:
     prepared: PreparedConfiguredInstallation
     previous_receipts: tuple[tuple[ArtifactCoordinate, ArtifactReceipt], ...] = ()
+    targets: tuple[HarnessTargetView, ...] = ()
+    chosen_targets: tuple[str, ...] = ()
+
+
+def _installation_targets(
+    prepared: PreparedConfiguredInstallation, profiles: tuple[str, ...]
+) -> tuple[HarnessTargetView, ...]:
+    """Project the draft's measured placement capability in host order.
+
+    The draft is the authority even while inputs remain unanswered: each MCP registration target,
+    tree delivery and managed merge names both its harness and its artifact. Policy, compatibility,
+    platform and scope have already narrowed these placements (D-260).
+    """
+
+    hosted: dict[str, list[str]] = {profile: [] for profile in profiles}
+    for placement in prepared.draft.placements:
+        coordinate = str(placement.coordinate)
+        harnesses = {item.harness for item in placement.targets}
+        harnesses.update(item.harness for item in placement.deliveries)
+        harnesses.update(item.harness for item in placement.merges)
+        for profile in profiles:
+            if profile in harnesses and coordinate not in hosted[profile]:
+                hosted[profile].append(coordinate)
+    return tuple(
+        HarnessTargetView(profile, tuple(hosted[profile]))
+        for profile in profiles
+        if hosted[profile]
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -1241,11 +1271,12 @@ class LocalConsumerActions:
     ) -> ConsumerActionUpdate:
         context = self._context
         host = self._host()
+        sources: tuple[SecretProviderReference, ...] = ()
         prepared = prepare_configured_installation(
             context.effective,
             selection,
             host=host,
-            sources=(),
+            sources=sources,
             policy=context.policy,
             selected_remediations=None,
             credential_providers=context.credential_providers,
@@ -1295,7 +1326,11 @@ class LocalConsumerActions:
                 )
                 if isinstance(prepared, Err):
                     return self._declined(command, _refusal(prepared.diagnostics))
-        self._pending_host = host
+        targets = (
+            _installation_targets(prepared.value, host.profiles)
+            if command.action is ConsumerActionKind.INSTALL
+            else ()
+        )
         if not prepared.value.ready:
             # Config values still need an editable field. Secret values never do: the shell binds
             # only their provider reference above and the provider itself owns entry/storage.
@@ -1311,8 +1346,44 @@ class LocalConsumerActions:
             )
         action = prepared.value.action
         assert action is not None
-        plan = action.flow.plan
-        self._pending = _PendingInstall(prepared.value, previous_receipts)
+        plan = replace(action.flow.plan, targets=targets)
+        chosen: tuple[str, ...] = ()
+        reviewed = prepared.value
+        reviewed_host = host
+        if command.action is ConsumerActionKind.INSTALL:
+            problems = target_choice_problems(plan, command.targets)
+            if not problems:
+                chosen = command.targets
+            if chosen:
+                reviewed_host = replace(host, profiles=chosen)
+                narrowed = prepare_configured_installation(
+                    context.effective,
+                    selection,
+                    host=reviewed_host,
+                    sources=sources,
+                    policy=context.policy,
+                    selected_remediations=None,
+                    credential_providers=context.credential_providers,
+                    resolvers=context.credential_providers,
+                    previous=previous,
+                )
+                if isinstance(narrowed, Err):
+                    return self._declined(command, _refusal(narrowed.diagnostics))
+                if not narrowed.value.ready:
+                    return self._declined(
+                        command,
+                        _lines("the chosen harness plan still needs installation inputs"),
+                    )
+                reviewed = narrowed.value
+                narrowed_action = reviewed.action
+                assert narrowed_action is not None
+                plan = replace(
+                    narrowed_action.flow.plan,
+                    targets=targets,
+                    chosen_targets=chosen,
+                )
+        self._pending_host = reviewed_host
+        self._pending = _PendingInstall(reviewed, previous_receipts, targets, chosen)
         self._pending_action = command.action
         return ConsumerActionUpdate(
             self.source(plan=plan),
@@ -1851,6 +1922,25 @@ class LocalConsumerActions:
     def _execute_installation(
         self, command: ConsumerUiCommand, pending: _PendingInstall
     ) -> ConsumerActionUpdate:
+        if pending.targets and not pending.chosen_targets:
+            return self._failed(
+                command,
+                _lines(
+                    "no installation harness was chosen; choose at least one eligible harness "
+                    "and review the installation again"
+                ),
+            )
+        if (
+            command.action is ConsumerActionKind.INSTALL
+            and command.targets != pending.chosen_targets
+        ):
+            return self._failed(
+                command,
+                _lines(
+                    "this confirmation names different harness targets than the reviewed plan; "
+                    "review the installation again"
+                ),
+            )
         recorded_at, today = self._moment()
         completed = complete_configured_installation(
             pending.prepared,

@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import unittest
+from dataclasses import replace
 
 from agent_artifacts.application.consumer_ui import (
     ConsumerActionKind,
+    ConsumerUiCommand,
     ConsumerUiCommandKind,
     ConsumerUiEvent,
     ConsumerUiEventKind,
@@ -13,7 +15,7 @@ from agent_artifacts.application.consumer_ui import (
     key_event,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import ConsumerScreen, ConsumerSession
+from agent_artifacts.application.consumer_views import ConsumerScreen, ConsumerSession, target_row
 from agent_artifacts.application.maintainer_views import MaintainerScreen
 
 ARTIFACT = "public/mcp/github@1.6.0"
@@ -53,8 +55,20 @@ class ConsumerInstallActionTest(unittest.TestCase):
         self.assertEqual(commands[0].kind, ConsumerUiCommandKind.PREPARE_ACTION)
         self.assertIs(commands[0].action, ConsumerActionKind.INSTALL)
         self.assertEqual(commands[0].selection, (ARTIFACT, OTHER))
+        self.assertEqual(commands[0].targets, ())
         self.assertEqual(commands[0].focus, "")
         self.assertEqual(commands[1].kind, ConsumerUiCommandKind.LOAD_SCREEN)
+
+        review = replace(review, rows=(target_row("claude"),), cursor=0)
+        toggled, reprepared = reduce_consumer_ui(
+            review,
+            ConsumerUiEvent(
+                ConsumerUiEventKind.TOGGLE_SELECTION,
+                key=target_row("claude"),
+            ),
+        )
+        self.assertEqual(toggled.targets, ("claude",))
+        self.assertEqual(reprepared[0].focus, "")
 
     def test_install_without_a_selection_is_not_a_request(self) -> None:
         state = ConsumerUiState(
@@ -203,6 +217,89 @@ class ConsumerInstalledActionTest(unittest.TestCase):
         after, invalid = _request(marketplace, ConsumerActionKind.VERIFY_REPAIR)
         self.assertIs(after, marketplace)
         self.assertEqual(invalid, ())
+
+    def test_screen_05_toggles_harness_intent_and_reprepares_the_original_request(self) -> None:
+        state = ConsumerUiState(
+            ConsumerSession(
+                ConsumerScreen.REVIEW_SELECTION,
+                history=(ConsumerScreen.ARTIFACT_DETAILS,),
+            ),
+            selection=(ARTIFACT,),
+            targets=("claude",),
+            rows=(target_row("claude"), target_row("opencode")),
+            cursor=1,
+            focus=ARTIFACT,
+            action=ConsumerActionKind.INSTALL,
+        )
+
+        event = key_event(" ", state)
+        self.assertEqual(
+            event,
+            ConsumerUiEvent(
+                ConsumerUiEventKind.TOGGLE_SELECTION,
+                key=target_row("opencode"),
+            ),
+        )
+        assert event is not None
+        updated, commands = reduce_consumer_ui(state, event)
+
+        self.assertEqual(updated.selection, (ARTIFACT,))
+        self.assertEqual(updated.targets, ("claude", "opencode"))
+        self.assertEqual(len(commands), 1)
+        self.assertEqual(commands[0].kind, ConsumerUiCommandKind.PREPARE_ACTION)
+        self.assertIs(commands[0].action, ConsumerActionKind.INSTALL)
+        self.assertEqual(commands[0].selection, (ARTIFACT,))
+        self.assertEqual(commands[0].targets, ("claude", "opencode"))
+        self.assertEqual(commands[0].focus, ARTIFACT)
+
+    def test_install_request_reuses_retained_harness_intent(self) -> None:
+        state = ConsumerUiState(
+            ConsumerSession(ConsumerScreen.ARTIFACT_DETAILS),
+            focus=ARTIFACT,
+            targets=("tabnine",),
+        )
+
+        _review, commands = _request(state, ConsumerActionKind.INSTALL)
+
+        self.assertEqual(commands[0].selection, ())
+        self.assertEqual(commands[0].focus, ARTIFACT)
+        self.assertEqual(commands[0].targets, ("tabnine",))
+
+    def test_recorded_install_clears_harness_intent(self) -> None:
+        state = ConsumerUiState(
+            ConsumerSession(
+                ConsumerScreen.INSTALLING,
+                semantic_identity=SEMANTIC,
+                selection_identity=SELECTION,
+                review_digest=REVIEW,
+            ),
+            selection=(ARTIFACT,),
+            targets=("opencode", "tabnine"),
+            action=ConsumerActionKind.INSTALL,
+        )
+
+        completed, _commands = reduce_consumer_ui(
+            state,
+            ConsumerUiEvent(
+                ConsumerUiEventKind.ACTION_RECORDED,
+                action=ConsumerActionKind.INSTALL,
+                text=RECORDED_AT,
+            ),
+        )
+
+        self.assertEqual(completed.targets, ())
+
+    def test_harness_intent_rejects_duplicate_empty_and_multiline_names(self) -> None:
+        for targets in (("opencode", "opencode"), ("",), ("bad\nname",)):
+            with self.subTest(targets=targets):
+                with self.assertRaisesRegex(ValueError, "consumer UI state"):
+                    ConsumerUiState(targets=targets)
+                with self.assertRaisesRegex(ValueError, "consumer UI command"):
+                    ConsumerUiCommand(
+                        ConsumerUiCommandKind.PREPARE_ACTION,
+                        action=ConsumerActionKind.INSTALL,
+                        targets=targets,
+                    )
 
 
 class MaintainerSourceSyncActionTest(unittest.TestCase):

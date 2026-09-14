@@ -6094,3 +6094,30 @@ A different Candidate ID is never covered by another's record: a genuinely new v
 same-version content change each get a new ID and stay promotable in the views (execution still
 enforces the baseline and version conflicts). The Source counts and the Status filter still count
 stored state (B-118).
+
+## D-260 — Installation harnesses are explicit user intent and narrow the reviewed plan
+
+Date: 2026-09-14 · Status: implemented · Scope: CP-23 task 10 · Supersedes: D-241's no-picker choice
+
+The first installation preparation measures eligibility from the draft placements already narrowed
+by artifact compatibility, platform, scope and policy. MCP `targets`, artifact `deliveries` and
+shared-file `merges` are projected in measured-host order as screen 05 rows. Even one eligible
+harness is a choice. The rows begin unticked, support several selections and state which artifacts
+each harness can host in Verbose.
+
+Harness intent is separate from artifact selection in `ConsumerUiState.targets`. Ticking a target
+re-prepares the same original request. A choice is valid only when every named harness is still
+eligible and every selected artifact has a chosen host; stale names remain visible with a refusal.
+Screen 05 cannot continue until the current projected plan was prepared for exactly that choice.
+
+For a valid choice, the I/O boundary prepares again with the host profiles narrowed to the chosen
+tuple while retaining `profiles_requested=False`. The narrowed canonical plan supplies review,
+effects and execution; receipts therefore record exactly those profiles. The execution boundary
+also refuses a pending installation with eligible targets and no confirmed choice, so bypassing
+the screen cannot turn an empty choice into installation across every measured harness. Eligible
+and chosen targets are included in the complete machine projection.
+
+Updates keep the harnesses recorded by the installed state and have no picker in this slice
+(B-119). The disposable lab Skill and MCP declare Claude, OpenCode and Tabnine compatibility so
+manual acceptance can exercise the same choice. Isolated filesystem E2Es prove OpenCode and
+Tabnine MCP settings and Skill directories, including a multi-target receipt.

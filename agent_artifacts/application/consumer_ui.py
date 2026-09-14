@@ -28,6 +28,7 @@ from .consumer_views import (
     is_screen_identifier,
     keeps_focus,
     navigation_targets,
+    target_from_row,
 )
 from .maintainer_views import (
     MaintainerCandidateFilter,
@@ -306,6 +307,7 @@ class ConsumerUiCommand:
     source_draft: SourceDraft | None = None
     registry_init_draft: RegistryInitDraft | None = None
     repository_scan_draft: RepositoryScanDraft | None = None
+    targets: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if (
@@ -316,6 +318,7 @@ class ConsumerUiCommand:
             )
             or (self.action is not None and not isinstance(self.action, ConsumerActionKind))
             or not _rows_valid(self.selection)
+            or not _rows_valid(self.targets)
             or not isinstance(self.focus, str)
             or any(character in self.focus for character in "\r\n")
             or not _safe_identity(self.review_digest)
@@ -372,6 +375,7 @@ _SELECTABLE = frozenset(
         ConsumerScreen.COLLECTION_PREVIEW,
         ConsumerScreen.COLLECTION_CUSTOMIZE,
         ConsumerScreen.UPDATES,
+        ConsumerScreen.REVIEW_SELECTION,
         # Screen 47 assembles one registry transaction, so selecting rows is what it is for.
         MaintainerScreen.BULK_PROMOTION,
         MaintainerScreen.SCAN_RESULT,
@@ -430,6 +434,9 @@ class ConsumerUiState:
     #: on the state rather than fetched where it is drawn, which keeps the frame off the
     #: filesystem (`QA-053`).
     workspace: str = ""
+    #: Harnesses explicitly chosen on screen 05. These are separate from artifact rows because
+    #: changing delivery intent must never change which artifacts the request contains (D-260).
+    targets: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if (
@@ -442,13 +449,8 @@ class ConsumerUiState:
             or not isinstance(self.focus, str)
             or any(character in self.focus for character in "\r\n")
             or not isinstance(self.searching, bool)
-            or len(set(self.selection)) != len(self.selection)
-            or any(
-                not isinstance(item, str)
-                or not item
-                or any(character in item for character in "\r\n")
-                for item in self.selection
-            )
+            or not _rows_valid(self.selection)
+            or not _rows_valid(self.targets)
             or not isinstance(self.search, str)
             or any(character in self.search for character in "\r\n")
             or not isinstance(self.help_visible, bool)
@@ -821,6 +823,29 @@ def _toggle_selection(
     key = key or state.current_row
     if state.session.screen not in _SELECTABLE or not key:
         return state, ()
+    if state.session.screen is ConsumerScreen.REVIEW_SELECTION:
+        harness = target_from_row(key)
+        if harness is None:
+            return state, ()
+        targets = (
+            tuple(item for item in state.targets if item != harness)
+            if harness in state.targets
+            else (*state.targets, harness)
+        )
+        updated = replace(state, targets=targets, quit_pending=False)
+        if state.action is not ConsumerActionKind.INSTALL:
+            return updated, ()
+        origin = state.session.history[-1] if state.session.history else None
+        request_focus = "" if origin is ConsumerScreen.MARKETPLACE else state.focus
+        return updated, (
+            ConsumerUiCommand(
+                ConsumerUiCommandKind.PREPARE_ACTION,
+                action=ConsumerActionKind.INSTALL,
+                selection=state.selection,
+                targets=targets,
+                focus=request_focus,
+            ),
+        )
     if key in state.selection:
         selected = tuple(item for item in state.selection if item != key)
     else:
@@ -984,6 +1009,7 @@ def _request_action(
         ConsumerUiCommandKind.PREPARE_ACTION,
         action=action,
         selection=state.selection,
+        targets=state.targets if action is ConsumerActionKind.INSTALL else (),
         focus=focus,
         promotion_mode=(
             state.promotion_mode
@@ -1097,6 +1123,7 @@ def _confirm_action(
         ConsumerUiCommandKind.EXECUTE_ACTION,
         action=action,
         selection=state.selection,
+        targets=state.targets if action is ConsumerActionKind.INSTALL else (),
         focus=state.focus,
         review_digest=review_digest,
     )
@@ -1211,6 +1238,7 @@ def _action_recorded(
     return replace(
         moved,
         selection=(),
+        targets=(),
         focus=focus,
         quit_pending=False,
         action=None,
@@ -1618,6 +1646,10 @@ def key_bindings(
         elif state.session.screen in _CONFIRM_SCREENS and "enter" not in keys:
             label = "Continue" if state.action is None else "Confirm"
             bindings.append(KeyBinding("Enter", label))
+        elif state.session.screen is ConsumerScreen.REVIEW_SELECTION and "enter" not in keys:
+            # Screen 05 always advertises the next step; while the choice is incomplete the
+            # status directly above explains why that key cannot advance yet (D-260).
+            bindings.append(KeyBinding("Enter", "Continue"))
         elif detail is not None and "enter" not in keys:
             # Success's rows are choices rather than things to open, so Enter says which one.
             choices: dict[ConsumerScreen | MaintainerScreen, str] = {}

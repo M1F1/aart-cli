@@ -1,6 +1,12 @@
 # AART Refactor Migration Status
 
-**2026-09-14: CP-22 CLOSED; CP-23 tasks 01–09 done, task 10 in progress (partial model committed; design in the slice).**
+**2026-09-14: CP-22 CLOSED; CP-23 tasks 01–10 done, task 11 next.**
+Task 10 (D-260): installation screen 05 offers explicit eligible harness rows even when there is
+one, supports several, re-prepares and executes only the chosen subset, keeps stale/incomplete
+choices as visible refusals, and fails closed at execution on an empty choice. Isolated E2Es prove
+exact Skill and MCP delivery plus receipt profiles for OpenCode and Tabnine; the manual fixtures
+declare Claude, OpenCode and Tabnine. Five targeted mutations were killed; 147 focused tests plus
+the 11-test temporary manual-lab module pass. Updates keep their recorded harnesses (B-119).
 Task 09 (D-259): a Candidate the Registry trees already record reads `Promoted locally` (or
 `Promoted`), and review, diff, bulk and the transaction refuse it. A restart derives the same state.
 Ten targeted mutations were killed.
@@ -26,8 +32,8 @@ and 193 subtests pass, including a Hypothesis row-selection property and real lo
 Scoped mutation analysis is recorded; format, lint, typecheck, unit (3,978 OK) and validate
 passed. Per-task work runs only the verifying gates; the full suite is task 15.
 
-Tasks 10–15 remain pending in [`CP-23`](slices/CP-23-actionable-tui-workflows.md); the next product
-step is explicit harness selection. The entire batch and its manual acceptance are still
+Tasks 11–15 remain pending in [`CP-23`](slices/CP-23-actionable-tui-workflows.md); the next product
+step is Artifact Details controls and compatibility wording. The entire batch and its manual acceptance are still
 open. Owner requirements in §167/D-249–D-250 retain manual publication, explicit target choice,
 credential acquisition guidance, and complete Frame/Verbose compliance with no standard in-TUI
 exceptions. No human retest, all-screen audit, or new CP-22 gate result is claimed.

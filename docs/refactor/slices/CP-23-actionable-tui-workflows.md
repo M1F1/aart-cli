@@ -793,10 +793,10 @@ Evidence:
 - Walkthrough sections 7 and 8 check the return, a restart and the refusals. Scoped `make mutants`
   and the full suite are left to task 15. No human terminal retest is claimed.
 
-### Task 10 — Explicit installation harness choice (IN PROGRESS, handed off 2026-09-14)
+### Task 10 — Explicit installation harness choice (DONE 2026-09-14)
 
-Not done. Nothing is claimed verified. Committed so far: only the application model in
-`application/consumer_views.py`. It contains:
+Implemented and focused-verification complete. The application model in
+`application/consumer_views.py` contains:
 
 - `HarnessTargetView(harness, artifacts)`;
 - `target_row`/`target_from_row` (the row key is `target:<harness>`);
@@ -806,14 +806,12 @@ Not done. Nothing is claimed verified. Committed so far: only the application mo
 - `ConsumerPlanView.targets`/`chosen_targets` (both default `()`, so update flows and existing
   fixtures are unchanged).
 
-The model has no tests yet. Write them first: they are the red step.
-
 Why a picker is needed: the TUI host (`tui.py` `_canonical_installation_host`) passes every measured
 harness with `profiles_requested=False`. `placement_for` then installs into every measured harness the
 artifact declares, so today the user never chooses. D-241's "no picker needed" is what task 10
 supersedes; its rule that setup follows recorded delivery stays.
 
-Planned design (record as D-260):
+Implemented design (D-260):
 
 1. **Reducer (`application/consumer_ui.py`).**
    - Add `ConsumerUiState.targets` and `ConsumerUiCommand.targets` (validated like rows).
@@ -871,3 +869,32 @@ Planned design (record as D-260):
    - focused gates only (`make typecheck format-check lint docs-check` plus the touched test
      modules, per owner instruction) and targeted mutations;
    - `handoff-plan done CP-23.10`, then commit.
+
+Evidence:
+
+- Characterization/model tests cover target row round trips, zero/one/many eligible harnesses,
+  stale and incomplete multi-artifact choices, exact confirmation, validation and machine
+  projection.
+- Reducer/screen tests prove harness state is separate from artifact selection, re-preparation
+  keeps the original request focus, Back and `v` preserve target intent as a Hypothesis property,
+  stale rows remain visible, Continue is gated, and Verbose names the artifacts hosted by the
+  focused harness. A second Hypothesis property covers every nonempty eligible subset.
+- Real isolated filesystem E2Es install both a Skill and an MCP through the chosen-target path into
+  OpenCode and Tabnine. They assert `opencode.json`, `.opencode/skills/<name>`,
+  `.tabnine/agent/settings.json` and `.tabnine/agent/skills/<name>`, prove unchosen harness paths
+  are absent, and read receipt profiles back from disk. A two-target Skill test records and
+  delivers to exactly OpenCode plus Tabnine.
+- The execution boundary test bypasses the UI with an empty target choice and proves refusal,
+  absent harness files and absent receipts. Policy refusal exposes no target plan and mutates no
+  harness. The manual lab test proves both fixtures declare Claude, OpenCode and Tabnine.
+- Focused run: 147 relevant reducer/view/shell/navigation/setup/E2E tests pass; the manual lab
+  module separately passes 11 tests using its temporary macOS Keychains. `make typecheck
+  format-check lint docs-check`: OK.
+- Five deliberate semantic mutations were killed: removing the exact-choice Continue gate (1
+  red), preparing against the full rather than chosen host (2 red), opening the empty-choice
+  execution boundary (1 red), and sending the old rather than toggled targets for re-preparation
+  (1 red), and reusing Marketplace's cursor focus instead of its original whole-selection subject
+  (1 red).
+- D-260 records the target-intent boundary. B-119 records the noncritical future explicit harness
+  migration question for updates. Scoped `make mutants`, the full suite and human acceptance stay
+  with task 15; no human terminal retest is claimed here.

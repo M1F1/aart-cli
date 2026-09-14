@@ -2,9 +2,12 @@
 
 ## Current objective — CP-23 (2026-09-14)
 
-**CP-22 is CLOSED. CP-23 tasks 01–09 are done; task 10 is in progress (handed to Codex).**
-Task 10's partial model and its full planned design, including the owner's opencode/Tabnine lab
-request, are under "Task 10" at the end of the slice. Read that first.
+**CP-22 is CLOSED. CP-23 tasks 01–10 are done; task 11 is next.**
+Task 10 (D-260) makes installation harnesses explicit user intent: screen 05 always offers the
+eligible targets, re-prepares against the chosen subset and refuses empty, stale or incomplete
+choices. Real isolated E2Es prove exact OpenCode and Tabnine Skill/MCP delivery and receipt
+profiles; the manual fixtures now declare all three supported lab harnesses. Updates retain their
+recorded harnesses (B-119).
 Task 09 (D-259): whether a Candidate is already promoted is read from the Registry trees on every
 composition, so it reads `Promoted locally` after the commit and after a restart, and no screen or
 transaction offers it again (B-118 tracks the Source counts).
@@ -34,11 +37,11 @@ Per-task work runs only the verifying gates; the full suite is task 15 (owner in
 Task 01's detailed evidence is in
 [`slices/CP-23-actionable-tui-workflows.md`](slices/CP-23-actionable-tui-workflows.md).
 
-**Next product action: task 10**, explicit selection of one or several eligible harnesses for
-installation, carried through review, execution and receipts. Continue the ordered fifteen-task plan;
-CP-23 as a whole is not
-implemented or verified. Task 15 retains the full-batch/manual acceptance requirement, and task 14
-retains the complete screen/state audit. No human manual acceptance is claimed for task 01.
+**Next product action: task 11**, make Artifact Details' selection/install/detail controls real and
+make its compatibility wording agree with task 10's eligible, unselected and explicitly selected
+target states. Continue the ordered fifteen-task plan; CP-23 as a whole is not implemented or
+verified. Task 15 retains the full-batch/manual acceptance requirement, and task 14 retains the
+complete screen/state audit. No human manual acceptance is claimed for task 10.
 
 The accepted owner revisions remain Product Specification §167 and D-249–D-250: remove TUI push
 capability (done, D-255), offer explicit Skill harness choice in task 10, carry credential guidance

@@ -370,9 +370,14 @@ escapability of these flows).
       described: Artifact, Kind, Version, Source and its approved Description (a Collection row
       shows what it Includes). Move the cursor and it follows; search it away and nothing stale
       remains; `v` again hides it.
-- [ ] **Marketplace** → select the Skill → `i` (**Install**). Review, then **cancel once**.
-- [ ] Confirm nothing was written. Install it for real.
-- [ ] Install `dummy-mcp`. At the provider prompt, enter **disposable test text only**.
+- [ ] **Marketplace** → select the Skill → `i` (**Install**). Screen 05 lists Claude, OpenCode and
+      Tabnine as unticked rows even when only one is eligible. Read the selection summary, tick one
+      harness with `Space`, then **cancel once** with `Esc`.
+- [ ] Confirm nothing was written. Return to the install, choose **OpenCode and Tabnine together**,
+      and continue. The status must read `Installing into: opencode, tabnine` before Continue opens
+      the next step.
+- [ ] Install `dummy-mcp`, choosing **OpenCode and Tabnine together**. At the provider prompt,
+      enter **disposable test text only**.
 - [ ] On **Success**, the choices are rows: `View installed`, `View receipt`, `Done`. The
       outcome above them has no bracketed buttons. `View receipt` opens the receipt of **this**
       install (its `Recorded:` time), not an older one. `Esc` and `Done` both land on
@@ -383,12 +388,20 @@ Expected: AART binds an isolated credential reference; the macOS Keychain owns v
 screen is lent to its prompt and taken back, and no reset dialog is reachable (`QA-081`/`QA-084`,
 `D-229`). The MCP reports only whether the variable is present and never echoes it.
 
-Harness delivery must be one answer everywhere it is said (`QA-078`…`QA-080`, `D-241`):
+Harness delivery must be one answer everywhere it is said (`QA-078`…`QA-080`, `D-260`):
 
-- [ ] On the review, read the `Harnesses:` line. It names the set and says where it came from —
-      every harness this machine measured that the artifact declares support for.
-- [ ] Compare it with what **Artifact Details** refused and with what **Success** reports. A harness
-      the details screen called unsupported must not appear as a delivery.
+- [ ] Before choosing, `Enter` does not advance and the status says to choose at least one harness.
+      In Verbose, moving the cursor names the artifacts that each harness can host. Unticked
+      harnesses remain eligibility, not planned delivery.
+- [ ] On **Ready**, the `Harnesses:` line names exactly the chosen set and says it was chosen for
+      this installation. Compare it with **Artifact Details** and **Success**. An unsupported or
+      unselected harness must not appear as a delivery.
+- [ ] After the Skill install, inspect the project: both
+      `.opencode/skills/manual-check/SKILL.md` and
+      `.tabnine/agent/skills/manual-check/SKILL.md` exist; `.claude/skills/manual-check` does not.
+- [ ] After each MCP install, inspect the project. OpenCode is registered only in `opencode.json`
+      under `mcp`; Tabnine is registered only in `.tabnine/agent/settings.json` under `mcpServers`.
+      No unchosen MCP settings file gains `dummy-mcp`.
 - [ ] If **Remediation** appears, it says what AART will change after the final review, and each
       change names its own subject. `Continue` is its row, never `[ Continue ]` text. A Skill that
       only configures a harness goes straight to **Ready**, which lists that change (D-258).

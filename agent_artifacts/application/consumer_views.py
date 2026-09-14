@@ -711,6 +711,11 @@ def consumer_plan_to_data(view: ConsumerPlanView) -> dict[str, object]:
         "selection": canonical["selection"],
         "selection_mode": view.selection.mode.value,
         "semantic_identity": view.semantic_identity,
+        "targets": [
+            {"harness": target.harness, "artifacts": list(target.artifacts)}
+            for target in view.targets
+        ],
+        "chosen_targets": list(view.chosen_targets),
     }
 
 

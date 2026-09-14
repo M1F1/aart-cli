@@ -426,7 +426,10 @@ def setup_lab(raw_root: Path, *, empty_registry: bool = False) -> ManualLab:
         "schema": "aart.dev/skill/v1",
         "artifact": {"name": "manual-check", "kind": "skill", "version": "1.0.0"},
         "payload": {"include": ["SKILL.md"]},
-        "compatibility": {"harnesses": ["claude"], "platforms": ["darwin", "linux"]},
+        "compatibility": {
+            "harnesses": ["claude", "opencode", "tabnine"],
+            "platforms": ["darwin", "linux"],
+        },
     }
     _initialize_repository(skill_repo, branch)
     _write(skill_repo / "manual-check/aart.json", _manifest_text(skill_manifest))
@@ -456,7 +459,10 @@ def setup_lab(raw_root: Path, *, empty_registry: bool = False) -> ManualLab:
                 },
             }
         ],
-        "compatibility": {"harnesses": ["claude"], "platforms": ["darwin", "linux"]},
+        "compatibility": {
+            "harnesses": ["claude", "opencode", "tabnine"],
+            "platforms": ["darwin", "linux"],
+        },
     }
     _initialize_repository(mcp_repo, branch)
     _write(mcp_repo / "dummy-mcp/aart.json", _manifest_text(mcp_manifest))

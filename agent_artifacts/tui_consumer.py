@@ -58,6 +58,10 @@ from agent_artifacts.application.consumer_views import (
     project_collection,
     project_registries,
     remediation_needs_decision,
+    target_choice_problems,
+    target_from_row,
+    target_row,
+    targets_confirmed,
 )
 from agent_artifacts.application.installed_setup import DeclaredArtifactSetup
 from agent_artifacts.application.maintainer_views import (
@@ -557,15 +561,12 @@ def render_ready(view: ConsumerPlanView, profile: PresentationProfile) -> tuple[
     credentials = tuple(item for item in view.inputs if isinstance(item, CredentialInputView))
     if credentials:
         lines.append(f"  {len(credentials)} credential(s) stored securely")
-    # `QA-079`: the operator learned where it had gone only afterwards. The set is derived rather
-    # than chosen -- every measured harness the artifact declares support for (`D-231`) -- so the
-    # screen names it and says where it comes from instead of offering a menu with one answer.
-    harnesses = _planned_harnesses(view)
+    # The final review names the intent confirmed on screen 05. Updates have no target picker and
+    # continue to derive their installed harnesses from the effects already in the plan (D-260).
+    harnesses = view.chosen_targets or _planned_harnesses(view)
     if harnesses:
-        lines.append(
-            f"Harnesses: {', '.join(harnesses)} "
-            "(every harness this machine measured that the artifact declares support for)."
-        )
+        suffix = " (chosen for this installation)." if view.chosen_targets else "."
+        lines.append(f"Harnesses: {', '.join(harnesses)}{suffix}")
     # Compressed, never quieter: this is the screen somebody confirms from, so every risk the plan
     # carries and every remediation it decided is named here as well as in the full plan.
     # CP-23 task 08: in the outcome wording Remediation uses, because a plan with only routine
@@ -2205,6 +2206,17 @@ class CanonicalScreenSource:
 
     def rows(self, state: ConsumerUiState) -> tuple[str, ...]:
         screen, query = state.session.screen, state.search
+        if screen is ConsumerScreen.REVIEW_SELECTION:
+            plan = self._screens.plan
+            if plan is None:
+                return ()
+            eligible = tuple(target_row(item.harness) for item in plan.targets)
+            stale = tuple(
+                target_row(harness)
+                for harness in state.targets
+                if all(item.harness != harness for item in plan.targets)
+            )
+            return (*eligible, *stale)
         if screen is ConsumerScreen.REMEDIATION:
             # CP-23 task 08: Continue is a row, so it is a control rather than a printed string.
             return () if self._screens.plan is None else (ConsumerScreen.READY.value,)
@@ -2505,7 +2517,7 @@ class CanonicalScreenSource:
             return ConsumerScreen.INSTALLED_ARTIFACT_DETAILS if state.current_row else None
         if screen is ConsumerScreen.REVIEW_SELECTION:
             plan = self._screens.plan
-            if plan is None:
+            if plan is None or not targets_confirmed(plan, state.targets):
                 return None
             # Inspection has already happened to produce this immutable plan. It remains
             # available as a detailed projection, but is not a mandatory click-through step.
@@ -2601,6 +2613,18 @@ class CanonicalScreenSource:
         if state.session.screen is ConsumerScreen.SUCCESS:
             chosen = self.detail(state)
             return () if not isinstance(chosen, ConsumerScreen) else (SUCCESS_PURPOSE[chosen],)
+        if state.session.screen is ConsumerScreen.REVIEW_SELECTION:
+            plan = self._screens.plan
+            harness = target_from_row(state.current_row)
+            if plan is None or harness is None:
+                return ()
+            target = next((item for item in plan.targets if item.harness == harness), None)
+            if target is None:
+                return (f"{harness} is no longer eligible for this selection.",)
+            return (
+                f"{harness} can host:",
+                *(f"  {artifact}" for artifact in target.artifacts),
+            )
         if state.session.screen is MaintainerScreen.REGISTRY:
             # `QA-098`: with the cursor on the registry this project publishes, the description is
             # where that registry has got to -- repository, branch, what its checkout knows of the
@@ -2738,6 +2762,19 @@ class CanonicalScreenSource:
             # CP-23 task 08: the changes are what this view states; Continue is its row.
             assert screens.plan is not None
             return render_remediation(screens.plan, state.session.profile)
+        if (
+            screen is ConsumerScreen.REVIEW_SELECTION
+            and screens.plan is not None
+            and (screens.plan.targets or state.targets)
+        ):
+            problems = target_choice_problems(screens.plan, state.targets)
+            target_status = (
+                problems if problems else (f"Installing into: {', '.join(state.targets)}",)
+            )
+            return separate(
+                render_review_selection(screens.plan, state.session.profile),
+                target_status,
+            )
         if screen is ConsumerScreen.SUCCESS and self.rows(state):
             # CP-23 task 06: what happened is the state of the view; the choices are the rows.
             if screens.transaction is not None:
@@ -2766,6 +2803,13 @@ class CanonicalScreenSource:
     def _body(self, state: ConsumerUiState) -> tuple[str, ...]:
         screen, profile = state.session.screen, state.session.profile
         screens = self._screens
+        if screen is ConsumerScreen.REVIEW_SELECTION and self.rows(state):
+            return tuple(
+                f"{'>' if row == state.current_row else ' '} "
+                f"{'[x]' if target_from_row(row) in state.targets else '[ ]'} "
+                f"{target_from_row(row)}"
+                for row in state.rows
+            )
         if screen is ConsumerScreen.REMEDIATION and self.rows(state):
             return (f"{'>' if state.current_row == ConsumerScreen.READY.value else ' '} Continue",)
         if screen is ConsumerScreen.SUCCESS and self.rows(state):
