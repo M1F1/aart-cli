@@ -293,46 +293,15 @@ class MaintainerCandidateShellTest(unittest.TestCase):
         )
         self.assertIsNone(key_event("d", _on(MaintainerScreen.SOURCES)))
 
-    def test_the_raw_file_diff_is_secondary_and_off_until_f_asks_for_it(self) -> None:
-        diff = _reload(
-            self.source,
-            _on(MaintainerScreen.CANDIDATE_DIFF, focus=self.by_alias["authors"].id),
-            entering=True,
-        )
-        summary = "\n".join(frame(self.source, diff))
-
-        event = key_event("f", diff)
-        self.assertEqual(event, ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_FILE_DIFF))
-        toggled, commands = reduce_consumer_ui(diff, event)
-        expanded = "\n".join(frame(self.source, toggled))
-
-        self.assertIn("Semantic changes:", summary)
-        self.assertIn("version", summary)
-        self.assertNotIn("Bounded redacted file diffs:", summary)
-        self.assertTrue(toggled.file_diff)
-        self.assertEqual(commands, ())
-        self.assertIn("Bounded redacted file diffs:", expanded)
-        self.assertIn("print('new')", expanded)
-
-    def test_f_means_nothing_away_from_the_diff_and_never_survives_navigation(self) -> None:
-        # `f` means what the screen it was pressed on is about: the raw file diff on screen 37,
-        # the Candidate filters on screen 35 (Product Specification 164.10), nothing anywhere else.
+    def test_f_opens_filters_on_the_list_and_means_nothing_on_the_diff(self) -> None:
+        # CP-23 task 03: the raw file diff is the Verbose projection of screen 37, so `f` no longer
+        # has a meaning there; on screen 35 it still opens the Candidate filters (164.10).
         self.assertIsNone(key_event("f", _on(MaintainerScreen.SOURCES)))
         opened_filters = key_event("f", _on(MaintainerScreen.CANDIDATES))
         assert opened_filters is not None
         self.assertIs(opened_filters.screen, MaintainerScreen.CANDIDATE_FILTERS)
-
-        detail = _on(MaintainerScreen.CANDIDATE_DETAILS, focus=self.by_alias["authors"].id)
-        diff, _ = reduce_consumer_ui(
-            detail,
-            ConsumerUiEvent(ConsumerUiEventKind.NAVIGATE, screen=MaintainerScreen.CANDIDATE_DIFF),
-        )
-        opened, _ = reduce_consumer_ui(diff, ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_FILE_DIFF))
-        left, _ = reduce_consumer_ui(opened, ConsumerUiEvent(ConsumerUiEventKind.BACK))
-
-        self.assertTrue(opened.file_diff)
-        self.assertIs(left.session.screen, MaintainerScreen.CANDIDATE_DETAILS)
-        self.assertFalse(left.file_diff)
+        diff = _on(MaintainerScreen.CANDIDATE_DIFF, focus=self.by_alias["authors"].id)
+        self.assertIsNone(key_event("f", diff))
 
     def test_back_from_each_candidate_side_view_keeps_the_candidate_on_details(self) -> None:
         candidate = self.by_alias["authors"].id

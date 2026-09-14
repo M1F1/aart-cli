@@ -545,7 +545,7 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
                 ENTER,
                 ENTER,
                 ord("d"),
-                ord("f"),
+                ord("v"),
             )
             finished = run_consumer_shell(
                 handler.source(),
@@ -572,6 +572,8 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             summary = terminal.screen_containing("Semantic changes:")
             self.assertIn("File changes (secondary):", summary)
             self.assertNotIn("Bounded redacted file diffs:", summary)
+            self.assertIn("Press v to view bounded redacted file diffs.", summary)
+            # CP-23 task 03: `v` is the one presentation toggle, so it reveals the file diffs.
             self.assertIn(
                 "Bounded redacted file diffs:",
                 terminal.screen_containing("Bounded redacted file diffs:"),

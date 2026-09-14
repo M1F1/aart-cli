@@ -576,13 +576,16 @@ def render_maintainer_collection_validation(
 def render_maintainer_candidate_diff(
     view: MaintainerCandidateView,
     profile: PresentationProfile,
-    *,
-    show_files: bool = False,
 ) -> tuple[str, ...]:
-    if (
-        not isinstance(view, MaintainerCandidateView)
-        or not isinstance(profile, PresentationProfile)
-        or not isinstance(show_files, bool)
+    """Screen 37: the semantic summary in Fast, with the bounded file diffs added in Verbose.
+
+    CP-23 task 03 (D-253): `v` is the one presentation toggle, so the raw file evidence is the
+    Verbose projection of the same Candidate rather than a second, screen-specific `f` switch.
+    The hint is its own statement after everything it is about.
+    """
+
+    if not isinstance(view, MaintainerCandidateView) or not isinstance(
+        profile, PresentationProfile
     ):
         raise ValueError("Maintainer Candidate diff rendering needs a typed view and profile")
     lines = [
@@ -606,8 +609,8 @@ def render_maintainer_candidate_diff(
     for changed_file in view.file_changes:
         marker = {"added": "+", "removed": "-", "modified": "~"}[changed_file.status]
         lines.append(f"{marker} {changed_file.path} — {changed_file.status}")
-    if not show_files:
-        lines.append("Press f to view bounded redacted file diffs; d returns to summary.")
+    if profile is not PresentationProfile.VERBOSE:
+        lines.extend(("", "Press v to view bounded redacted file diffs."))
         return tuple(lines)
     lines.extend(("", "Bounded redacted file diffs:"))
     for changed_file in view.file_changes:
@@ -615,7 +618,7 @@ def render_maintainer_candidate_diff(
         lines.extend(f"  {line}" for line in changed_file.diff)
         if not changed_file.diff:
             lines.append("  content omitted by the global diff bound")
-    lines.append("Press f to hide file diffs.")
+    lines.extend(("", "Press v to hide the bounded redacted file diffs."))
     return tuple(lines)
 
 

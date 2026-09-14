@@ -2699,9 +2699,7 @@ class CanonicalScreenSource:
             return (
                 ("That Candidate is not available.",)
                 if candidate is None
-                else render_maintainer_candidate_diff(
-                    candidate, profile, show_files=state.file_diff
-                )
+                else render_maintainer_candidate_diff(candidate, profile)
             )
         if screen is MaintainerScreen.CANDIDATE_LIFECYCLE:
             lifecycle = screens.candidate_lifecycle(state.focus)

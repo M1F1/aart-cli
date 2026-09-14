@@ -90,7 +90,6 @@ class ConsumerUiEventKind(str, Enum):
     TOGGLE_PROFILE = "toggle-profile"
     TOGGLE_SELECTION = "toggle-selection"
     TOGGLE_SETTING = "toggle-setting"
-    TOGGLE_FILE_DIFF = "toggle-file-diff"
     TOGGLE_CANDIDATE_FILTER = "toggle-candidate-filter"
     TOGGLE_PROMOTION_MODE = "toggle-promotion-mode"
     SEARCH = "search"
@@ -441,8 +440,6 @@ class ConsumerUiState:
     failed_action: ConsumerActionKind | None = None
     #: What the Candidate list is narrowed to. Screen 53 edits it; screen 35 obeys it.
     candidate_filter: MaintainerCandidateFilter = MaintainerCandidateFilter()
-    #: Whether the Candidate diff is also showing raw canonical file changes (INV-202).
-    file_diff: bool = False
     #: Which promotion the Maintainer is reviewing. Screen 42 chooses it; screens 41 and 43 obey
     #: it. Both modes are composed, so this selects a projection rather than causing one.
     promotion_mode: PromotionMode = PromotionMode.VENDORED
@@ -493,7 +490,6 @@ class ConsumerUiState:
             # A plan cannot be both awaiting confirmation and already finished with.
             or (self.action is not None and self.failed_action is not None)
             or not isinstance(self.candidate_filter, MaintainerCandidateFilter)
-            or not isinstance(self.file_diff, bool)
             or not isinstance(self.workspace, str)
             or any(character in self.workspace for character in "\r\n")
             or not isinstance(self.registry_draft, RegistryDraft)
@@ -762,7 +758,6 @@ def _navigate(
         search="",
         help_visible=False,
         quit_pending=False,
-        file_diff=False,
         failed_action=None,
     )
     # Only the form being entered is emptied. Each form owns one draft, and entering one is not a
@@ -806,7 +801,6 @@ def _back(state: ConsumerUiState) -> tuple[ConsumerUiState, tuple[ConsumerUiComm
         search="",
         help_visible=False,
         quit_pending=False,
-        file_diff=False,
         failed_action=None,
     )
     return updated, (ConsumerUiCommand(ConsumerUiCommandKind.LOAD_SCREEN, session.screen),)
@@ -1464,10 +1458,6 @@ def reduce_consumer_ui(
             else PromotionMode.VENDORED
         )
         return replace(state, promotion_mode=chosen, quit_pending=False), ()
-    if event.kind is ConsumerUiEventKind.TOGGLE_FILE_DIFF:
-        if state.session.screen is not MaintainerScreen.CANDIDATE_DIFF:
-            return state, ()
-        return replace(state, file_diff=not state.file_diff, quit_pending=False), ()
     if event.kind is ConsumerUiEventKind.TOGGLE_CANDIDATE_FILTER:
         # Screen 53's rows are facet values, so a row is parsed back into the typed facet it
         # addresses rather than being pulled apart here. A row nothing can be made of changes
@@ -1590,9 +1580,6 @@ _SCREEN_BINDINGS: dict[ApplicationScreen, tuple[_ScreenBinding, ...]] = {
     MaintainerScreen.CANDIDATE_DETAILS: (
         _navigate_binding("d", "Diff", MaintainerScreen.CANDIDATE_DIFF),
         _navigate_binding("r", "Lifecycle", MaintainerScreen.CANDIDATE_LIFECYCLE),
-    ),
-    MaintainerScreen.CANDIDATE_DIFF: (
-        _event_binding("f", "Files", ConsumerUiEventKind.TOGGLE_FILE_DIFF),
     ),
     MaintainerScreen.VALIDATION: (
         _navigate_binding("p", "Policy", MaintainerScreen.POLICY_REVIEW),

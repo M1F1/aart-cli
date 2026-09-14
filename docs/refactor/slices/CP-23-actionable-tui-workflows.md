@@ -1,6 +1,6 @@
 # CP-23 — Actionable TUI workflows after the fourth manual run
 
-Status: IN PROGRESS — TASKS 01–02 DONE; TASK 03 NEXT
+Status: IN PROGRESS — TASKS 01–03 DONE; TASK 04 NEXT
 
 Date: 2026-09-14. Authority: the product owner's manual screen reports and request to create CP-23
 and close CP-22, followed by the all-screen audit and credential guidance requirements.
@@ -445,3 +445,72 @@ Evidence:
 - Per the owner's instruction, per-task verification runs only the verifying gates. Scoped
   `make mutants` for `tui_maintainer.py`/`tui_consumer.py` and the full suite are left to task 15.
   No human terminal retest is claimed.
+
+### Task 03 — Candidate file diffs behind `v` (2026-09-14)
+
+Done. D-253 records the choices. `f`, its event and the `file_diff` state are gone; Verbose is
+the projection that adds the bounded redacted diffs.
+
+Before (Fast), production-composed: the prompt stood inside the file list and the footer offered
+two toggles.
+
+```text
+- File changes (secondary):
+  ~ artifact.json — modified
+  ~ payload/server.py — modified
+  ~ provenance.json — modified
+  Press f to view bounded redacted file diffs; d returns to summary.
+────────────────────────────────────────────────────────────────
+[f] Files   [v] Fast / Verbose
+```
+
+After, Fast, then after one `v` (tail of each frame, long JSON lines cut here for width):
+
+```text
+- File changes (secondary):
+  ~ artifact.json — modified
+  ~ payload/server.py — modified
+  ~ provenance.json — modified
+
+- Press v to view bounded redacted file diffs.
+
+────────────────────────────────────────────────────────────────
+
+[v] Fast / Verbose
+[↑/↓] Move   [Esc] Back   [?] Help   [q] Quit
+
+- Bounded redacted file diffs:
+  [payload/server.py]
+    --- before/payload/server.py
+    +++ after/payload/server.py
+    @@ -1 +1 @@
+    -print('old')
+    +print('new')
+  …
+
+- Press v to hide the bounded redacted file diffs.
+```
+
+Evidence:
+
+- `tests/maintainer_candidate_diff_verbose_test.py` (new, 9 tests): Fast has the semantic summary
+  and file list but no diff text, no `Press f`/`d returns`, and the hint as its own last statement;
+  Verbose adds the diffs and the hide hint; the footer offers `[v]` and no `[f]`, and `f` maps to
+  no event; `v` twice restores the identical frame while focus, screen, history and review digest
+  stay put and only `PERSIST_SETTINGS` is dispatched; drawing either projection opens no file; a
+  Hypothesis property over 0–7 presses (files shown exactly when Verbose, identity unchanged); a
+  planted credential assignment is redacted in the Verbose render; a 400-line change stays within
+  the 200-line bound and repeated toggling alternates exactly two frames.
+- `maintainer_validation_views_test.py`: Enter on the diff reaches Validation with the same focus
+  in both profiles. `maintainer_candidate_shell_test.py`: `f` still opens filters on screen 35 and
+  means nothing on 37. `maintainer_composition_e2e_test.py`: the real session presses `v` instead of
+  `f`. `contextual_key_legend_test.py`: screen 37 advertises `[v] Fast / Verbose`.
+- Focused run: 212 tests across the diff, shell, validation, composition E2E, Candidate detail,
+  UI state, block structure, skeleton, workflow progress, navigation, back stack, lifecycle,
+  CLI-command leak and identifier leak modules, plus 112 `tui_*`/`cp20_tui` tests and the key legend
+  tests: all OK. `make format-check lint typecheck`: OK.
+- Five targeted mutations, all killed: file diffs shown in Fast (**6 red**); hint merged into the
+  file list (**1 red**); hide hint dropped (**1 red**); an `f` binding restored on screen 37
+  (**2 red**); diff lines left unredacted in the projection (**1 red**).
+- Scoped `make mutants` and the full suite are left to task 15 (owner instruction). No human
+  terminal retest is claimed.

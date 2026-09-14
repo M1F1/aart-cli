@@ -5922,3 +5922,24 @@ filter (`_candidate_filter`) as the rows, so a row excluded by the search text i
 before the rows reload. Consequence: in Fast a name truncated by the grid is no longer repeated in
 full on screen 35; Verbose or Candidate Details shows it. That is the owner's stated rule, not an
 exception to `QA-030`.
+
+## D-253 — Candidate file diffs are the Verbose projection of screen 37
+
+Date: 2026-09-14 · Status: implemented · Scope: CP-23 task 03
+
+`render_maintainer_candidate_diff` shows the bounded, redacted file diffs exactly when the
+session profile is Verbose. The screen-specific `[f] Files` binding, the `TOGGLE_FILE_DIFF` event
+and the `ConsumerUiState.file_diff` flag are removed rather than left unreachable: the shared `v`
+toggle is the one presentation switch (D-250, task 14's "not a second independent toggle").
+Consequence: the choice now persists like every other Fast/Verbose choice; a Maintainer who
+leaves the diff in Verbose finds file diffs on the next Candidate too. The previous flag reset on
+every navigation. That is the owner's single-toggle rule, so no per-screen reset was added.
+
+Fast ends with `Press v to view bounded redacted file diffs.`; Verbose ends with `Press v to hide
+the bounded redacted file diffs.` Screen 37 has no rows, so its body is view status, and each hint
+is its own blank-separated statement — its own list item after the file list, never inside it.
+§167 asks for the hint in "its own block below the diff". No new Frame region or hard-coded rule
+was added for it (task 03/14 forbid both). The status list's statement boundary is the existing
+shared separation. If task 14's frame-order audit gives prompts a block of their own, this hint
+moves with that shared rule. `d returns to summary` is removed. Enter still continues to Validation
+in both profiles; the review stepper and focus are unchanged by toggling.

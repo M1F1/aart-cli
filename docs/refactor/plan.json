@@ -563,7 +563,7 @@
         {
           "id": "3",
           "title": "Use Verbose for bounded redacted Candidate file diffs",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "4",

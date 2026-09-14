@@ -249,8 +249,9 @@ nothing is recorded as an `invalid` Candidate.
 
 ## 6 — Review a Candidate
 
-- [ ] Open a Candidate. Press `d` (**Diff**), then `f` (**Files**) to fold raw file changes in and
-      out. `r` opens its **Lifecycle**.
+- [ ] Open a Candidate. Press `d` (**Diff**), then `v` (**Fast / Verbose**) to fold the bounded
+      redacted file diffs in and out (CP-23 task 03: `f` does nothing here any more). `r` on the
+      Candidate opens its **Lifecycle**.
 
 Expected: facts, decisions and the one line telling you what a key press will do are visually
 separated, with the action prompt last (`QA-029`).

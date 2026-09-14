@@ -354,6 +354,31 @@ class ValidationShellTest(unittest.TestCase):
         self.assertIs(details_again.session.screen, MaintainerScreen.VALIDATION_DETAILS)
         self.assertEqual(details_again.focus, details.focus)
 
+    def test_enter_on_the_diff_continues_to_validation_in_either_profile(self) -> None:
+        """CP-23 task 03: moving the file diffs behind `v` leaves the review's Enter path alone."""
+
+        for profile in PresentationProfile:
+            with self.subTest(profile=profile):
+                diff = dataclasses.replace(
+                    _on(MaintainerScreen.CANDIDATE_DIFF, focus=self.candidate),
+                    session=ConsumerSession(
+                        MaintainerScreen.CANDIDATE_DIFF,
+                        history=(MaintainerScreen.CANDIDATES, MaintainerScreen.CANDIDATE_DETAILS),
+                        profile=profile,
+                    ),
+                )
+                event = key_event("enter", diff, detail=self.source.detail(diff))
+                self.assertEqual(
+                    event,
+                    ConsumerUiEvent(
+                        ConsumerUiEventKind.NAVIGATE, screen=MaintainerScreen.VALIDATION
+                    ),
+                )
+                assert event is not None
+                validation, _ = reduce_consumer_ui(diff, event)
+                self.assertIs(validation.session.screen, MaintainerScreen.VALIDATION)
+                self.assertEqual(validation.focus, self.candidate)
+
     def test_back_from_validation_details_keeps_the_candidate_on_the_diff(self) -> None:
         diff = dataclasses.replace(
             _on(MaintainerScreen.CANDIDATE_DIFF, focus=self.candidate),

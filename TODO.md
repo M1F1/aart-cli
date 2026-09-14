@@ -143,7 +143,7 @@ machine-readable task list. No product fix is claimed by creating this plan.
 
 - [x] 01 — Explain Source Sync after Add Source.
 - [x] 02 — Separate Candidate table and focused identity summary.
-- [ ] 03 — Use `v` for file diffs; remove obsolete `f`/`d` instructions.
+- [x] 03 — Use `v` for file diffs; remove obsolete `f`/`d` instructions.
 - [ ] 04 — Remove Validation's redundant Policy shortcut; retain Enter progression.
 - [ ] 05 — Remove TUI push and explain manual publication before Registry Sync.
 - [ ] 06 — Make Success controls functional, including exact receipt and supported Undo.
