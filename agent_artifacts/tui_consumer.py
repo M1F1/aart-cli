@@ -757,9 +757,6 @@ def render_ready(view: ConsumerPlanView, profile: PresentationProfile) -> tuple[
     outcomes = Counter(_OUTCOMES.get(item.kind, "other change") for item in view.effects)
     lines = ["Ready to install", f"{len(view.selection.resolved)} artifact(s) will be installed."]
     lines.extend(f"  {count} {name}" for name, count in sorted(outcomes.items()))
-    credentials = tuple(item for item in view.inputs if isinstance(item, CredentialInputView))
-    if credentials:
-        lines.append(f"  {len(credentials)} credential(s) stored securely")
     # The final review names the intent confirmed on screen 05. Updates have no target picker and
     # continue to derive their installed harnesses from the effects already in the plan (D-260).
     harnesses = view.chosen_targets or _planned_harnesses(view)
@@ -914,7 +911,6 @@ def render_credential(view: CredentialRecordView, profile: PresentationProfile) 
                 f"Provider state: {_human(view.provider_state)}",
             )
         )
-    lines.append("Actions: " + ", ".join(view.actions) + ".")
     return tuple(lines)
 
 
@@ -1044,9 +1040,7 @@ def render_installed_artifact(
         lines.append("Needs attention: " + ", ".join(item.component for item in view.drift) + ".")
     else:
         lines.append("Verified against its desired state.")
-    if view.actions:
-        lines.append("Actions: " + ", ".join(view.actions) + ".")
-    else:
+    if not view.actions:
         lines.append("No action is offered until it is observed.")
     if profile is PresentationProfile.VERBOSE:
         lines.append("Ownership:")
@@ -1079,7 +1073,6 @@ def render_installed_collection(
     if profile is PresentationProfile.VERBOSE:
         lines.append("Members:")
         lines.extend(f"  - {item.artifact}: {_human(item.health.value)}" for item in view.members)
-    lines.append("Actions: " + ", ".join(view.actions) + ".")
     return tuple(lines)
 
 
@@ -2105,12 +2098,53 @@ def _heading(state: ConsumerUiState) -> str:
 
     trail = (*state.session.history, state.session.screen)
     steps = [step for step in (_step(screen) for screen in trail[:-1]) if step]
-    heading = " / ".join(("AART", *steps, _title(trail[-1])))
-    if state.failed_action is not None:
-        # The screen's name still says "review", and it is now the result of an attempt. Saying so
-        # here is what stops the plan below reading as something still about to happen (`QA-033`).
-        heading += " - did not run"
-    return heading
+    # The screen's name still says "review", and it is now the result of an attempt. Saying so
+    # here is what stops the plan below reading as something still about to happen (`QA-033`).
+    suffix = " - did not run" if state.failed_action is not None else ""
+    return (
+        " / ".join(("AART", *_fitted(steps, _screen_title(state), suffix), _screen_title(state)))
+        + suffix
+    )
+
+
+def _fitted(steps: list[str], title: str, suffix: str) -> list[str]:
+    """The passed-through places that fit on the frame's first line (CP-23 task 14, D-272).
+
+    A trail five places deep ran past the content measure and wrapped. The places dropped are the
+    middle ones: the first says which area this is, and the last is where Esc goes.
+    """
+
+    def fits(shown: list[str]) -> bool:
+        return len(" / ".join(("AART", *shown, title)) + suffix) <= CONTENT_MEASURE
+
+    if fits(steps):
+        return steps
+    for head in (1, 0):
+        shown = [*steps[:head], "…", steps[-1]]
+        if len(steps) > head + 1 and fits(shown):
+            return shown
+    return ["…", steps[-1]] if len(steps) > 1 else steps
+
+
+#: Review 24a is one screen for three things, so its name is the thing it is (D-272).
+_CREDENTIAL_REVIEW_TITLES = {
+    ConsumerActionKind.CREDENTIAL_REPLACE: "Review Replacement",
+    ConsumerActionKind.CREDENTIAL_DELETE: "Review Deletion",
+    ConsumerActionKind.CREDENTIAL_SET: "Review Setup",
+}
+
+
+def _screen_title(state: ConsumerUiState) -> str:
+    screen = state.session.screen
+    if screen is ConsumerScreen.CREDENTIAL_REVIEW:
+        # With no action pending the screen is what Verify found (`render_credential_review`).
+        action = state.action
+        return (
+            "Verification"
+            if action is None
+            else _CREDENTIAL_REVIEW_TITLES.get(action, "Verification")
+        )
+    return _title(screen)
 
 
 def _step(screen: ApplicationScreen) -> str:

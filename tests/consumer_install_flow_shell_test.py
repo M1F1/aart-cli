@@ -223,7 +223,9 @@ class InstallFlowScreenTest(unittest.TestCase):
 
         self.assertIn("macos-keychain", fast)
         self.assertIn("public/mcp/github", fast)
-        self.assertIn("verify", fast)
+        # What can be done is the legend's; the facts do not restate it as a sentence (D-272).
+        self.assertIn("[Enter] Open", fast)
+        self.assertNotIn("Actions:", fast)
 
     def test_deleting_a_credential_in_use_shows_what_it_would_affect(self):
         source, state = at(ConsumerScreen.CREDENTIALS)

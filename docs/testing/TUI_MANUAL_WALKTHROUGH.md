@@ -423,6 +423,8 @@ Harness delivery must be one answer everywhere it is said (`QA-078`…`QA-080`, 
 - [ ] On **Ready**, the `Harnesses:` line names exactly the chosen set and says it was chosen for
       this installation. Compare it with **Artifact Details** and **Success**. An unsupported or
       unselected harness must not appear as a delivery.
+      Where the plan stores a credential, Ready counts `credential(s) stored securely` once; where
+      the credential already exists, it says nothing is stored (D-272).
 - [ ] After the Skill install, inspect the project: both
       `.opencode/skills/manual-check/SKILL.md` and
       `.tabnine/agent/skills/manual-check/SKILL.md` exist; `.claude/skills/manual-check` does not.
@@ -464,10 +466,15 @@ Harness delivery must be one answer everywhere it is said (`QA-078`…`QA-080`, 
 - [ ] **Credentials** → a credential → Enter (**Credential Action**). Verify and Replace are rows,
       and Delete is absent while something uses it. The `[Enter]` label follows the cursor, and
       `v` describes the focused row below the list.
-- [ ] On **Verify**, Enter reports health with `Checked just now; nothing was changed.` Enter goes
-      back to the credential.
-- [ ] On **Replace**, Enter opens a review that names every installation using it and says no copy
-      is kept. Esc returns to Credential Action with nothing prompted.
+- [ ] On **Verify**, Enter reports health with `Checked just now; nothing was changed.` under a
+      trail ending `/ Verification`. Enter goes back to the credential.
+- [ ] On **Replace**, Enter opens **Review Replacement**, which names every installation using it
+      and says no copy is kept. Esc returns to Credential Action with nothing prompted. The trail
+      fits on one line: the middle places read `…`, and the area and Credential Action stay
+      (D-272).
+- [ ] Credential Details states the provider, health and dependants with no `Actions:` sentence;
+      the legend is what offers `[Enter] Open`. Installed artifact and Collection details do the
+      same.
 - [ ] Confirm the review. The provider (Keychain) asks in this terminal; type disposable text only.
       It lands on Credential Details with `Replaced <input> in <provider>.`, and no frame shows the
       value (D-262).

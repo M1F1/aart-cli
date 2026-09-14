@@ -1672,7 +1672,7 @@ The six previously owed 16.1 targeted mutations were also run and killed:
   - `Space/Enter` on empty filters.
 - 1162 tests pass across the UI modules. The static gates pass.
 - Audit re-run over 1172 recorded frames: no violation on any screen.
-- **Still open for task 14:**
+- **Still open for task 14** (the first three were fixed in 14.6):
   - Ready's duplicate credential line;
   - 23's `Actions:` line;
   - 24a's title;
@@ -1681,4 +1681,35 @@ The six previously owed 16.1 targeted mutations were also run and killed:
   - long breadcrumbs;
   - the recorded matrix: catalog coverage of all screens, laws over recorded states, `v`
     properties, text/curses equivalence.
+
+#### 14.6 — Ready's count, `Actions:` sentences, 24a's title and long trails (DONE, D-272)
+
+- **Findings fixed:**
+  - **09 Ready** counts stored credentials from the plan's effects only. It said it twice, and said
+    it where the plan stores none.
+  - **23 Credential Details, Installed Artifact Details and Installed Collection Details** no
+    longer print `Actions: …`; the legend offers the keys.
+  - **24a** is titled `Review Replacement`, `Review Deletion`, `Review Setup`, or `Verification`
+    for Verify's answer.
+  - **Trails** past `CONTENT_MEASURE` elide their middle places as `…`, keeping the area and the
+    place Esc returns to. 24a's went from 142 characters to 83.
+- **Tests:** `tests/frame_wording_test.py` covers:
+  - Ready with and without a store effect;
+  - the three details renderers in both profiles;
+  - 24a's three titles under the frame laws;
+  - a deep trail and a trail that fits.
+  `credential_action_rows_test` and `consumer_install_flow_shell_test` now expect the new titles
+  and the legend instead of the sentence.
+- **Targeted mutations, all killed:**
+  - the inputs line back on Ready;
+  - `Actions:` back on 23;
+  - the generic 24a title;
+  - an unfitted trail;
+  - eliding the area first.
+- The UI modules pass. The only errors are Hypothesis's differing-executors check from listing two
+  modules twice in one run, which also fails at HEAD. The static gates pass.
+- **Still open for task 14:**
+  - 22c not prefilling the current value;
+  - 22d's generic review text;
+  - the recorded matrix.
 

@@ -603,7 +603,7 @@ class CredentialActionShellE2ETest(unittest.TestCase):
     def test_replace_is_reviewed_confirmed_and_lands_on_the_credential(self) -> None:
         _, terminal, journal, provider = self._run(ENTER, ENTER, ENTER, DOWN, ENTER, ENTER)
 
-        review = terminal.screen_containing("/ Review Credential Action")
+        review = terminal.screen_containing("/ Review Replacement")
         self.assertIn("public/mcp/github", review)
         self.assertIn("[Enter] Confirm", review)
         self.assertEqual(provider.stored, [(None, True)])
@@ -614,23 +614,23 @@ class CredentialActionShellE2ETest(unittest.TestCase):
     def test_escape_from_the_review_leaves_the_credential_untouched(self) -> None:
         _, terminal, journal, provider = self._run(ENTER, ENTER, ENTER, DOWN, ENTER, ESCAPE)
 
-        self.assertTrue(terminal.screen_containing("/ Review Credential Action"))
+        self.assertTrue(terminal.screen_containing("/ Review Replacement"))
         self.assertEqual(provider.stored, [])
         self.assertNotIn("released", journal.entries)
         self.assertIn("Credential Action", terminal.last)
-        self.assertNotIn("Review Credential Action", terminal.last)
+        self.assertNotIn("Review Replacement", terminal.last)
         self.assertIn("github-token", terminal.last)
 
     def test_verify_reports_in_place_and_enter_goes_back_to_the_credential(self) -> None:
         _, terminal, journal, provider = self._run(ENTER, ENTER, ENTER, ENTER, ENTER)
 
         verified = terminal.screen_containing("nothing was changed")
-        self.assertIn("/ Review Credential Action", verified)
+        self.assertIn("/ Verification", verified)
         self.assertIn("[Enter] Credential details", verified)
         self.assertEqual(provider.stored, [])
         self.assertNotIn("released", journal.entries)
         self.assertIn("Credential Details", terminal.last)
-        self.assertNotIn("Review Credential Action", terminal.last)
+        self.assertNotIn("Review Replacement", terminal.last)
 
     def test_no_frame_or_plan_ever_holds_a_value(self) -> None:
         _, terminal, _, _ = self._run(ENTER, ENTER, ENTER, DOWN, ENTER, ENTER)

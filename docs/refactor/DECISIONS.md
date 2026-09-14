@@ -6591,3 +6591,39 @@ all Maintainer lists breaking §167's frame:
 - `tests/maintainer_screen_rows_test.py` holds the frame, `v` and key laws on every cursor of each
   screen in both profiles.
 - The task 14 frame audit reports no violation on any recorded frame.
+
+## D-272 — A frame says each change once, names a review for what it reviews, and fits its trail
+
+Date: 2026-09-15 (CP-23 task 14, sixth increment).
+
+**Context.** Four findings recorded for task 14 by tasks 12, 13 and 16 remained after the audit's
+frame laws were clean:
+
+- **Ready (09)** counted stored credentials twice: once from the plan's `store-credential` effects
+  and once from its credential inputs. Where the plan stores nothing, because the credential already
+  exists, the inputs line still said one would be stored.
+- **Credential Details (23)**, Installed Artifact Details and Installed Collection Details closed
+  their facts with `Actions: verify, replace.` The legend already offers those keys, and §167's
+  Artifact Details rule says a printed `Actions:` sentence alone is insufficient. The artifact's
+  sentence could also name `update`, which that screen does not offer.
+- **Review 24a** was titled `Review Credential Action` whether it reviewed a replacement, a
+  deletion or a setup, or showed what Verify found.
+- **Trails** five places deep ran past the content measure (24a at 142 characters, 22d at 126), so
+  the frame's first line wrapped.
+
+**Decision.**
+
+- Ready's counts come from the effects alone. The credential inputs add no line of their own.
+- The three details screens drop the `Actions:` sentence. Installed Artifact Details keeps "No
+  action is offered until it is observed." because that is a fact about the artifact, not a list of
+  keys. Doctor's "repair issues using minimal reconciliation plans" stays: it says what the repair
+  does, not which key runs it (QA-087).
+- 24a's title follows the pending action: `Review Replacement`, `Review Deletion`, `Review Setup`.
+  With no action pending the screen is Verify's answer, `Verification`. The titles echo the Enter
+  labels on screen 24.
+- A trail longer than `CONTENT_MEASURE` replaces its middle places with `…`. It keeps `AART`, the
+  first place (the area), the last place passed through (where Esc goes) and the screen's title. If
+  that still does not fit, the area goes too. A trail that fits is drawn whole.
+
+**Consequences.** The history is unchanged, so Esc still walks back through every elided place. The
+frame checker's self-naming rule reads the last trail segment, which elision never removes.
