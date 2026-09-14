@@ -225,6 +225,11 @@ and no Registry content.
 Expected: the Skill and the MCP appear exactly once each. Columns keep their positions between
 rows, and the focused value is readable in full (`QA-030`).
 
+CP-23 task 02 retest: in Verbose, below the table and its own rule, `Artifact`, `Version`, `Source`
+and `Status` describe the row under the cursor, with no `Under the cursor:` heading; moving the
+cursor updates them. Press `v`: Fast shows only the table. Press `v` again: the same row is
+described. Search for a name so no row matches: no stale detail remains.
+
 One malformed manifest must not fail the whole Source (`QA-063`, `D-230`). It takes a minute to
 prove and nothing else in the run tests it:
 

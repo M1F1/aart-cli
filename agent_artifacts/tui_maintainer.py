@@ -55,6 +55,7 @@ __all__ = [
     "render_maintainer_candidate_lifecycle",
     "render_maintainer_candidate_diff",
     "render_maintainer_candidates",
+    "maintainer_candidate_detail",
     "render_maintainer_collection_candidates",
     "render_maintainer_collection_validation",
     "render_maintainer_source",
@@ -274,9 +275,9 @@ def render_maintainer_candidates(
     if not candidates:
         return ("No active Candidates have been discovered.",)
     # `QA-030`: the header and every row are laid out on one shared grid, so a name longer than its
-    # column is cut there instead of pushing the columns after it out of line. Cutting is only
-    # honest because the row under the cursor is repeated in full underneath, which is also where
-    # the per-row evidence went: a detail line under every row was the density being complained of.
+    # column is cut there instead of pushing the columns after it out of line. The row under the
+    # cursor is spelt out in full by `maintainer_candidate_detail`, which is the screen's cursor
+    # description rather than a second block inside the table (CP-23 task 02, D-252).
     rows = [("", *_CANDIDATE_HEADINGS)]
     rows.extend(
         (
@@ -288,27 +289,36 @@ def render_maintainer_candidates(
         )
         for item in candidates
     )
-    listed = columns(rows, width=CONTENT_MEASURE)
+    return columns(rows, width=CONTENT_MEASURE)
+
+
+def maintainer_candidate_detail(
+    candidates: tuple[MaintainerCandidateView, ...],
+    *,
+    cursor: str,
+) -> tuple[str, ...]:
+    """The Candidate under the cursor, in full, or nothing when the cursor is on no Candidate.
+
+    It is a cursor description, so the frame draws it below the table's rule and only in Verbose
+    (D-250). No heading: the block's position already says what it describes.
+    """
+
+    if any(not isinstance(candidate, MaintainerCandidateView) for candidate in candidates) or (
+        not isinstance(cursor, str)
+    ):
+        raise ValueError("Maintainer Candidate detail needs typed views and a cursor")
     focused = next((item for item in candidates if item.id == cursor), None)
     if focused is None:
-        return listed
-    fields = [
+        return ()
+    fields = (
         ("Artifact", focused.artifact),
         ("Version", focused.version),
         ("Source", focused.source_alias),
         ("Status", _human(focused.state.value)),
-    ]
-    if profile is PresentationProfile.VERBOSE:
-        fields.extend(
-            (("Candidate", focused.id), ("Target registry", focused.target_registry)),
-        )
-    return separate(
-        listed,
-        (
-            "Under the cursor:",
-            *field_block(fields, indent=2, width=CONTENT_MEASURE),
-        ),
+        ("Candidate", focused.id),
+        ("Target registry", focused.target_registry),
     )
+    return field_block(fields, indent=2, width=CONTENT_MEASURE)
 
 
 def _short(value: str, profile: PresentationProfile) -> str:

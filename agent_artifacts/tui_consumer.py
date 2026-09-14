@@ -108,6 +108,7 @@ from agent_artifacts.tui_layout import (
     stated,
 )
 from agent_artifacts.tui_maintainer import (
+    maintainer_candidate_detail,
     maintainer_registry_descriptor,
     maintainer_registry_rows,
     maintainer_registry_status,
@@ -2504,6 +2505,16 @@ class CanonicalScreenSource:
             # left to add here and says nothing rather than repeating itself.
             purpose = REGISTRY_STAGE_PURPOSE.get(state.current_row or "")
             return () if purpose is None else (purpose,)
+        if state.session.screen is MaintainerScreen.CANDIDATES:
+            # CP-23 task 02: the table is the actions block; the Candidate it points at is this
+            # description, read from the same filtered list the rows were, so a row the search
+            # removed is never described.
+            if self._screens.maintainer is None:
+                return ()
+            return maintainer_candidate_detail(
+                self._screens.candidates(_candidate_filter(state)),
+                cursor=state.current_row or "",
+            )
         if state.session.screen not in _DESCRIBED_SCREENS:
             return ()
         targets = navigation_targets(

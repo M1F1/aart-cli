@@ -1,6 +1,6 @@
 # CP-23 — Actionable TUI workflows after the fourth manual run
 
-Status: IN PROGRESS — TASK 01 DONE; TASK 02 NEXT
+Status: IN PROGRESS — TASKS 01–02 DONE; TASK 03 NEXT
 
 Date: 2026-09-14. Authority: the product owner's manual screen reports and request to create CP-23
 and close CP-22, followed by the all-screen audit and credential guidance requirements.
@@ -389,3 +389,59 @@ passed format-check, lint, typecheck, unit (**3,978 tests OK, 1 skipped**; the i
 was skipped as a subset of unit) and validate. The run was stopped during coverage at the owner's
 instruction: per-task verification runs only the gates that verify the change, and the full suite
 (including coverage and a separate `make integration`) belongs to task 15.
+
+### Task 02 — Candidates table and focused detail (2026-09-14)
+
+Done. D-252 records the choices. The table renderer returns only the grid; screen 35's cursor
+description supplies the focused Candidate, so the shared frame places it below its own rule in
+Verbose and omits it in Fast. `Under the cursor:` is gone.
+
+Before, both profiles drew `Under the cursor:` and the four fields inside the table's block (Verbose
+added Candidate and Target registry there). After, production-composed through `frame` with two
+Sources and four Candidates:
+
+```text
+Verbose:
+   STATUS  ARTIFACT           VERSION  SOURCE
+>  New     mcp/github-mcp     1.0.0    authors
+   New     skill/code-review  1.0.0    authors
+   New     mcp/jira-mcp       2.0.0    vendors
+   New     skill/triage       2.0.0    vendors
+
+────────────────────────────────────────────────────────────────
+
+  Artifact         mcp/github-mcp
+  Version          1.0.0
+  Source           authors
+  Status           New
+  Candidate        23e725aa…
+  Target registry  company
+
+────────────────────────────────────────────────────────────────
+
+[f] Filters   [c] Collections   [Enter] Open   [/] Search   [v] Fast / Verbose
+[↑/↓] Move   [Esc] Back   [?] Help   [q] Quit
+
+Fast: the same table and footer, with no detail block and no extra rule.
+```
+
+Evidence:
+
+- `tests/maintainer_candidate_detail_test.py` (new, 10 tests): the Verbose frame has the table, a
+  rule and the four labels in order; Fast has none; `v` twice keeps the same row, restores the
+  identical Verbose frame and dispatches only `PERSIST_SETTINGS`; every row across both Sources is
+  described as the cursor moves; search narrowing to one row and to none; a stale cursor on a
+  row excluded by the search is not described; the curses path at 40×20 keeps the footer whole,
+  clips the detail, and draws no line wider than the terminal; a long name is described in full
+  within `CONTENT_MEASURE`; and a Hypothesis property that detail exists exactly when the cursor
+  names a listed Candidate and the table is always header + one line per Candidate.
+- `tests/tabular_list_columns_test.py`: the full-name claim moved from the table to the detail.
+- Focused run: candidate detail/filters/shell, tabular columns, block structure, skeleton, key
+  legend, composition E2E, promotion, workflow progress and every `tui_*`/`cp20_tui` module:
+  **328 tests OK**. `make format-check lint typecheck`: OK.
+- Four targeted mutations, all killed: description branch returns nothing (**6 red**); description
+  reads the unfiltered list (**1 red** — it first survived, which is why the stale-cursor test
+  exists); detail put back inside the table (**5 red**); Status field dropped (**2 red**).
+- Per the owner's instruction, per-task verification runs only the verifying gates. Scoped
+  `make mutants` for `tui_maintainer.py`/`tui_consumer.py` and the full suite are left to task 15.
+  No human terminal retest is claimed.

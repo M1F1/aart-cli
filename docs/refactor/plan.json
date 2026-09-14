@@ -558,7 +558,7 @@
         {
           "id": "2",
           "title": "Separate the Candidates table from focused Candidate detail",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "3",

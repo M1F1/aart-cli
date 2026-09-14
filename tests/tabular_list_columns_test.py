@@ -9,7 +9,8 @@ najwyżej ucinać nazwy, ale jak się najedzie kursorem, to pod spodem jest cał
 The claims here are stated over the shared grid rather than over one screen, because `B-107` found
 the layout kernel's width arithmetic unheld: a bounded row, a truncated cell, and a column whose
 position is the same on every row including the header. Truncating is only acceptable because the
-row under the cursor is repeated in full underneath, so nothing is actually hidden.
+row under the cursor is described in full (in Verbose, below the table since CP-23 task 02), so
+nothing is actually hidden.
 """
 
 from __future__ import annotations
@@ -28,6 +29,7 @@ from agent_artifacts.application.maintainer_views import (
 from agent_artifacts.domain.candidates import CandidateState
 from agent_artifacts.tui_layout import CONTENT_MEASURE, STAGE_PROJECTION
 from agent_artifacts.tui_maintainer import (
+    maintainer_candidate_detail,
     render_maintainer_bulk_promotion,
     render_maintainer_candidates,
 )
@@ -143,24 +145,29 @@ class CandidateListHoldsItsColumnsTest(unittest.TestCase):
         for line in rendered:
             self.assertLessEqual(len(line), CONTENT_MEASURE, line)
 
-    def test_the_row_under_the_cursor_is_repeated_in_full(self) -> None:
-        """Truncation is only honest because nothing is actually hidden by it."""
+    def test_the_row_under_the_cursor_is_described_in_full(self) -> None:
+        """Truncation is only honest because nothing is actually hidden by it.
+
+        CP-23 task 02 moved the full row out of the table into the cursor description, which the
+        frame draws below the table in Verbose (D-252).
+        """
 
         focused = _candidate(LONG, source="superpowers-test")
 
-        rendered = self._rendered(_candidate(), focused, cursor=focused.id)
+        described = maintainer_candidate_detail((_candidate(), focused), cursor=focused.id)
 
         self.assertTrue(
-            any(line.strip().endswith(LONG) for line in rendered),
-            f"the focused name is nowhere in full: {rendered}",
+            any(line.strip().endswith(LONG) for line in described),
+            f"the focused name is nowhere in full: {described}",
         )
 
-    def test_nothing_is_repeated_when_the_cursor_is_on_nothing(self) -> None:
-        rendered = self._rendered(_candidate(LONG, source="superpowers-test"))
+    def test_nothing_is_described_when_the_cursor_is_on_nothing(self) -> None:
+        candidates = (_candidate(LONG, source="superpowers-test"),)
 
+        self.assertEqual(maintainer_candidate_detail(candidates, cursor=""), ())
         self.assertFalse(
-            any(line.strip().endswith(LONG) for line in rendered),
-            f"an unfocused row was expanded anyway: {rendered}",
+            any(line.strip().endswith(LONG) for line in self._rendered(*candidates)),
+            "an unfocused row was expanded anyway",
         )
 
     def test_an_empty_list_still_says_so(self) -> None:

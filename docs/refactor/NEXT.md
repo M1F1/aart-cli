@@ -2,7 +2,9 @@
 
 ## Current objective — CP-23 (2026-09-14)
 
-**CP-22 is CLOSED. CP-23 task 01 is done; task 02 is next.**
+**CP-22 is CLOSED. CP-23 tasks 01–02 are done; task 03 is next.**
+Task 02 (D-252) made the Candidates table the actions block and the focused Candidate its
+Verbose-only cursor description; evidence is in the slice.
 The unfinished Source onboarding changes from the previous run are completed in the working tree.
 Add Source names the new Source and explains explicit Candidate discovery, retaining its row for
 `[s] Sync`. Returning from Source Details or cancelling its Sync review also preserves that Source.
@@ -16,8 +18,8 @@ Per-task work runs only the verifying gates; the full suite is task 15 (owner in
 Task 01's detailed evidence is in
 [`slices/CP-23-actionable-tui-workflows.md`](slices/CP-23-actionable-tui-workflows.md).
 
-**Next product action: task 02**, separating the Candidates table from the focused identity detail
-under the shared Verbose gate. Continue the ordered fifteen-task plan; CP-23 as a whole is not
+**Next product action: task 03**, Candidate file diffs behind `v`: remove the `f` binding and the
+`Press f` / `d returns to summary` prompts, keeping the review stepper and Enter progression. Continue the ordered fifteen-task plan; CP-23 as a whole is not
 implemented or verified. Task 15 retains the full-batch/manual acceptance requirement, and task 14
 retains the complete screen/state audit. No human manual acceptance is claimed for task 01.
 

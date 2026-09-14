@@ -5904,3 +5904,21 @@ These optional inspections need no additional progress stage. The test cancels a
 to Sources, discovers Candidates, repeats Sync unchanged, and then discovers a new version while
 the approved Registry remains byte-for-byte unchanged. This fixes task 01's return path without
 changing the Candidate/publication contracts scheduled later in CP-23.
+
+## D-252 — The Candidate under the cursor is the Candidates screen's cursor description
+
+Date: 2026-09-14 · Status: implemented · Scope: CP-23 task 02
+
+`render_maintainer_candidates` returns only the `STATUS  ARTIFACT  VERSION  SOURCE` table, which
+is the frame's actions block. The focused Candidate is `maintainer_candidate_detail`, supplied by
+`CanonicalScreenSource.description` for screen 35, so the shared `described` block draws it below
+the table's rule in Verbose and `v` collapses it in Fast (D-250). The `Under the cursor:` heading
+is removed; the block's position says what it describes. No separator is embedded in a renderer.
+
+The detail lists Artifact, Version, Source and Status first, then Candidate ID and Target registry.
+The last two were already Verbose-only on this screen before the change; since the whole block is
+now Verbose-only, keeping them loses nothing and adds no Fast text. The description reads the same
+filter (`_candidate_filter`) as the rows, so a row excluded by the search text is not described even
+before the rows reload. Consequence: in Fast a name truncated by the grid is no longer repeated in
+full on screen 35; Verbose or Candidate Details shows it. That is the owner's stated rule, not an
+exception to `QA-030`.
