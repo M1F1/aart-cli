@@ -39,6 +39,7 @@ from agent_artifacts.application.consumer_views import (
     ActivityView,
     ApplicationScreen,
     ConfigInputView,
+    ConfigurationFileView,
     ConsumerPlanView,
     ConsumerScreen,
     ConsumerSettings,
@@ -284,6 +285,102 @@ def _credential_health(view: CredentialRecordView) -> tuple[str, str]:
 def _credential_row(view: CredentialRecordView) -> str:
     mark, health = _credential_health(view)
     return f"{mark} {view.input}  {health}  Used by {len(view.dependants)}"
+
+
+_USER_CONFIG_ROW_PREFIX = "configuration:"
+
+
+def _user_config_row(identifier: str) -> str:
+    return _USER_CONFIG_ROW_PREFIX + identifier
+
+
+def _user_credential_row(reference: str) -> str:
+    return reference
+
+
+def render_user_inputs_area(
+    screens: "ConsumerScreens", rows: tuple[str, ...], current_row: str
+) -> tuple[str, ...]:
+    """Screen 22: one row per installed artifact, never one global variables bucket."""
+
+    lines = ["User variables and credentials", "Installed artifacts with runtime inputs"]
+    for coordinate in rows:
+        configurations = screens.configurations_for(coordinate)
+        credentials = screens.credentials_for(coordinate)
+        config_ids = sorted(
+            {
+                identifier
+                for file in configurations
+                for identifier in (*file.inputs, *(item[0] for item in file.values))
+            }
+        )
+        mark = ">" if coordinate == current_row else " "
+        lines.append(f"{mark} {coordinate}")
+        lines.append(
+            "    Configuration: "
+            + (", ".join(config_ids) if config_ids else "none")
+            + f" ({len(configurations)} harness file(s))"
+        )
+        if not credentials:
+            lines.append("    Credentials: none")
+        for credential in credentials:
+            lines.append(f"    Credentials: {_credential_row(credential)}")
+    return tuple(lines) if rows else ("User variables and credentials", "Nothing here yet.")
+
+
+def render_artifact_user_inputs(
+    coordinate: str,
+    configurations: tuple[ConfigurationFileView, ...],
+    credentials: tuple[CredentialRecordView, ...],
+    current_row: str,
+    profile: PresentationProfile,
+) -> tuple[str, ...]:
+    """Screen 22a: ordinary file values and provider references as separate sections."""
+
+    lines = [coordinate, "Configuration"]
+    identifiers = tuple(
+        sorted(
+            {
+                identifier
+                for file in configurations
+                for identifier in (*file.inputs, *(item[0] for item in file.values))
+            }
+        )
+    )
+    if not identifiers:
+        lines.append("  No ordinary configuration is declared.")
+    for identifier in identifiers:
+        row = _user_config_row(identifier)
+        lines.append(f"{'>' if current_row == row else ' '} {identifier}")
+        for file in configurations:
+            value = next((value for name, value in file.values if name == identifier), None)
+            status = _human(file.state)
+            shown = "value unavailable" if value is None else value
+            lines.append(f"    {file.harness}: {shown} — {status}")
+            if profile is PresentationProfile.VERBOSE:
+                lines.append(f"      File: {file.path}")
+                if file.detail:
+                    lines.append(f"      {file.detail}")
+    lines.append("Credentials")
+    lines.append("  Values stay with their providers and are never read or displayed by AART.")
+    if not credentials:
+        lines.append("  No credential reference is declared.")
+    for credential in credentials:
+        row = _user_credential_row(credential.reference)
+        status = (
+            "Configured securely"
+            if credential.health == "present"
+            else _human(credential.health).title()
+        )
+        lines.append(f"{'>' if current_row == row else ' '} {credential.input}: {status}")
+        if profile is PresentationProfile.VERBOSE:
+            lines.extend(
+                (
+                    f"    Provider: {credential.provider}",
+                    f"    Reference: {credential.reference}",
+                )
+            )
+    return tuple(lines)
 
 
 _STEP_MARKS: dict[str, str] = {
@@ -1456,7 +1553,9 @@ _DASHBOARD_DESCRIPTIONS: dict[ApplicationScreen, str] = {
     ConsumerScreen.INSTALLED: "See what AART manages in this project and whether it is healthy.",
     ConsumerScreen.UPDATES: "Review newer approved versions; nothing changes without confirmation.",
     ConsumerScreen.REGISTRIES: "See which sources determine what Marketplace can offer.",
-    ConsumerScreen.CREDENTIALS: "Check credential references and which installed tools depend on them.",
+    ConsumerScreen.CREDENTIALS: (
+        "Manage ordinary per-harness configuration beside provider-held credentials."
+    ),
     ConsumerScreen.ACTIVITY: "Review recorded changes, results and their receipts.",
     ConsumerScreen.DOCTOR: "Inspect health and find the smallest safe repair for detected drift.",
     ConsumerScreen.SETTINGS: "Choose detail, installation scope and optional Maintainer Mode.",
@@ -2006,6 +2105,7 @@ class ConsumerScreens:
     #: The pre-review screen-07 projection. It is separate from ``plan.inputs`` because no plan
     #: exists until these values have been accepted and bound.
     installation_inputs: tuple[InputView, ...] = ()
+    configurations: tuple[ConfigurationFileView, ...] = ()
 
     def offered(self, key: str) -> MarketplaceEntry | None:
         return next((item for item in self.marketplace if item.key == key), None)
@@ -2024,6 +2124,19 @@ class ConsumerScreens:
 
     def credential(self, reference: str) -> CredentialRecordView | None:
         return next((item for item in self.credentials if item.reference == reference), None)
+
+    def user_input_artifacts(self) -> tuple[str, ...]:
+        """Installed artifacts that own config or depend on a provider reference."""
+
+        configured = {item.coordinate for item in self.configurations}
+        dependants = {owner for item in self.credentials for owner in item.dependants}
+        return tuple(sorted(configured | dependants))
+
+    def configurations_for(self, coordinate: str) -> tuple[ConfigurationFileView, ...]:
+        return tuple(item for item in self.configurations if item.coordinate == coordinate)
+
+    def credentials_for(self, coordinate: str) -> tuple[CredentialRecordView, ...]:
+        return tuple(item for item in self.credentials if coordinate in item.dependants)
 
     def candidate(self, candidate_id: str) -> MaintainerCandidateView | None:
         """One Candidate by its stable ID, because two Sources may name an artifact the same."""
@@ -2250,6 +2363,7 @@ def screens_from(
         adopted_artifacts,
         adoption_upstream,
         installation_inputs,
+        machine.configurations,
     )
 
 
@@ -2402,6 +2516,23 @@ class CanonicalScreenSource:
             # CP-23 task 12: the actions the record permits are the rows (D-262).
             record = self._screens.credential(state.focus)
             return () if record is None else record.actions
+        if screen is ConsumerScreen.USER_INPUT_DETAILS:
+            coordinate = state.user_inputs_artifact or state.focus
+            configuration_rows = tuple(
+                _user_config_row(identifier)
+                for identifier in sorted(
+                    {
+                        identifier
+                        for file in self._screens.configurations_for(coordinate)
+                        for identifier in (*file.inputs, *(item[0] for item in file.values))
+                    }
+                )
+            )
+            credential_rows = tuple(
+                _user_credential_row(item.reference)
+                for item in self._screens.credentials_for(coordinate)
+            )
+            return (*configuration_rows, *credential_rows)
         if screen is ConsumerScreen.SUCCESS:
             # CP-23 task 06: the choices exist once something ran; before that there is nothing
             # to view, and a row that opens nothing is the gap this replaced.
@@ -2493,9 +2624,9 @@ class CanonicalScreenSource:
             )
         if screen is ConsumerScreen.CREDENTIALS:
             return tuple(
-                item.reference
-                for item in self._screens.credentials
-                if _matches(query, item.reference, item.input, item.health)
+                coordinate
+                for coordinate in self._screens.user_input_artifacts()
+                if _matches(query, coordinate)
             )
         if screen is ConsumerScreen.ACTIVITY:
             return tuple(
@@ -2726,6 +2857,12 @@ class CanonicalScreenSource:
                 if remediation_needs_decision(plan)
                 else ConsumerScreen.READY
             )
+        if screen is ConsumerScreen.USER_INPUT_DETAILS:
+            return (
+                ConsumerScreen.CREDENTIAL_DETAILS
+                if self._screens.credential(row) is not None
+                else None
+            )
         if screen is ConsumerScreen.REMEDIATION:
             return ConsumerScreen.READY if self._screens.plan is not None else None
         if not isinstance(screen, ConsumerScreen):
@@ -2733,7 +2870,7 @@ class CanonicalScreenSource:
         target = {
             ConsumerScreen.ACTIVITY: ConsumerScreen.ACTIVITY_DETAILS,
             ConsumerScreen.ACTIVITY_DETAILS: ConsumerScreen.RECEIPT_DETAILS,
-            ConsumerScreen.CREDENTIALS: ConsumerScreen.CREDENTIAL_DETAILS,
+            ConsumerScreen.CREDENTIALS: ConsumerScreen.USER_INPUT_DETAILS,
             ConsumerScreen.CREDENTIAL_DETAILS: ConsumerScreen.CREDENTIAL_ACTION,
             ConsumerScreen.UPDATES: ConsumerScreen.UPDATE_INPUTS,
             ConsumerScreen.REGISTRIES: ConsumerScreen.REGISTRY_ADD,
@@ -3282,13 +3419,15 @@ class CanonicalScreenSource:
                 else render_installed_collection(group, profile)
             )
         if screen is ConsumerScreen.CREDENTIALS:
-            return self._list(
-                state,
-                tuple(
-                    _credential_row(item)
-                    for item in screens.credentials
-                    if item.reference in state.rows
-                ),
+            return render_user_inputs_area(screens, state.rows, state.current_row)
+        if screen is ConsumerScreen.USER_INPUT_DETAILS:
+            coordinate = state.user_inputs_artifact or state.focus
+            return render_artifact_user_inputs(
+                coordinate,
+                screens.configurations_for(coordinate),
+                screens.credentials_for(coordinate),
+                state.current_row,
+                profile,
             )
         if screen in (ConsumerScreen.CREDENTIAL_DETAILS, ConsumerScreen.CREDENTIAL_ACTION):
             record = screens.credential(state.focus)

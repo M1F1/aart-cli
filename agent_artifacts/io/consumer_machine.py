@@ -31,6 +31,7 @@ from agent_artifacts.application.consumer_session import (
     UnadoptedInstallation,
     assemble_consumer_machine,
 )
+from agent_artifacts.application.consumer_views import ConfigurationFileView
 from agent_artifacts.application.installed_state import (
     current_state_from_observation,
     current_state_from_placement,
@@ -38,6 +39,7 @@ from agent_artifacts.application.installed_state import (
     desired_state_from_receipt,
 )
 from agent_artifacts.domain.artifacts import ArtifactKind
+from agent_artifacts.domain.configuration_files import parse_configuration_file
 from agent_artifacts.domain.credentials import (
     CredentialObservation,
     CredentialReference,
@@ -61,6 +63,7 @@ from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.install_state.model import InstallScope
 from agent_artifacts.install_state.paths import install_state_paths
 from agent_artifacts.install_state.schema import parse_install_state
+from agent_artifacts.protocol.hashing import sha256_bytes
 
 from .credentials import CredentialProviderPort
 from .harness import LocalHarnessRegistry
@@ -72,6 +75,7 @@ __all__ = [
     "INSTALL_STATE_UNREADABLE",
     "InspectedInstallations",
     "read_consumer_machine",
+    "read_configuration_files",
     "read_installed_inspections",
 ]
 
@@ -205,6 +209,88 @@ class InspectedInstallations:
 
     inspections: tuple[InstalledInspection, ...]
     credentials: tuple[CredentialObservation, ...]
+    configurations: tuple[ConfigurationFileView, ...] = ()
+
+
+def read_configuration_files(
+    records: tuple[InstalledRecord, ...],
+) -> Result[tuple[ConfigurationFileView, ...]]:
+    """Read artifact-owned config files without turning absence or damage into guessed values."""
+
+    if any(not isinstance(item, InstalledRecord) for item in records):
+        raise ValueError("configuration reading needs installed records")
+    views: list[ConfigurationFileView] = []
+    for installed in records:
+        receipt = installed.receipt
+        if not isinstance(receipt, InstallationReceipt):
+            continue
+        input_ids = tuple(item.input.value for item in receipt.config)
+        for record in receipt.configuration_files:
+            try:
+                content = Path(record.path).read_bytes()
+            except FileNotFoundError:
+                views.append(
+                    ConfigurationFileView(
+                        str(installed.coordinate),
+                        record.harness,
+                        record.path,
+                        "missing",
+                        (),
+                        "the configuration file is missing",
+                        input_ids,
+                    )
+                )
+                continue
+            except OSError:
+                views.append(
+                    ConfigurationFileView(
+                        str(installed.coordinate),
+                        record.harness,
+                        record.path,
+                        "unreadable",
+                        (),
+                        "the configuration file could not be read",
+                        input_ids,
+                    )
+                )
+                continue
+            try:
+                text = content.decode("utf-8")
+            except UnicodeDecodeError:
+                parsed = None
+            else:
+                candidate = parse_configuration_file(text)
+                parsed = candidate.value if isinstance(candidate, Ok) else None
+            if parsed is None:
+                views.append(
+                    ConfigurationFileView(
+                        str(installed.coordinate),
+                        record.harness,
+                        record.path,
+                        "unreadable",
+                        (),
+                        "the configuration file does not use the supported format",
+                        input_ids,
+                    )
+                )
+                continue
+            state = "matched" if sha256_bytes(content) == record.digest else "changed-outside-aart"
+            views.append(
+                ConfigurationFileView(
+                    str(installed.coordinate),
+                    record.harness,
+                    record.path,
+                    state,
+                    tuple((item[0].value, item[1]) for item in parsed),
+                    (
+                        ""
+                        if state == "matched"
+                        else "the file changed outside AART after its receipt was recorded"
+                    ),
+                    input_ids or tuple(item[0].value for item in parsed),
+                )
+            )
+    return Ok(tuple(views))
 
 
 def read_installed_inspections(
@@ -296,7 +382,16 @@ def read_installed_inspections(
         )
         inspections.append(InstalledInspection(record, desired, current))
 
-    return Ok(InspectedInstallations(tuple(inspections), tuple(observations)))
+    configurations = read_configuration_files(records)
+    if isinstance(configurations, Err):
+        return configurations
+    return Ok(
+        InspectedInstallations(
+            tuple(inspections),
+            tuple(observations),
+            configurations.value,
+        )
+    )
 
 
 def read_consumer_machine(
@@ -367,6 +462,7 @@ def read_consumer_machine(
             credentials=tuple(observations),
             actions=actions.value,
             unadopted=tuple(unadopted),
+            configurations=read.value.configurations,
             today=today,
         )
     )

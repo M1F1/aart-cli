@@ -86,6 +86,7 @@ __all__ = [
     "ApplicationScreen",
     "ConfigInputView",
     "config_input_value_problem",
+    "ConfigurationFileView",
     "ConsumerPlanView",
     "ConsumerScreen",
     "ConsumerSession",
@@ -187,7 +188,8 @@ class ConsumerScreen(str, Enum):
     # before anything is.
     REGISTRY_SYNC = "21c-sync-registry"
     REGISTRY_REMOVE = "21d-disconnect-registry"
-    CREDENTIALS = "22-credentials"
+    CREDENTIALS = "22-user-variables-and-credentials"
+    USER_INPUT_DETAILS = "22a-artifact-variables-and-credentials"
     CREDENTIAL_DETAILS = "23-credential-details"
     CREDENTIAL_ACTION = "24-credential-action"
     # 24a states what a chosen credential action does before it does it, and is where Verify's
@@ -864,6 +866,55 @@ class CredentialRecordView:
     detail: str
     dependants: tuple[str, ...]
     actions: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ConfigurationFileView:
+    """One installed harness's ordinary values, read from its artifact-owned file."""
+
+    coordinate: str
+    harness: str
+    path: str
+    state: str
+    values: tuple[tuple[str, str], ...]
+    detail: str = ""
+    inputs: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.coordinate, str)
+            or not self.coordinate
+            or not isinstance(self.harness, str)
+            or not self.harness
+            or not isinstance(self.path, str)
+            or not self.path.startswith("/")
+            or self.state not in {"matched", "changed-outside-aart", "missing", "unreadable"}
+            or not isinstance(self.detail, str)
+            or any(
+                character in self.coordinate + self.harness + self.path + self.detail
+                for character in "\r\n"
+            )
+            or not isinstance(self.values, tuple)
+            or any(
+                not isinstance(item, tuple)
+                or len(item) != 2
+                or not isinstance(item[0], str)
+                or not item[0]
+                or not isinstance(item[1], str)
+                or any(character in item[0] + item[1] for character in "\r\n")
+                for item in self.values
+            )
+            or len({item[0] for item in self.values}) != len(self.values)
+            or not isinstance(self.inputs, tuple)
+            or any(
+                not isinstance(item, str)
+                or not item
+                or any(character in item for character in "\r\n")
+                for item in self.inputs
+            )
+            or len(set(self.inputs)) != len(self.inputs)
+        ):
+            raise ValueError("configuration file view is invalid")
 
 
 def project_credential_record(
@@ -1733,7 +1784,8 @@ _NAVIGATION: dict[ConsumerScreen, tuple[ConsumerScreen, ...]] = {
     ConsumerScreen.REGISTRY_REMOVE: (ConsumerScreen.REGISTRIES,),
     ConsumerScreen.REGISTRY_ADD: (ConsumerScreen.REGISTRY_REVIEW,),
     ConsumerScreen.REGISTRY_REVIEW: (ConsumerScreen.REGISTRIES,),
-    ConsumerScreen.CREDENTIALS: (ConsumerScreen.CREDENTIAL_DETAILS,),
+    ConsumerScreen.CREDENTIALS: (ConsumerScreen.USER_INPUT_DETAILS,),
+    ConsumerScreen.USER_INPUT_DETAILS: (ConsumerScreen.CREDENTIAL_DETAILS,),
     ConsumerScreen.CREDENTIAL_DETAILS: (ConsumerScreen.CREDENTIAL_ACTION,),
     ConsumerScreen.CREDENTIAL_ACTION: (ConsumerScreen.CREDENTIAL_REVIEW,),
     ConsumerScreen.CREDENTIAL_REVIEW: (

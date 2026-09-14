@@ -1382,14 +1382,32 @@ The six previously owed 16.1 targeted mutations were also run and killed:
 - dropping the launcher's duplicate-value refusal;
 - omitting configuration-file records from the receipt.
 
+#### 16.3 — Grouped user-input area (DONE)
+
+- D-266 renames screen 22 to **User variables and credentials** and makes installed artifact
+  coordinates its rows. Screen 22a is the group detail: Configuration lists each ordinary input's
+  value and observed state per harness; Credentials lists provider-owned inputs and routes to the
+  accepted Details and Action screens rather than duplicating them (INV-067).
+- Composition reads real paths from `InstallationReceipt.configuration_files`, strictly parses the
+  supported format, and compares bytes with the receipt digest. The four projections are matched,
+  changed outside AART, missing and unreadable. Invalid/unreadable content contributes neither a
+  guessed value nor raw content to application state.
+- Credential health remains derived from provider references and observations. Fast shows no
+  provider reference; Verbose may show the reference but never material.
+- `tests/user_inputs_area_test.py` covers real matching, edited and missing files, invalid-content
+  redaction, separate sections and an artifact having only a credential dependency. Existing
+  credential action and shell tests now traverse the artifact group.
+- Focused evidence: 137 tests pass across the new area, credential actions, navigation, session and
+  machine composition, shell flows, frame structure and consumer properties.
+- Targeted mutations killed for 16.3:
+  - reversing the receipt-digest comparison;
+  - reporting a missing file as matched;
+  - projecting invalid file text as an ordinary value;
+  - replacing the Credentials section heading with Configuration;
+  - dropping credential-only artifacts from the grouped rows.
+
 #### Remaining increments (design; not implemented)
 
-- **16.3 — area.** Add one "User variables and credentials" area grouped by installed artifact,
-  with separate Configuration and Credentials sections (INV-067).
-  - Configuration is read from each receipt's `configuration_files`, via parse plus digest:
-    matches / changed outside AART / missing / unreadable.
-  - Credentials come from provider references and observations, extending task 12's Credentials
-    view.
 - **16.4 — edit.** A value is edited for one harness, a chosen set or all of them (reuse task 10
   selection).
   - The edit is a reviewed, receipted `configure_intent` mutation that writes only CONFIGURATION

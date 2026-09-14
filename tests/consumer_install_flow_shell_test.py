@@ -210,13 +210,15 @@ class InstallFlowScreenTest(unittest.TestCase):
         source, state = at(ConsumerScreen.CREDENTIALS)
         fast = "\n".join(frame(source, state))
 
-        self.assertEqual(state.rows, ("github-token@macos-keychain:github.com/work",))
+        self.assertEqual(state.rows, ("public/mcp/github",))
+        self.assertIn("github-token", fast)
         self.assertIn("Ready", fast)
         self.assertIn("Used by 1", fast)
 
     def test_a_credential_detail_names_its_provider_consumers_and_actions(self):
         source, state = at(ConsumerScreen.CREDENTIALS)
-        opened, _ = _navigate(source, state, ConsumerScreen.CREDENTIAL_DETAILS)
+        grouped, _ = _navigate(source, state, ConsumerScreen.USER_INPUT_DETAILS)
+        opened, _ = _navigate(source, grouped, ConsumerScreen.CREDENTIAL_DETAILS)
         fast = "\n".join(frame(source, opened))
 
         self.assertIn("macos-keychain", fast)
@@ -225,7 +227,8 @@ class InstallFlowScreenTest(unittest.TestCase):
 
     def test_deleting_a_credential_in_use_shows_what_it_would_affect(self):
         source, state = at(ConsumerScreen.CREDENTIALS)
-        opened, _ = _navigate(source, state, ConsumerScreen.CREDENTIAL_DETAILS)
+        grouped, _ = _navigate(source, state, ConsumerScreen.USER_INPUT_DETAILS)
+        opened, _ = _navigate(source, grouped, ConsumerScreen.CREDENTIAL_DETAILS)
         action, _ = _navigate(source, opened, ConsumerScreen.CREDENTIAL_ACTION)
         fast = "\n".join(frame(source, action))
 

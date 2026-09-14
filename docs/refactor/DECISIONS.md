@@ -6332,3 +6332,29 @@ identity: a pre-review editable form when no InstallPlan exists, and the existin
 of the immutable plan after screen 05. Configuration and Credentials are rendered as visibly
 separate sections; the credential provider still owns entry and storage and AART carries only its
 reference.
+
+## D-266 — Screen 22 groups runtime inputs by installed artifact and reads configuration from disk
+
+Date: 2026-09-14 (CP-23 task 16, third increment).
+
+**Context.** The former Credentials list was global and its rows were provider references. The
+owner asked for one nearby management area in which ordinary configuration and credentials remain
+different entities but are organised by the artifact that uses them. Configuration files can be
+edited or removed outside AART, so a receipt alone cannot truthfully describe their current value
+or health.
+
+**Decision.** Screen 22 is now **User variables and credentials** and its rows are installed
+artifact coordinates. Screen 22a shows that artifact's inputs in two explicit sections:
+Configuration contains each input's per-harness value and observed file state; Credentials contains
+only provider reference health and routes into the accepted screens 23/24/24a. Composition reads
+each receipt's `configuration_files` from its absolute artifact-owned path. Strict parse plus the
+recorded digest yields `matched`, `changed-outside-aart`, `missing`, or `unreadable`; invalid or
+unreadable content contributes no guessed value and no raw content to the view. Provider
+observations remain the sole source of credential health and no credential value is read.
+
+**Consequences.** The old credential actions are extended through an artifact group rather than
+duplicated. Fast identifies configuration values by input and harness and credentials by input and
+health; Verbose may additionally show the ordinary configuration path and provider reference.
+Changing a file outside AART is visible without rewriting it. A provider reference with no local
+dependant remains testable at the credential-action seam, but—as before D-262—no real unused row is
+discoverable from installation receipts alone.

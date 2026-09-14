@@ -1,6 +1,11 @@
 # AART Refactor Migration Status
 
-**2026-09-14: CP-22 CLOSED; CP-23 tasks 01–13 done, owner task 16 in progress (16.1 per-harness files and 16.2 install form done), then 14 and 15.**
+**2026-09-14: CP-22 CLOSED; CP-23 tasks 01–13 done, owner task 16 in progress (16.1–16.3 done), then 14 and 15.**
+Task 16.3 (D-266): screen 22 now groups runtime inputs by installed artifact and screen 22a keeps
+Configuration and Credentials as separate sections. Composition strictly reads each
+artifact-owned per-harness file and reports matched, changed outside AART, missing or unreadable;
+invalid content is neither guessed nor projected. Existing credential Details and Action screens
+remain the deeper route. Five targeted mutations were killed and 137 focused tests pass.
 Task 16.2 (D-265): screen 07 collects required ConfigInputs before screen 05, with defaults that
 require Enter, domain-owned inline validation, masked credential-shaped mistakes, and a separate
 credential-provider section. Continue re-prepares INSTALL with PromptedConfigValues; target changes

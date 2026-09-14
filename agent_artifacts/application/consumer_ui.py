@@ -564,6 +564,9 @@ class ConsumerUiState:
     #: summary of the immutable plan.
     config_draft: InstallationConfigDraft = InstallationConfigDraft()
     config_form_active: bool = False
+    #: The artifact whose two input sections screen 22a shows. Credential drill-down changes
+    #: ``focus`` to a provider reference, so this parent identity is carried separately.
+    user_inputs_artifact: str = ""
 
     def __post_init__(self) -> None:
         if (
@@ -580,6 +583,8 @@ class ConsumerUiState:
             or not _rows_valid(self.targets)
             or not isinstance(self.config_draft, InstallationConfigDraft)
             or not isinstance(self.config_form_active, bool)
+            or not isinstance(self.user_inputs_artifact, str)
+            or any(character in self.user_inputs_artifact for character in "\r\n")
             or not isinstance(self.search, str)
             or any(character in self.search for character in "\r\n")
             or not isinstance(self.help_visible, bool)
@@ -856,6 +861,9 @@ def _navigate(
         state,
         session=state.session.navigate(screen),
         focus=focus,
+        user_inputs_artifact=(
+            focus if screen is ConsumerScreen.USER_INPUT_DETAILS else state.user_inputs_artifact
+        ),
         search="",
         help_visible=False,
         quit_pending=False,

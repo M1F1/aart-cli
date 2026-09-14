@@ -37,6 +37,7 @@ from agent_artifacts.domain.selection import ResolvedSelection
 
 from .consumer_views import (
     ActivityView,
+    ConfigurationFileView,
     ConsumerPlanView,
     CredentialRecordView,
     DashboardView,
@@ -141,6 +142,7 @@ class ConsumerMachine:
     receipts: tuple[ReceiptDetailView, ...] = ()
     registries: tuple[RegistryView, ...] = ()
     doctor: DoctorView | None = None
+    configurations: tuple[ConfigurationFileView, ...] = ()
 
 
 def credential_dependants(
@@ -187,6 +189,7 @@ def assemble_consumer_machine(
     actions: tuple[ReceiptDetailView, ...] = (),
     registries: tuple[RegistryView, ...] = (),
     unadopted: tuple[UnadoptedInstallation, ...] = (),
+    configurations: tuple[ConfigurationFileView, ...] = (),
     today: date,
 ) -> ConsumerMachine:
     """Assemble everything the consumer screens draw from, from what was read of this machine.
@@ -206,6 +209,8 @@ def assemble_consumer_machine(
         raise ValueError("consumer assembly needs recorded actions and registry views")
     if any(not isinstance(item, UnadoptedInstallation) for item in unadopted):
         raise ValueError("consumer assembly needs unadopted installations")
+    if any(not isinstance(item, ConfigurationFileView) for item in configurations):
+        raise ValueError("consumer assembly needs configuration file observations")
     inspected = {item.coordinate for item in inspections}
     if len({item.coordinate for item in unadopted} & inspected):
         raise ValueError(
@@ -259,6 +264,7 @@ def assemble_consumer_machine(
         actions,
         registries,
         project_doctor(views),
+        tuple(sorted(configurations, key=lambda item: (item.coordinate, item.harness))),
     )
 
 

@@ -38,6 +38,7 @@ from agent_artifacts.application.consumer_ui import (
 )
 from agent_artifacts.application.consumer_views import (
     ConsumerScreen,
+    ConsumerSession,
     PresentationProfile,
     project_credential_record,
 )
@@ -84,8 +85,15 @@ def _on_action(
     source, state = at(ConsumerScreen.CREDENTIALS, profile)
     if unused:
         source = _unused_source()
+        state = dataclasses.replace(
+            state,
+            session=ConsumerSession(ConsumerScreen.CREDENTIAL_DETAILS),
+            focus=REFERENCE,
+        )
         state = _reload(source, state, entering=True)
-    state, _ = _navigate(source, state, ConsumerScreen.CREDENTIAL_DETAILS)
+    else:
+        state, _ = _navigate(source, state, ConsumerScreen.USER_INPUT_DETAILS)
+        state, _ = _navigate(source, state, ConsumerScreen.CREDENTIAL_DETAILS)
     state, _ = _navigate(source, state, ConsumerScreen.CREDENTIAL_ACTION)
     return source, state
 
@@ -537,7 +545,7 @@ class CredentialActionShellE2ETest(unittest.TestCase):
         return finished, terminal, journal, provider
 
     def test_replace_is_reviewed_confirmed_and_lands_on_the_credential(self) -> None:
-        _, terminal, journal, provider = self._run(ENTER, ENTER, DOWN, ENTER, ENTER)
+        _, terminal, journal, provider = self._run(ENTER, ENTER, ENTER, DOWN, ENTER, ENTER)
 
         review = terminal.screen_containing("/ Review Credential Action")
         self.assertIn("public/mcp/github", review)
@@ -548,7 +556,7 @@ class CredentialActionShellE2ETest(unittest.TestCase):
         self.assertIn("Credential Details", landed)
 
     def test_escape_from_the_review_leaves_the_credential_untouched(self) -> None:
-        _, terminal, journal, provider = self._run(ENTER, ENTER, DOWN, ENTER, ESCAPE)
+        _, terminal, journal, provider = self._run(ENTER, ENTER, ENTER, DOWN, ENTER, ESCAPE)
 
         self.assertTrue(terminal.screen_containing("/ Review Credential Action"))
         self.assertEqual(provider.stored, [])
@@ -558,7 +566,7 @@ class CredentialActionShellE2ETest(unittest.TestCase):
         self.assertIn("github-token", terminal.last)
 
     def test_verify_reports_in_place_and_enter_goes_back_to_the_credential(self) -> None:
-        _, terminal, journal, provider = self._run(ENTER, ENTER, ENTER, ENTER)
+        _, terminal, journal, provider = self._run(ENTER, ENTER, ENTER, ENTER, ENTER)
 
         verified = terminal.screen_containing("nothing was changed")
         self.assertIn("/ Review Credential Action", verified)
@@ -569,7 +577,7 @@ class CredentialActionShellE2ETest(unittest.TestCase):
         self.assertNotIn("Review Credential Action", terminal.last)
 
     def test_no_frame_or_plan_ever_holds_a_value(self) -> None:
-        _, terminal, _, _ = self._run(ENTER, ENTER, DOWN, ENTER, ENTER)
+        _, terminal, _, _ = self._run(ENTER, ENTER, ENTER, DOWN, ENTER, ENTER)
 
         drawn = json.dumps(terminal.frames)
         for shape in ("password", "secret value", "0x"):

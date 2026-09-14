@@ -132,7 +132,7 @@ class DashboardBlockTest(TestCase):
                 "  Installed",
                 "  Updates",
                 "  Registries",
-                "  Credentials",
+                "  User Variables And Credentials",
                 "  Activity",
                 "  Doctor",
                 "  Settings",
