@@ -38,6 +38,7 @@ from tests.configured_install_command_e2e_test import _environment
 from tests.consumer_application_e2e_test import _actions, _at, _drive
 from tests.consumer_shell_test import DOWN, ENTER, SPACE
 from tests.consumer_views_test import _plan
+from tests.frame_contract import key_violations
 
 _COMPATIBLE = ["claude", "opencode", "tabnine"]
 _SKILL_MANIFEST = {
@@ -152,7 +153,9 @@ class HarnessTargetScreenTest(unittest.TestCase):
         self.assertIn("[ ] tabnine", drawn)
         self.assertIn("unique artifact(s) will be installed", drawn)
         self.assertIn("Choose at least one harness to install into.", drawn)
-        self.assertIn("[Enter] Continue", drawn)
+        # D-270: Enter is offered once it advances; until then the status says what is missing.
+        self.assertNotIn("[Enter]", drawn)
+        self.assertEqual(key_violations(source, state), ())
 
     def test_a_stale_choice_stays_visible_and_refuses_to_continue(self) -> None:
         source = _source()
@@ -174,6 +177,11 @@ class HarnessTargetScreenTest(unittest.TestCase):
 
         self.assertIsNone(pending.detail(mismatch))
         self.assertIs(pending.detail(confirmed), ConsumerScreen.REMEDIATION)
+        for state in (mismatch, confirmed):
+            state = replace(state, rows=pending.rows(state))
+            self.assertEqual(key_violations(pending, state), ())
+        confirmed = replace(confirmed, rows=pending.rows(confirmed))
+        self.assertIn("[Enter] Continue", "\n".join(frame(pending, confirmed)))
         self.assertIn("Installing into: opencode", "\n".join(pending.status(confirmed)))
 
     def test_verbose_cursor_description_names_artifacts_the_harness_can_host(self) -> None:

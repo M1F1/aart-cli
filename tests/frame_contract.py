@@ -179,6 +179,23 @@ def frame_violations(source: ConsumerScreenSource, state: ConsumerUiState) -> tu
     return tuple(found)
 
 
+def _same_rows(
+    before: tuple[str, ...], after: tuple[str, ...], old: ConsumerUiState, new: ConsumerUiState
+) -> bool:
+    """The rows `v` left alone, allowing only a row that names the detail level to name the new one.
+
+    A row showing the stored preference itself, as Settings' detail level does, is a row about the
+    very thing `v` changed. The state cannot hold the new preference with the old presentation --
+    it keeps the two in step -- so the allowance is stated on the drawn lines instead.
+    """
+
+    was, now = (item.session.profile.value.title() for item in (old, new))
+    return len(before) == len(after) and all(
+        line == drawn or (was in line and line.replace(was, now) == drawn)
+        for line, drawn in zip(before, after, strict=True)
+    )
+
+
 def toggle_violations(source: ConsumerScreenSource, state: ConsumerUiState) -> tuple[str, ...]:
     """§167: `v` changes the presentation and nothing else, and pressing it again undoes it.
 
@@ -186,7 +203,8 @@ def toggle_violations(source: ConsumerScreenSource, state: ConsumerUiState) -> t
     navigation exactly as they were, and ask for nothing but keeping the preference.
     """
 
-    if typing_text(state) or state.quit_pending or state.searching:
+    # A shell that has exited takes no more keys, so there is no `v` to press on its last frame.
+    if typing_text(state) or state.quit_pending or state.searching or state.exited:
         return ()
     screen = state.session.screen.value
     event = key_event("v", state, detail=source.detail(state))
@@ -209,10 +227,9 @@ def toggle_violations(source: ConsumerScreenSource, state: ConsumerUiState) -> t
     )
     if unchanged != state:
         found.append(f"{screen}: v changes more than the presentation")
-    if source.actions(after) != source.actions(replace(state, settings=after.settings)):
+    if not _same_rows(source.actions(state), source.actions(after), state, after):
         # §167's one cursor-description rule: Verbose describes the row under the cursor in the
-        # description block, rather than growing every row. A row that shows the stored
-        # preference itself, as Settings' detail level does, may show its new value.
+        # description block, rather than growing every row.
         found.append(f"{screen}: v redraws the rows instead of describing the cursor row")
     back, _ = reduce_consumer_ui(after, event)
     if back != state:

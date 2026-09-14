@@ -13,10 +13,12 @@ from dataclasses import replace
 
 from agent_artifacts.application.consumer_ui import (
     CONFIG_CONTINUE_ROW,
+    ConsumerUiEvent,
     ConsumerUiEventKind,
     ConsumerUiState,
     key_bindings,
     key_event,
+    reduce_consumer_ui,
 )
 from agent_artifacts.application.consumer_views import (
     ConsumerScreen,
@@ -27,7 +29,13 @@ from agent_artifacts.application.maintainer_views import MaintainerScreen
 from agent_artifacts.tui_consumer import CanonicalScreenSource, frame
 from tests.configuration_edit_test import _key, _source_and_state
 from tests.consumer_shell_test import screens
-from tests.frame_contract import key_violations, literal_violations
+from tests.frame_contract import (
+    frame_violations,
+    key_violations,
+    literal_violations,
+    toggle_violations,
+)
+from tests.install_time_config_form_test import InstallTimeConfigFormRenderingTest
 from tests.install_time_config_form_test import _state as _install_form
 
 #: The rows of each simple form that hold typed text, and the one row Space toggles, if any.
@@ -51,7 +59,8 @@ def _simple_forms():
 
 
 def _configuration_forms():
-    install = CanonicalScreenSource(screens())
+    # With a projected field and a credential beside it, so the form has everything it can draw.
+    install = InstallTimeConfigFormRenderingTest._source(None)  # type: ignore[arg-type]
     for cursor in (0, 1):
         yield install, replace(_install_form(), cursor=cursor), cursor == 0, False
     source, state = _source_and_state()
@@ -116,6 +125,25 @@ class AFormRowOffersOnlyWhatItTakesTest(unittest.TestCase):
         self.assertNotIn("[q] Quit", "\n".join(field))
         self.assertIn("[?] Help", "\n".join(connect))
         self.assertNotIn("[Backspace]", "\n".join(connect))
+
+
+class AFormIsDrawnInTheSharedFrameTest(unittest.TestCase):
+    """§167: a form's fields are its rows; what it explains is the state of the view."""
+
+    def test_every_form_row_keeps_the_frame_in_both_profiles(self) -> None:
+        for source, state, _, _ in _every_form_row():
+            verbose, _ = reduce_consumer_ui(
+                replace(state, cursor=len(state.rows) - 1),
+                ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_PROFILE),
+            )
+            for drawn in (state, replace(verbose, cursor=state.cursor)):
+                with self.subTest(
+                    screen=state.session.screen,
+                    row=state.current_row,
+                    profile=drawn.session.profile,
+                ):
+                    self.assertEqual(frame_violations(source, drawn), ())
+                    self.assertEqual(toggle_violations(source, drawn), ())
 
 
 class PastingIntoAFormTest(unittest.TestCase):

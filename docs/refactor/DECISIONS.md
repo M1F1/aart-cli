@@ -6482,3 +6482,59 @@ a paste into it raised instead of being typed. The shell kept a second copy of t
 move to a toggle or Continue, or leave with `Esc`. Legend expectations in the contextual-legend and
 block-structure tests changed from `[Enter] Next / continue` on a text field to `[Enter] Next`.
 
+
+## D-270 — A Collection's details summarize it; its Contents are the member rows
+
+Date: 2026-09-14 (CP-23 task 14, fourth increment).
+
+**Context.** The task 14 audit found four consumer screens breaking §167's frame:
+
+- **04 Collection and 04a Contents.**
+  - Both drew the coordinate, counts, selection count and warning where rows belong, and drew no
+    member as a row, while Space ticked members.
+  - Verbose listed the members a second time, which is a redraw by `v`.
+  - The frame's generic "N selected" line repeated the screen's own "N / M selected".
+- **07 Required Inputs.** The install form drew its introduction, the credential section and
+  Verbose bindings at row level.
+- **22c Edit Configuration Value.** The artifact, the harnesses and the explanation sat among the
+  field and Continue rows.
+- **05 Review Selection.** Enter was advertised before the prepared plan matched the chosen
+  harnesses, where it does nothing.
+
+§161.4 settles the Collection shape. The details "summarize artifact counts and aggregated
+prerequisites rather than dumping all members immediately", and the Contents "support member
+selection" and show "7 / 8 selected" with the custom-selection warning.
+
+**Decision.**
+
+- **04** has no rows. The summary is its view status:
+  - coordinate and summary;
+  - Includes and counts;
+  - what you will need;
+  - N / M selected, and the warning when the selection is custom;
+  - in Verbose, the contents and the selection identity.
+
+  Enter still opens the Contents, and `i` still installs.
+- **04a** draws the members as `[x]`/`[ ]` cursor rows. Its status is the same summary, without a
+  Verbose contents list, since the rows are the contents. Verbose describes the member under the
+  cursor with its Marketplace description, when that member is offered on its own.
+- **The session's "N selected" line is dropped when the view status already states a selection
+  count.** This is read off the status lines rather than off a list of screens.
+- **07's form** keeps only the "Configuration" heading, the field rows, what a field says under
+  itself (example, problem, hint) and Continue. The introduction, where values are kept, and the
+  credentials are the view status. Credential guidance stays a Fast fact (D-263). A field's binding
+  is its Verbose description.
+- **22c** keeps the field and Continue rows. The artifact, the harnesses and the explanation are its
+  view status.
+- **05 offers Enter only once it advances.** That means the prepared plan matches the chosen
+  harnesses. Until then the status already names what is missing. This revises the code's earlier
+  "always advertise the next step" reading of D-260.
+- **The checker's `v` law** now allows a drawn row to change only by naming the new detail level in
+  place of the old one. The previous comparison state could not exist, because `ConsumerUiState`
+  keeps the stored and session profiles in step, so Settings was always reported.
+
+**Consequences.**
+
+- Space no longer ticks members on screen 04; the Contents are where members are chosen. The
+  Marketplace shell tests now open the Contents before pressing Space.
+- A legend on screen 05 gains `[Enter] Continue` when the re-prepared plan arrives.

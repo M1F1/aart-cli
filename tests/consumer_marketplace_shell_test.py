@@ -98,14 +98,20 @@ class MarketplaceShellTest(unittest.TestCase):
         self.assertIn("2 artifacts", terminal.last)
         self.assertIn("2 / 2 selected", terminal.last)
 
-    def test_a_collection_preview_lists_its_members_as_the_rows_it_is_about(self):
-        state, _ = drive(UP, ENTER, state=_at(ConsumerScreen.MARKETPLACE))
+    def test_a_collections_contents_list_its_members_as_the_rows_it_is_about(self):
+        """§161.4: the preview summarizes; its Contents are where the members are rows."""
+
+        preview, _ = drive(UP, ENTER, state=_at(ConsumerScreen.MARKETPLACE))
+        state, _ = drive(UP, ENTER, ENTER, state=_at(ConsumerScreen.MARKETPLACE))
+
+        self.assertEqual(preview.rows, ())
+        self.assertEqual(state.session.screen, ConsumerScreen.COLLECTION_CUSTOMIZE)
 
         self.assertEqual(state.rows, ("company/mcp/database@1.0.0", "company/skill/review@1.0.0"))
 
     def test_deselecting_a_member_makes_the_selection_custom_with_its_own_identity(self):
         exact, _ = drive(UP, ENTER, state=_at(ConsumerScreen.MARKETPLACE))
-        custom, terminal = drive(UP, ENTER, SPACE, ENTER, state=_at(ConsumerScreen.MARKETPLACE))
+        custom, terminal = drive(UP, ENTER, ENTER, SPACE, state=_at(ConsumerScreen.MARKETPLACE))
 
         self.assertEqual(custom.session.screen, ConsumerScreen.COLLECTION_CUSTOMIZE)
         self.assertIn("1 / 2 selected", terminal.last)

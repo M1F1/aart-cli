@@ -1593,3 +1593,43 @@ The six previously owed 16.1 targeted mutations were also run and killed:
   The 21 toggle report came from a fixture whose session and stored profiles disagree; it will be
   confirmed before the matrix lands.
 
+#### 14.4 — Collection, the configuration forms and screen 05 (DONE, D-270)
+
+- **Findings fixed:**
+  - **04 Collection.** It follows §161.4 and has no rows. Its view status is the summary: Includes
+    and counts, what you will need, `N / M selected` and the custom warning. Verbose adds the
+    contents and the selection identity. It no longer states `N selected` a second time.
+  - **04a Contents.** The members are `[x]`/`[ ]` cursor rows. Verbose describes the member under
+    the cursor rather than listing them all again.
+  - **07 Required Inputs form.** The rows are `Configuration`, the fields and Continue. The
+    introduction and the credentials, guidance included, are the view status. A field's binding is
+    its Verbose description.
+  - **22c.** The artifact, harnesses and explanation are the view status.
+  - **05.** `[Enter] Continue` is offered only once the re-prepared plan matches the choice.
+- **Checker corrections, found while confirming findings:**
+  - The `v` law's comparison state could not exist, because the state keeps the stored and session
+    profiles in step. So every Settings frame was reported, although 14.3 already said a row
+    showing the preference may change. The allowance is now stated on drawn lines: a row may change
+    only by naming the new detail level.
+  - The 21 Registries report came from the shell's final `exited` state, which takes no keys. The
+    `v` law now skips exited states; it was not a product finding.
+- **Tests:**
+  - `tests/list_screen_rows_test.py` covers Settings, 04 and 04a.
+  - `tests/form_row_keys_test.py` holds every row of all six forms to the frame and `v` laws in
+    both profiles, with a credential beside the install form's field.
+  - `tests/install_time_config_form_test.py` pins the credentials out of the rows.
+  - `tests/installation_harness_choice_test.py` holds screen 05's Enter to the key law.
+- **Targeted mutations, all killed:**
+  - the preview dumping members as rows;
+  - member rows on the preview;
+  - the selection count stated twice;
+  - Verbose contents on 04a;
+  - cursorless member rows;
+  - `Harnesses:` among 22c's rows;
+  - a `Credentials` heading among 07's rows;
+  - Enter always offered on 05;
+  - removing the checker's detail-level allowance.
+- 1151 tests pass across the UI modules. The static gates pass.
+- Audit re-run: every Consumer screen is clean. The remaining findings are all on Maintainer
+  screens: 35, 38, 46, 46d, 46f, 47, 51 and 53.
+

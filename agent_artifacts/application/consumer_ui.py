@@ -2117,9 +2117,11 @@ def key_bindings(
             label = "Continue" if state.action is None else "Confirm"
             bindings.append(KeyBinding("Enter", label))
         elif state.session.screen is ConsumerScreen.REVIEW_SELECTION and "enter" not in keys:
-            # Screen 05 always advertises the next step; while the choice is incomplete the
-            # status directly above explains why that key cannot advance yet (D-260).
-            bindings.append(KeyBinding("Enter", "Continue"))
+            # D-270 (revising D-260's "always advertises"): Enter is offered once the prepared
+            # plan matches the chosen harnesses, because only then does it advance; while the
+            # choice is incomplete the status says what is missing instead of a key doing nothing.
+            if detail is not None:
+                bindings.append(KeyBinding("Enter", "Continue"))
         elif detail is not None and "enter" not in keys:
             # Success's rows are choices rather than things to open, so Enter says which one.
             choices: dict[ConsumerScreen | MaintainerScreen, str] = {}

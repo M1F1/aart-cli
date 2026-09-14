@@ -403,9 +403,10 @@ screen is lent to its prompt and taken back, and no reset dialog is reachable (`
 
 Harness delivery must be one answer everywhere it is said (`QA-078`…`QA-080`, `D-260`):
 
-- [ ] Before choosing, `Enter` does not advance and the status says to choose at least one harness.
-      In Verbose, moving the cursor names the artifacts that each harness can host. Unticked
-      harnesses remain eligibility, not planned delivery.
+- [ ] Before choosing, the footer offers no `[Enter]` and the status says to choose at least one
+      harness. Once a tick has been re-prepared, `[Enter] Continue` appears (D-270). In Verbose,
+      moving the cursor names the artifacts that each harness can host. Unticked harnesses remain
+      eligibility, not planned delivery.
 - [ ] On **Ready**, the `Harnesses:` line names exactly the chosen set and says it was chosen for
       this installation. Compare it with **Artifact Details** and **Success**. An unsupported or
       unselected harness must not appear as a delivery.
@@ -429,6 +430,14 @@ Harness delivery must be one answer everywhere it is said (`QA-078`…`QA-080`, 
       `Enter` on it, so Continue does nothing before that. Pasting disposable text shaped like a
       token is refused on the field with `looks like a credential`, and the text itself is not
       drawn. The credential is listed separately, under Credentials.
+- [ ] On that form, the block above the rule holds only `Configuration`, the field rows with what
+      each says under itself, and `Continue`. The introduction and the Credentials section,
+      guidance included, are the status below the rule in Fast. `v` on Continue leaves the rows
+      exactly as they were; with the cursor on a field, Verbose describes its binding (D-270).
+- [ ] If the lab offers a **Collection**, its details show only the summary (Includes, what you will
+      need, `N / M selected`) with no member rows and no `N selected` twice. `Enter` opens the
+      Contents, where members are `[x]` rows ticked with `Space`, and unticking one adds
+      `Warning: Custom selection` to the status (D-270).
 - [ ] After installing into OpenCode and Tabnine, the artifact's installed root has
       `config/opencode.conf` and `config/tabnine.conf` holding `dummy-user=…`. No
       `config/claude.conf` exists, and the value appears nowhere under the lab's AART data or
@@ -456,7 +465,8 @@ Harness delivery must be one answer everywhere it is said (`QA-078`…`QA-080`, 
       `changed outside AART`, and an edit of it is refused until you put the file back.
 - [ ] On `dummy-user`, `Enter` opens **Choose Configuration Harnesses** with every installed
       harness ticked. Untick all of them: `Enter` does not advance. Tick only Tabnine, then type
-      a new disposable value and press `Enter` on it, then **Continue**.
+      a new disposable value and press `Enter` on it, then **Continue**. On that edit form the
+      artifact, `Harnesses:` and the explanation are the status below the rule, not rows (D-270).
 - [ ] The review names only `configuration:tabnine`. Confirm it. Back on the area, Tabnine shows
       the new value `matched` while OpenCode keeps the old one. Only `config/tabnine.conf`
       changed on disk, and **Activity** records `Reconfigured` without the value (D-267).

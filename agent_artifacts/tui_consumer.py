@@ -180,6 +180,7 @@ __all__ = [
     "activity_rows",
     "render_activity",
     "render_collection",
+    "collection_member_rows",
     "render_credential",
     "render_credential_action",
     "render_credential_review",
@@ -207,6 +208,9 @@ __all__ = [
     "render_remediation",
     "render_required_inputs",
     "render_installation_config_form",
+    "installation_config_status",
+    "installation_config_purpose",
+    "configuration_value_status",
     "render_review_selection",
     "render_settings",
     "settings_consequence",
@@ -441,24 +445,27 @@ def render_configuration_value_form(
         if problem and "credential" in problem
         else f"[{value}]"
     )
-    lines = [
-        f"Change {input_id} for {coordinate}",
-        "Harnesses: " + ", ".join(harnesses),
-        f"{'>' if current_row == input_id else ' '} {input_id} {shown}",
-    ]
+    lines = [f"{'>' if current_row == input_id else ' '} {input_id} {shown}"]
     if problem:
         lines.append(f"    {problem}")
     elif any(item.id == input_id and item.accepted for item in draft.fields):
         lines.append("    accepted")
     lines.append(f"{'>' if current_row == CONFIG_CONTINUE_ROW else ' '} Continue")
-    lines.extend(
+    return tuple(lines)
+
+
+def configuration_value_status(
+    coordinate: str, input_id: str, harnesses: tuple[str, ...]
+) -> tuple[str, ...]:
+    """Screen 22c's state: which value of which artifact, for which harnesses, and what it is."""
+
+    return separate(
+        (f"Change {input_id} for {coordinate}", "Harnesses: " + ", ".join(harnesses)),
         (
-            "",
             "This is ordinary configuration stored beside the artifact.",
             "Credentials stay with their provider and are not accepted here.",
-        )
+        ),
     )
-    return tuple(lines)
 
 
 _STEP_MARKS: dict[str, str] = {
@@ -1375,23 +1382,22 @@ def render_installation_config_form(
     inputs: tuple[InputView, ...],
     draft: InstallationConfigDraft,
     current_row: str,
-    profile: PresentationProfile,
 ) -> tuple[str, ...]:
-    """Draw editable non-secrets beside read-only credential-provider guidance (INV-067)."""
+    """Screen 07's rows: the editable non-secrets and Continue (INV-067).
+
+    What the form explains, and the credentials a provider will ask for, are not rows a cursor can
+    stand on, so they are :func:`installation_config_status`; what a field binds to is Verbose's
+    description of it, :func:`installation_config_purpose`.
+    """
 
     if (
         any(not isinstance(item, (ConfigInputView, CredentialInputView)) for item in inputs)
         or not isinstance(draft, InstallationConfigDraft)
         or not isinstance(current_row, str)
-        or not isinstance(profile, PresentationProfile)
     ):
         raise ValueError("installation config form needs projected inputs and a safe draft")
     projected = {item.id: item for item in inputs if isinstance(item, ConfigInputView)}
-    lines = [
-        "A few things are needed before installation",
-        "Configuration",
-        "  These ordinary values will be kept beside the installed artifact, per harness.",
-    ]
+    lines = ["Configuration"] if draft.fields else []
     for field in draft.fields:
         view = projected.get(field.id)
         label = field.id if view is None else view.label
@@ -1410,28 +1416,51 @@ def render_installation_config_form(
             lines.append(f"    Problem: {problem}")
         elif view is not None and view.validation_hint:
             lines.append(f"    {view.validation_hint}")
-        if profile is PresentationProfile.VERBOSE and view is not None:
-            lines.append(f"    Binding: {_human(view.binding)} ({_human(view.exposure)})")
-    credentials = tuple(item for item in inputs if isinstance(item, CredentialInputView))
-    if credentials:
-        lines.append("Credentials")
-        lines.append("  Values stay with the credential provider; AART keeps only references.")
-        for item in credentials:
-            lines.extend(credential_guidance_lines(item.guidance))
-            status = (
-                "Configured securely"
-                if item.health == "present"
-                else (
-                    "Enter securely during installation"
-                    if item.provider_reference is not None
-                    else "Required"
-                )
-            )
-            lines.append(f"  {item.label}: {status}")
     mark = ">" if current_row == CONFIG_CONTINUE_ROW else " "
     readiness = "Review selection" if draft.ready else "Accept every configuration value first"
     lines.append(f"{mark} Continue: {readiness}")
     return tuple(lines)
+
+
+def installation_config_status(inputs: tuple[InputView, ...]) -> tuple[str, ...]:
+    """Screen 07's state: why it asks, where the values go, and what the provider will ask for.
+
+    The credential guidance is a Fast fact (D-263): a person needs it before the provider asks.
+    """
+
+    statements: list[tuple[str, ...]] = [
+        ("A few things are needed before installation",),
+        ("These ordinary values will be kept beside the installed artifact, per harness.",),
+    ]
+    credentials = tuple(item for item in inputs if isinstance(item, CredentialInputView))
+    if credentials:
+        statements.append(
+            ("Credentials", "Values stay with the credential provider; AART keeps only references.")
+        )
+    for item in credentials:
+        status = (
+            "Configured securely"
+            if item.health == "present"
+            else (
+                "Enter securely during installation"
+                if item.provider_reference is not None
+                else "Required"
+            )
+        )
+        statements.append((*credential_guidance_lines(item.guidance), f"{item.label}: {status}"))
+    return separate(*statements)
+
+
+def installation_config_purpose(
+    inputs: tuple[InputView, ...], current_row: str | None
+) -> tuple[str, ...]:
+    """What the field under the cursor binds to, which Verbose describes rather than drawing."""
+
+    view = next(
+        (item for item in inputs if isinstance(item, ConfigInputView) and item.id == current_row),
+        None,
+    )
+    return () if view is None else (f"Binding: {_human(view.binding)} ({_human(view.exposure)})",)
 
 
 def render_marketplace_artifact(
@@ -1477,30 +1506,56 @@ def render_marketplace_artifact(
 
 
 def render_collection(
-    view: MarketplaceCollectionView, profile: PresentationProfile
+    view: MarketplaceCollectionView, profile: PresentationProfile, *, contents: bool = True
 ) -> tuple[str, ...]:
+    """What a Collection and the current choice of its members amount to: the view's status.
+
+    §161.4: the details summarize counts and prerequisites rather than dumping every member, so
+    the members are listed here only in Verbose, and only where they are not already the rows
+    (`contents=False` on the Contents screen, whose rows they are).
+    """
+
     if not isinstance(view, MarketplaceCollectionView) or not isinstance(
         profile, PresentationProfile
     ):
         raise ValueError("Collection rendering needs a Collection view and presentation profile")
-    lines = [view.coordinate, view.summary, "Includes", f"{len(view.members)} artifacts"]
-    lines.extend(f"{count} {_human(kind)}" for kind, count in view.kind_counts)
+    statements: list[tuple[str, ...]] = [
+        (view.coordinate, view.summary),
+        (
+            "Includes",
+            f"{len(view.members)} artifacts",
+            *(f"{count} {_human(kind)}" for kind, count in view.kind_counts),
+        ),
+    ]
     if view.inputs:
-        lines.append("What you will need")
-        lines.extend(f"  - {item.label}" for item in view.inputs)
-    lines.append(f"{len(view.selected)} / {len(view.members)} selected")
+        statements.append(("What you will need", *(f"  - {item.label}" for item in view.inputs)))
+    statements.append((f"{len(view.selected)} / {len(view.members)} selected",))
     if not view.exact:
-        lines.extend(
-            (
-                "Warning: Custom selection",
-                "This will not install the complete Collection.",
-            )
+        statements.append(
+            ("Warning: Custom selection", "This will not install the complete Collection.")
         )
     if profile is PresentationProfile.VERBOSE:
-        lines.append("Contents:")
-        lines.extend(f"  [{'x' if item in view.selected else ' '}] {item}" for item in view.members)
-        lines.append(f"Selection identity: {view.semantic_identity}")
-    return tuple(lines)
+        if contents:
+            statements.append(
+                (
+                    "Contents:",
+                    *(
+                        f"  [{'x' if item in view.selected else ' '}] {item}"
+                        for item in view.members
+                    ),
+                )
+            )
+        statements.append((f"Selection identity: {view.semantic_identity}",))
+    return separate(*statements)
+
+
+def collection_member_rows(view: MarketplaceCollectionView, current: str | None) -> tuple[str, ...]:
+    """A Collection's members as the rows Space ticks, the cursor on the one it is on."""
+
+    return tuple(
+        f"{'>' if item == current else ' '} [{'x' if item in view.selected else ' '}] {item}"
+        for item in view.members
+    )
 
 
 def render_activity(view: ActivityView, profile: PresentationProfile) -> tuple[str, ...]:
@@ -1998,11 +2053,14 @@ def compose_frame(source: ConsumerScreenSource, state: ConsumerUiState) -> Frame
         session.append((f"Search: {state.search}_",))
     elif state.search:
         session.append((f"Filter: {state.search} (esc to clear)",))
-    if state.selection:
+    spoken = source.status(state)
+    # A screen that already states how much of its own list is selected ("1 / 2 selected") has
+    # said it more exactly; the session's bare count would be the same statement twice.
+    if state.selection and not any(line.endswith(" selected") for line in spoken):
         session.append((f"{len(state.selection)} selected",))
     if state.quit_pending:
         session.append((f"Discard {len(state.selection)} selected item(s) and quit? y/n",))
-    status = bulleted(stated(separate(source.status(state), *session)))
+    status = bulleted(stated(separate(spoken, *session)))
     # `QA-086`: the launch directory is the footer's caption -- the last line before the keys'
     # rule and flush on it, with the terminal's padding above it rather than under it (revising
     # `QA-069`/`D-235`, which had it as a section of its own; `QA-066` had moved it off the title).
@@ -2775,7 +2833,9 @@ class CanonicalScreenSource:
                 for item in self._offers()
                 if _matches(query, item.key, self._summary(item))
             )
-        if screen in (ConsumerScreen.COLLECTION_PREVIEW, ConsumerScreen.COLLECTION_CUSTOMIZE):
+        if screen is ConsumerScreen.COLLECTION_CUSTOMIZE:
+            # §161.4: the details summarize the Collection rather than dumping its members; the
+            # Contents are where members are rows, because ticking them is what they are for.
             preview = self._screens.offered_collection(state.focus)
             return () if preview is None else preview.members
         if screen is ConsumerScreen.INSTALLED:
@@ -3143,6 +3203,11 @@ class CanonicalScreenSource:
                 f"Recorded {entry.recorded_at}",
                 f"Review identity: {entry.review_digest}",
             )
+        if state.session.screen is ConsumerScreen.REQUIRED_INPUTS and state.config_form_active:
+            return installation_config_purpose(self._screens.installation_inputs, state.current_row)
+        if state.session.screen is ConsumerScreen.COLLECTION_CUSTOMIZE:
+            member = self._screens.offered(state.current_row or "")
+            return () if member is None else marketplace_offer_description(member)
         if state.session.screen is ConsumerScreen.REGISTRIES:
             if state.current_row == "add-registry":
                 return ("Opens the form that connects another approved registry.",)
@@ -3293,6 +3358,14 @@ class CanonicalScreenSource:
         prose = self._form_prose(state)
         if prose:
             return prose
+        if screen is ConsumerScreen.REQUIRED_INPUTS and state.config_form_active:
+            return installation_config_status(screens.installation_inputs)
+        if screen is ConsumerScreen.CONFIGURATION_VALUE and self.rows(state):
+            return configuration_value_status(
+                state.user_inputs_artifact,
+                state.configuration_input,
+                state.configuration_targets,
+            )
         if screen in _REVIEW_SCREENS:
             return _review_facts(state, screens)
         if screen is ConsumerScreen.USER_INPUT_DETAILS and self.rows(state):
@@ -3302,6 +3375,14 @@ class CanonicalScreenSource:
                 screens.configurations_for(coordinate),
                 screens.credentials_for(coordinate),
             )
+        if screen in (ConsumerScreen.COLLECTION_PREVIEW, ConsumerScreen.COLLECTION_CUSTOMIZE):
+            preview = screens.offered_collection(state.focus)
+            if preview is not None:
+                return render_collection(
+                    preview.view(state.selection),
+                    state.session.profile,
+                    contents=screen is ConsumerScreen.COLLECTION_PREVIEW,
+                )
         if screen is ConsumerScreen.DASHBOARD:
             # `QA-087`: first-run guidance and the counts are both answers to "what state is this
             # in", so they belong here rather than above the rows, inside the rows' own block.
@@ -3655,7 +3736,9 @@ class CanonicalScreenSource:
             preview = screens.offered_collection(state.focus)
             if preview is None:
                 return ("No Collection is offered here.",)
-            return render_collection(preview.view(state.selection), profile)
+            if screen is ConsumerScreen.COLLECTION_PREVIEW:
+                return ()
+            return collection_member_rows(preview.view(state.selection), state.current_row)
         if screen in (ConsumerScreen.INSTALLED, ConsumerScreen.UPDATES):
             health = {item.collection: item.health for item in screens.installed_collections}
             health.update({item.coordinate: item.health for item in screens.installed})
@@ -3830,8 +3913,7 @@ class CanonicalScreenSource:
             return render_installation_config_form(
                 screens.installation_inputs,
                 state.config_draft,
-                state.current_row,
-                profile,
+                state.current_row or "",
             )
         if not isinstance(screen, ConsumerScreen):
             return (f"{_title(screen)} is not available yet.",)

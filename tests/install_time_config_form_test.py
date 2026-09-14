@@ -31,7 +31,7 @@ from agent_artifacts.domain.credentials import (
 )
 from agent_artifacts.domain.inputs import InputValidation, PromptedConfigValue
 from agent_artifacts.domain.result import Ok
-from agent_artifacts.tui_consumer import CanonicalScreenSource, frame
+from agent_artifacts.tui_consumer import CanonicalScreenSource, compose_frame, frame
 from tests.artifact_installation_e2e_test import ORG
 from tests.configured_install_command_e2e_test import _environment
 from tests.configured_installation_draft_e2e_test import AUTHORED_MCP
@@ -192,6 +192,26 @@ class InstallTimeConfigFormRenderingTest(unittest.TestCase):
         self.assertIn("Enter securely during installation", drawn)
         self.assertIn("Continue", drawn)
         self.assertIn("[Type] Edit", drawn)
+        # §167: the fields are the rows; the credentials a provider will ask for are not rows a
+        # cursor can stand on, so they are the state of the view (CP-23 task 14).
+        blocks = compose_frame(source, state)
+        self.assertEqual(blocks.actions[0], "Configuration")
+        self.assertNotIn("Credentials", blocks.actions)
+        self.assertNotIn("GitHub token", "\n".join(blocks.actions))
+        self.assertIn("- Credentials", blocks.status)
+        self.assertIn("- GitHub token: Enter securely during installation", blocks.status)
+
+    def test_verbose_describes_what_the_field_under_the_cursor_binds_to(self) -> None:
+        source = self._source()
+        state = _state()
+        state = replace(state, rows=source.rows(state))
+        verbose, _ = reduce_consumer_ui(
+            replace(state, cursor=1), ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_PROFILE)
+        )
+        verbose = replace(verbose, cursor=0)
+
+        self.assertEqual(compose_frame(source, verbose).described[0].split()[0], "Binding:")
+        self.assertEqual(source.actions(verbose), source.actions(state))
 
     def test_problem_is_inline_and_a_credential_shaped_value_is_not_drawn(self) -> None:
         secret_like = access_token("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
