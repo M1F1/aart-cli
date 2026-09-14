@@ -6443,3 +6443,42 @@ a notice holds it on a real screen.
 **Consequences.** Every consumer and maintainer screen and both terminals change together, because
 the order lives in one type. Existing structure tests needed no changes: none depended on a notice
 standing above the status.
+
+## D-269 — A form's keys follow the row under the cursor
+
+Date: 2026-09-14 (CP-23 task 14, second increment).
+
+**Context.** §167 keeps text entry literal. The task 14 audit pressed every key each form's legend
+offered, and found three problems:
+
+- On a text field, `v`, `?` and `q` were typed, as §167 requires, while the legend still offered
+  Fast / Verbose, Help and Quit.
+- On a toggle or the submit row, the same letters did nothing, so Help and Quit could not be reached
+  from any form.
+- Backspace was offered on rows that hold no text, and Space on rows it does not toggle.
+
+Separately, Add Source was missing from the reducer's list of screens that accept a whole paste, so
+a paste into it raised instead of being typed. The shell kept a second copy of that list.
+
+**Decision.**
+
+- The reducer knows each form's text rows: the fixed forms name theirs, and the two configuration
+  forms use their draft's field ids.
+- `typing_text(state)` is true while the cursor is on one of those rows. Then printable keys,
+  pastes included, are text, and the legend offers `Type`, `Backspace`, `Enter` (Next), `↑/↓` and
+  `Esc`, with no `v`, `?` or `q`.
+- On every other form row, `v`, `?` and `q` are the universal commands again and are advertised.
+  Space is offered only on the row it toggles. Enter is offered only where it acts: "Next" on a field
+  or toggle, "Continue" on the submit row.
+- The shell reads literal input from `typing_text`, so there is one list of text rows.
+- The legend's split between a screen's own keys and the ways out counts the trailing universal
+  keys instead of assuming four.
+- `tests/frame_contract.py` states the key laws once:
+  - every advertised key dispatches;
+  - a universal key means its one command;
+  - a text field types the letters it does not advertise.
+
+**Consequences.** A form's legend changes as the cursor moves. To reach Help or Quit from a form,
+move to a toggle or Continue, or leave with `Esc`. Legend expectations in the contextual-legend and
+block-structure tests changed from `[Enter] Next / continue` on a text field to `[Enter] Next`.
+

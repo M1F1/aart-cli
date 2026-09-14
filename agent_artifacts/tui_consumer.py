@@ -29,6 +29,7 @@ from agent_artifacts.application.consumer_ui import (
     key_bindings,
     key_event,
     reduce_consumer_ui,
+    typing_text,
     workflow_progress,
 )
 from agent_artifacts.application.consumer_views import (
@@ -1858,14 +1859,17 @@ def _binding_lines(bindings: tuple[KeyBinding, ...]) -> tuple[str, ...]:
     return tuple(lines)
 
 
+#: The universal keys `key_bindings` always ends with: how to move and how to leave.
+_WAYS_OUT = frozenset({"↑/↓", "Esc", "?", "q"})
+
+
 def _key_legend(source: ConsumerScreenSource, state: ConsumerUiState) -> tuple[str, ...]:
     """This screen's own keys on one line, the ways out of it on the line below (`QA-068`).
 
     Mixing them read as one undifferentiated row of brackets, so the two questions a reader
     actually has -- "what can I do here?" and "how do I leave?" -- had to be answered by scanning
-    the same line twice. The universal four are last in `key_bindings` by construction, so the
-    split is read off the order the reducer already guarantees rather than off a second list that
-    could drift from it.
+    the same line twice. The universal keys are last in `key_bindings` by construction, so the
+    split is read off the order the reducer already guarantees.
 
     A mode that has taken the keyboard -- search, the quit prompt -- has no universal half to
     separate: every key it lists is the mode's own, so it stays one line.
@@ -1874,7 +1878,12 @@ def _key_legend(source: ConsumerScreenSource, state: ConsumerUiState) -> tuple[s
     bindings = key_bindings(state, detail=source.detail(state))
     if state.searching or state.quit_pending:
         return _binding_lines(bindings)
-    local, global_keys = bindings[:-4], bindings[-4:]
+    # A text field gives up `?` and `q` to the text (D-269), so the ways out are counted rather
+    # than assumed to be four.
+    split = len(bindings)
+    while split and bindings[split - 1].key in _WAYS_OUT:
+        split -= 1
+    local, global_keys = bindings[:split], bindings[split:]
     return (*_binding_lines(local), *_binding_lines(global_keys))
 
 
@@ -1999,21 +2008,9 @@ def run_consumer_shell(
     current = _reload(active_source, current, entering=True)
     while not current.exited:
         terminal.draw(frame(active_source, current))
-        name = key_name(
-            terminal.key(),
-            literal=(
-                current.session.screen is ConsumerScreen.REQUIRED_INPUTS
-                and current.config_form_active
-            )
-            or current.session.screen is ConsumerScreen.CONFIGURATION_VALUE
-            or current.session.screen
-            in (
-                ConsumerScreen.REGISTRY_ADD,
-                MaintainerScreen.SOURCE_ADD,
-                MaintainerScreen.REGISTRY_INIT,
-                MaintainerScreen.REPOSITORY_SCAN,
-            ),
-        )
+        # A paste arrives whole on a text field, and the reducer, not a second list here, knows
+        # which rows are text fields (D-269).
+        name = key_name(terminal.key(), literal=typing_text(current))
         if not name:
             continue
         event = key_event(name, current, detail=active_source.detail(current))

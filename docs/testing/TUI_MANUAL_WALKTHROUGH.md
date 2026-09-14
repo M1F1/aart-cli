@@ -127,6 +127,11 @@ The two must not be conflated, and no internal screen number may appear in the t
 
 - [ ] Press `n` (**Initialize**). The form has five rows; `↑`/`↓` move between them, typing edits
       the focused one, `Backspace` deletes, `Space` toggles a choice, `Enter` advances.
+- [ ] Check that the legend follows the cursor (D-269). On a text field it offers `[Type] Edit`,
+      `[Backspace] Delete`, `[Enter] Next`, `[↑/↓] Move` and `[Esc] Back`, with no `v`, `?` or `q`.
+      Typing `v`, `?` or `q` there puts that character in the field. On **Local commit** it offers
+      `[Space] Local commit`. On **Continue** it offers `[Enter] Continue` and `v`, `?` and `q`
+      again; `?` opens Help from the form.
 
 | row | what to enter |
 |---|---|

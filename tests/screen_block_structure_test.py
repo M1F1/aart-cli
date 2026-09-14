@@ -520,7 +520,7 @@ class AddRegistryFormBlockTest(TestCase):
         )
 
     def test_the_screen_says_nothing_about_the_keyboard(self) -> None:
-        """`QA-088`: the four keys this form accepts are advertised, not described."""
+        """`QA-088`: the keys the field under the cursor takes are advertised, not described."""
 
         rendered = self._frame()
 
@@ -528,7 +528,7 @@ class AddRegistryFormBlockTest(TestCase):
             "Type to edit; Backspace removes; Space toggles default; Enter advances.", rendered
         )
         self.assertIn(
-            "[Type] Edit   [Backspace] Delete   [Space] Make default   [Enter] Next / continue",
+            "[Type] Edit   [Backspace] Delete   [Enter] Next",
             rendered,
         )
 

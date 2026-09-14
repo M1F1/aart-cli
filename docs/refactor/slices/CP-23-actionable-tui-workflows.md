@@ -1517,3 +1517,36 @@ The six previously owed 16.1 targeted mutations were also run and killed:
 - Targeted mutation: restoring the old order failed both tests.
 - 1041 tests pass across every module that draws a frame (85 modules).
 
+#### Audit method (applies to the remaining increments)
+
+- Every frame drawn by the 85 frame-drawing test modules was captured by wrapping `frame`, together
+  with a synthesized Verbose variant of each Fast state.
+- Each captured frame was checked for:
+  - prose in the actions block;
+  - the number of cursor markers;
+  - a description with no row;
+  - the header repeated in the body;
+  - bracketed control text in the body;
+  - that `v` changes only the profile;
+  - that every advertised key dispatches.
+- All 74 catalog screens (39 Consumer, 35 Maintainer) are drawn somewhere in the suite.
+- Findings outside forms are listed under the increments that fix them.
+
+#### 14.2 — Form keys follow the cursor row (DONE, D-269)
+
+- Findings fixed:
+  - forms 07, 21a, 22c, 31a, 46a and 46c advertised `v`/`?`/`q` on text fields, where those letters
+    are typed;
+  - the same forms left those letters dead on toggles and Continue;
+  - Backspace and Space were offered on rows that do not take them;
+  - a paste into Add Source raised.
+- `tests/form_row_keys_test.py` covers every row of all six forms, both configuration forms included.
+  Its key laws live in `tests/frame_contract.py`.
+- Targeted mutations, all killed:
+  - advertising `v` on a field;
+  - leaving the letters dead off a field;
+  - refusing a paste on Add Source;
+  - offering Space on every row.
+- 1110 tests pass across the 93 modules that import the TUI or its reducer.
+- `make typecheck lint format-check docs-check secret-shape-check` passes.
+

@@ -60,6 +60,7 @@ __all__ = [
     "key_bindings",
     "opening_state",
     "reduce_consumer_ui",
+    "typing_text",
     "workflow_progress",
 ]
 
@@ -1923,16 +1924,6 @@ _SCREEN_BINDINGS: dict[ApplicationScreen, tuple[_ScreenBinding, ...]] = {
     ),
 }
 
-_FORM_SCREENS = frozenset(
-    {
-        ConsumerScreen.REGISTRY_ADD,
-        ConsumerScreen.REQUIRED_INPUTS,
-        ConsumerScreen.CONFIGURATION_VALUE,
-        MaintainerScreen.SOURCE_ADD,
-        MaintainerScreen.REGISTRY_INIT,
-        MaintainerScreen.REPOSITORY_SCAN,
-    }
-)
 #: What Space changes on each form that has something to change, said by name.
 #:
 #: `QA-088`: the sentence that used to carry this -- "Space toggles default", "Space switches
@@ -1943,6 +1934,55 @@ _FORM_TOGGLE_LABELS: dict[ApplicationScreen, str] = {
     MaintainerScreen.SOURCE_ADD: "Switch kind",
     MaintainerScreen.REGISTRY_INIT: "Local commit",
 }
+#: The row Space toggles on each form that has one.
+_FORM_TOGGLE_ROWS: dict[ApplicationScreen, str] = {
+    ConsumerScreen.REGISTRY_ADD: "default",
+    MaintainerScreen.SOURCE_ADD: "kind",
+    MaintainerScreen.REGISTRY_INIT: "commit",
+}
+#: The rows of each fixed form that take typed text. Every other row -- a toggle, the submit row --
+#: takes none, so the universal letters are commands there rather than characters (D-269).
+_FORM_TEXT_ROWS: dict[ApplicationScreen, frozenset[str]] = {
+    ConsumerScreen.REGISTRY_ADD: frozenset({"alias", "url", "ref"}),
+    MaintainerScreen.SOURCE_ADD: frozenset({"alias", "location", "ref"}),
+    MaintainerScreen.REGISTRY_INIT: frozenset({"id", "name", "reporting"}),
+    MaintainerScreen.REPOSITORY_SCAN: frozenset({"url", "ref"}),
+}
+#: The keys every screen offers, which a form gives up while the cursor is on a text field.
+_UNIVERSAL_LETTERS: dict[str, ConsumerUiEventKind] = {
+    "q": ConsumerUiEventKind.QUIT,
+    "?": ConsumerUiEventKind.HELP,
+    "v": ConsumerUiEventKind.TOGGLE_PROFILE,
+}
+
+
+def _form_text_rows(state: ConsumerUiState) -> frozenset[str] | None:
+    """The rows of the open form that take typed text, or None when no form is open."""
+
+    screen = state.session.screen
+    if screen is ConsumerScreen.CONFIGURATION_VALUE:
+        return frozenset(item.id for item in state.configuration_draft.fields)
+    if screen is ConsumerScreen.REQUIRED_INPUTS:
+        return (
+            frozenset(item.id for item in state.config_draft.fields)
+            if state.config_form_active
+            else None
+        )
+    return _FORM_TEXT_ROWS.get(screen)
+
+
+def typing_text(state: ConsumerUiState) -> bool:
+    """Whether a printable key is text here: the cursor is on a form field that takes it.
+
+    §167 keeps text entry literal, so a field has to be able to hold a `v`, a `?` and a `q`. The
+    same letters are commands on every other row, a form's toggles and its submit row included,
+    which is what keeps Help and Quit reachable from a form at all (D-269).
+    """
+
+    rows = _form_text_rows(state)
+    return rows is not None and state.current_row in rows
+
+
 _CONFIRM_SCREENS = frozenset(
     {
         ConsumerScreen.READY,
@@ -2035,18 +2075,23 @@ def key_bindings(
         if _binding_enabled(binding, state)
     ]
     keys = {binding.key.lower() for binding in bindings}
-    if state.session.screen in _FORM_SCREENS and (
-        state.session.screen is not ConsumerScreen.REQUIRED_INPUTS or state.config_form_active
-    ):
-        # `QA-088`: a form accepts four keys and used to describe them in a sentence above a
-        # legend that advertised two. They are all keys, so they are all in the legend, in the
-        # order a reader uses them: change a field, then move on.
-        bindings.append(KeyBinding("Type", "Edit"))
-        bindings.append(KeyBinding("Backspace", "Delete"))
-        toggle = _FORM_TOGGLE_LABELS.get(state.session.screen)
-        if toggle is not None:
-            bindings.append(KeyBinding("Space", toggle))
-        bindings.append(KeyBinding("Enter", "Next / continue"))
+    text_rows = _form_text_rows(state)
+    typing = typing_text(state)
+    if text_rows is not None:
+        # `QA-088`: a form's keys are in the legend, in the order a reader uses them: change a
+        # field, then move on. D-269: only the keys the row under the cursor takes, because the
+        # audit found Backspace offered on Continue and Space on rows it does not toggle.
+        def acts(name: str) -> bool:
+            return key_event(name, state, detail=detail) is not None
+
+        if typing:
+            bindings.append(KeyBinding("Type", "Edit"))
+            bindings.append(KeyBinding("Backspace", "Delete"))
+        toggling = state.current_row == _FORM_TOGGLE_ROWS.get(state.session.screen)
+        if toggling and acts(" "):
+            bindings.append(KeyBinding("Space", _FORM_TOGGLE_LABELS[state.session.screen]))
+        if acts("enter"):
+            bindings.append(KeyBinding("Enter", "Next" if typing or toggling else "Continue"))
     elif state.session.screen is ConsumerScreen.SETTINGS:
         bindings.append(KeyBinding("Space/Enter", "Change"))
     elif state.session.screen is MaintainerScreen.CANDIDATE_FILTERS:
@@ -2093,15 +2138,11 @@ def key_bindings(
             bindings.append(KeyBinding("Enter", "Registry"))
     if state.session.screen in _SEARCHABLE:
         bindings.append(KeyBinding("/", "Search"))
-    bindings.append(KeyBinding("v", "Fast / Verbose"))
-    bindings.extend(
-        (
-            KeyBinding("↑/↓", "Move"),
-            KeyBinding("Esc", "Back"),
-            KeyBinding("?", "Help"),
-            KeyBinding("q", "Quit"),
-        )
-    )
+    if not typing:
+        bindings.append(KeyBinding("v", "Fast / Verbose"))
+    bindings.extend((KeyBinding("↑/↓", "Move"), KeyBinding("Esc", "Back")))
+    if not typing:
+        bindings.extend((KeyBinding("?", "Help"), KeyBinding("q", "Quit")))
     return tuple(bindings)
 
 
@@ -2126,18 +2167,7 @@ def key_event(
     if (
         not isinstance(key, str)
         or not key
-        or (
-            len(key) != 1
-            and key not in _SPECIAL_KEYS
-            and state.session.screen
-            not in (
-                ConsumerScreen.REGISTRY_ADD,
-                ConsumerScreen.REQUIRED_INPUTS,
-                ConsumerScreen.CONFIGURATION_VALUE,
-                MaintainerScreen.REGISTRY_INIT,
-                MaintainerScreen.REPOSITORY_SCAN,
-            )
-        )
+        or (len(key) != 1 and key not in _SPECIAL_KEYS and _form_text_rows(state) is None)
         or not (detail is None or isinstance(detail, (ConsumerScreen, MaintainerScreen)))
     ):
         raise ValueError("key translation needs a key name and consumer UI state")
@@ -2159,6 +2189,14 @@ def key_event(
         if len(key) == 1 and key.isprintable():
             return ConsumerUiEvent(ConsumerUiEventKind.SEARCH, text=state.search + key)
         return None
+
+    text_rows = _form_text_rows(state)
+    if (
+        text_rows is not None
+        and (cursor or state.current_row) not in text_rows
+        and key in _UNIVERSAL_LETTERS
+    ):
+        return ConsumerUiEvent(_UNIVERSAL_LETTERS[key])
 
     if state.session.screen is ConsumerScreen.CONFIGURATION_VALUE:
         row = cursor or state.current_row

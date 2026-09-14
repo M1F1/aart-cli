@@ -9,6 +9,7 @@ legend cannot become a second, decorative keyboard map.
 from __future__ import annotations
 
 import unittest
+from dataclasses import replace
 
 from agent_artifacts.application.consumer_ui import ConsumerUiState
 from agent_artifacts.application.consumer_views import (
@@ -33,6 +34,12 @@ def _state(screen, *, rows: tuple[str, ...] = ()) -> ConsumerUiState:
 class ContextualKeyLegendTest(unittest.TestCase):
     def setUp(self) -> None:
         self.source = CanonicalScreenSource(screens())
+
+    def _form(self, screen, cursor: int) -> ConsumerUiState:
+        """A form as the shell draws it: its rows loaded and the cursor on one of them."""
+
+        state = _state(screen)
+        return replace(state, rows=self.source.rows(state), cursor=cursor)
 
     def _footer(self, state: ConsumerUiState) -> str:
         lines = frame(self.source, state)
@@ -120,25 +127,30 @@ class ContextualKeyLegendTest(unittest.TestCase):
             MaintainerScreen.REPOSITORY_SCAN,
         ):
             with self.subTest(screen=screen):
-                footer = self._footer(_state(screen))
+                footer = self._footer(self._form(screen, 0))
 
                 self.assertIn("[Type] Edit", footer)
                 self.assertIn("[Backspace] Delete", footer)
-                self.assertIn("[Enter] Next / continue", footer)
+                self.assertIn("[Enter] Next", footer)
 
     def test_a_form_toggle_is_advertised_by_what_it_changes(self) -> None:
         """The prose that said what Space does is gone, so the legend has to carry its meaning."""
 
         expected = {
-            ConsumerScreen.REGISTRY_ADD: "[Space] Make default",
-            MaintainerScreen.SOURCE_ADD: "[Space] Switch kind",
-            MaintainerScreen.REGISTRY_INIT: "[Space] Local commit",
+            ConsumerScreen.REGISTRY_ADD: ("default", "[Space] Make default"),
+            MaintainerScreen.SOURCE_ADD: ("kind", "[Space] Switch kind"),
+            MaintainerScreen.REGISTRY_INIT: ("commit", "[Space] Local commit"),
         }
-        for screen, binding in expected.items():
+        for screen, (row, binding) in expected.items():
             with self.subTest(screen=screen):
-                self.assertIn(binding, self._footer(_state(screen)))
+                rows = self._form(screen, 0).rows
+                self.assertIn(binding, self._footer(self._form(screen, rows.index(row))))
 
-        self.assertNotIn("Space", self._footer(_state(MaintainerScreen.REPOSITORY_SCAN)))
+        scan = self._form(MaintainerScreen.REPOSITORY_SCAN, 0)
+        for cursor in range(len(scan.rows)):
+            self.assertNotIn(
+                "Space", self._footer(self._form(MaintainerScreen.REPOSITORY_SCAN, cursor))
+            )
 
     def test_global_exit_and_help_keys_remain_visible_on_every_screen(self) -> None:
         for screen in (ConsumerScreen.DASHBOARD, MaintainerScreen.REGISTRY):
