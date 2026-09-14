@@ -362,6 +362,11 @@ escapability of these flows).
 - [ ] **Marketplace** → select the Skill → `i` (**Install**). Review, then **cancel once**.
 - [ ] Confirm nothing was written. Install it for real.
 - [ ] Install `dummy-mcp`. At the provider prompt, enter **disposable test text only**.
+- [ ] On **Success**, the choices are rows: `View installed`, `View receipt`, `Done`. The
+      outcome above them has no bracketed buttons. `View receipt` opens the receipt of **this**
+      install (its `Recorded:` time), not an older one. `Esc` and `Done` both land on
+      **Marketplace**; `Esc` must never show Installing or Ready again. No Undo row is offered: the
+      screen says why (D-256).
 
 Expected: AART binds an isolated credential reference; the macOS Keychain owns value entry, the
 screen is lent to its prompt and taken back, and no reset dialog is reachable (`QA-081`/`QA-084`,

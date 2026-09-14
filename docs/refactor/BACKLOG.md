@@ -3015,3 +3015,13 @@ the default branch through `_configured_registry_branch` instead. The function a
 still pass. Noncritical: it is harmless, and deleting it is a CLI-module cleanup rather than part of
 removing the TUI capability. Decide whether the CLI should use it (the remote's actual default)
 or whether it should be removed.
+
+## B-117 — No reviewed installation Undo exists to offer from Success
+
+Found 2026-09-14 during CP-23 task 06. Product Specification §167 allows Success to offer Undo
+when the recorded effects support safe reversal, as a separately reviewed operation. The consumer
+surface has no such operation: `UndoAvailability` is projected from receipts, but the only undo
+command (`aart receipt undo`) reverses setup records. Success and Receipt Details therefore
+explain that no reviewed undo is offered (D-256). Noncritical: withholding an unreviewed reversal
+satisfies INV-009/INV-192. Adding one needs an owned-effect reversal plan, a review screen and
+receipt semantics; it is not a relabelled Uninstall.

@@ -20,6 +20,7 @@ from agent_artifacts.domain.registry import PromotionMode
 
 from .consumer_views import (
     SETTING_ROWS,
+    SUCCESS_CHOICES,
     ApplicationScreen,
     ConsumerScreen,
     ConsumerSession,
@@ -751,6 +752,10 @@ _OWNING_DASHBOARD: dict[ApplicationScreen, ApplicationScreen] = {
 
 
 def _back(state: ConsumerUiState) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
+    # CP-23 task 06: the install already ran, so the screens behind Success are a finished wizard
+    # -- Installing, and Ready still asking to confirm. Leaving goes where Done does.
+    if state.session.screen is ConsumerScreen.SUCCESS:
+        return _navigate(state, ConsumerScreen.MARKETPLACE)
     owner = _OWNING_DASHBOARD.get(state.session.screen)
     if owner is not None and owner in state.session.history:
         session = state.session.navigate(owner)
@@ -1427,7 +1432,6 @@ def _event_binding(key: str, label: str, kind: ConsumerUiEventKind) -> _ScreenBi
 #: derived below from the same screen sets and review maps that the reducer uses.
 _SCREEN_BINDINGS: dict[ApplicationScreen, tuple[_ScreenBinding, ...]] = {
     ConsumerScreen.MARKETPLACE: (_action_binding("i", "Install", ConsumerActionKind.INSTALL),),
-    ConsumerScreen.SUCCESS: (_navigate_binding("Enter", "Done", ConsumerScreen.MARKETPLACE),),
     ConsumerScreen.ARTIFACT_DETAILS: (_action_binding("i", "Install", ConsumerActionKind.INSTALL),),
     ConsumerScreen.COLLECTION_PREVIEW: (
         _action_binding("i", "Install", ConsumerActionKind.INSTALL),
@@ -1615,7 +1619,12 @@ def key_bindings(
             label = "Continue" if state.action is None else "Confirm"
             bindings.append(KeyBinding("Enter", label))
         elif detail is not None and "enter" not in keys:
-            bindings.append(KeyBinding("Enter", "Open"))
+            # Success's rows are choices rather than things to open, so Enter says which one.
+            choices: dict[ConsumerScreen | MaintainerScreen, str] = (
+                dict(SUCCESS_CHOICES) if state.session.screen is ConsumerScreen.SUCCESS else {}
+            )
+            label = choices.get(detail, "Open")
+            bindings.append(KeyBinding("Enter", label))
         elif (
             state.session.screen is MaintainerScreen.REGISTRY_COMMIT
             and state.action is None

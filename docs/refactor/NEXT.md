@@ -2,7 +2,10 @@
 
 ## Current objective — CP-23 (2026-09-14)
 
-**CP-22 is CLOSED. CP-23 tasks 01–05 are done; task 06 is next.**
+**CP-22 is CLOSED. CP-23 tasks 01–06 are done; task 07 is next.**
+Task 06 (D-256) made Success's `View installed`/`View receipt`/`Done` working rows; `View receipt`
+opens this operation's exact receipt, Esc leaves for Marketplace instead of the finished wizard, and
+Undo is explained rather than offered because no reviewed installation undo exists (B-117).
 Task 02 (D-252) made the Candidates table the actions block and the focused Candidate its
 Verbose-only cursor description; task 03 (D-253) made Candidate file diffs the Verbose projection
 of screen 37 and removed `f`; task 04 (D-254) removed Validation's `p` so Enter is the only route
@@ -22,9 +25,8 @@ Per-task work runs only the verifying gates; the full suite is task 15 (owner in
 Task 01's detailed evidence is in
 [`slices/CP-23-actionable-tui-workflows.md`](slices/CP-23-actionable-tui-workflows.md).
 
-**Next product action: task 06**, making installation Success actions real (`View installed`,
-`View receipt`, `Undo` only when supported, `Done`) and explaining their destinations. Treat the
-printed names as a control gap, not as working buttons. Continue the ordered fifteen-task plan;
+**Next product action: task 07**, describing the focused Marketplace artifact below the list from
+approved Registry metadata (Verbose only, collapsed by `v`, truthful fallback). Continue the ordered fifteen-task plan;
 CP-23 as a whole is not
 implemented or verified. Task 15 retains the full-batch/manual acceptance requirement, and task 14
 retains the complete screen/state audit. No human manual acceptance is claimed for task 01.

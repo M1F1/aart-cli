@@ -78,6 +78,8 @@ __all__ = [
     "ConsumerSettings",
     "SETTING_PURPOSE",
     "SETTING_ROWS",
+    "SUCCESS_CHOICES",
+    "SUCCESS_PURPOSE",
     "CredentialInputView",
     "CredentialRecordView",
     "EffectView",
@@ -1593,6 +1595,9 @@ _KEEPS_FOCUS: frozenset[tuple[ConsumerScreen, ConsumerScreen]] = frozenset(
         (ConsumerScreen.COLLECTION_PREVIEW, ConsumerScreen.COLLECTION_CUSTOMIZE),
         (ConsumerScreen.COLLECTION_PREVIEW, ConsumerScreen.REVIEW_SELECTION),
         (ConsumerScreen.COLLECTION_CUSTOMIZE, ConsumerScreen.REVIEW_SELECTION),
+        # CP-23 task 06: Success is focused on the receipt its operation recorded, so opening the
+        # receipt from it opens that one rather than whichever row the cursor was on.
+        (ConsumerScreen.SUCCESS, ConsumerScreen.RECEIPT_DETAILS),
     }
 )
 
@@ -1695,6 +1700,27 @@ class ConsumerSettings:
         if row == "maintainer-mode":
             return self.with_maintainer_mode(not self.maintainer_mode)
         raise ValueError(f"no consumer setting is named {row}")
+
+
+#: Screen 11's actions, in the order the Product Specification names them, as the screens they open
+#: (CP-23 task 06). The row identity is the destination, as on a dashboard, so a choice can never
+#: be carried forward as though it were the subject of the screen it opens. Undo is not one: this
+#: surface has no reviewed installation undo, so offering it would be a name without an action
+#: (D-256).
+SUCCESS_CHOICES: tuple[tuple[ConsumerScreen, str], ...] = (
+    (ConsumerScreen.INSTALLED, "View installed"),
+    (ConsumerScreen.RECEIPT_DETAILS, "View receipt"),
+    (ConsumerScreen.MARKETPLACE, "Done"),
+)
+
+SUCCESS_PURPOSE: dict[ConsumerScreen, str] = {
+    ConsumerScreen.INSTALLED: "Opens Installed: everything AART manages here and whether it is healthy.",
+    ConsumerScreen.RECEIPT_DETAILS: "Opens the receipt this install recorded: what ran, its effects "
+    "and why Undo is or is not possible.",
+    ConsumerScreen.MARKETPLACE: "Returns to Marketplace and leaves this finished install behind; "
+    "nothing runs again.",
+}
+"""Where each Success choice goes, for the block `[v]` opens."""
 
 
 #: The controls of accepted screen 28, in the order the Product Specification lists them. They are

@@ -7,6 +7,7 @@ adds detail without changing what the screen is about.
 
 from __future__ import annotations
 
+import dataclasses
 import unittest
 
 from agent_artifacts.application.consumer_ui import (
@@ -174,8 +175,12 @@ class InstallFlowScreenTest(unittest.TestCase):
         self.assertIn("View installed", fast)
         self.assertIn("View receipt", fast)
 
-    def test_enter_on_success_finishes_the_wizard_at_marketplace(self) -> None:
+    def test_enter_on_done_finishes_the_wizard_at_marketplace(self) -> None:
         source, state = at(ConsumerScreen.SUCCESS)
+        # CP-23 task 06: Done is the last of Success's rows; the others open what they name.
+        state = dataclasses.replace(
+            state, cursor=state.rows.index(ConsumerScreen.MARKETPLACE.value)
+        )
 
         event = key_event("enter", state, detail=source.detail(state))
         self.assertIsNotNone(event)

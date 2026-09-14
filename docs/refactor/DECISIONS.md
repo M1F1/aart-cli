@@ -5983,3 +5983,32 @@ consumer-visible. "AART does not push it for you" is kept verbatim.
 The `aart registry push` CLI command, `application/registry_publication.py`,
 `io/registry_publication.py` and their tests are an independently supported contract and are
 untouched. `registry_remote_default_branch` lost its only production caller (B-116).
+
+## D-256 — Installation Success: working rows, Esc leaves the wizard, Undo explained not offered
+
+Date: 2026-09-14 · Status: implemented · Scope: CP-23 task 06
+
+Screen 11's three names are its actions block: `View installed`, `View receipt` and `Done`, in
+that order, present only once a transaction or outcome exists. Each row is the Enter target it
+names: Installed, Receipt Details and Marketplace. The Enter legend carries the focused row's
+label instead of a generic "Open". The outcome report is the view's status and no longer prints
+bracketed button prose. Verbose describes where the focused row goes; Fast collapses that
+description. The old `Enter → Done` screen binding is removed because it shadowed every row.
+
+`View receipt` opens the exact record this operation wrote. Success is entered focused on that
+receipt's `recorded_at`, and `(SUCCESS, RECEIPT_DETAILS)` joins `_KEEPS_FOCUS`, so the receipt
+screen opens that record rather than whichever row the cursor was on. `View installed` and `Done`
+carry no subject.
+
+Esc on Success goes where Done goes: Marketplace, rewinding the history to it. Walking back used
+to reach Installing and a Ready screen still asking to confirm an install that had already run.
+No key on Success can prepare or execute an action.
+
+Undo is never a row. The product allows Undo only as a separately reviewed operation when the
+recorded effects support safe reversal (§167, INV-192). This surface has no reviewed installation
+undo: the CLI `receipt undo` reverses setup records, and mapping Undo to Uninstall would misstate
+a removal as a reversal. So Success states either the recorded reason Undo is unavailable or, when
+the effects are reversible, that no reviewed undo is offered here. Receipt Details words its
+reversible case the same way instead of "Undo: available", so the two screens do not disagree.
+The CLI install/update output shares `render_transaction_success` and loses the button line too.
+Offering a real installation undo is B-117.

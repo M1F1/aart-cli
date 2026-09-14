@@ -31,6 +31,8 @@ from agent_artifacts.application.consumer_ui import (
 from agent_artifacts.application.consumer_views import (
     SETTING_PURPOSE,
     SETTING_ROWS,
+    SUCCESS_CHOICES,
+    SUCCESS_PURPOSE,
     ActivityView,
     ApplicationScreen,
     ConfigInputView,
@@ -598,10 +600,12 @@ def render_transaction_success(
     lines.append(f"{view.outcome.mark} {_human(view.outcome.value).capitalize()}")
     for drift in view.residual_drift:
         lines.append(f"  Still needs attention: {drift.component} ({_human(drift.kind)})")
+    # CP-23 task 06 (D-256): the choices are rows on the screen, not words in its report, and Undo
+    # is never one of them -- no reviewed installation undo exists to start from here.
     lines.append(
-        "[ View installed ] [ View receipt ] [ Undo ] [ Done ]"
+        "Undo is not offered here: no reviewed undo exists for an installation yet."
         if view.undo.available
-        else f"[ View installed ] [ View receipt ] [ Done ]  Undo unavailable: {view.undo.reason}"
+        else f"Undo unavailable: {view.undo.reason}"
     )
     return tuple(lines)
 
@@ -630,11 +634,9 @@ def render_pending_setup(pending: tuple[DeclaredArtifactSetup, ...]) -> tuple[st
 
 
 def render_success(view: LifecycleOutcomeView, profile: PresentationProfile) -> tuple[str, ...]:
-    """Screen 11. Outcome-oriented completion, and where to go from it."""
+    """Screen 11's outcome. Where to go from it is the screen's rows (CP-23 task 06)."""
 
-    lines = list(render_lifecycle_outcome(view, profile))
-    lines.append("[ View installed ] [ View receipt ] [ Done ]")
-    return tuple(lines)
+    return render_lifecycle_outcome(view, profile)
 
 
 def render_credential(view: CredentialRecordView, profile: PresentationProfile) -> tuple[str, ...]:
@@ -1108,7 +1110,9 @@ def render_receipt_detail(view: ReceiptDetailView, profile: PresentationProfile)
     if view.restoration_status is not None:
         lines.append(f"Restoration: {_human(view.restoration_status)}.")
     lines.append(
-        f"Undo: available for {', '.join(view.undo.components)}."
+        # D-256: reversibility is a recorded fact, and no reviewed undo exists to act on it here.
+        f"Undo: {', '.join(view.undo.components)} could be reversed, but no reviewed undo is "
+        "offered here."
         if view.undo.available
         else f"Undo: not available — {view.undo.reason}."
     )
@@ -2106,6 +2110,12 @@ class CanonicalScreenSource:
 
     def rows(self, state: ConsumerUiState) -> tuple[str, ...]:
         screen, query = state.session.screen, state.search
+        if screen is ConsumerScreen.SUCCESS:
+            # CP-23 task 06: the choices exist once something ran; before that there is nothing
+            # to view, and a row that opens nothing is the gap this replaced.
+            if self._screens.transaction is None and self._screens.outcome is None:
+                return ()
+            return tuple(target.value for target, _label in SUCCESS_CHOICES)
         if screen is ConsumerScreen.DASHBOARD:
             return tuple(
                 target.value
@@ -2257,6 +2267,16 @@ class CanonicalScreenSource:
         """Enter opens the detail of whatever this screen is currently about."""
 
         screen, row = state.session.screen, state.current_row or state.focus
+        if screen is ConsumerScreen.SUCCESS:
+            # The cursor alone: Success's focus is the recorded receipt, never a choice.
+            return next(
+                (
+                    target
+                    for target, _label in SUCCESS_CHOICES
+                    if target.value == state.current_row and state.current_row in state.rows
+                ),
+                None,
+            )
         if screen is ConsumerScreen.DASHBOARD:
             return next(
                 (
@@ -2472,6 +2492,9 @@ class CanonicalScreenSource:
         if state.session.screen is ConsumerScreen.SETTINGS:
             purpose = SETTING_PURPOSE.get(state.current_row or "")
             return () if purpose is None else (purpose,)
+        if state.session.screen is ConsumerScreen.SUCCESS:
+            chosen = self.detail(state)
+            return () if not isinstance(chosen, ConsumerScreen) else (SUCCESS_PURPOSE[chosen],)
         if state.session.screen is MaintainerScreen.REGISTRY:
             # `QA-098`: with the cursor on the registry this project publishes, the description is
             # where that registry has got to -- repository, branch, what its checkout knows of the
@@ -2592,6 +2615,14 @@ class CanonicalScreenSource:
             # From the session's own settings, not the machine snapshot: the same reason the rows
             # are drawn from `state.settings`.
             return settings_consequence(state.settings)
+        if screen is ConsumerScreen.SUCCESS and self.rows(state):
+            # CP-23 task 06: what happened is the state of the view; the choices are the rows.
+            if screens.transaction is not None:
+                return render_transaction_success(
+                    screens.transaction, state.session.profile
+                ) + render_pending_setup(screens.pending_setup)
+            assert screens.outcome is not None
+            return render_success(screens.outcome, state.session.profile)
         if screen is ConsumerScreen.REGISTRIES:
             if screens.registries:
                 return _REGISTRY_EXPLANATION
@@ -2612,6 +2643,11 @@ class CanonicalScreenSource:
     def _body(self, state: ConsumerUiState) -> tuple[str, ...]:
         screen, profile = state.session.screen, state.session.profile
         screens = self._screens
+        if screen is ConsumerScreen.SUCCESS and self.rows(state):
+            return tuple(
+                f"{'>' if target.value == state.current_row else ' '} {label}"
+                for target, label in SUCCESS_CHOICES
+            )
         if screen is ConsumerScreen.DASHBOARD:
             targets = navigation_targets(screen, maintainer_mode=state.settings.maintainer_mode)
             menu = tuple(

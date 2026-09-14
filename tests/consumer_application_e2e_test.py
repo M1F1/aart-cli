@@ -42,7 +42,7 @@ from agent_artifacts.domain.result import Ok
 from agent_artifacts.tui_consumer import run_consumer_shell
 from tests.configured_install_command_e2e_test import _environment
 from tests.configured_installation_draft_e2e_test import AUTHORED_MCP
-from tests.consumer_shell_test import ENTER, SPACE, FakeTerminal
+from tests.consumer_shell_test import DOWN, ENTER, ESCAPE, SPACE, FakeTerminal
 
 TODAY = dt.date(2026, 9, 1)
 OFFERED = "company/skill/code-review@1.2.0"
@@ -137,6 +137,36 @@ class ConsumerApplicationInstallTest(unittest.TestCase):
             self.assertEqual(
                 [item.coordinate for item in handler.source().screens.installed], [OFFERED]
             )
+
+    def test_each_success_row_reaches_what_it_names_and_none_installs_again(self) -> None:
+        """CP-23 task 06: View receipt, View installed, Done and Esc after a real install."""
+
+        cases = (
+            ((DOWN, ENTER), ConsumerScreen.RECEIPT_DETAILS),
+            ((ENTER,), ConsumerScreen.INSTALLED),
+            ((DOWN, DOWN, ENTER), ConsumerScreen.MARKETPLACE),
+            ((ESCAPE,), ConsumerScreen.MARKETPLACE),
+        )
+        for keys, screen in cases:
+            with self.subTest(screen=screen.value, keys=keys), _environment() as env:
+                finished, terminal, handler = _drive(
+                    env, _at(ConsumerScreen.MARKETPLACE), *_INSTALL, *keys
+                )
+
+                self.assertIs(finished.session.screen, screen, terminal.last)
+                screens = handler.source().screens
+                self.assertEqual(len(screens.receipts), 1, "leaving Success installed again")
+                # The persisted receipt of this one install, as read back from the machine.
+                recorded = screens.receipts[0].recorded_at
+                if screen is ConsumerScreen.RECEIPT_DETAILS:
+                    self.assertEqual(finished.focus, recorded)
+                    self.assertTrue(terminal.screen_containing(f"Recorded: {recorded}"))
+                elif screen is ConsumerScreen.INSTALLED:
+                    self.assertIn(OFFERED, terminal.last)
+                else:
+                    # Marketplace is where this drive began, so leaving rewinds to it: Back from
+                    # here can no longer reach the wizard that already ran.
+                    self.assertEqual(finished.session.history, ())
 
     def test_installing_the_same_offer_twice_converges_instead_of_installing_twice(self) -> None:
         with _environment() as env:

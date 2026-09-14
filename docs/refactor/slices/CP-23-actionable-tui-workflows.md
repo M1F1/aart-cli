@@ -1,6 +1,6 @@
 # CP-23 — Actionable TUI workflows after the fourth manual run
 
-Status: IN PROGRESS — TASKS 01–05 DONE; TASK 06 NEXT
+Status: IN PROGRESS — TASKS 01–06 DONE; TASK 07 NEXT
 
 Date: 2026-09-14. Authority: the product owner's manual screen reports and request to create CP-23
 and close CP-22, followed by the all-screen audit and credential guidance requirements.
@@ -589,3 +589,52 @@ Evidence:
     transport).
 - Walkthrough step 8 is now the external Git step. Scoped `make mutants` and the full suite are
   left to task 15. No human terminal retest is claimed.
+
+### Task 06 — Installation Success actions are real (2026-09-14)
+
+Done. D-256 records the choice; B-117 records the missing reviewed installation undo.
+
+Characterized first: `render_transaction_success` printed `[ View installed ] [ View receipt ]
+[ Done ]` (plus `[ Undo ]` when the projection said available) as prose. Success had one screen
+binding, `Enter → Done`. Esc walked back through history into Installing and a Ready screen still
+asking to confirm the install that had just run.
+
+After: the three names are Success's rows, and each is its own Enter target with a matching Enter
+label. The outcome is the view's status with no button prose. A Verbose-only description says
+where the focused row goes. `View receipt` opens the receipt this operation recorded
+(`_KEEPS_FOCUS`). Done and Esc both leave for Marketplace. Undo is explained, never offered: either
+the recorded reason it is unavailable, or that no reviewed undo is offered here. Receipt Details
+no longer says "Undo: available".
+
+Evidence:
+
+- New `installation_success_actions_test.py` (12 tests):
+  - rows versus status, with no bracketed prose in the frame;
+  - every row's Enter destination, emitting only `LOAD_SCREEN`;
+  - Done leaves the wizard's history;
+  - with an older receipt present, `View receipt` opens this operation's exact receipt;
+  - View installed and Done carry no subject;
+  - the Enter label per row;
+  - Verbose describes each row differently, and Fast hides the description;
+  - Esc goes to Marketplace;
+  - a Hypothesis property: no key sequence on Success emits `PREPARE_ACTION`/`EXECUTE_ACTION` or
+    re-enters a wizard screen;
+  - unavailable Undo states its reason, a reversible transaction still offers no Undo, and Receipt
+    Details does not promise one.
+- Real application E2E, `consumer_application_e2e_test.py`: after a real install through the
+  terminal, `View receipt`, `View installed`, `Done` and Esc each reach their screen. The machine
+  still holds exactly one receipt, and View receipt shows its `recorded_at`.
+- `consumer_install_flow_shell_test.py`: Enter on Done finishes the wizard at Marketplace.
+- Focused runs: 13 install/Success/transaction/legend/back-stack/activity/setup modules (**131
+  OK**); the CLI modules sharing `render_transaction_success` (`marketplace_lifecycle_e2e`,
+  `consumer_command_seam_e2e`, `merged_installation_e2e`) (**46 OK**).
+  `make typecheck format-check lint`: OK.
+- Targeted mutations, all killed:
+  - `_back` walking into the wizard (**3 red**, including the property and the E2E);
+  - dropping `(SUCCESS, RECEIPT_DETAILS)` from `_KEEPS_FOCUS` (**2 red**);
+  - restoring `Enter → Done` as a screen binding (**4 red**);
+  - restoring the button line (**1 red**);
+  - replacing the explanation with `[ Undo ]` (**1 red**);
+  - `detail` ignoring the cursor (**7 red**).
+- Walkthrough section 11 checks the rows, the exact receipt and Esc. Scoped `make mutants` and the
+  full suite are left to task 15. No human terminal retest is claimed.
