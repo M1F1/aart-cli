@@ -1,6 +1,13 @@
 # AART Refactor Migration Status
 
-**2026-09-14: CP-22 CLOSED; CP-23 tasks 01–11 done, task 12 next (owner task 16 added after 13).**
+**2026-09-14: CP-22 CLOSED; CP-23 tasks 01–12 done, task 13 next (owner task 16 follows 13).**
+Task 12 (D-262): Credential Action's actions are rows. Replace and Delete open review 24a. Confirm
+plans with the credential lifecycle, executes the reviewed digest with the provider holding the
+terminal, then re-inspects. Verify answers in place. The lifecycle had named effects by input only,
+which no interpreter could act on; it now uses the whole reference and is runtime-reachable
+(B-074 resolved). Esc keeps the credential as the subject. A pre-existing D-260 fixture break in the
+terminal-handover test was fixed. Eleven targeted mutations were killed. No Activity receipt yet
+(B-120).
 Task 11 (D-261): Details and installation share one eligibility rule. Empty declarations are
 unconstrained, and an excluded platform refuses placement (a Windows-only Skill had installed on
 darwin). Details shows eligible vs detected harnesses, Space selects the focused artifact, and the
@@ -37,8 +44,8 @@ and 193 subtests pass, including a Hypothesis row-selection property and real lo
 Scoped mutation analysis is recorded; format, lint, typecheck, unit (3,978 OK) and validate
 passed. Per-task work runs only the verifying gates; the full suite is task 15.
 
-Tasks 11–15 remain pending in [`CP-23`](slices/CP-23-actionable-tui-workflows.md); the next product
-step is Artifact Details controls and compatibility wording. The entire batch and its manual acceptance are still
+Tasks 13, 16, 14 and 15 remain pending in [`CP-23`](slices/CP-23-actionable-tui-workflows.md); the
+next product step is credential acquisition guidance from Source to the installation prompt. The entire batch and its manual acceptance are still
 open. Owner requirements in §167/D-249–D-250 retain manual publication, explicit target choice,
 credential acquisition guidance, and complete Frame/Verbose compliance with no standard in-TUI
 exceptions. No human retest, all-screen audit, or new CP-22 gate result is claimed.

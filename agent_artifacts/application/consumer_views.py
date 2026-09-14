@@ -181,6 +181,10 @@ class ConsumerScreen(str, Enum):
     CREDENTIALS = "22-credentials"
     CREDENTIAL_DETAILS = "23-credential-details"
     CREDENTIAL_ACTION = "24-credential-action"
+    # 24a states what a chosen credential action does before it does it, and is where Verify's
+    # answer is drawn. Screen 24 is the choice; a review of its own keeps the rows and the
+    # consequences on separate screens, the way 21c/21d did for a Registry row (D-262).
+    CREDENTIAL_REVIEW = "24a-review-credential-action"
     ACTIVITY = "25-activity"
     ACTIVITY_DETAILS = "26-activity-details"
     RECEIPT_DETAILS = "27-receipt-details"
@@ -1695,7 +1699,11 @@ _NAVIGATION: dict[ConsumerScreen, tuple[ConsumerScreen, ...]] = {
     ConsumerScreen.REGISTRY_REVIEW: (ConsumerScreen.REGISTRIES,),
     ConsumerScreen.CREDENTIALS: (ConsumerScreen.CREDENTIAL_DETAILS,),
     ConsumerScreen.CREDENTIAL_DETAILS: (ConsumerScreen.CREDENTIAL_ACTION,),
-    ConsumerScreen.CREDENTIAL_ACTION: (ConsumerScreen.ACTIVITY_DETAILS,),
+    ConsumerScreen.CREDENTIAL_ACTION: (ConsumerScreen.CREDENTIAL_REVIEW,),
+    ConsumerScreen.CREDENTIAL_REVIEW: (
+        ConsumerScreen.CREDENTIAL_DETAILS,
+        ConsumerScreen.CREDENTIALS,
+    ),
     ConsumerScreen.ACTIVITY: (ConsumerScreen.ACTIVITY_DETAILS,),
     ConsumerScreen.ACTIVITY_DETAILS: (ConsumerScreen.RECEIPT_DETAILS,),
     ConsumerScreen.RECEIPT_DETAILS: (),
@@ -1712,6 +1720,9 @@ _KEEPS_FOCUS: frozenset[tuple[ConsumerScreen, ConsumerScreen]] = frozenset(
         # CP-23 task 06: Success is focused on the receipt its operation recorded, so opening the
         # receipt from it opens that one rather than whichever row the cursor was on.
         (ConsumerScreen.SUCCESS, ConsumerScreen.RECEIPT_DETAILS),
+        # CP-23 task 12: 24's rows are verbs, so the review they open is still about the credential
+        # rather than about the word "replace" (D-262).
+        (ConsumerScreen.CREDENTIAL_ACTION, ConsumerScreen.CREDENTIAL_REVIEW),
     }
 )
 

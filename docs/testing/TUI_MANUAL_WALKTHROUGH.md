@@ -419,6 +419,16 @@ Harness delivery must be one answer everywhere it is said (`QA-078`…`QA-080`, 
 ## 12 — Inspect
 
 - [ ] **Installed** → artifact details. **Credentials** → the reference and its dependants.
+- [ ] **Credentials** → a credential → Enter (**Credential Action**). Verify and Replace are rows,
+      and Delete is absent while something uses it. The `[Enter]` label follows the cursor, and
+      `v` describes the focused row below the list.
+- [ ] On **Verify**, Enter reports health with `Checked just now; nothing was changed.` Enter goes
+      back to the credential.
+- [ ] On **Replace**, Enter opens a review that names every installation using it and says no copy
+      is kept. Esc returns to Credential Action with nothing prompted.
+- [ ] Confirm the review. The provider (Keychain) asks in this terminal; type disposable text only.
+      It lands on Credential Details with `Replaced <input> in <provider>.`, and no frame shows the
+      value (D-262).
 - [ ] **Doctor** → health, offline readiness, activity, configuration.
 - [ ] **Activity** → what actually happened, with real provenance.
 

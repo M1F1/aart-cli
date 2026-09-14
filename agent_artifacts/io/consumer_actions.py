@@ -50,6 +50,11 @@ from agent_artifacts.application.consumer_views import (
     project_lifecycle_plan,
     target_choice_problems,
 )
+from agent_artifacts.application.credential_lifecycle import (
+    CredentialPlan,
+    credential_plan_to_data,
+    plan_credential_mutation,
+)
 from agent_artifacts.application.installed_setup import DeclaredArtifactSetup
 from agent_artifacts.application.maintainer_promotion import (
     CandidatePromotionExecutionResult,
@@ -76,8 +81,14 @@ from agent_artifacts.configuration.model import ConfiguredSource, SourceKind
 from agent_artifacts.configuration.policy import EffectiveConfiguration, redact_text
 from agent_artifacts.configuration.schema import configured_source_from_input
 from agent_artifacts.domain.candidates import CandidateId
-from agent_artifacts.domain.credentials import CredentialProviderRef, ProviderState
+from agent_artifacts.domain.credentials import (
+    CredentialIntent,
+    CredentialProviderRef,
+    CredentialState,
+    ProviderState,
+)
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from agent_artifacts.domain.effects import VerifyCredential
 from agent_artifacts.domain.harness import Scope
 from agent_artifacts.domain.identifiers import ArtifactCoordinate, SourceAlias
 from agent_artifacts.domain.inputs import SecretInput, SecretProviderReference
@@ -112,10 +123,10 @@ from .configured_uninstall_action import (
     complete_configured_uninstall,
     prepare_configured_uninstall,
 )
-from .consumer_machine import read_installed_inspections
+from .consumer_machine import read_consumer_machine, read_installed_inspections
 from .consumer_settings import write_consumer_settings
 from .credentials import CredentialProviderPort
-from .execution import TerminalHandover
+from .execution import CredentialEffectInterpreter, TerminalHandover
 from .maintainer_promotion import (
     PreparedConfiguredCandidatePromotion,
     complete_configured_candidate_promotion,
@@ -360,6 +371,27 @@ class _PendingRegistryRemoval:
 
 
 @dataclass(frozen=True, slots=True)
+class _PendingCredentialAction:
+    """One reviewed replacement or deletion: the plan, the provider it runs on, and its identity.
+
+    The plan holds a reference and effects and no value (INV-056); the provider is the one whose
+    observation the plan was made from, so confirmation cannot land on a different adapter.
+    """
+
+    plan: CredentialPlan
+    provider: CredentialProviderPort
+    review_digest: str
+
+
+#: The credential intent each of screen 24's rows asks for (CP-23 task 12, D-262).
+_CREDENTIAL_INTENTS: dict[ConsumerActionKind, CredentialIntent] = {
+    ConsumerActionKind.CREDENTIAL_VERIFY: CredentialIntent.VERIFY,
+    ConsumerActionKind.CREDENTIAL_REPLACE: CredentialIntent.REPLACE,
+    ConsumerActionKind.CREDENTIAL_DELETE: CredentialIntent.DELETE,
+}
+
+
+@dataclass(frozen=True, slots=True)
 class _PendingSourceAddition:
     draft: SourceDraft
     source: ConfiguredSource
@@ -447,6 +479,7 @@ _Pending = (
     | _PendingRegistryInit
     | _PendingRegistryRebuild
     | PreparedAdoption
+    | _PendingCredentialAction
 )
 
 #: The host is passed rather than closed over: setup and usage reporting describe the installation
@@ -707,7 +740,99 @@ class LocalConsumerActions:
             return self._prepare_candidate_promotion(command)
         if action is ConsumerActionKind.BULK_PROMOTION:
             return self._prepare_bulk_promotion(command)
+        if action in _CREDENTIAL_INTENTS:
+            return self._prepare_credential_action(command)
         return self._prepare_uninstall(command)
+
+    def _prepare_credential_action(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        """Plan one credential action against what the provider says now (CP-23 task 12, D-262).
+
+        The observation and its dependants are read live rather than taken from the drawn list:
+        that list is as old as the session, and the plan has to be about the reference as it stands
+        and about every installation that uses it (INV-057). Planning is
+        `plan_credential_mutation`, so policy, provider availability and the in-use deletion rule
+        are the lifecycle's own. Verify is answered here -- asking the provider is all it is -- so
+        it leaves nothing pending.
+        """
+
+        assert command.action is not None
+        intent = _CREDENTIAL_INTENTS[command.action]
+        host = self._host()
+        providers = self._context.credential_providers
+        inspected = read_installed_inspections(
+            state_root=host.state_root,
+            harness_root=host.harness_root,
+            credential_providers=providers,
+        )
+        if isinstance(inspected, Err):
+            return self._declined(command, _refusal(inspected.diagnostics))
+        observation = next(
+            (item for item in inspected.value.credentials if str(item.reference) == command.focus),
+            None,
+        )
+        if observation is None:
+            return self._declined(
+                command, _lines(f"nothing installed here uses the credential {command.focus}")
+            )
+        named = observation.reference.provider.provider
+        provider = next((item for item in providers if item.provider == named), None)
+        if provider is None:
+            return self._declined(
+                command, _lines(f"nothing here can reach the credential provider {named}")
+            )
+        dependants = tuple(
+            item.record.coordinate
+            for item in inspected.value.inspections
+            if observation.reference in item.record.credential_references
+        )
+        planned = plan_credential_mutation(
+            intent,
+            observation,
+            dependants,
+            policy=self._context.policy,
+            # The review names every dependant before a replacement can be confirmed, so the
+            # confirmation is the acknowledgement. A deletion is never acknowledged from here,
+            # which is what keeps a credential something uses from being removed (INV-057).
+            acknowledged_dependants=dependants if intent is CredentialIntent.REPLACE else (),
+        )
+        if isinstance(planned, Err):
+            return self._declined(command, _refusal(planned.diagnostics))
+        identity = json.dumps(
+            credential_plan_to_data(planned.value), sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+        review_digest = "sha256:" + hashlib.sha256(identity).hexdigest()
+        if intent is CredentialIntent.VERIFY:
+            refreshed = self._reread_machine(host)
+            if refreshed:
+                return self._declined(command, refreshed)
+        else:
+            self._pending = _PendingCredentialAction(planned.value, provider, review_digest)
+            self._pending_action = command.action
+        return ConsumerActionUpdate(
+            self.source(),
+            ConsumerUiEvent(
+                ConsumerUiEventKind.ACTION_PREPARED,
+                action=command.action,
+                review_digest=review_digest,
+            ),
+        )
+
+    def _reread_machine(self, host: InstallationHost) -> tuple[str, ...]:
+        """Draw the machine as it is now; what stopped the read, or nothing when it worked."""
+
+        machine = read_consumer_machine(
+            state_root=host.state_root,
+            harness_root=host.harness_root,
+            today=self._now().date(),
+            project_root=host.project_root,
+            user_home=host.user_home,
+            data_root=host.data_root,
+            credential_providers=self._context.credential_providers,
+        )
+        if isinstance(machine, Err):
+            return _refusal(machine.diagnostics)
+        self._machine = machine.value
+        return ()
 
     def _prepare_repository_scan(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
         draft = command.repository_scan_draft
@@ -1566,6 +1691,8 @@ class LocalConsumerActions:
             return self._execute_source_sync(command, pending)
         if isinstance(pending, PreparedConfiguredCandidatePromotion):
             return self._execute_candidate_promotion(command, pending)
+        if isinstance(pending, _PendingCredentialAction):
+            return self._execute_credential_action(command, pending)
         assert isinstance(pending, PreparedConfiguredUninstall)
         return self._execute_uninstall(command, pending)
 
@@ -1978,6 +2105,52 @@ class LocalConsumerActions:
             transaction=receipt,
             pending_setup=completed.value.pending_setup,
         )
+
+    def _execute_credential_action(
+        self, command: ConsumerUiCommand, pending: _PendingCredentialAction
+    ) -> ConsumerActionUpdate:
+        """Run a reviewed replacement or deletion, then ask the provider what it now holds.
+
+        The effects go through `CredentialEffectInterpreter`, the interpreter repair uses, so a
+        replacement lends the terminal to the provider's own prompt and AART never holds a value,
+        old or new (INV-056, `QA-081`). The plan's verify effect is the reading taken afterwards:
+        it is the one whose answer decides whether the action did what the review said (INV-176).
+        """
+
+        plan = pending.plan
+        reference = plan.observation.reference
+        interpreter = CredentialEffectInterpreter(
+            pending.provider,
+            (reference,),
+            interactive_store=True,
+            terminal_handover=self._terminal_handover,
+        )
+        for effect in plan.effects:
+            if isinstance(effect, VerifyCredential):
+                continue
+            applied = interpreter.apply(effect)
+            if isinstance(applied, Err):
+                self._reread_machine(self._host())
+                return self._failed(command, _refusal(applied.diagnostics))
+        observed = pending.provider.inspect(reference)
+        unread = self._reread_machine(self._host())
+        if isinstance(observed, Err):
+            return self._failed(command, _refusal(observed.diagnostics))
+        provider = reference.provider.provider
+        if plan.intent is CredentialIntent.DELETE:
+            expected, done = CredentialState.ABSENT, f"Deleted {reference.input} from {provider}."
+        else:
+            expected, done = CredentialState.PRESENT, f"Replaced {reference.input} in {provider}."
+        if observed.value.state is not expected:
+            return self._failed(
+                command,
+                _lines(
+                    f"{provider} reports {reference.input} as {observed.value.state.value} "
+                    f"after the {plan.intent.value}",
+                    "choose Verify to ask it again",
+                ),
+            )
+        return self._recorded(command, str(reference), notice=(done, *unread))
 
     def _execute_repair(
         self, command: ConsumerUiCommand, pending: PreparedConfiguredRepair

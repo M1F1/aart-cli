@@ -79,6 +79,9 @@ class ConsumerActionKind(str, Enum):
     REPOSITORY_ADOPT = "repository-adopt"
     REPOSITORY_UPSTREAM_CHECK = "repository-upstream-check"
     REPOSITORY_ADOPT_UPDATE = "repository-adopt-update"
+    CREDENTIAL_VERIFY = "credential-verify"
+    CREDENTIAL_REPLACE = "credential-replace"
+    CREDENTIAL_DELETE = "credential-delete"
 
 
 class ConsumerUiEventKind(str, Enum):
@@ -637,6 +640,9 @@ _SUBJECT_PRESERVING_BACK_EDGES = frozenset(
         (MaintainerScreen.VERSION_CONFLICT, MaintainerScreen.PROVENANCE),
         (MaintainerScreen.VALIDATION_DETAILS, MaintainerScreen.VALIDATION),
         (MaintainerScreen.POLICY_REVIEW, MaintainerScreen.VALIDATION_DETAILS),
+        # CP-23 task 12: backing out of a credential action is still about that credential.
+        (ConsumerScreen.CREDENTIAL_REVIEW, ConsumerScreen.CREDENTIAL_ACTION),
+        (ConsumerScreen.CREDENTIAL_ACTION, ConsumerScreen.CREDENTIAL_DETAILS),
     }
 )
 
@@ -931,6 +937,19 @@ _ACTION_REVIEW: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
         ConsumerActionKind.BULK_PROMOTION,
         MaintainerScreen.BULK_PROMOTION,
     ): MaintainerScreen.REGISTRY_VALIDATION,
+    # CP-23 task 12: screen 24's rows are the actions, and each opens 24a about the same reference.
+    (
+        ConsumerActionKind.CREDENTIAL_VERIFY,
+        ConsumerScreen.CREDENTIAL_ACTION,
+    ): ConsumerScreen.CREDENTIAL_REVIEW,
+    (
+        ConsumerActionKind.CREDENTIAL_REPLACE,
+        ConsumerScreen.CREDENTIAL_ACTION,
+    ): ConsumerScreen.CREDENTIAL_REVIEW,
+    (
+        ConsumerActionKind.CREDENTIAL_DELETE,
+        ConsumerScreen.CREDENTIAL_ACTION,
+    ): ConsumerScreen.CREDENTIAL_REVIEW,
 }
 
 #: The screens an action can be asked from, which are also the screens a declined preparation
@@ -1069,9 +1088,12 @@ def _action_prepared(
         return _declined_preparation(state)
     # Scanning is the completed read-only action: the result is now on screen and there is no
     # mutation waiting for confirmation.  Adoption starts a separate reviewed action from it.
+    # Verifying a credential is the same kind of answer: the provider was asked while preparing,
+    # and nothing is left to confirm (D-262).
     if action in (
         ConsumerActionKind.REPOSITORY_SCAN,
         ConsumerActionKind.REPOSITORY_UPSTREAM_CHECK,
+        ConsumerActionKind.CREDENTIAL_VERIFY,
     ):
         return replace(state, action=None, quit_pending=False), ()
     if action in (ConsumerActionKind.INSTALL, ConsumerActionKind.UPDATE) and (
@@ -1112,6 +1134,8 @@ _ACTION_RUNNING: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationS
         ConsumerActionKind.BULK_PROMOTION,
         MaintainerScreen.REGISTRY_COMMIT,
     ): None,
+    (ConsumerActionKind.CREDENTIAL_REPLACE, ConsumerScreen.CREDENTIAL_REVIEW): None,
+    (ConsumerActionKind.CREDENTIAL_DELETE, ConsumerScreen.CREDENTIAL_REVIEW): None,
 }
 
 
@@ -1174,6 +1198,15 @@ _ACTION_RESULT: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
         ConsumerActionKind.REPOSITORY_ADOPT_UPDATE,
         MaintainerScreen.ADOPTION_REVIEW,
     ): MaintainerScreen.REGISTRY,
+    # A replaced credential is still there to look at; a deleted one is not, so its list is.
+    (
+        ConsumerActionKind.CREDENTIAL_REPLACE,
+        ConsumerScreen.CREDENTIAL_REVIEW,
+    ): ConsumerScreen.CREDENTIAL_DETAILS,
+    (
+        ConsumerActionKind.CREDENTIAL_DELETE,
+        ConsumerScreen.CREDENTIAL_REVIEW,
+    ): ConsumerScreen.CREDENTIALS,
 }
 
 
@@ -1579,8 +1612,34 @@ _CONFIRM_SCREENS = frozenset(
         MaintainerScreen.SOURCE_ADD_REVIEW,
         MaintainerScreen.REGISTRY_INIT_REVIEW,
         MaintainerScreen.REGISTRY_REBUILD_REVIEW,
+        ConsumerScreen.CREDENTIAL_REVIEW,
     }
 )
+
+#: Screens whose rows are the actions themselves: Enter requests the one under the cursor, and the
+#: legend names it. The subject stays the screen's focus -- on screen 24 the credential reference --
+#: so moving among the verbs never changes what they act on (CP-23 task 12, D-262).
+_ROW_ACTIONS: dict[ApplicationScreen, dict[str, tuple[ConsumerActionKind, str]]] = {
+    ConsumerScreen.CREDENTIAL_ACTION: {
+        "verify": (ConsumerActionKind.CREDENTIAL_VERIFY, "Verify"),
+        "replace": (ConsumerActionKind.CREDENTIAL_REPLACE, "Review replacement"),
+        "delete": (ConsumerActionKind.CREDENTIAL_DELETE, "Review deletion"),
+    },
+}
+
+
+def _row_action(state: ConsumerUiState, cursor: str = "") -> tuple[ConsumerActionKind, str] | None:
+    return _ROW_ACTIONS.get(state.session.screen, {}).get(cursor or state.current_row or "")
+
+
+def _answered_in_place(state: ConsumerUiState) -> bool:
+    """A credential was verified and its answer is on 24a: Enter goes back to that credential."""
+
+    return (
+        state.session.screen is ConsumerScreen.CREDENTIAL_REVIEW
+        and state.action is None
+        and state.failed_action is None
+    )
 
 
 def _binding_enabled(binding: _ScreenBinding, state: ConsumerUiState) -> bool:
@@ -1651,7 +1710,12 @@ def key_bindings(
                 else "Select"
             )
             bindings.append(KeyBinding("Space", label))
-        if state.failed_action is not None and "enter" not in keys:
+        chosen = _row_action(state)
+        if chosen is not None and "enter" not in keys:
+            bindings.append(KeyBinding("Enter", chosen[1]))
+        elif _answered_in_place(state) and "enter" not in keys:
+            bindings.append(KeyBinding("Enter", "Credential details"))
+        elif state.failed_action is not None and "enter" not in keys:
             # The run is over. The only thing Enter can honestly do here is leave.
             bindings.append(KeyBinding("Enter", "Back to list"))
         elif state.session.screen in _CONFIRM_SCREENS and "enter" not in keys:
@@ -1930,8 +1994,19 @@ def key_event(
         if owner is not None:
             return ConsumerUiEvent(ConsumerUiEventKind.NAVIGATE, screen=owner)
         return ConsumerUiEvent(ConsumerUiEventKind.BACK)
+    if key == "enter" and _answered_in_place(state):
+        return ConsumerUiEvent(
+            ConsumerUiEventKind.NAVIGATE, screen=ConsumerScreen.CREDENTIAL_DETAILS
+        )
     if key == "enter" and state.session.screen in _CONFIRM_SCREENS:
         return ConsumerUiEvent(ConsumerUiEventKind.CONFIRM_ACTION)
+    if key == "enter" and state.session.screen in _ROW_ACTIONS:
+        chosen = _row_action(state, cursor)
+        return (
+            None
+            if chosen is None
+            else ConsumerUiEvent(ConsumerUiEventKind.REQUEST_ACTION, action=chosen[0])
+        )
     if key == "enter" and detail is not None:
         return ConsumerUiEvent(ConsumerUiEventKind.NAVIGATE, screen=detail)
     return None

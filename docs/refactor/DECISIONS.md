@@ -6155,3 +6155,48 @@ Evidence: an E2E over the production composition asserts that Details' eligible 
 screen 05's target rows for one, three and undeclared harness sets. For an excluded platform, both
 screens say unavailable and nothing is delivered. A Hypothesis property covers declared/detected
 harness subsets and platform declarations.
+
+## D-262 — Credential Action's permitted actions are rows planned by the credential lifecycle
+
+Date: 2026-09-14 · CP-23 task 12 · Supersedes: the 24 → 26 catalog route
+
+Screen 24 printed `[ Verify ]` and `[ Replace ]` over a screen with no rows, so no key did what
+those labels promised. Nothing in the runtime could replace or delete a credential:
+`application/credential_lifecycle.py` was a deliberately unreachable module (B-074).
+
+- **The rows are the actions the record permits.** Verify and Replace are always rows. Delete is a
+  row only when nothing installed depends on the reference. Enter requests the row under the
+  cursor, and the legend names it: `Verify`, `Review replacement`, `Review deletion`. The subject
+  stays the screen's focus (the credential reference) through the review and back, so moving among
+  the verbs never changes what they act on. Usage, the in-use restriction and "AART never reads or
+  shows its current value" are view status below the rows.
+- **One review screen, 24a (`24a-review-credential-action`).** It follows the 21c/21d precedent: a
+  row's action gets its own review screen rather than an in-place mode. A replacement names every
+  installation that will use the new value (INV-057) and says the provider asks for it (INV-056).
+  A deletion says it cannot be undone. Esc cancels back to 24.
+  - A finished replacement lands on Credential Details. A finished deletion lands on Credentials.
+  - The outcome is a notice on the landing screen.
+- **Verify is answered while it opens.** Preparing it asks the provider and re-reads the machine.
+  Like a repository scan, it leaves nothing to confirm. 24a states the observed health and
+  "nothing was changed", and Enter returns to Credential Details.
+- **Planning is `plan_credential_mutation`, and execution is `CredentialEffectInterpreter`.**
+  - The adapter reads the observation and dependants live, not from the drawn list.
+  - Policy, provider availability and the in-use deletion rule are the lifecycle's own. A
+    replacement's dependants are acknowledged by confirming the review that named them; a deletion
+    is never acknowledged from the TUI.
+  - The review digest is the canonical JSON of the plan, which holds no value.
+  - Execution lends the terminal to the provider's prompt (`QA-081`), then inspects the provider
+    again (INV-176). A replacement not reported `present`, or a deletion not reported `absent`, is
+    a failed run rather than a success.
+- **Effects name the whole reference.** `credential_lifecycle` named effects by input
+  (`github-token`), while `installed_state` and the interpreter use the whole reference
+  (`github-token@macos-keychain:github.com/work`). The planner could never have driven the
+  interpreter. It now uses the whole reference, which also disambiguates one input bound through
+  two providers or accounts.
+- **No Activity receipt yet (B-120).** Receipts are per-artifact lifecycle outcomes, and a credential
+  action is about a reference that may serve several artifacts or none. The 24 → 26 catalog route
+  promised a receipt that nothing could record, so it is replaced by 24 → 24a → 23/22.
+- **Delete is not yet reachable for a real reference.** The Credentials list is derived from
+  installation receipts, so every listed reference has at least one dependant. Unused deletion is
+  held at the projection, reducer and planner, and the adapter refuses in-use deletion. The row
+  appears when a list source can report unused references.

@@ -13,14 +13,15 @@ schema freeze (D-154).
 The exception list is a claim about each name in it, so each one states its reason:
 
 * ``_commit`` -- written by the build, which stamps a commit into release artifacts.
-* ``application.credential_lifecycle`` -- retained for the still-incomplete credential lifecycle,
-  rather than falsely claiming that capability was replaced.
 * ``profiles.loader`` -- reads ``<project>/.agent-artifacts/profiles.json`` over the built-ins.
   Kept, and *not* legacy: INV-001 requires enterprise profiles to live outside the public tool, and
   this is the only mechanism by which a profile defined outside it can get in.  What is wrong is
   that nothing calls it -- ``consumer/runtime.py`` passes ``builtin()`` straight into the consumer
   context, so a project's ``profiles.json`` is read by tests and ignored by the product.  That is a
   capability gap, not dead code; B-072 carries the wiring, D-155 the verdict.
+
+``application.credential_lifecycle`` was on this list, retained for a credential lifecycle nothing
+could run yet. Screen 24's Verify/Replace/Delete rows plan through it now (CP-23 task 12, D-262).
 
 ``domain.collections`` and ``domain.ports`` were on this list and are gone: each was the unadopted
 half of a proposed kernel.  Thirty ``Protocol`` classes are defined across the shipped subsystems,
@@ -44,7 +45,6 @@ RUNTIME_ROOTS = frozenset({"agent_artifacts.__main__", "agent_artifacts.cli"})
 DELIBERATE_NON_RUNTIME_MODULES = frozenset(
     {
         "agent_artifacts._commit",
-        "agent_artifacts.application.credential_lifecycle",
         "agent_artifacts.profiles.loader",
     }
 )

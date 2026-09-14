@@ -1,6 +1,6 @@
 # CP-23 — Actionable TUI workflows after the fourth manual run
 
-Status: IN PROGRESS — TASKS 01–11 DONE; TASK 12 NEXT (owner task 16 added after 13)
+Status: IN PROGRESS — TASKS 01–12 DONE; TASK 13 NEXT (owner task 16 follows 13)
 
 Date: 2026-09-14. Authority: the product owner's manual screen reports and request to create CP-23
 and close CP-22, followed by the all-screen audit and credential guidance requirements.
@@ -1054,3 +1054,115 @@ while Details called it unavailable. It is now refused by placement, naming both
   - eligible harnesses not listed (**1 red**).
 - Walkthrough section 11 adds the Details checks. Scoped `make mutants` and the full suite are left
   to task 15. No human terminal retest is claimed.
+
+### Task 12 — Credential Action rows wired to the credential lifecycle (DONE 2026-09-14)
+
+Before (screen 24, Fast and Verbose identical; no rows, and no key did anything):
+
+```text
+- github-token: choose an action
+    [ Verify ]
+    [ Replace ]
+  Replacing affects
+    • public/mcp/github
+  It cannot be removed while these use it.
+  Replacement stores a new value and verifies what uses it; no old value is kept.
+
+[v] Fast / Verbose
+[↑/↓] Move   [Esc] Back   [?] Help   [q] Quit
+```
+
+After (production adapter over an isolated environment and a recording fake provider):
+
+```text
+> Verify
+  Replace
+
+- github-token in macos-keychain  ✓ Ready
+  Used by
+    • public/mcp/github@1.6.0
+  It cannot be removed while these use it.
+  AART never reads or shows its current value.
+
+[Enter] Verify   [v] Fast / Verbose
+```
+
+On Replace, Verbose describes the row (`Opens a review first. macos-keychain then asks for the new
+value itself; …`), and Enter reads `Review replacement` and opens 24a:
+
+```text
+AART / Credentials / Credential Details / Credential Action / Review Credential Action
+
+- Replace github-token in macos-keychain.
+  macos-keychain asks for the new value in this terminal.
+  AART never reads or shows the current one.
+
+- These use it and will use the new value:
+    • public/mcp/github@1.6.0
+  No copy of the current value is kept, so this cannot be undone.
+
+[Enter] Confirm   [v] Fast / Verbose
+```
+
+Confirming lends the terminal to the provider, re-inspects, and lands on Credential Details with
+`- Replaced github-token in macos-keychain.` Verify answers on 24a (`Checked just now; nothing was
+changed.`, `[Enter] Credential details`).
+
+Design and scope (D-262):
+
+- New screen 24a, action kinds `credential-verify|replace|delete`, and a `_ROW_ACTIONS` table:
+  Enter and the legend read the same row.
+- The adapter plans with `plan_credential_mutation` over a live read and executes through
+  `CredentialEffectInterpreter`.
+- `credential_lifecycle` named effects by input only, so the interpreter could not act on them. It
+  now uses the whole reference, as `installed_state` does.
+- `credential_lifecycle` left the deliberate non-runtime list, and B-074 is resolved.
+- Backing out of 24/24a now keeps the credential as the subject. Before, Esc from 24 showed
+  `No credential is known here.` on 23.
+- Receipts for credential actions, 23's `Actions:` sentence and 24a's title are B-120 or task 14.
+- Unused Delete is held at the projection, reducer and planner. A real Credentials list only holds
+  referenced credentials, so it has no unused row yet.
+
+Evidence:
+
+- `tests/credential_action_rows_test.py` (26 tests) covers:
+  - rows from the permitted actions, Delete only when unused;
+  - no bracketed labels, and consequences in status only;
+  - the Enter label follows the cursor;
+  - Verbose-only row descriptions;
+  - a Hypothesis property: after any moves, Enter requests the row's action on the same reference;
+  - replace/delete review wording, Esc cancel keeping the reference, and confirm executing the
+    reviewed digest on that reference;
+  - landing on 23 or 22, and Verify finishing in place.
+- Adapter tests with a recording fake provider:
+  - Verify inspects only and re-reads health;
+  - preparing Replace touches nothing, and confirming releases the terminal, prompts with no value
+    (`store(secret=None, replace=True)`), restores it and re-inspects;
+  - a mismatched digest runs nothing;
+  - a replacement not reported present fails;
+  - in-use Delete is refused, naming the installation;
+  - an unavailable provider refuses before any prompt, and an unknown reference is refused;
+  - the digest is stable per plan and differs per intent.
+- Shell E2Es run keys, reducer, adapter and frames together: replace reviewed and confirmed, Esc
+  leaves the credential untouched, and Verify reports in place. No frame holds a value shape.
+- `tests/credential_terminal_handover_test.py`'s composition test was already failing at HEAD: its
+  fixture predated D-260's `targets`. Its namespace now carries the fields D-260 reads.
+- Focused runs:
+  - 51 consumer/frame/screen/credential/reachability modules. The only failure was the
+    reachability exception list, now updated.
+  - `make typecheck format-check lint docs-check`: OK.
+- Targeted mutations, all killed:
+  - deletion acknowledges dependants (**1 red**);
+  - no terminal loan (**2**);
+  - an unverified replacement counts as success (**1**);
+  - Verify left pending (**2**);
+  - Enter requests the first row (**6**);
+  - the review forgets the reference (**9**);
+  - Esc forgets the reference (**2**);
+  - Delete lands on Details (**1**);
+  - effects named by input only (**3**);
+  - in-use restriction not stated (**1**);
+  - no rows (**13**). On the first run this mutant hung: `_moved` looped forever looking for a row
+    that no longer existed. The helper is now bounded by the rows, so it fails instead of hanging.
+- Walkthrough section 12 adds the credential action checks. Scoped `make mutants` and the full suite
+  are left to task 15. No human terminal retest is claimed.

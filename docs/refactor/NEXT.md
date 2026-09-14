@@ -2,9 +2,17 @@
 
 ## Current objective — CP-23 (2026-09-14)
 
-**CP-22 is CLOSED. CP-23 tasks 01–11 are done; task 12 is next.** The owner added task 16 (user
+**CP-22 is CLOSED. CP-23 tasks 01–12 are done; task 13 is next** (credential purpose and
+acquisition guidance from Source to the installation prompt). The owner added task 16 (user
 variables and credentials per artifact and harness), which runs after 13 and before the task 14
 audit; its requirements are in the slice.
+Task 12 (D-262): Credential Action's permitted actions (Verify, Replace, and Delete when unused) are
+rows. Enter's label follows the row, and Verbose describes the focused row. Replace and Delete open
+review 24a, which names what uses the credential and says nothing is kept. Confirming plans through
+`plan_credential_mutation`, runs the reviewed digest through `CredentialEffectInterpreter`, and
+re-inspects before landing on Details or Credentials. The terminal is lent to the provider, so AART
+never reads the value. Verify answers in place. Credential actions write no Activity receipt yet
+(B-120).
 Task 11 (D-261): Artifact Details and installation read one eligibility rule. An empty harness or
 platform declaration is unconstrained, and a declared platform excluding this machine refuses
 placement. Details lists eligible and detected-but-not-eligible harnesses separately and drops its

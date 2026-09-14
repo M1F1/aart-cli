@@ -1869,7 +1869,12 @@ Evidence/links: INV-123; INV-078 and INV-080; `docs/testing/PLAN-live-acceptance
 
 ## B-074 — INV-057's warning has no destructive credential flow to attach to
 
-Found: CP-18 step 5 (2026-09-04) · Severity: low · Status: open
+Found: CP-18 step 5 (2026-09-04) · Severity: low · Status: resolved 2026-09-14 (CP-23 task 12, D-262)
+
+Resolution: screen 24's Replace and Delete rows plan through `plan_credential_mutation`. The
+replacement review names every dependant before confirmation, and deletion of a reference anything
+uses is refused by the planner, which the TUI never acknowledges. `credential_lifecycle` is off the
+deliberate non-runtime list.
 
 INV-057 requires that "deleting/replacing/rebinding a credential reference warns about artifacts
 that depend on the same reference before destructive mutation".
@@ -3045,3 +3050,19 @@ must not silently add or remove harness delivery. A future supported harness-mig
 needs its own explicit reconciliation intent, review, effects and receipt rather than overloading
 artifact update. Noncritical: current updates retain the installed targets and task 10 changes no
 update behavior.
+
+## B-120 — Credential actions do not reach Activity
+
+Found 2026-09-14 during CP-23 task 12 (D-262). Verify, Replace and Delete on screen 24 run through
+the credential lifecycle and report on the landing screen, but they record no receipt. Activity
+receipts are per-artifact `LifecycleExecutionOutcome`s, while a credential action is about a
+reference that may serve several artifacts or none. INV-173 asks credential rotation to share the
+receipt machinery. The likely shape is a credential-rotation lifecycle receipt per dependant, plus a
+subject-less record for an unused reference. Two other items were noticed and left as they are:
+
+- Screen 23 still prints `Actions: verify, replace.` above `[Enter] Open` (task 14's audit).
+- 24a's trail reads "Review Credential Action" even when it shows Verify's answer.
+
+Noncritical: no receipt is claimed, the outcome is stated where the action lands, and no value is
+involved.
+

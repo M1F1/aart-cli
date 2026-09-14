@@ -81,7 +81,10 @@ class CredentialPlan:
 
 
 def _effects(intent: CredentialIntent, observation: CredentialObservation) -> tuple[Effect, ...]:
-    reference = str(observation.reference.input)
+    # The whole reference, as `installed_state` names a credential effect: an input name alone is
+    # ambiguous across providers and accounts, and it is the whole reference an interpreter is
+    # given to act on (D-262).
+    reference = str(observation.reference)
     provider = observation.reference.provider.provider
     if intent is CredentialIntent.INSPECT:
         return ()

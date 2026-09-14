@@ -608,7 +608,7 @@
         {
           "id": "12",
           "title": "Make Credential Action rows navigable and wire permitted actions",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "13",

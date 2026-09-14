@@ -16,6 +16,7 @@ from agent_artifacts.application.consumer_session import ConsumerMachine
 from agent_artifacts.application.consumer_ui import (
     ACTION_ANSWER_SCREENS,
     ACTION_REQUEST_SCREENS,
+    ConsumerActionKind,
     ConsumerUiCommand,
     ConsumerUiCommandKind,
     ConsumerUiEvent,
@@ -175,6 +176,8 @@ __all__ = [
     "render_collection",
     "render_credential",
     "render_credential_action",
+    "render_credential_review",
+    "credential_action_purpose",
     "render_dashboard",
     "doctor_rows",
     "doctor_status",
@@ -722,22 +725,93 @@ def render_credential(view: CredentialRecordView, profile: PresentationProfile) 
 def render_credential_action(
     view: CredentialRecordView, profile: PresentationProfile
 ) -> tuple[str, ...]:
-    """Screen 24. What an action would do, and to whom.
+    """Screen 24's view status: the credential the rows act on, who uses it, and what cannot happen.
 
-    Delete is offered only where nothing depends on the credential. A credential something still
-    uses is not deletable from here; the dependants are named instead, because the honest answer to
-    "delete this" is which installations would stop working.
+    CP-23 task 12 (D-262). The actions are the screen's rows, so nothing here names one. What stays
+    is what somebody choosing among them must not miss: which installations depend on the reference
+    (INV-057), that one in use cannot be removed, and that no action reads the current value
+    (INV-056).
     """
 
     if not isinstance(view, CredentialRecordView) or not isinstance(profile, PresentationProfile):
         raise ValueError("credential action rendering needs a record view and presentation profile")
-    lines = [f"{view.input}: choose an action"]
-    lines.extend(f"  [ {item.capitalize()} ]" for item in view.actions)
+    mark, health = _credential_health(view)
+    lines = [f"{view.input} in {view.provider}  {mark} {health}"]
     if view.dependants:
-        lines.append("Replacing affects")
+        lines.append("Used by")
         lines.extend(f"  • {item}" for item in view.dependants)
         lines.append("It cannot be removed while these use it.")
-    lines.append("Replacement stores a new value and verifies what uses it; no old value is kept.")
+    else:
+        lines.append("Nothing installed uses it.")
+    lines.append("AART never reads or shows its current value.")
+    if profile is PresentationProfile.VERBOSE:
+        lines.append(f"Reference: {view.reference}")
+    return tuple(lines)
+
+
+def credential_action_purpose(view: CredentialRecordView, action: str) -> tuple[str, ...]:
+    """What one of screen 24's rows does, for the cursor description (Verbose, D-250)."""
+
+    if not isinstance(view, CredentialRecordView) or not isinstance(action, str):
+        raise ValueError("a credential action purpose needs a record view and an action")
+    if action == "verify":
+        return (
+            f"Asks {view.provider} whether {view.input} is still there;",
+            "nothing is changed.",
+        )
+    if action == "replace":
+        return (
+            f"Opens a review first. {view.provider} then asks for the new value",
+            "itself; AART never reads or shows the current one.",
+        )
+    if action == "delete":
+        return (
+            f"Opens a review first. Removes {view.input} from {view.provider};",
+            "no copy is kept, so it cannot be undone.",
+        )
+    return ()
+
+
+def render_credential_review(
+    view: CredentialRecordView, action: ConsumerActionKind | None
+) -> tuple[str, ...]:
+    """Screen 24a: what a chosen credential action will do, or what verifying it found.
+
+    A replacement names every installation that will use the new value before the provider is
+    asked for it (INV-057), and says the provider asks rather than AART (INV-056). A deletion is
+    only ever reviewed for a reference nothing uses. With no pending action the screen is Verify's
+    answer: the provider was asked while it opened, and nothing was changed.
+    """
+
+    if not isinstance(view, CredentialRecordView) or not (
+        action is None or isinstance(action, ConsumerActionKind)
+    ):
+        raise ValueError("credential review rendering needs a record view and an action")
+    if action is ConsumerActionKind.CREDENTIAL_REPLACE:
+        lines = [
+            f"Replace {view.input} in {view.provider}.",
+            f"{view.provider} asks for the new value in this terminal.",
+            "AART never reads or shows the current one.",
+            "",
+        ]
+        if view.dependants:
+            lines.append("These use it and will use the new value:")
+            lines.extend(f"  • {item}" for item in view.dependants)
+        else:
+            lines.append("Nothing installed uses it.")
+        lines.append("No copy of the current value is kept, so this cannot be undone.")
+        return tuple(lines)
+    if action is ConsumerActionKind.CREDENTIAL_DELETE:
+        return (
+            f"Delete {view.input} from {view.provider}.",
+            "Nothing installed uses it.",
+            "No copy is kept, so this cannot be undone.",
+        )
+    mark, health = _credential_health(view)
+    lines = [f"{view.input} in {view.provider}  {mark} {health}"]
+    if view.detail:
+        lines.append(view.detail)
+    lines.append("Checked just now; nothing was changed.")
     return tuple(lines)
 
 
@@ -1302,6 +1376,7 @@ _REVIEW_SCREENS: frozenset[ApplicationScreen] = frozenset(
         MaintainerScreen.REGISTRY_INIT_REVIEW,
         MaintainerScreen.REGISTRY_REBUILD_REVIEW,
         ConsumerScreen.REGISTRY_SYNC,
+        ConsumerScreen.CREDENTIAL_REVIEW,
     }
 )
 
@@ -1507,6 +1582,11 @@ def _review_facts(state: ConsumerUiState, screens: "ConsumerScreens") -> tuple[s
         return () if purpose is None else (f"Run {stage} only: {purpose}.",)
     if screen is ConsumerScreen.REGISTRY_REMOVE:
         return () if not state.focus else (f"Disconnect {state.focus} from this project.",)
+    if screen is ConsumerScreen.CREDENTIAL_REVIEW:
+        record = screens.credential(state.focus)
+        if record is None:
+            return ("That credential is not known here any more.",)
+        return render_credential_review(record, state.action)
     if screen is ConsumerScreen.REGISTRY_SYNC:
         connected = next(
             (item for item in screens.registries if item.alias == state.focus),
@@ -2236,6 +2316,10 @@ class CanonicalScreenSource:
         if screen is ConsumerScreen.REMEDIATION:
             # CP-23 task 08: Continue is a row, so it is a control rather than a printed string.
             return () if self._screens.plan is None else (ConsumerScreen.READY.value,)
+        if screen is ConsumerScreen.CREDENTIAL_ACTION:
+            # CP-23 task 12: the actions the record permits are the rows (D-262).
+            record = self._screens.credential(state.focus)
+            return () if record is None else record.actions
         if screen is ConsumerScreen.SUCCESS:
             # CP-23 task 06: the choices exist once something ran; before that there is nothing
             # to view, and a row that opens nothing is the gap this replaced.
@@ -2626,6 +2710,11 @@ class CanonicalScreenSource:
             if state.current_row != ConsumerScreen.READY.value or self.detail(state) is None:
                 return ()
             return (_REMEDIATION_CONTINUE,)
+        if state.session.screen is ConsumerScreen.CREDENTIAL_ACTION:
+            record = self._screens.credential(state.focus)
+            if record is None or state.current_row not in record.actions:
+                return ()
+            return credential_action_purpose(record, state.current_row or "")
         if state.session.screen is ConsumerScreen.SUCCESS:
             chosen = self.detail(state)
             return () if not isinstance(chosen, ConsumerScreen) else (SUCCESS_PURPOSE[chosen],)
@@ -2780,6 +2869,10 @@ class CanonicalScreenSource:
                 if state.focus in state.selection
                 else "Not selected for installation.",
             )
+        if screen is ConsumerScreen.CREDENTIAL_ACTION and self.rows(state):
+            record = screens.credential(state.focus)
+            assert record is not None
+            return render_credential_action(record, state.session.profile)
         if screen is ConsumerScreen.REMEDIATION and self.rows(state):
             # CP-23 task 08: the changes are what this view states; Continue is its row.
             assert screens.plan is not None
@@ -2834,6 +2927,11 @@ class CanonicalScreenSource:
             )
         if screen is ConsumerScreen.REMEDIATION and self.rows(state):
             return (f"{'>' if state.current_row == ConsumerScreen.READY.value else ' '} Continue",)
+        if screen is ConsumerScreen.CREDENTIAL_ACTION and self.rows(state):
+            return tuple(
+                f"{'>' if row == state.current_row else ' '} {row.capitalize()}"
+                for row in state.rows
+            )
         if screen is ConsumerScreen.SUCCESS and self.rows(state):
             return tuple(
                 f"{'>' if target.value == state.current_row else ' '} {label}"
