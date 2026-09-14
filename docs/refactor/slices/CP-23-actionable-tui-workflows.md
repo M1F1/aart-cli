@@ -1,6 +1,6 @@
 # CP-23 — Actionable TUI workflows after the fourth manual run
 
-Status: IN PROGRESS — TASKS 01–09 DONE; TASK 10 NEXT
+Status: IN PROGRESS — TASKS 01–09 DONE; TASK 10 IN PROGRESS (handed to Codex)
 
 Date: 2026-09-14. Authority: the product owner's manual screen reports and request to create CP-23
 and close CP-22, followed by the all-screen audit and credential guidance requirements.
@@ -792,3 +792,82 @@ Evidence:
   - the refusal without its way on (**1 red**).
 - Walkthrough sections 7 and 8 check the return, a restart and the refusals. Scoped `make mutants`
   and the full suite are left to task 15. No human terminal retest is claimed.
+
+### Task 10 — Explicit installation harness choice (IN PROGRESS, handed off 2026-09-14)
+
+Not done. Nothing is claimed verified. Committed so far: only the application model in
+`application/consumer_views.py`. It contains:
+
+- `HarnessTargetView(harness, artifacts)`;
+- `target_row`/`target_from_row` (the row key is `target:<harness>`);
+- `target_choice_problems(view, chosen)`, which covers the empty choice, stale/ineligible names and
+  artifacts no chosen harness covers;
+- `targets_confirmed(view, chosen)`;
+- `ConsumerPlanView.targets`/`chosen_targets` (both default `()`, so update flows and existing
+  fixtures are unchanged).
+
+The model has no tests yet. Write them first: they are the red step.
+
+Why a picker is needed: the TUI host (`tui.py` `_canonical_installation_host`) passes every measured
+harness with `profiles_requested=False`. `placement_for` then installs into every measured harness the
+artifact declares, so today the user never chooses. D-241's "no picker needed" is what task 10
+supersedes; its rule that setup follows recorded delivery stays.
+
+Planned design (record as D-260):
+
+1. **Reducer (`application/consumer_ui.py`).**
+   - Add `ConsumerUiState.targets` and `ConsumerUiCommand.targets` (validated like rows).
+   - Add screen 05 to `_SELECTABLE`.
+   - In `_toggle_selection` on 05, toggle a `target:` row in `state.targets` (never in
+     `selection`). When `state.action is INSTALL`, emit `PREPARE_ACTION(INSTALL,
+     selection=state.selection, focus=<the original request focus>, targets=...)`.
+   - Careful: `_request_action` sends `focus=""` from Marketplace, while `state.focus` on 05 is
+     whatever `_navigate` set. Re-send the request's subject, not `state.focus`.
+   - `_request_action` passes `state.targets` for INSTALL.
+   - `_action_recorded` clears `targets`.
+   - Back and `v` keep them (Hypothesis property).
+   - The Enter label on 05 is `Continue`.
+2. **Screen 05 (`tui_consumer.py`).**
+   - Rows are `target:` rows for `plan.targets`, plus stale chosen names, with nothing preselected.
+   - `_body` draws `[x]/[ ] harness`.
+   - `_view_status` holds `render_review_selection`, then the problems or `Installing into: ...`.
+   - `detail` is `None` unless `targets_confirmed(plan, state.targets)`.
+   - The Verbose description says which artifacts that harness hosts.
+   - `render_ready` must stop saying "every harness this machine measured..." and name the chosen
+     harnesses.
+3. **I/O (`io/consumer_actions.py` `_offer_installation`, INSTALL only).**
+   - Prepare as today. Eligibility per harness comes from `draft.placements`: `targets`,
+     `deliveries` and `merges` harness → `str(artifact.version.coordinate)`, in measured order.
+     Eligibility is available even when the draft is not ready.
+   - If `command.targets` has no `target_choice_problems`, prepare again with
+     `replace(host, profiles=chosen)`, keeping `profiles_requested=False`.
+   - Set `plan = replace(plan, targets=..., chosen_targets=chosen or ())`, and set `_pending_host`
+     to the narrowed host.
+   - `_execute_installation` must refuse when targets exist but none are chosen: no mutation with
+     an empty set.
+4. **Existing E2E install key sequences** (e.g. `tests/consumer_application_e2e_test.py`
+   `_INSTALL = (SPACE, "i", ENTER, ENTER)`) need a Space on 05 before Enter.
+5. **Owner request (2026-09-14):**
+   - The manual lab's test MCP and Skill must be installable into opencode and Tabnine as well as
+     Claude, so harness choice and the opencode installer can be tested.
+   - In `scripts/manual_test.py` the `manual-check` Skill and `dummy-mcp` manifests declare
+     `compatibility.harnesses: ["claude"]`. Widen both to `["claude", "opencode", "tabnine"]` and
+     update `tests/manual_test_lab_test.py`.
+   - Tabnine MCP (`.tabnine/agent/settings.json`) and Tabnine Skill delivery
+     (`.tabnine/agent/skills/<name>`, project scope only) must be covered by a real isolated
+     filesystem E2E through the chosen-target path.
+6. **Tests required by the slice:**
+   - one, many and zero eligible harnesses;
+   - multi-artifact compatibility;
+   - cancel/Back;
+   - policy restriction;
+   - a stale choice refused visibly;
+   - real delivery only to the chosen harnesses, with receipt profiles equal to the choice;
+   - no mutation with an empty choice;
+   - Hypothesis subset/persistence properties.
+7. **Then:**
+   - D-260 (and a BACKLOG note that updates keep their installed harnesses);
+   - TODO 10, NEXT, MIGRATION_STATUS, walkthrough section 11;
+   - focused gates only (`make typecheck format-check lint docs-check` plus the touched test
+     modules, per owner instruction) and targeted mutations;
+   - `handoff-plan done CP-23.10`, then commit.

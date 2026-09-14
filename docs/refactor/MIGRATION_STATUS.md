@@ -1,6 +1,6 @@
 # AART Refactor Migration Status
 
-**2026-09-14: CP-22 CLOSED; CP-23 tasks 01–09 done, task 10 next.**
+**2026-09-14: CP-22 CLOSED; CP-23 tasks 01–09 done, task 10 in progress (partial model committed; design in the slice).**
 Task 09 (D-259): a Candidate the Registry trees already record reads `Promoted locally` (or
 `Promoted`), and review, diff, bulk and the transaction refuse it. A restart derives the same state.
 Ten targeted mutations were killed.

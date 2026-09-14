@@ -64,6 +64,12 @@ from .maintainer_views import MaintainerScreen, maintainer_navigation_targets
 from .removal_proposal import RemovalProposal
 
 __all__ = [
+    "TARGET_ROW_PREFIX",
+    "HarnessTargetView",
+    "target_choice_problems",
+    "target_from_row",
+    "target_row",
+    "targets_confirmed",
     "ActivityDayView",
     "ActivityEntry",
     "ActivityOutcome",
@@ -201,6 +207,89 @@ def _identity(data: object) -> str:
 
 def _risk_label(name: str) -> str:
     return name.lower().replace("_", "-")
+
+
+#: How screen 05 addresses one harness row, so a row is never a bare name a renderer must guess at.
+TARGET_ROW_PREFIX = "target:"
+
+
+@dataclass(frozen=True, slots=True)
+class HarnessTargetView:
+    """One harness a selection can be installed into, and which of its artifacts it can host.
+
+    Eligibility is derived: the artifact's declared compatibility, the measured target tables for
+    its kind at this scope, and policy. Choosing among these is the user's intent (D-260).
+    """
+
+    harness: str
+    artifacts: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.harness, str)
+            or not self.harness
+            or ":" in self.harness
+            or any(character in self.harness for character in "\r\n")
+            or not isinstance(self.artifacts, tuple)
+            or not self.artifacts
+            or any(not isinstance(item, str) or not item for item in self.artifacts)
+        ):
+            raise ValueError("a harness target view is invalid")
+
+
+def target_row(harness: str) -> str:
+    return f"{TARGET_ROW_PREFIX}{harness}"
+
+
+def target_from_row(row: str) -> str | None:
+    if not isinstance(row, str) or not row.startswith(TARGET_ROW_PREFIX):
+        return None
+    harness = row[len(TARGET_ROW_PREFIX) :]
+    return harness or None
+
+
+def target_choice_problems(view: ConsumerPlanView, chosen: tuple[str, ...]) -> tuple[str, ...]:
+    """Why these chosen harnesses cannot be installed into, in words; empty when they can.
+
+    A plan that offers no choice has nothing to object to. Otherwise the choice must name at least
+    one harness, every name must still be eligible (a stale choice is refused, never replaced), and
+    every artifact must be hosted by some chosen harness.
+    """
+
+    if not view.targets:
+        return ()
+    if not chosen:
+        return ("Choose at least one harness to install into.",)
+    eligible = {item.harness: item for item in view.targets}
+    problems = [
+        f"{harness} cannot host anything in this selection; untick it."
+        for harness in chosen
+        if harness not in eligible
+    ]
+    hosted = {
+        artifact
+        for harness in chosen
+        if harness in eligible
+        for artifact in eligible[harness].artifacts
+    }
+    for artifact in view.selection.resolved:
+        if artifact in hosted:
+            continue
+        options = ", ".join(item.harness for item in view.targets if artifact in item.artifacts)
+        problems.append(
+            f"None of the chosen harnesses can host {artifact}; it can go into {options}."
+            if options
+            else f"No eligible harness can host {artifact}."
+        )
+    return tuple(problems)
+
+
+def targets_confirmed(view: ConsumerPlanView, chosen: tuple[str, ...]) -> bool:
+    """Whether this plan is the one prepared for exactly these chosen harnesses, and may continue."""
+
+    if not view.targets:
+        return True
+    return not target_choice_problems(view, chosen) and set(chosen) == set(view.chosen_targets)
 
 
 @dataclass(frozen=True, slots=True)
@@ -442,6 +531,12 @@ class ConsumerPlanView:
     inputs: tuple[InputView, ...]
     review_digest: str
     policy_digest: str
+    #: The harnesses this selection could be installed into, each with the artifacts it can host.
+    #: Empty for a plan that offers no choice (an update keeps what is installed). CP-23 task 10.
+    targets: tuple[HarnessTargetView, ...] = ()
+    #: The harnesses this plan was prepared for, as somebody chose them. Empty while nothing is
+    #: chosen: such a plan is eligibility to choose from, never a plan to confirm (D-260).
+    chosen_targets: tuple[str, ...] = ()
 
     @property
     def semantic_identity(self) -> str:

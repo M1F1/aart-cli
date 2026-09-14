@@ -2,7 +2,9 @@
 
 ## Current objective — CP-23 (2026-09-14)
 
-**CP-22 is CLOSED. CP-23 tasks 01–09 are done; task 10 is next.**
+**CP-22 is CLOSED. CP-23 tasks 01–09 are done; task 10 is in progress (handed to Codex).**
+Task 10's partial model and its full planned design, including the owner's opencode/Tabnine lab
+request, are under "Task 10" at the end of the slice. Read that first.
 Task 09 (D-259): whether a Candidate is already promoted is read from the Registry trees on every
 composition, so it reads `Promoted locally` after the commit and after a restart, and no screen or
 transaction offers it again (B-118 tracks the Source counts).
