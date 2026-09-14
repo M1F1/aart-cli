@@ -330,7 +330,8 @@ class CodexMcpInstallationTest(unittest.TestCase):
 
         self._install()
 
-        command = self._listed()[0]["transport"]["command"]
+        transport = self._listed()[0]["transport"]
+        command = [transport["command"], *(transport.get("args") or [])]
         reply = speak(command, [{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {}}])
         answers = json.loads(reply[0]["result"]["content"][0]["text"])
 

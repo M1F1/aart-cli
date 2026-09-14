@@ -4,10 +4,16 @@ The projection is derived, never authored. It comes from the artifact's own envi
 contract and its bound inputs, and it exists so that nothing else has to be present at run time --
 not AART, not a package installer, not a network. A harness records one path and executes it.
 
-Two rules decide the shape of the file. A secret is never written: the script holds the command
-that asks the provider for it, and the value exists only inside the launched process. Everything
-else is a value that has already been reviewed, so it is quoted, once, by the domain's quoter, and
-never concatenated into a command line by hand.
+Three rules decide the shape of the file. A secret is never written: the script holds the command
+that asks the provider for it, and the value exists only inside the launched process. A
+configuration value is not written either: it lives in the configuration file of the harness that
+started the launcher, beside the artifact (D-264), and is read line by line with `read -r`, so it is
+text in a variable and never a word the shell interprets. Everything the script does hold -- paths,
+argument names -- is quoted, once, by the domain's quoter, and never concatenated by hand.
+
+Configuration is per harness, and the launcher is shared, so a launcher that reads configuration is
+started with one argument: the harness that started it. Each harness registration passes its own
+name. A launcher for an artifact with no configuration takes no argument and reads no file.
 """
 
 from __future__ import annotations
@@ -15,9 +21,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
+from agent_artifacts.domain.configuration_files import (
+    CONFIGURATION_DIRECTORY,
+    CONFIGURATION_FILE_INVALID,
+    CONFIGURATION_SUFFIX,
+    ConfigurationFileRecord,
+    configuration_file_path,
+    render_configuration_file,
+)
 from agent_artifacts.domain.credentials import CredentialReference
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.identifiers import ObjectDigest
+from agent_artifacts.domain.identifiers import InputId, ObjectDigest
 from agent_artifacts.domain.inputs import (
     BoundInput,
     BoundInputs,
@@ -41,8 +55,10 @@ LAUNCHER_TRANSPORT_CONFLICT = DiagnosticCode("launcher-transport-conflict")
 # would not answer. Both are ordinary repair cases, and neither is the artifact failing.
 MISSING_ENVIRONMENT_STATUS = 78
 UNRESOLVED_CREDENTIAL_STATUS = 77
+MISSING_CONFIGURATION_STATUS = 76
 
 _SECRET_VARIABLE_PREFIX = "AART_SECRET_"
+_CONFIG_VARIABLE_PREFIX = "AART_CONFIG_"
 
 
 class CredentialResolutionPort(Protocol):
@@ -73,12 +89,117 @@ class RuntimeProjection:
         return self.path
 
 
+@dataclass(frozen=True, slots=True)
+class ConfigurationProjection:
+    """One harness's configuration file for one installed artifact, with the digest it must have."""
+
+    harness: str
+    path: str
+    content: str
+    digest: ObjectDigest
+
+    def __post_init__(self) -> None:
+        # The record's own checks: a harness slug, and the path of that harness's file.
+        ConfigurationFileRecord(self.harness, self.path, self.digest)
+        if not isinstance(self.content, str) or not self.content:
+            raise ValueError("a configuration projection has content")
+
+    @property
+    def record(self) -> ConfigurationFileRecord:
+        return ConfigurationFileRecord(self.harness, self.path, self.digest)
+
+
+def configuration_projection(
+    environment: ArtifactEnvironment, harness: str, values: tuple[tuple[InputId, str], ...]
+) -> Result[ConfigurationProjection]:
+    """The file `harness` reads `values` from. Pure; a value unfit for the file is refused here."""
+
+    try:
+        content = render_configuration_file(environment.artifact, harness, values)
+        return Ok(
+            ConfigurationProjection(
+                harness,
+                configuration_file_path(environment.root, harness),
+                content,
+                sha256_bytes(content.encode("utf-8")),
+            )
+        )
+    except ValueError as error:
+        return _error(CONFIGURATION_FILE_INVALID, f"{environment.artifact}: {error}")
+
+
 def _error(code: DiagnosticCode, message: str) -> Err:
     return Err((Diagnostic(code, Severity.ERROR, message),))
 
 
 def _secret_variable(bound: BoundInput) -> str:
     return _SECRET_VARIABLE_PREFIX + bound.input.id.value.upper().replace("-", "_")
+
+
+def _config_variable(bound: BoundInput) -> str:
+    return _CONFIG_VARIABLE_PREFIX + bound.input.id.value.upper().replace("-", "_")
+
+
+def _configuration_reader(environment: ArtifactEnvironment, items: list[BoundInput]) -> list[str]:
+    """Read each configured value from the starting harness's file, or stop saying which is missing.
+
+    Nothing read is evaluated: `IFS= read -r` keeps the line exactly, a `case` pattern matches the
+    literal input id, and the value is taken with a prefix removal into a variable that is only ever
+    expanded inside double quotes.
+    """
+
+    artifact = shell_quote(environment.artifact)
+    directory = shell_quote(f"{environment.root}/{CONFIGURATION_DIRECTORY}/")
+    status = MISSING_CONFIGURATION_STATUS
+    lines = [
+        'AART_HARNESS="${1-}"',
+        'case "$AART_HARNESS" in',
+        "  ''|*[!a-z0-9-]*)",
+        "    printf 'aart: %s was started without the harness whose configuration it reads; "
+        f"repair the installation\\n' {artifact} >&2",
+        f"    exit {status}",
+        "    ;;",
+        "esac",
+        f'AART_CONFIGURATION={directory}"$AART_HARNESS"{shell_quote(CONFIGURATION_SUFFIX)}',
+        'if [ ! -r "$AART_CONFIGURATION" ]; then',
+        "  printf 'aart: %s has no configuration for %s; set it in AART under User variables "
+        f'and credentials\\n\' {artifact} "$AART_HARNESS" >&2',
+        f"  exit {status}",
+        "fi",
+    ]
+    for item in items:
+        variable = _config_variable(item)
+        lines.append(f"{variable}=")
+    lines.append('while IFS= read -r aart_line || [ -n "$aart_line" ]; do')
+    lines.append('  case "$aart_line" in')
+    for item in items:
+        identifier = item.input.id.value
+        variable = _config_variable(item)
+        lines.extend(
+            [
+                f"    {shell_quote(identifier + '=')}*)",
+                f'      if [ -n "${variable}" ]; then',
+                f"        printf 'aart: %s sets %s twice in %s\\n' {artifact} "
+                f'{shell_quote(identifier)} "$AART_CONFIGURATION" >&2',
+                f"        exit {status}",
+                "      fi",
+                f'      {variable}="${{aart_line#{identifier}=}}"',
+                "      ;;",
+            ]
+        )
+    lines.extend(["  esac", 'done < "$AART_CONFIGURATION"'])
+    for item in items:
+        variable = _config_variable(item)
+        lines.extend(
+            [
+                f'if [ -z "${variable}" ]; then',
+                f"  printf 'aart: %s has no value for %s in %s\\n' {artifact} "
+                f'{shell_quote(item.input.id.value)} "$AART_CONFIGURATION" >&2',
+                f"  exit {status}",
+                "fi",
+            ]
+        )
+    return lines
 
 
 def _resolution_argv(
@@ -115,6 +236,16 @@ def generate_launcher(
     exports: list[str] = []
     assignments: list[str] = []
     arguments: list[str] = [shell_quote(argument) for argument in contract.arguments]
+    configured = [
+        item for item in bound.inputs if not isinstance(item.source, SecretProviderReference)
+    ]
+    for item in configured:
+        if _config_variable(item) in declared:
+            return _error(
+                LAUNCHER_INVALID,
+                f"input {item.input.id} needs the shell variable {_config_variable(item)}, which "
+                "another input already binds to the environment",
+            )
 
     for item in bound.inputs:
         binding = item.binding
@@ -170,7 +301,7 @@ def generate_launcher(
                 arguments.extend([shell_quote(binding.argument), f'"${variable}"'])
             continue
 
-        value = shell_quote(item.source.value)
+        value = f'"${_config_variable(item)}"'
         if isinstance(binding, EnvironmentBinding):
             assignments.append(f"{binding.variable}={value}")
             exports.append(f"export {binding.variable}")
@@ -182,7 +313,8 @@ def generate_launcher(
                 f"input {item.input.id} uses a binding this launcher cannot render",
             )
 
-    content = _render(environment, contract, assignments, exports, arguments)
+    reader = _configuration_reader(environment, configured) if configured else []
+    content = _render(environment, contract, reader + assignments, exports, arguments)
     try:
         return Ok(
             RuntimeProjection(
@@ -209,7 +341,8 @@ def _render(
         "#!/bin/sh",
         f"# Generated by AART for {environment.artifact}. Do not edit: repairing or updating this",
         "# artifact rewrites this file. It is a projection of the installation, not its source.",
-        "# It holds no secret value; each one is read from its provider when this script runs.",
+        "# It holds no secret and no configuration value: secrets are read from their provider and",
+        "# configuration from the starting harness's file under config/ when this script runs.",
         "set -eu",
         "",
         f"AART_INTERPRETER={interpreter}",

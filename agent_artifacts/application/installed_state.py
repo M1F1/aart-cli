@@ -133,6 +133,15 @@ def desired_state_from_receipt(
             )
         )
 
+    # One per harness, each its own component: changing one harness's values is a change to that
+    # file alone, never to the launcher or another harness (INV-179, D-264).
+    components.extend(
+        DesiredComponent(
+            ComponentId(Component.CONFIGURATION, record.harness),
+            (WriteFile(record.path, str(record.digest), False),),
+        )
+        for record in receipt.configuration_files
+    )
     components.append(
         DesiredComponent(
             ComponentId(Component.LAUNCHER),
@@ -581,6 +590,22 @@ def current_state_from_observation(
         else:
             state = ComponentState.MATCHED
         components.append(ObservedComponent(ComponentId(Component.HARNESS, harness), state))
+
+    expected_configuration = {
+        record.harness: record.digest for record in receipt.configuration_files
+    }
+    for harness, present, digest in observation.configuration_files:
+        if not present:
+            configuration = ComponentState.ABSENT
+        elif digest is None:
+            configuration = ComponentState.UNKNOWN
+        elif digest == expected_configuration.get(harness):
+            configuration = ComponentState.MATCHED
+        else:
+            configuration = ComponentState.DIVERGENT
+        components.append(
+            ObservedComponent(ComponentId(Component.CONFIGURATION, harness), configuration)
+        )
 
     components.extend(
         ObservedComponent(ComponentId(Component.CREDENTIAL, name), state)

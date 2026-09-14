@@ -1,6 +1,6 @@
 # CP-23 — Actionable TUI workflows after the fourth manual run
 
-Status: IN PROGRESS — TASKS 01–13 DONE; OWNER TASK 16 NEXT (then 14, 15)
+Status: IN PROGRESS — TASKS 01–13 DONE; OWNER TASK 16 IN PROGRESS (16.1 done; handed to Codex), then 14, 15
 
 Date: 2026-09-14. Authority: the product owner's manual screen reports and request to create CP-23
 and close CP-22, followed by the all-screen audit and credential guidance requirements.
@@ -1289,3 +1289,87 @@ Evidence:
     anyway. The test now uses 30 columns, and the mutant is killed.
 - Scoped mutmut and the full suite belong to task 15. No human terminal retest is claimed.
 
+### Task 16 — User variables and credentials (IN PROGRESS, handed off 2026-09-14)
+
+Increment 16.1 is done (D-264). Increments 16.2–16.5 are not started.
+
+#### 16.1 — Configuration lives per harness beside the installed artifact (DONE)
+
+- `domain/configuration_files.py` is new. It covers:
+  - the path `<artifact root>/config/<harness>.conf`;
+  - one plain `input-id=value` format;
+  - `configuration_value_problem`, which refuses empty, control/format characters, surrounding
+    space and credential shapes;
+  - a strict `parse_configuration_file`;
+  - `ConfigurationFileRecord`, which holds a harness, path and digest and never a value.
+- Planning (`artifact_installation.py`, `installation_proposal.py`):
+  - A configured artifact gets one `ConfigurationProjection` per chosen harness.
+  - Each harness registration passes its own harness as the single launcher argument.
+  - `PlannedInstallation` refuses a plan whose files and registrations disagree, or whose file
+    content is not the reviewed values.
+- The launcher (`application/runtime_projection.py`) holds no configuration value. When the
+  artifact has configuration, it reads `config/$1.conf` with `read -r`, so nothing is evaluated.
+  It exits 76 with a message pointing at "User variables and credentials" when:
+  - the harness argument is missing or invalid;
+  - the file is missing;
+  - a value is empty or repeated.
+- Receipts record `configuration_files` (path and digest) only when configured, so older receipts
+  are unchanged.
+- Desired state has one `configuration:<harness>` WriteFile component per file. Observation hashes
+  each file:
+  - as written → MATCHED;
+  - edited → DIVERGENT;
+  - missing → ABSENT;
+  - unreadable → UNKNOWN.
+- `io/installation_execution.py` offers the file content to the file interpreter.
+- Evidence:
+  - `tests/configuration_files_test.py` (Hypothesis round-trip and credential-shape refusal);
+  - `tests/harness_configuration_planning_test.py` (Hypothesis over harness subsets);
+  - `tests/runtime_projection_test.py` `LauncherReadsHarnessConfigurationTest` (real sh, a
+    Hypothesis property that a hostile value reaches the process as exact text and runs nothing);
+  - `tests/configured_installation_action_e2e_test.py`
+    `test_configuration_lands_per_harness_beside_the_artifact_and_nowhere_in_aart_state` (claude
+    and tabnine files, mode 0600, `args` per harness, value absent from data root, launcher and
+    settings).
+  - The wide affected set (922 tests) passed, and typecheck, format-check, lint and docs-check are
+    OK.
+- **Not yet done for 16.1:** targeted mutations are not recorded. Candidates:
+  - drop registration args;
+  - skip the credential-shape check;
+  - drop offering the config content;
+  - DIVERGENT→MATCHED;
+  - drop the launcher's duplicate check;
+  - drop the receipt record.
+
+#### Remaining increments (design; not implemented)
+
+- **16.2 — install-time form.** Today, unanswered ConfigInputs in `LocalConsumerActions._offer_installation`
+  decline with "waiting for answers this screen cannot collect yet". The review digest binds
+  config values, so the values must come before screen 05. The design:
+  - Route to screen 07 in *form* mode first. Its rows are the config input ids, with any default
+    prefilled as editable text that is never submitted without Enter. A final continue row follows.
+  - Use the existing form-key pattern: REGISTRY_ADD/SOURCE_ADD rows, printable keys and paste
+    append, Backspace trims.
+  - Show inline problems from `validate_config_value` and `configuration_value_problem`.
+  - Continue re-issues PREPARE_ACTION INSTALL with the answers on the command. They become
+    `PromptedConfigValue` sources, and the flow then runs 05 → 07 summary → Ready.
+  - Secrets keep the auto-bound provider reference and the task 12/13 handoff.
+  - Record this as D-265.
+  - E2E: real isolated files for each chosen harness (task 10 selection), no value in AART state.
+- **16.3 — area.** Add one "User variables and credentials" area grouped by installed artifact,
+  with separate Configuration and Credentials sections (INV-067).
+  - Configuration is read from each receipt's `configuration_files`, via parse plus digest:
+    matches / changed outside AART / missing / unreadable.
+  - Credentials come from provider references and observations, extending task 12's Credentials
+    view.
+- **16.4 — edit.** A value is edited for one harness, a chosen set or all of them (reuse task 10
+  selection).
+  - The edit is a reviewed, receipted `configure_intent` mutation that writes only CONFIGURATION
+    components (INV-179), offers the new content and updates receipt digests.
+  - It needs Hypothesis properties for scope selection and redaction.
+- **16.5 — credentials from the area.** Set and replace use task 12 actions with the task 13
+  briefing (terminal handoff plus verify, INV-180).
+- **Close-out:**
+  - update NEXT, MIGRATION_STATUS, TODO.md and `docs/testing/TUI_MANUAL_WALKTHROUGH.md`;
+  - add a candidate spec revision note for §96/§97 (already stated in D-264);
+  - run `handoff-plan done CP-23.16`.

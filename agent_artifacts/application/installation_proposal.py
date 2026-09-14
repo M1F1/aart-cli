@@ -21,6 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import TypeAlias
 
+from agent_artifacts.domain.configuration_files import parse_configuration_file
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.effects import Effect
 from agent_artifacts.domain.harness import McpRegistration
@@ -58,7 +59,7 @@ from .intents import (
     plan_lifecycle_intent,
     supersession_intent,
 )
-from .runtime_projection import RuntimeProjection
+from .runtime_projection import ConfigurationProjection, RuntimeProjection
 
 __all__ = [
     "PROPOSAL_INVALID",
@@ -105,6 +106,8 @@ class PlannedInstallation:
     requirements: tuple[Requirement, ...] = ()
     runtime: str | None = None
     declared: tuple[RuntimeInput, ...] = ()
+    #: One configuration file per harness when the artifact has configuration values (D-264).
+    configuration: tuple[ConfigurationProjection, ...] = ()
 
     def __post_init__(self) -> None:
         if (
@@ -119,6 +122,33 @@ class PlannedInstallation:
             raise ValueError("a planned launcher belongs to the artifact root it is generated for")
         if any(not isinstance(item, McpRegistration) for item in self.registrations):
             raise ValueError("planned harness registrations are invalid")
+        if any(not isinstance(item, ConfigurationProjection) for item in self.configuration):
+            raise ValueError("planned configuration files are invalid")
+        configured = {item.harness: item for item in self.configuration}
+        if len(configured) != len(self.configuration):
+            raise ValueError("one harness reads one configuration file of an artifact")
+        for item in self.configuration:
+            if not item.path.startswith(f"{self.environment.root}/"):
+                raise ValueError("a configuration file belongs to the artifact root it configures")
+        if self.configuration or self.bound.config_values:
+            # Each harness that starts the launcher must name the file it reads, and every file
+            # must be read by a harness: a file nobody names configures nothing, and a harness
+            # naming no file starts a launcher that stops for want of one.
+            if {item.target.harness for item in self.registrations} != set(configured):
+                raise ValueError("every harness starting a configured artifact has its own file")
+            for item in self.configuration:
+                # At install every harness starts from the values that were reviewed; a file
+                # holding anything else would configure something nobody confirmed.
+                if parse_configuration_file(item.content) != Ok(self.bound.config_values):
+                    raise ValueError(
+                        f"the configuration planned for {item.harness} is not the reviewed values"
+                    )
+            for registration in self.registrations:
+                if registration.arguments != (registration.target.harness,):
+                    raise ValueError(
+                        f"harness {registration.target.harness} would not name the "
+                        "configuration it starts with"
+                    )
         for registration in self.registrations:
             # A harness entry that names anything else would start something this plan never
             # reviewed, and no later inspection of the launcher would notice.
@@ -203,6 +233,8 @@ def intended_receipt(planned: PlannedInstallation) -> InstallationReceipt:
         # See `intended_placement_receipt`: which package this is, written down where the plan
         # already knows it.
         object_digest=planned.artifact.version.object_digest,
+        # Where each harness's configuration is and its digest; never the values (D-264).
+        configuration_files=tuple(item.record for item in planned.configuration),
     )
 
 

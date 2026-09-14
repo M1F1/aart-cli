@@ -122,6 +122,8 @@ def interpreters_for(
             continue
         files = FileEffectInterpreter(installation.environment)
         files.offer(installation.launcher.content.encode("utf-8"))
+        for configuration in installation.configuration:
+            files.offer(configuration.content.encode("utf-8"))
         interpreters.append(files)
         interpreters.append(
             RuntimeEffectInterpreter(

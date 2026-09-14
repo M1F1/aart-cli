@@ -19,8 +19,10 @@ import json
 import os
 import pathlib
 import secrets
+import stat
 import tempfile
 import unittest
+from dataclasses import replace
 from datetime import date
 
 from agent_artifacts.application.execution import InstallationExecutionStatus
@@ -262,6 +264,44 @@ class ConfiguredInstallationActionTest(unittest.TestCase):
 
         self.assertIn(self.token, pathlib.Path(self.provider.path).read_text(encoding="utf-8"))
         self.assertNotIn(self.token, surfaces)
+
+    def test_configuration_lands_per_harness_beside_the_artifact_and_nowhere_in_aart_state(
+        self,
+    ) -> None:
+        """D-264: the answered value is in each harness's file under the artifact, and only there."""
+
+        value = "platform-team-e2e"
+        self.host = replace(self.host, profiles=("claude", "tabnine"))
+        prepared = self._prepare(
+            sources=(PromptedConfigValue(ORG, value), SecretProviderReference(TOKEN, REFERENCE))
+        )
+        self.assertIsInstance(prepared, Ok, getattr(prepared, "diagnostics", ()))
+        completed = self._complete(prepared.value)
+        self.assertIsInstance(completed, Ok, getattr(completed, "diagnostics", ()))
+
+        root = pathlib.Path(self._installed_root(prepared.value))
+        files = sorted((root / "config").iterdir())
+        self.assertEqual([path.name for path in files], ["claude.conf", "tabnine.conf"])
+        for path in files:
+            self.assertIn(f"{ORG}={value}\n", path.read_text(encoding="utf-8"))
+            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+
+        project = pathlib.Path(self.project_root)
+        claude = json.loads((project / ".mcp.json").read_text(encoding="utf-8"))
+        tabnine = json.loads((project / ".tabnine/agent/settings.json").read_text(encoding="utf-8"))
+        self.assertEqual(claude["mcpServers"]["github"]["args"], ["claude"])
+        self.assertEqual(tabnine["mcpServers"]["github"]["args"], ["tabnine"])
+
+        # Nothing AART keeps -- receipts, lock, journal, object store -- holds the value, and
+        # neither do the launcher and the harness settings that name the files.
+        elsewhere = [
+            path
+            for path in (*pathlib.Path(self.data_root).rglob("*"), *project.rglob("*"))
+            if path.is_file()
+            and path not in files
+            and value in path.read_text(encoding="utf-8", errors="replace")
+        ]
+        self.assertEqual(elsewhere, [])
 
     def test_a_review_the_caller_did_not_confirm_is_refused_before_the_lease(self) -> None:
         prepared = self._prepare()

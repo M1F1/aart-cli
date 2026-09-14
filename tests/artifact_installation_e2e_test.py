@@ -376,8 +376,9 @@ class AuthoredInstallationTest(unittest.TestCase):
         settings = json.loads(
             (self.scope / ".tabnine/agent/settings.json").read_text(encoding="utf-8")
         )
+        entry = settings["mcpServers"]["github"]
         reply = speak(
-            settings["mcpServers"]["github"]["command"],
+            [entry["command"], *entry.get("args", [])],
             [{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {}}],
         )
         return json.loads(reply[0]["result"]["content"][0]["text"])

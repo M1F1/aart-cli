@@ -29,7 +29,10 @@ from agent_artifacts.application.installed_state import (
     removal_state_from_receipt,
 )
 from agent_artifacts.application.reconciliation import plan_repair
-from agent_artifacts.application.runtime_projection import generate_launcher
+from agent_artifacts.application.runtime_projection import (
+    configuration_projection,
+    generate_launcher,
+)
 from agent_artifacts.domain.credentials import CredentialProviderRef
 from agent_artifacts.domain.effects import CreatePythonEnvironment
 from agent_artifacts.domain.harness import McpRegistration, Scope, mcp_target
@@ -108,8 +111,16 @@ class InstalledFixture(unittest.TestCase):
             resolvers=(self.provider,),  # type: ignore[arg-type]
         ).value
         LocalProjectionWriter(self.environment).write(self.projection)
+        # The harness's own configuration file, which the shared launcher reads (D-264).
+        self.configuration = configuration_projection(
+            self.environment, "tabnine", self.bound().config_values
+        ).value
+        pathlib.Path(self.configuration.path).parent.mkdir(parents=True)
+        pathlib.Path(self.configuration.path).write_text(
+            self.configuration.content, encoding="utf-8"
+        )
         self.registration = McpRegistration(
-            mcp_target("tabnine", Scope.PROJECT), "github", self.projection.command
+            mcp_target("tabnine", Scope.PROJECT), "github", self.projection.command, ("tabnine",)
         )
         self.registry.register(self.registration)
         self.receipt = InstallationReceipt(
@@ -122,6 +133,7 @@ class InstalledFixture(unittest.TestCase):
             (self.registration,),
             self.bound().credential_references,
             base_interpreter=sys.executable,
+            configuration_files=(self.configuration.record,),
         )
         self.desired = desired_state_from_receipt(
             COORDINATE, self.receipt, base_interpreter=sys.executable
@@ -147,6 +159,7 @@ class InstalledFixture(unittest.TestCase):
     def interpreters(self):
         files = FileEffectInterpreter(self.environment)
         files.offer(self.projection.content.encode("utf-8"))
+        files.offer(self.configuration.content.encode("utf-8"))
         return (
             files,
             RuntimeEffectInterpreter(LocalPythonRuntime(self.environment)),
@@ -188,8 +201,9 @@ class InstalledFixture(unittest.TestCase):
         settings = json.loads(
             (self.scope / ".tabnine/agent/settings.json").read_text(encoding="utf-8")
         )
+        entry = settings["mcpServers"]["github"]
         reply = speak(
-            settings["mcpServers"]["github"]["command"],
+            [entry["command"], *entry.get("args", [])],
             [{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {}}],
         )[0]
         return json.loads(reply["result"]["content"][0]["text"])

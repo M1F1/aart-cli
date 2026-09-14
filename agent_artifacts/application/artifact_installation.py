@@ -53,7 +53,12 @@ from .installation_planning import (
 )
 from .installation_proposal import PlannedArtifact, PlannedInstallation
 from .python_environment import dependency_installation, select_python_installer
-from .runtime_projection import CredentialResolutionPort, generate_launcher
+from .runtime_projection import (
+    ConfigurationProjection,
+    CredentialResolutionPort,
+    configuration_projection,
+    generate_launcher,
+)
 
 __all__ = [
     "INSTALLATION_NOT_DESCRIBED",
@@ -189,12 +194,25 @@ def plan_artifact_installation(
             environment, description.dependencies, installer.value
         )
 
+    # Configuration is kept per harness beside the artifact (D-264): every harness gets its own file,
+    # holding the values answered at install, and its registration names it so the shared launcher
+    # reads the right one. An artifact with no configuration keeps an argument-free registration.
+    values = bound.value.config_values
+    configuration: list[ConfigurationProjection] = []
+    if values:
+        for target in targets:
+            projected = configuration_projection(environment, target.harness, values)
+            if isinstance(projected, Err):
+                return projected
+            configuration.append(projected.value)
+
     try:
         registrations = tuple(
             McpRegistration(
                 target,
                 identity.name,
                 launcher.value.command,
+                (target.harness,) if values else (),
                 transport=contract.transport,
             )
             for target in targets
@@ -213,6 +231,7 @@ def plan_artifact_installation(
                 requirements_for(description, targets=targets),
                 description.runtime,
                 description.inputs,
+                tuple(configuration),
             )
         )
     except ValueError as error:

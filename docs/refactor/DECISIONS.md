@@ -6259,3 +6259,47 @@ words, in Fast, immediately before entry. Emoji joiners and other format charact
 accepted in guidance text; nothing that explains an input needs them. Sharing one credential across
 two artifacts in one transaction still fails the second artifact's pre-check. That defect already
 existed without these changes and is B-121.
+
+## D-264 — Configuration values live per harness beside the installed artifact; the launcher reads them
+
+Date: 2026-09-14 (CP-23 task 16, first increment).
+
+**Context.** The owner asked that ordinary per-user values such as a user name or an `https` site
+URL be asked at install and kept "in the place the artifact is installed to", manageable from the
+TUI, per harness or for all harnesses, and never kept in AART's own files. §96 allows
+non-secret configuration in AART-owned local state, and §97 allows embedding it in the generated
+launcher. Until now the values were embedded in the single launcher shared by every harness, so
+they could not differ per harness, and changing one meant regenerating the launcher.
+
+**Decision.**
+
+- §96 is narrowed to the artifact's own installed location. Each harness an artifact is installed
+  into gets `<artifact root>/config/<harness>.conf`, holding that harness's values, and nothing
+  else. AART's state keeps only the file's path and digest, on the receipt
+  (`InstallationReceipt.configuration_files`), never a value.
+- The format is the plainest a POSIX shell reads without evaluating anything: comment lines and
+  `input-id=value`, where the value is everything after the first `=` and is one safe, trimmed
+  line. `domain/configuration_files.py` renders and strictly parses it; a hand-edited file in any
+  other shape is reported rather than guessed at. A credential-shaped value is refused, so a token
+  pasted into a configuration answer is never written to disk (INV-161).
+- The launcher holds no configuration value. A launcher for an artifact with configuration is
+  started with one argument, the harness that started it, and reads that harness's file with
+  `IFS= read -r` into variables that are only expanded inside double quotes. A missing harness
+  argument, a missing file, a missing or repeated value each stop it with exit status 76 and a
+  message naming what to set, so a server never starts half configured. An artifact without
+  configuration keeps the previous argument-free launcher and registration.
+- Planning emits one `ConfigurationProjection` per registered harness and gives each registration
+  `arguments=(harness,)`. `PlannedInstallation` refuses a plan where a configured artifact's
+  registered harnesses and files differ, a registration does not name its harness, or a file holds
+  anything but the reviewed values.
+- Each file is its own reconciliation component, `configuration:<harness>`, written by
+  `WriteFile(path, digest, executable=False)`. Observation measures each file's presence and
+  digest: as written is matched, edited is divergent, deleted is absent, unreadable is unknown.
+  A receipt-only repair cannot rewrite a configuration file, for the same reason it cannot rewrite
+  a launcher: the receipt holds no content. Re-establishing values is the configuration edit's job.
+
+**Consequences.** §97's "launcher may embed non-secret values" is no longer used; values reach the
+process through the harness's file instead. That is a candidate Product Specification revision
+(like §167) and is recorded with task 16's evidence. Hand-built fixtures that register a
+configured artifact now pass the harness argument, and tests that start a server start it with the
+recorded command and its arguments, as a harness does.

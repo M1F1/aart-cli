@@ -27,7 +27,10 @@ from agent_artifacts.application.installed_state import (
     desired_state_from_receipt,
 )
 from agent_artifacts.application.intents import LifecycleIntentKind
-from agent_artifacts.application.runtime_projection import RuntimeProjection
+from agent_artifacts.application.runtime_projection import (
+    RuntimeProjection,
+    configuration_projection,
+)
 from agent_artifacts.domain.candidates import CandidateId
 from agent_artifacts.domain.credentials import CredentialProviderRef
 from agent_artifacts.domain.effects import (
@@ -156,7 +159,7 @@ LAUNCHER_BODY = (
     "  exit 78\n"
     "fi\n"
     "export GITHUB_TOKEN\n"
-    "GITHUB_ORG=acme\n"
+    'GITHUB_ORG="$AART_CONFIG_GITHUB_ORG"\n'
     "export GITHUB_ORG\n"
     "exec true\n"
 )
@@ -178,9 +181,18 @@ def _planned(
     registered = (
         registrations
         if registrations is not None
-        else (McpRegistration(mcp_target("tabnine", Scope.PROJECT), "github", projection.command),)
+        else (
+            McpRegistration(
+                mcp_target("tabnine", Scope.PROJECT), "github", projection.command, ("tabnine",)
+            ),
+        )
     )
     fields: dict[str, object] = {
+        # The harness's configuration file, as planning makes it for a configured artifact (D-264).
+        "configuration": tuple(
+            configuration_projection(environment, item.target.harness, _bound().config_values).value
+            for item in registered
+        ),
         "bound": _bound(),
         "declared": tuple(item.input for item in _bound().inputs),
         "registrations": registered,
@@ -220,6 +232,8 @@ class PlannedInstallationTest(unittest.TestCase):
                 "payload",
                 "runtime-environment",
                 "runtime-dependencies",
+                # The harness's own configuration file is its own part (D-264).
+                "configuration:tabnine",
                 "credential:github-token",
                 "launcher",
                 "harness:tabnine",
@@ -281,7 +295,7 @@ class PlannedInstallationTest(unittest.TestCase):
 
         self.assertEqual(
             [str(component.id) for component in desired.components],
-            ["credential:github-token", "launcher", "harness:tabnine"],
+            ["configuration:tabnine", "credential:github-token", "launcher", "harness:tabnine"],
         )
 
 
@@ -329,6 +343,8 @@ class InstallationProposalTest(unittest.TestCase):
                 CreatePythonEnvironment.__name__,
                 InstallPythonDependencies.__name__,
                 StoreCredential.__name__,
+                # The harness's configuration file and the launcher.
+                WriteFile.__name__,
                 WriteFile.__name__,
             ],
         )

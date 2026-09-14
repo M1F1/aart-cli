@@ -33,7 +33,10 @@ from agent_artifacts.application.installed_state import (
     desired_state_from_receipt,
 )
 from agent_artifacts.application.reconciliation import plan_repair, repair_converged
-from agent_artifacts.application.runtime_projection import generate_launcher
+from agent_artifacts.application.runtime_projection import (
+    configuration_projection,
+    generate_launcher,
+)
 from agent_artifacts.domain.credentials import CredentialProviderRef, CredentialReference
 from agent_artifacts.domain.effects import CreatePythonEnvironment
 from agent_artifacts.domain.harness import McpRegistration, Scope, mcp_target
@@ -144,12 +147,16 @@ class _FileProvider:
         return ("/bin/cat", self.path)
 
 
-def speak(command: str, requests: list[dict]) -> list[dict]:
-    """Run `command` as a harness would and exchange newline-delimited JSON-RPC with it."""
+def speak(command: str | list[str], requests: list[dict]) -> list[dict]:
+    """Run `command` as a harness would and exchange newline-delimited JSON-RPC with it.
+
+    A harness records a command and its arguments; a configured artifact's registration passes the
+    harness name, so a list is the whole recorded invocation (D-264).
+    """
 
     payload = "".join(json.dumps(request) + "\n" for request in requests)
     completed = subprocess.run(
-        [command],
+        [command] if isinstance(command, str) else list(command),
         input=payload.encode("utf-8"),
         capture_output=True,
         timeout=120,
@@ -223,8 +230,13 @@ class InstalledMcpServerTest(unittest.TestCase):
         self.assertIsInstance(written, Ok, getattr(written, "diagnostics", ()))
         self.assertTrue(written.value.changed)
 
+        configuration = configuration_projection(
+            self.environment, "tabnine", bound.config_values
+        ).value
+        pathlib.Path(configuration.path).parent.mkdir(parents=True, exist_ok=True)
+        pathlib.Path(configuration.path).write_text(configuration.content, encoding="utf-8")
         registration = McpRegistration(
-            mcp_target("tabnine", Scope.PROJECT), "github", projection.command
+            mcp_target("tabnine", Scope.PROJECT), "github", projection.command, ("tabnine",)
         )
         registered = LocalHarnessRegistry(str(self.scope)).register(registration)
         self.assertIsInstance(registered, Ok, getattr(registered, "diagnostics", ()))
@@ -239,18 +251,20 @@ class InstalledMcpServerTest(unittest.TestCase):
             (registration,),
             bound.credential_references,
             tuple(config_fingerprint(name, value) for name, value in bound.config_values),
+            configuration_files=(configuration.record,),
         )
 
-    def recorded_command(self) -> str:
+    def recorded_command(self) -> list[str]:
         settings = json.loads(
             (self.scope / ".tabnine/agent/settings.json").read_text(encoding="utf-8")
         )
-        return settings["mcpServers"]["github"]["command"]
+        entry = settings["mcpServers"]["github"]
+        return [entry["command"], *entry.get("args", [])]
 
     def test_the_harness_records_a_command_that_starts_a_real_mcp_server(self):
         self.install(self.provider, "test-file")
         command = self.recorded_command()
-        self.assertTrue(os.access(command, os.X_OK))
+        self.assertTrue(os.access(command[0], os.X_OK))
 
         replies = speak(
             command,
@@ -299,8 +313,12 @@ class InstalledMcpServerTest(unittest.TestCase):
             with self.subTest(surface=name):
                 self.assertNotIn(self.token, surface)
         self.assertIn("test-file:aart-e2e/github-token", projected)
-        # The config value is fingerprinted, not copied.
-        self.assertNotIn(self.organisation, projected)
+        # The config value is fingerprinted, not copied, and lives only in the harness's own
+        # configuration file beside the artifact (D-264).
+        for surface in (projected, launcher, settings):
+            self.assertNotIn(self.organisation, surface)
+        (record,) = receipt.configuration_files
+        self.assertIn(self.organisation, pathlib.Path(record.path).read_text(encoding="utf-8"))
 
     def test_writing_the_same_installation_again_changes_nothing(self):
         first = self.install(self.provider, "test-file")
@@ -329,7 +347,7 @@ class InstalledMcpServerTest(unittest.TestCase):
         self.install(self.provider, "test-file")
         os.rename(self.environment.interpreter, f"{self.environment.interpreter}.moved")
         completed = subprocess.run(
-            [self.recorded_command()],
+            self.recorded_command(),
             capture_output=True,
             timeout=60,
             env={"PATH": "/usr/bin:/bin"},
@@ -341,7 +359,7 @@ class InstalledMcpServerTest(unittest.TestCase):
         self.install(self.provider, "test-file")
         os.remove(self.provider.path)
         completed = subprocess.run(
-            [self.recorded_command()],
+            self.recorded_command(),
             capture_output=True,
             timeout=60,
             env={"PATH": "/usr/bin:/bin"},

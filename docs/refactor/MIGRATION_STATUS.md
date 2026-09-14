@@ -1,6 +1,6 @@
 # AART Refactor Migration Status
 
-**2026-09-14: CP-22 CLOSED; CP-23 tasks 01–13 done, owner task 16 next (then 14 and 15).**
+**2026-09-14: CP-22 CLOSED; CP-23 tasks 01–13 done, owner task 16 in progress (16.1 per-harness configuration files done), then 14 and 15.**
 Task 13 (D-263): credential guidance reaches screen 07 (Fast), the lent terminal before the
 provider's prompt, and the CLI refusal. It proves the author's `help` survives compile, promotion and
 the vendored Registry. Other changes:

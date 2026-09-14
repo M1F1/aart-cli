@@ -27,7 +27,10 @@ from agent_artifacts.application.installation_proposal import (
 )
 from agent_artifacts.application.installed_state import current_state_from_observation
 from agent_artifacts.application.receipt_recording import record_lifecycle_outcome
-from agent_artifacts.application.runtime_projection import generate_launcher
+from agent_artifacts.application.runtime_projection import (
+    configuration_projection,
+    generate_launcher,
+)
 from agent_artifacts.domain.candidates import CandidateId
 from agent_artifacts.domain.credentials import CredentialProviderRef
 from agent_artifacts.domain.harness import McpRegistration, Scope, mcp_target
@@ -121,8 +124,11 @@ class ProposedInstallationTest(unittest.TestCase):
             self.bound(),
             resolvers=(self.provider,),  # type: ignore[arg-type]
         ).value
+        self.configuration = configuration_projection(
+            self.environment, "tabnine", self.bound().config_values
+        ).value
         self.registration = McpRegistration(
-            mcp_target("tabnine", Scope.PROJECT), "github", self.launcher.command
+            mcp_target("tabnine", Scope.PROJECT), "github", self.launcher.command, ("tabnine",)
         )
         self.planned = PlannedInstallation(
             self.resolved(),
@@ -134,6 +140,7 @@ class ProposedInstallationTest(unittest.TestCase):
             payload_source=str(self.source),
             base_interpreter=sys.executable,
             runtime="python",
+            configuration=(self.configuration,),
         )
         self.desired = desired_state_for(self.planned)
         self.receipt = intended_receipt(self.planned)
@@ -205,6 +212,7 @@ class ProposedInstallationTest(unittest.TestCase):
     def interpreters(self):
         files = FileEffectInterpreter(self.environment)
         files.offer(self.launcher.content.encode("utf-8"))
+        files.offer(self.configuration.content.encode("utf-8"))
         return (
             files,
             RuntimeEffectInterpreter(LocalPythonRuntime(self.environment)),
@@ -244,8 +252,9 @@ class ProposedInstallationTest(unittest.TestCase):
         settings = json.loads(
             (self.scope / ".tabnine/agent/settings.json").read_text(encoding="utf-8")
         )
+        entry = settings["mcpServers"]["github"]
         reply = speak(
-            settings["mcpServers"]["github"]["command"],
+            [entry["command"], *entry.get("args", [])],
             [{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {}}],
         )
         return json.loads(reply[0]["result"]["content"][0]["text"])

@@ -2,7 +2,7 @@
 
 ## Current objective — CP-23 (2026-09-14)
 
-**CP-22 is CLOSED. CP-23 tasks 01–13 are done; owner task 16 is next** (user variables and
+**CP-22 is CLOSED. CP-23 tasks 01–13 are done; owner task 16 is in progress (16.1 done, D-264; 16.2–16.5 designed in the slice)** (user variables and
 credentials per artifact and harness, in one TUI area). Task 14's all-screen audit follows 16, and
 task 15 closes the batch. Task 16's requirements are in the slice.
 Task 13 (D-263): an author's credential help reaches every place the value is asked for, in the

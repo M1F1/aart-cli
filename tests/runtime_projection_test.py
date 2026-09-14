@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import pathlib
 import re
 import subprocess
+import tempfile
 import unittest
 
 from hypothesis import given, settings
@@ -14,7 +16,12 @@ from agent_artifacts.application.runtime_projection import (
     LAUNCHER_INVALID,
     LAUNCHER_PROVIDER_UNRESOLVABLE,
     LAUNCHER_TRANSPORT_CONFLICT,
+    MISSING_CONFIGURATION_STATUS,
     generate_launcher,
+)
+from agent_artifacts.domain.configuration_files import (
+    configuration_value_problem,
+    render_configuration_file,
 )
 from agent_artifacts.domain.credentials import CredentialProviderRef, CredentialReference
 from agent_artifacts.domain.identifiers import InputId
@@ -180,7 +187,7 @@ class GeneratedLauncherTest(unittest.TestCase):
         # The value is captured from the provider, never assigned as a literal.
         self.assertIn('GITHUB_TOKEN="$(', content)
 
-    def test_a_config_value_is_quoted_so_a_shell_reproduces_it_exactly(self):
+    def test_a_config_value_is_never_written_into_the_launcher(self):
         hostile = "'; touch /tmp/pwned; echo '"
         bound = bind(
             BoundInput(
@@ -189,14 +196,14 @@ class GeneratedLauncherTest(unittest.TestCase):
             )
         )
         content = generate(bound).value.content
-        # Skip the environment guard: this asserts what the assignment expands to, and the
-        # artifact-owned interpreter it checks for does not exist on this machine.
-        body = content.split("fi\n", 1)[1].split("exec ")[0]
-        script = body + 'printf "%s" "$GITHUB_ORG"'
-        completed = subprocess.run(
-            ["/bin/sh", "-c", script], capture_output=True, check=True, timeout=30
-        )
-        self.assertEqual(completed.stdout.decode("utf-8"), hostile)
+        self.assertNotIn(hostile, content)
+        self.assertNotIn("touch", content)
+        self.assertIn("/config/", content)
+
+    def test_a_launcher_without_configuration_reads_no_file_and_takes_no_harness(self):
+        content = generate(bind(BoundInput(token_input(), token_source()))).value.content
+        self.assertNotIn("AART_HARNESS", content)
+        self.assertNotIn("/config/", content)
 
     def test_a_cli_bound_secret_reaches_the_command_line_through_a_variable(self):
         bound = bind(BoundInput(token_input(CliArgumentBinding("--token")), token_source()))
@@ -254,6 +261,148 @@ class GeneratedLauncherTest(unittest.TestCase):
         content = generate(bind()).value.content
         self.assertIn("set -eu", content)
         self.assertIn("exit 78", content)
+
+
+def _started(root: pathlib.Path, bound: BoundInputs, *argv: str, contract=None):
+    """Run the generated launcher for real, with an interpreter that reports what it was given."""
+
+    environment = ArtifactEnvironment("mcp/github", str(root))
+    projection = generate_launcher(environment, contract or LaunchContract("server.py"), bound)
+    launcher = pathlib.Path(projection.value.path)
+    launcher.parent.mkdir(parents=True, exist_ok=True)
+    launcher.write_text(projection.value.content, encoding="utf-8")
+    launcher.chmod(0o700)
+    interpreter = pathlib.Path(environment.interpreter)
+    interpreter.parent.mkdir(parents=True, exist_ok=True)
+    interpreter.write_text(
+        '#!/bin/sh\nshift\nprintf "env=%s\\n" "${GITHUB_ORG-unset}"\n'
+        'for argument in "$@"; do printf "arg=%s\\n" "$argument"; done\n',
+        encoding="utf-8",
+    )
+    interpreter.chmod(0o700)
+    return subprocess.run(
+        [str(launcher), *argv], capture_output=True, text=True, timeout=30, check=False
+    )
+
+
+def _configured(**values: str) -> BoundInputs:
+    items = []
+    for name, value in values.items():
+        identifier = InputId(name.replace("_", "-"))
+        binding = (
+            EnvironmentBinding("GITHUB_ORG")
+            if name == "org"
+            else CliArgumentBinding(f"--{identifier}")
+        )
+        items.append(
+            BoundInput(ConfigInput(identifier, binding), PersistedConfigValue(identifier, value))
+        )
+    return BoundInputs(tuple(items))
+
+
+class LauncherReadsHarnessConfigurationTest(unittest.TestCase):
+    """The configured values reach the process from the starting harness's file (D-264)."""
+
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = pathlib.Path(directory.name) / "mcp" / "github"
+        (self.root / "config").mkdir(parents=True)
+        self.bound = _configured(org="acme", site_url="https://forge.example")
+
+    def _write(self, harness: str, content: str) -> None:
+        (self.root / "config" / f"{harness}.conf").write_text(content, encoding="utf-8")
+
+    def test_each_harness_starts_the_server_with_its_own_values(self):
+        self._write(
+            "claude", render_configuration_file("mcp/github", "claude", self.bound.config_values)
+        )
+        self._write(
+            "opencode",
+            render_configuration_file(
+                "mcp/github",
+                "opencode",
+                ((InputId("org"), "other-org"), (InputId("site-url"), "https://two.example")),
+            ),
+        )
+        claude = _started(self.root, self.bound, "claude")
+        opencode = _started(self.root, self.bound, "opencode")
+        self.assertEqual(claude.returncode, 0, claude.stderr)
+        self.assertEqual(
+            claude.stdout.splitlines(), ["env=acme", "arg=--site-url", "arg=https://forge.example"]
+        )
+        self.assertEqual(
+            opencode.stdout.splitlines(),
+            ["env=other-org", "arg=--site-url", "arg=https://two.example"],
+        )
+
+    @settings(max_examples=25, deadline=None)
+    @given(
+        st.text(
+            st.characters(codec="utf-8", exclude_categories=("Cc", "Cf", "Cs", "Zl", "Zp")),
+            min_size=1,
+            max_size=40,
+        ).filter(lambda value: configuration_value_problem(value) is None)
+    )
+    def test_any_value_the_file_can_hold_reaches_the_process_exactly_and_runs_nothing(self, value):
+        self._write(
+            "claude",
+            render_configuration_file(
+                "mcp/github",
+                "claude",
+                ((InputId("org"), value), (InputId("site-url"), f"{value}$(touch pwned)")),
+            ),
+        )
+        started = _started(self.root, self.bound, "claude")
+        self.assertEqual(started.returncode, 0, started.stderr)
+        self.assertEqual(
+            started.stdout.split("\n")[:3],
+            [f"env={value}", "arg=--site-url", f"arg={value}$(touch pwned)"],
+        )
+        self.assertFalse((self.root / "pwned").exists())
+        self.assertFalse(pathlib.Path("pwned").exists())
+
+    def test_started_without_a_harness_it_stops_and_says_why(self):
+        for argv in ((), ("../state",), ("",)):
+            with self.subTest(argv=argv):
+                started = _started(self.root, self.bound, *argv)
+                self.assertEqual(started.returncode, MISSING_CONFIGURATION_STATUS)
+                self.assertIn("without the harness", started.stderr)
+                self.assertEqual(started.stdout, "")
+
+    def test_a_missing_file_stops_it_and_names_where_to_set_the_values(self):
+        started = _started(self.root, self.bound, "codex")
+        self.assertEqual(started.returncode, MISSING_CONFIGURATION_STATUS)
+        self.assertIn("has no configuration for codex", started.stderr)
+        self.assertIn("User variables and credentials", started.stderr)
+
+    def test_a_missing_or_repeated_value_stops_it_rather_than_starting_half_configured(self):
+        for content, reason in (
+            ("org=acme\n", "has no value for site-url"),
+            ("org=acme\norg=other\nsite-url=https://x\n", "sets org twice"),
+            ("org=\nsite-url=https://x\n", "has no value for org"),
+        ):
+            with self.subTest(content=content):
+                self._write("claude", content)
+                started = _started(self.root, self.bound, "claude")
+                self.assertEqual(started.returncode, MISSING_CONFIGURATION_STATUS)
+                self.assertIn(reason, started.stderr)
+                self.assertEqual(started.stdout, "")
+
+    def test_a_config_variable_may_not_collide_with_a_declared_environment_binding(self):
+        bound = bind(
+            BoundInput(
+                ConfigInput(InputId("org"), CliArgumentBinding("--org")),
+                PersistedConfigValue(InputId("org"), "acme"),
+            ),
+            BoundInput(
+                ConfigInput(InputId("shadow"), EnvironmentBinding("AART_CONFIG_ORG")),
+                PersistedConfigValue(InputId("shadow"), "overwritten"),
+            ),
+        )
+        result = generate(bound)
+        self.assertIsInstance(result, Err)
+        self.assertEqual(result.diagnostics[0].code, LAUNCHER_INVALID)
 
 
 class LauncherSecrecyPropertyTest(unittest.TestCase):

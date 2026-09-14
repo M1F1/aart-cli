@@ -25,6 +25,7 @@ import re
 from dataclasses import dataclass
 from typing import TypeAlias
 
+from .configuration_files import ConfigurationFileRecord
 from .credentials import CredentialProviderRef, CredentialReference
 from .diagnostics import Diagnostic, DiagnosticCode, Severity
 from .effects import DeliveryKind
@@ -103,6 +104,9 @@ class InstallationReceipt:
     #: The durable setup record attached to this installation, when setup has run. Kept on the
     #: receipt because that is the canonical store that says this payload is installed.
     setup_state_ref: str | None = None
+    #: Each harness's configuration file and the digest AART wrote it with. The values stay in the
+    #: files beside the artifact and never enter this record (D-264, §96 narrowed).
+    configuration_files: tuple[ConfigurationFileRecord, ...] = ()
 
     def __post_init__(self) -> None:
         for value, label in (
@@ -151,6 +155,20 @@ class InstallationReceipt:
         object.__setattr__(
             self, "config", tuple(sorted(self.config, key=lambda item: item.input.value))
         )
+        if not isinstance(self.configuration_files, tuple) or any(
+            not isinstance(item, ConfigurationFileRecord) or item.root != self.root
+            for item in self.configuration_files
+        ):
+            raise ValueError("installation receipt configuration files are invalid")
+        if len({item.harness for item in self.configuration_files}) != len(
+            self.configuration_files
+        ):
+            raise ValueError("installation receipt records one configuration file per harness")
+        object.__setattr__(
+            self,
+            "configuration_files",
+            tuple(sorted(self.configuration_files, key=lambda item: item.harness)),
+        )
 
 
 def installation_receipt_to_data(receipt: InstallationReceipt) -> dict[str, object]:
@@ -160,9 +178,21 @@ def installation_receipt_to_data(receipt: InstallationReceipt) -> dict[str, obje
     setup: dict[str, object] = (
         {} if receipt.setup_state_ref is None else {"setup_state_ref": receipt.setup_state_ref}
     )
+    # Written only when there is configuration, so a receipt without any reads exactly as before.
+    configuration: dict[str, object] = (
+        {
+            "configuration_files": [
+                {"digest": str(item.digest), "harness": item.harness, "path": item.path}
+                for item in receipt.configuration_files
+            ]
+        }
+        if receipt.configuration_files
+        else {}
+    )
     return {
         **identity,
         **setup,
+        **configuration,
         "artifact": receipt.artifact,
         "base_interpreter": receipt.base_interpreter,
         "config": [
@@ -654,7 +684,7 @@ def installation_receipt_from_data(data: object) -> Result[InstallationReceipt]:
         for key in ("artifact", "root", "launcher", "launcher_digest", "interpreter"):
             if key not in data:
                 raise ValueError(f"installation receipt is missing {key}")
-        for key in ("registrations", "credentials", "config"):
+        for key in ("registrations", "credentials", "config", "configuration_files"):
             if not isinstance(data.get(key, []), list):
                 raise ValueError(f"installation receipt {key} must be a list")
         return Ok(
@@ -676,7 +706,16 @@ def installation_receipt_from_data(data: object) -> Result[InstallationReceipt]:
                     else None
                 ),
                 None if data.get("setup_state_ref") is None else str(data["setup_state_ref"]),
+                tuple(_configuration_file(item) for item in data.get("configuration_files", [])),
             )
         )
     except ValueError as error:
         return _error(str(error))
+
+
+def _configuration_file(data: object) -> ConfigurationFileRecord:
+    if not isinstance(data, dict) or set(data) != {"digest", "harness", "path"}:
+        raise ValueError("an installation receipt configuration file is invalid")
+    return ConfigurationFileRecord(
+        str(data["harness"]), str(data["path"]), _digest(data["digest"], "configuration digest")
+    )

@@ -179,6 +179,9 @@ class InstallationObservation:
     launcher_digest: ObjectDigest | None = None
     interpreter_present: bool = False
     registered_commands: tuple[tuple[str, str, str | None], ...] = ()
+    #: (harness, present, digest) for each configuration file the receipt records. A file that is
+    #: there and could not be read is present with no digest, which is not the same as absent.
+    configuration_files: tuple[tuple[str, bool, ObjectDigest | None], ...] = ()
 
     def __post_init__(self) -> None:
         if self.payload_present is not None and not isinstance(self.payload_present, bool):
@@ -201,6 +204,15 @@ class InstallationObservation:
             for item in self.registered_commands
         ):
             raise ValueError("observed harness registrations are invalid")
+        if not isinstance(self.configuration_files, tuple) or any(
+            not isinstance(item, tuple)
+            or len(item) != 3
+            or not isinstance(item[0], str)
+            or not isinstance(item[1], bool)
+            or not (item[2] is None or isinstance(item[2], ObjectDigest))
+            for item in self.configuration_files
+        ):
+            raise ValueError("observed configuration files are invalid")
 
     def command_for(self, harness: str, server: str) -> str | None:
         for observed_harness, observed_server, command in self.registered_commands:

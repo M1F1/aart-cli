@@ -148,7 +148,20 @@ def observe_installation(
             command = _observed_command(registry, registration)
         commands.append((registration.target.harness, registration.server, command))
 
+    configuration: list[tuple[str, bool, ObjectDigest | None]] = []
+    for record in receipt.configuration_files:
+        held = os.path.isfile(record.path)
+        measured: ObjectDigest | None = None
+        if held:
+            try:
+                with open(record.path, "rb") as handle:
+                    measured = sha256_bytes(handle.read())
+            except OSError:
+                measured = None
+        configuration.append((record.harness, held, measured))
+
     return InstallationObservation(
+        configuration_files=tuple(configuration),
         payload_present=os.path.isdir(ArtifactEnvironment(receipt.artifact, receipt.root).payload),
         launcher_present=present,
         launcher_executable=present and os.access(receipt.launcher, os.X_OK),

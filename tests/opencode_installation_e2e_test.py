@@ -331,10 +331,11 @@ class OpenCodeMcpInstallationTest(unittest.TestCase):
 
         self.assertEqual("local", entry["type"])
         self.assertIsInstance(entry["command"], list)
-        # The launcher this install wrote is the whole vector: the author's `--strict` is baked
-        # into the script, which is what keeps a harness from having to reproduce it.
+        # The launcher this install wrote and the harness it reads configuration for are the whole
+        # vector: the author's `--strict` is baked into the script, which is what keeps a harness
+        # from having to reproduce it, and `opencode` names its own configuration file (D-264).
         self.assertEqual(
-            [os.path.join(str(self.scope), ".opencode/aart/mcp/github/launch.sh")],
+            [os.path.join(str(self.scope), ".opencode/aart/mcp/github/launch.sh"), "opencode"],
             entry["command"],
         )
         self.assertNotIn("args", entry, "OpenCode reads one vector; `args` is Claude's spelling")
@@ -346,7 +347,7 @@ class OpenCodeMcpInstallationTest(unittest.TestCase):
 
         command = self._settings()["mcp"]["github"]["command"]
         reply = speak(
-            command[0],
+            command,
             [{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {}}],
         )
         answers = json.loads(reply[0]["result"]["content"][0]["text"])
