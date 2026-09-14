@@ -135,9 +135,36 @@ Each new entry records:
 
 ### Open
 
-#### CP-22 — third manual TUI run (2026-09-11)
+#### CP-23 — fourth manual TUI run (2026-09-14)
 
-- [ ] **QA-087 — every view fills the skeleton differently, and actions share a block with the
+PLANNED. The complete tasks, evidence requirements and acceptance criteria are in
+[`CP-23`](docs/refactor/slices/CP-23-actionable-tui-workflows.md); `docs/refactor/plan.json` is the
+machine-readable task list. No product fix is claimed by creating this plan.
+
+- [x] 01 — Explain Source Sync after Add Source.
+- [ ] 02 — Separate Candidate table and focused identity summary.
+- [ ] 03 — Use `v` for file diffs; remove obsolete `f`/`d` instructions.
+- [ ] 04 — Remove Validation's redundant Policy shortcut; retain Enter progression.
+- [ ] 05 — Remove TUI push and explain manual publication before Registry Sync.
+- [ ] 06 — Make Success controls functional, including exact receipt and supported Undo.
+- [ ] 07 — Show the focused Marketplace artifact description.
+- [ ] 08 — Explain proposed Remediation effects and separate Continue from facts.
+- [ ] 09 — Refresh Candidate state immediately and durably after local promotion.
+- [ ] 10 — Select one or multiple eligible harnesses explicitly.
+- [ ] 11 — Fix Artifact Details controls and compatibility messaging.
+- [ ] 12 — Make Credential Action selectable and wire permitted actions.
+- [ ] 13 — Carry explicit credential purpose/acquisition guidance from Source to installation.
+- [ ] 14 — Enforce the shared skeleton without in-TUI exceptions; verify `v` on every screen.
+- [ ] 15 — Targeted mutations, scoped mutmut, full gates and manual acceptance.
+
+#### CP-22 — closed by the operator (2026-09-14)
+
+The entries below retain the third manual run's findings and implementation history. The owner
+closed CP-22 explicitly (D-248); new defects/refinements belong to CP-23. Closure does not assert
+a fresh gate run or individual manual success for every earlier case. Historical full quality
+evidence is on `d60bdd5`; the bootstrap stage-history enhancement remains in BACKLOG.
+
+- [x] **QA-087 — every view fills the skeleton differently, and actions share a block with the
       view's status.** Surface: every screen. Severity: high. Observed: on Registries the one
       actionable row `> [ Add Registry ]` stands in the same block as four lines of prose about
       registries; on the Dashboard the first-run panel sits above the navigation rows inside their
@@ -155,7 +182,8 @@ Each new entry records:
       exception — *"Wszystko pod pola (jak reszta)"* — so the fields stand alone and every
       explanatory line reads below the rule, key prompt last. Add Source, Initialize Registry,
       Scan Repository and Rebuild Registry followed through one table, `_FORM_PROSE`, and
-      `MIXED_SCREENS` is now empty. **Still open:** the review and result screens. `CP-22` step 14.
+      `MIXED_SCREENS` is now empty. Review/result screens subsequently landed in CP-22 step 14;
+      the new control/prose gaps are tracked in CP-23.
 
 - [x] **QA-088 — a form described in prose the keys the footer advertises two lines below.**
       Surface: Add Registry, Add Source, Initialize Registry, Scan Repository, Rebuild Registry.
@@ -181,17 +209,17 @@ Each new entry records:
       to a repository's `main`. Fixed in CP-22 step 17 (`D-247`): `MaintainerRegistryWorkspaceView`
       and `MaintainerPublicationState` in the application layer, `read_registry_workspace` reading
       the checkout's own knowledge of its remote with no network, and screen 46 carrying the row
-      and its lifecycle description. Two parts remain: the initialization stage report needs a
-      durable record of the last bootstrap run and is in `BACKLOG.md`, and the operator's message
-      ended mid-sentence (*"chcialbym zeby tez byla"*), so one addition is still to be asked for.
+      and its lifecycle description. The initialization stage report remains in `BACKLOG.md`.
+      The earlier unfinished message is not a pending clarification after closure (D-248);
+      concrete later publication requirements are CP-23 task 05.
 
-- [ ] **QA-097 — Settings has four rows that change behaviour and no row that says what it changes.**
+- [x] **QA-097 — Settings has four rows that change behaviour and no row that says what it changes.**
       Surface: Settings (28). Severity: medium. Observed: `[v]` opens nothing for `Detail level`,
       `Default scope` or `Show available updates`, so the reader toggles a setting to find out what
       it does. Expected: every row the cursor can sit on describes itself under `[v]`, like the
       rebuild stages do since `QA-089`.
 
-- [ ] **QA-096 — a view's status reads as a paragraph, and starts its sentences both ways.**
+- [x] **QA-096 — a view's status reads as a paragraph, and starts its sentences both ways.**
       Surface: every screen. Severity: medium. Observed: separate statements about the view are
       drawn as consecutive lines, so three unrelated facts read as one wrapped sentence; and the
       first word is capitalised on some (`No authoring Sources are configured.`) and not on others
@@ -199,18 +227,18 @@ Each new entry records:
       each statement is a list item — `- ` with a blank line between items, always, including when
       there is only one — and every statement is a sentence: capital first letter, full stop.
 
-- [ ] **QA-095 — an explanation that never changes is drawn on every frame.**
+- [x] **QA-095 — an explanation that never changes is drawn on every frame.**
       Surface: Registry Maintainer (46). Severity: low. Observed: `Connected Registry snapshots` /
       `These approved snapshots determine what Marketplace can offer.` stands in the status block
       in both profiles, although it describes what a registry snapshot is rather than what this
       project's is. Expected: it collapses under `[v]` like every other explanation (`QA-070`).
 
-- [ ] **QA-094 — Registry Maintainer says the project is not a Registry twice.**
+- [x] **QA-094 — Registry Maintainer says the project is not a Registry twice.**
       Surface: Registry Maintainer (46). Severity: medium. Observed: the same fact is stated once
       as the state of the local workspace and once as the notice left by an action, so the reader
       is told twice and can tell neither statement is the same one.
 
-- [ ] **QA-093 — what an action left behind shares a block with the action.**
+- [x] **QA-093 — what an action left behind shares a block with the action.**
       Surface: Rebuild Registry (46h), and every screen that carries a notice. Severity: high.
       Observed: `actions` composes the notice into the block reserved for what the cursor can act
       on, so `the current project is not a Registry, so there is nothing here to rebuild` is drawn
@@ -218,7 +246,7 @@ Each new entry records:
       own, after a rule — it is neither a row, nor what the cursor points at, nor the state of the
       view, so it is a block the skeleton does not have yet.
 
-- [ ] **QA-092 — a heading that repeats what the lines below it already say.**
+- [x] **QA-092 — a heading that repeats what the lines below it already say.**
       Surface: Maintainer Dashboard (30). Severity: low. Observed: `Maintainer overview` labels
       four counts and a list of recent activity, none of which needs telling that it is an
       overview — the same fault `QA-067` removed from `Navigation:`.

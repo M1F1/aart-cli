@@ -456,7 +456,7 @@
     {
       "id": "CP-22",
       "title": "One screen structure, and the third manual run",
-      "status": "in_progress",
+      "status": "done",
       "steps": [
         {
           "id": "1",
@@ -535,13 +535,95 @@
         },
         {
           "id": "16",
-          "title": "Full quality gate and the operator's third manual run over QA-044..QA-091",
-          "status": "blocked"
+          "title": "Historical full quality gate and operator closure on 2026-09-14; new findings tracked in CP-23 (D-248)",
+          "status": "done"
         },
         {
           "id": "17",
           "title": "The third manual run's findings QA-092..QA-098",
           "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "CP-23",
+      "title": "Actionable TUI workflows after the fourth manual run",
+      "status": "in_progress",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Explain Source Sync after adding a Source",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Separate the Candidates table from focused Candidate detail",
+          "status": "todo"
+        },
+        {
+          "id": "3",
+          "title": "Use Verbose for bounded redacted Candidate file diffs",
+          "status": "todo"
+        },
+        {
+          "id": "4",
+          "title": "Remove redundant Policy shortcut while preserving Enter progression",
+          "status": "todo"
+        },
+        {
+          "id": "5",
+          "title": "Remove TUI push capability and explain manual Registry publication",
+          "status": "todo"
+        },
+        {
+          "id": "6",
+          "title": "Make Success actions functional and receipt-specific",
+          "status": "todo"
+        },
+        {
+          "id": "7",
+          "title": "Show the focused Marketplace artifact description under Verbose",
+          "status": "todo"
+        },
+        {
+          "id": "8",
+          "title": "Describe proposed Remediation effects and separate Continue from facts",
+          "status": "todo"
+        },
+        {
+          "id": "9",
+          "title": "Refresh durable Candidate state after local promotion",
+          "status": "todo"
+        },
+        {
+          "id": "10",
+          "title": "Select one or multiple compatible installation harnesses explicitly",
+          "status": "todo"
+        },
+        {
+          "id": "11",
+          "title": "Repair Artifact Details controls and compatibility wording",
+          "status": "todo"
+        },
+        {
+          "id": "12",
+          "title": "Make Credential Action rows navigable and wire permitted actions",
+          "status": "todo"
+        },
+        {
+          "id": "13",
+          "title": "Carry explicit credential acquisition guidance from Source to installation prompts",
+          "status": "todo"
+        },
+        {
+          "id": "14",
+          "title": "Enforce one skeleton without in-TUI exceptions and verify Verbose on every screen",
+          "status": "todo"
+        },
+        {
+          "id": "15",
+          "title": "Targeted mutations, scoped mutmut, full gates and manual acceptance",
+          "status": "todo"
         }
       ]
     }

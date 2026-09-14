@@ -658,11 +658,12 @@ def _same_workflow(current: ApplicationScreen, target: ApplicationScreen) -> boo
     return any(current in route and target in route for route in _WORKFLOW_ROUTES)
 
 
-# These are reverse-navigation relationships about one stable Candidate, not stages in the
-# promotion route. Keeping them separate prevents optional inspection screens from appearing in
-# the progress chrome merely to retain their subject (`QA-073`).
+# These reverse-navigation relationships retain one Source or Candidate through optional detail
+# screens without adding those screens to the progress chrome (`QA-073`, CP-23/01).
 _SUBJECT_PRESERVING_BACK_EDGES = frozenset(
     {
+        (MaintainerScreen.SOURCE_DETAILS, MaintainerScreen.SOURCES),
+        (MaintainerScreen.SOURCE_SYNC, MaintainerScreen.SOURCE_DETAILS),
         (MaintainerScreen.CANDIDATE_LIFECYCLE, MaintainerScreen.CANDIDATE_DETAILS),
         (MaintainerScreen.PROVENANCE, MaintainerScreen.CANDIDATE_DETAILS),
         (MaintainerScreen.VERSION_CONFLICT, MaintainerScreen.CANDIDATE_DETAILS),
@@ -819,6 +820,8 @@ def _set_rows(
     unticks anything."""
 
     standing = state.current_row
+    if standing not in rows:
+        standing = state.focus
     cursor = rows.index(standing) if standing in rows else 0
     return replace(state, rows=rows, cursor=cursor), ()
 

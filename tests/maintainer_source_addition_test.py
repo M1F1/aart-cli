@@ -47,6 +47,31 @@ def _state(screen, **changes) -> ConsumerUiState:
 
 
 class MaintainerSourceAdditionInteractionTest(unittest.TestCase):
+    def test_completed_addition_focuses_the_new_source_before_sync(self) -> None:
+        state = _state(
+            MaintainerScreen.SOURCE_ADD_REVIEW,
+            action=ConsumerActionKind.SOURCE_ADD,
+            source_draft=SourceDraft("z-authors", "source-local", "/srv/authors", ""),
+            rows=("connect",),
+        )
+        returned, _ = reduce_consumer_ui(
+            state,
+            ConsumerUiEvent(
+                ConsumerUiEventKind.ACTION_RECORDED,
+                action=ConsumerActionKind.SOURCE_ADD,
+                text="z-authors",
+            ),
+        )
+        loaded, _ = reduce_consumer_ui(
+            returned,
+            ConsumerUiEvent(ConsumerUiEventKind.SET_ROWS, rows=("a-authors", "z-authors")),
+        )
+        self.assertIs(loaded.session.screen, MaintainerScreen.SOURCES)
+        self.assertEqual(loaded.current_row, "z-authors")
+        requested, commands = reduce_consumer_ui(loaded, key_event("s", loaded))
+        self.assertEqual(requested.focus, "z-authors")
+        self.assertEqual(commands[0].focus, "z-authors")
+
     def test_maintainer_sources_offers_a_real_add_route(self) -> None:
         state = _state(MaintainerScreen.SOURCES)
 
@@ -142,6 +167,71 @@ class MaintainerSourceAdditionCompositionTest(unittest.TestCase):
         )
         assert isinstance(composed, Ok), composed
         return composed.value
+
+    def test_success_names_the_source_and_explains_discovery_without_claiming_promotion(self):
+        from tests.configured_install_command_e2e_test import _environment
+
+        with _environment() as env, mock.patch.dict(env.xdg, clear=False):
+            actions = self._composed(env)
+            actions._source_connection = lambda _draft: Ok(actions._context)
+            draft = SourceDraft("local-authors", "source-local", str(env.project), "")
+            prepared = actions.handle(
+                ConsumerUiCommand(
+                    ConsumerUiCommandKind.PREPARE_ACTION,
+                    action=ConsumerActionKind.SOURCE_ADD,
+                    source_draft=draft,
+                )
+            )
+            completed = actions.handle(
+                ConsumerUiCommand(
+                    ConsumerUiCommandKind.EXECUTE_ACTION,
+                    action=ConsumerActionKind.SOURCE_ADD,
+                    review_digest=prepared.event.review_digest,
+                )
+            )
+            self.assertEqual(completed.event.text, draft.alias)
+            drawn = "\n".join(frame(completed.source, _state(MaintainerScreen.SOURCES)))
+            self.assertIn("Source local-authors added", drawn)
+            self.assertIn("Source Sync", drawn)
+            self.assertIn("discover artifacts", drawn)
+            self.assertIn("Candidates", drawn)
+            self.assertIn("does not promote", drawn)
+
+    def test_failed_addition_has_no_success_notice_or_automatic_sync(self):
+        from tests.configured_install_command_e2e_test import _environment
+        from tests.maintainer_source_sync_application_test import _failure
+
+        with _environment() as env, mock.patch.dict(env.xdg, clear=False):
+            actions = self._composed(env)
+            connector = mock.Mock(return_value=_failure("Source connection refused"))
+            actions._source_connection = connector
+            draft = SourceDraft("refused-authors", "source-local", str(env.project), "")
+            prepared = actions.handle(
+                ConsumerUiCommand(
+                    ConsumerUiCommandKind.PREPARE_ACTION,
+                    action=ConsumerActionKind.SOURCE_ADD,
+                    source_draft=draft,
+                )
+            )
+            completed = actions.handle(
+                ConsumerUiCommand(
+                    ConsumerUiCommandKind.EXECUTE_ACTION,
+                    action=ConsumerActionKind.SOURCE_ADD,
+                    review_digest=prepared.event.review_digest,
+                )
+            )
+            failed, commands = reduce_consumer_ui(
+                _state(MaintainerScreen.SOURCE_ADD_REVIEW, action=ConsumerActionKind.SOURCE_ADD),
+                completed.event,
+            )
+            connector.assert_called_once_with(draft)
+            self.assertIs(completed.event.kind, ConsumerUiEventKind.ACTION_FAILED)
+            self.assertIs(failed.session.screen, MaintainerScreen.SOURCE_ADD_REVIEW)
+            self.assertEqual(commands, ())
+            drawn = "\n".join(frame(completed.source, failed))
+            self.assertIn("Source connection refused", drawn)
+            self.assertNotIn("Source refused-authors added", drawn)
+            self.assertNotIn("Run Source Sync", drawn)
 
     def test_the_composed_action_calls_the_canonical_source_add_transaction(self) -> None:
         """Both kinds, because the kind the form chose is the thing being carried.

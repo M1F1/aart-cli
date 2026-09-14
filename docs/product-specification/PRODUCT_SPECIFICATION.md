@@ -9407,24 +9407,21 @@ policy and snapshot reproducibility.
 
 Commit is explicit. AART creates the local registry commit.
 
-**Publishing that commit is an action inside AART, not a reason to leave it.** Having to drop out
-of the surface to type `git push` is a gap in the product, not a safeguard: the maintainer has
-already reviewed exactly these bytes here, and the push carries no decision the surface did not
-already record.
+**Accepted revision, 2026-09-14: TUI promotion ends at the local commit.** The TUI offers no push
+action or push-configuration workflow. The maintainer pushes the Registry branch manually and
+completes any required pull request, CI, review and merge outside the TUI. This supersedes the
+earlier acceptance of an in-TUI push; CP-23 implements the revision.
 
-**Publication is a push to a branch, never to the default branch.** The maintainer configures which
-remote branch a registry publishes to, and may choose any branch except the registry's default one.
-Pushing to, merging into, or fast-forwarding the default branch is outside what AART does at all:
-no surface offers it, and the attempt is refused here rather than delegated to policy or to the
-forge's branch protection. Opening the pull request and merging it remain the reviewer's work,
-through `gh` or the forge.
+After local commit, AART explains the remaining steps: manually push, complete review/merge into
+the consumer-visible branch where required, update the local checkout, and synchronize the Registry
+subscription to observe the approved state. Pushing a review branch alone does not make its
+artifacts available to consumers subscribed to the default branch. Source Sync discovers upstream
+Candidates; Registry Sync reads approved Registry state. Neither operation implicitly pushes,
+promotes or updates installed artifacts.
 
-A consumer never sees that choice. Subscribing to a registry reads its default branch, so what a
-consumer can install is what somebody merged, not what somebody published.
-
-This is what separates publication from approval, and it is unchanged by AART performing the push:
-a push moves reviewed bytes to a place other people can look at; only the merge makes them the
-registry, and AART never performs that step.
+A consumer subscription reads the Registry's default branch. Local promotion and remote review
+branches remain distinct from the approved snapshot that consumer synchronization can activate.
+This TUI revision does not implicitly remove an independently supported CLI publication contract.
 
 ## 164.8 Screen 46 — Registry Maintainer View — ACCEPTED
 
@@ -10188,3 +10185,83 @@ remain the authority for human approval and publication.
 **INV-242 — Local promotion is not publication.** Published means present on the canonical
 consumer-visible registry branch/snapshot, not merely prepared or committed locally.
 
+---
+
+# 167. Accepted TUI refinements from the 2026-09-14 manual run
+
+Status: **ACCEPTED — implementation tracked in CP-23**. These explicit product-owner revisions
+supersede earlier presentation choices where they differ. Acceptance is the intended contract,
+not a claim that the existing implementation already satisfies it.
+
+- **Source onboarding:** successful Add Source explains that Source Sync is needed to discover
+  artifacts and create/refresh Candidates, including upstream version changes. Adding the Source
+  alone does not discover them; discovery is distinct from promotion and consumer updates.
+- **Candidates:** the status/artifact/version/source table and focused Candidate identity summary
+  occupy separate frame blocks. The summary has no `Under the cursor:` heading and is shown under
+  Verbose, collapsed in Fast, following the later all-screen clarification. A successfully promoted
+  Candidate must no longer appear as New or remain eligible for
+  duplicate promotion. Local promotion is visibly distinct from consumer-visible publication, and
+  history remains auditable across refresh and restart.
+- **Candidate Diff:** `v` switches between summary and bounded redacted file diffs as Fast/Verbose
+  projections of the same Candidate. The `f` key and ineffective `d returns to summary` guidance
+  are removed from this screen. The supplied `Press v to view bounded redacted file diffs` hint
+  occupies its own block below the diff; navigation and review identity do not change on toggle.
+- **Validation:** remove the redundant `p` Policy shortcut. Enter continues the existing review
+  path through validation details and policy without bypassing either check.
+- **Publication:** §164.7 now ends the TUI flow at local commit and explains manual push and any
+  required review/merge before Registry Sync can discover the newly approved version.
+- **Success:** View installed, View receipt, Done and any supported Undo are working controls,
+  separate from outcome prose. View receipt targets this operation's exact record. Undo is a
+  separately reviewed operation offered only when the actual effects support safe reversal.
+- **Marketplace:** the row under the cursor has a description from approved artifact metadata in
+  a separate block, shown under Verbose and collapsed in Fast with `v`, following the later
+  all-screen clarification. No description is invented or fetched during rendering.
+- **Remediation:** describe proposed AART changes as actions AART will perform after approval,
+  not unexplained chores the user must perform. Continue is a working control outside explanatory
+  prose. Keep required decisions and material risk visible; routine derived changes do not force
+  a redundant remediation stop when no decision is needed.
+- **Harness targets:** Skill installation always offers explicit choice among eligible harnesses,
+  even when exactly one is eligible, and permits selecting multiple eligible targets. Eligibility
+  follows artifact compatibility, platform, scope and policy; choosing a subset is user intent.
+  Review, effects and receipts agree on that subset. Existing setup remains derived from actual
+  delivery. This supersedes the earlier interpretation that deriving eligibility removes the
+  need for a target picker; selecting targets is a meaningful decision under INV-150.
+- **Artifact Details:** selection/install/detail controls must have working keys or selectable
+  rows; a printed `Actions:` sentence alone is insufficient. Detected but unselected incompatible
+  harnesses are not presented as missing requirements; explicitly selected incompatible targets
+  remain refusals with guidance.
+- **Credential Action:** permitted actions are navigable and executable through the same
+  application services as other surfaces. Usage/replacement consequences remain outside action
+  rows; in-use deletion restrictions, explicit mutation review and secret-value protection remain.
+- **Every screen follows the shared frame:** the trail/applicable stepper, action rows, cursor
+  description, view status, notices, workspace caption and key legend retain their shared order
+  and separate blocks in both text and curses views. Empty blocks are omitted. Compliance must be
+  checked over every declared screen and relevant conditional state, including populated forms,
+  failures and completed operations, and enforced by tests when the catalog grows.
+  There are no screen-specific skeleton exceptions for normal views remaining inside TUI,
+  including credential/MCP forms, help and modal states. They all use the same frame composition;
+  optional regions follow shared rules. Necessary external credential/MCP handoffs may use a
+  fallback outside TUI, but returning restores the same frame and preserved session state.
+- **One cursor-description rule:** `v` enables Verbose and shows the description for the current
+  row; cursor movement updates it and returning to Fast hides it. This supersedes the earlier
+  Fast-visible exceptions for Candidates and Marketplace. No stale detail remains on a screen
+  without a describable row. Presentation changes do not mutate intent, execute actions or perform
+  observation IO. Candidate Diff also discloses its file evidence through this same profile.
+  Text-entry mode preserves literal text input. Required input help, material risks and blockers
+  remain visible in Fast; they are essential form/review information, not optional cursor detail.
+  These facts use the standard information block; their visibility is not a layout exception
+  and does not allow mixing prose into selectable/input rows.
+- **Explicit credential acquisition guidance:** the source author declares each credential's
+  human name, purpose and how/where to obtain it in the native manifest's input guidance. Reuse
+  §§154–157 and the existing help contract, including acquisition label/link and optional format
+  or permissions guidance. Compilation and promotion preserve it in approved `artifact.json`;
+  installation shows essential guidance at the point of secure entry in Fast and Verbose,
+  including provider-owned prompts. Approved Registry enrichment may refine the guidance; the
+  live Source or remote help is not fetched during installation/rendering. Manual issuance can
+  be explained without inventing a self-service link. Missing guidance in older valid manifests
+  receives author validation feedback and an honest consumer fallback rather than fabricated
+  instructions or a silent new hard schema requirement. New examples demonstrate complete help.
+  Descriptions/links contain no usable secret values and do not determine provider/binding policy.
+
+These refine INV-062–068, INV-134–135, INV-149–168, INV-187–197, INV-202, INV-205 and INV-242;
+they do not create a second planner, permit rendering IO or weaken the approved Registry baseline.

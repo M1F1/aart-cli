@@ -5263,7 +5263,7 @@ quietly rewrote a published record; it carries the same guard.
 
 ## D-228 — AART pushes a reviewed registry commit, and never to the default branch
 
-Date: 2026-09-10 · Increment: QA-082 · Status: accepted · Authority: product owner
+Date: 2026-09-10 · Increment: QA-082 · Status: superseded for TUI by D-249 (2026-09-14)
 
 164.7 used to end "AART may create the local registry commit but does not push it", and `QA-082`
 was recorded as needing a Product Specification decision before anything could be built. The
@@ -5609,6 +5609,9 @@ binding is now derived from the same state that enables the key.
 
 Date: 2026-09-11 · Increment: QA-078/QA-079/QA-080 · Status: accepted
 
+The no-picker conclusion below is superseded by D-249 (2026-09-14). Setup following recorded
+delivery and refusing explicitly requested incompatible targets remain accepted.
+
 `D-231` settled what an empty `compatibility.harnesses` means and then deliberately did not land
 the narrowing, because applying it inside `placement_for` produced a receipt recording one harness
 while the machine still carried four, and `configured_consumer_completion` refused with
@@ -5805,3 +5808,99 @@ push, so it reports none rather than reporting the literal `HEAD` Git prints.
 The registry's name comes from `aart-registry.json` through `parse_registry_manifest`, the one
 parser the rest of the repository reads that file with. A half-written or invalid marker therefore
 names nothing and the directory answers instead, rather than the screen naming something wrong.
+
+## D-248 — Close CP-22 by operator decision and track the next manual findings in CP-23
+
+Date: 2026-09-14 · Status: accepted · Authority: explicit product-owner instruction
+
+The owner requested a new CP-23 task set and then explicitly requested closing CP-22. Mark CP-22
+and step 16 done, retaining the historical `make quality` evidence on `d60bdd5`. This is an
+administrative acceptance of the completed increment, not evidence of a newly run full suite or
+an exhaustive successful manual retest. The concrete screens reported on 2026-09-14 are open
+CP-23 tasks, including regressions/refinements of previously implemented behavior.
+
+The bootstrap initialization stage-history enhancement remains noncritical backlog. The earlier
+unfinished QA-098 sentence is no longer a pending clarification; only concrete later requirements
+are scheduled. CP-23 is planned with no implementation claimed. The untracked operator notes and
+existing manual lab remain untouched.
+
+## D-249 — Explicit manual-run revisions define CP-23's product contract
+
+Date: 2026-09-14 · Status: accepted, implementation pending · Authority: product owner
+
+Update Product Specification §164.7 and add §167 so the next implementer does not have to choose
+between the owner's request and older product prose. The TUI must offer no push capability; local
+commit guidance leads to manual push, required review/merge, checkout update and Registry Sync.
+This supersedes D-228's TUI push decision, not an independently supported CLI contract. Merely
+pushing a review branch must not be called publication to default-branch consumers.
+
+Eligibility and target selection are different facts: the first is derived, the second is user
+intent. Skill installation must offer a picker for one or many eligible harnesses. This supersedes
+D-241's no-picker conclusion while preserving setup driven by actual recorded delivery. Detected
+but unselected incompatible harnesses must not become repair tasks.
+
+Initially the Candidate identity summary and Marketplace description were planned as Fast-visible
+exceptions; the owner's subsequent all-screen clarification supersedes these through D-250.
+Candidate file diffs use `v`; the redundant Validation `p` shortcut is removed while Enter retains
+policy review. Actions on Success, Artifact Details, Remediation and Credential Action must be
+backed by real input handling and separated from status, preserving CP-22's frame contract.
+
+The report that a committed Candidate remains New is a required reproduction and lifecycle fix,
+not yet a diagnosed root cause. Keep durable local promotion distinct from consumer-visible
+approval and preserve the exact Registry baseline. Every task includes behavior/negative evidence;
+scoped mutation analysis and full gates precede an implemented/verified claim.
+
+## D-250 — One Verbose rule across screens, and credential guidance at the point of entry
+
+Date: 2026-09-14 · Status: accepted, implementation pending · Authority: product-owner follow-up
+
+The owner requires every view to follow the agreed skeleton and `v` to reveal the current row's
+description. Remove the initial CP-23 Fast-visible cursor-description exceptions in tasks 02/07
+and §167; retain one shared gate rather than a new per-screen exception. Required input guidance,
+blockers and material risks remain in Fast (§§152.4, 154.1); optional cursor detail cannot hide
+information needed to make an informed decision or provide a credential.
+
+Add CP-23 task 14 as a catalog-complete screen/state audit with repairs and a checked evidence
+matrix. It must test real populated composition, both frontends, navigation and live key behavior,
+not merely assert that every enum member renders an empty fixture. New screens must require test
+coverage. No all-screen compliance is claimed before that work is complete.
+
+Add task 13 for explicit credential purpose/acquisition help authored alongside SecretInput in
+the source manifest, preserved in canonical artifact.json and approved Registry state, and shown
+immediately before secure entry. `InputGuidance` and missing-acquisition validation warnings already
+exist, so trace and repair the pipeline before inventing a schema. Preserve compatibility for old
+manifests, explain missing guidance honestly, and make new authoring examples complete. A manually
+issued credential need not have a self-service URL. Never fetch unapproved help or infer a real
+credential value. Final quality/manual acceptance moves from task 13 to task 15.
+
+The owner further clarified that normal in-TUI screens have **no skeleton exceptions**. Every
+screen uses the shared frame, including forms, credential/MCP screens, help, errors and normal
+modal states. Essential credential guidance belongs to the existing information block rather
+than an exceptional inline layout. Shared optional regions do not create exceptions. A necessary
+external credential/MCP fallback is a handoff outside TUI, with restoration of the standard frame
+and session on return; it is not an alternative in-TUI renderer. Task 14 must reject bypasses and
+exception allow-lists, not merely inventory and accept them.
+
+## D-251 — Source onboarding returns the Source identity and preserves it through inspection
+
+Date: 2026-09-14 · Status: implemented · Scope: CP-23 task 01
+
+Successful Add Source returns the connected alias as its completion subject, instead of a
+timestamp that cannot identify a Source row. Its discovery guidance occupies the existing action
+notice block; Sources retains its actual `[s] Sync` binding. Source Sync creates/refreshes
+Candidates, including upstream versions; it neither promotes them nor updates installations.
+Connection still acquires and validates an authoring snapshot using the existing transaction,
+but creates no Candidate history until explicit Source Sync. No second discovery path is added.
+
+The shared row loader first preserves a still-visible current row, then a visible subject focus,
+then defaults to the first row. This restores the connected alias without overriding deliberate
+cursor movement or altering selections. A Hypothesis property holds that precedence and the
+absence of effects across generated row sets, including empty lists and missing subjects.
+
+The real composed onboarding test also reproduced a second focus loss: Esc from Source Details
+cleared the Source alias, so `[s]` on the returned list synchronized its first Source. Extend the
+existing subject-preserving reverse edges for Details → Sources and Sync review → Details.
+These optional inspections need no additional progress stage. The test cancels a review, returns
+to Sources, discovers Candidates, repeats Sync unchanged, and then discovers a new version while
+the approved Registry remains byte-for-byte unchanged. This fixes task 01's return path without
+changing the Candidate/publication contracts scheduled later in CP-23.

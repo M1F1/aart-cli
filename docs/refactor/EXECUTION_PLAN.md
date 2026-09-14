@@ -149,6 +149,26 @@ gates before handback. The first real Consumer also exposed the missing Git-publ
 after that critical repair, finish workflow progress/back context, shared visual hierarchy,
 promotion-mode explanation and honest Registry/Source rows before handback.
 
+### CP-20–CP-22 — Completed manual acceptance increments
+
+CP-20 added consumer configuration and isolated manual acceptance; CP-21 refined the shared screen
+skeleton and lifecycle behavior; CP-22 established one frame structure and incorporated the third
+manual run. CP-22 was closed by the product owner on 2026-09-14 (D-248). Historical gate results
+remain in their slice records; closure does not assert a new full-suite run.
+
+### CP-23 — Actionable TUI workflows after the fourth manual run
+
+Implement the 2026-09-14 screen reports as fourteen bounded product/audit tasks plus final acceptance:
+Source Sync guidance, Candidate table/detail, Verbose file diffs, Validation progression, manual
+Registry publication outside TUI, functional Success actions, Marketplace descriptions, clear
+Remediation effects, durable post-promotion Candidate state, explicit harness selection, Artifact
+Details controls, navigable credential actions, explicit credential guidance from Source through
+approved metadata to secure entry, and a complete screen/state audit of Frame and `v` semantics.
+Cursor descriptions are Verbose-only throughout; essential input guidance stays visible in Fast.
+Product Specification §167 records the owner's
+revisions. The ordered tasks and completion criteria are in
+`docs/refactor/slices/CP-23-actionable-tui-workflows.md`; start at task 01.
+
 ## Dependency order
 
 ```text
@@ -157,6 +177,8 @@ CP-00 → CP-01 → CP-02 → CP-03 → CP-04 → CP-05 → CP-06 → CP-07
 CP-08 → CP-09 → CP-10 → CP-11 → CP-12 → CP-13 → CP-14 → CP-15
                                                           ↓
                                            CP-16 → CP-17 → CP-18 → CP-19
+                                                                     ↓
+                                           CP-23 ← CP-22 ← CP-21 ← CP-20
 ```
 
 Parallelism is allowed only when slices do not share unsettled domain contracts and neither depends

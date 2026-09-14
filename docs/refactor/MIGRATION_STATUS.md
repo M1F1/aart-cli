@@ -1,6 +1,24 @@
 # AART Refactor Migration Status
 
-**CP-22 is 16 of 17 steps done — one screen structure (2026-09-11).** The full `make quality`
+**2026-09-14: CP-22 CLOSED; CP-23 task 01 done, task 02 next.**
+The existing Add Source changes now have complete focused evidence. Successful connection names
+and focuses the Source, explains explicit Sync/Candidate discovery and keeps the Sync key separate
+from the notice. The real workflow also exposed and fixed lost focus when returning from Source
+Details or cancelling Sync review (D-251). Five semantic mutations were killed; 83 focused tests
+and 193 subtests pass, including a Hypothesis row-selection property and real local Source history.
+Scoped mutation analysis is recorded; format, lint, typecheck, unit (3,978 OK) and validate
+passed. Per-task work runs only the verifying gates; the full suite is task 15.
+
+Tasks 02–15 remain pending in [`CP-23`](slices/CP-23-actionable-tui-workflows.md); the next product
+step is Candidate table/detail separation. The entire batch and its manual acceptance are still
+open. Owner requirements in §167/D-249–D-250 retain manual publication, explicit target choice,
+credential acquisition guidance, and complete Frame/Verbose compliance with no standard in-TUI
+exceptions. No human retest, all-screen audit, or new CP-22 gate result is claimed.
+The operator's manual lab and untracked notes remain untouched.
+
+## Historical CP-22 checkpoint (2026-09-11; closed above)
+
+**CP-22 was 16 of 17 steps done — one screen structure.** The full `make quality`
 half of step 16 is green on `d60bdd5`: two discovery runs each passed 3,924 tests (one skipped),
 branch coverage is 85.47%, and every format, lint, type, repository validation, packaging, docs
 and secret-shape gate passed. The operator then walked the built screens and reported seven more

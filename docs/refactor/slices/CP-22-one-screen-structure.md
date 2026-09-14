@@ -1,6 +1,18 @@
 # CP-22 — One screen structure, and the third manual run
 
-Status: OPEN — 15 OF 16 STEPS DONE
+Status: CLOSED — 17 OF 17 STEPS DONE (operator closure, 2026-09-14)
+
+## Closure
+
+The product owner explicitly requested closure on 2026-09-14 and creation of
+[`CP-23`](CP-23-actionable-tui-workflows.md) for the new manual-run findings. Step 16 is closed
+on that instruction and the previously recorded full quality run on `d60bdd5`; no new full suite
+or exhaustive manual pass is claimed by this documentation change (D-248).
+
+The detailed notes below are historical implementation evidence, not current blockers. The
+bootstrap initialization stage report remains in BACKLOG. The incomplete QA-098 sentence is not
+an outstanding clarification; later concrete requests are the executable scope in CP-23.
+New reports about mixed prose/actions are CP-23 regressions/refinements, not silently marked fixed.
 
 ## Goal
 

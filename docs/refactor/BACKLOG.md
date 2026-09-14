@@ -6,6 +6,11 @@
 
 ## Backlog admission rule
 
+CP-23 follow-up (2026-09-14, D-250): all-screen Frame/Verbose compliance and explicit credential
+purpose/acquisition guidance are mandatory tasks 14 and 13, respectively. Do not defer failures
+of those acceptance criteria here as presentation polish or optional documentation. No unrelated
+new backlog item was discovered during this planning update.
+
 Add an item when it is valuable but **not required** to satisfy a currently mandatory Product
 Specification invariant, acceptance criterion, security boundary or critical-path dependency.
 Do not implement it merely because it is nearby.
@@ -2843,6 +2848,10 @@ CP-21 `QA-076` reproduced the stale-copy condition again. Its runs moved each ge
 tree to a unique temporary directory before changing scope; no generated mutation checkout remains
 in the repository worktree.
 
+CP-23 task 01 reproduced the same condition when switching from `application/consumer_ui.py` to
+`io/consumer_actions.py`. Moving the generated UI checkout under `.git/` before rerunning the
+new module restored mutation discovery. No runner or product gate was weakened.
+
 ## B-111 — `make mutants` aborts when a Hypothesis property test is in `TESTS`
 
 Found: 2026-09-10, during CP-21 step 5.
@@ -2868,6 +2877,10 @@ slice's only coverage of a claim is a property.
 Worth fixing properly in `scripts/mutants.py` -- either by suppressing that health check for the
 mutation run, or by naming the cause in the failure so the next agent does not spend the run
 finding it. Related to `B-110`, which is the other way this command fails with a misleading message.
+
+CP-23 task 01 reproduced this with `consumer_ui_state_test.py` during the clean-test phase.
+The successful advisory retry used the example/E2E Source suites; the generated cursor property
+remained enabled in ordinary tests and the deliberate mutation proof. No health check was disabled.
 
 ## B-112 — `make mutants` mutates no class methods in `consumer_views.py`
 
@@ -2935,6 +2948,10 @@ improving. The third group deserves a test whenever `_merges` is next opened. Re
 
 ## The Registry initialization stage report on screen 46 (`QA-098`)
 
+2026-09-14 disposition (D-248): remains noncritical backlog after operator closure of CP-22.
+CP-23 implements the new concrete screen reports, not this separate durable stage-history feature.
+The unfinished fragment of the earlier QA-098 message is not an active clarification or blocker.
+
 The operator asked Registry Maintainer to show the run that produced the current snapshot: `init`,
 `lock`, `build`, `validate`, `audit`, `commit`, ending in `committed <sha> locally; not pushed and
 not merged`. CP-22 step 17 built everything else in that finding — the registry as a row, and its
@@ -2952,3 +2969,30 @@ passed, what it said, and the commit it ended on — and project that. Not criti
 screen now carries already answers the question the finding opens with (where has this registry got
 to), and the stage report is the history behind it. Worth doing when a slice next opens
 `io/registry_bootstrap.py` for a product reason.
+
+## B-114 — Source-onboarding mutation scope leaves unrelated UI/action claims unmeasured
+
+Found: 2026-09-14, CP-23 task 01. Advisory runs intentionally used Source addition/onboarding and
+navigation examples, rather than claiming adequacy for both large modules as a whole.
+
+- `application/consumer_ui.py`: 1,961 mutants; 550 killed, 1,345 survived, 66 had no selected test.
+  `_set_rows` has no survivor. Reviewed `_back_focus` survivors concern the pre-existing general
+  workflow predicate, unrelated-screen fallback and Candidate validation-row unwrapping. The
+  Source-specific reverse edges are held by the two targeted mutations and composed workflow.
+  Other survivors cover unrelated bindings/forms, event guards, promotion/publication completion
+  and generic completion selection/pending-state clearing. They are not evidence those areas lack
+  tests in the full repository: those suites were outside this advisory selection.
+- `io/consumer_actions.py`: final fresh run has 2,170 mutants; 246 killed, 278 survived, 1,646 had
+  no selected test. Six newly added notice/text survivors were within this task's claims and were
+  closed by checking the three actual rendered statements separately. The sole remaining
+  `_execute_source_addition` survivor removes refreshing `offers` from the reread context. Both
+  real and fake Source-add fixtures keep the approved offers unchanged, as this operation should;
+  a separately changed approved-offer observation would need its own refresh scenario. The other
+  survivors/no-test cases concern existing review identity/diagnostic variants, shared host/screen
+  composition and non-onboarding installation, maintenance, promotion and credential actions.
+
+Noncritical: no survivor remains in the new cursor fallback or new Source success notice. Broaden
+the appropriate scope when the later CP-23 tasks touch those existing contracts, especially
+Candidate transitions (tasks 04/09) and publication/completion (tasks 05/06). Do not treat these
+scoped figures as full-module mutation adequacy. B-110/B-111 record the runner limitations met
+before successful runs; neither was resolved by changing product tests or weakening a gate.

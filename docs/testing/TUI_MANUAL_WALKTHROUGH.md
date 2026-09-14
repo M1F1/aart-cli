@@ -204,6 +204,13 @@ Expected: a Source is visibly an authoring location, not an approved Registry (`
 review shows alias, URL and ref before confirmation. Opening the Add Source form a second time
 opens it **empty**; returning to a refused form keeps what you typed (`QA-028`).
 
+CP-23 task 01 retest: after each successful addition, the cursor stays on the Source just added.
+A separate notice names it and explains that **Source Sync** discovers/refreshes Candidates,
+including new upstream versions; it neither promotes them nor updates installed artifacts.
+Open that Source's details, start Sync, cancel with Esc, then return to Sources with Esc. The same
+Source must remain selected, and `s` must review that Source. A refused addition must not show the
+success notice. Adding the connection alone leaves Candidate discovery for the next step.
+
 ## 5 — Sync and discover Candidates
 
 - [ ] On **Sources**, press `s` (**Sync**).

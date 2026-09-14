@@ -1761,8 +1761,18 @@ class LocalConsumerActions:
             offers=connected.value.offers,
             maintainer=connected.value.maintainer,
         )
-        recorded_at, _today = self._moment()
-        return self._recorded(command, recorded_at)
+        return self._recorded(
+            command,
+            pending.draft.alias,
+            notice=(
+                f"Source {pending.draft.alias} added.",
+                "",
+                "Run Source Sync to discover artifacts and create or refresh Candidates, "
+                "including new upstream versions. Adding a Source only connects it.",
+                "",
+                "Source Sync does not promote Candidates or update installed artifacts.",
+            ),
+        )
 
     def _execute_registry_init(
         self,

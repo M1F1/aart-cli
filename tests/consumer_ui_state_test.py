@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from dataclasses import replace
 
 from hypothesis import given
 from hypothesis import strategies as st
@@ -20,6 +21,30 @@ from agent_artifacts.application.consumer_views import (
 
 
 class ConsumerUiStateTest(unittest.TestCase):
+    @given(
+        st.lists(st.text(alphabet="abcdef", min_size=1, max_size=8), unique=True, max_size=12),
+        st.text(alphabet="abcdef", max_size=8),
+        st.text(alphabet="abcdef", max_size=8),
+    )
+    def test_reloading_rows_keeps_the_cursor_then_focus_then_the_first_row(
+        self, rows: list[str], standing: str, focus: str
+    ) -> None:
+        state = ConsumerUiState(
+            ConsumerSession(ConsumerScreen.MARKETPLACE),
+            rows=(standing,) if standing else (),
+            focus=focus,
+            selection=("selected-but-filtered-out",),
+        )
+        loaded, commands = reduce_consumer_ui(
+            state, ConsumerUiEvent(ConsumerUiEventKind.SET_ROWS, rows=tuple(rows))
+        )
+        expected = (
+            standing if standing in rows else focus if focus in rows else rows[0] if rows else ""
+        )
+        self.assertEqual(loaded.current_row, expected)
+        self.assertEqual(replace(loaded, rows=state.rows, cursor=state.cursor), state)
+        self.assertEqual(commands, ())
+
     def test_navigation_profile_search_selection_help_and_back_are_pure(self) -> None:
         initial = ConsumerUiState()
 

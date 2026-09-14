@@ -1,8 +1,40 @@
 # AART Refactor — Next Work
 
-## CP-22 current objective (2026-09-11)
+## Current objective — CP-23 (2026-09-14)
 
-**CP-22 is OPEN — step 17 is landed, and step 16 waits on the operator's next manual run.** The
+**CP-22 is CLOSED. CP-23 task 01 is done; task 02 is next.**
+The unfinished Source onboarding changes from the previous run are completed in the working tree.
+Add Source names the new Source and explains explicit Candidate discovery, retaining its row for
+`[s] Sync`. Returning from Source Details or cancelling its Sync review also preserves that Source.
+D-251 records the second focus defect reproduced by the real composed workflow and its repair.
+
+Focused evidence: 83 tests and 193 subtests pass, including the real Add → Details → cancelled
+review → Sources → Sync → repeat Sync → new-version discovery path and a Hypothesis cursor
+precedence/persistence property. Five targeted semantic mutations were killed. Scoped advisory
+mutation analysis is recorded; format, lint, typecheck, unit (3,978 OK) and validate passed.
+Per-task work runs only the verifying gates; the full suite is task 15 (owner instruction).
+Task 01's detailed evidence is in
+[`slices/CP-23-actionable-tui-workflows.md`](slices/CP-23-actionable-tui-workflows.md).
+
+**Next product action: task 02**, separating the Candidates table from the focused identity detail
+under the shared Verbose gate. Continue the ordered fifteen-task plan; CP-23 as a whole is not
+implemented or verified. Task 15 retains the full-batch/manual acceptance requirement, and task 14
+retains the complete screen/state audit. No human manual acceptance is claimed for task 01.
+
+The accepted owner revisions remain Product Specification §167 and D-249–D-250: remove TUI push
+capability in task 05, offer explicit Skill harness choice in task 10, carry credential guidance
+through approved metadata in task 13, and enforce the shared frame without in-TUI exceptions in
+task 14. All cursor descriptions are Verbose-only; essential input guidance stays in Fast.
+Preserve the exact Registry baseline and the distinction between local promotion and publication.
+The previous lab and the operator's untracked notes remain untouched.
+
+CP-22's closure is an owner decision, not fresh gate or manual evidence; its historical gate is
+`d60bdd5`. Bootstrap stage history remains backlog, and the unfinished old QA-098 sentence is not
+a pending user question (D-248). The historical handoffs below do not override this next action.
+
+## Historical CP-22 handoff (2026-09-11; superseded by closure above)
+
+**At this checkpoint CP-22 was OPEN — step 17 was landed and step 16 awaited a manual run.** The
 third manual run's seven findings are all built: `QA-092`…`QA-097` (`8f5605b`) and `QA-098`, which
 makes the registry this project publishes a row and its description the lifecycle (`D-247`). Whether
 a remote branch exists is still a network answer a frame cannot go and get, so what the screen
