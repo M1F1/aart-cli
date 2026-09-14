@@ -4,16 +4,15 @@ The operator installed and only afterwards found out where it had gone. Nothing 
 named a harness, so there was no point at which the answer could have been checked, let alone
 changed.
 
-The set is not a preference and offering it as one would be a lie of a different kind: the shell
-installs into every harness this build measured that the artifact itself declares support for
-(`D-231`), so it is derived from the machine and the manifest, with nothing left over for anybody
-to choose. What was missing is that the screen never said so. It says both halves now -- the names,
-and where they come from.
+CP-23 task 10 (D-260) made the set a choice: screen 05 offers the eligible harnesses and the
+reviewed plan is narrowed to the ones ticked. Ready names that choice as the user's intent, and no
+longer claims the set is every harness the machine measured.
 """
 
 from __future__ import annotations
 
 import unittest
+from dataclasses import replace
 
 from agent_artifacts.application.consumer_views import PresentationProfile
 from agent_artifacts.domain.result import Ok
@@ -22,19 +21,20 @@ from tests.consumer_flow_test import _begin
 
 
 class ReviewNamesTheHarnessesTest(unittest.TestCase):
-    def _ready(self) -> str:
+    def _ready(self, *, chosen: tuple[str, ...] = ()) -> str:
         begun = _begin()
         assert isinstance(begun, Ok), getattr(begun, "diagnostics", ())
-        return "\n".join(render_ready(begun.value.plan, PresentationProfile.FAST))
+        plan = replace(begun.value.plan, chosen_targets=chosen)
+        return "\n".join(render_ready(plan, PresentationProfile.FAST))
 
     def test_the_review_names_the_harness_the_artifact_will_reach(self) -> None:
         self.assertIn("tabnine", self._ready())
 
-    def test_it_says_where_that_set_came_from_rather_than_offering_it_as_a_choice(self) -> None:
-        text = self._ready()
+    def test_it_names_the_chosen_set_as_a_choice_rather_than_everything_measured(self) -> None:
+        text = self._ready(chosen=("tabnine",))
 
-        self.assertIn("Harnesses:", text)
-        self.assertIn("declares", text)
+        self.assertIn("Harnesses: tabnine (chosen for this installation).", text)
+        self.assertNotIn("every harness this machine measured", text)
 
 
 if __name__ == "__main__":

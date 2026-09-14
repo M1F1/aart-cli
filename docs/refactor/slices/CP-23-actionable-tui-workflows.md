@@ -1,6 +1,6 @@
 # CP-23 — Actionable TUI workflows after the fourth manual run
 
-Status: IN PROGRESS — TASKS 01–09 DONE; TASK 10 IN PROGRESS (handed to Codex)
+Status: IN PROGRESS — TASKS 01–11 DONE; TASK 12 NEXT (owner task 16 added after 13)
 
 Date: 2026-09-14. Authority: the product owner's manual screen reports and request to create CP-23
 and close CP-22, followed by the all-screen audit and credential guidance requirements.
@@ -221,6 +221,78 @@ narrow terminals, terminal-control/unsafe-URL rejection, and secret redaction. C
 with isolated providers; never retrieve/store real secret values for a test. A targeted mutation
 dropping guidance from the pipeline or prompt must fail the test that claims to hold it.
 
+### 16 — Manage user configuration and credentials per artifact and harness (owner request)
+
+Added by the owner on 2026-09-14, after task 10. It runs after tasks 12 and 13, which it builds on,
+and before the task 14 audit, which must include its screens. The owner's words:
+
+> chcialbym dolaczyc nowy task - zarzadznie secretami i zmiennymi charakterystycznymi dla
+> uzytkwnika per np mcp takimi jak nazwa uzytwkonika czy url strony z https zeby o to tez pytal
+> aart w trakcie instalacji i umieszczal taki plik konfiguracyjny w miejscu do ktorego zostanie
+> zainstalwoany artefakt i nastepnie zeby z poziomu TUI mozna bylo tym zarzadzac, najlepiej zeby
+> credentiale i takie zmienne byly uporzadkowane w kontekscie mcp czy innych artefaktow ktore z
+> nichj korzystaja, wiec niech bedzie zakladka zbioraoa user variables and credentials, ktore sa
+> zczytywane z zainstalowych artefaktow czy stanu keychaina, ale nigdy ofc nie przychowywane w
+> aplikacji czy plikach aplikacji (credentials) podobnie jak zmienen niech one beda na dysku w
+> sciezkach zainstalowanych artefaktow, ale mozna bedzie je modyfkowac z poziomu aart, zeby nie
+> babrac sie w jsonach [...] oczywiscie jakiekolwiek zmiany w kechain beda sie mozna powiedziec
+> dzialy poza aplikacja, czyli tak jak obecnie isntaluje sie mcp to jest zejscie do cli zeby je
+> ustawic za pomoca api kechaina cli
+
+> no i to bedzie fajne bo bedzie mozna je zmieniac te zmienne dla wszystkich harnessow ofc, mozna
+> jeszcze wybrac dla ktorych harnesow je zminic i one zawsze beda w kontekscie harnesow, czyli
+> mozna je zminiec per jeden harnes ale tez per wszystkie harnesy
+
+Requirements:
+
+- **Installation asks for non-secret configuration.** Values such as a user name or an `https`
+  site URL are `ConfigInput`s (§91–92.2). Installation asks for them just as it asks for credentials
+  today. Today screen 07 refuses with "waiting for answers this screen cannot collect yet"; that
+  refusal is replaced by a working input form using the standard frame.
+- **Where values live.**
+  - Non-secret values are written to a configuration file at the installed artifact's own location
+    (its installation root, per harness where the projection differs), never to AART's application
+    state files.
+  - Credentials are never stored in AART or its files. They stay in the secret provider (for
+    example macOS Keychain), and AART holds only the `CredentialReference`.
+  - §96 permits AART-owned local config state, and this owner choice narrows it to the artifact's
+    installed location. Record that as a decision and, if needed, a Product Specification revision
+    like §167.
+- **Separate entities, shown side by side.** The owner clarified on 2026-09-14:
+  > i don't want to merge secrets and non secrets into one variable concept i just want them to be
+  > near each other in TUI to configure them, but they are different entitites with different way
+  > to establish and install them
+
+  Configuration values and credentials keep their own types, their own way of being established
+  and their own installation effects. Only their placement in the TUI is shared.
+- **One area: "User variables and credentials".**
+  - The area is grouped by the artifact that uses each value (MCP or other kinds).
+  - It is read from the installed artifacts' configuration files and from the provider's reference
+    state.
+  - Credential values are never read, displayed or kept.
+  - INV-067 still holds: configuration and credentials are two visibly distinct sections with
+    different handling guarantees, never one generic "variables" list.
+  - It extends, rather than duplicates, the accepted Credentials views (§161.8, task 12).
+- **Editing from the TUI, per harness.**
+  - A configuration value can be changed for one harness, for a chosen set of harnesses, or for
+    every harness the artifact is installed into. Values are always shown in the context of their
+    harnesses. The choice reuses task 10's harness-selection model.
+  - A change is a reviewed, receipted mutation that touches only the dependent projections
+    (INV-179: a configuration change is not a reinstall).
+- **Credentials change outside the application.** Setting or replacing a credential stays a
+  provider handoff, like today's MCP install: the terminal is lent to the Keychain CLI/API and the
+  frame is restored afterwards. The TUI starts it and then verifies the reference, and never
+  handles the value (INV-180).
+- **Tests:**
+  - install-time configuration and credential collection with real isolated files written to the
+    chosen harnesses' installed locations;
+  - no configuration in AART state, and no secret anywhere on disk, in plans, receipts or logs;
+  - editing one harness, several or all, with only dependent projections changed;
+  - the grouped area projected from installed artifacts and provider references;
+  - a stale or missing configuration file reported honestly;
+  - Hypothesis properties for per-harness scope selection and secret redaction;
+  - isolated provider fakes only.
+
 ### 14 — Audit and enforce the frame and Verbose contract on every TUI view
 
 Inventory the actual Consumer/Maintainer screen catalogs, routes, conditional states and both
@@ -276,7 +348,7 @@ Mark IMPLEMENTED after code/gates; mark VERIFIED only when the required acceptan
 Begin at task 01. Tasks 02–04 share presentation/navigation seams and should be sequential. Task 05
 defines publication wording for task 09. Task 10 defines target intent used by task 11 and revisits
 task 08's final plan summaries. Task 13 extends the input path; task 14 audits all completed/new
-screens. Task 15 runs after all fourteen product/audit tasks; none is silently
+screens. Task 15 runs after all fifteen product/audit tasks (including owner-added task 16); none is silently
 deferred to backlog. Additional unrelated findings go to BACKLOG with evidence.
 
 ## Initial inspection evidence (read-only)
@@ -898,3 +970,87 @@ Evidence:
 - D-260 records the target-intent boundary. B-119 records the noncritical future explicit harness
   migration question for updates. Scoped `make mutants`, the full suite and human acceptance stay
   with task 15; no human terminal retest is claimed here.
+
+### Task 11 — Artifact Details controls and one eligibility rule (DONE 2026-09-14)
+
+Codex started this task before its limit (controls, eligible/detected wording, and the
+`compatible` → any-eligible change). This segment verified it against the production composition,
+found that Details still disagreed with task 10, and fixed the rule (D-261).
+
+Before (production composition, E2E Skill declaring `harnesses: ["claude"]` and no platforms):
+
+```text
+- company/skill/code-review@1.2.0
+  Approved
+  Code review
+  What it needs
+    - platform 'darwin' is not supported; supported platforms: none
+    - profile 'codex' is not supported; supported profiles: claude
+    - profile 'opencode' is not supported; supported profiles: claude
+    - profile 'tabnine' is not supported; supported profiles: claude
+  Actions: select, install, verbose.
+
+[i] Install   [v] Fast / Verbose
+```
+
+After:
+
+```text
+- company/skill/code-review@1.2.0
+  Approved
+  Code review
+  Eligible installation harnesses
+    - claude
+  Detected but not eligible
+    - codex
+    - opencode
+    - tabnine
+  What it needs
+    - Nothing else before choosing an eligible harness
+
+- Not selected for installation.
+
+[i] Install   [Space] Select   [v] Fast / Verbose
+```
+
+A probe also showed that a Skill declaring only `windows` installed on darwin through the TUI
+while Details called it unavailable. It is now refused by placement, naming both platforms.
+
+- `tests/artifact_details_controls_test.py` (14 tests) covers:
+  - one eligible harness keeps the artifact available, and detected-unsupported harnesses are not
+    requirements;
+  - no eligible harness is a visible blocker with per-harness reasons;
+  - Verbose calls each detected harness eligible or detected-unavailable;
+  - Space selects and deselects the focused artifact with a Select/Deselect label and status;
+  - the selection survives Back and keeps the Marketplace cursor identity;
+  - the frame advertises the working controls and no decorative prose;
+  - install from Details needs no Marketplace tick (real E2E);
+  - an unavailable install declines back on Details;
+  - a Hypothesis property over declared/detected harness subsets and empty/this/other platform
+    declarations;
+  - an undeclared platform is not reported as unsupported;
+  - placement refuses an excluded platform whether profiles were requested or measured, and still
+    places when this platform is declared;
+  - production-composition E2Es: Details' eligible harnesses equal screen 05's target rows (Claude
+    only; Claude/OpenCode/Tabnine; undeclared), and an excluded platform is unavailable on both
+    screens and delivers nothing.
+- `tests/install_review_names_harnesses_test.py` still asserted D-241's "not a choice" wording,
+  which task 10 superseded without running this module. It now holds D-260: Ready names the chosen
+  set as chosen.
+- Focused runs: every test module mentioning compatibility, platforms, placement, harnesses or the
+  E2E environment (196 modules, 2,299 tests). The only failures were:
+  - the stale Ready wording test above, now fixed;
+  - `tests.aggregate_gate_test`, which fails to import when loaded directly, and fails the same way
+    without this change (checked with the change stashed).
+
+  `make typecheck format-check lint docs-check`: OK.
+- Targeted mutations, all killed:
+  - empty harness declaration strict again (**2 red**);
+  - empty platform declaration strict (**3 red**);
+  - placement ignores platforms (**2 red**);
+  - Details needs every harness compatible (**2 red**);
+  - Space uses the cursor row instead of the focused artifact (**1 red**);
+  - selection status inverted (**1 red**);
+  - eligible harnesses not listed (**1 red**).
+- Walkthrough section 11 adds the Details checks. Scoped `make mutants` and the full suite are left
+  to task 15. No human terminal retest is claimed.

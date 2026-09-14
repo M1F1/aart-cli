@@ -1,6 +1,11 @@
 # AART Refactor Migration Status
 
-**2026-09-14: CP-22 CLOSED; CP-23 tasks 01–10 done, task 11 next.**
+**2026-09-14: CP-22 CLOSED; CP-23 tasks 01–11 done, task 12 next (owner task 16 added after 13).**
+Task 11 (D-261): Details and installation share one eligibility rule. Empty declarations are
+unconstrained, and an excluded platform refuses placement (a Windows-only Skill had installed on
+darwin). Details shows eligible vs detected harnesses, Space selects the focused artifact, and the
+decorative actions line is gone. A production E2E proves Details equals screen 05's targets. Seven
+targeted mutations were killed.
 Task 10 (D-260): installation screen 05 offers explicit eligible harness rows even when there is
 one, supports several, re-prepares and executes only the chosen subset, keeps stale/incomplete
 choices as visible refusals, and fails closed at execution on an empty choice. Isolated E2Es prove

@@ -784,7 +784,9 @@ def evaluate_compatibility(
         payload.append(
             CompatibilityReason("artifact-removed", "artifact was removed from its source")
         )
-    if target.profile not in manifest.compatibility.profiles:
+    # D-231/D-261: an empty declaration is unconstrained, the same rule placement applies, so
+    # Artifact Details cannot call unavailable what installation would put in place.
+    if manifest.compatibility.profiles and target.profile not in manifest.compatibility.profiles:
         payload.append(
             CompatibilityReason(
                 "profile-unsupported",
@@ -792,7 +794,7 @@ def evaluate_compatibility(
                 f"{supported_label(manifest.compatibility.profiles)}",
             )
         )
-    if target.platform not in manifest.compatibility.platforms:
+    if manifest.compatibility.platforms and target.platform not in manifest.compatibility.platforms:
         payload.append(
             CompatibilityReason(
                 "platform-unsupported",

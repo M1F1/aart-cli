@@ -372,6 +372,7 @@ _SEARCHABLE = frozenset(
 _SELECTABLE = frozenset(
     {
         ConsumerScreen.MARKETPLACE,
+        ConsumerScreen.ARTIFACT_DETAILS,
         ConsumerScreen.COLLECTION_PREVIEW,
         ConsumerScreen.COLLECTION_CUSTOMIZE,
         ConsumerScreen.UPDATES,
@@ -820,7 +821,11 @@ def _move(
 def _toggle_selection(
     state: ConsumerUiState, key: str
 ) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
-    key = key or state.current_row
+    key = key or (
+        state.focus
+        if state.session.screen is ConsumerScreen.ARTIFACT_DETAILS
+        else state.current_row
+    )
     if state.session.screen not in _SELECTABLE or not key:
         return state, ()
     if state.session.screen is ConsumerScreen.REVIEW_SELECTION:
@@ -1639,7 +1644,13 @@ def key_bindings(
         bindings.append(KeyBinding("Space/Enter", "Toggle filter"))
     else:
         if state.session.screen in _SELECTABLE and " " not in keys:
-            bindings.append(KeyBinding("Space", "Select"))
+            label = (
+                "Deselect"
+                if state.session.screen is ConsumerScreen.ARTIFACT_DETAILS
+                and state.focus in state.selection
+                else "Select"
+            )
+            bindings.append(KeyBinding("Space", label))
         if state.failed_action is not None and "enter" not in keys:
             # The run is over. The only thing Enter can honestly do here is leave.
             bindings.append(KeyBinding("Enter", "Back to list"))
@@ -1894,9 +1905,12 @@ def key_event(
             else ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_CANDIDATE_FILTER, key=row)
         )
     if key == " ":
-        return ConsumerUiEvent(
-            ConsumerUiEventKind.TOGGLE_SELECTION, key=cursor or state.current_row
+        selected = (
+            state.focus
+            if state.session.screen is ConsumerScreen.ARTIFACT_DETAILS
+            else cursor or state.current_row
         )
+        return ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_SELECTION, key=selected)
     if key in ("up", "k"):
         return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="up")
     if key in ("down", "j"):

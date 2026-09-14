@@ -86,7 +86,10 @@ class MarketplaceShellTest(unittest.TestCase):
 
         self.assertEqual(state.session.screen, ConsumerScreen.ARTIFACT_DETAILS)
         self.assertIn(self.keys()[0], terminal.last)
-        self.assertIn("Actions: select, install, verbose.", terminal.last)
+        self.assertIn("[i] Install", terminal.last)
+        self.assertIn("[Space] Select", terminal.last)
+        self.assertIn("[v] Fast / Verbose", terminal.last)
+        self.assertNotIn("Actions: select, install, verbose.", terminal.last)
 
     def test_enter_on_a_collection_opens_the_preview_rather_than_artifact_details(self):
         state, terminal = drive(UP, ENTER, state=_at(ConsumerScreen.MARKETPLACE))

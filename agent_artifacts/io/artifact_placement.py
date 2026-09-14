@@ -60,6 +60,7 @@ from agent_artifacts.protocol.authoring import (
 from agent_artifacts.protocol.native_tree import compile_native_package
 from agent_artifacts.store.model import ObjectReadRequest, ObjectStorePaths
 
+from .environment_inspection import platform_name
 from .object_store import read_object
 
 __all__ = ["PLACEMENT_UNAVAILABLE", "placement_for"]
@@ -122,6 +123,17 @@ def _declared_narrowing(
     package = compile_native_package(entries, expected_identity=identity)  # type: ignore[arg-type]
     if isinstance(package, Err):
         return package
+    platforms = package.value.manifest.compatibility.platforms
+    here = platform_name()
+    # D-261: the platforms an artifact declares narrow exactly as Artifact Details reads them, and
+    # by the same D-231 rule -- an empty declaration is unconstrained. A platform this machine is
+    # not is no harness's fault, so it is refused whoever named the profiles.
+    if platforms and here not in platforms:
+        return _error(
+            f"{identity} declares support for platforms {supported_label(platforms)}, and this "
+            f"machine is {here}",
+            "install it on a machine running one of those platforms",
+        )
     declared = package.value.manifest.compatibility.profiles
     if not declared:
         return Ok(profiles)

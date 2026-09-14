@@ -1089,14 +1089,30 @@ def render_marketplace_artifact(
         if row.trust in {"registry-reviewed", "company-reviewed"}
         else _human(row.trust).title()
     )
-    lines = [row.key, approval, row.summary, "What it needs"]
-    if not row.compatible:
-        lines.extend(f"  - {item.message}" for item in row.reasons)
-    elif not inputs:
-        lines.append("  - Your selected system and harness are ready")
+    lines = [row.key, approval, row.summary, "Eligible installation harnesses"]
+    if row.eligible_harnesses:
+        lines.extend(f"  - {harness}" for harness in row.eligible_harnesses)
     else:
+        lines.append("  - No eligible installation harness is available on this machine.")
+    if row.unavailable_harnesses:
+        lines.append("Detected but not eligible")
+        lines.extend(f"  - {harness}" for harness in row.unavailable_harnesses)
+    if not row.compatible:
+        lines.append("Why installation is unavailable")
+        lines.extend(
+            f"  - {item.profile}: "
+            + (
+                "; ".join(reason.message for reason in item.reasons)
+                if item.reasons
+                else "no compatible placement is available"
+            )
+            for item in row.compatibility
+        )
+    lines.append("What it needs")
+    if inputs:
         lines.extend(f"  - {item.label}" for item in inputs)
-    lines.append("Actions: select, install, verbose.")
+    else:
+        lines.append("  - Nothing else before choosing an eligible harness")
     return tuple(lines)
 
 
@@ -2758,6 +2774,12 @@ class CanonicalScreenSource:
             # From the session's own settings, not the machine snapshot: the same reason the rows
             # are drawn from `state.settings`.
             return settings_consequence(state.settings)
+        if screen is ConsumerScreen.ARTIFACT_DETAILS and screens.offered(state.focus) is not None:
+            return (
+                "Selected for installation."
+                if state.focus in state.selection
+                else "Not selected for installation.",
+            )
         if screen is ConsumerScreen.REMEDIATION and self.rows(state):
             # CP-23 task 08: the changes are what this view states; Continue is its row.
             assert screens.plan is not None

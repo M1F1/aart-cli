@@ -370,6 +370,14 @@ escapability of these flows).
       described: Artifact, Kind, Version, Source and its approved Description (a Collection row
       shows what it Includes). Move the cursor and it follows; search it away and nothing stale
       remains; `v` again hides it.
+- [ ] **Marketplace** → `Enter` on the Skill opens **Artifact Details**. It lists **Eligible
+      installation harnesses** (Claude, OpenCode, Tabnine for the lab Skill) and, separately, any
+      detected harness that is not eligible. No unselected harness appears under *What it needs*.
+      There is no `Actions: select, install, verbose.` line. The footer shows `[Space] Select`:
+      press it, the status reads `Selected for installation.` and the label becomes Deselect. `Esc`
+      back to Marketplace keeps the tick on that row (D-261).
+- [ ] From **Artifact Details**, `i` starts the install without any Marketplace tick, and screen 05
+      offers exactly the harnesses Details called eligible. `Esc` out of it.
 - [ ] **Marketplace** → select the Skill → `i` (**Install**). Screen 05 lists Claude, OpenCode and
       Tabnine as unticked rows even when only one is eligible. Read the selection summary, tick one
       harness with `Space`, then **cancel once** with `Esc`.

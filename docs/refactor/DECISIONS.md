@@ -6121,3 +6121,37 @@ Updates keep the harnesses recorded by the installed state and have no picker in
 (B-119). The disposable lab Skill and MCP declare Claude, OpenCode and Tabnine compatibility so
 manual acceptance can exercise the same choice. Isolated filesystem E2Es prove OpenCode and
 Tabnine MCP settings and Skill directories, including a multi-target receipt.
+
+## D-261 — Artifact Details and installation read one eligibility rule
+
+Date: 2026-09-14 · Status: implemented · Scope: CP-23 task 11 · Refines: D-231, D-260
+
+Artifact Details and installation disagreed in the production composition. The E2E Skill
+`company/skill/code-review@1.2.0` declares `harnesses: ["claude"]` and no platforms. Details said
+`platform 'darwin' is not supported; supported platforms: none` for every detected harness and
+listed codex/opencode/tabnine under "What it needs". Screen 05 still offered Claude, and
+installation delivered it. A Skill declaring only `windows` also installed on darwin, so D-260's
+claim that placements were already narrowed by platform was not true.
+
+The rule is now one rule, applied in both places:
+
+- An empty `compatibility.harnesses` or `compatibility.platforms` declaration is unconstrained.
+  This is the D-231 rule, which placement already applied to harnesses. `evaluate_compatibility`
+  now applies it to both lists, so an author who wrote nothing is not reported as "none".
+- A non-empty platform declaration that excludes this machine refuses placement by name
+  (`io/artifact_placement.py` `_declared_narrowing`), whoever named the profiles. A platform is
+  not a harness choice, so D-231's measured/requested asymmetry does not apply to it.
+- Details treats an artifact as available when at least one detected harness is eligible. It lists
+  the eligible harnesses first and the detected-but-not-eligible ones separately, and gives reasons
+  only when none is eligible. A harness nobody selected is never shown as something the user must
+  fix. A harness somebody names explicitly and that is unsupported is still refused by the
+  placement (`declared_harness_narrowing_test`).
+- Details' decorative `Actions: select, install, verbose.` is gone. Space selects or deselects the
+  focused artifact itself (not a cursor row, since Details has none), the footer advertises it with
+  a Select/Deselect label, and the view status says whether it is selected. `i` installs from
+  Details without a Marketplace tick.
+
+Evidence: an E2E over the production composition asserts that Details' eligible harnesses equal
+screen 05's target rows for one, three and undeclared harness sets. For an excluded platform, both
+screens say unavailable and nothing is delivered. A Hypothesis property covers declared/detected
+harness subsets and platform declarations.

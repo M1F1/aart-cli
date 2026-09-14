@@ -2,7 +2,13 @@
 
 ## Current objective — CP-23 (2026-09-14)
 
-**CP-22 is CLOSED. CP-23 tasks 01–10 are done; task 11 is next.**
+**CP-22 is CLOSED. CP-23 tasks 01–11 are done; task 12 is next.** The owner added task 16 (user
+variables and credentials per artifact and harness), which runs after 13 and before the task 14
+audit; its requirements are in the slice.
+Task 11 (D-261): Artifact Details and installation read one eligibility rule. An empty harness or
+platform declaration is unconstrained, and a declared platform excluding this machine refuses
+placement. Details lists eligible and detected-but-not-eligible harnesses separately and drops its
+decorative actions line. Space selects the focused artifact, and install works from Details.
 Task 10 (D-260) makes installation harnesses explicit user intent: screen 05 always offers the
 eligible targets, re-prepares against the chosen subset and refuses empty, stale or incomplete
 choices. Real isolated E2Es prove exact OpenCode and Tabnine Skill/MCP delivery and receipt

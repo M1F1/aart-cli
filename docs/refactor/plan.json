@@ -603,7 +603,7 @@
         {
           "id": "11",
           "title": "Repair Artifact Details controls and compatibility wording",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "12",
@@ -613,6 +613,11 @@
         {
           "id": "13",
           "title": "Carry explicit credential acquisition guidance from Source to installation prompts",
+          "status": "todo"
+        },
+        {
+          "id": "16",
+          "title": "Manage per-artifact user configuration and credentials by harness from one TUI area",
           "status": "todo"
         },
         {
