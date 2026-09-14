@@ -17,10 +17,13 @@ from dataclasses import replace
 from unittest import TestCase
 
 from agent_artifacts.application.consumer_ui import (
+    ConsumerUiEvent,
+    ConsumerUiEventKind,
     ConsumerUiState,
     RegistryDraft,
     RegistryInitDraft,
     SourceDraft,
+    reduce_consumer_ui,
 )
 from agent_artifacts.application.consumer_views import (
     SETTING_PURPOSE,
@@ -53,6 +56,7 @@ from agent_artifacts.tui_maintainer import (
     maintainer_registry_status,
 )
 from tests.consumer_shell_test import screens
+from tests.frame_contract import frame_violations
 from tests.screen_skeleton_test import _registry
 
 #: Screens whose body still answers prose and rows together. Every entry is work, not a decision;
@@ -225,7 +229,7 @@ class MaintainerDashboardBlockTest(TestCase):
 class RegistriesBlockTest(TestCase):
     """Screen 21, which is the one the operator drew."""
 
-    def _frame(self, *, connected: bool) -> tuple[str, ...]:
+    def _source_and_state(self, *, connected: bool):
         source = CanonicalScreenSource(
             ConsumerScreens(
                 project_dashboard((), registry_count=2 if connected else 0),
@@ -237,13 +241,15 @@ class RegistriesBlockTest(TestCase):
             settings=ConsumerSettings(),
             workspace="/lab/consumer-project",
         )
-        state = replace(state, rows=source.rows(state), cursor=0)
-        return frame(source, state)
+        return source, replace(state, rows=source.rows(state), cursor=0)
+
+    def _frame(self, *, connected: bool) -> tuple[str, ...]:
+        return frame(*self._source_and_state(connected=connected))
 
     def test_the_actions_block_holds_the_add_row_and_nothing_else(self) -> None:
         blocks = _blocks(self._frame(connected=False))
 
-        self.assertEqual(_spoken(blocks[1]), ("> [ Add Registry ]",))
+        self.assertEqual(_spoken(blocks[1]), ("> Add Registry",))
 
     def test_what_a_registry_is_and_what_this_machine_has_are_the_state_of_the_view(self) -> None:
         blocks = _blocks(self._frame(connected=False))
@@ -263,9 +269,34 @@ class RegistriesBlockTest(TestCase):
         blocks = _blocks(self._frame(connected=True))
         rows = _spoken(blocks[1])
 
-        self.assertEqual(rows[0], "> [ Add Registry ]")
+        self.assertEqual(rows[0], "> Add Registry")
         self.assertTrue([line for line in rows if "company" in line])
         self.assertFalse([line for line in rows if line.startswith("Connect an approved")])
+
+    def test_a_registry_row_is_described_in_verbose_rather_than_drawn_as_more_rows(self) -> None:
+        """CP-23 task 14: what a sync does is about the row, so it is the cursor's description."""
+
+        source, state = self._source_and_state(connected=True)
+        fast = replace(state, cursor=1)
+        verbose, _ = reduce_consumer_ui(fast, ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_PROFILE))
+
+        self.assertEqual(
+            _spoken(source.actions(fast)),
+            (
+                "  Add Registry",
+                "> company — connected",
+                "    2 artifacts",
+                "  team — connected",
+                "    2 artifacts",
+            ),
+        )
+        self.assertEqual(source.actions(verbose), source.actions(fast))
+        self.assertIn(
+            "Sync refreshes Marketplace availability; it does not update installed artifacts.",
+            _spoken(_blocks(frame(source, verbose))[2]),
+        )
+        for drawn in (fast, verbose):
+            self.assertEqual(frame_violations(source, drawn), ())
 
     def test_the_empty_state_guidance_is_gone_once_something_is_connected(self) -> None:
         blocks = _blocks(self._frame(connected=True))
@@ -356,24 +387,23 @@ class DoctorBlockTest(TestCase):
         state = replace(state, rows=source.rows(state), cursor=0)
         return frame(source, state)
 
-    def test_the_actions_block_holds_the_artifacts_and_what_drifted_on_them(self) -> None:
+    def test_the_rows_are_the_issues_repair_acts_on_with_the_cursor_on_one(self) -> None:
+        """CP-23 task 14: `r` repairs the row under the cursor, so the cursor has to be drawn."""
+
         blocks = _blocks(self._frame())
 
         self.assertEqual(
             _spoken(blocks[1]),
-            (
-                "✓ public/mcp/github@1.6.0",
-                "⚠ public/mcp/jira@2.2.0",
-                "  launcher: missing",
-            ),
+            ("> ⚠ public/mcp/jira@2.2.0", "    launcher: missing"),
         )
 
-    def test_the_counts_and_what_repair_would_do_are_the_state_of_the_view(self) -> None:
+    def test_the_counts_the_healthy_artifacts_and_what_repair_does_are_the_view_state(self) -> None:
         blocks = _blocks(self._frame())
 
         self.assertEqual(
             _statements(blocks[2]),
             (
+                "✓ public/mcp/github@1.6.0",
                 "1 ready",
                 "1 needs attention",
                 "Actions: repair issues using minimal reconciliation plans.",
@@ -383,7 +413,7 @@ class DoctorBlockTest(TestCase):
     def test_verbose_adds_to_the_state_of_the_view_not_to_the_rows(self) -> None:
         blocks = _blocks(self._frame(verbose=True))
 
-        self.assertEqual(_spoken(blocks[1])[-1], "  launcher: missing")
+        self.assertEqual(_spoken(blocks[1])[-1], "    launcher: missing")
         self.assertEqual(
             _statements(blocks[2])[-2:], ("Independently repairable:", "  - public/mcp/jira@2.2.0")
         )

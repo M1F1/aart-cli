@@ -19,6 +19,7 @@ from agent_artifacts.configuration.model import SourceKind
 from agent_artifacts.domain.result import Ok
 from agent_artifacts.marketplace.catalog import build_marketplace
 from agent_artifacts.tui_consumer import (
+    registry_purpose,
     render_dashboard,
     render_doctor,
     render_registry,
@@ -140,7 +141,10 @@ class ConsumerOverviewTest(unittest.TestCase):
         rendered = "\n".join(
             line
             for registry in registries.values()
-            for line in render_registry(registry, PresentationProfile.FAST)
+            for line in (
+                *render_registry(registry, PresentationProfile.FAST),
+                *registry_purpose(registry),
+            )
         )
         self.assertIn("1 artifact", rendered)
         self.assertNotIn("Actions: update", rendered)

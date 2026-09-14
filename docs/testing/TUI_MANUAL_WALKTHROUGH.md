@@ -467,7 +467,9 @@ Harness delivery must be one answer everywhere it is said (`QA-078`…`QA-080`, 
       Keychain with the authored briefing above its prompt. Type disposable text only; it lands
       with `Set <input> in <provider>.` and verifies (D-267).
 - [ ] **Doctor** → health, offline readiness, activity, configuration.
-- [ ] **Activity** → what actually happened, with real provenance.
+- [ ] **Activity** → what actually happened, with real provenance. Each entry is a row under its
+      day with the cursor on one. `v` shows that entry's review identity below the rows rather
+      than widening every row (CP-23 task 14).
 
 Expected: Dashboard, lists, help and footer have a readable hierarchy with visible focus
 (`QA-035`/`QA-038`/`QA-040`/`QA-041`/`QA-042`).
@@ -475,6 +477,8 @@ Expected: Dashboard, lists, help and footer have a readable hierarchy with visib
 ## 13 — Repair, update, remove
 
 - [ ] Break an installed file by hand, then **Doctor** → `r` (**Repair issues**). Minimal repair only.
+      The repairable issue is a row with the cursor on it, and healthy artifacts and counts are
+      listed below the rule, so it is clear which issue `r` acts on.
 - [ ] Publish a `1.0.1` from the maintainer side and check **Updates** → `i`.
 - [ ] **Installed** → artifact → `u` (**Uninstall**).
 - [ ] **Registries** → `d` (**Disconnect**) — reviewed and bounded (`QA-050`).

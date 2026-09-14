@@ -23,7 +23,6 @@ from dataclasses import replace
 
 from agent_artifacts.application.consumer_views import (
     ConsumerScreen,
-    PresentationProfile,
     project_registries,
 )
 from agent_artifacts.configuration.model import SourceKind
@@ -42,7 +41,7 @@ from agent_artifacts.tui_consumer import (
     CanonicalScreenSource,
     frame,
     read_consumer_offers,
-    render_registry,
+    registry_purpose,
     run_consumer_shell,
     screens_from,
 )
@@ -151,7 +150,7 @@ class ConfiguredRegistriesScreenTest(unittest.TestCase):
         offers = self._offers()
         registry = next(item for item in offers.registries if item.alias == "company")
 
-        drawn = "\n".join(render_registry(registry, PresentationProfile.FAST))
+        drawn = "\n".join(registry_purpose(registry))
 
         self.assertIn("does not update installed artifacts", drawn)
         self.assertNotIn("authoring Source", drawn)

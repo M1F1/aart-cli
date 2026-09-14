@@ -1550,3 +1550,46 @@ The six previously owed 16.1 targeted mutations were also run and killed:
 - 1110 tests pass across the 93 modules that import the TUI or its reducer.
 - `make typecheck lint format-check docs-check secret-shape-check` passes.
 
+#### 14.3 — Consumer list screens draw rows, the cursor and Verbose descriptions (DONE)
+
+- The checker gained the frame laws, stated once in `tests/frame_contract.py`:
+  - the actions block holds rows, what a row says under itself, and headings that group rows;
+  - it draws exactly the state's rows, with the cursor on the state's row;
+  - the description appears only in Verbose, and only on a screen with rows;
+  - the body never repeats the screen name or talks about keys;
+  - `v` changes only the presentation: the rows stay the same, and pressing it twice returns to the
+    start. A row that shows the stored preference itself, such as the Settings detail level, may
+    change.
+- `tui_consumer.compose_frame` returns the `Frame`, so the checker reads blocks instead of lines.
+- Findings fixed:
+  - **21 Registries.** `[ Add Registry ]` is a plain row. A registry's sync explanation and snapshot
+    details are its Verbose description (`registry_purpose`), not more lines at row level.
+  - **22 User variables and credentials.** It no longer repeats its own name under the trail.
+  - **22a.** The artifact and the provider promise moved to the view status. File paths and
+    provider references describe the cursor row in Verbose.
+  - **25 Activity.** Entries are cursor rows under their day, and the review identity is the
+    cursor row's description. `render_activity` stays the command line's timeline.
+  - **29 Doctor.** The repairable issues `r` acts on are cursor rows. Healthy artifacts and counts
+    are the view status. `render_doctor` still prints the whole report for the command line.
+- `tests/list_screen_rows_test.py` covers 22, 22a and 25 on every row in both profiles. The block
+  tests for 21 and 29 were updated to the new rows.
+- Targeted mutations, all killed:
+  - a cursorless Activity or Doctor;
+  - 22 naming itself;
+  - file paths among 22a's rows;
+  - the bracketed Add Registry button.
+- 1115 tests pass across the 94 modules that import the TUI or its reducer. The static gates pass.
+- Remaining audit findings for the next increments:
+  - 04/04a Collection: prose among rows, and rows redrawn by `v`;
+  - 07 and 22c forms: prose at row level;
+  - 05: Enter offered before a harness is chosen;
+  - 35 Candidates: table gutter;
+  - 38 Validation;
+  - 46 Registry Maintainer: rows redrawn by `v`, and a description with no rows;
+  - 46d, 46f and 47: prose and the cursor;
+  - 51: rows redrawn by `v`;
+  - 53: prose, and Space/Enter on an empty facet list.
+
+  The 21 toggle report came from a fixture whose session and stored profiles disagree; it will be
+  confirmed before the matrix lands.
+

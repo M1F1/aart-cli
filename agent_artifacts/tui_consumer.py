@@ -177,6 +177,7 @@ __all__ = [
     "read_consumer_offers",
     "screens_from",
     "key_name",
+    "activity_rows",
     "render_activity",
     "render_collection",
     "render_credential",
@@ -184,6 +185,7 @@ __all__ = [
     "render_credential_review",
     "credential_action_purpose",
     "render_dashboard",
+    "doctor_issue_rows",
     "doctor_rows",
     "doctor_status",
     "render_doctor",
@@ -200,6 +202,7 @@ __all__ = [
     "render_ready",
     "render_receipt_detail",
     "render_registry",
+    "registry_purpose",
     "remediation_change",
     "render_remediation",
     "render_required_inputs",
@@ -208,6 +211,7 @@ __all__ = [
     "render_settings",
     "settings_consequence",
     "render_success",
+    "compose_frame",
     "run_consumer_shell",
 ]
 
@@ -302,31 +306,38 @@ def _user_credential_row(reference: str) -> str:
 def render_user_inputs_area(
     screens: "ConsumerScreens", rows: tuple[str, ...], current_row: str
 ) -> tuple[str, ...]:
-    """Screen 22: one row per installed artifact, never one global variables bucket."""
+    """Screen 22: one row per installed artifact, never one global variables bucket.
 
-    lines = ["User variables and credentials", "Installed artifacts with runtime inputs"]
+    The trail already names the view, so the rows start at once (CP-23 task 14).
+    """
+
+    lines: list[str] = []
     for coordinate in rows:
         configurations = screens.configurations_for(coordinate)
         credentials = screens.credentials_for(coordinate)
-        config_ids = sorted(
-            {
-                identifier
-                for file in configurations
-                for identifier in (*file.inputs, *(item[0] for item in file.values))
-            }
-        )
         mark = ">" if coordinate == current_row else " "
         lines.append(f"{mark} {coordinate}")
+        identifiers = _configuration_identifiers(configurations)
         lines.append(
             "    Configuration: "
-            + (", ".join(config_ids) if config_ids else "none")
+            + (", ".join(identifiers) if identifiers else "none")
             + f" ({len(configurations)} harness file(s))"
         )
         if not credentials:
             lines.append("    Credentials: none")
         for credential in credentials:
             lines.append(f"    Credentials: {_credential_row(credential)}")
-    return tuple(lines) if rows else ("User variables and credentials", "Nothing here yet.")
+    return tuple(lines) if rows else ("No installed artifact has runtime inputs.",)
+
+
+def _configuration_identifiers(configurations: tuple[ConfigurationFileView, ...]) -> list[str]:
+    return sorted(
+        {
+            identifier
+            for file in configurations
+            for identifier in (*file.inputs, *(item[0] for item in file.values))
+        }
+    )
 
 
 def render_artifact_user_inputs(
@@ -336,36 +347,28 @@ def render_artifact_user_inputs(
     current_row: str,
     profile: PresentationProfile,
 ) -> tuple[str, ...]:
-    """Screen 22a: ordinary file values and provider references as separate sections."""
+    """Screen 22a's rows: ordinary values and provider references, each under its own heading.
 
-    lines = [coordinate, "Configuration"]
-    identifiers = tuple(
-        sorted(
-            {
-                identifier
-                for file in configurations
-                for identifier in (*file.inputs, *(item[0] for item in file.values))
-            }
-        )
-    )
-    if not identifiers:
-        lines.append("  No ordinary configuration is declared.")
+    What the artifact is and what AART never reads are the state of the view
+    (`artifact_user_inputs_status`), and a file path or provider reference describes the row under
+    the cursor in Verbose (`artifact_user_input_purpose`), so the rows are the same in both
+    profiles (CP-23 task 14).
+    """
+
+    del coordinate, profile
+    lines: list[str] = []
+    identifiers = _configuration_identifiers(configurations)
+    if identifiers:
+        lines.append("Configuration")
     for identifier in identifiers:
         row = _user_config_row(identifier)
         lines.append(f"{'>' if current_row == row else ' '} {identifier}")
         for file in configurations:
             value = next((value for name, value in file.values if name == identifier), None)
-            status = _human(file.state)
             shown = "value unavailable" if value is None else value
-            lines.append(f"    {file.harness}: {shown} — {status}")
-            if profile is PresentationProfile.VERBOSE:
-                lines.append(f"      File: {file.path}")
-                if file.detail:
-                    lines.append(f"      {file.detail}")
-    lines.append("Credentials")
-    lines.append("  Values stay with their providers and are never read or displayed by AART.")
-    if not credentials:
-        lines.append("  No credential reference is declared.")
+            lines.append(f"    {file.harness}: {shown} — {_human(file.state)}")
+    if credentials:
+        lines.append("Credentials")
     for credential in credentials:
         row = _user_credential_row(credential.reference)
         status = (
@@ -374,13 +377,46 @@ def render_artifact_user_inputs(
             else _human(credential.health).title()
         )
         lines.append(f"{'>' if current_row == row else ' '} {credential.input}: {status}")
-        if profile is PresentationProfile.VERBOSE:
-            lines.extend(
-                (
-                    f"    Provider: {credential.provider}",
-                    f"    Reference: {credential.reference}",
-                )
-            )
+    return tuple(lines)
+
+
+def artifact_user_inputs_status(
+    coordinate: str,
+    configurations: tuple[ConfigurationFileView, ...],
+    credentials: tuple[CredentialRecordView, ...],
+) -> tuple[str, ...]:
+    """Screen 22a's view state: whose inputs these are, and what is and is not declared."""
+
+    return separate(
+        (coordinate,),
+        ()
+        if _configuration_identifiers(configurations)
+        else ("No ordinary configuration is declared.",),
+        ("Credentials stay with their providers; AART never reads or displays them.",)
+        if credentials
+        else ("No credential reference is declared.",),
+    )
+
+
+def artifact_user_input_purpose(
+    configurations: tuple[ConfigurationFileView, ...],
+    credentials: tuple[CredentialRecordView, ...],
+    current_row: str,
+) -> tuple[str, ...]:
+    """Where the value under the cursor lives: each harness's file, or the provider reference."""
+
+    for credential in credentials:
+        if _user_credential_row(credential.reference) == current_row:
+            return (f"Provider: {credential.provider}", f"Reference: {credential.reference}")
+    if not current_row.startswith(_USER_CONFIG_ROW_PREFIX):
+        return ()
+    identifier = current_row.removeprefix(_USER_CONFIG_ROW_PREFIX)
+    lines: list[str] = []
+    for file in configurations:
+        if identifier in file.inputs or any(name == identifier for name, _ in file.values):
+            lines.append(f"{file.harness}: {file.path}")
+            if file.detail:
+                lines.append(f"  {file.detail}")
     return tuple(lines)
 
 
@@ -1128,6 +1164,12 @@ def render_registry(
     *,
     focused: bool = False,
 ) -> tuple[str, ...]:
+    """One connected registry as a row, and what the row says about itself under it.
+
+    What a sync does and the snapshot's details describe the row rather than being it, so they are
+    `registry_purpose`, read in Verbose through the cursor description (CP-23 task 14).
+    """
+
     if not isinstance(view, RegistryView) or not isinstance(profile, PresentationProfile):
         raise ValueError("registry rendering needs a registry view and presentation profile")
     if not isinstance(focused, bool):
@@ -1135,40 +1177,35 @@ def render_registry(
     noun = "artifact" if view.artifact_count == 1 else "artifacts"
     lines = [
         f"{'> ' if focused else '  '}{view.alias} — {_human(view.availability)}",
-        f"  {view.artifact_count} {noun}",
+        f"    {view.artifact_count} {noun}",
     ]
-    if view.is_registry:
-        lines.extend(
-            (
-                "  Actions: details, sync.",
-                "  Sync refreshes Marketplace availability; it does not update installed artifacts.",
-            )
-        )
-    else:
+    if not view.is_registry:
         # An empty row with no explanation reads as a registry that approved nothing, which is a
         # fault; this one is configured, healthy and simply not a registry (INV-026, B-038).
-        lines.extend(
-            (
-                "  An authoring Source, not a registry.",
-                "  Its content is offered here once a maintainer promotes it into a registry.",
-                "  Actions: details.",
-            )
-        )
-    if profile is PresentationProfile.VERBOSE:
-        age = (
-            "never" if view.last_sync_age_seconds is None else f"{view.last_sync_age_seconds}s ago"
-        )
-        lines.extend(
-            (
-                f"  Kind: {_human(view.kind)}",
-                f"  Origin: {view.origin}",
-                f"  Health: {_human(view.health)}; last sync: {age}",
-                f"  Revision: {view.revision or 'none'}",
-                f"  Snapshot: {view.snapshot_digest or 'none'}",
-                f"  Trust: {', '.join(view.trust) or 'none'}",
-            )
-        )
+        lines.append("    an authoring Source, not a registry")
     return tuple(lines)
+
+
+def registry_purpose(view: RegistryView) -> tuple[str, ...]:
+    """What a connected registry row is for, and the snapshot behind it."""
+
+    if not isinstance(view, RegistryView):
+        raise ValueError("a registry description needs a registry view")
+    age = "never" if view.last_sync_age_seconds is None else f"{view.last_sync_age_seconds}s ago"
+    purpose = (
+        "Sync refreshes Marketplace availability; it does not update installed artifacts."
+        if view.is_registry
+        else "Its content is offered here once a maintainer promotes it into a registry."
+    )
+    return (
+        purpose,
+        f"Kind: {_human(view.kind)}",
+        f"Origin: {view.origin}",
+        f"Health: {_human(view.health)}; last sync: {age}",
+        f"Revision: {view.revision or 'none'}",
+        f"Snapshot: {view.snapshot_digest or 'none'}",
+        f"Trust: {', '.join(view.trust) or 'none'}",
+    )
 
 
 def render_settings(view: ConsumerSettings, focus: str = "") -> tuple[str, ...]:
@@ -1213,17 +1250,42 @@ def settings_consequence(view: ConsumerSettings) -> tuple[str, ...]:
     return ("Maintainer Mode off hides Sources, Candidates, Promotion and Publish.",)
 
 
-def doctor_rows(view: DoctorView) -> tuple[str, ...]:
-    """One row per installed artifact, with whatever drifted on it underneath (`QA-087`)."""
+def doctor_rows(view: DoctorView, *, leaving_out: tuple[str, ...] = ()) -> tuple[str, ...]:
+    """Each installed artifact and how it is, with whatever drifted on it underneath (`QA-087`).
+
+    The command line prints every artifact. The TUI leaves out the issues it draws as rows, so
+    what `r` would repair is under the cursor and everything else is the state of the view.
+    """
 
     if not isinstance(view, DoctorView):
         raise ValueError("Doctor rendering needs a Doctor view")
     lines: list[str] = []
     for item in view.artifacts:
+        if item.coordinate in leaving_out:
+            continue
         marker = "✓" if item.health in {"ready", "update"} else "⚠"
         lines.append(f"{marker} {item.coordinate}")
         if item.health in {"attention", "broken"}:
             lines.extend(f"  {drift.component}: {_human(drift.kind)}" for drift in item.drift)
+    return tuple(lines)
+
+
+def doctor_issue_rows(view: DoctorView, rows: tuple[str, ...], current: str) -> tuple[str, ...]:
+    """The repairable issues as rows, the cursor on the one `r` repairs (CP-23 task 14).
+
+    Repair is requested for the row under the cursor, and Doctor used to draw its list with no
+    cursor at all, so nothing on screen said which issue the key would act on.
+    """
+
+    if not isinstance(view, DoctorView):
+        raise ValueError("Doctor rendering needs a Doctor view")
+    artifacts = {item.coordinate: item for item in view.artifacts}
+    lines: list[str] = []
+    for row in rows:
+        lines.append(f"{'>' if row == current else ' '} ⚠ {row}")
+        item = artifacts.get(row)
+        drift = () if item is None else item.drift
+        lines.extend(f"    {entry.component}: {_human(entry.kind)}" for entry in drift)
     return tuple(lines)
 
 
@@ -1456,6 +1518,31 @@ def render_activity(view: ActivityView, profile: PresentationProfile) -> tuple[s
             lines.append(
                 line if profile is PresentationProfile.FAST else f"{line}  {entry.review_digest}"
             )
+    return tuple(lines)
+
+
+def activity_rows(view: ActivityView, rows: tuple[str, ...], current: str) -> tuple[str, ...]:
+    """Screen 25's entries as rows under their day, the cursor on the one Enter opens.
+
+    `render_activity` is the command line's timeline, titled and read top to bottom. On screen the
+    trail names the view and Enter opens the entry under the cursor, so the cursor is drawn and
+    the review identity describes that entry in Verbose rather than widening every row
+    (CP-23 task 14).
+    """
+
+    if not isinstance(view, ActivityView):
+        raise ValueError("activity rendering needs an activity view")
+    lines: list[str] = []
+    for day in view.days:
+        shown = [entry for entry in day.entries if entry.recorded_at in rows]
+        if not shown:
+            continue
+        lines.append(day.label)
+        lines.extend(
+            f"{'>' if entry.recorded_at == current else ' '} {entry.mark} {entry.time}  "
+            f"{entry.summary}"
+            for entry in shown
+        )
     return tuple(lines)
 
 
@@ -1890,6 +1977,16 @@ def _key_legend(source: ConsumerScreenSource, state: ConsumerUiState) -> tuple[s
 def frame(source: ConsumerScreenSource, state: ConsumerUiState) -> tuple[str, ...]:
     """One drawn screen: heading, body, prompts, and the persistent navigation footer."""
 
+    return render(compose_frame(source, state))
+
+
+def compose_frame(source: ConsumerScreenSource, state: ConsumerUiState) -> Frame:
+    """The blocks one screen is drawn from, before `render` lays them out.
+
+    Kept apart from `frame` so the frame contract can be checked block by block (CP-23 task 14)
+    rather than by reading blocks back off drawn lines.
+    """
+
     heading = _heading(state)
     progress = _workflow_chrome(state)
     header = (heading, *(("", *progress) if progress else ()))
@@ -1910,17 +2007,15 @@ def frame(source: ConsumerScreenSource, state: ConsumerUiState) -> tuple[str, ..
     # rule and flush on it, with the terminal's padding above it rather than under it (revising
     # `QA-069`/`D-235`, which had it as a section of its own; `QA-066` had moved it off the title).
     workspace = f"working at {state.workspace}" if state.workspace else ""
-    return render(
-        Frame(
-            trail=header,
-            actions=source.actions(state),
-            described=_described(source, state),
-            notice=source.notice(state),
-            help=_HELP_LINES if state.help_visible else (),
-            status=status,
-            context=workspace,
-            keys=_key_legend(source, state),
-        )
+    return Frame(
+        trail=header,
+        actions=source.actions(state),
+        described=_described(source, state),
+        notice=source.notice(state),
+        help=_HELP_LINES if state.help_visible else (),
+        status=status,
+        context=workspace,
+        keys=_key_legend(source, state),
     )
 
 
@@ -3026,6 +3121,36 @@ class CanonicalScreenSource:
         if state.session.screen is ConsumerScreen.SETTINGS:
             purpose = SETTING_PURPOSE.get(state.current_row or "")
             return () if purpose is None else (purpose,)
+        if state.session.screen is ConsumerScreen.USER_INPUT_DETAILS:
+            coordinate = state.user_inputs_artifact or state.focus
+            return artifact_user_input_purpose(
+                self._screens.configurations_for(coordinate),
+                self._screens.credentials_for(coordinate),
+                state.current_row,
+            )
+        if state.session.screen is ConsumerScreen.ACTIVITY:
+            entry = next(
+                (
+                    item
+                    for item in self._screens.activity.entries
+                    if item.recorded_at == state.current_row
+                ),
+                None,
+            )
+            if entry is None:
+                return ()
+            return (
+                f"Recorded {entry.recorded_at}",
+                f"Review identity: {entry.review_digest}",
+            )
+        if state.session.screen is ConsumerScreen.REGISTRIES:
+            if state.current_row == "add-registry":
+                return ("Opens the form that connects another approved registry.",)
+            registry = next(
+                (item for item in self._screens.registries if item.alias == state.current_row),
+                None,
+            )
+            return () if registry is None else registry_purpose(registry)
         if state.session.screen is ConsumerScreen.REMEDIATION:
             if state.current_row != ConsumerScreen.READY.value or self.detail(state) is None:
                 return ()
@@ -3170,6 +3295,13 @@ class CanonicalScreenSource:
             return prose
         if screen in _REVIEW_SCREENS:
             return _review_facts(state, screens)
+        if screen is ConsumerScreen.USER_INPUT_DETAILS and self.rows(state):
+            coordinate = state.user_inputs_artifact or state.focus
+            return artifact_user_inputs_status(
+                coordinate,
+                screens.configurations_for(coordinate),
+                screens.credentials_for(coordinate),
+            )
         if screen is ConsumerScreen.DASHBOARD:
             # `QA-087`: first-run guidance and the counts are both answers to "what state is this
             # in", so they belong here rather than above the rows, inside the rows' own block.
@@ -3184,11 +3316,12 @@ class CanonicalScreenSource:
                 screens.maintainer_registries(), registry_workspace_present=present
             )
         if screen is ConsumerScreen.DOCTOR:
-            return (
-                ()
-                if screens.doctor is None
-                else doctor_status(screens.doctor, state.session.profile)
-            )
+            if screens.doctor is None:
+                return ()
+            report = doctor_status(screens.doctor, state.session.profile)
+            if not state.rows:
+                return report
+            return separate(doctor_rows(screens.doctor, leaving_out=state.rows), report)
         if screen is ConsumerScreen.SETTINGS:
             # From the session's own settings, not the machine snapshot: the same reason the rows
             # are drawn from `state.settings`.
@@ -3570,7 +3703,9 @@ class CanonicalScreenSource:
                 else render_installed_artifact(artifact, profile)
             )
         if screen is ConsumerScreen.ACTIVITY:
-            return render_activity(screens.activity, profile)
+            if not state.rows:
+                return ("Nothing has happened here yet.",)
+            return activity_rows(screens.activity, state.rows, state.current_row)
         if screen in (ConsumerScreen.ACTIVITY_DETAILS, ConsumerScreen.RECEIPT_DETAILS):
             receipt = screens.receipt(state.focus)
             return (
@@ -3581,7 +3716,7 @@ class CanonicalScreenSource:
         if screen is ConsumerScreen.REGISTRIES:
             # `QA-087`: the row, and the rows of whatever is connected. What a registry *is*, and
             # what this machine has, are answers to different questions and live in `status`.
-            add = (f"{'>' if state.current_row == 'add-registry' else ' '} [ Add Registry ]",)
+            add = (f"{'>' if state.current_row == 'add-registry' else ' '} Add Registry",)
             if not screens.registries:
                 return add
             return cards(
@@ -3726,11 +3861,11 @@ class CanonicalScreenSource:
             # happened to re-read the machine.
             return render_settings(state.settings, state.current_row)
         if screen is ConsumerScreen.DOCTOR:
-            return (
-                ("Nothing has been checked yet.",)
-                if screens.doctor is None
-                else doctor_rows(screens.doctor)
-            )
+            if screens.doctor is None:
+                return ("Nothing has been checked yet.",)
+            if state.rows:
+                return doctor_issue_rows(screens.doctor, state.rows, state.current_row)
+            return doctor_rows(screens.doctor)
         # A screen added to the catalog without a body reaches here. It is a guard against drawing
         # a blank frame, not a statement about the accepted catalog: no accepted screen reaches it.
         return (f"{_title(screen)} is not available yet.",)

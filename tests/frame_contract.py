@@ -11,14 +11,36 @@ sweep says which screen broke which rule and on which line.
 
 from __future__ import annotations
 
+import re
+from dataclasses import replace
+
 from agent_artifacts.application.consumer_ui import (
+    ConsumerUiCommandKind,
     ConsumerUiEvent,
     ConsumerUiEventKind,
     ConsumerUiState,
     key_bindings,
     key_event,
+    reduce_consumer_ui,
+    typing_text,
 )
-from agent_artifacts.tui_consumer import ConsumerScreenSource
+from agent_artifacts.application.consumer_views import PresentationProfile
+from agent_artifacts.tui_consumer import ConsumerScreenSource, compose_frame
+
+#: A row as the actions block draws it: the cursor gutter, then the row itself.
+_ROW = re.compile(r"^(> |  )\S")
+#: What a row says under itself, indented past the gutter.
+_UNDER_ROW = re.compile(r"^    ")
+#: A group heading names the rows under it; a sentence or a label with a value is prose.
+_NOT_A_HEADING = re.compile(r"[.:;!?]")
+#: Keyboard talk that belongs to the legend: a key in brackets, a padded button, or a key that
+#: "selects", "opens" and so on in a sentence.
+_CONTROL = re.compile(
+    r"\[(Enter|Esc|Space|Tab|Backspace|↑/↓|\?|/)\]"
+    r"|\[ [A-Z][A-Za-z ]*[a-z] \]"
+    r"|\b(Enter|Space|Esc|Backspace) (selects|checks|toggles|opens|switches|continues|confirms"
+    r"|reviews|advances|removes|returns|changes)\b"
+)
 
 #: How a legend spells a key, and the name the shell hands the reducer for it.
 _KEY_NAMES = {
@@ -93,10 +115,106 @@ def literal_violations(source: ConsumerScreenSource, state: ConsumerUiState) -> 
     screen = state.session.screen.value
     for letter, command in _UNIVERSAL.items():
         event = _event(source, state, letter)
-        if event is None or event.kind is command or not event.kind.name.startswith("EDIT_"):
+        typed = ConsumerUiEventKind.SEARCH if state.searching else None
+        if (
+            event is None
+            or event.kind is command
+            or not (event.kind is typed or event.kind.name.startswith("EDIT_"))
+        ):
             found.append(f"{screen}: typing {letter!r} into {state.current_row!r} is not text")
         elif not event.text.endswith(letter):
             found.append(f"{screen}: typing {letter!r} into {state.current_row!r} lost it")
         if letter in advertised:
             found.append(f"{screen}: [{letter}] is advertised on a field that types it")
+    return tuple(found)
+
+
+def _spoken(lines: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(line for line in lines if line.strip())
+
+
+def frame_violations(source: ConsumerScreenSource, state: ConsumerUiState) -> tuple[str, ...]:
+    """What one composed frame breaks of §167's shared frame.
+
+    - The actions block holds rows, what a row says under itself, and headings that group rows.
+      Prose, counts and labelled values are the state of the view and go to its status.
+    - It draws exactly the rows the state holds, with the cursor on the one the state is on, and
+      no actions block at all where there are no rows.
+    - The cursor description is Verbose only, and only where there is a row to describe.
+    - The body does not name the screen again under the trail, and does not talk about keys: that
+      is the legend's.
+    """
+
+    blocks = compose_frame(source, state)
+    screen = state.session.screen.value
+    found: list[str] = []
+    actions = _spoken(blocks.actions)
+    if not state.rows and actions:
+        found.append(f"{screen}: draws an actions block with no rows: {actions[0]!r}")
+    for index, line in enumerate(actions):
+        if _ROW.match(line) or _UNDER_ROW.match(line):
+            continue
+        following = actions[index + 1] if index + 1 < len(actions) else ""
+        if _ROW.match(following) and not _NOT_A_HEADING.search(line):
+            continue
+        found.append(f"{screen}: prose among the rows: {line!r}")
+    drawn = [line for line in actions if _ROW.match(line)]
+    if state.rows and actions:
+        cursors = [index for index, line in enumerate(drawn) if line.startswith("> ")]
+        if len(drawn) != len(state.rows):
+            found.append(f"{screen}: draws {len(drawn)} row(s) for {len(state.rows)} in the state")
+        elif cursors != [state.cursor]:
+            found.append(f"{screen}: the cursor is drawn on {cursors}, not row {state.cursor}")
+    if blocks.described and state.session.profile is not PresentationProfile.VERBOSE:
+        found.append(f"{screen}: describes the cursor row in Fast")
+    if blocks.described and not state.rows:
+        found.append(f"{screen}: describes a row on a screen with none")
+    title = blocks.trail[0].split(" / ")[-1].removesuffix(" - did not run").casefold()
+    for line in (*actions, *blocks.described, *blocks.status, *blocks.notice):
+        said = line.strip().removeprefix("> ").removeprefix("- ").strip()
+        if said.casefold() == title:
+            found.append(f"{screen}: names itself again under the trail: {line!r}")
+        if _CONTROL.search(line):
+            found.append(f"{screen}: keyboard talk outside the legend: {line!r}")
+    return tuple(found)
+
+
+def toggle_violations(source: ConsumerScreenSource, state: ConsumerUiState) -> tuple[str, ...]:
+    """§167: `v` changes the presentation and nothing else, and pressing it again undoes it.
+
+    Outside a text field `v` must switch the profile, keep selection, focus, drafts, review and
+    navigation exactly as they were, and ask for nothing but keeping the preference.
+    """
+
+    if typing_text(state) or state.quit_pending or state.searching:
+        return ()
+    screen = state.session.screen.value
+    event = key_event("v", state, detail=source.detail(state))
+    if event is None or event.kind is not ConsumerUiEventKind.TOGGLE_PROFILE:
+        return (f"{screen}: v does not switch Fast / Verbose",)
+    found: list[str] = []
+    after, commands = reduce_consumer_ui(state, event)
+    if any(command.kind is not ConsumerUiCommandKind.PERSIST_SETTINGS for command in commands):
+        found.append(f"{screen}: v asks for more than keeping the preference")
+    # The stored detail level is the choice; the session shows whatever it holds (`_apply_setting`).
+    if (
+        after.settings.profile is state.settings.profile
+        or after.session.profile is not after.settings.profile
+    ):
+        found.append(f"{screen}: v leaves the profile where it was")
+    unchanged = replace(
+        after,
+        session=after.session.switch_profile(state.session.profile),
+        settings=state.settings,
+    )
+    if unchanged != state:
+        found.append(f"{screen}: v changes more than the presentation")
+    if source.actions(after) != source.actions(replace(state, settings=after.settings)):
+        # §167's one cursor-description rule: Verbose describes the row under the cursor in the
+        # description block, rather than growing every row. A row that shows the stored
+        # preference itself, as Settings' detail level does, may show its new value.
+        found.append(f"{screen}: v redraws the rows instead of describing the cursor row")
+    back, _ = reduce_consumer_ui(after, event)
+    if back != state:
+        found.append(f"{screen}: v pressed twice does not return to where it started")
     return tuple(found)
