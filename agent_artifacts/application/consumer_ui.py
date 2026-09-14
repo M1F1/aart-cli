@@ -2095,7 +2095,9 @@ def key_bindings(
     elif state.session.screen is ConsumerScreen.SETTINGS:
         bindings.append(KeyBinding("Space/Enter", "Change"))
     elif state.session.screen is MaintainerScreen.CANDIDATE_FILTERS:
-        bindings.append(KeyBinding("Space/Enter", "Toggle filter"))
+        # With nothing composed there is no value to tick, so the key is not offered.
+        if state.rows:
+            bindings.append(KeyBinding("Space/Enter", "Toggle filter"))
     else:
         if state.session.screen in _SELECTABLE and " " not in keys:
             label = (

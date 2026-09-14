@@ -87,15 +87,23 @@ def _columns(header: str) -> tuple[tuple[str, int], ...]:
     return tuple((heading, header.index(heading)) for heading in HEADINGS)
 
 
+#: The `> ` cursor gutter every list row starts with; the header over the rows has none (CP-23 14).
+GUTTER = 2
+
+
 def _assert_rows_share_the_header_grid(
     case: unittest.TestCase, header: str, rows: tuple[str, ...]
 ) -> None:
     grid = _columns(header)
     for row in rows:
+        case.assertIn(
+            row[:GUTTER], ("> ", "  "), f"a row does not start with the cursor gutter: {row!r}"
+        )
         for index, (heading, offset) in enumerate(grid):
-            cell = row[offset:]
+            start = offset + GUTTER if index == 0 else offset
+            cell = row[start:]
             if index + 1 < len(grid):
-                cell = row[offset : grid[index + 1][1]]
+                cell = row[start : grid[index + 1][1]]
             case.assertTrue(
                 not cell.strip() or not cell[:1].isspace(),
                 f"{heading} does not start where the header says: {row!r}",
@@ -220,7 +228,6 @@ class BulkPromotionHoldsItsColumnsTest(unittest.TestCase):
         rendered = render_maintainer_bulk_promotion(
             (self._view("mcp/aart-e2e-mcp", LONG),),
             (),
-            profile=PresentationProfile.FAST,
         )
 
         rows = [line for line in rendered if line.lstrip().startswith(("[ ]", "[x]"))]
@@ -236,7 +243,6 @@ class BulkPromotionHoldsItsColumnsTest(unittest.TestCase):
         rendered = render_maintainer_bulk_promotion(
             (self._view("mcp/aart-e2e-mcp", LONG),),
             (),
-            profile=PresentationProfile.FAST,
         )
 
         for line in rendered:

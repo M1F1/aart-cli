@@ -1633,3 +1633,52 @@ The six previously owed 16.1 targeted mutations were also run and killed:
 - Audit re-run: every Consumer screen is clean. The remaining findings are all on Maintainer
   screens: 35, 38, 46, 46d, 46f, 47, 51 and 53.
 
+#### 14.5 — Maintainer lists (DONE, D-271)
+
+- **Findings fixed:**
+  - **35 Candidates.** The `> ` gutter is inside the first cell and the heading is flush left, so
+    rows and heading share the grid (`tests/tabular_list_columns_test.py` offsets by the gutter).
+  - **38 Validation.** The checks are cursor rows under `Checks`. The verdict is the view status,
+    and a check's detail is its Verbose description.
+  - **46 Registry Maintainer.** Each subscribed registry is one cursor row with short digests
+    indented under it, the same in both profiles. Verbose describes the registry under the cursor
+    with the digests in full. With no row, the QA-095 explanation is Verbose view status rather
+    than a description of nothing.
+  - **46d Scan Result.** Only adoptable artifacts are rows. The rest, with reasons, and "Nothing in
+    this repository can be adopted." are the view status. The `Space selects…` prose is gone.
+  - **46f Adopted Artifacts.** Rows with URL, ref and short commit under them. The full commit,
+    manifest and recorded input are the Verbose description, and the `Enter checks…` prose is gone.
+  - **47 Bulk Promotion.** Candidates are cursor rows under their registry. Refusals and
+    `Not promotable` are the view status, with no second `N selected`.
+  - **51 Collection Candidates.** Rows only. Source, manifest, candidate and members are the
+    Verbose description.
+  - **53 Candidate Filters.** Values are rows and `Search / Filtered / Showing N of M` is the
+    status. A value's match count is its description. `Space/Enter` is offered only with rows.
+- **Tests:** `tests/maintainer_screen_rows_test.py` holds the frame, `v` and key laws on every
+  cursor of each screen in both profiles. It covers the empty filters, bulk promotion with and
+  without a selection, and Registry Maintainer with no row. It checks full digests only in the
+  description, and `Not promotable` and the refused scan artifact in the status.
+- **Targeted mutations, all killed:**
+  - the cursor outside the Candidates cell;
+  - a full digest in a registry row;
+  - a cursorless registry row;
+  - the registry detail dropped;
+  - the no-rows descriptor dropped;
+  - a description with no rows;
+  - non-adoptable artifacts as rows;
+  - key prose back on 46d and 46f;
+  - cursorless bulk rows;
+  - `Not promotable` dropped;
+  - `Space/Enter` on empty filters.
+- 1162 tests pass across the UI modules. The static gates pass.
+- Audit re-run over 1172 recorded frames: no violation on any screen.
+- **Still open for task 14:**
+  - Ready's duplicate credential line;
+  - 23's `Actions:` line;
+  - 24a's title;
+  - 22c not prefilling the current value;
+  - 22d's generic review text;
+  - long breadcrumbs;
+  - the recorded matrix: catalog coverage of all screens, laws over recorded states, `v`
+    properties, text/curses equivalence.
+

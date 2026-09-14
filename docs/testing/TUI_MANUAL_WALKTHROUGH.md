@@ -125,6 +125,10 @@ Expected: two clearly separate blocks — *Connected Registry snapshots* (none) 
 workspace*, which says the current project is not a Registry and that Initialize creates one here.
 The two must not be conflated, and no internal screen number may appear in the text (`QA-044`).
 
+CP-23 task 14 (D-271): with nothing subscribed and no workspace there is no row, so there is no
+cursor. The status says the project is not a Registry; press `v` and *Connected Registry snapshots*
+joins it as status, not as a description.
+
 - [ ] Press `n` (**Initialize**). The form has five rows; `↑`/`↓` move between them, typing edits
       the focused one, `Backspace` deletes, `Space` toggles a choice, `Enter` advances.
 - [ ] Check that the legend follows the cursor (D-269). On a text field it offers `[Type] Edit`,
@@ -180,7 +184,9 @@ so that Sync has a baseline. The Registry is empty at this point, which is corre
 Candidate will therefore be *new*.
 
 Expected: Registries lists `manual-registry` as the default, and Registry Maintainer's *Connected
-Registry snapshots* block is no longer empty.
+Registry snapshots* block is no longer empty. Each subscribed registry is a `> ` cursor row with its revision,
+snapshot and promotions shortened under it. Press `v`: the rows stay exactly as they were, and the
+description below them spells out the digests of the registry under the cursor (D-271).
 
 Skip this step and step 5 refuses with `Source Sync needs an explicit default target registry`,
 every Source stays at `0 manifests`, and Candidates is empty (`QA-059`).
@@ -227,7 +233,8 @@ and no Registry content.
 - [ ] **Maintainer Dashboard** → **Candidates**.
 
 Expected: the Skill and the MCP appear exactly once each. Columns keep their positions between
-rows, and the focused value is readable in full (`QA-030`).
+rows, and the focused value is readable in full (`QA-030`). The column heading is flush left and each
+row starts with the `> ` / blank gutter inside its first column (D-271).
 
 CP-23 task 02 retest: in Verbose, below the table and its own rule, `Artifact`, `Version`, `Source`
 and `Status` describe the row under the cursor, with no `Under the cursor:` heading; moving the
@@ -264,6 +271,10 @@ separated, with the action prompt last (`QA-029`).
 
 - [ ] From the Candidate, reach **Validation**. Press `Enter` on a check to open it, then `Enter`
       again for **Policy review** (CP-23 task 04: `p` does nothing on Validation).
+- [ ] On **Validation**, the checks are `> ` cursor rows under a `Checks` heading; the verdict is the
+      status above the legend, and `v` describes the check under the cursor (D-271).
+- [ ] On **Candidate filters**, the values are rows and `Showing N of M` is the status. With no
+      Candidate at all there is no row and the legend offers no `Space/Enter` toggle.
 - [ ] Walk on to **Promotion review** → **Promotion mode**.
 - [ ] On Promotion mode, press `m` to toggle **Vendored** / **Referenced**.
 
@@ -283,6 +294,8 @@ confirmation (`QA-033`).
       New, Ready or Published (CP-23 task 09, `D-259`).
 - [ ] Open its promotion review. It refuses: already promoted in the local checkout, so publish
       that commit with Git, then run Registry Sync. Bulk promotion does not offer it either.
+      Bulk promotion's Candidates are `> ` cursor rows under their registry; what cannot be
+      promoted reads `Not promotable: …` in the status, never as a row (D-271).
 - [ ] Quit and reopen the TUI. The same Candidate still reads **Promoted locally**.
 
 ## 8 — Publish the promotion yourself, in Git

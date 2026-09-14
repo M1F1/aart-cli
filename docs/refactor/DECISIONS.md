@@ -6538,3 +6538,56 @@ selection" and show "7 / 8 selected" with the custom-selection warning.
 - Space no longer ticks members on screen 04; the Contents are where members are chosen. The
   Marketplace shell tests now open the Contents before pressing Space.
 - A legend on screen 05 gains `[Enter] Continue` when the re-prepared plan arrives.
+
+## D-271 — Maintainer lists: rows are what the cursor acts on, the rest is status or description
+
+Date: 2026-09-15 (CP-23 task 14, fifth increment).
+
+**Context.** After D-270 every Consumer screen passed the task 14 audit. The remaining findings were
+all Maintainer lists breaking §167's frame:
+
+- **35 Candidates.** The cursor sat in a table gutter outside the grid, so the header and rows did
+  not share a left edge with any other list's rows.
+- **38 Validation and 47 Bulk Promotion.** Enter and Space act on a check or a Candidate, but no
+  cursor was drawn. Bulk promotion drew refusals, `Not promotable` lines and `N selected` among its
+  rows.
+- **46d Scan Result and 46f Adopted Artifacts.** They explained their keys in prose among the rows
+  (`Space selects…`, `Enter checks…`). Scan Result drew artifacts that cannot be adopted as rows
+  that Space could not tick.
+- **46 Registry Maintainer, 51 Collection Candidates and 53 Candidate Filters.** `v` redrew the
+  rows: full digests, members and match counts appeared inside them. Registry Maintainer drew one
+  registry as several unindented lines, and with nothing subscribed it described a row that did not
+  exist. Filters offered `Space/Enter` with no value to toggle.
+
+**Decision.**
+
+- **A row is only what the cursor acts on**, with a `> ` gutter and what the row says under itself
+  indented past it.
+  - A table's cursor is carried inside its first cell, so the later columns stay on one grid. The
+    column heading is flush left like every heading over rows.
+  - Scan Result's rows are the adoptable artifacts. Non-adoptable artifacts, with the reason, are
+    the view status, and "Nothing in this repository can be adopted." when there are none.
+  - Bulk promotion draws a registry heading only over Candidates. Its refusals, "No Candidate…" and
+    `Not promotable: …` are the view status. The frame's `N selected` is the only count.
+- **What a screen found is its view status**: the scan's URL and commit, the validation verdict,
+  and `Search / Filtered / Showing N of M`.
+- **What `v` adds describes the row under the cursor**, and the rows are the same in both profiles:
+  - a check's detail;
+  - a filter value's match count;
+  - a Collection Candidate's source, manifest and members;
+  - a scanned artifact's kind, name and version;
+  - an adopted artifact's full commit, manifest and recorded input;
+  - a registry's full revision, snapshot, working-tree digest and promotion ids.
+  A registry row shows those digests shortened in both profiles.
+- **With no row, nothing is described.** Registry Maintainer's QA-095 explanation of what a
+  subscribed snapshot is for is added to the Verbose view status instead, so it still obeys `v`.
+- **A key is offered only where it acts**: Candidate Filters offers `Space/Enter` only when there
+  are rows.
+
+**Consequences.**
+
+- Renderers no longer take a presentation profile for these screens; `profile=` arguments were
+  dropped from their callers and tests.
+- `tests/maintainer_screen_rows_test.py` holds the frame, `v` and key laws on every cursor of each
+  screen in both profiles.
+- The task 14 frame audit reports no violation on any recorded frame.

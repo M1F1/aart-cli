@@ -247,7 +247,7 @@ class ValidationRenderingTest(unittest.TestCase):
             policy=EffectivePolicy(required_checks=frozenset({"live-acceptance"})),
         )
 
-        drawn = "\n".join(render_maintainer_validation(view, PresentationProfile.FAST))
+        drawn = "\n".join(render_maintainer_validation(view))
 
         self.assertIn("Manifest schema", drawn)
         self.assertIn("Secret metadata", drawn)

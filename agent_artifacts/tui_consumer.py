@@ -122,10 +122,18 @@ from agent_artifacts.tui_layout import (
     stated,
 )
 from agent_artifacts.tui_maintainer import (
+    adopted_artifact_detail,
+    maintainer_bulk_promotion_status,
     maintainer_candidate_detail,
+    maintainer_candidate_filter_detail,
+    maintainer_candidate_filter_status,
+    maintainer_collection_candidate_detail,
     maintainer_registry_descriptor,
+    maintainer_registry_detail,
     maintainer_registry_rows,
     maintainer_registry_status,
+    maintainer_validation_check_detail,
+    maintainer_validation_status,
     maintainer_workspace_detail,
     maintainer_workspace_row,
     render_adopted_artifacts,
@@ -154,6 +162,8 @@ from agent_artifacts.tui_maintainer import (
     render_repository_scan,
     render_source_sync_result,
     render_source_sync_review,
+    repository_scan_detail,
+    repository_scan_status,
 )
 from agent_artifacts.tui_marketplace import (
     MarketplaceArtifactRow,
@@ -3205,6 +3215,29 @@ class CanonicalScreenSource:
             )
         if state.session.screen is ConsumerScreen.REQUIRED_INPUTS and state.config_form_active:
             return installation_config_purpose(self._screens.installation_inputs, state.current_row)
+        if state.session.screen is MaintainerScreen.COLLECTION_CANDIDATES:
+            return maintainer_collection_candidate_detail(
+                self._screens.collection_candidates(), state.current_row
+            )
+        if state.session.screen is MaintainerScreen.VALIDATION:
+            validation = self._screens.validation(state.focus)
+            return (
+                ()
+                if validation is None
+                else maintainer_validation_check_detail(validation, state.current_row)
+            )
+        if state.session.screen is MaintainerScreen.CANDIDATE_FILTERS:
+            return maintainer_candidate_filter_detail(
+                project_maintainer_candidate_filters(
+                    self._screens.candidates(), _candidate_filter(state)
+                ),
+                state.current_row,
+            )
+        if state.session.screen is MaintainerScreen.SCAN_RESULT:
+            scan = self._screens.repository_scan
+            return () if scan is None else repository_scan_detail(scan, state.current_row)
+        if state.session.screen is MaintainerScreen.ADOPTED_ARTIFACTS:
+            return adopted_artifact_detail(self._screens.adopted_artifacts, state.current_row)
         if state.session.screen is ConsumerScreen.COLLECTION_CUSTOMIZE:
             member = self._screens.offered(state.current_row or "")
             return () if member is None else marketplace_offer_description(member)
@@ -3257,17 +3290,24 @@ class CanonicalScreenSource:
             workspace = self._registry_workspace()
             if workspace is not None and state.current_row == REGISTRY_WORKSPACE_ROW:
                 return maintainer_workspace_detail(workspace)
-            # `QA-095`: the screen's one explanation, which is about registry snapshots rather
-            # than about the row under the cursor -- so it answers from the screen. `[v]` still
-            # gates it, because `_described` is the only caller.
+            # `QA-095`: what a snapshot is for, which `[v]` gates because `_described` is the only
+            # caller, followed by the registry under the cursor with its digests in full. With no
+            # row there is nothing to describe; the view status says it instead.
+            if not state.rows:
+                return ()
             screens = self._screens
             present = (
                 True
                 if screens.maintainer is None
                 else screens.maintainer.registry_workspace_present
             )
-            return maintainer_registry_descriptor(
-                screens.maintainer_registries(), registry_workspace_present=present
+            registries = screens.maintainer_registries()
+            subscribed = next(
+                (item for item in registries if item.alias == state.current_row), None
+            )
+            return separate(
+                maintainer_registry_descriptor(registries, registry_workspace_present=present),
+                () if subscribed is None else maintainer_registry_detail(subscribed),
             )
         if state.session.screen is MaintainerScreen.REGISTRY_REBUILD:
             # The whole-sequence row names its four stages in its own label, so it has nothing
@@ -3295,7 +3335,7 @@ class CanonicalScreenSource:
                 return ()
             return maintainer_candidate_detail(
                 self._screens.candidates(_candidate_filter(state)),
-                cursor=state.current_row or "",
+                cursor=state.current_row,
             )
         if state.session.screen not in _DESCRIBED_SCREENS:
             return ()
@@ -3383,6 +3423,18 @@ class CanonicalScreenSource:
                     state.session.profile,
                     contents=screen is ConsumerScreen.COLLECTION_PREVIEW,
                 )
+        if screen is MaintainerScreen.BULK_PROMOTION:
+            return maintainer_bulk_promotion_status(screens.bulk_promotions())
+        if screen is MaintainerScreen.VALIDATION and self.rows(state):
+            validation = screens.validation(state.focus)
+            assert validation is not None
+            return maintainer_validation_status(validation)
+        if screen is MaintainerScreen.CANDIDATE_FILTERS and self.rows(state):
+            return maintainer_candidate_filter_status(
+                project_maintainer_candidate_filters(screens.candidates(), _candidate_filter(state))
+            )
+        if screen is MaintainerScreen.SCAN_RESULT and screens.repository_scan is not None:
+            return repository_scan_status(screens.repository_scan)
         if screen is ConsumerScreen.DASHBOARD:
             # `QA-087`: first-run guidance and the counts are both answers to "what state is this
             # in", so they belong here rather than above the rows, inside the rows' own block.
@@ -3393,8 +3445,18 @@ class CanonicalScreenSource:
                 if screens.maintainer is None
                 else screens.maintainer.registry_workspace_present
             )
-            return maintainer_registry_status(
+            status = maintainer_registry_status(
                 screens.maintainer_registries(), registry_workspace_present=present
+            )
+            if state.rows or state.session.profile is not PresentationProfile.VERBOSE:
+                return status
+            # With no row to describe, `QA-095`'s explanation is still Verbose's to show; it is
+            # said with the view's state rather than as a description of nothing.
+            return separate(
+                maintainer_registry_descriptor(
+                    screens.maintainer_registries(), registry_workspace_present=present
+                ),
+                status,
             )
         if screen is ConsumerScreen.DOCTOR:
             if screens.doctor is None:
@@ -3593,7 +3655,6 @@ class CanonicalScreenSource:
             return render_maintainer_collection_candidates(
                 screens.collection_candidates(),
                 cursor=state.current_row,
-                profile=profile,
             )
         if screen is MaintainerScreen.COLLECTION_VALIDATION:
             collection_validation = screens.collection_validation(state.focus)
@@ -3607,7 +3668,6 @@ class CanonicalScreenSource:
                 project_maintainer_candidate_filters(
                     screens.candidates(), _candidate_filter(state)
                 ),
-                profile,
                 cursor=state.current_row,
             )
         if screen is MaintainerScreen.VALIDATION:
@@ -3615,7 +3675,7 @@ class CanonicalScreenSource:
             return (
                 ("That Candidate's validation is not available.",)
                 if validation is None
-                else render_maintainer_validation(validation, profile)
+                else render_maintainer_validation(validation, cursor=state.current_row)
             )
         if screen is MaintainerScreen.VALIDATION_DETAILS:
             validation = screens.validation(state.focus)
@@ -3659,7 +3719,7 @@ class CanonicalScreenSource:
                 published,
                 maintainer_registry_rows(
                     screens.maintainer_registries(),
-                    profile,
+                    cursor=state.current_row,
                     registry_workspace_present=present,
                 ),
             )
@@ -3671,7 +3731,6 @@ class CanonicalScreenSource:
                     screens.repository_scan,
                     state.selection,
                     cursor=state.current_row,
-                    profile=profile,
                 )
             )
         if screen is MaintainerScreen.ADOPTION_REVIEW:
@@ -3684,7 +3743,6 @@ class CanonicalScreenSource:
             return render_adopted_artifacts(
                 screens.adopted_artifacts,
                 cursor=state.current_row,
-                profile=profile,
             )
         if screen is MaintainerScreen.UPSTREAM_CHECK:
             return (
@@ -3694,7 +3752,7 @@ class CanonicalScreenSource:
             )
         if screen is MaintainerScreen.BULK_PROMOTION:
             return render_maintainer_bulk_promotion(
-                screens.bulk_promotions(), state.selection, profile
+                screens.bulk_promotions(), state.selection, cursor=state.current_row
             )
         if screen is MaintainerScreen.REGISTRY_VALIDATION:
             return (

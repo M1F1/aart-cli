@@ -467,10 +467,10 @@ class RegistryMaintainerBlockTest(TestCase):
     def test_a_subscribed_snapshot_is_a_row_and_nothing_introduces_it(self) -> None:
         """`QA-092`: a registry snapshot does not need a line above it saying so."""
 
-        rows = maintainer_registry_rows((_maintainer_registry(),), PresentationProfile.FAST)
+        rows = maintainer_registry_rows((_maintainer_registry(),), cursor="company")
 
         self.assertNotIn("Connected Registry snapshots", rows)
-        self.assertTrue(rows[0].startswith("company"))
+        self.assertTrue(rows[0].startswith("> company"))
 
     def test_the_local_workspace_is_state_whether_or_not_anything_is_subscribed(self) -> None:
         for views in ((), (_maintainer_registry(),)):

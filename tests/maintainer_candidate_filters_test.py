@@ -23,7 +23,6 @@ from agent_artifacts.application.consumer_ui import (
 from agent_artifacts.application.consumer_views import (
     ConsumerSession,
     ConsumerSettings,
-    PresentationProfile,
     project_dashboard,
 )
 from agent_artifacts.application.maintainer import reconcile_source_scan
@@ -53,7 +52,7 @@ from agent_artifacts.protocol.native_tree import (
 )
 from agent_artifacts.protocol.paths import parse_relative_path
 from agent_artifacts.tui_consumer import CanonicalScreenSource, ConsumerScreens, _reload, frame
-from agent_artifacts.tui_maintainer import render_maintainer_candidate_filters
+from agent_artifacts.tui_maintainer import maintainer_candidate_filter_status
 from tests.marketplace_fixtures import configured_source, source_state
 
 
@@ -396,7 +395,7 @@ class MaintainerCandidateFilterShellTest(unittest.TestCase):
 
     def test_an_unfiltered_screen_says_so_rather_than_drawing_an_empty_summary(self) -> None:
         view = project_maintainer_candidate_filters(self.candidates, MaintainerCandidateFilter())
-        drawn = "\n".join(render_maintainer_candidate_filters(view, PresentationProfile.VERBOSE))
+        drawn = "\n".join(maintainer_candidate_filter_status(view))
 
         self.assertIn("No filter is applied", drawn)
         self.assertIn("4 of 4", drawn)

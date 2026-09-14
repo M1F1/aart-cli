@@ -51,6 +51,16 @@ _CANDIDATE_HEADINGS = ("STATUS", "ARTIFACT", "VERSION", "SOURCE")
 _BULK_INDENT = 2
 
 __all__ = [
+    "maintainer_registry_detail",
+    "maintainer_bulk_promotion_status",
+    "maintainer_collection_candidate_detail",
+    "maintainer_validation_check_detail",
+    "maintainer_validation_status",
+    "maintainer_candidate_filter_detail",
+    "maintainer_candidate_filter_status",
+    "adopted_artifact_detail",
+    "repository_scan_detail",
+    "repository_scan_status",
     "render_maintainer_dashboard",
     "render_maintainer_candidate",
     "render_maintainer_candidate_filters",
@@ -295,11 +305,13 @@ def render_maintainer_candidates(
     # column is cut there instead of pushing the columns after it out of line. The row under the
     # cursor is spelt out in full by `maintainer_candidate_detail`, which is the screen's cursor
     # description rather than a second block inside the table (CP-23 task 02, D-252).
-    rows = [("", *_CANDIDATE_HEADINGS)]
+    # CP-23 task 14: the cursor is the same `> ` gutter every other list draws, carried inside the
+    # first cell so the later columns stay on one grid; the header is the table's heading, flush
+    # left like every heading over rows.
+    rows = [_CANDIDATE_HEADINGS]
     rows.extend(
         (
-            ">" if item.id == cursor else "",
-            candidate_status(item),
+            f"{'>' if item.id == cursor else ' '} {candidate_status(item)}",
             item.artifact,
             item.version,
             item.source_alias,
@@ -484,24 +496,23 @@ def render_maintainer_version_conflict(
 
 def render_maintainer_candidate_filters(
     view: MaintainerCandidateFilterView,
-    profile: PresentationProfile,
     *,
     cursor: str = "",
 ) -> tuple[str, ...]:
-    """Screen 53: the facets, what is ticked, and what the narrowing currently leaves.
+    """Screen 53's rows: the facets and which of their values are ticked.
 
-    The count beside each value is what choosing it would leave, not how many carry it, so a
-    narrowing that selects nothing is legible before it is applied rather than after screen 35
-    goes blank.
+    What the narrowing currently leaves is the view's status
+    (:func:`maintainer_candidate_filter_status`). What ticking the value under the cursor would
+    leave is Verbose's description of it (:func:`maintainer_candidate_filter_detail`), so a
+    narrowing that selects nothing is legible before it is applied.
     """
 
     if (
         not isinstance(view, MaintainerCandidateFilterView)
-        or not isinstance(profile, PresentationProfile)
         or not isinstance(cursor, str)
         or any(character in cursor for character in "\r\n")
     ):
-        raise ValueError("Maintainer Candidate filter rendering needs a view and a profile")
+        raise ValueError("Maintainer Candidate filter rendering needs a view and a cursor")
     if not view.groups:
         return ("No Candidates are composed, so there is nothing to narrow.",)
     lines: list[str] = []
@@ -512,51 +523,76 @@ def render_maintainer_candidate_filters(
         for option in group.options:
             mark = "[x]" if option.active else "[ ]"
             pointer = ">" if option.row == cursor else " "
-            line = f"{pointer} {mark} {option.value}"
-            if profile is PresentationProfile.VERBOSE:
-                line += f"  — {option.matching} would match"
-            lines.append(line)
-    lines.append("")
-    if view.query:
-        lines.append(f"Search: {view.query}")
-    lines.append("No filter is applied." if view.is_empty else "Filtered.")
-    lines.append(f"Showing {view.matching} of {view.total} Candidates")
+            lines.append(f"{pointer} {mark} {option.value}")
     return tuple(lines)
+
+
+def maintainer_candidate_filter_status(view: MaintainerCandidateFilterView) -> tuple[str, ...]:
+    """Screen 53's state: the search, whether anything narrows, and what that leaves."""
+
+    if not isinstance(view, MaintainerCandidateFilterView):
+        raise ValueError("Maintainer Candidate filter status needs a view")
+    return separate(
+        (f"Search: {view.query}",) if view.query else (),
+        ("No filter is applied." if view.is_empty else "Filtered.",),
+        (f"Showing {view.matching} of {view.total} Candidates",),
+    )
+
+
+def maintainer_candidate_filter_detail(
+    view: MaintainerCandidateFilterView, cursor: str
+) -> tuple[str, ...]:
+    """What the value under the cursor would leave: the count, not how many carry the value."""
+
+    option = next(
+        (item for group in view.groups for item in group.options if item.row == cursor), None
+    )
+    if option is None:
+        return ()
+    return (f"{option.value}: {option.matching} Candidate(s) would match",)
 
 
 def render_maintainer_collection_candidates(
     candidates: tuple[MaintainerCollectionCandidateView, ...],
     *,
     cursor: str = "",
-    profile: PresentationProfile,
 ) -> tuple[str, ...]:
-    """Screen 51: versioned Collection Candidates, never flattened to imperative steps."""
+    """Screen 51: versioned Collection Candidates, never flattened to imperative steps.
+
+    Where the Candidate under the cursor came from and what it holds is Verbose's description of it
+    (:func:`maintainer_collection_candidate_detail`), so `v` never grows the rows.
+    """
 
     if (
         any(not isinstance(item, MaintainerCollectionCandidateView) for item in candidates)
         or not isinstance(cursor, str)
         or any(character in cursor for character in "\r\n")
-        or not isinstance(profile, PresentationProfile)
     ):
-        raise ValueError("Maintainer Collection rendering needs Candidate views and a profile")
+        raise ValueError("Maintainer Collection rendering needs Candidate views and a cursor")
     if not candidates:
         return ("No Collection Candidates are available.",)
-    lines = []
-    for candidate in candidates:
-        lines.append(
-            f"{'>' if candidate.candidate_id == cursor else ' '} {candidate.coordinate} — "
-            f"{_human(candidate.state.value)} · {_noun(len(candidate.members), 'member')}"
-        )
-        if profile is PresentationProfile.VERBOSE:
-            lines.extend(
-                (
-                    f"    Source: {candidate.source_alias} · {candidate.source_location}",
-                    f"    Manifest: {candidate.manifest_path}",
-                    f"    Candidate: {candidate.candidate_id}",
-                )
-            )
-            lines.extend(f"    - {item}" for item in candidate.members)
-    return tuple(lines)
+    return tuple(
+        f"{'>' if candidate.candidate_id == cursor else ' '} {candidate.coordinate} — "
+        f"{_human(candidate.state.value)} · {_noun(len(candidate.members), 'member')}"
+        for candidate in candidates
+    )
+
+
+def maintainer_collection_candidate_detail(
+    candidates: tuple[MaintainerCollectionCandidateView, ...], cursor: str
+) -> tuple[str, ...]:
+    """The Collection Candidate under the cursor: its source, manifest, identity and members."""
+
+    candidate = next((item for item in candidates if item.candidate_id == cursor), None)
+    if candidate is None:
+        return ()
+    return (
+        f"Source: {candidate.source_alias} · {candidate.source_location}",
+        f"Manifest: {candidate.manifest_path}",
+        f"Candidate: {candidate.candidate_id}",
+        "Members:",
+        *(f"  - {item}" for item in candidate.members),
+    )
 
 
 def render_maintainer_collection_validation(
@@ -649,26 +685,54 @@ def _allowlist(values: tuple[str, ...] | None) -> str:
 
 def render_maintainer_validation(
     view: MaintainerValidationView,
-    profile: PresentationProfile,
+    *,
+    cursor: str = "",
 ) -> tuple[str, ...]:
-    if not isinstance(view, MaintainerValidationView) or not isinstance(
-        profile, PresentationProfile
-    ):
-        raise ValueError("Maintainer validation rendering needs a typed view and profile")
-    lines = [
-        f"{view.artifact}@{view.version} — {_human(view.state.value)}",
-        f"{view.error_count} {_noun(view.error_count, 'error')}, "
-        f"{view.warning_count} {_noun(view.warning_count, 'warning')}",
-        "Checks:",
-    ]
+    """Screen 38's rows: one per check, marked where policy requires it.
+
+    The verdict and the counts are the view's status (:func:`maintainer_validation_status`); what a
+    check found is Verbose's description of the row under the cursor
+    (:func:`maintainer_validation_check_detail`).
+    """
+
+    if not isinstance(view, MaintainerValidationView) or not isinstance(cursor, str):
+        raise ValueError("Maintainer validation rendering needs a typed view and a cursor")
+    lines = ["Checks"]
     for item in view.checks:
         marker = " · required" if item.required else ""
-        lines.append(f"  {item.label} — {_human(item.outcome)}{marker}")
-        if profile is PresentationProfile.VERBOSE:
-            lines.extend(f"    - {detail.message}" for detail in item.details)
-    if view.unmet_requirements:
-        lines.append(f"Unmet requirements: {', '.join(view.unmet_requirements)}")
+        pointer = ">" if item.row == cursor else " "
+        lines.append(f"{pointer} {item.label} — {_human(item.outcome)}{marker}")
     return tuple(lines)
+
+
+def maintainer_validation_status(view: MaintainerValidationView) -> tuple[str, ...]:
+    """Screen 38's state: which Candidate, its verdict, and what policy still requires."""
+
+    if not isinstance(view, MaintainerValidationView):
+        raise ValueError("Maintainer validation status needs a typed view")
+    return separate(
+        (f"{view.artifact}@{view.version} — {_human(view.state.value)}",),
+        (
+            f"{view.error_count} {_noun(view.error_count, 'error')}, "
+            f"{view.warning_count} {_noun(view.warning_count, 'warning')}",
+        ),
+        (f"Unmet requirements: {', '.join(view.unmet_requirements)}",)
+        if view.unmet_requirements
+        else (),
+    )
+
+
+def maintainer_validation_check_detail(
+    view: MaintainerValidationView, cursor: str
+) -> tuple[str, ...]:
+    """What the check under the cursor found, one line per finding."""
+
+    check = next((item for item in view.checks if item.row == cursor), None)
+    if check is None:
+        return ()
+    if not check.details:
+        return (f"{check.label}: nothing to report",)
+    return (f"{check.label}:", *(f"  - {detail.message}" for detail in check.details))
 
 
 def render_maintainer_validation_check(
@@ -898,49 +962,72 @@ _WORKING_TREE_LABELS = {
 
 def render_maintainer_registry(
     view: MaintainerRegistryView,
-    profile: PresentationProfile,
     *,
+    selected: bool = False,
     show_working_tree: bool = True,
 ) -> tuple[str, ...]:
-    if not isinstance(view, MaintainerRegistryView) or not isinstance(profile, PresentationProfile):
-        raise ValueError("Maintainer registry rendering needs a typed view and profile")
+    """One subscribed registry as a row, with what it holds said under it.
+
+    Digests are shortened in both profiles so `v` never redraws the row; they are spelt out in full
+    by :func:`maintainer_registry_detail`, the description of the row under the cursor.
+    """
+
+    if not isinstance(view, MaintainerRegistryView) or not isinstance(selected, bool):
+        raise ValueError("Maintainer registry rendering needs a typed view")
+    fast = PresentationProfile.FAST
     lines = [
-        f"{view.alias}  {'✓ Valid' if view.valid else '⚠ Attention'}",
+        f"{'>' if selected else ' '} {view.alias}  {'✓ Valid' if view.valid else '⚠ Attention'}",
     ]
-    lines.extend(f"  - {item}" for item in view.diagnostics)
+    lines.extend(f"    - {item}" for item in view.diagnostics)
     if view.snapshot is None:
         return tuple(lines)
-    lines.append(f"Revision: {_short(view.revision or '', profile)}")
-    lines.append(f"Snapshot: {_short(view.snapshot, profile)}")
-    lines.append(f"Approved versions: {view.version_count}")
+    lines.append(f"    Revision: {_short(view.revision or '', fast)}")
+    lines.append(f"    Snapshot: {_short(view.snapshot, fast)}")
+    lines.append(f"    Approved versions: {view.version_count}")
     if view.artifact_counts:
         lines.append(
-            "  " + "  ".join(f"{kind.value} {count}" for kind, count in view.artifact_counts)
+            "      " + "  ".join(f"{kind.value} {count}" for kind, count in view.artifact_counts)
         )
     if show_working_tree:
         tree = view.working_tree
-        lines.append(f"Working tree: {_WORKING_TREE_LABELS[tree.state]}")
+        lines.append(f"    Working tree: {_WORKING_TREE_LABELS[tree.state]}")
         if tree.digest is not None:
-            lines.append(f"  observed {_short(tree.digest, profile)}")
+            lines.append(f"      observed {_short(tree.digest, fast)}")
         if tree.detail is not None:
-            lines.append(f"  {tree.detail}")
+            lines.append(f"      {tree.detail}")
     if not view.transactions:
-        lines.append("No promotion has been recorded in this registry yet.")
+        lines.append("    No promotion has been recorded in this registry yet.")
         return tuple(lines)
-    lines.append("Recent promotions (newest first):")
+    lines.append("    Recent promotions (newest first):")
     for item in view.transactions:
         lines.append(
-            f"  {_short(item.snapshot_after, profile)} ({item.mode}) "
+            f"      {_short(item.snapshot_after, fast)} ({item.mode}) "
             f"{len(item.candidate_ids)} {_noun(len(item.candidate_ids), 'candidate')}"
         )
-        lines.extend(f"    {_short(candidate, profile)}" for candidate in item.candidate_ids)
+        lines.extend(f"        {_short(candidate, fast)}" for candidate in item.candidate_ids)
+    return tuple(lines)
+
+
+def maintainer_registry_detail(view: MaintainerRegistryView) -> tuple[str, ...]:
+    """The registry under the cursor with every digest in full (Verbose)."""
+
+    if not isinstance(view, MaintainerRegistryView):
+        raise ValueError("Maintainer registry detail needs a typed view")
+    if view.snapshot is None:
+        return ()
+    lines = [f"Revision: {view.revision or 'none'}", f"Snapshot: {view.snapshot}"]
+    if view.working_tree.digest is not None:
+        lines.append(f"Working tree observed: {view.working_tree.digest}")
+    for item in view.transactions:
+        lines.append(f"Promotion {item.snapshot_after} ({item.mode})")
+        lines.extend(f"  {candidate}" for candidate in item.candidate_ids)
     return tuple(lines)
 
 
 def maintainer_registry_rows(
     views: tuple[MaintainerRegistryView, ...],
-    profile: PresentationProfile,
     *,
+    cursor: str = "",
     registry_workspace_present: bool = True,
 ) -> tuple[str, ...]:
     """The subscribed snapshots, and nothing that introduces them.
@@ -950,14 +1037,18 @@ def maintainer_registry_rows(
     collapses under `[v]` with the rest of them (`QA-095`, `maintainer_registry_descriptor`).
     """
 
-    if not isinstance(views, tuple) or not isinstance(profile, PresentationProfile):
-        raise ValueError("Maintainer registries rendering needs typed views and a profile")
+    if not isinstance(views, tuple) or not isinstance(cursor, str):
+        raise ValueError("Maintainer registries rendering needs typed views and a cursor")
     lines: list[str] = []
     for view in views:
         if lines:
             lines.append("")
         lines.extend(
-            render_maintainer_registry(view, profile, show_working_tree=registry_workspace_present)
+            render_maintainer_registry(
+                view,
+                selected=view.alias == cursor,
+                show_working_tree=registry_workspace_present,
+            )
         )
     return tuple(lines)
 
@@ -1100,26 +1191,26 @@ def render_repository_scan(
     selection: tuple[str, ...],
     *,
     cursor: str = "",
-    profile: PresentationProfile,
 ) -> tuple[str, ...]:
-    """Screen 46d: exact manifests from one pinned read, with adoption eligibility visible."""
+    """Screen 46d's rows: the artifacts one pinned read found that can be adopted.
+
+    An artifact that cannot be adopted is not a row Space could tick, so it is part of
+    :func:`repository_scan_status` with the reason; what a row is, beyond its manifest and payload,
+    is Verbose's description of it (:func:`repository_scan_detail`).
+    """
 
     if (
         not isinstance(view, MaintainerRepositoryScanView)
         or not isinstance(selection, tuple)
         or not isinstance(cursor, str)
-        or not isinstance(profile, PresentationProfile)
     ):
-        raise ValueError("repository scan rendering needs a view, selection, cursor and profile")
-    lines = [
-        f"Repository scan: {view.url}",
-        f"Resolved commit: {view.commit}",
-        f"{view.manifest_count} explicit manifest(s) found; this repository was not saved as a Source.",
-        "",
-    ]
+        raise ValueError("repository scan rendering needs a view, selection and cursor")
+    lines: list[str] = []
     selected = frozenset(selection)
     for item in view.artifacts:
-        mark = "x" if item.coordinate in selected else (" " if item.adoptable else "-")
+        if not item.adoptable:
+            continue
+        mark = "x" if item.coordinate in selected else " "
         lines.append(
             f"{'>' if item.coordinate == cursor else ' '} [{mark}] {item.coordinate}  {item.state}"
         )
@@ -1127,12 +1218,44 @@ def render_repository_scan(
         lines.append(f"    manifest: {item.manifest_path}")
         lines.append("    declared payload:")
         lines.extend(f"      {path}" for path in item.payload_paths)
-        if not item.adoptable:
-            lines.append("    cannot be adopted until its manifest passes validation")
-        if profile is PresentationProfile.VERBOSE:
-            lines.append(f"    kind: {item.kind}; name: {item.name}; version: {item.version}")
-    lines.extend(("", "Space selects an adoptable artifact; a reviews the selected copies."))
     return tuple(lines)
+
+
+def repository_scan_status(view: MaintainerRepositoryScanView) -> tuple[str, ...]:
+    """Screen 46d's state: what was read, and what it found that cannot be adopted, and why."""
+
+    if not isinstance(view, MaintainerRepositoryScanView):
+        raise ValueError("repository scan status needs a view")
+    refused = tuple(
+        (
+            f"{item.coordinate}  {item.state}: cannot be adopted until its manifest passes"
+            " validation",
+            f"  {item.summary}",
+            f"  manifest: {item.manifest_path}",
+        )
+        for item in view.artifacts
+        if not item.adoptable
+    )
+    adoptable = any(item.adoptable for item in view.artifacts)
+    return separate(
+        (
+            f"Repository scan: {view.url}",
+            f"Resolved commit: {view.commit}",
+            f"{view.manifest_count} explicit manifest(s) found; this repository was not saved as"
+            " a Source.",
+        ),
+        *refused,
+        () if adoptable else ("Nothing in this repository can be adopted.",),
+    )
+
+
+def repository_scan_detail(view: MaintainerRepositoryScanView, cursor: str) -> tuple[str, ...]:
+    """The scanned artifact under the cursor, as its manifest declares it (Verbose)."""
+
+    item = view.artifact(cursor)
+    if item is None or not item.adoptable:
+        return ()
+    return (f"Kind: {item.kind}", f"Name: {item.name}", f"Version: {item.version}")
 
 
 def render_repository_adoption_review(
@@ -1166,16 +1289,17 @@ def render_adopted_artifacts(
     artifacts: tuple[MaintainerAdoptedArtifactView, ...],
     *,
     cursor: str = "",
-    profile: PresentationProfile,
 ) -> tuple[str, ...]:
-    """Screen 46f: packages with enough immutable provenance for an on-demand check."""
+    """Screen 46f: packages with enough immutable provenance for an on-demand check.
 
-    if (
-        any(not isinstance(item, MaintainerAdoptedArtifactView) for item in artifacts)
-        or not isinstance(cursor, str)
-        or not isinstance(profile, PresentationProfile)
+    What Enter does is the legend's; the full provenance of the row under the cursor is Verbose's
+    description of it (:func:`adopted_artifact_detail`), so `v` never grows the rows.
+    """
+
+    if any(not isinstance(item, MaintainerAdoptedArtifactView) for item in artifacts) or (
+        not isinstance(cursor, str)
     ):
-        raise ValueError("adopted artifact rendering needs typed views, cursor and profile")
+        raise ValueError("adopted artifact rendering needs typed views and a cursor")
     if not artifacts:
         return (
             "No repository-adopted artifacts are in this Registry yet.",
@@ -1185,12 +1309,25 @@ def render_adopted_artifacts(
     for item in artifacts:
         lines.append(f"{'>' if item.coordinate == cursor else ' '} {item.coordinate}")
         lines.append(f"    {item.url} at {item.ref}")
-        lines.append(f"    adopted commit: {_short(item.recorded_commit, profile)}")
-        if profile is PresentationProfile.VERBOSE:
-            lines.append(f"    manifest: {item.manifest_path}")
-            lines.append(f"    recorded input: {item.input_digest}")
-    lines.extend(("", "Enter checks the focused artifact's upstream now."))
+        lines.append(
+            f"    adopted commit: {_short(item.recorded_commit, PresentationProfile.FAST)}"
+        )
     return tuple(lines)
+
+
+def adopted_artifact_detail(
+    artifacts: tuple[MaintainerAdoptedArtifactView, ...], cursor: str
+) -> tuple[str, ...]:
+    """The adopted artifact under the cursor, with the provenance its check compares against."""
+
+    item = next((entry for entry in artifacts if entry.coordinate == cursor), None)
+    if item is None:
+        return ()
+    return (
+        f"Adopted commit: {item.recorded_commit}",
+        f"Manifest: {item.manifest_path}",
+        f"Recorded input: {item.input_digest}",
+    )
 
 
 def render_adoption_upstream_check(
@@ -1242,43 +1379,72 @@ def render_adoption_upstream_check(
 def render_maintainer_bulk_promotion(
     views: tuple[MaintainerBulkPromotionView, ...],
     selection: tuple[str, ...],
-    profile: PresentationProfile,
+    *,
+    cursor: str = "",
 ) -> tuple[str, ...]:
-    """Screen 47: what one registry transaction may carry, and what it may not.
+    """Screen 47's rows: the Candidates one registry transaction may carry, under their registry.
 
-    A Candidate the run refused is named here with its reason rather than being silently absent:
-    "it is not in the list" and "it does not exist" look identical on screen otherwise.
+    What it may not carry, and why, is not a row Space could tick, so it is the view's status
+    (:func:`maintainer_bulk_promotion_status`): a refused Candidate is named with its reason rather
+    than silently absent, because "it is not in the list" and "it does not exist" look identical
+    on screen otherwise.
     """
 
     if (
         not isinstance(views, tuple)
         or not isinstance(selection, tuple)
-        or not isinstance(profile, PresentationProfile)
+        or not isinstance(cursor, str)
     ):
-        raise ValueError("Maintainer bulk promotion rendering needs typed views and a profile")
-    if not views:
-        return ("Bulk promotion has nothing composed yet.",)
+        raise ValueError("Maintainer bulk promotion rendering needs typed views and a cursor")
     lines: list[str] = []
-    chosen = 0
-    for index, view in enumerate(views):
-        if index:
+    for view in views:
+        if not view.candidates:
+            continue
+        if lines:
             lines.append("")
         lines.append(f"{view.target_registry}")
-        lines.extend(f"  - {item}" for item in view.refusals)
         # `QA-030` again: these rows are a table without a header, and were ragged for the same
-        # reason. Two spaces of indent are spent on the nesting, so the grid gets what is left.
-        selectable: list[tuple[str, ...]] = []
-        for item in view.candidates:
-            mark = "[x]" if item.candidate_id in selection else "[ ]"
-            chosen += 1 if item.candidate_id in selection else 0
-            selectable.append((mark, item.artifact, item.version, _human(item.state.value)))
+        # reason. The cursor gutter is spent first, so the grid gets what is left.
+        selectable = [
+            (
+                "[x]" if item.candidate_id in selection else "[ ]",
+                item.artifact,
+                item.version,
+                _human(item.state.value),
+            )
+            for item in view.candidates
+        ]
+        grid = columns(selectable, width=CONTENT_MEASURE - _BULK_INDENT)
         lines.extend(
-            f"  {line}" for line in columns(selectable, width=CONTENT_MEASURE - _BULK_INDENT)
+            f"{'>' if item.candidate_id == cursor else ' '} {line}"
+            for item, line in zip(view.candidates, grid, strict=True)
         )
-        if not view.candidates and not view.refusals:
-            lines.append("  No Candidate of this registry can be promoted right now.")
-        for blocked in view.excluded:
-            lines.append(f"  Not promotable: {blocked.artifact} — {blocked.reason}")
-    lines.append("")
-    lines.append(f"{chosen} selected")
     return tuple(lines)
+
+
+def maintainer_bulk_promotion_status(
+    views: tuple[MaintainerBulkPromotionView, ...],
+) -> tuple[str, ...]:
+    """Screen 47's state: per registry, what it refuses and which Candidates it cannot carry."""
+
+    if not isinstance(views, tuple):
+        raise ValueError("Maintainer bulk promotion status needs typed views")
+    if not views:
+        return ("Bulk promotion has nothing composed yet.",)
+    statements: list[tuple[str, ...]] = []
+    for view in views:
+        said = (
+            *(f"  - {item}" for item in view.refusals),
+            *(
+                ("  No Candidate of this registry can be promoted right now.",)
+                if not view.candidates and not view.refusals
+                else ()
+            ),
+            *(
+                f"  Not promotable: {blocked.artifact} — {blocked.reason}"
+                for blocked in view.excluded
+            ),
+        )
+        if said:
+            statements.append((view.target_registry, *said))
+    return separate(*statements)
