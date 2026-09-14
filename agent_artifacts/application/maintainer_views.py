@@ -8,6 +8,7 @@ same application session and reducer; this module introduces no second UI state 
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from difflib import unified_diff
 from enum import Enum
@@ -21,7 +22,9 @@ from agent_artifacts.application.candidate_validation import (
 from agent_artifacts.application.maintainer import CandidateBundle, SourceScan
 from agent_artifacts.application.maintainer_promotion import (
     CandidatePromotionExecutionResult,
+    CandidatePromotionRecord,
     PreparedCandidatePromotionTransaction,
+    candidate_promotion_record_refusal,
     plan_candidate_promotion,
     prepare_candidate_promotion,
     promotion_commit_subject,
@@ -738,6 +741,9 @@ class MaintainerCandidateView:
     baseline: str
     semantic_changes: tuple[MaintainerCandidateSemanticChangeView, ...]
     file_changes: tuple[MaintainerCandidateFileChangeView, ...]
+    #: What the Registry trees record for this Candidate, which its stored state cannot say until
+    #: Source Sync observes a synchronized Registry (CP-23 task 09, D-259).
+    promotion: CandidatePromotionRecord = CandidatePromotionRecord.NOT_PROMOTED
 
     def __post_init__(self) -> None:
         required = (
@@ -791,6 +797,7 @@ class MaintainerCandidateView:
                 not isinstance(item, MaintainerCandidateFileChangeView)
                 for item in self.file_changes
             )
+            or not isinstance(self.promotion, CandidatePromotionRecord)
         ):
             raise ValueError("Maintainer Candidate view is invalid")
 
@@ -1267,7 +1274,11 @@ def _semantic_changes(
     return tuple(sorted(set(changes)))
 
 
-def _candidate_view(bundle: CandidateBundle, history: dict) -> MaintainerCandidateView:
+def _candidate_view(
+    bundle: CandidateBundle,
+    history: dict,
+    promotion: CandidatePromotionRecord = CandidatePromotionRecord.NOT_PROMOTED,
+) -> MaintainerCandidateView:
     candidate = bundle.candidate
     previous = None if candidate.previous is None else history.get(candidate.previous)
     description = _description(bundle)
@@ -1309,19 +1320,36 @@ def _candidate_view(bundle: CandidateBundle, history: dict) -> MaintainerCandida
         baseline,
         _semantic_changes(previous, bundle),
         _file_changes(previous, bundle),
+        promotion,
     )
 
 
 def project_maintainer_candidates(
     scans: tuple[SourceScan, ...],
+    *,
+    promotion: Mapping[str, CandidatePromotionRecord] | None = None,
 ) -> tuple[MaintainerCandidateView, ...]:
-    if not isinstance(scans, tuple) or any(not isinstance(scan, SourceScan) for scan in scans):
+    """Project active Candidates, each with what the Registry trees record for it by Candidate ID."""
+
+    records = {} if promotion is None else promotion
+    if (
+        not isinstance(scans, tuple)
+        or any(not isinstance(scan, SourceScan) for scan in scans)
+        or not isinstance(records, Mapping)
+        or any(not isinstance(item, CandidatePromotionRecord) for item in records.values())
+    ):
         raise ValueError("Maintainer Candidate projection needs Source Scans")
     all_history = {bundle.candidate.id: bundle for scan in scans for bundle in scan.history}
     if sum(len(scan.history) for scan in scans) != len(all_history):
         raise ValueError("Maintainer Candidate history contains duplicate Candidate IDs")
     projected = tuple(
-        _candidate_view(bundle, all_history) for scan in scans for bundle in scan.active
+        _candidate_view(
+            bundle,
+            all_history,
+            records.get(bundle.candidate.id.value, CandidatePromotionRecord.NOT_PROMOTED),
+        )
+        for scan in scans
+        for bundle in scan.active
     )
     return tuple(
         sorted(
@@ -2967,6 +2995,7 @@ def project_maintainer_promotion_review(
     approved: ApprovedRegistryState | None,
     *,
     mode: PromotionMode,
+    promotion: CandidatePromotionRecord = CandidatePromotionRecord.NOT_PROMOTED,
 ) -> MaintainerPromotionReviewView:
     """Project one Candidate's promotion review, including the reasons it may have none."""
 
@@ -2976,6 +3005,7 @@ def project_maintainer_promotion_review(
         or not isinstance(policy, EffectivePolicy)
         or not isinstance(mode, PromotionMode)
         or not (approved is None or isinstance(approved, ApprovedRegistryState))
+        or not isinstance(promotion, CandidatePromotionRecord)
     ):
         raise ValueError("Maintainer promotion review projection needs a Candidate and a policy")
     candidate = bundle.candidate
@@ -3001,6 +3031,19 @@ def project_maintainer_promotion_review(
         "canonical_digest": str(candidate.canonical_digest),
         "source_revision": candidate.artifact.provenance.revision,
     }
+    # A recorded Candidate has no review to confirm, whatever its run says (D-259).
+    recorded = candidate_promotion_record_refusal(bundle, promotion)
+    if recorded is not None:
+        return MaintainerPromotionReviewView(
+            **common,  # type: ignore[arg-type]
+            review_digest=None,
+            registry_revision=None if approved is None else approved.revision,
+            registry_snapshot_digest=None if approved is None else str(approved.snapshot_digest),
+            validation_report_digest=None,
+            effective_policy_digest=None,
+            warnings=(),
+            refusals=(redact_text(recorded),),
+        )
     if approved is None:
         return MaintainerPromotionReviewView(
             **common,  # type: ignore[arg-type]
@@ -3086,6 +3129,7 @@ def project_maintainer_registry_diff(
     registry_snapshot: SourceSnapshot | None,
     *,
     mode: PromotionMode,
+    promotion: CandidatePromotionRecord = CandidatePromotionRecord.NOT_PROMOTED,
 ) -> MaintainerRegistryDiffView:
     """Project the transaction, or the reasons there is none to project."""
 
@@ -3096,6 +3140,7 @@ def project_maintainer_registry_diff(
         or not isinstance(mode, PromotionMode)
         or not (approved is None or isinstance(approved, ApprovedRegistryState))
         or not (registry_snapshot is None or isinstance(registry_snapshot, SourceSnapshot))
+        or not isinstance(promotion, CandidatePromotionRecord)
     ):
         raise ValueError("Maintainer registry diff projection needs a Candidate and a policy")
     candidate = bundle.candidate
@@ -3118,6 +3163,9 @@ def project_maintainer_registry_diff(
             refusals=tuple(redact_text(item) for item in reasons),
         )
 
+    recorded = candidate_promotion_record_refusal(bundle, promotion)
+    if recorded is not None:
+        return _refused(recorded)
     if approved is None:
         return _refused(
             f"target registry {candidate.target_registry.value} has no synchronized "
@@ -3716,6 +3764,8 @@ def project_maintainer_bulk_promotion(
     alias: SourceAlias,
     runs: tuple[tuple[CandidateBundle, CandidateValidation], ...],
     approved: ApprovedRegistryState | None,
+    *,
+    promotion: Mapping[str, CandidatePromotionRecord] | None = None,
 ) -> MaintainerBulkPromotionView:
     """Project the selectable set for one registry from runs that already happened.
 
@@ -3723,10 +3773,13 @@ def project_maintainer_bulk_promotion(
     Candidate cannot be offered for bulk promotion on a judgement no screen ever displayed.
     """
 
+    records = {} if promotion is None else promotion
     if (
         not isinstance(alias, SourceAlias)
         or not isinstance(runs, tuple)
         or not (approved is None or isinstance(approved, ApprovedRegistryState))
+        or not isinstance(records, Mapping)
+        or any(not isinstance(item, CandidatePromotionRecord) for item in records.values())
     ):
         raise ValueError("Maintainer bulk promotion projection needs an alias and typed runs")
     mine = tuple(
@@ -3746,6 +3799,14 @@ def project_maintainer_bulk_promotion(
     for bundle, validation in mine:
         candidate = bundle.candidate
         artifact = str(candidate.artifact.coordinate.artifact)
+        recorded = candidate_promotion_record_refusal(
+            bundle, records.get(candidate.id.value, CandidatePromotionRecord.NOT_PROMOTED)
+        )
+        if recorded is not None:
+            excluded.append(
+                MaintainerBulkExclusionView(candidate.id.value, artifact, redact_text(recorded))
+            )
+            continue
         if validation.state is CandidateState.INVALID:
             excluded.append(
                 MaintainerBulkExclusionView(

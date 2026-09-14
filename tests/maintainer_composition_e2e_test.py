@@ -18,8 +18,9 @@ from agent_artifacts.application.consumer_ui import (
     ConsumerUiEventKind,
     opening_state,
 )
-from agent_artifacts.application.consumer_views import ConsumerSettings
+from agent_artifacts.application.consumer_views import ConsumerSettings, PresentationProfile
 from agent_artifacts.application.maintainer import CandidateBundle, reconcile_source_scan
+from agent_artifacts.application.maintainer_promotion import CandidatePromotionRecord
 from agent_artifacts.application.maintainer_views import MaintainerScreen, parse_validation_row
 from agent_artifacts.application.promotion import (
     PromotionSourceKind,
@@ -64,6 +65,7 @@ from agent_artifacts.sources.model import (
     source_store_paths,
 )
 from agent_artifacts.tui_consumer import run_consumer_shell
+from agent_artifacts.tui_maintainer import render_maintainer_candidates
 from tests.candidate_history_test import _ready_scan
 from tests.configured_install_command_e2e_test import _environment
 from tests.consumer_application_e2e_test import _actions
@@ -834,6 +836,10 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
                 tuple(item.candidate.id.value for item in scan.active),
                 composed.sources,
             )
+            self.assertEqual(
+                {item.promotion for item in composed.candidates or ()},
+                {CandidatePromotionRecord.NOT_PROMOTED},
+            )
             terminal = FakeTerminal(
                 *(DOWN for _ in range(8)),
                 ENTER,
@@ -925,6 +931,39 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
                     for stage in lifecycle.stages
                 )
             )
+            # CP-23 task 09 (D-259): the Candidate the commit recorded reads Promoted locally on
+            # the return, is offered by no review, diff or bulk selection, and a restart composed
+            # from nothing but the durable trees says exactly the same.
+            promoted_id = scan.active[0].candidate.id.value
+            restarted = _actions(env).source().screens.maintainer
+            assert restarted is not None
+            for views in (refreshed, restarted):
+                candidate = next(item for item in views.candidates or () if item.id == promoted_id)
+                self.assertIs(candidate.promotion, CandidatePromotionRecord.PROMOTED_LOCALLY)
+                table = "\n".join(
+                    render_maintainer_candidates(
+                        views.candidates or (), cursor=promoted_id, profile=PresentationProfile.FAST
+                    )
+                )
+                self.assertIn("Promoted locally", table)
+                self.assertNotIn("New", table)
+                self.assertNotIn("Published", table)
+                reviews = [
+                    item for item in views.promotions or () if item.candidate_id == promoted_id
+                ]
+                diffs = [
+                    item for item in views.registry_diffs or () if item.candidate_id == promoted_id
+                ]
+                self.assertEqual(len(reviews), len(PromotionMode))
+                self.assertFalse(any(item.confirmable for item in reviews))
+                self.assertFalse(any(item.plannable for item in diffs))
+                self.assertTrue(
+                    all("already promoted" in " ".join(item.refusals) for item in reviews)
+                )
+                for bulk in views.bulk_promotions or ():
+                    self.assertNotIn(promoted_id, {item.candidate_id for item in bulk.candidates})
+            self.assertEqual(restarted.candidates, refreshed.candidates)
+            self.assertEqual(restarted.promotions, refreshed.promotions)
 
     def test_a_collection_candidate_is_reached_and_resolved_through_the_real_shell(self) -> None:
         """Screens 51-52 over one real installation: `c` from the Candidate list, then Enter."""

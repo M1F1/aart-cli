@@ -274,6 +274,11 @@ confirmation (`QA-033`).
 
 - [ ] After the commit, **Registry commit** stays on screen with its receipt; `Enter` goes on to
       **Registry Maintainer**, one key from the next promotion.
+- [ ] Go back to **Candidates**. The Candidate you just committed reads **Promoted locally**, not
+      New, Ready or Published (CP-23 task 09, `D-259`).
+- [ ] Open its promotion review. It refuses: already promoted in the local checkout, so publish
+      that commit with Git, then run Registry Sync. Bulk promotion does not offer it either.
+- [ ] Quit and reopen the TUI. The same Candidate still reads **Promoted locally**.
 
 ## 8 — Publish the promotion yourself, in Git
 
@@ -324,6 +329,8 @@ Checkpoint for Act I:
 - [ ] Screen 45 listed push → review/merge → update checkout → Registry Sync, and never called
       the local commit published.
 - [ ] Promotion records are visible in the merged branch.
+- [ ] After Registry Sync and then Source Sync, the Candidate reads **Promoted** and its earlier
+      history is still listed on the Candidate lifecycle screen (`r`).
 
 ---
 

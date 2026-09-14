@@ -2,7 +2,10 @@
 
 ## Current objective — CP-23 (2026-09-14)
 
-**CP-22 is CLOSED. CP-23 tasks 01–08 are done; task 09 is next.**
+**CP-22 is CLOSED. CP-23 tasks 01–09 are done; task 10 is next.**
+Task 09 (D-259): whether a Candidate is already promoted is read from the Registry trees on every
+composition, so it reads `Promoted locally` after the commit and after a restart, and no screen or
+transaction offers it again (B-118 tracks the Source counts).
 Task 08 (D-258): Remediation states the changes AART will make as outcomes, with Fast impact and
 Verbose effect terms; Continue is its row; harness-only plans go straight to Ready, which discloses them.
 Task 07 (D-257) describes the focused Marketplace artifact or Collection from its approved summary
@@ -29,8 +32,8 @@ Per-task work runs only the verifying gates; the full suite is task 15 (owner in
 Task 01's detailed evidence is in
 [`slices/CP-23-actionable-tui-workflows.md`](slices/CP-23-actionable-tui-workflows.md).
 
-**Next product action: task 09**, making a promoted Candidate leave New and become ineligible for
-duplicate promotion, with auditable history. Continue the ordered fifteen-task plan;
+**Next product action: task 10**, explicit selection of one or several eligible harnesses for
+installation, carried through review, execution and receipts. Continue the ordered fifteen-task plan;
 CP-23 as a whole is not
 implemented or verified. Task 15 retains the full-batch/manual acceptance requirement, and task 14
 retains the complete screen/state audit. No human manual acceptance is claimed for task 01.

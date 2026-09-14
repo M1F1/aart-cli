@@ -149,7 +149,7 @@ machine-readable task list. No product fix is claimed by creating this plan.
 - [x] 06 — Make Success controls functional, including exact receipt and supported Undo.
 - [x] 07 — Show the focused Marketplace artifact description.
 - [x] 08 — Explain proposed Remediation effects and separate Continue from facts.
-- [ ] 09 — Refresh Candidate state immediately and durably after local promotion.
+- [x] 09 — Refresh Candidate state immediately and durably after local promotion.
 - [ ] 10 — Select one or multiple eligible harnesses explicitly.
 - [ ] 11 — Fix Artifact Details controls and compatibility messaging.
 - [ ] 12 — Make Credential Action selectable and wire permitted actions.

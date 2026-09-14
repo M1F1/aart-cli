@@ -6061,3 +6061,36 @@ runtime, executable, Python packages, network) still stops. Ready discloses ever
 the same outcome wording ("AART will also: …"), and the Fast-risk property now checks that
 wording. The real composed installs in the E2Es are harness-only, so their key sequences lose the
 Remediation Enter.
+
+## D-259 — Whether a Candidate is already promoted is read from the Registry trees
+
+Date: 2026-09-14 · Status: implemented · Scope: CP-23 task 09
+
+Root cause of the `New` row after a committed promotion: Candidate state only becomes `promoted`
+when Source Sync reconciles against the *synchronized* approved Registry. A local commit is
+deliberately not a sync (D-249), and screen 48 was the only reader of the checkout's version and
+audit evidence. So after the commit the Candidates row, the promotion review (both modes), the
+Registry diff and bulk promotion all still treated the same Candidate as promotable. Only the
+execution-time baseline check (checkout ahead of the synchronized snapshot) would have stopped a
+second commit, and it named the baseline rather than the duplicate.
+
+Choice: `CandidatePromotionRecord` (`not-promoted`, `promoted-locally`, `promoted`) is derived on
+every composition by `candidate_promotion_record` from what the trees record for the exact
+Candidate ID in its target registry. The synchronized approved versions win (`promoted`); a record
+only in the attributable local checkout is `promoted-locally`; an unreadable tree records nothing.
+Nothing is written beside Candidate history, so the history, audits and superseded/rejected records
+are untouched, and a restart derives the same answer from the same trees. The Source Sync
+reconciliation (CP-21) still moves the stored state to `promoted` once Registry Sync has observed
+the published commit.
+
+- `MaintainerCandidateView.promotion` carries the record. Its status reads `Promoted locally` or
+  `Promoted` (table, cursor detail, Candidate heading) and never `New`, `Ready` or `Published`.
+- The promotion review, Registry diff and bulk selection take the record and refuse with the way
+  on: publish with Git, then run Registry Sync (local), or run Source Sync (synchronized).
+- `prepare_promotion_transaction`, the one choke point for execution, refuses any Candidate the
+  workspace or the synchronized state already records, by name, before the baseline comparison.
+
+A different Candidate ID is never covered by another's record: a genuinely new version and a
+same-version content change each get a new ID and stay promotable in the views (execution still
+enforces the baseline and version conflicts). The Source counts and the Status filter still count
+stored state (B-118).

@@ -593,7 +593,7 @@
         {
           "id": "9",
           "title": "Refresh durable Candidate state after local promotion",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "10",

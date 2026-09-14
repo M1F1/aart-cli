@@ -10,6 +10,10 @@ from __future__ import annotations
 import time
 
 from agent_artifacts.application.candidate_validation import validate_candidate
+from agent_artifacts.application.maintainer_promotion import (
+    CandidatePromotionRecord,
+    candidate_promotion_record,
+)
 from agent_artifacts.application.maintainer_sync import ApprovedRegistryState
 from agent_artifacts.application.maintainer_views import (
     MaintainerViews,
@@ -116,7 +120,6 @@ def read_maintainer_views(
             return _error(f"cannot bind Candidate history for {configured.alias}: {error}")
     sources = tuple(projected)
     try:
-        candidates = project_maintainer_candidates(tuple(scans))
         collection_candidate_records = tuple(
             candidate for scan in scans for candidate in scan.collection_active
         )
@@ -217,6 +220,19 @@ def read_maintainer_views(
             versions_by_registry[alias_value] = (
                 None if isinstance(loaded_versions, Err) else loaded_versions.value
             )
+        # What the Registry trees record decides whether a Candidate is still promotable, because its
+        # stored state cannot move until Source Sync observes a synchronized Registry (D-259).
+        promotion: dict[str, CandidatePromotionRecord] = {}
+        for scan in scans:
+            for bundle in scan.active:
+                alias_value = bundle.candidate.target_registry.value
+                synchronized = approved.get(alias_value)
+                promotion[bundle.candidate.id.value] = candidate_promotion_record(
+                    bundle,
+                    approved=None if synchronized is None else synchronized.versions,
+                    local=versions_by_registry.get(alias_value),
+                )
+        candidates = project_maintainer_candidates(tuple(scans), promotion=promotion)
         histories = {item.candidate.id: scan.history for scan in scans for item in scan.active}
         lifecycles = tuple(
             project_maintainer_candidate_lifecycle(
@@ -247,6 +263,7 @@ def read_maintainer_views(
                 approved[bundle.candidate.target_registry.value],
                 workspaces[bundle.candidate.target_registry.value],
                 mode=mode,
+                promotion=promotion[bundle.candidate.id.value],
             )
             for bundle, validation in runs
             for mode in PromotionMode
@@ -258,6 +275,7 @@ def read_maintainer_views(
                 judged,
                 approved[bundle.candidate.target_registry.value],
                 mode=mode,
+                promotion=promotion[bundle.candidate.id.value],
             )
             for bundle, validation in runs
             for mode in PromotionMode
@@ -281,7 +299,9 @@ def read_maintainer_views(
                     else None
                 )
             bulk_promotions.append(
-                project_maintainer_bulk_promotion(registry.alias, runs, approved[alias_value])
+                project_maintainer_bulk_promotion(
+                    registry.alias, runs, approved[alias_value], promotion=promotion
+                )
             )
             registries.append(
                 project_maintainer_registry(

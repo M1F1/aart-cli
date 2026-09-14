@@ -1,6 +1,9 @@
 # AART Refactor Migration Status
 
-**2026-09-14: CP-22 CLOSED; CP-23 tasks 01–08 done, task 09 next.**
+**2026-09-14: CP-22 CLOSED; CP-23 tasks 01–09 done, task 10 next.**
+Task 09 (D-259): a Candidate the Registry trees already record reads `Promoted locally` (or
+`Promoted`), and review, diff, bulk and the transaction refuse it. A restart derives the same state.
+Ten targeted mutations were killed.
 Task 08 (D-258): Remediation says what AART will change, Continue is a row, and routine harness
 configuration no longer forces the stop. Ten targeted mutations were killed.
 Task 07 (D-257): the focused Marketplace offer is described from its approved summary below the
@@ -23,8 +26,8 @@ and 193 subtests pass, including a Hypothesis row-selection property and real lo
 Scoped mutation analysis is recorded; format, lint, typecheck, unit (3,978 OK) and validate
 passed. Per-task work runs only the verifying gates; the full suite is task 15.
 
-Tasks 09–15 remain pending in [`CP-23`](slices/CP-23-actionable-tui-workflows.md); the next product
-step is the Candidate state after promotion. The entire batch and its manual acceptance are still
+Tasks 10–15 remain pending in [`CP-23`](slices/CP-23-actionable-tui-workflows.md); the next product
+step is explicit harness selection. The entire batch and its manual acceptance are still
 open. Owner requirements in §167/D-249–D-250 retain manual publication, explicit target choice,
 credential acquisition guidance, and complete Frame/Verbose compliance with no standard in-TUI
 exceptions. No human retest, all-screen audit, or new CP-22 gate result is claimed.

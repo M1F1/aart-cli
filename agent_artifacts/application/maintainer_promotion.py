@@ -41,7 +41,7 @@ from agent_artifacts.domain.candidates import CandidateId, CandidateState, asses
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.identifiers import SourceAlias, source_revision_kind
 from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.registry import PromotionMode
+from agent_artifacts.domain.registry import PromotionMode, RegistryArtifactVersion
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.domain.serialization import canonical_json_bytes
 from agent_artifacts.protocol.hashing import sha256_bytes
@@ -52,6 +52,7 @@ from agent_artifacts.store.model import ObjectDigest
 
 __all__ = [
     "MAINTAINER_PROMOTION_INVALID",
+    "CandidatePromotionRecord",
     "CandidatePromotionExecutionResult",
     "CandidatePromotionCommitCommand",
     "CandidatePromotionCommitReceipt",
@@ -59,6 +60,8 @@ __all__ = [
     "PreparedCandidatePromotion",
     "PreparedCandidatePromotionTransaction",
     "RegistryBaselineMismatch",
+    "candidate_promotion_record",
+    "candidate_promotion_record_refusal",
     "execute_candidate_promotion",
     "plan_candidate_promotion",
     "effective_policy_digest",
@@ -97,6 +100,70 @@ def _error(message: str, *remediation: str) -> Err:
             ),
         )
     )
+
+
+class CandidatePromotionRecord(Enum):
+    """What the Registry trees say about one Candidate, independent of its stored state.
+
+    Candidate state only becomes ``promoted`` when Source Sync reconciles against the synchronized
+    approved Registry, and a local commit is deliberately not a sync (D-249). So whether a Candidate
+    was already promoted is read from the trees each time rather than written beside its history,
+    which is what lets a restart say exactly what the screen said before it (CP-23 task 09, D-259).
+    """
+
+    NOT_PROMOTED = "not-promoted"
+    PROMOTED_LOCALLY = "promoted-locally"
+    PROMOTED = "promoted"
+
+
+def _records(bundle: CandidateBundle, versions: tuple[RegistryArtifactVersion, ...] | None) -> bool:
+    candidate = bundle.candidate
+    return versions is not None and any(
+        item.candidate_id == candidate.id and item.coordinate.source == candidate.target_registry
+        for item in versions
+    )
+
+
+def candidate_promotion_record(
+    bundle: CandidateBundle,
+    *,
+    approved: tuple[RegistryArtifactVersion, ...] | None,
+    local: tuple[RegistryArtifactVersion, ...] | None,
+) -> CandidatePromotionRecord:
+    """Whether the synchronized Registry, or only the local checkout, records this Candidate.
+
+    `None` is a tree that could not be read, which records nothing. The synchronized Registry wins
+    over the checkout: once it records the Candidate, the promotion is no longer only local.
+    """
+
+    if not isinstance(bundle, CandidateBundle):
+        raise ValueError("a promotion record is read for one Candidate")
+    if _records(bundle, approved):
+        return CandidatePromotionRecord.PROMOTED
+    if _records(bundle, local):
+        return CandidatePromotionRecord.PROMOTED_LOCALLY
+    return CandidatePromotionRecord.NOT_PROMOTED
+
+
+def candidate_promotion_record_refusal(
+    bundle: CandidateBundle, record: CandidatePromotionRecord
+) -> str | None:
+    """Why a recorded Candidate cannot be promoted again, and what moves it on; `None` otherwise."""
+
+    if not isinstance(bundle, CandidateBundle) or not isinstance(record, CandidatePromotionRecord):
+        raise ValueError("a promotion refusal needs a Candidate and its promotion record")
+    registry = bundle.candidate.target_registry.value
+    if record is CandidatePromotionRecord.PROMOTED_LOCALLY:
+        return (
+            f"this Candidate is already promoted in the local {registry} Registry checkout; "
+            "publish that commit with Git, then run Registry Sync"
+        )
+    if record is CandidatePromotionRecord.PROMOTED:
+        return (
+            f"this Candidate is already promoted in the synchronized {registry} Registry; "
+            "run Source Sync to record it"
+        )
+    return None
 
 
 def _registry_baseline_error(mismatch: RegistryBaselineMismatch) -> Err:
@@ -561,6 +628,20 @@ def prepare_promotion_transaction(
     workspace_digest = source_snapshot_digest(registry_workspace)
     if isinstance(workspace_digest, Err):
         return workspace_digest
+    # A duplicate is named before the baseline: after a local commit the checkout is also ahead of
+    # the synchronized snapshot, and "promoted already" is the answer the Maintainer can act on.
+    if not isinstance(approved, ApprovedRegistryState) or any(
+        not isinstance(bundle, CandidateBundle) for bundle in bundles
+    ):
+        return _error("preparing a promotion needs a Candidate, its run, a policy and a baseline")
+    recorded = load_registry_versions(registry_workspace)
+    local = recorded.value if isinstance(recorded, Ok) else None
+    for bundle in bundles:
+        refusal = candidate_promotion_record_refusal(
+            bundle, candidate_promotion_record(bundle, approved=approved.versions, local=local)
+        )
+        if refusal is not None:
+            return _error(f"{bundle.candidate.artifact.coordinate}: {refusal}")
     if workspace_digest.value != approved.snapshot_digest:
         return _registry_baseline_error(baseline_mismatch)
     promotions: list[PreparedCandidatePromotion] = []

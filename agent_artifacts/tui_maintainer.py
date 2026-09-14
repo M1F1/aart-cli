@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from agent_artifacts.application.consumer_views import PresentationProfile
+from agent_artifacts.application.maintainer_promotion import CandidatePromotionRecord
 from agent_artifacts.application.maintainer_views import (
     MaintainerAdoptedArtifactView,
     MaintainerAdoptionReviewView,
@@ -33,6 +34,7 @@ from agent_artifacts.application.maintainer_views import (
     MaintainerVersionConflictView,
     MaintainerWorkingTreeState,
 )
+from agent_artifacts.domain.candidates import CandidateState
 from agent_artifacts.tui_layout import (
     CONTENT_MEASURE,
     action_prompt,
@@ -260,6 +262,21 @@ def render_source_sync_result(
     return separate(*sections, [f"Review identity: {view.review_digest}"])
 
 
+def candidate_status(view: MaintainerCandidateView) -> str:
+    """A Candidate's status as the Registry trees record it, before its stored state (D-259).
+
+    A local commit is not a sync, so until Source Sync observes a synchronized Registry the stored
+    state still reads New or Ready. The record is what is true now; nothing here says Published.
+    """
+
+    if view.state is not CandidateState.PROMOTED:
+        if view.promotion is CandidatePromotionRecord.PROMOTED_LOCALLY:
+            return "Promoted locally"
+        if view.promotion is CandidatePromotionRecord.PROMOTED:
+            return "Promoted"
+    return _human(view.state.value)
+
+
 def render_maintainer_candidates(
     candidates: tuple[MaintainerCandidateView, ...],
     *,
@@ -282,7 +299,7 @@ def render_maintainer_candidates(
     rows.extend(
         (
             ">" if item.id == cursor else "",
-            _human(item.state.value),
+            candidate_status(item),
             item.artifact,
             item.version,
             item.source_alias,
@@ -314,7 +331,7 @@ def maintainer_candidate_detail(
         ("Artifact", focused.artifact),
         ("Version", focused.version),
         ("Source", focused.source_alias),
-        ("Status", _human(focused.state.value)),
+        ("Status", candidate_status(focused)),
         ("Candidate", focused.id),
         ("Target registry", focused.target_registry),
     )
@@ -334,7 +351,7 @@ def render_maintainer_candidate(
     ):
         raise ValueError("Maintainer Candidate rendering needs a typed view and profile")
     lines = [
-        f"{view.artifact}@{view.version} — {_human(view.state.value)}",
+        f"{view.artifact}@{view.version} — {candidate_status(view)}",
         f"Kind: {view.kind}",
         f"Source: {view.source_alias} · {view.source_location}",
         f"Source revision: {_short(view.source_revision, profile)}",

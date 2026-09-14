@@ -3025,3 +3025,12 @@ command (`aart receipt undo`) reverses setup records. Success and Receipt Detail
 explain that no reviewed undo is offered (D-256). Noncritical: withholding an unreviewed reversal
 satisfies INV-009/INV-192. Adding one needs an owned-effect reversal plan, a review screen and
 receipt semantics; it is not a relabelled Uninstall.
+
+## B-118 — Source counts and the Status filter still read stored Candidate state
+
+Found 2026-09-14 during CP-23 task 09. After a local promotion, the Candidates row reads
+`Promoted locally` (D-259). `MaintainerSourceView.candidate_states` (Dashboard/Sources counts) and
+screen 53's Status facet still count the stored state, so they say `ready=1` until Source Sync runs
+after Registry Sync. Noncritical: nothing there is actionable, and no promotion is offered from
+those counts. Fixing it means projecting the record into the Source view and adding a Status facet
+value for it.

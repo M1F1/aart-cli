@@ -1,6 +1,6 @@
 # CP-23 — Actionable TUI workflows after the fourth manual run
 
-Status: IN PROGRESS — TASKS 01–08 DONE; TASK 09 NEXT
+Status: IN PROGRESS — TASKS 01–09 DONE; TASK 10 NEXT
 
 Date: 2026-09-14. Authority: the product owner's manual screen reports and request to create CP-23
 and close CP-22, followed by the all-screen audit and credential guidance requirements.
@@ -735,4 +735,60 @@ Evidence:
   - the legend back to Open (**1 red**);
   - the isolation claim restored (**1 red**).
 - Walkthrough section 11 checks the wording, Continue and the skipped stop. Scoped `make mutants`
+  and the full suite are left to task 15. No human terminal retest is claimed.
+
+### Task 09 — A promoted Candidate is no longer offered again (2026-09-14)
+
+Done. D-259 records the choice.
+
+Characterized first, with a temporary probe over the real composed walk from
+`maintainer_composition_e2e_test`. After the local commit, the composed Candidate was still
+`ready`. Both promotion reviews had no refusals, and the Registry diff still carried plan digests.
+Root cause: Candidate state moves to `promoted` only when Source Sync reconciles against the
+synchronized approved Registry. The checkout's version and audit evidence fed only screen 48's
+lifecycle.
+
+After:
+
+- `candidate_promotion_record` derives `not-promoted` / `promoted-locally` / `promoted` from the
+  synchronized versions and the attributable checkout on every composition.
+- Candidates show `Promoted locally` (or `Promoted`) in the row, the cursor detail and the Candidate
+  heading.
+- Review, diff and bulk refuse with the way on.
+- The transaction refuses a recorded Candidate by name before the baseline comparison.
+- No history is rewritten; restart reads the same trees.
+
+Evidence:
+
+- New `candidate_promoted_locally_test.py` (20 tests):
+  - the record for local-only, synchronized (with and without a checkout) and unreadable trees;
+  - a genuinely new version and a same-version content change are not covered;
+  - a repeat Source Sync keeps the Candidate promoted locally;
+  - Source Sync after Registry Sync stores `promoted` and keeps its history;
+  - a Hypothesis property over two Candidates and every local/synchronized subset;
+  - the row and detail read `Promoted locally`, never New/Ready/Published;
+  - a synchronized record reads `Promoted`;
+  - the other Candidate keeps its state, and the projection is unchanged without evidence;
+  - review and diff refuse in both modes and name Registry Sync, or Source Sync;
+  - an unrecorded Candidate is still offered;
+  - bulk excludes only the recorded Candidate;
+  - the transaction refuses a synchronized record, an unpublished local commit and a mixed
+    selection, and a failed promotion (nothing written) stays promotable.
+- `maintainer_composition_e2e_test` (the real walk) now also asserts:
+  - no record before the walk;
+  - on the immediate return and after a restart composed from disk, `Promoted locally`, refused
+    reviews and diffs, and no bulk offer;
+  - the restart's Candidates and reviews equal the return's.
+- Focused runs: 76 maintainer/candidate/registry modules (**746 OK**) plus three other modules
+  touching the changed projections (**76 OK**). `make typecheck format-check lint`: OK.
+- Targeted mutations, all killed:
+  - no tree records anything (**9 red**);
+  - the checkout outranks the synchronized Registry (**3 red**);
+  - the choke point open (**3 red**);
+  - review open (**3 red**), diff open (**2 red**), bulk open (**2 red**);
+  - composition drops the records from Candidates (**1 red**);
+  - composition never reads the checkout (**1 red**);
+  - status from stored state only (**3 red**);
+  - the refusal without its way on (**1 red**).
+- Walkthrough sections 7 and 8 check the return, a restart and the refusals. Scoped `make mutants`
   and the full suite are left to task 15. No human terminal retest is claimed.
