@@ -383,6 +383,47 @@ def render_artifact_user_inputs(
     return tuple(lines)
 
 
+def render_configuration_value_form(
+    coordinate: str,
+    input_id: str,
+    harnesses: tuple[str, ...],
+    draft: InstallationConfigDraft,
+    current_row: str,
+) -> tuple[str, ...]:
+    """Screen 22c: one ordinary value, using screen 07's accept-before-continue contract."""
+
+    if not input_id or all(item.id != input_id for item in draft.fields):
+        return (
+            "Choose an installed artifact and configuration input before entering a value.",
+            "No configuration change has been prepared.",
+        )
+    value = draft.value(input_id)
+    problem = draft.problem(input_id)
+    shown = (
+        "[value hidden because it looks like a credential]"
+        if problem and "credential" in problem
+        else f"[{value}]"
+    )
+    lines = [
+        f"Change {input_id} for {coordinate}",
+        "Harnesses: " + ", ".join(harnesses),
+        f"{'>' if current_row == input_id else ' '} {input_id} {shown}",
+    ]
+    if problem:
+        lines.append(f"    {problem}")
+    elif any(item.id == input_id and item.accepted for item in draft.fields):
+        lines.append("    accepted")
+    lines.append(f"{'>' if current_row == CONFIG_CONTINUE_ROW else ' '} Continue")
+    lines.extend(
+        (
+            "",
+            "This is ordinary configuration stored beside the artifact.",
+            "Credentials stay with their provider and are not accepted here.",
+        )
+    )
+    return tuple(lines)
+
+
 _STEP_MARKS: dict[str, str] = {
     "applied": "✓",
     "failed": "✗",
@@ -589,7 +630,7 @@ def remediation_change(item: RemediationView) -> str:
 #: What a change touches that somebody must not miss, kept in Fast in plain words. Harness
 #: configuration is absent: it is routine and derived (D-258), and the change itself names it.
 _REMEDIATION_IMPACT: dict[str, str] = {
-    "configure-credential": "A credential will be stored; AART never shows its value.",
+    "configure-credential": ("A credential will be stored; AART never shows its value."),
     "select-alternative-provider": "A credential will be kept by a different provider.",
     "install-runtime": "Software will be installed on this machine.",
     "install-executable": "Software will be installed on this machine.",
@@ -865,6 +906,11 @@ def credential_action_purpose(view: CredentialRecordView, action: str) -> tuple[
             f"Opens a review first. {view.provider} then asks for the new value",
             "itself; AART never reads or shows the current one.",
         )
+    if action == "set":
+        return (
+            f"Opens a review first. {view.provider} then asks for the value",
+            "itself; AART never receives or keeps it.",
+        )
     if action == "delete":
         return (
             f"Opens a review first. Removes {view.input} from {view.provider};",
@@ -901,6 +947,20 @@ def render_credential_review(
         else:
             lines.append("Nothing installed uses it.")
         lines.append("No copy of the current value is kept, so this cannot be undone.")
+        return tuple(lines)
+    if action is ConsumerActionKind.CREDENTIAL_SET:
+        lines = [
+            f"Set {view.input} in {view.provider}.",
+            f"{view.provider} asks for the new value in this terminal.",
+            "AART never receives or keeps it.",
+            "",
+        ]
+        if view.dependants:
+            lines.append("These installations need it:")
+            lines.extend(f"  • {item}" for item in view.dependants)
+        else:
+            lines.append("Nothing installed uses it.")
+        lines.append("The provider is verified immediately after setup.")
         return tuple(lines)
     if action is ConsumerActionKind.CREDENTIAL_DELETE:
         return (
@@ -1540,6 +1600,7 @@ _REVIEW_SCREENS: frozenset[ApplicationScreen] = frozenset(
         MaintainerScreen.REGISTRY_REBUILD_REVIEW,
         ConsumerScreen.REGISTRY_SYNC,
         ConsumerScreen.CREDENTIAL_REVIEW,
+        ConsumerScreen.CONFIGURATION_REVIEW,
     }
 )
 
@@ -1752,6 +1813,10 @@ def _review_facts(state: ConsumerUiState, screens: "ConsumerScreens") -> tuple[s
         if record is None:
             return ("That credential is not known here any more.",)
         return render_credential_review(record, state.action)
+    if screen is ConsumerScreen.CONFIGURATION_REVIEW:
+        if screens.lifecycle is None:
+            return ("That configuration change is not prepared any more.",)
+        return render_lifecycle_plan(screens.lifecycle, state.session.profile)
     if screen is ConsumerScreen.REGISTRY_SYNC:
         connected = next(
             (item for item in screens.registries if item.alias == state.focus),
@@ -1940,6 +2005,7 @@ def run_consumer_shell(
                 current.session.screen is ConsumerScreen.REQUIRED_INPUTS
                 and current.config_form_active
             )
+            or current.session.screen is ConsumerScreen.CONFIGURATION_VALUE
             or current.session.screen
             in (
                 ConsumerScreen.REGISTRY_ADD,
@@ -2491,6 +2557,20 @@ class CanonicalScreenSource:
 
     def rows(self, state: ConsumerUiState) -> tuple[str, ...]:
         screen, query = state.session.screen, state.search
+        if screen is ConsumerScreen.CONFIGURATION_TARGETS:
+            coordinate = state.user_inputs_artifact
+            return tuple(
+                target_row(item.harness)
+                for item in self._screens.configurations_for(coordinate)
+                if state.configuration_input in item.inputs
+                or any(name == state.configuration_input for name, _value in item.values)
+            )
+        if screen is ConsumerScreen.CONFIGURATION_VALUE:
+            return (
+                (state.configuration_input, CONFIG_CONTINUE_ROW)
+                if state.configuration_input
+                else ()
+            )
         if screen is ConsumerScreen.REQUIRED_INPUTS and state.config_form_active:
             fields = tuple(
                 item.id
@@ -2681,6 +2761,13 @@ class CanonicalScreenSource:
 
         if state.session.screen is MaintainerScreen.SCAN_RESULT:
             return ()
+        if state.session.screen is ConsumerScreen.CONFIGURATION_TARGETS:
+            return tuple(
+                item.harness
+                for item in self._screens.configurations_for(state.user_inputs_artifact)
+                if state.configuration_input in item.inputs
+                or any(name == state.configuration_input for name, _value in item.values)
+            )
         if state.session.screen is not ConsumerScreen.COLLECTION_PREVIEW:
             return None
         entry = self._screens.offered_collection(state.focus)
@@ -2859,8 +2946,25 @@ class CanonicalScreenSource:
             )
         if screen is ConsumerScreen.USER_INPUT_DETAILS:
             return (
-                ConsumerScreen.CREDENTIAL_DETAILS
-                if self._screens.credential(row) is not None
+                ConsumerScreen.CONFIGURATION_TARGETS
+                if row.startswith(_USER_CONFIG_ROW_PREFIX)
+                else (
+                    ConsumerScreen.CREDENTIAL_DETAILS
+                    if self._screens.credential(row) is not None
+                    else None
+                )
+            )
+        if screen is ConsumerScreen.CONFIGURATION_TARGETS:
+            eligible = {
+                item.harness
+                for item in self._screens.configurations_for(state.user_inputs_artifact)
+                if state.configuration_input in item.inputs
+                or any(name == state.configuration_input for name, _value in item.values)
+            }
+            return (
+                ConsumerScreen.CONFIGURATION_VALUE
+                if state.configuration_targets
+                and set(state.configuration_targets).issubset(eligible)
                 else None
             )
         if screen is ConsumerScreen.REMEDIATION:
@@ -2948,6 +3052,16 @@ class CanonicalScreenSource:
             return (
                 f"{harness} can host:",
                 *(f"  {artifact}" for artifact in target.artifacts),
+            )
+        if state.session.screen is ConsumerScreen.CONFIGURATION_TARGETS:
+            harness = target_from_row(state.current_row)
+            if harness is None:
+                return ()
+            is_selected = harness in state.configuration_targets
+            return (
+                f"{harness} will receive the value from this edit."
+                if is_selected
+                else f"{harness} is not changed by this edit.",
             )
         if state.session.screen is MaintainerScreen.REGISTRY:
             # `QA-098`: with the cursor on the registry this project publishes, the description is
@@ -3141,6 +3255,13 @@ class CanonicalScreenSource:
             return tuple(
                 f"{'>' if row == state.current_row else ' '} "
                 f"{'[x]' if target_from_row(row) in state.targets else '[ ]'} "
+                f"{target_from_row(row)}"
+                for row in state.rows
+            )
+        if screen is ConsumerScreen.CONFIGURATION_TARGETS:
+            return tuple(
+                f"{'>' if row == state.current_row else ' '} "
+                f"{'[x]' if target_from_row(row) in state.configuration_targets else '[ ]'} "
                 f"{target_from_row(row)}"
                 for row in state.rows
             )
@@ -3428,6 +3549,14 @@ class CanonicalScreenSource:
                 screens.credentials_for(coordinate),
                 state.current_row,
                 profile,
+            )
+        if screen is ConsumerScreen.CONFIGURATION_VALUE:
+            return render_configuration_value_form(
+                state.user_inputs_artifact,
+                state.configuration_input,
+                state.configuration_targets,
+                state.configuration_draft,
+                state.current_row,
             )
         if screen in (ConsumerScreen.CREDENTIAL_DETAILS, ConsumerScreen.CREDENTIAL_ACTION):
             record = screens.credential(state.focus)

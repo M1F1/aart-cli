@@ -1,6 +1,13 @@
 # AART Refactor Migration Status
 
-**2026-09-14: CP-22 CLOSED; CP-23 tasks 01–13 done, owner task 16 in progress (16.1–16.3 done), then 14 and 15.**
+**2026-09-14: CP-22 CLOSED; CP-23 tasks 01–13 and owner task 16 done; task 14 next, then 15.**
+Task 16.4–16.5 (D-267): screens 22b–22d edit one ordinary value for a chosen harness subset as a
+reviewed CONFIGURATION-only lifecycle, with compare-and-swap against the reviewed digests and a
+refusal when the installation has unrelated drift. The receipt it records holds only digests. An
+absent credential offers Set through the provider with the authored briefing, then verifies. The
+real E2Es edit one, several and all of Claude/OpenCode/Tabnine and find the value only in those
+files. Ten targeted mutations were killed. The lab `dummy-mcp` gains a `dummy-user` config input,
+and the secret-shape gate is green again.
 Task 16.3 (D-266): screen 22 now groups runtime inputs by installed artifact and screen 22a keeps
 Configuration and Credentials as separate sections. Composition strictly reads each
 artifact-owned per-harness file and reports matched, changed outside AART, missing or unreadable;

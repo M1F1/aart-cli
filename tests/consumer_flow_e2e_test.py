@@ -180,7 +180,8 @@ class ConsumerFlowTest(InstalledFixture):
         missing = self.credential_record(CredentialState.ABSENT)
 
         self.assertEqual(missing.health, "absent")
-        self.assertEqual(missing.actions, ("verify", "replace"))
+        # An absent value has nothing to replace: the provider is asked to set it (D-267).
+        self.assertEqual(missing.actions, ("verify", "set"))
         self.assertNotIn("delete", missing.actions)
         self.assertEqual(project_receipt_detail(record).undo.components, ("launcher",))
 

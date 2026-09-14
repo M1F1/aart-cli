@@ -323,7 +323,8 @@ for line in sys.stdin:
                              "inputSchema": {"type": "object", "properties": {}}}]}
     elif method == "tools/call":
         result = {"content": [{"type": "text", "text":
-                  "dummy credential present: " + str(bool(os.environ.get("AART_DUMMY_TOKEN"))).lower()}]}
+                  "dummy credential present: " + str(bool(os.environ.get("AART_DUMMY_TOKEN"))).lower()
+                  + "; user: " + os.environ.get("AART_DUMMY_USER", "")}]}
     else:
         result = {}
     print(json.dumps({"jsonrpc": "2.0", "id": request.get("id"), "result": result}), flush=True)
@@ -462,7 +463,17 @@ def setup_lab(raw_root: Path, *, empty_registry: bool = False) -> ManualLab:
                         "label": "Nothing issues it; make up disposable text such as lab-only-test",
                     },
                 },
-            }
+            },
+            {
+                # Ordinary configuration, not a credential: answered at install, kept per harness
+                # beside the installed artifact and editable in the TUI (CP-23 task 16).
+                "id": "dummy-user",
+                "kind": "config",
+                "required": True,
+                "default": "lab-user",
+                "inject": {"type": "environment", "variable": "AART_DUMMY_USER"},
+                "help": {"label": "Lab user name shown by the dummy server"},
+            },
         ],
         "compatibility": {
             "harnesses": ["claude", "opencode", "tabnine"],

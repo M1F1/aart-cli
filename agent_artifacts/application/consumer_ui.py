@@ -85,6 +85,8 @@ class ConsumerActionKind(str, Enum):
     REPOSITORY_UPSTREAM_CHECK = "repository-upstream-check"
     REPOSITORY_ADOPT_UPDATE = "repository-adopt-update"
     CREDENTIAL_VERIFY = "credential-verify"
+    CREDENTIAL_SET = "credential-set"
+    CONFIGURE = "configure"
     CREDENTIAL_REPLACE = "credential-replace"
     CREDENTIAL_DELETE = "credential-delete"
 
@@ -116,6 +118,7 @@ class ConsumerUiEventKind(str, Enum):
     EDIT_REGISTRY_INIT = "edit-registry-init"
     EDIT_REPOSITORY_SCAN = "edit-repository-scan"
     EDIT_INSTALL_CONFIG = "edit-install-config"
+    EDIT_CONFIGURATION = "edit-configuration"
 
 
 @dataclass(frozen=True, slots=True)
@@ -481,6 +484,7 @@ _SELECTABLE = frozenset(
         ConsumerScreen.COLLECTION_CUSTOMIZE,
         ConsumerScreen.UPDATES,
         ConsumerScreen.REVIEW_SELECTION,
+        ConsumerScreen.CONFIGURATION_TARGETS,
         # Screen 47 assembles one registry transaction, so selecting rows is what it is for.
         MaintainerScreen.BULK_PROMOTION,
         MaintainerScreen.SCAN_RESULT,
@@ -567,6 +571,11 @@ class ConsumerUiState:
     #: The artifact whose two input sections screen 22a shows. Credential drill-down changes
     #: ``focus`` to a provider reference, so this parent identity is carried separately.
     user_inputs_artifact: str = ""
+    #: The ordinary input and harness subset currently being edited from screen 22a. They are
+    #: separate from installation targets/drafts so leaving one workflow cannot alter the other.
+    configuration_input: str = ""
+    configuration_targets: tuple[str, ...] = ()
+    configuration_draft: InstallationConfigDraft = InstallationConfigDraft()
 
     def __post_init__(self) -> None:
         if (
@@ -585,6 +594,10 @@ class ConsumerUiState:
             or not isinstance(self.config_form_active, bool)
             or not isinstance(self.user_inputs_artifact, str)
             or any(character in self.user_inputs_artifact for character in "\r\n")
+            or not isinstance(self.configuration_input, str)
+            or any(character in self.configuration_input for character in "\r\n")
+            or not _rows_valid(self.configuration_targets)
+            or not isinstance(self.configuration_draft, InstallationConfigDraft)
             or not isinstance(self.search, str)
             or any(character in self.search for character in "\r\n")
             or not isinstance(self.help_visible, bool)
@@ -857,13 +870,33 @@ def _navigate(
     # were a Source alias, and the message then named no Source at all (`QA-077`).
     if is_screen_identifier(focus):
         focus = ""
+    configuration_input = state.configuration_input
+    configuration_targets = state.configuration_targets
+    configuration_draft = state.configuration_draft
+    if screen is ConsumerScreen.CONFIGURATION_TARGETS:
+        prefix = "configuration:"
+        configuration_input = focus[len(prefix) :] if focus.startswith(prefix) else ""
+        configuration_targets = ()
+        configuration_draft = InstallationConfigDraft()
+    elif screen is ConsumerScreen.CONFIGURATION_VALUE:
+        configuration_draft = (
+            InstallationConfigDraft((InstallationConfigField(configuration_input),))
+            if configuration_input
+            else InstallationConfigDraft()
+        )
     updated = replace(
         state,
         session=state.session.navigate(screen),
         focus=focus,
         user_inputs_artifact=(
-            focus if screen is ConsumerScreen.USER_INPUT_DETAILS else state.user_inputs_artifact
+            focus
+            if screen is ConsumerScreen.USER_INPUT_DETAILS
+            and state.session.screen is ConsumerScreen.CREDENTIALS
+            else state.user_inputs_artifact
         ),
+        configuration_input=configuration_input,
+        configuration_targets=configuration_targets,
+        configuration_draft=configuration_draft,
         search="",
         help_visible=False,
         quit_pending=False,
@@ -945,6 +978,15 @@ def _set_selection(
 
     if state.session.screen not in _SELECTABLE:
         return state, ()
+    if state.session.screen is ConsumerScreen.CONFIGURATION_TARGETS:
+        return (
+            replace(
+                state,
+                configuration_targets=tuple(dict.fromkeys(selected)),
+                quit_pending=False,
+            ),
+            (),
+        )
     return replace(state, selection=tuple(dict.fromkeys(selected)), quit_pending=False), ()
 
 
@@ -967,6 +1009,16 @@ def _toggle_selection(
     )
     if state.session.screen not in _SELECTABLE or not key:
         return state, ()
+    if state.session.screen is ConsumerScreen.CONFIGURATION_TARGETS:
+        harness = target_from_row(key)
+        if harness is None:
+            return state, ()
+        targets = (
+            tuple(item for item in state.configuration_targets if item != harness)
+            if harness in state.configuration_targets
+            else (*state.configuration_targets, harness)
+        )
+        return replace(state, configuration_targets=targets, quit_pending=False), ()
     if state.session.screen is ConsumerScreen.REVIEW_SELECTION:
         harness = target_from_row(key)
         if harness is None:
@@ -1077,6 +1129,10 @@ _ACTION_REVIEW: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
         ConsumerScreen.CREDENTIAL_ACTION,
     ): ConsumerScreen.CREDENTIAL_REVIEW,
     (
+        ConsumerActionKind.CREDENTIAL_SET,
+        ConsumerScreen.CREDENTIAL_ACTION,
+    ): ConsumerScreen.CREDENTIAL_REVIEW,
+    (
         ConsumerActionKind.CREDENTIAL_REPLACE,
         ConsumerScreen.CREDENTIAL_ACTION,
     ): ConsumerScreen.CREDENTIAL_REVIEW,
@@ -1084,6 +1140,10 @@ _ACTION_REVIEW: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
         ConsumerActionKind.CREDENTIAL_DELETE,
         ConsumerScreen.CREDENTIAL_ACTION,
     ): ConsumerScreen.CREDENTIAL_REVIEW,
+    (
+        ConsumerActionKind.CONFIGURE,
+        ConsumerScreen.CONFIGURATION_VALUE,
+    ): ConsumerScreen.CONFIGURATION_REVIEW,
 }
 
 #: The screens an action can be asked from, which are also the screens a declined preparation
@@ -1116,6 +1176,10 @@ def _request_action(
     state: ConsumerUiState, action: ConsumerActionKind | None
 ) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
     if action is None:
+        return state, ()
+    if action is ConsumerActionKind.CONFIGURE and (
+        not state.configuration_targets or not state.configuration_draft.ready
+    ):
         return state, ()
     if (
         action is ConsumerActionKind.INSTALL
@@ -1192,6 +1256,8 @@ def _request_action(
         return state, ()
     if state.session.screen is ConsumerScreen.MARKETPLACE:
         focus = ""
+    if action is ConsumerActionKind.CONFIGURE:
+        focus = state.user_inputs_artifact
     prepared = replace(
         moved,
         action=action,
@@ -1206,7 +1272,13 @@ def _request_action(
         ConsumerUiCommandKind.PREPARE_ACTION,
         action=action,
         selection=state.selection,
-        targets=state.targets if action is ConsumerActionKind.INSTALL else (),
+        targets=(
+            state.targets
+            if action is ConsumerActionKind.INSTALL
+            else state.configuration_targets
+            if action is ConsumerActionKind.CONFIGURE
+            else ()
+        ),
         focus=focus,
         promotion_mode=(
             state.promotion_mode
@@ -1223,7 +1295,13 @@ def _request_action(
         repository_scan_draft=(
             state.repository_scan_draft if action is ConsumerActionKind.REPOSITORY_SCAN else None
         ),
-        config_answers=(state.config_draft.answers if action is ConsumerActionKind.INSTALL else ()),
+        config_answers=(
+            state.config_draft.answers
+            if action is ConsumerActionKind.INSTALL
+            else (
+                state.configuration_draft.answers if action is ConsumerActionKind.CONFIGURE else ()
+            )
+        ),
     )
     return prepared, (command, *navigation)
 
@@ -1334,7 +1412,9 @@ _ACTION_RUNNING: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationS
         MaintainerScreen.REGISTRY_COMMIT,
     ): None,
     (ConsumerActionKind.CREDENTIAL_REPLACE, ConsumerScreen.CREDENTIAL_REVIEW): None,
+    (ConsumerActionKind.CREDENTIAL_SET, ConsumerScreen.CREDENTIAL_REVIEW): None,
     (ConsumerActionKind.CREDENTIAL_DELETE, ConsumerScreen.CREDENTIAL_REVIEW): None,
+    (ConsumerActionKind.CONFIGURE, ConsumerScreen.CONFIGURATION_REVIEW): None,
 }
 
 
@@ -1351,10 +1431,22 @@ def _confirm_action(
         ConsumerUiCommandKind.EXECUTE_ACTION,
         action=action,
         selection=state.selection,
-        targets=state.targets if action is ConsumerActionKind.INSTALL else (),
+        targets=(
+            state.targets
+            if action is ConsumerActionKind.INSTALL
+            else state.configuration_targets
+            if action is ConsumerActionKind.CONFIGURE
+            else ()
+        ),
         focus=state.focus,
         review_digest=review_digest,
-        config_answers=(state.config_draft.answers if action is ConsumerActionKind.INSTALL else ()),
+        config_answers=(
+            state.config_draft.answers
+            if action is ConsumerActionKind.INSTALL
+            else (
+                state.configuration_draft.answers if action is ConsumerActionKind.CONFIGURE else ()
+            )
+        ),
     )
     target = _ACTION_RUNNING[key]
     if target is None:
@@ -1404,9 +1496,17 @@ _ACTION_RESULT: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
         ConsumerScreen.CREDENTIAL_REVIEW,
     ): ConsumerScreen.CREDENTIAL_DETAILS,
     (
+        ConsumerActionKind.CREDENTIAL_SET,
+        ConsumerScreen.CREDENTIAL_REVIEW,
+    ): ConsumerScreen.CREDENTIAL_DETAILS,
+    (
         ConsumerActionKind.CREDENTIAL_DELETE,
         ConsumerScreen.CREDENTIAL_REVIEW,
     ): ConsumerScreen.CREDENTIALS,
+    (
+        ConsumerActionKind.CONFIGURE,
+        ConsumerScreen.CONFIGURATION_REVIEW,
+    ): ConsumerScreen.USER_INPUT_DETAILS,
 }
 
 
@@ -1561,6 +1661,26 @@ def reduce_consumer_ui(
             )
         edited_config = state.config_draft.edit(event.key, event.text)
         return replace(state, config_draft=edited_config, quit_pending=False), ()
+    if event.kind is ConsumerUiEventKind.EDIT_CONFIGURATION:
+        if state.session.screen is not ConsumerScreen.CONFIGURATION_VALUE or all(
+            item.id != event.key for item in state.configuration_draft.fields
+        ):
+            return state, ()
+        if event.accepted is True:
+            config_draft = state.configuration_draft.accept(event.key)
+            if not any(item.id == event.key and item.accepted for item in config_draft.fields):
+                return replace(state, configuration_draft=config_draft, quit_pending=False), ()
+            return (
+                replace(
+                    state,
+                    configuration_draft=config_draft,
+                    cursor=(state.cursor + 1) % max(len(state.rows), 1),
+                    quit_pending=False,
+                ),
+                (),
+            )
+        config_draft = state.configuration_draft.edit(event.key, event.text)
+        return replace(state, configuration_draft=config_draft, quit_pending=False), ()
     if event.kind is ConsumerUiEventKind.EDIT_REGISTRY:
         if state.session.screen is not ConsumerScreen.REGISTRY_ADD:
             return state, ()
@@ -1807,6 +1927,7 @@ _FORM_SCREENS = frozenset(
     {
         ConsumerScreen.REGISTRY_ADD,
         ConsumerScreen.REQUIRED_INPUTS,
+        ConsumerScreen.CONFIGURATION_VALUE,
         MaintainerScreen.SOURCE_ADD,
         MaintainerScreen.REGISTRY_INIT,
         MaintainerScreen.REPOSITORY_SCAN,
@@ -1838,6 +1959,7 @@ _CONFIRM_SCREENS = frozenset(
         MaintainerScreen.REGISTRY_INIT_REVIEW,
         MaintainerScreen.REGISTRY_REBUILD_REVIEW,
         ConsumerScreen.CREDENTIAL_REVIEW,
+        ConsumerScreen.CONFIGURATION_REVIEW,
     }
 )
 
@@ -1847,6 +1969,7 @@ _CONFIRM_SCREENS = frozenset(
 _ROW_ACTIONS: dict[ApplicationScreen, dict[str, tuple[ConsumerActionKind, str]]] = {
     ConsumerScreen.CREDENTIAL_ACTION: {
         "verify": (ConsumerActionKind.CREDENTIAL_VERIFY, "Verify"),
+        "set": (ConsumerActionKind.CREDENTIAL_SET, "Review setup"),
         "replace": (ConsumerActionKind.CREDENTIAL_REPLACE, "Review replacement"),
         "delete": (ConsumerActionKind.CREDENTIAL_DELETE, "Review deletion"),
     },
@@ -2010,6 +2133,7 @@ def key_event(
             not in (
                 ConsumerScreen.REGISTRY_ADD,
                 ConsumerScreen.REQUIRED_INPUTS,
+                ConsumerScreen.CONFIGURATION_VALUE,
                 MaintainerScreen.REGISTRY_INIT,
                 MaintainerScreen.REPOSITORY_SCAN,
             )
@@ -2034,6 +2158,46 @@ def key_event(
             return ConsumerUiEvent(ConsumerUiEventKind.SEARCH, text=state.search[:-1])
         if len(key) == 1 and key.isprintable():
             return ConsumerUiEvent(ConsumerUiEventKind.SEARCH, text=state.search + key)
+        return None
+
+    if state.session.screen is ConsumerScreen.CONFIGURATION_VALUE:
+        row = cursor or state.current_row
+        if key == "escape":
+            return ConsumerUiEvent(ConsumerUiEventKind.BACK)
+        if key == "up":
+            return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="up")
+        if key == "down":
+            return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="down")
+        if key == "enter":
+            if row == CONFIG_CONTINUE_ROW:
+                return (
+                    ConsumerUiEvent(
+                        ConsumerUiEventKind.REQUEST_ACTION,
+                        action=ConsumerActionKind.CONFIGURE,
+                    )
+                    if state.configuration_draft.ready
+                    else None
+                )
+            if any(item.id == row for item in state.configuration_draft.fields):
+                return ConsumerUiEvent(
+                    ConsumerUiEventKind.EDIT_CONFIGURATION,
+                    key=row,
+                    accepted=True,
+                )
+            return None
+        if any(item.id == row for item in state.configuration_draft.fields) and key == "backspace":
+            return ConsumerUiEvent(
+                ConsumerUiEventKind.EDIT_CONFIGURATION,
+                key=row,
+                text=state.configuration_draft.value(row)[:-1],
+            )
+        if any(item.id == row for item in state.configuration_draft.fields) and key.isprintable():
+            value = key if len(key) > 1 else state.configuration_draft.value(row) + key
+            return ConsumerUiEvent(
+                ConsumerUiEventKind.EDIT_CONFIGURATION,
+                key=row,
+                text=value,
+            )
         return None
 
     if state.session.screen is ConsumerScreen.REQUIRED_INPUTS and state.config_form_active:

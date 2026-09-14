@@ -6358,3 +6358,69 @@ health; Verbose may additionally show the ordinary configuration path and provid
 Changing a file outside AART is visible without rewriting it. A provider reference with no local
 dependant remains testable at the credential-action seam, but—as before D-262—no real unused row is
 discoverable from installation receipts alone.
+
+## D-267 — A configuration edit is a reviewed CONFIGURATION-only lifecycle; an absent credential is Set
+
+Date: 2026-09-14 (CP-23 task 16, fourth and fifth increments).
+
+**Context.** D-264 put ordinary values in one file per harness beside the artifact, and D-266 made
+screen 22a show them. The owner asked to change them from AART, for one harness, a chosen set or
+all, without editing JSON, and to establish credentials from the same place. INV-179 says a change
+touches only the projections that depend on it. INV-180 says a credential is entered through its
+provider. Before this, Credential Action offered Replace even when the provider held nothing, which
+asked for a replacement of nothing.
+
+**Decision.**
+
+- Screen 22a's Configuration rows lead to three new screens:
+  - **22b** chooses harnesses. It opens with every installed harness for that input and uses task
+    10's toggle rows. An empty choice cannot continue.
+  - **22c** enters one value with D-265's accept-before-continue form, validation and credential
+    masking.
+  - **22d** reviews the lifecycle plan.
+- `application/configuration_edit.py` is pure. It takes the bytes that were read and:
+  - refuses an empty, duplicate or stale harness choice;
+  - refuses a credential-shaped value;
+  - refuses a value that breaks the artifact's declared validation;
+  - refuses a file whose digest is not the receipt's, or that does not parse;
+  - refuses an unchanged value.
+
+  Otherwise it renders the new file for each chosen harness. It returns only
+  `configuration:<harness>` WriteFile replacements and the receipt with those digests updated. A
+  diagnostic never echoes the value; a declared rule's own message, or the rule's kind, is used
+  instead.
+- `io/configured_configuration_action.py` runs the edit:
+  - It refuses when the installation already has drift anywhere. A chosen file is named as changed
+    outside AART. Anything else must be verified or repaired first, so a plan built by
+    `configure_intent` cannot carry a repair.
+  - It checks that the plan's steps are exactly the chosen components.
+  - Completion checks the review digest, offers the rendered bytes to the file interpreter and takes
+    the mutation lease.
+  - Every inspection the lifecycle makes compares each chosen file against its reviewed or new
+    digest, so an edit made outside AART after Review stops the action.
+  - It then records the updated digest-only receipt as a `Reconfigured` Activity entry and re-reads
+    the machine.
+- The declared validation is read from the installed artifact's immutable object in the store,
+  which is the approved description, rather than from a Source that may have moved.
+- Credential Action offers **Set** (`CredentialIntent.STORE`, `replace=False`) for an absent
+  credential, and only Verify for an unknown one. Present credentials keep Verify/Replace/Delete.
+  Set and Replace both hand the terminal to the provider with task 13's briefing, gathered from
+  every installed artifact that declares that input. Both then verify.
+
+**Consequences.**
+
+- Editing configuration never rewrites the launcher, a registration, another harness's file or
+  anything outside the artifact root.
+- A value appears only in the chosen files. The receipt, Activity and AART state stay digest-only.
+- Values a person changed by hand are not overwritten: 22a shows *changed outside AART*, and the
+  edit refuses until the file is reconciled.
+- §97 ("the launcher may embed non-secret values") and §96 ("configuration in AART-owned local
+  state") together make a candidate Product Specification revision:
+  - configuration lives beside the installed artifact, per harness;
+  - AART state keeps only path and digest;
+  - changes are CONFIGURE lifecycles over those files.
+
+  It is recorded here and in the CP-23 slice for the owner, like §167. The specification is not
+  edited unilaterally.
+- The manual lab's `dummy-mcp` gains an ordinary `dummy-user` input, so the manual run exercises
+  the install form, the grouped area and a per-harness edit.

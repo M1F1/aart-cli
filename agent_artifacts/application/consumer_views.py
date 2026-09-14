@@ -17,7 +17,11 @@ from typing import cast
 
 from agent_artifacts.configuration.model import SourceKind
 from agent_artifacts.domain.configuration_files import configuration_value_problem
-from agent_artifacts.domain.credentials import CredentialObservation, CredentialReference
+from agent_artifacts.domain.credentials import (
+    CredentialObservation,
+    CredentialReference,
+    CredentialState,
+)
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.effects import RiskClass, effect_to_data
 from agent_artifacts.domain.inputs import (
@@ -190,6 +194,9 @@ class ConsumerScreen(str, Enum):
     REGISTRY_REMOVE = "21d-disconnect-registry"
     CREDENTIALS = "22-user-variables-and-credentials"
     USER_INPUT_DETAILS = "22a-artifact-variables-and-credentials"
+    CONFIGURATION_TARGETS = "22b-choose-configuration-harnesses"
+    CONFIGURATION_VALUE = "22c-edit-configuration-value"
+    CONFIGURATION_REVIEW = "22d-review-configuration-change"
     CREDENTIAL_DETAILS = "23-credential-details"
     CREDENTIAL_ACTION = "24-credential-action"
     # 24a states what a chosen credential action does before it does it, and is where Verify's
@@ -929,7 +936,13 @@ def project_credential_record(
         raise ValueError("credential record projection is invalid")
     reference = observation.reference
     ordered_dependants = tuple(sorted(set(dependants)))
-    actions = ("verify", "replace") if ordered_dependants else ("verify", "replace", "delete")
+    actions: tuple[str, ...]
+    if observation.state is CredentialState.ABSENT:
+        actions = ("verify", "set")
+    elif observation.state is CredentialState.UNKNOWN:
+        actions = ("verify",)
+    else:
+        actions = ("verify", "replace") if ordered_dependants else ("verify", "replace", "delete")
     return CredentialRecordView(
         str(reference),
         reference.input.value,
@@ -1785,7 +1798,13 @@ _NAVIGATION: dict[ConsumerScreen, tuple[ConsumerScreen, ...]] = {
     ConsumerScreen.REGISTRY_ADD: (ConsumerScreen.REGISTRY_REVIEW,),
     ConsumerScreen.REGISTRY_REVIEW: (ConsumerScreen.REGISTRIES,),
     ConsumerScreen.CREDENTIALS: (ConsumerScreen.USER_INPUT_DETAILS,),
-    ConsumerScreen.USER_INPUT_DETAILS: (ConsumerScreen.CREDENTIAL_DETAILS,),
+    ConsumerScreen.USER_INPUT_DETAILS: (
+        ConsumerScreen.CONFIGURATION_TARGETS,
+        ConsumerScreen.CREDENTIAL_DETAILS,
+    ),
+    ConsumerScreen.CONFIGURATION_TARGETS: (ConsumerScreen.CONFIGURATION_VALUE,),
+    ConsumerScreen.CONFIGURATION_VALUE: (ConsumerScreen.CONFIGURATION_REVIEW,),
+    ConsumerScreen.CONFIGURATION_REVIEW: (ConsumerScreen.USER_INPUT_DETAILS,),
     ConsumerScreen.CREDENTIAL_DETAILS: (ConsumerScreen.CREDENTIAL_ACTION,),
     ConsumerScreen.CREDENTIAL_ACTION: (ConsumerScreen.CREDENTIAL_REVIEW,),
     ConsumerScreen.CREDENTIAL_REVIEW: (
@@ -1811,6 +1830,8 @@ _KEEPS_FOCUS: frozenset[tuple[ConsumerScreen, ConsumerScreen]] = frozenset(
         # CP-23 task 12: 24's rows are verbs, so the review they open is still about the credential
         # rather than about the word "replace" (D-262).
         (ConsumerScreen.CREDENTIAL_ACTION, ConsumerScreen.CREDENTIAL_REVIEW),
+        (ConsumerScreen.CONFIGURATION_TARGETS, ConsumerScreen.CONFIGURATION_VALUE),
+        (ConsumerScreen.CONFIGURATION_VALUE, ConsumerScreen.CONFIGURATION_REVIEW),
     }
 )
 

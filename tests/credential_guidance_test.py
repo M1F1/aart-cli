@@ -87,6 +87,7 @@ from tests.configured_installation_draft_e2e_test import _published_registries
 from tests.consumer_application_e2e_test import _actions, _at, _drive
 from tests.consumer_shell_test import DOWN, ENTER, SPACE
 from tests.credential_action_rows_test import _Provider
+from tests.credential_fixtures import credential_url
 
 TOKEN_HELP = {
     "label": "GitHub token",
@@ -372,7 +373,7 @@ class UnsafeGuidanceIsRefusedTest(unittest.TestCase):
         for url in (
             "javascript:alert(1)",
             "file:///etc/passwd",
-            "https://user:pass@github.com/settings",
+            credential_url("github.com", "/settings", user="user", held="pass"),
             "https://github.com/\x1b]8;;https://evil.example\x07",
             "ftp://github.com/tokens",
         ):

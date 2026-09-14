@@ -1,6 +1,6 @@
 # CP-23 — Actionable TUI workflows after the fourth manual run
 
-Status: IN PROGRESS — TASKS 01–13 DONE; OWNER TASK 16 IN PROGRESS (16.1 done; handed to Codex), then 14, 15
+Status: IN PROGRESS — TASKS 01–13 AND OWNER TASK 16 DONE; TASK 14 NEXT, then 15
 
 Date: 2026-09-14. Authority: the product owner's manual screen reports and request to create CP-23
 and close CP-22, followed by the all-screen audit and credential guidance requirements.
@@ -1137,7 +1137,7 @@ Evidence:
 - Adapter tests with a recording fake provider:
   - Verify inspects only and re-reads health;
   - preparing Replace touches nothing, and confirming releases the terminal, prompts with no value
-    (`store(secret=None, replace=True)`), restores it and re-inspects;
+    (`store` receives no value and `replace=True`), restores it and re-inspects;
   - a mismatched digest runs nothing;
   - a replacement not reported present fails;
   - in-use Delete is refused, naming the installation;
@@ -1289,7 +1289,7 @@ Evidence:
     anyway. The test now uses 30 columns, and the mutant is killed.
 - Scoped mutmut and the full suite belong to task 15. No human terminal retest is claimed.
 
-### Task 16 — User variables and credentials (IN PROGRESS, handed off 2026-09-14)
+### Task 16 — User variables and credentials (DONE 2026-09-14)
 
 Increments 16.1 and 16.2 are done (D-264–D-265). Increments 16.3–16.5 are not started.
 
@@ -1406,16 +1406,103 @@ The six previously owed 16.1 targeted mutations were also run and killed:
   - replacing the Credentials section heading with Configuration;
   - dropping credential-only artifacts from the grouped rows.
 
-#### Remaining increments (design; not implemented)
+#### 16.4 — Reviewed per-harness configuration edit (DONE)
 
-- **16.4 — edit.** A value is edited for one harness, a chosen set or all of them (reuse task 10
-  selection).
-  - The edit is a reviewed, receipted `configure_intent` mutation that writes only CONFIGURATION
-    components (INV-179), offers the new content and updates receipt digests.
-  - It needs Hypothesis properties for scope selection and redaction.
-- **16.5 — credentials from the area.** Set and replace use task 12 actions with the task 13
-  briefing (terminal handoff plus verify, INV-180).
-- **Close-out:**
-  - update NEXT, MIGRATION_STATUS, TODO.md and `docs/testing/TUI_MANUAL_WALKTHROUGH.md`;
-  - add a candidate spec revision note for §96/§97 (already stated in D-264);
-  - run `handoff-plan done CP-23.16`.
+- D-267 adds screens 22b (choose harnesses; all installed harnesses for that input start ticked),
+  22c (the value form) and 22d (review) under 22a's Configuration rows.
+- The pure planner `application/configuration_edit.py` replaces one declared input in exactly the
+  chosen files. It returns CONFIGURATION-only replacements and a digest-updated receipt, and it
+  refuses:
+  - an empty, duplicate or stale choice;
+  - a credential-shaped value;
+  - a value that breaks declared validation;
+  - a changed or unparseable baseline;
+  - an unchanged value.
+
+  Diagnostics never echo the value.
+- `io/configured_configuration_action.py` refuses when the installation has any existing drift and
+  checks the plan's steps equal the chosen components (INV-179).
+  - Completion checks the review digest, offers the rendered bytes, takes the lease and compares
+    each chosen file's digest on every inspection (compare-and-swap).
+  - It records the updated receipt (`Reconfigured` in Activity) and re-reads the machine.
+- The handler reads the declared validation from the installed artifact's immutable object.
+- Evidence:
+  - `tests/configuration_edit_test.py` holds Hypothesis properties: touched components equal the
+    chosen harnesses, and credential shapes are refused without being echoed. It also covers the
+    reducer, form and masking.
+  - `tests/configured_configuration_action_e2e_test.py` makes a real isolated install into Claude,
+    OpenCode and Tabnine, then edits one, a chosen set and all harnesses. It checks:
+    - only those files change in the project;
+    - the receipt digests change only for them;
+    - each harness's recorded command starts the server with its own value;
+    - the value is absent from Activity, receipts and the whole state root.
+
+    It also covers:
+    - empty and stale choices;
+    - a file changed after Review;
+    - unrelated drift refused;
+    - the real handler applying declared validation without keeping the value;
+    - a shell run through 22a → 22b → 22c → 22d that writes only Claude's file.
+- Targeted mutations killed:
+  - Codex killed three:
+    - editing only the first chosen harness (`harnesses[:1]`);
+    - skipping credential-shape refusal;
+    - not offering the rendered content (the edit E2Es failed).
+  - This session killed four more:
+    - skipping the compare-and-swap;
+    - recording the old receipt;
+    - allowing unrelated drift (it survived until
+      `test_unrelated_drift_is_refused_so_an_edit_cannot_carry_a_repair` was added);
+    - ignoring declared validation.
+
+#### 16.5 — Credentials established from the area (DONE)
+
+- Credential Action offers **Set** for an absent credential (`CredentialIntent.STORE`, the
+  provider's `store` receives no value and `replace` is false). It offers only Verify for an
+  unknown credential. A present one keeps Verify/Replace, plus Delete when unused.
+- Set and Replace hand the terminal to the provider with task 13's briefing, gathered from every
+  installed artifact declaring the input, then verify. A store the provider does not report as
+  present is a failure, not a success.
+- Evidence: `tests/credential_action_rows_test.py` covers:
+  - the adapter setting and verifying;
+  - an unconfirmed set that fails;
+  - a shell E2E from the grouped area with the briefed handover.
+
+  `tests/configured_configuration_action_e2e_test.py` checks that Set uses the installed authored
+  briefing and verifies. `tests/consumer_flow_e2e_test.py` now expects `("verify", "set")` for a
+  credential the provider lost.
+- Targeted mutations killed:
+  - offering Replace for an absent credential;
+  - Set overwriting (`REPLACE` intent);
+  - dropping the briefing.
+
+#### Close-out
+
+- The manual lab's `dummy-mcp` declares an ordinary `dummy-user` input (default `lab-user`,
+  `AART_DUMMY_USER`), and its server reports the value. `tests/manual_test_lab_test.py` holds it,
+  and the real authoring parser accepts the manifest. `docs/testing/TUI_MANUAL_WALKTHROUGH.md`
+  gains the install-form, grouped-area, per-harness edit and Set steps.
+- The secret-shape gate was failing on literals introduced during CP-23. They were fixed through
+  `tests/credential_fixtures.py`, a parenthesized remediation string and slice wording:
+  - `credential_guidance_test`;
+  - `install_time_config_form_test`;
+  - `configuration_edit_test`;
+  - `tui_consumer.py`;
+  - this slice.
+- For task 14's audit, observed in the captured 22a–22d frames:
+  - 22c opens with an empty field rather than the value the chosen harnesses currently hold;
+  - 22d's Fast review is the generic lifecycle text (`Review configure …`, `Review identity:
+    sha256:…`) rather than naming the input, the harnesses and the old → new change;
+  - the breadcrumb for 22d runs to five segments.
+- Candidate Product Specification revision (for the owner; not edited unilaterally):
+  - §96 and §97 should say configuration lives per harness beside the installed artifact;
+  - AART state keeps only its path and digest;
+  - the launcher reads it rather than embedding it;
+  - changes are CONFIGURE lifecycles over those files (D-264, D-267).
+- Focused evidence:
+  - 1199 affected tests across every module importing the consumer UI, views, actions, session,
+    repair or configuration code, with one expectation then updated;
+  - the touched modules re-run (88 tests);
+  - `make secret-shape-check typecheck format-check lint docs-check` passes.
+
+  The full suite and scoped mutmut remain task 15's.

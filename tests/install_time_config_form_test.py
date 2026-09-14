@@ -37,6 +37,7 @@ from tests.configured_install_command_e2e_test import _environment
 from tests.configured_installation_draft_e2e_test import AUTHORED_MCP
 from tests.consumer_application_e2e_test import _actions, _at, _drive
 from tests.consumer_shell_test import DOWN, ENTER, SPACE, screens
+from tests.credential_fixtures import access_token
 
 
 def _config_view() -> ConfigInputView:
@@ -143,7 +144,7 @@ class InstallTimeConfigFormInteractionTest(unittest.TestCase):
     def test_invalid_and_credential_shaped_values_stay_on_the_field(self) -> None:
         for value, expected in (
             ("not an identifier", "expected an identifier"),
-            ("ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", "looks like a credential"),
+            (access_token("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"), "looks like a credential"),
         ):
             with self.subTest(value=value):
                 draft = _draft().edit("organization", value)
@@ -193,7 +194,7 @@ class InstallTimeConfigFormRenderingTest(unittest.TestCase):
         self.assertIn("[Type] Edit", drawn)
 
     def test_problem_is_inline_and_a_credential_shaped_value_is_not_drawn(self) -> None:
-        secret_like = "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        secret_like = access_token("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
         state = _state(_draft().edit("organization", secret_like))
         source = self._source()
 

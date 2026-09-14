@@ -154,7 +154,7 @@ machine-readable task list. No product fix is claimed by creating this plan.
 - [x] 11 — Fix Artifact Details controls and compatibility messaging.
 - [x] 12 — Make Credential Action selectable and wire permitted actions.
 - [x] 13 — Carry explicit credential purpose/acquisition guidance from Source to installation.
-- [ ] 16 — Owner request: user variables and credentials area per artifact/harness (ConfigInput at install, files at the installed location, credentials only in the provider, edit per harness or all).
+- [x] 16 — Owner request: user variables and credentials area per artifact/harness (ConfigInput at install, files at the installed location, credentials only in the provider, edit per harness or all).
 - [ ] 14 — Enforce the shared skeleton without in-TUI exceptions; verify `v` on every screen.
 - [ ] 15 — Targeted mutations, scoped mutmut, full gates and manual acceptance.
 

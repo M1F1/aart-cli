@@ -110,6 +110,14 @@ class ManualTestLabTest(unittest.TestCase):
             manifest["compatibility"]["harnesses"],
             ["claude", "opencode", "tabnine"],
         )
+        # CP-23 task 16: an ordinary value beside the credential, so the manual run can answer it
+        # at install and edit it per harness under User variables and credentials (D-264–D-267).
+        (config,) = [item for item in manifest["inputs"] if item["kind"] == "config"]
+        self.assertEqual(config["id"], "dummy-user")
+        self.assertEqual(config["inject"], {"type": "environment", "variable": "AART_DUMMY_USER"})
+        self.assertIn(
+            "AART_DUMMY_USER", (self.root / "repositories/mcp/dummy-mcp/server.py").read_text()
+        )
         skill_manifest = json.loads(
             (self.root / "repositories/skill/manual-check/aart.json").read_text()
         )

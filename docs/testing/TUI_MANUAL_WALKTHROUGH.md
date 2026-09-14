@@ -419,6 +419,15 @@ Harness delivery must be one answer everywhere it is said (`QA-078`…`QA-080`, 
 - [ ] When the Keychain asks, the same lines appear just above its prompt. The screen is released,
       nothing is drawn over the footer, and it ends with `macos-keychain asks for it next. Type it
       there; AART never sees or keeps it.` Type disposable text only.
+- [ ] Installing `dummy-mcp` first stops on **Required Inputs** as a form, before the review
+      (D-265). `dummy-user` is prefilled with `lab-user` but is not accepted until you press
+      `Enter` on it, so Continue does nothing before that. Pasting disposable text shaped like a
+      token is refused on the field with `looks like a credential`, and the text itself is not
+      drawn. The credential is listed separately, under Credentials.
+- [ ] After installing into OpenCode and Tabnine, the artifact's installed root has
+      `config/opencode.conf` and `config/tabnine.conf` holding `dummy-user=…`. No
+      `config/claude.conf` exists, and the value appears nowhere under the lab's AART data or
+      state (D-264).
 - [ ] Setup steps are owed only for a harness the artifact actually reached: `dummy-mcp` installed
       into one harness must not produce four `configure harness` rows.
 
@@ -435,6 +444,23 @@ Harness delivery must be one answer everywhere it is said (`QA-078`…`QA-080`, 
 - [ ] Confirm the review. The provider (Keychain) asks in this terminal; type disposable text only.
       It lands on Credential Details with `Replaced <input> in <provider>.`, and no frame shows the
       value (D-262).
+- [ ] **User variables and credentials** lists installed artifacts. Open `dummy-mcp`: its
+      **Configuration** section shows `dummy-user` per harness with `matched`, and its
+      **Credentials** section shows the token's health only, never a value (D-266).
+- [ ] Edit one harness's file by hand, then reopen the area. That harness reads
+      `changed outside AART`, and an edit of it is refused until you put the file back.
+- [ ] On `dummy-user`, `Enter` opens **Choose Configuration Harnesses** with every installed
+      harness ticked. Untick all of them: `Enter` does not advance. Tick only Tabnine, then type
+      a new disposable value and press `Enter` on it, then **Continue**.
+- [ ] The review names only `configuration:tabnine`. Confirm it. Back on the area, Tabnine shows
+      the new value `matched` while OpenCode keeps the old one. Only `config/tabnine.conf`
+      changed on disk, and **Activity** records `Reconfigured` without the value (D-267).
+- [ ] Repeat with both harnesses ticked, which changes all of them. Ask the MCP from each harness:
+      each reports its own `user:` value.
+- [ ] Delete the dummy token from the Keychain, then open it from the area. **Credential Action**
+      offers `Verify` and `Set`, not `Replace`. `Set` → review → confirm lends the terminal to the
+      Keychain with the authored briefing above its prompt. Type disposable text only; it lands
+      with `Set <input> in <provider>.` and verifies (D-267).
 - [ ] **Doctor** → health, offline readiness, activity, configuration.
 - [ ] **Activity** → what actually happened, with real provenance.
 

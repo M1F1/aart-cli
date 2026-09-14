@@ -52,6 +52,10 @@ from agent_artifacts.application.consumer_views import (
     project_lifecycle_plan,
     target_choice_problems,
 )
+from agent_artifacts.application.credential_guidance import (
+    CredentialGuidance,
+    gather_credential_guidance,
+)
 from agent_artifacts.application.credential_lifecycle import (
     CredentialPlan,
     credential_plan_to_data,
@@ -95,16 +99,20 @@ from agent_artifacts.domain.harness import Scope
 from agent_artifacts.domain.identifiers import ArtifactCoordinate, InputId, SourceAlias
 from agent_artifacts.domain.inputs import (
     ConfigInput,
+    InputGuidance,
     InputValueSource,
     PromptedConfigValue,
+    RuntimeInput,
     SecretInput,
     SecretProviderReference,
 )
 from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.receipts import ArtifactReceipt
+from agent_artifacts.domain.receipts import ArtifactReceipt, InstallationReceipt, InstalledRecord
 from agent_artifacts.domain.reconciliation import DesiredState
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.domain.selection import ArtifactRequest, ArtifactSelection, VersionConstraint
+from agent_artifacts.protocol.authoring import read_package_description
+from agent_artifacts.store.model import ObjectReadRequest, object_store_paths
 from agent_artifacts.tui_consumer import (
     CanonicalScreenSource,
     ConsumerActionCompletion,
@@ -114,6 +122,11 @@ from agent_artifacts.tui_consumer import (
     screens_from,
 )
 
+from .configured_configuration_action import (
+    PreparedConfiguredConfiguration,
+    complete_configured_configuration,
+    prepare_configured_configuration,
+)
 from .configured_installation_action import (
     CompletedConfiguredInstallation,
     InstallationHost,
@@ -146,6 +159,7 @@ from .maintainer_sync import (
     prepare_configured_source_sync,
 )
 from .maintainer_views import read_maintainer_views
+from .object_store import read_object
 from .registry_adoption import (
     AdoptedArtifact,
     AdoptionUpstreamCheck,
@@ -389,11 +403,13 @@ class _PendingCredentialAction:
     plan: CredentialPlan
     provider: CredentialProviderPort
     review_digest: str
+    guidance: tuple[CredentialGuidance, ...] = ()
 
 
 #: The credential intent each of screen 24's rows asks for (CP-23 task 12, D-262).
 _CREDENTIAL_INTENTS: dict[ConsumerActionKind, CredentialIntent] = {
     ConsumerActionKind.CREDENTIAL_VERIFY: CredentialIntent.VERIFY,
+    ConsumerActionKind.CREDENTIAL_SET: CredentialIntent.STORE,
     ConsumerActionKind.CREDENTIAL_REPLACE: CredentialIntent.REPLACE,
     ConsumerActionKind.CREDENTIAL_DELETE: CredentialIntent.DELETE,
 }
@@ -488,6 +504,7 @@ _Pending = (
     | _PendingRegistryRebuild
     | PreparedAdoption
     | _PendingCredentialAction
+    | PreparedConfiguredConfiguration
 )
 
 #: The host is passed rather than closed over: setup and usage reporting describe the installation
@@ -738,6 +755,8 @@ class LocalConsumerActions:
             return self._prepare_repository_adoption_update(command)
         if action is ConsumerActionKind.UPDATE:
             return self._prepare_update(command)
+        if action is ConsumerActionKind.CONFIGURE:
+            return self._prepare_configuration(command)
         if action is ConsumerActionKind.VERIFY_REPAIR:
             return self._prepare_repair(command)
         if action is ConsumerActionKind.REGISTRY_SYNC:
@@ -816,7 +835,28 @@ class LocalConsumerActions:
             if refreshed:
                 return self._declined(command, refreshed)
         else:
-            self._pending = _PendingCredentialAction(planned.value, provider, review_digest)
+            declared: list[tuple[str, InputGuidance | None]] = []
+            for installation in inspected.value.inspections:
+                if observation.reference not in installation.record.credential_references:
+                    continue
+                inputs = self._installed_inputs(installation.record)
+                if isinstance(inputs, Err):
+                    continue
+                declared.extend(
+                    (str(installation.record.coordinate), item.guidance)
+                    for item in inputs.value
+                    if isinstance(item, SecretInput) and item.id == observation.reference.input
+                )
+            guidance = gather_credential_guidance(
+                observation.reference.input.value,
+                declared,
+            )
+            self._pending = _PendingCredentialAction(
+                planned.value,
+                provider,
+                review_digest,
+                guidance,
+            )
             self._pending_action = command.action
         return ConsumerActionUpdate(
             self.source(),
@@ -1598,6 +1638,91 @@ class LocalConsumerActions:
             ),
         )
 
+    def _installed_inputs(self, record: InstalledRecord) -> Result[tuple[RuntimeInput, ...]]:
+        """Read an installed artifact's approved input declarations from its immutable object."""
+
+        receipt = record.receipt
+        if not isinstance(receipt, InstallationReceipt) or receipt.object_digest is None:
+            return Err(
+                (
+                    Diagnostic(
+                        CONSUMER_ACTION_NOT_INSTALLED,
+                        Severity.ERROR,
+                        f"{record.coordinate} has no retained approved input description",
+                    ),
+                )
+            )
+        loaded = read_object(
+            ObjectReadRequest(
+                object_store_paths(self._context.host.data_root), receipt.object_digest
+            )
+        )
+        if isinstance(loaded, Err):
+            return loaded
+        if loaded.value is None:
+            return Err(
+                (
+                    Diagnostic(
+                        CONSUMER_ACTION_NOT_INSTALLED,
+                        Severity.ERROR,
+                        f"{record.coordinate}'s approved object is no longer available",
+                    ),
+                )
+            )
+        described = read_package_description(loaded.value.candidate.entries)
+        if isinstance(described, Err):
+            return described
+        return Ok(described.value.inputs)
+
+    def _prepare_configuration(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        inspected = self._inspections((command.focus,) if command.focus else ())
+        if isinstance(inspected, Err):
+            return self._declined(command, _refusal(inspected.diagnostics))
+        if len(inspected.value) != 1 or len(command.config_answers) != 1:
+            return self._declined(
+                command,
+                _lines("a configuration edit needs one installed artifact and one ordinary input"),
+            )
+        identifier, value = command.config_answers[0]
+        try:
+            input_id = InputId(identifier)
+        except ValueError:
+            return self._declined(command, _lines("the chosen configuration input is invalid"))
+        declarations = self._installed_inputs(inspected.value[0].record)
+        if isinstance(declarations, Err):
+            return self._declined(command, _refusal(declarations.diagnostics))
+        declared = tuple(
+            item
+            for item in declarations.value
+            if isinstance(item, ConfigInput) and item.id == input_id
+        )
+        if len(declared) != 1:
+            return self._declined(
+                command,
+                _lines("the approved artifact no longer declares this configuration input"),
+            )
+        prepared = prepare_configured_configuration(
+            inspected.value[0],
+            input_id=input_id,
+            harnesses=command.targets,
+            value=value,
+            policy=self._context.policy,
+            validation=declared[0].validation,
+        )
+        if isinstance(prepared, Err):
+            return self._declined(command, _refusal(prepared.diagnostics))
+        self._pending_host = self._host()
+        self._pending = prepared.value
+        self._pending_action = command.action
+        return ConsumerActionUpdate(
+            self.source(lifecycle=project_lifecycle_plan(prepared.value.plan)),
+            ConsumerUiEvent(
+                ConsumerUiEventKind.ACTION_PREPARED,
+                action=command.action,
+                review_digest=str(prepared.value.review_digest),
+            ),
+        )
+
     def _prepare_uninstall(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
         inspected = self._inspections(self._targets(command))
         if isinstance(inspected, Err):
@@ -1743,6 +1868,8 @@ class LocalConsumerActions:
             return self._execute_repository_adoption(command, pending)
         if isinstance(pending, PreparedConfiguredRepair):
             return self._execute_repair(command, pending)
+        if isinstance(pending, PreparedConfiguredConfiguration):
+            return self._execute_configuration(command, pending)
         if isinstance(pending, PreparedSourceSync):
             return self._execute_source_sync(command, pending)
         if isinstance(pending, PreparedConfiguredCandidatePromotion):
@@ -2180,6 +2307,7 @@ class LocalConsumerActions:
             (reference,),
             interactive_store=True,
             terminal_handover=self._terminal_handover,
+            guidance={str(reference): pending.guidance} if pending.guidance else None,
         )
         for effect in plan.effects:
             if isinstance(effect, VerifyCredential):
@@ -2195,6 +2323,8 @@ class LocalConsumerActions:
         provider = reference.provider.provider
         if plan.intent is CredentialIntent.DELETE:
             expected, done = CredentialState.ABSENT, f"Deleted {reference.input} from {provider}."
+        elif plan.intent is CredentialIntent.STORE:
+            expected, done = CredentialState.PRESENT, f"Set {reference.input} in {provider}."
         else:
             expected, done = CredentialState.PRESENT, f"Replaced {reference.input} in {provider}."
         if observed.value.state is not expected:
@@ -2213,6 +2343,25 @@ class LocalConsumerActions:
     ) -> ConsumerActionUpdate:
         recorded_at, today = self._moment()
         completed = complete_configured_repair(
+            pending,
+            expected_review_digest=pending.review_digest,
+            host=self._reviewed_host(),
+            policy=self._context.policy,
+            credential_providers=self._context.credential_providers,
+            recorded_at=recorded_at,
+            today=today,  # type: ignore[arg-type]
+            offline=self._context.offline,
+        )
+        if isinstance(completed, Err):
+            return self._failed(command, _refusal(completed.diagnostics))
+        self._machine = completed.value.machine
+        return self._recorded(command, completed.value.recorded.receipt.recorded_at)
+
+    def _execute_configuration(
+        self, command: ConsumerUiCommand, pending: PreparedConfiguredConfiguration
+    ) -> ConsumerActionUpdate:
+        recorded_at, today = self._moment()
+        completed = complete_configured_configuration(
             pending,
             expected_review_digest=pending.review_digest,
             host=self._reviewed_host(),

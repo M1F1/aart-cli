@@ -62,11 +62,13 @@ from tests.consumer_views_test import _credential_input
 REFERENCE = "github-token@macos-keychain:github.com/work"
 _ROW_ACTIONS = {
     "verify": ConsumerActionKind.CREDENTIAL_VERIFY,
+    "set": ConsumerActionKind.CREDENTIAL_SET,
     "replace": ConsumerActionKind.CREDENTIAL_REPLACE,
     "delete": ConsumerActionKind.CREDENTIAL_DELETE,
 }
 _ENTER_LABELS = {
     "verify": "Verify",
+    "set": "Review setup",
     "replace": "Review replacement",
     "delete": "Review deletion",
 }
@@ -333,8 +335,11 @@ class TheReviewTest(unittest.TestCase):
 class _Journal:
     def __init__(self) -> None:
         self.entries: list[str] = []
+        self.briefings: list[tuple[str, ...]] = []
 
     def handover(self, briefing=()):
+        self.briefings.append(tuple(briefing))
+
         @contextlib.contextmanager
         def _lent():
             self.entries.append("released")
@@ -472,12 +477,42 @@ class CredentialActionAdapterTest(unittest.TestCase):
         self.assertEqual(self.provider.stored, [(None, True)])
         self.assertTrue(any("Replaced github-token" in line for line in done.source.screens.notice))
 
+    def test_an_absent_credential_is_set_by_the_provider_then_verified(self) -> None:
+        self.provider.present = CredentialState.ABSENT
+        prepared = self.composed.prepare(ConsumerActionKind.CREDENTIAL_SET)
+
+        self.assertTrue(prepared.event.review_digest, prepared.source.screens.notice)
+        self.assertNotIn("prompted", self.journal.entries)
+        self.journal.entries.clear()
+        done = self.composed.execute(
+            ConsumerActionKind.CREDENTIAL_SET, prepared.event.review_digest
+        )
+
+        self.assertIs(done.event.kind, ConsumerUiEventKind.ACTION_RECORDED)
+        self.assertEqual(self.provider.stored, [(None, False)])
+        self.assertEqual(self.journal.entries[:3], ["released", "prompted", "restored"])
+        self.assertIn("inspected", self.journal.entries[3:])
+        self.assertTrue(any("Set github-token" in line for line in done.source.screens.notice))
+
     def test_a_replacement_the_provider_does_not_report_as_stored_is_not_a_success(self) -> None:
         self.provider.after_store = CredentialState.ABSENT
         prepared = self.composed.prepare(ConsumerActionKind.CREDENTIAL_REPLACE)
 
         done = self.composed.execute(
             ConsumerActionKind.CREDENTIAL_REPLACE, prepared.event.review_digest
+        )
+
+        self.assertIs(done.event.kind, ConsumerUiEventKind.ACTION_FAILED)
+        self.assertIn("absent", "\n".join(done.source.screens.notice))
+        self.assertEqual(self._record(done).health, "absent")
+
+    def test_a_set_the_provider_does_not_report_as_stored_is_not_a_success(self) -> None:
+        self.provider.present = CredentialState.ABSENT
+        self.provider.after_store = CredentialState.ABSENT
+        prepared = self.composed.prepare(ConsumerActionKind.CREDENTIAL_SET)
+
+        done = self.composed.execute(
+            ConsumerActionKind.CREDENTIAL_SET, prepared.event.review_digest
         )
 
         self.assertIs(done.event.kind, ConsumerUiEventKind.ACTION_FAILED)
@@ -532,9 +567,10 @@ class CredentialActionAdapterTest(unittest.TestCase):
 class CredentialActionShellE2ETest(unittest.TestCase):
     """The keys, the reducer, the adapter and the frames, together."""
 
-    def _run(self, *codes: int):
+    def _run(self, *codes: int, present: CredentialState = CredentialState.PRESENT):
         journal = _Journal()
         provider = _Provider(journal)
+        provider.present = present
         with _environment() as env:
             with mock.patch.dict(os.environ, env.xdg, clear=False):
                 composed = _Composed(env, provider, journal)
@@ -543,6 +579,26 @@ class CredentialActionShellE2ETest(unittest.TestCase):
                 env, _at(ConsumerScreen.CREDENTIALS), *codes, actions=composed.actions
             )
         return finished, terminal, journal, provider
+
+    def test_absent_credential_is_set_from_the_grouped_area_with_a_briefed_handover(self) -> None:
+        _, terminal, journal, provider = self._run(
+            ENTER,
+            ENTER,
+            ENTER,
+            DOWN,
+            ENTER,
+            ENTER,
+            present=CredentialState.ABSENT,
+        )
+
+        review = terminal.screen_containing("Set github-token")
+        self.assertIn("asks for the new value", review)
+        self.assertEqual(provider.stored, [(None, False)])
+        self.assertLess(journal.entries.index("released"), journal.entries.index("prompted"))
+        self.assertLess(journal.entries.index("prompted"), journal.entries.index("restored"))
+        briefing = "\n".join(journal.briefings[-1])
+        self.assertIn("github-token", briefing)
+        self.assertIn("AART never sees or keeps it", briefing)
 
     def test_replace_is_reviewed_confirmed_and_lands_on_the_credential(self) -> None:
         _, terminal, journal, provider = self._run(ENTER, ENTER, ENTER, DOWN, ENTER, ENTER)
