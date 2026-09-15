@@ -40,12 +40,13 @@ python scripts/install_commands.py
 ```
 
 The shapes are below, if you want them before you look. `<repository>` is the address of the
-repository you are reading this in; the command above prints it filled in.
+repository you are reading this in, and `X.Y.Z` is the release you want; the command above prints
+both filled in.
 
 | Source | `pip` (inside your environment) | `pipx` | `uv` |
 |---|---|---|---|
-| Tagged Git repository, no clone | `python -m pip install --no-deps "git+<repository>.git@v0.0.1"` | `pipx install "git+<repository>.git@v0.0.1"` | `uv tool install "git+<repository>.git@v0.0.1"` <!-- x-release-please-version --> |
-| Downloaded wheel | `python -m pip install --no-deps ./aart_cli-0.0.1-py3-none-any.whl` | `pipx install ./aart_cli-0.0.1-py3-none-any.whl` | `uv tool install ./aart_cli-0.0.1-py3-none-any.whl` <!-- x-release-please-version --> |
+| Tagged Git repository, no clone | `python -m pip install --no-deps "git+<repository>.git@vX.Y.Z"` | `pipx install "git+<repository>.git@vX.Y.Z"` | `uv tool install "git+<repository>.git@vX.Y.Z"` |
+| Downloaded wheel | `python -m pip install --no-deps ./aart_cli-X.Y.Z-py3-none-any.whl` | `pipx install ./aart_cli-X.Y.Z-py3-none-any.whl` | `uv tool install ./aart_cli-X.Y.Z-py3-none-any.whl` |
 | Release wheel by URL | `python -m pip install --no-deps <the wheel's address on the release>` | `pipx install <the wheel's address on the release>` | `uv tool install <the wheel's address on the release>` |
 
 The Git row leads because it is the only one that needs nothing arranged first: `git+https://` goes
@@ -64,7 +65,7 @@ sources work at all.
 |---|---|
 | Tagged Git repository, no clone | **Yes.** git authenticates, so this row needs nothing set up |
 | Downloaded wheel | Yes, once the file is on disk -- see below for getting it there |
-| Internal index, once the wheel is published to it | Yes. Add `--index-url <your index>` (`--default-index` for `uv`) and ask for `"aart-cli==0.0.1"` <!-- x-release-please-version --> |
+| Internal index, once the wheel is published to it | Yes. Add `--index-url <your index>` (`--default-index` for `uv`) and ask for `"aart-cli==X.Y.Z"` |
 | Release wheel by URL | **No.** See below |
 
 The last row is the one that surprises people. `pip`, `pipx` and `uv` send no token when they fetch
@@ -535,7 +536,7 @@ on `main`, and proving it again at the tag proves the same tree twice.
 The last one is the one a pull request could not have run: the wheel did not exist yet.
 
 ```sh
-python scripts/release_artifact.py --tag v0.1.0
+python scripts/release_artifact.py --tag vX.Y.Z
 ```
 
 The seven registry checks are reported `skipped`, never `passed`, when no registry checkout is
@@ -547,9 +548,9 @@ reach it.
 ### One version, written by one thing
 
 `agent_artifacts/__init__.py` holds the only version literal. `runtime_contract.EXECUTABLE_VERSION`
-parses it, `pyproject.toml` and this README are rewritten by the release engine on the lines marked
-`x-release-please-version`, and nothing compares any of them to anything, because nothing can
-disagree.
+parses it, the release engine rewrites it and `pyproject.toml`, and nothing compares any of them to
+anything, because nothing can disagree. This README names no release: it writes `X.Y.Z`, and the
+exact commands come from `scripts/install_commands.py` and the release page.
 
 ### The workflow is read from the tag, not from `main`
 
@@ -559,7 +560,7 @@ that triggered the run, so a release runs `release.yml` **as it was at the tag**
 rather than picking the fix up. Move the tag and publish again:
 
 ```sh
-git tag -f v0.1.0 main && git push -f origin v0.1.0
+git tag -f vX.Y.Z main && git push -f origin vX.Y.Z
 ```
 
 Re-publishing is safe: the attach step replaces an asset of the same name instead of colliding

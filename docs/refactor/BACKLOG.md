@@ -3244,3 +3244,12 @@ output still say a single file cannot be vendored. Verify the current behaviour,
 Recorded 2026-09-15 by D-276. The wheel still installs `agent-artifacts` beside `aart`, and the
 package is still `agent_artifacts`. Both are names from the predecessor project. Dropping the alias
 is a breaking change for anyone who scripted it, so it waits for an explicit decision.
+
+## B-129 — `manual_test_lab_test` can fail on Python 3.14 while resetting the lab
+
+Found 2026-09-15 in `pr-check` for the first release PR, Python 3.14 only. Severity: low (flaky).
+`test_setup_builds_a_fresh_ecosystem_with_a_credential_mcp` raised `OSError: [Errno 39] Directory
+not empty: .../manual-lab/repositories/registry/.git` from `shutil.rmtree` in
+`scripts/manual_test.py:reset_lab`. Something was still writing into that `.git` while it was
+removed, most likely a git process started earlier in the lab setup. The same test passed on 3.10
+and 3.11 in that run and on 3.14 in earlier runs. Not reproduced or fixed.
