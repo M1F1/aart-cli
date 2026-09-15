@@ -25,8 +25,7 @@ There are two routes through the same product, and this is one of them:
 Both run over the same lab. Running both tests more than either alone, but they are separate passes
 with separate findings.
 
-Findings go to the first section of [`TODO.md`](../../TODO.md), in the format its *Finding
-template* gives.
+Findings go to [`manual-acceptance.md`](manual-acceptance.md), in the format it describes.
 
 ## Build the lab
 
@@ -261,7 +260,7 @@ nothing is recorded as an `invalid` Candidate.
 ## 6 — Review a Candidate
 
 - [ ] Open a Candidate. Press `d` (**Diff**), then `v` (**Fast / Verbose**) to fold the bounded
-      redacted file diffs in and out (CP-23 task 03: `f` does nothing here any more). `r` on the
+      redacted file diffs in and out (`f` does nothing here). `r` on the
       Candidate opens its **Lifecycle**.
 
 Expected: facts, decisions and the one line telling you what a key press will do are visually
@@ -565,7 +564,7 @@ and II in order and check these links of the chain, each at the step that owns i
   - every key in the footer does what it says;
   - a narrow or short terminal keeps the whole footer.
 
-File anything that fails as a CP-23 finding in [`TODO.md`](../../TODO.md). When everything passes,
+File anything that fails as a CP-23 finding in [`manual-acceptance.md`](manual-acceptance.md). When everything passes,
 record it in the slice's task 15 evidence and mark CP-23.15 done.
 
 ---
@@ -579,5 +578,5 @@ make manual-test-reset
 Removes only this marker-owned lab, after checking `.aart-manual-lab.json` and the exact absolute
 root. It refuses an unmarked directory.
 
-Then move confirmed items in [`TODO.md`](../../TODO.md) from *Fixed — awaiting manual retest* to
-checked, and file anything new in *Open*.
+Then move confirmed items in [`manual-acceptance.md`](manual-acceptance.md) from *Fixed — awaiting
+retest* to *Confirmed*, and file anything new in *Open*.

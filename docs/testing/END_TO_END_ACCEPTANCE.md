@@ -16,8 +16,8 @@ There are two routes through the same product, and this is one of them:
 Run whichever matches what you are testing. Running both over one lab is fine and tests more than
 either alone, but they are separate passes with separate findings.
 
-The Product Specification remains the product authority. Findings go to the first section of
-[`TODO.md`](../../TODO.md), in the format its *Finding template* gives.
+The Product Specification remains the product authority. Findings go to
+[`manual-acceptance.md`](manual-acceptance.md), in the format it describes.
 
 ## Build the lab
 

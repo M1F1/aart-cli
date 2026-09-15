@@ -77,38 +77,27 @@ class RootDocumentAuthorityTest(unittest.TestCase):
     """A newcomer opening a root-level markdown file has met this repository's authority, whether
     or not the file meant to be authoritative.
 
-    Three of them -- `PLAN.md`, `PROGRESS.md`, `TODO.md` -- are the completed `M1F1/agent-artifacts`
-    1.0 program, and `TODO.md` opened by saying its GitHub issues "remain the source of truth for
-    discussion and status", which sends a reader to a repository CLAUDE.md names as legacy. That the
-    contract file classifies them as historical does not help someone who never opened it, so the
-    documents say it themselves.
+    So no root document may send a reader to a predecessor repository, which CLAUDE.md names as
+    reference only: not for behaviour, and not for status in its issue tracker.
     """
 
-    LEGACY_PROGRAM = "M1F1/agent-artifacts/"
+    LEGACY_REPOSITORY = "M1F1/agent-artifacts/"
 
     def _root_documents(self) -> list[Path]:
         return sorted(p for p in _ROOT.glob("*.md"))
 
-    def test_a_root_document_citing_the_legacy_program_says_it_is_historical(self) -> None:
-        for path in self._root_documents():
-            text = path.read_text(encoding="utf-8")
-            if self.LEGACY_PROGRAM not in text:
-                continue
+    def test_no_root_document_cites_a_predecessor_repository(self) -> None:
+        documents = self._root_documents()
+        self.assertGreater(len(documents), 2)
+        for path in documents:
             with self.subTest(document=path.name):
-                head = text[:600]
-                self.assertIn("[!WARNING]", head, f"{path.name} cites the legacy program unmarked")
-                self.assertIn("PRODUCT_SPECIFICATION.md", head)
+                self.assertNotIn(self.LEGACY_REPOSITORY, path.read_text(encoding="utf-8"))
 
     def test_no_root_document_sends_a_reader_to_the_legacy_issue_tracker_for_status(self) -> None:
         for path in self._root_documents():
             text = path.read_text(encoding="utf-8")
             with self.subTest(document=path.name):
                 self.assertNotIn("GitHub issues remain the source of truth", text)
-
-    def test_this_guard_is_not_vacuous(self) -> None:
-        citing = [p.name for p in self._root_documents() if self.LEGACY_PROGRAM in p.read_text()]
-
-        self.assertEqual(sorted(citing), ["PLAN.md", "PROGRESS.md", "TODO.md"])
 
 
 class RemediationNamesRealCommandsTest(unittest.TestCase):

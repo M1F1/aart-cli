@@ -20,8 +20,8 @@ Before architectural or product work, read:
 
 It is the canonical and sole AART Product Specification.
 
-If anything else conflicts with it, the Product Specification wins. Historical `PLAN.md`,
-`PROGRESS.md`, `TODO.md`, `docs/design/*`, old specs and legacy code are evidence/reference only.
+If anything else conflicts with it, the Product Specification wins. Older repositories, their
+documents and legacy code are evidence/reference only.
 
 ## Autonomous execution rule
 

@@ -10,9 +10,8 @@
 > credential handling, testing expectations, maintainer workflows, consumer workflows, edge cases,
 > migration invariants, and release direction.
 >
-> If any historical `PLAN.md`, `PROGRESS.md`, `TODO.md`, `docs/design/*`, `docs/product/*`, README
-> prose, issue, comment, legacy implementation, or older AART repository conflicts with this
-> document, **this Product Specification wins**.
+> If any other document, README prose, issue, comment, legacy implementation, or older AART
+> repository conflicts with this document, **this Product Specification wins**.
 >
 > Older repositories including `M1F1/aart`, `agent-artifacts`, `Agent Artifacts`, old registry
 > experiments, and other predecessor repositories are **reference material only**. They may be read
