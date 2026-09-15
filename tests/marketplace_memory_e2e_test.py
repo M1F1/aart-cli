@@ -1,7 +1,7 @@
 """End-to-end proof that `--memory-mode` reaches the file the harness actually reads.
 
 The memory install modes were always implemented in the installation engine, but the flag that
-selected them lived on the removed legacy install command (LAF-21).  Wiring alone is not the
+selected them lived on the removed legacy install command.  Wiring alone is not the
 contract: these tests drive the real CLI over a real project and assert the bytes on disk, so a
 mode that stops reaching the planner fails here rather than in a unit-level mock.
 """

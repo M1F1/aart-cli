@@ -7,23 +7,20 @@ has zero runtime dependencies.
 Three names, because they differ and the difference has cost someone an afternoon: the command is
 **`aart`**, the package you install is **`aart-cli`**, and the import package is
 **`agent_artifacts`**. `agent-artifacts` on a package index is a **different project, belonging to
-someone else** — installing it gives you their code, not this one. `agent-artifacts` also still
-works as a command name, so an existing script keeps running.
+someone else** — installing it gives you their code, not this one. The wheel also installs
+`agent-artifacts` as a second name for the `aart` command.
 
-## One current contract
+## One contract
 
-AART is one product with one interface: `source`, `marketplace`, and `registry`. It does not
-support or convert legacy catalogs, former top-level consumer commands, old installation state, or
-retired setup recipes. Input outside the current contract is rejected with a migration diagnostic;
-there are no compatibility flags or silent fallbacks.
+AART is one product with one interface: `source`, `marketplace`, and `registry`. Input outside the
+contract is rejected with a diagnostic; there are no compatibility flags or silent fallbacks.
 
-The names `native-source-v1` and `registry-v1` identify the current document families. They are
-not legacy modes. **Setup v1 is retired**: setup v2 is the only accepted recipe. The same compiler
-validates it at both publication and consumption boundaries.
+`native-source-v1` and `registry-v1` name the document families, and setup v2 is the recipe format.
+The same compiler validates them at both publication and consumption boundaries.
 
-See the [native source contract](docs/protocol/native-source-v1.md),
-[registry contract](docs/protocol/registry-v1.md), and the accepted
-[remediation design](docs/design/DESIGN-post-live-acceptance-remediation.md).
+The [Product Specification](docs/product-specification/PRODUCT_SPECIFICATION.md) is the product's
+single source of truth. See also the [native source contract](docs/protocol/native-source-v1.md) and
+the [registry contract](docs/protocol/registry-v1.md).
 
 ## Install and quick start
 
@@ -47,15 +44,16 @@ repository you are reading this in; the command above prints it filled in.
 
 | Source | `pip` (inside your environment) | `pipx` | `uv` |
 |---|---|---|---|
-| Tagged Git repository, no clone | `python -m pip install --no-deps "git+<repository>.git@v0.0.1"` | `pipx install "git+<repository>.git@v0.0.1"` | `uv tool install "git+<repository>.git@v0.0.1"` |
-| Downloaded wheel | `python -m pip install --no-deps ./aart_cli-0.0.1-py3-none-any.whl` | `pipx install ./aart_cli-0.0.1-py3-none-any.whl` | `uv tool install ./aart_cli-0.0.1-py3-none-any.whl` |
+| Tagged Git repository, no clone | `python -m pip install --no-deps "git+<repository>.git@v0.0.1"` | `pipx install "git+<repository>.git@v0.0.1"` | `uv tool install "git+<repository>.git@v0.0.1"` <!-- x-release-please-version --> |
+| Downloaded wheel | `python -m pip install --no-deps ./aart_cli-0.0.1-py3-none-any.whl` | `pipx install ./aart_cli-0.0.1-py3-none-any.whl` | `uv tool install ./aart_cli-0.0.1-py3-none-any.whl` <!-- x-release-please-version --> |
 | Release wheel by URL | `python -m pip install --no-deps <the wheel's address on the release>` | `pipx install <the wheel's address on the release>` | `uv tool install <the wheel's address on the release>` |
 
 The Git row leads because it is the only one that needs nothing arranged first: `git+https://` goes
 through git, and git uses the credentials you already push with.
 
 `pipx` and `uv tool` create an isolated tool environment. AART has no runtime dependencies. The
-release wheel is byte-reproducible from its tag and its digest is published in the release notes.
+release wheel is byte-reproducible from its tag; see
+[wheel reproducibility](docs/release/wheel-reproducibility-v1.md) to check one.
 
 ### On a private Enterprise instance
 
@@ -66,7 +64,7 @@ sources work at all.
 |---|---|
 | Tagged Git repository, no clone | **Yes.** git authenticates, so this row needs nothing set up |
 | Downloaded wheel | Yes, once the file is on disk -- see below for getting it there |
-| Internal index, once the wheel is published to it | Yes. Add `--index-url <your index>` (`--default-index` for `uv`) and ask for `"aart-cli==0.0.1"` |
+| Internal index, once the wheel is published to it | Yes. Add `--index-url <your index>` (`--default-index` for `uv`) and ask for `"aart-cli==0.0.1"` <!-- x-release-please-version --> |
 | Release wheel by URL | **No.** See below |
 
 The last row is the one that surprises people. `pip`, `pipx` and `uv` send no token when they fetch
@@ -85,7 +83,7 @@ The editable install is for working on AART itself, not for a colleague adopting
 
 ```sh
 git clone <repository>.git
-cd agent-artifacts
+cd aart-cli
 python -m pip install --no-index --no-deps --no-build-isolation -e .
 ```
 
@@ -96,7 +94,7 @@ cd /path/to/consumer-project
 aart source add \
   --alias company \
   --kind registry-git \
-  --location https://github.example.com/company/agent-artifacts-registry.git \
+  --location https://github.example.com/company/agent-registry.git \
   --ref main \
   --default \
   --json
@@ -107,6 +105,7 @@ aart marketplace list --json
 With automatic synchronization (the default), source-bearing marketplace and TUI entry points
 compare with the origin and publish a validated changed snapshot first. Manual mode reports
 `not-synchronized` or `could-not-check` without moving the local pointer.
+
 ## Consumer lifecycle
 
 Every mutation uses the same review and finalize boundary. Without `--yes`, a command renders its
@@ -212,7 +211,7 @@ keeps: aart/mcp/github:1.0.0
   module  docker.build@1
   reason  the tag named an image before this run, so it is not removed — but it now points
           at what this run built, and the receipt never recorded the earlier image id, so
-          the undo cannot restore the original binding (LAF-58)
+          the undo cannot restore the original binding
 Undo: reverses=2, keeps=1
 Reviewed only; re-run with --yes to apply this exact undo.
 ```
@@ -225,11 +224,50 @@ partial success the record is written back as `rollback_incomplete`.
 
 All three are also reachable from `aart` with no arguments, under **Action → receipt**.
 
+### One report for the whole machine
+
+The three commands above each answer a question about one installation. `aart doctor` answers them
+for everything at once, and reads only — it resolves no marketplace content and applies nothing.
+
+```sh
+# What is the state of everything installed here?
+aart doctor
+aart doctor --json
+```
+
+One run reports measured drift with the smallest policy-permitted repair plan for each item; offline
+readiness for every enabled source, as three separate answers — cached metadata, cached canonical
+payload, cached runtime dependencies — because `--offline` is one flag and those are three different
+reasons it can fail; any working copy an interrupted run left behind; the activity trail and what
+each entry can still undo; credential health and which installations depend on it; and the
+configuration this machine is ignoring, meaning disabled sources and fields your organization's
+policy has locked.
+
+Repair follows the same review-then-confirm boundary as everything else, one artifact at a time:
+
+```sh
+# Review one artifact's minimal plan — applies nothing
+aart doctor --repair company/mcp/github
+
+# Apply exactly the plan that review returned
+aart doctor --repair company/mcp/github --yes --expect <digest>
+```
+
+`--yes` without `--expect` is refused, and a machine that changed between the review and the
+confirmation returns the recomputed plan instead of applying the stale one. There is no flag that
+repairs everything.
+
+What it cannot repair, it still reports: an artifact whose payload is missing or divergent is named
+with what is wrong, rather than being omitted because no repair for it exists.
+
 ## Maintaining a registry
 
 A registry is an ordinary Git checkout. Maintainer mutations prepare reviewed files and stop. The
-explicit `registry publish --yes` flow runs every publisher gate and creates the listed commit; AART
-never pushes. An empty Git repository is not a registry until its `aart-registry.json` marker exists.
+explicit `registry publish --yes` flow runs every publisher gate and creates the listed commit, and
+stops there. `registry push --branch NAME` then pushes that commit to a review branch — never the
+registry's default branch, which is refused by name, because a subscriber reads the default branch
+and only a merge should change what it can install. Merging is the reviewer's work, on the forge.
+An empty Git repository is not a registry until its `aart-registry.json` marker exists.
 
 AART reaches every remote by running system Git, with an allowlisted environment rather than the
 operator's. If a repository clones at a shell prompt but not through AART, the environment is where
@@ -238,21 +276,22 @@ passed, what is dropped, and what to configure instead — `https_proxy` is drop
 proxy that is the whole failure.
 
 `registry init` turns an empty checkout into a registry: the two JSON markers, a `.gitignore`,
-three GitHub workflows, a `README.md` describing the registry it just made, and a `.aart-version`
-pinning the AART that created it. Those last two are written only when absent — they are the files
+the quality workflow (plus the two usage-reporting workflows when `--usage-reporting-repository` is
+given), a `README.md` describing the registry it just made, and a `.aart-version` pinning the AART
+that created it. Those last two are written only when absent — they are the files
 you own afterwards, and AART never compares or overwrites them. The workflows and the JSON are
 managed: hand-edit one and `init` refuses the registry.
 
 The generated workflows need no configuration to run on github.com. To run them inside a company,
-set the variables in [Repository variables](#repository-variables) — no file in the registry
-changes.
+set repository variables — no file in the registry changes. See
+[Rolling out AART on GitHub Enterprise Server](docs/ci/github-enterprise-rollout.md).
 
 ```sh
 # Create a registry
 aart registry init --source . --source-id company --display-name "Company Registry" \
-  --usage-reporting-repository acme/agent-artifacts-registry
+  --usage-reporting-repository acme/agent-registry
 aart registry init --source . --source-id company --display-name "Company Registry" \
-  --usage-reporting-repository acme/agent-artifacts-registry --yes
+  --usage-reporting-repository acme/agent-registry --yes
 
 # Author a package, or review a native package from another repository
 aart registry scaffold skill code-review --source . --summary "Review code." \
@@ -270,6 +309,9 @@ aart registry vendor skill code-review --source . \
 # Review, then finalize lock + build + validate + audit + one commit
 aart registry publish --source .
 aart registry publish --source . --yes
+
+# Push the commit to a review branch, then open a pull request
+aart registry push --source . --branch add-code-review
 ```
 
 `promote-native` records a reference to an external repository, pins its resolved commit in the
@@ -283,95 +325,20 @@ For the complete path, use the [walked company-registry tutorial for Tabnine](do
 The [vendoring tutorial](docs/tutorials/vendoring-v1.md) covers provenance and re-vendoring, and
 [porting an MCP server](docs/tutorials/mcp-servers-into-the-registry.md) covers setup recipes.
 
-## Repository variables
+An author team whose repository becomes a Source commits one `aart.yaml` beside each artifact. A
+complete MCP example — Python stdio server, `requirements.txt` dependencies, one Keychain secret and
+one per-harness setting — is [docs/examples/author-source/example-mcp/aart.yaml](docs/examples/author-source/example-mcp/aart.yaml),
+held to what AART accepts by `tests/author_manifest_example_test.py`.
 
-Every knob in this project's CI, and in the workflows `registry init` writes, is a GitHub
-repository variable with a default that reproduces the public run. **A fork configures itself from
-its settings page and never edits a file.** That matters on sync: an edited literal is a permanent
-conflict on the line every later merge from upstream touches.
+## Running inside a company
 
-Set variables under *Settings → Secrets and variables → Actions → Variables*. Set them on the
-**organisation** where you can: GitHub resolves a repository variable over an organisation one, so
-one organisation variable configures every repository, and any single repository can still
-override it.
+Every setting in this project's CI, and in the workflows `registry init` writes, is a GitHub Actions
+variable whose default reproduces the public github.com run. A copy on a company GitHub Enterprise
+Server instance configures itself from its settings page and never edits a workflow.
 
-### A fork of this repository
-
-| Variable | Default | What it does |
-|---|---|---|
-| `AART_RUNNER` | `["ubuntu-latest"]` | JSON array of runner labels. Must be JSON — `["self-hosted","linux","x64"]`, not a bare word |
-| `AART_CI_IMAGE` | unset | Container image for the jobs. Unset means the runner's own environment |
-| `AART_PYTHON` | `python` | The interpreter's name inside that image |
-| `AART_PYTHON_VERSIONS` | `["3.10", "3.14"]` | JSON array for the quality matrix. Pin to one entry when `AART_CI_IMAGE` is set |
-| `AART_PIP_INDEX_URL` | `https://pypi.org/simple` | Internal mirror for `ruff`, `mypy` and `coverage` |
-| `AART_RELEASE_PYTHON_VERSION` | `3.11` | Interpreter for the release job when no container is used |
-| `AART_REFERENCE_REGISTRY_URL` | this project's registry | The registry the release checklist reconciles against |
-| `AART_GH_HOST` | `github.com` | `gh` talks to github.com unless told the instance hostname |
-| `AART_IMAGE_USERNAME_SECRET` | unset | **Name** of the secret holding the image-registry username |
-| `AART_IMAGE_PASSWORD_SECRET` | unset | **Name** of the secret holding the image-registry password |
-| `AART_PIP_INDEX_CREDENTIALS_SECRET` | unset | **Name** of a secret holding `user:pass` for that index |
-
-### A registry created by `aart registry init`
-
-A registry splits its configuration by one test: **is this a decision about the registry, or a fact
-about the instance it runs on?**
-
-*Which* AART version is a decision, so `registry init` pins it in Git, in a one-line `.aart-version`
-at the registry root. Bump it in a pull request and the gates run against the new version before it
-merges; `git blame` says when the registry moved; a bad bump is one revert away. After fetching, CI
-compares `aart --version` with that file and fails if they differ — so a moved tag, an index that
-resolved elsewhere, or a stale AART baked into a CI image is caught rather than assumed.
-
-*Where this deployment fetches it from* is a fact about the instance, so it stays in variables. Four
-ways in; the first variable that is set wins, and they are never combined:
-
-| Order | Variable | Example | How it fetches |
-|---|---|---|---|
-| 1 | `AART_PACKAGE` | `aart-cli=={version}` | `pip` from `AART_PIP_INDEX_URL` |
-| 2 | `AART_WHEEL_URL` | `https://host/…/v{version}/aart_cli-{version}-py3-none-any.whl` | `curl`, then unzip |
-| 3 | `AART_TOOL_PATH` | `/opt/aart` | Already on the runner |
-| 4 | `AART_TOOL_URL` | `https://ghe.corp/platform/agent-artifacts.git` | `git clone` at `v` + the pin |
-
-`{version}` is replaced with the pin, so the version is written **once**, in the repository, and no
-variable carries one. `AART_REF` overrides the pin for a single registry — the run says so and the
-version check switches off, because you asked for a different build deliberately.
-
-The order runs from the most governed supply chain to the least, so migration is additive: stand up
-an internal index later, set `AART_PACKAGE`, and it takes over without unsetting anything. Git is
-last because it carries the only shipped default — an arm below one that is always set would be
-unreachable.
-
-Set none of them and CI reaches `github.com`. Inside a GitHub Enterprise instance that fails on the
-first run, loudly, rather than silently pointing at the wrong tool. Which arm answered is printed by
-the run: `AART: aart-cli 0.0.1  via wheel https://…`.
-
-The registry also reads `AART_RUNNER`, `AART_CI_IMAGE`, `AART_PYTHON`, `AART_PIP_INDEX_URL`,
-`AART_REPOSITORY`, `AART_GH_HOST`, and `AART_PAGES` — set the last to `false` where the instance
-offers no GitHub Pages, and the usage dashboard is still built and validated, only not published.
-
-### Registries and images that need a login
-
-A private image needs a `credentials` block, and that block cannot be made conditional: an empty one
-and a `null` one are both rejected before the job starts, and a placeholder makes an anonymous pull
-fail a `docker login` it never needed. So every containerised job is written twice and `if:` picks
-one. **You name the secrets rather than copying them**, because a secret's name is not a secret:
-
-| Variable | Holds |
-|---|---|
-| `AART_IMAGE_USERNAME_SECRET` | the name of your existing username secret, e.g. `NEXUS_USER` |
-| `AART_IMAGE_PASSWORD_SECRET` | the name of your existing password secret |
-| `AART_PIP_INDEX_CREDENTIALS_SECRET` | the name of a secret holding `user:pass` for the index |
-
-Setting `AART_IMAGE_USERNAME_SECRET` is what flips the switch. Leave it unset and the job that runs
-is the one this project always ran, unchanged. An organisation therefore keeps its own naming and
-creates no new secrets, and the index URL stays a bare host — the credential is assembled in the
-step, with both halves re-masked first, because GitHub masks the whole `user:pass` it was given and
-neither half after a split.
-
-[The Enterprise fork contract](docs/ci/enterprise-fork-v1.md) is the full page. Its runbook is the
-ordered version of everything above — mirror this repository onto the instance, set its variables,
-choose how registries will fetch it, and only then run `registry init` — followed by every
-variable in reference form, what was walked, and what was not.
+[Rolling out AART on GitHub Enterprise Server](docs/ci/github-enterprise-rollout.md) walks it in
+order — put `aart-cli` on the instance, configure its CI, create a registry, configure the
+registry's CI, point people at it — and lists every variable.
 
 ## Canonical package
 
@@ -396,9 +363,11 @@ payload-free consumer projection. Both are generated and must pass their gates b
 ## Interface
 
 ```text
-aart source add|list|sync|health
-aart marketplace list|search|health|install|update|uninstall|status|setup
-aart registry init|scaffold|collection|discover|vendor|vendor-batch|revendor|promote-native|refresh-native|lock|build|validate|audit|publish|diff
+aart source add|list|sync|remove|resubscribe|health
+aart marketplace list|search|health|install|update|uninstall|status|setup|receipt
+aart doctor
+aart reset
+aart registry init|scaffold|collection|scan|promote|adopt|check-upstream|discover|format|promote-native|vendor|vendor-batch|revendor|refresh-native|validate|lock|build|audit|publish|push|test|diff
 aart security scan|show|verify|analyzers|suites
 aart reporting validate-event|validate-issue|aggregate
 aart upgrade --wheel FILE | --source-checkout DIR
@@ -408,6 +377,10 @@ Running `aart` without a subcommand on a TTY opens the human-oriented TUI (curse
 fallback). The TUI submits the same canonical requests as flag mode; it is not a second command
 engine.
 
+`aart reset` is the CLI-only factory reset. It lists the exact AART-owned per-user configuration,
+managed state and cache paths, then requires two different typed confirmations. It never removes
+projects, harness files, organization policy or credentials owned by another application.
+
 ## Verification
 
 ```sh
@@ -415,9 +388,9 @@ python -m unittest
 git diff --check
 ```
 
-The historical first live-acceptance record remains in
-[`docs/testing/PROGRESS-live-acceptance.md`](docs/testing/PROGRESS-live-acceptance.md). The new
-remediation run is documented separately and does not rewrite that evidence.
+The manual walks are [the TUI walkthrough](docs/testing/TUI_MANUAL_WALKTHROUGH.md) and
+[the command-line walkthrough](docs/testing/END_TO_END_ACCEPTANCE.md); what they find is tracked in
+[manual acceptance](docs/testing/manual-acceptance.md).
 
 ## Development dependencies and what the quality gates run
 
@@ -452,7 +425,7 @@ from a block inside `pyproject.toml` — while pip reads `PIP_INDEX_URL` and alw
 internal index, set `PIP_INDEX_URL` and use the second command.
 
 `.venv/` is already in `.gitignore`. Activate it in every new shell before running the gates or
-`scripts/prepare_release.py`; `deactivate` leaves it. If `python3 -m venv` fails with an
+`scripts/packaging_check.py`; `deactivate` leaves it. If `python3 -m venv` fails with an
 `ensurepip` error, that interpreter's venv support is broken — use another one, for example
 `python3.11 -m venv .venv`.
 
@@ -486,7 +459,7 @@ and a real one did not. Run a single gate with `make <gate>`.
 | `typecheck` | `mypy` | `mypy` |
 | `unit` | `unittest discover -s tests -p "*_test.py"` | stdlib |
 | `integration` | `unittest discover -s tests -p "*e2e_test.py"` — drives the real CLI over real trees | stdlib |
-| `validate` | `scripts/validate.py`, then `scripts/version.py check` | stdlib |
+| `validate` | `scripts/validate.py` | stdlib |
 | `coverage` | `coverage run --branch --source=agent_artifacts` over the unit suite, then `coverage report` | `coverage` |
 | `packaging-check` | `scripts/packaging_check.py` — builds the wheel and inspects it | stdlib |
 | `docs-check` | `scripts/docs_check.py` | stdlib |
@@ -497,133 +470,96 @@ Python itself.
 
 ## Releasing
 
-**Actions → cut release → Run workflow → type the version.** That is the release.
+**Merge a pull request whose title says what kind of change it is. Later, merge the release pull
+request that Release Please keeps open.** That is the release.
 
-One thing is decided before you press it, and it is the one a machine cannot decide: what the
-notes say. It arrives on `main` through an ordinary reviewed change.
+Nobody edits a version. Nobody writes a changelog entry. Nobody pushes a tag or presses a button.
+The one decision left to a person is the one a machine has no business making: *when* the
+accumulated changes should become a release.
 
-### The number comes from the changelog
+### What a pull request title has to say
 
-Changes are written under `## Unreleased` in `CHANGELOG.md` as they land, each under a heading that
-says what kind of change it is. That heading is what decides the version:
+The title becomes the squash commit on `main`, and that commit is what decides the next version.
 
-| Heading | What moves |
+```text
+fix(tui): preserve selected artifact after refresh
+feat(mcp): add isolated Python runtime
+feat(registry)!: replace legacy source schema
+```
+
+| The title says | The version moves |
 |---|---|
-| `Removed`, `Breaking` | major |
-| `Added`, `Changed` | minor |
-| `Fixed`, `Security`, `Packaging`, `Documentation`, `Testing` | patch |
+| `fix`, `perf`, `revert` | patch |
+| `feat` | minor |
+| anything with `!` before the colon | major |
+| `docs`, `test`, `ci`, `chore`, `build`, `refactor`, `security` | nothing releases on its own |
 
-Anything else — `Compatibility`, `Known defects shipped open`, `Upgrading from 2.7.1` — is prose
-about the release rather than a change in it. It is kept and ignored when the number is decided,
-and a section made only of those refuses to decide one rather than guessing.
+`pr-check` validates the title on every pull request, and refuses one it cannot classify. That is
+a check on semantic change metadata, not on a version number — nothing in it knows what version
+this project is. The types and what each is called in the changelog are declared in
+[`release-please-config.json`](release-please-config.json), which is also where the `0.x` bumping
+rules are turned off so that `feat` means minor and `!` means major at every version.
 
-```sh
-python scripts/changelog.py next
-```
-
-Below `1.0.0` each part moves the one below it: a removal moves the minor, everything else moves
-the patch. A zero major version promises nothing, and `1.0.0` announces a stability that cannot be
-taken back, so it is not something a heading should trigger by accident.
-
-`scripts/prepare_release.py` offers that number and Enter takes it. `docs-check` holds the file's
-shape on every run (`DOC011`), because a heading in the wrong shape is no longer a typo — it is a
-version that comes out wrong, or a release that cannot be cut at all.
-
-### What you do
+Locally:
 
 ```sh
-python scripts/prepare_release.py
+python scripts/conventional_title.py "feat(tui): add a screen"
 ```
 
-It asks which version and what the release does in one line, then runs everything local in the
-only order that works: the version into the six files that carry it, the four documents into their
-places, the ten gates, the eleven checklist checks. It stops at the first refusal and says which
-step refused.
+### What happens after the merge
 
-One thing it deliberately leaves you: the prose. The documents arrive with their headings and a
-visible `TODO(2.9.0)` line wherever a human has to write something, and the script will not
-continue while one stands. A change record, a compatibility statement and a checklist entry are
-what someone reads to decide whether to upgrade; no command can write them, and a release that
-ships without them is a release nobody can assess.
+Release Please reads the accumulated commits on `main` and keeps **one** pull request open: the
+next version, the generated `CHANGELOG.md` entry, and the version written into `pyproject.toml`,
+`agent_artifacts/__init__.py` and this README. It updates that same pull request as more changes
+land, rather than asking anyone for a version-bump PR.
 
-When it finishes, three things are left and none of them is a gate:
+Merging it is the release: the tag and the GitHub Release are created, and the release run builds the wheel,
+verifies it against the tag and attaches it.
 
-1. Commit, push, open the pull request.
-2. Merge to `main`.
-3. **Actions → cut release → Run workflow → type the version.**
+Nothing merges that pull request for you. Automating the arithmetic is not automating the
+decision; auto-merge is a policy this repository has deliberately not turned on.
 
-### The same script, driven by an agent
+### What the release run proves
 
-Pass what a person would have typed and read a receipt instead of prose:
-
-```sh
-python scripts/prepare_release.py 2.9.0 --summary "One line about the release." --json
-```
-
-Both callers take the same path through the same steps — a JSON mode running different code is a
-JSON mode reporting a run nobody had. `stdout` carries exactly one document; everything the steps
-print goes to `stderr`. It never prompts where there is no terminal to prompt at, and never
-substitutes a default for an answer it could not get: a guessed version would set six files to a
-number nobody chose.
-
-Three exit codes, and the middle one is the interesting one:
-
-| Code | Meaning | What to do |
-|---|---|---|
-| `0` | prepared | commit, merge, press the button |
-| `3` | documents still hold placeholders | the receipt lists them by file and line — write them, run again |
-| `2` | a step failed | read `reason`; nothing already written was undone |
-
-`3` is separate from `2` on purpose. An unwritten changelog is a retry after work; a failing gate
-is a stop. One code for both teaches a caller to treat them the same.
-
-### What the button does
-
-In this order, writing nothing until every check has passed:
+Its subject is the artifact, not the source. The source was proven by the pull request that put it
+on `main`, and proving it again at the tag proves the same tree twice.
 
 | Step | Refuses when |
 |---|---|
-| Preconditions | the worktree is dirty, the source version does not match the tag, the notes are missing or empty, the tag already exists, or `HEAD` is not in `origin/main` |
-| Ten quality gates | any gate fails |
-| Eleven checklist checks | any check fails — four cover this repository, seven reconcile against the reference registry |
-| Tag and publish | — |
+| The tagged commit is in `main` | the tag names source no one reviewed |
+| Release checklist | schema freeze, system matrix, packaging, and the seven registry reconciliation checks |
+| Wheel build | the pinned `poetry-core` is not the one building it |
+| `scripts/release_artifact.py` | the wheel's filename, metadata version, project name or declared dependencies disagree with the tag, or the installed `aart` reports another version |
+| Attach and publish | — |
 
-A run therefore produces a tag and a release, or it produces neither. There is no half-published
-state to unpick by hand.
-
-Publishing the release fires `release.yml`, which builds the wheel and attaches it. That keeps one
-builder of release artifacts rather than two that can disagree. The release body carries the
-wheel's `sha256`, computed from the same tag, so a downloaded asset can be checked against it.
-
-### The same thing from a terminal
-
-The button is a trigger; the sequence lives in a script, so it runs anywhere:
+The last one is the one a pull request could not have run: the wheel did not exist yet.
 
 ```sh
-python scripts/cut_release.py 2.9.0 --registry /path/to/agent-artifacts-registry
+python scripts/release_artifact.py --tag v0.1.0
 ```
 
-With no registry checkout to hand:
+The seven registry checks are reported `skipped`, never `passed`, when no registry checkout is
+available. In CI that choice is one repository variable, `AART_REFERENCE_REGISTRY_URL` — set, the
+registry is cloned and reconciled against; unset, those checks are skipped. It has no default,
+because a default naming a github.com repository reproduces nothing on an instance that cannot
+reach it.
 
-```sh
-python scripts/cut_release.py 2.9.0 --without-registry
-```
+### One version, written by one thing
 
-The seven registry checks are then reported `skipped`, never `passed`, and the run says so. Typing
-the flag out is the point: a release that verifies less can only happen on purpose. In CI the same
-choice is made by one repository variable, `AART_REFERENCE_REGISTRY_URL` — set, the registry is
-cloned and reconciled against; unset, those checks are skipped. It has no default, because a
-default naming a github.com repository reproduces nothing on an instance that cannot reach it.
+`agent_artifacts/__init__.py` holds the only version literal. `runtime_contract.EXECUTABLE_VERSION`
+parses it, `pyproject.toml` and this README are rewritten by the release engine on the lines marked
+`x-release-please-version`, and nothing compares any of them to anything, because nothing can
+disagree.
 
 ### The workflow is read from the tag, not from `main`
 
-This is the part that catches people, and it caught us. GitHub loads workflow files from the ref
+This is the part that catches people. GitHub loads workflow files from the ref
 that triggered the run, so a release runs `release.yml` **as it was at the tag**. A fix merged to
 `main` after tagging is not in that run, and re-running the failed job replays the same commit
 rather than picking the fix up. Move the tag and publish again:
 
 ```sh
-git tag -f v2.9.0 main && git push -f origin v2.9.0
+git tag -f v0.1.0 main && git push -f origin v0.1.0
 ```
 
 Re-publishing is safe: the attach step replaces an asset of the same name instead of colliding

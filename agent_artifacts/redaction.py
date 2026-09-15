@@ -1,15 +1,14 @@
 """The one redactor for the package.
 
-There used to be two, with different rules, and the weaker one was the one `dump_setup_state` used
-— so a credentialed clone URL was hidden in a diagnostic and written to disk in full (`LAF-72`).
-Two implementations of a safety property is one implementation and one liability.
+Every boundary that hides credentials uses these rules. Two implementations of a safety property
+would be one implementation and one liability: the weaker one decides what reaches disk.
 
 This module lives at the leaf because both `setup.py` and `configuration.policy` need it and
 `setup.py` cannot import from `configuration`: the path
 `configuration -> protocol -> native_tree -> setup` closes the cycle.  It therefore imports nothing
 from the package, and must keep importing nothing, or the cycle comes back through this file.
 
-See `docs/design/DESIGN-token-containment.md`.
+See Product Specification §19 (secret-safety invariants).
 """
 
 from __future__ import annotations
@@ -31,7 +30,7 @@ _QUERY_SECRET_RE = re.compile(
 # `<VENDOR>_TOKEN` the position before `TOKEN` sits between two word characters, so no boundary
 # exists and no match is made: a bare `TOKEN=` redacted and every prefixed form did not.  The
 # prefixed forms are the ones real recipes use, so the boundary excluded exactly the cases that
-# mattered (`LAF-63`).
+# mattered.
 #
 # The names are written generically on purpose.  `scripts/validate.py` fails any module under
 # `agent_artifacts/` that contains a real credential variable name, because AART holds no
@@ -49,8 +48,8 @@ _ASSIGNMENT_SECRET_RE = re.compile(
 # Rules 1-3 all require the credential to sit next to its name.  A transcript that prints the value
 # alone on a line defeats every one of them.  Deliberately *not* entropy-based: a high-entropy
 # matcher would redact `sha256:` digests, image ids and plan hashes, which are the fields a receipt
-# exists to carry.  The cost of that choice is that an unrecognised credential format is not caught,
-# and `DESIGN-token-containment.md` §4.4 states the limit rather than hiding it.
+# exists to carry.  The cost of that choice is that an unrecognised credential format is not caught;
+# this comment states the limit rather than hiding it.
 _CREDENTIAL_SHAPE_RE = re.compile(
     r"(?:gh[pousr]_[A-Za-z0-9]{16,}"
     r"|github_pat_[A-Za-z0-9_]{20,}"
@@ -67,8 +66,8 @@ _PRIVATE_KEY_RE = re.compile(
 def redact_text(text: str) -> str:
     """Hide credentials in free text without interpreting the message.
 
-    Idempotent: ``redact_text(redact_text(x)) == redact_text(x)``, because the boundaries in
-    `DESIGN-token-containment.md` §4.2 apply it more than once on purpose.
+    Idempotent: ``redact_text(redact_text(x)) == redact_text(x)``, because several boundaries
+    apply it to the same text on purpose.
     """
 
     redacted = _PRIVATE_KEY_RE.sub("[redacted private key]", text)

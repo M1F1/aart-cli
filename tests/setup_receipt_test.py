@@ -1,4 +1,4 @@
-"""RR-1: the persisted setup record can be read from outside a run.
+"""The persisted setup record can be read from outside a run.
 
 Three absences get three sentences, because an operator holding a refusal needs to know which
 of them they are in: never installed, installed without setup, or a pointer whose target is
@@ -111,7 +111,7 @@ def test_an_uninstalled_coordinate_is_not_an_installation_without_setup() -> Non
 
     assert isinstance(located, Err)
     assert _codes(located) == {RECEIPT_NOT_INSTALLED.value}
-    assert _remediation(located), "a refusal with no remediation is the residue RS-09 records"
+    assert _remediation(located), "a refusal must name a next step"
 
 
 def test_an_installation_with_no_recorded_run_claims_only_what_the_state_proves() -> None:
@@ -222,5 +222,5 @@ def test_a_file_holding_no_single_bound_record_is_refused() -> None:
 
 
 # Collected by `unittest discover`, which sees `TestCase` subclasses and nothing
-# else; without this the functions above are imported and never run (`AD-41`).
+# else; without this the functions above are imported and never run.
 SetupReceiptTests = function_test_case(globals(), name="SetupReceiptTests")

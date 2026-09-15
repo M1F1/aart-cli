@@ -755,7 +755,14 @@ class InstallPlan:
             )
             or self.object_root != expected_object_root
             or (self.provenance is not None and not isinstance(self.provenance, InstallProvenance))
-            or self.source_health not in {"healthy", "stale", "degraded"}
+            # `could-not-check` is admitted for the reason Product Specification 165.11 gives: a
+            # registry that cannot be reached is shown as Offline and the Marketplace may keep
+            # using the last synced snapshot. That is the state `SyncDisposition.RETAINED` -- the
+            # explicit last-known-good fallback -- reports, and this plan pins the snapshot and the
+            # object it installs by digest, so it depends on nothing the failed check would have
+            # told it. What stays excluded is `missing` and `not-synchronized`: no snapshot, so
+            # nothing to install from.
+            or self.source_health not in {"healthy", "stale", "degraded", "could-not-check"}
             or not isinstance(self.source_age_seconds, int)
             or isinstance(self.source_age_seconds, bool)
             or self.source_age_seconds < 0

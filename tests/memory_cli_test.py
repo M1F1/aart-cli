@@ -1,4 +1,4 @@
-"""WP-30 tests: CLI/TUI surface for the `memory` artifact type.
+"""CLI/TUI surface for the `memory` artifact type.
 
 Pure wiring (mirrors cli_test.py): the marketplace handler is stubbed via ``cli.DISPATCH`` so
 we assert only that argv maps onto the right :class:`Request` fields — ``--memory-mode`` ->
@@ -13,7 +13,7 @@ import io
 import unittest
 from unittest.mock import patch
 
-from agent_artifacts import cli, tui
+from agent_artifacts import cli
 
 
 def _dispatch(argv, *, command, code=0):
@@ -48,7 +48,7 @@ class TestMemoryModeFlag(unittest.TestCase):
                 self.assertEqual(req.memory_mode, mode)
 
     def test_memory_mode_defaults_to_none(self):
-        # Absent flag -> None, so the planner applies the "prepend" default (DESIGN-memory §3.4).
+        # Absent flag -> None, so the planner applies the "prepend" default.
         _, req = _dispatch(
             ["marketplace", "install", "team/memory/house@1.0.0", "--profile", "claude"],
             command="marketplace",
@@ -81,12 +81,16 @@ class TestTypeFilterMemory(unittest.TestCase):
 
 
 class TestTuiKnowsMemory(unittest.TestCase):
-    def test_type_order_includes_memory(self):
-        self.assertIn("memory", tui._TYPE_ORDER)
+    def test_the_browsable_kinds_include_memory(self):
+        """Retargeted from the retired wizard's `tui._TYPE_ORDER`.
 
-    def test_memory_rank_is_stable(self):
-        # A defined rank, not the fall-through len() default reserved for unknown types.
-        self.assertEqual(tui._type_rank("memory"), tui._TYPE_ORDER.index("memory"))
+        The claim is unchanged -- a Memory is a first-class artifact kind an interface offers, not
+        a CLI-only one -- but the set that decides it now lives with the marketplace projection.
+        """
+
+        from agent_artifacts.tui_marketplace import _KINDS
+
+        self.assertIn("memory", _KINDS)
 
 
 if __name__ == "__main__":

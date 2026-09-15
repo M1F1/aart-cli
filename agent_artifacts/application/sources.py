@@ -234,7 +234,7 @@ class SourceFreshnessRequest:
             raise ValueError("source freshness request is invalid")
 
 
-def _failure(code: str, message: str, *remediation: str) -> Err:
+def _failure(code: str, message: str, *remediation: str, interactive: tuple[str, ...] = ()) -> Err:
     return Err(
         (
             Diagnostic(
@@ -242,6 +242,7 @@ def _failure(code: str, message: str, *remediation: str) -> Err:
                 Severity.ERROR,
                 redact_text(message),
                 remediation=tuple(remediation),
+                interactive=tuple(redact_text(item) for item in interactive),
             ),
         )
     )
@@ -336,6 +337,12 @@ def _sync_locked(
             "resolved source changed its declared source identity",
             f"review both identities with `aart source resubscribe --alias "
             f"{request.source.alias.value}`, then re-run it with --yes to adopt the change",
+            interactive=(
+                f"The origin behind {request.source.alias.value} now declares a different "
+                "identity, so this refresh was refused and the snapshot you already have is kept.",
+                "Compare the two identities and re-subscribe deliberately if the change is one "
+                "you meant to accept.",
+            ),
         )
         return _retained(changed_identity, current, request.fallback)
     published = ports.publish(
@@ -380,13 +387,36 @@ def sync_source(
     )
     if isinstance(lease, Err):
         return lease
-    outcome = _sync_locked(request, ports)
+    outcome = sync_source_while_locked(request, ports, lease.value)
     released = ports.release_lock(lease.value)
     if isinstance(released, Err):
         if isinstance(outcome, Err):
             return Err((*outcome.diagnostics, *released.diagnostics))
         return released
     return outcome
+
+
+def sync_source_while_locked(
+    request: SourceSyncRequest,
+    ports: SourceSyncPorts,
+    lease: SourceLockLease,
+) -> Result[SourceSyncOutcome]:
+    """Synchronize through a lease owned by a wider Source transaction.
+
+    Candidate reconciliation needs the same per-instance serialization as pointer publication.
+    The explicit lease prevents a caller from accidentally holding another Source's lock or from
+    nesting the ordinary :func:`sync_source` lock around that wider transaction.
+    """
+
+    if not request.source.enabled:
+        return _failure("source-invalid", "disabled source cannot be synchronized")
+    paths = source_store_paths(request.data_root, source_instance_id(request.source))
+    if not isinstance(lease, SourceLockLease) or lease.lock_directory != paths.lock_directory:
+        return _failure(
+            "source-lock-invalid",
+            "source synchronization lease does not belong to the configured Source instance",
+        )
+    return _sync_locked(request, ports)
 
 
 def discard_source(

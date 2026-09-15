@@ -153,8 +153,14 @@ def setup_review_value(plan: CanonicalSetupPlan) -> JsonObject:
 class CanonicalSetupPlan:
     request: SetupRequest
     installation: InstallationRecord
-    install_state_path: str
-    install_state_lock_path: str
+    #: The durable file that says this artifact is installed here, and the lock that guards it.
+    #: Named for what they are rather than for which store holds them: the legacy install-state
+    #: manifest for an install the legacy route made, and the canonical receipt for one the
+    #: configured seam made. The plan is bound to whichever it was reviewed against, and setup
+    #: persistence takes that lock -- so the record cannot move under a run that was authorized
+    #: against it.
+    installation_record_path: str
+    installation_record_lock_path: str
     trust: str
     trust_evidence_digest: ObjectDigest
     policy_digest: ObjectDigest
@@ -228,8 +234,8 @@ class CanonicalSetupPlan:
             or self.trust not in _TRUST
             or _SETUP_REF_RE.fullmatch(self.setup_state_ref) is None
             or self.setup_reference_owner != f"setup/{self.setup_state_ref}"
-            or not posixpath.isabs(self.install_state_path)
-            or not posixpath.isabs(self.install_state_lock_path)
+            or not posixpath.isabs(self.installation_record_path)
+            or not posixpath.isabs(self.installation_record_lock_path)
             or not posixpath.isabs(self.setup_state_path)
             or self.setup_state_path != expected_state_path
             or self.setup_state_precondition.path != self.setup_state_path

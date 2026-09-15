@@ -76,6 +76,7 @@ from agent_artifacts.registry_maintenance.planning import (
     plan_native_promotion,
     project_registry_mutation,
 )
+from agent_artifacts.registry_maintenance.promoted import is_promoted_registry
 from agent_artifacts.registry_maintenance.vendoring import (
     DeliveryFinding,
     LicenseFinding,
@@ -193,11 +194,12 @@ def _follow_up(
     changes: tuple[CurationChange, ...],
     action: CurationAction,
 ) -> tuple[str, ...]:
+    # `QA-014`: this does not lead with `git -C … diff -- <every reviewed path>`, which would repeat
+    # the path list the review has just printed and be the longest line in a successful run.
+    # `render_curation_review` already closes a mutating action with "AART will not commit or push;
+    # review the working-tree diff afterward" — the same instruction, without the repetition and
+    # without a shell command, which is also what keeps screen 46 free of one (`QA-017`).
     quoted = shlex.quote(workspace)
-    changed = tuple(item.path for item in changes if item.status != "unchanged")
-    diff = f"git -C {quoted} diff --"
-    if changed:
-        diff = f"{diff} {' '.join(shlex.quote(path) for path in changed)}"
     if action in {
         CurationAction.INIT,
         CurationAction.SCAFFOLD,
@@ -210,14 +212,12 @@ def _follow_up(
         CurationAction.REVENDOR,
     }:
         return (
-            diff,
             f"aart registry validate --source {quoted}",
             f"aart registry lock --source {quoted}",
             f"aart registry build --source {quoted}",
             f"aart registry audit --source {quoted}",
         )
     return (
-        diff,
         f"aart registry validate --source {quoted} --strict",
         f"aart registry audit --source {quoted}",
     )
@@ -434,15 +434,10 @@ class LocalCurationService:
         planned = prepare_registry_init(options, output=self.workspace)
         if isinstance(planned, Err):
             return planned
-        warnings: tuple[str, ...] = (
-            ()
-            if request.usage_reporting_repository is not None
-            else (
-                "usage reporting templates are inert because no destination was advertised; "
-                "re-run init with --usage-reporting-repository OWNER/REPOSITORY to enable "
-                "prompt-only registry routing",
-            )
-        )
+        # `QA-013`/`D-180`: init writes the usage-reporting templates only when a destination is
+        # named, so there is nothing inert to warn about. Warning that an unchosen optional
+        # feature was not chosen is a non-finding (`QA-015`), and the review is read in the TUI where a flag name is not an action.
+        warnings: tuple[str, ...] = ()
         # Two questions, two homes, and `init` owes the reader both.  *Which* AART is the
         # registry's own decision and is now pinned in a file it can review and revert; *where
         # this deployment gets it from* is a fact about the instance and stays in settings.
@@ -451,9 +446,10 @@ class LocalCurationService:
             "pull request and the gates run against the new version before it is merged",
             "where CI fetches that version from is a repository variable, first one set wins: "
             "AART_PACKAGE (package index), AART_WHEEL_URL (released wheel), AART_TOOL_PATH "
-            "(already on the runner), then AART_TOOL_URL (git clone). Setting none reaches "
-            "github.com, which an Enterprise instance cannot; set one on the organisation so it "
-            "configures every registry at once",
+            "(already on the runner), then AART_TOOL_URL (git clone). Setting none clones "
+            "M1F1/aart-cli from the instance the registry runs on, which fails wherever that "
+            "repository is absent or needs a login; set one on the organisation so it configures "
+            "every registry at once",
         )
         return Ok(self._workspace_review(request, planned.value, warnings=warnings))
 
@@ -564,7 +560,7 @@ class LocalCurationService:
 
         It always passes. AART is not qualified to adjudicate a licence, and a maintainer vendoring
         their own company's code has nothing to record; the obligation is to make the omission
-        visible rather than to block on it (design §7).
+        visible rather than to block on it.
         """
 
         recorded = request.artifact_license or finding.identifier
@@ -588,7 +584,7 @@ class LocalCurationService:
         Vendoring copies a subtree into the registry; installing an `mcp` merges one JSON object and
         copies nothing. A descriptor whose command names a file inside the payload names one that
         will not exist on any consumer machine, and a review that reported the copy while staying
-        silent about that would be describing a package nobody can start (`LAF-46`, design §7).
+        silent about that would be describing a package nobody can start.
         """
 
         details = [finding.note]
@@ -991,7 +987,7 @@ class LocalCurationService:
         if checked.disposition is NativeReferenceDisposition.UP_TO_DATE:
             # Two differing commits under `up-to-date` is the *normal* result of vendoring one
             # directory out of a monorepo, and it reads as a contradiction.  The line that
-            # reconciles them is printed where they are, not left in a docstring (`LAF-42`).
+            # reconciles them is printed where they are, not left in a docstring.
             details.append(
                 "the ref has not moved since this copy was taken"
                 if checked.resolved_commit == checked.recorded_commit
@@ -1039,7 +1035,7 @@ class LocalCurationService:
         if not integrity.value.matches:
             # Before the network, deliberately: nothing upstream says can make this copy the copy
             # its provenance describes, and re-vendoring over the difference would erase evidence
-            # the maintainer has not seen yet (design §5).
+            # the maintainer has not seen yet.
             return self._informational_review(
                 request,
                 current.value,
@@ -1065,7 +1061,7 @@ class LocalCurationService:
         if isinstance(acquired, Err):
             # An upstream that cannot be read is a disposition, not a crash: the maintainer needs to
             # be told their copy's provenance can no longer be checked, which is a different fact
-            # from the copy being current (design §6).
+            # from the copy being current.
             return self._informational_review(
                 request,
                 current.value,
@@ -1255,10 +1251,52 @@ class LocalCurationService:
             acquired.append(result.value)
         return Ok(tuple(acquired))
 
+    def _prepare_promoted_lock(
+        self,
+        request: CurationRequest,
+        snapshot: SourceSnapshot,
+    ) -> Result[PreparedCuration]:
+        """Lock over the approved representation, which has nothing left to resolve.
+
+        A lock pins what authored entries point at, and the approved representation has no authored
+        entries: every approval already carries the input, payload, canonical and object digests it
+        was reviewed against, and `validate` holds the registry to them. So this reports that and
+        writes nothing, rather than manufacturing the older workspace's lock file beside approvals
+        that never needed one (`B-057`).
+        """
+
+        digest = _snapshot_digest(snapshot)
+        if isinstance(digest, Err):
+            return digest
+        checks = (
+            CurationCheck(
+                "lock",
+                True,
+                ("approved versions are pinned by their own records; nothing to resolve",),
+            ),
+        )
+        review_digest = curation_review_digest(request.action, digest.value, (), checks, ())
+        return Ok(
+            PreparedCuration(
+                CurationReview(
+                    request.action,
+                    self.root,
+                    False,
+                    review_digest,
+                    digest.value,
+                    (),
+                    checks,
+                ),
+                _ReadOnlyPrepared(snapshot, checks),
+            )
+        )
+
     def _prepare_generated(self, request: CurationRequest) -> Result[PreparedCuration]:
         current = self._current()
         if isinstance(current, Err):
             return current
+        if request.action is CurationAction.LOCK and is_promoted_registry(current.value):
+            return self._prepare_promoted_lock(request, current.value)
         acquired = self._acquire_entries(current.value)
         if isinstance(acquired, Err):
             return acquired
@@ -1289,26 +1327,31 @@ class LocalCurationService:
         acquired = self._acquire_entries(current.value)
         if isinstance(acquired, Err):
             return acquired
-        locked = plan_registry_lock(
-            current.value,
-            acquired.value,
-            executable_version=_VERSION,
-            available_capabilities=_CAPABILITIES,
-        )
-        if isinstance(locked, Err):
-            return locked
-        locked_snapshot = project_registry_workspace_plan(current.value, locked.value)
-        if isinstance(locked_snapshot, Err):
-            return locked_snapshot
+        lock_plans: tuple[RegistryWorkspacePlan, ...] = ()
+        locked_snapshot_value = current.value
+        if not is_promoted_registry(current.value):
+            locked = plan_registry_lock(
+                current.value,
+                acquired.value,
+                executable_version=_VERSION,
+                available_capabilities=_CAPABILITIES,
+            )
+            if isinstance(locked, Err):
+                return locked
+            locked_snapshot = project_registry_workspace_plan(current.value, locked.value)
+            if isinstance(locked_snapshot, Err):
+                return locked_snapshot
+            lock_plans = (locked.value,)
+            locked_snapshot_value = locked_snapshot.value
         built = plan_registry_build(
-            locked_snapshot.value,
+            locked_snapshot_value,
             acquired.value,
             executable_version=_VERSION,
             available_capabilities=_CAPABILITIES,
         )
         if isinstance(built, Err):
             return built
-        published_snapshot = project_registry_workspace_plan(locked_snapshot.value, built.value)
+        published_snapshot = project_registry_workspace_plan(locked_snapshot_value, built.value)
         if isinstance(published_snapshot, Err):
             return published_snapshot
         validated = validate_registry_workspace(
@@ -1336,7 +1379,7 @@ class LocalCurationService:
         if failed:
             return _error("registry publish gate failed: " + "; ".join(failed))
         touched = {
-            str(change.path) for plan in (locked.value, built.value) for change in plan.changes
+            str(change.path) for plan in (*lock_plans, built.value) for change in plan.changes
         }
         files = {
             str(entry.path): entry
@@ -1360,7 +1403,9 @@ class LocalCurationService:
                 aggregate.value,
                 checks=(*_checks(validated.value), *_checks(audited.value)),
                 warnings=(
-                    "Publish runs lock, build, validate, and audit in that order over one reviewed snapshot.",
+                    "Publish runs lock, build, validate, and audit in that order over one reviewed snapshot."
+                    if lock_plans
+                    else "Publish builds, validates, and audits one reviewed snapshot; the approved records need no lock.",
                     "Finalizing commits every listed Git change in the registry checkout and never pushes.",
                 ),
             )

@@ -1,4 +1,4 @@
-"""AART 1.0 strict protocol primitives."""
+"""AART strict protocol primitives."""
 
 from .capabilities import Capability, CapabilityDecision, negotiate_capabilities, parse_capability
 from .hashing import TreeEntry, json_digest, parse_sha256, sha256_bytes, tree_digest

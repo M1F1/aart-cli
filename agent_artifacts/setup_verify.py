@@ -1,9 +1,8 @@
-"""RR-3: ask the world whether what a receipt claims is still true.
+"""Ask the world whether what a receipt claims is still true.
 
-The receipt is an honest record of what a run *reported*.  `LAF-55` is the case where that is
-not enough: `security add-generic-password -w` with no terminal exits 0 having stored nothing,
+The receipt is an honest record of what a run *reported*, and that is not always enough: `security add-generic-password -w` with no terminal exits 0 having stored nothing,
 so the run reports `configured`, the receipt records the step, and the Keychain is empty.  The
-only way to learn that is to ask the Keychain, and nothing asks it today.
+only way to learn that is to ask the Keychain, and only this module asks it.
 
 Two halves, separated on purpose.  `plan_verification` is pure: it reads a persisted record and
 decides which questions the receipt licenses, asking nothing.  `verify_claims` puts those
@@ -12,8 +11,8 @@ it never reports `true` for a question it did not ask, because a verifier that q
 what it cannot see is worse than no verifier.
 
 This module reports and never repairs.  An orphaned run directory is named and left; an emptied
-merge file is named and left.  Deciding when AART may delete something it may not own is the
-separate question `PLAN-subscription-identity-binding` recorded.
+merge file is named and left.  Deciding when AART may delete something it may not own is a
+separate question.
 """
 
 from __future__ import annotations
@@ -105,10 +104,9 @@ def plan_verification(record: SetupStateRecord) -> Tuple[Claim, ...]:
             continue
         module = str(step.get("module", ""))
         claims.extend(_claims_for_step(index, module, step))
-    # Asked of every record, including one with no steps: a record written before `RR-10A` may
-    # carry a credential that today's redactor would have caught, and the operator cannot know
-    # that without being told.  `RR-10A` fixes what is written from here on; this is how the fix
-    # reaches what is already on disk, without the fix editing it.
+    # Asked of every record, including one with no steps: a record on disk may carry a credential
+    # the redactor would catch, and the operator cannot know that without being told.  This reports
+    # it without editing the record.
     claims.append(
         Claim(
             index=0,
@@ -118,10 +116,10 @@ def plan_verification(record: SetupStateRecord) -> Tuple[Claim, ...]:
             arguments={"record": _record_text(record)},
         )
     )
-    # `LAF-73`: the record's own instruction to the operator, checked against the command surface
-    # of the executable reading it.  A record written before `2.6.0` says no undo exists, and the
-    # same executable ships one.  Nothing rewrites the field — this is how the reader stops
-    # repeating it without the writer touching evidence.
+    # The record's own instruction to the operator, checked against the command surface
+    # of the executable reading it.  A record can name an undo line this executable does not accept.
+    # Nothing rewrites the field — this is how the reader stops repeating it without the writer
+    # touching evidence.
     if record.rollback_command:
         claims.append(
             Claim(
@@ -164,7 +162,7 @@ def verify_claims(
 
 
 def verification_payload(results: Sequence[ClaimResult]) -> dict:
-    """The one value both `--json` and the text renderer read, as `RR-2A` requires."""
+    """The one value both `--json` and the text renderer read."""
 
     return {
         "claims": [
@@ -275,7 +273,7 @@ def _verify(claim: Claim, probes: VerificationProbes) -> ClaimResult:
             return result(UNKNOWN, "the Keychain could not be asked")
         if held:
             return result(TRUE, "the item exists and holds a value")
-        # `LAF-55` in one sentence, at the moment it becomes visible.
+        # A Keychain step that stored nothing, in one sentence, at the moment it becomes visible.
         return result(
             FALSE,
             "the item is missing or empty; a Keychain step run without a terminal "
@@ -305,7 +303,7 @@ def _verify(claim: Claim, probes: VerificationProbes) -> ClaimResult:
             return result(UNKNOWN, "the run directory could not be read")
         if not orphans:
             return result(TRUE, "no working copy was left behind")
-        # `LAF-61`: reported, named, and left exactly where it is.
+        # Reported, named, and left exactly where it is.
         return result(
             FALSE,
             f"{len(orphans)} working copy left by an interrupted run, not removed: "
@@ -318,7 +316,7 @@ def _verify(claim: Claim, probes: VerificationProbes) -> ClaimResult:
             return result(UNKNOWN, "this executable's command surface could not be asked")
         if accepted:
             return result(TRUE, "this executable accepts the recorded rollback command")
-        # `LAF-73`, at the moment it becomes visible.  The recorded line is not echoed back: it is
+        # A stale rollback line, at the moment it becomes visible.  The recorded line is not echoed back: it is
         # the wrong instruction, and repeating it is what this claim exists to stop.
         return result(
             FALSE,

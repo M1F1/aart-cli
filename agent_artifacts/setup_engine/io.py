@@ -98,8 +98,8 @@ class LocalSetupAdapter(LocalInstallAdapter, SetupApplyPorts):
         wrote_setup = False
         wrote_install = False
         try:
-            with _lock(Path(plan.install_state_lock_path)):
-                state = self.read_state(plan.install_state_path)
+            with _lock(Path(plan.installation_record_lock_path)):
+                state = self.read_state(plan.installation_record_path)
                 if not isinstance(state, Ok) or state.value is None:
                     return _error("installed payload state is unavailable during setup persistence")
                 current_installation = _selected(state.value, plan)
@@ -110,7 +110,7 @@ class LocalSetupAdapter(LocalInstallAdapter, SetupApplyPorts):
                 if current_installation not in expected_installations:
                     return _error("installed payload changed before setup persistence")
                 setup_before_result = self.inspect_path(plan.setup_state_path)
-                install_before_result = self.inspect_path(plan.install_state_path)
+                install_before_result = self.inspect_path(plan.installation_record_path)
                 references = self.read_references(ReferenceReadRequest(plan.object_store_paths))
                 if (
                     not isinstance(setup_before_result, Ok)
@@ -165,7 +165,7 @@ class LocalSetupAdapter(LocalInstallAdapter, SetupApplyPorts):
                 )
                 wrote_setup = True
                 _write_atomic(
-                    Path(plan.install_state_path),
+                    Path(plan.installation_record_path),
                     install_state_bytes(replacement_state),
                 )
                 wrote_install = True

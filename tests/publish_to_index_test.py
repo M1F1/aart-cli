@@ -19,7 +19,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import mock
 
-from tests.versioning_test import _load_script
+from tests.script_fixtures import load_script as _load_script
 
 publish_to_index = _load_script("publish_to_index")
 

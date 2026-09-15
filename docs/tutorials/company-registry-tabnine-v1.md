@@ -1,15 +1,15 @@
 # Standing up your first company registry, for Tabnine
 
 From an empty Git repository to a colleague running `aart marketplace install` and finding the
-skill in their `.tabnine/` directory. Every command below was executed against AART `2.6.1` before
-this document was written; the outputs quoted are real. Where something was not walked, it says so.
+skill in their `.tabnine/` directory. Every command below was executed before this document was
+written; the outputs quoted are real. Where something was not walked, it says so.
 
 The examples use `company` as the registry id and `tabnine` as the profile throughout. Substitute
 your own registry id; keep the profile.
 
 **What you need**
 
-- AART `2.6.1` or later on your machine. `aart --version` must print it.
+- AART installed on your machine. `aart --version` must print a version.
 - A Git host you can push to — GitHub Enterprise, GitHub, anything reachable over HTTPS or SSH.
 - Somewhere to put a new repository, and permission to create it.
 - The URL of at least one existing company repository that holds material worth sharing. It does
@@ -26,17 +26,17 @@ prompt, AART works, and if it does not, fix it in Git.
 
 ## 1. Create the registry repository
 
-Create an empty repository on your Git host — call it `agent-artifacts-registry` — then clone it:
+Create an empty repository on your Git host — call it `agent-registry` — then clone it:
 
 ```sh
-git clone https://ghe.company.example/platform/agent-artifacts-registry.git
-cd agent-artifacts-registry
+git clone https://ghe.company.example/platform/agent-registry.git
+cd agent-registry
 ```
 
 If you would rather start locally and add the remote later:
 
 ```sh
-mkdir agent-artifacts-registry && cd agent-artifacts-registry
+mkdir agent-registry && cd agent-registry
 git init -b main .
 ```
 
@@ -54,12 +54,12 @@ it. Look at the first output before you type the second.
 
 ```sh
 aart registry init --source . --source-id company --display-name "Company AART Registry" \
-  --usage-reporting-repository platform/agent-artifacts-registry
+  --usage-reporting-repository platform/agent-registry
 ```
 
 ```text
 Review canonical Maintainer action: init
-  Workspace: /path/to/agent-artifacts-registry
+  Workspace: /path/to/agent-registry
   Review digest: sha256:209d2da8…
   Mutation: yes, only on Finalize
   - added: .gitignore
@@ -74,7 +74,7 @@ Review canonical Maintainer action: init
 
 ```sh
 aart registry init --source . --source-id company --display-name "Company AART Registry" \
-  --usage-reporting-repository platform/agent-artifacts-registry --yes
+  --usage-reporting-repository platform/agent-registry --yes
 ```
 
 `--source-id` is the identity every artifact coordinate starts with — your colleagues will type
@@ -91,7 +91,7 @@ and `.mcp.json`), so an acceptance install inside the checkout does not pollute 
 The marker it writes declares which AART versions may read this registry:
 
 ```json
-{"requires_aart": {"min_inclusive": "2.6.1", "max_exclusive": "3.0.0"}, …}
+{"requires_aart": {"min_inclusive": "0.1.0", "max_exclusive": "1.0.0"}, …}
 ```
 
 The default is derived from the AART you ran, so it always contains it. Widen it with
@@ -372,7 +372,7 @@ cd ~/work/some-project
 aart source add \
   --alias company \
   --kind registry-git \
-  --location https://ghe.company.example/platform/agent-artifacts-registry.git \
+  --location https://ghe.company.example/platform/agent-registry.git \
   --ref main \
   --default
 ```
@@ -389,7 +389,7 @@ aart marketplace list
 ```
 
 ```text
-source company [healthy] registry-git https://ghe.company.example/platform/agent-artifacts-registry.git
+source company [healthy] registry-git https://ghe.company.example/platform/agent-registry.git
 company/guideline/branch-conventions@1.0.0 [healthy] How we name and merge branches. origin=https://ghe.company.example/platform/shared-tools.git@3706c2a…:packages/branch-conventions
 company/skill/release-evidence@1.0.0 [healthy] Evidence checklist for a release. origin=https://ghe.company.example/platform/shared-tools.git@3706c2a…:packages/release-evidence
 ```
@@ -485,7 +485,7 @@ installed separately, is untouched.
 
 ## What was verified, and how
 
-Every command in sections 1–8 was executed against a wheel built from AART `2.6.1` and installed
+Every command in sections 1–8 was executed against a wheel built from this repository and installed
 into a throwaway virtual environment, with a sandboxed `HOME`, on `2026-08-16`. The registry, the
 consumer project and the upstream repository were real Git repositories; nothing was faked,
 patched, or mocked. The vendoring examples were walked against a real public repository over HTTPS,
@@ -503,9 +503,7 @@ Two things are **not** verified and are marked where they appear:
 
 ## Where to read more
 
-- [Registry vendoring, in depth](../design/DESIGN-registry-vendoring.md) — why vendoring exists and
-  what it guarantees.
-- [Keeping a vendored copy honest](../design/DESIGN-vendored-copy-integrity.md) — what drift
-  detection actually checks.
+- [Vendoring foreign content](vendoring-v1.md) — why vendoring exists, what it guarantees, and what
+  drift detection actually checks.
 - [The registry protocol](../protocol/registry-v1.md) — the file formats, if you are automating
   against them.

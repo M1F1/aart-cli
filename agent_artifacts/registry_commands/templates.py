@@ -24,7 +24,7 @@ usage-dashboard/
 # run, so a registry created inside a company is configured by settings rather than by editing the
 # file.  That matters more than it looks: `plan_registry_init` refuses to overwrite a template
 # whose content differs, so a hand-edited workflow puts a registry permanently out of step with
-# the command that manages it.  `docs/ci/enterprise-fork-v1.md` lists the variables.
+# the command that manages it.  `docs/ci/github-enterprise-rollout.md` lists the variables.
 #
 # The three workflows share one way of reaching the tool, kept here so they cannot drift apart.
 # AART has no runtime dependencies and ships `agent_artifacts/__main__.py`, so *any* directory
@@ -36,7 +36,7 @@ _PROVIDE_AART = b"""      - name: Provide AART
           PACKAGE: ${{ vars.AART_PACKAGE }}
           WHEEL_URL: ${{ vars.AART_WHEEL_URL }}
           TOOL_PATH: ${{ vars.AART_TOOL_PATH }}
-          TOOL_URL: ${{ vars.AART_TOOL_URL || format('{0}/{1}.git', github.server_url, vars.AART_REPOSITORY || 'M1F1/agent-artifacts') }}
+          TOOL_URL: ${{ vars.AART_TOOL_URL || format('{0}/{1}.git', github.server_url, vars.AART_REPOSITORY || 'M1F1/aart-cli') }}
           TOOL_REF: ${{ vars.AART_REF }}
           INDEX_URL: ${{ vars.AART_PIP_INDEX_URL || 'https://pypi.org/simple' }}
           INDEX_CREDENTIALS: ${{ secrets[vars.AART_PIP_INDEX_CREDENTIALS_SECRET] }}
@@ -186,7 +186,71 @@ def _job(job_id: bytes, body: bytes, header: bytes = b"", when: bytes = b"") -> 
     return b"".join(emitted)
 
 
-REGISTRY_CI_WORKFLOW = b"""name: AART registry quality
+def _aggregate(job_id: bytes) -> bytes:
+    """The one job name branch protection can require, over a job `_job` emitted in two shapes.
+
+    Neither shape is requirable on its own. Each is a matrix, so the name GitHub reports carries a
+    matrix value; and only one of the two ever runs, so a rule naming the shape a deployment does
+    not use would wait forever -- except that GitHub counts a skipped required check as
+    *satisfied*, so it would not wait at all. It would pass, having proven nothing. This job's name
+    is the same on every instance and in every configuration (INV-077).
+
+    `if: always()` is what makes it a gate rather than a formality: without it a skipped or failed
+    dependency skips this job too, and the rule is satisfied again for the same reason.
+
+    It runs no Python and pulls no image. The job branch protection depends on must not be able to
+    fail for a reason that has nothing to do with the gates.
+    """
+
+    return b"".join(
+        (
+            b"  ",
+            job_id,
+            b"-gate:\n    if: always()\n    needs: [",
+            job_id,
+            b", ",
+            job_id,
+            b"-private-image]\n",
+            _RUNS_ON,
+            b"""    steps:
+      - name: Report the gate results
+        shell: bash
+        env:
+          PLAIN: ${{ needs.""",
+            job_id,
+            b""".result }}
+          PRIVATE: ${{ needs.""",
+            job_id,
+            b"""-private-image.result }}
+        run: |
+          set -euo pipefail
+          echo "plain:         $PLAIN"
+          echo "private-image: $PRIVATE"
+
+          # Exactly one arm is meant to run; the other stands down by its own `if:`.  Both skipped
+          # means the gates never ran at all -- a broken condition, an image variable set to
+          # something unexpected -- and that must fail rather than look like a pass.
+          if [ "$PLAIN" = "skipped" ] && [ "$PRIVATE" = "skipped" ]; then
+            echo "::error::neither gate job ran; check AART_IMAGE_USERNAME_SECRET" >&2
+            exit 1
+          fi
+          # An allowlist rather than a check for "failure": a cancelled run is neither success nor
+          # failure and proves nothing, and any result GitHub adds later should stop this gate
+          # rather than slip through it.
+          for result in "$PLAIN" "$PRIVATE"; do
+            case "$result" in
+              success|skipped) ;;
+              *) echo "::error::a gate job reported '$result'" >&2; exit 1 ;;
+            esac
+          done
+          echo "all gates passed"
+""",
+        )
+    )
+
+
+REGISTRY_CI_WORKFLOW = (
+    b"""name: AART registry quality
 on:
   pull_request:
   push:
@@ -194,26 +258,29 @@ on:
 permissions:
   contents: read
 jobs:
-""" + _job(
-    b"registry-quality",
-    header=b"""    strategy:
+"""
+    + _job(
+        b"registry-quality",
+        header=b"""    strategy:
       fail-fast: false
       matrix:
         compatibility: [minimum, latest]
 """,
-    body=b"""    steps:
+        body=b"""    steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
 """
-    + _PROVIDE_AART
-    + b"""      - run: aart registry format --source . --check
+        + _PROVIDE_AART
+        + b"""      - run: aart registry format --source . --check
       - run: aart registry validate --source . --strict --frozen
       - run: aart registry lock --source . --check
       - run: aart registry build --source . --check
       - run: aart registry audit --source .
       - run: aart registry test --source . --compatibility ${{ matrix.compatibility }}
 """,
+    )
+    + _aggregate(b"registry-quality")
 )
 USAGE_REPORT_ISSUE_FORM = b"""name: AART redacted usage report
 description: Share one voluntary, bounded AART session result with this registry.
@@ -337,7 +404,7 @@ REPORTING_TEMPLATES = (
 # is supposed to change is the one that puts the registry out of step with the command managing it.
 _REGISTRY_README = b"""# __DISPLAY_NAME__
 
-An [agent-artifacts](https://github.com/M1F1/agent-artifacts) registry. It holds packaged
+An [AART](https://github.com/M1F1/aart-cli) registry. It holds packaged
 artifacts - skills, agents, commands, MCP servers, memory and guidelines - that AART installs into
 a consumer project.
 
@@ -354,7 +421,7 @@ Its registry id is `__REGISTRY_ID__`. Consumers name it when they add this regis
 | `collections/` | Named groups of artifacts installed together |
 | `aart.lock.json` | Resolved, pinned contents. Generated - never edited by hand |
 | `aart.index.json` | The published index consumers read. Generated |
-| `.github/workflows/` | The quality gate, and the usage-reporting pair |
+| `.github/workflows/` | The quality gate, and the usage-reporting pair if this registry offers it |
 
 The JSON files and the workflows are **managed**: AART regenerates them and refuses to run against
 a copy that was hand-edited. This README is not managed. Edit it freely.
@@ -405,12 +472,12 @@ Two separate questions, kept in two separate places.
 
 ```
 .aart-version
-2.8.5
+0.1.0
 ```
 
 Bump it in a pull request. The gates then run against the new version **before** the change is
 merged, so a version that breaks this registry fails in review rather than after. `git blame`
-answers "when did we move to 2.9.0", and a bad bump is one `git revert` away. None of that is
+answers "when did we move to 0.2.0", and a bad bump is one `git revert` away. None of that is
 possible when the version lives in a settings page.
 
 The version is also **proved, not just claimed**. After fetching, CI compares `aart --version`
@@ -426,7 +493,7 @@ wins**, and they are never combined:
 | 1 | `AART_PACKAGE` | `aart-cli=={version}` | `pip` from `AART_PIP_INDEX_URL` |
 | 2 | `AART_WHEEL_URL` | `https://host/.../v{version}/aart_cli-{version}-py3-none-any.whl` | fetch, then unzip |
 | 3 | `AART_TOOL_PATH` | `/opt/aart` | Already on the runner |
-| 4 | `AART_TOOL_URL` | `https://ghe.corp/platform/agent-artifacts.git` | `git clone` at `v` + the pin |
+| 4 | `AART_TOOL_URL` | `https://ghe.corp/platform/aart-cli.git` | `git clone` at `v` + the pin |
 
 `{version}` is replaced with whatever `.aart-version` says, so the version appears **once**, in
 Git, and never in a settings page. Set `AART_REF` to override the pin for one registry - the run
@@ -437,8 +504,9 @@ The order runs from the most governed supply chain to the least. That matters wh
 stand up an internal index later, set `AART_PACKAGE`, and it takes over. You do not have to unset
 anything first.
 
-**Set none of them** and CI reaches `github.com`. On a GitHub Enterprise instance that fails on the
-first run, loudly, which is the intended behaviour.
+**Set none of them** and CI clones `M1F1/aart-cli` from the instance this registry runs on. Where
+that repository does not exist, or needs a login the runner does not have, the first run fails
+loudly, which is the intended behaviour.
 
 **Set them on the organisation, not here.** GitHub resolves a repository variable over an
 organisation one, so one organisation variable configures every registry your company has, and any
@@ -447,7 +515,7 @@ single registry can still override it.
 Which arm actually answered is printed by the run:
 
 ```
-AART: aart-cli 2.8.5  via index https://nexus.corp/pypi/simple (aart-cli==2.8.5)
+AART: aart-cli 0.1.0  via index https://nexus.corp/pypi/simple (aart-cli==0.1.0)
 ```
 
 ### The other variables
@@ -455,13 +523,24 @@ AART: aart-cli 2.8.5  via index https://nexus.corp/pypi/simple (aart-cli==2.8.5)
 | Variable | Default | What it does |
 |---|---|---|
 | `AART_PIP_INDEX_URL` | `https://pypi.org/simple` | Index used by `AART_PACKAGE` |
-| `AART_REPOSITORY` | `M1F1/agent-artifacts` | `owner/name` of the AART fork, combined with this instance's own URL |
+| `AART_REPOSITORY` | `M1F1/aart-cli` | `owner/name` of the AART repository, combined with this instance's own URL |
 | `AART_REF` | `v` + the pin | Escape hatch: a branch or tag instead of `.aart-version`. Switches the version check off |
 | `AART_RUNNER` | `["ubuntu-latest"]` | JSON array of runner labels. Must be JSON, not a bare word |
 | `AART_CI_IMAGE` | unset | Container image for the jobs. Unset means the runner's own environment |
 | `AART_PYTHON` | `python3` | The interpreter's name inside that image |
 | `AART_GH_HOST` | derived | Only needed if your instance is served on a path or a non-default port |
 | `AART_PAGES` | unset | Set to `false` where the instance offers no GitHub Pages. The dashboard is still built, only publication is skipped |
+
+## Protecting `main`
+
+Require one status check: **`registry-quality-gate`**.
+
+Do not require the gate jobs themselves. Each is a matrix, so the name GitHub reports carries a
+compatibility arm, and the quality job is emitted in two container shapes of which only one ever
+runs on your instance. A rule naming the shape you do not use would never be satisfied - except
+that GitHub counts a *skipped* required check as satisfied, so it would pass, having proven
+nothing. `registry-quality-gate` has the same name in every configuration, runs whatever its
+dependencies did, and fails if any arm failed or if no arm ran at all.
 
 ## The version window
 
@@ -473,17 +552,43 @@ That is a different statement from `.aart-version`. The window says which versio
 claims to work with; the pin says which single version CI actually runs. Keep the pin inside the
 window - a pin outside it is a registry contradicting itself.
 
-## Usage reporting
+__REPORTING__"""
+
+
+#: What the README says about usage reporting when the registry offers it.
+_README_REPORTING = b"""## Usage reporting
 
 The two `aart-usage-*` workflows accept voluntary, redacted usage reports as GitHub Issues and
 build a dashboard from the ones that validate. Reports carry no credentials, paths or repository
 names. Delete both workflows and the issue template if you do not want them.
 """
 
+#: And what it says when nobody asked for it: how to turn it on, not how to delete it.
+_README_NO_REPORTING = b"""## Usage reporting
 
-def render_registry_readme(registry_id: str, display_name: str) -> bytes:
-    """The one generated file a maintainer owns after it is written."""
+This registry does not collect usage reports, so no issue template or reporting workflow was
+generated. To offer the service, re-run `registry init` in a fresh workspace with
+`--usage-reporting-repository owner/name`; reports are voluntary and redacted, and carry no
+credentials, paths or repository names.
+"""
 
-    return _REGISTRY_README.replace(b"__DISPLAY_NAME__", display_name.encode("utf-8")).replace(
+
+def render_registry_readme(
+    registry_id: str,
+    display_name: str,
+    *,
+    usage_reporting: bool = False,
+) -> bytes:
+    """The one generated file a maintainer owns after it is written.
+
+    Its usage-reporting section describes the registry that was actually created (B-087).  A
+    README telling a maintainer to "delete both workflows" that were never written is a document
+    disagreeing with the tree beside it, which is how a generated file stops being read at all.
+    """
+
+    body = _REGISTRY_README.replace(
+        b"__REPORTING__", _README_REPORTING if usage_reporting else _README_NO_REPORTING
+    )
+    return body.replace(b"__DISPLAY_NAME__", display_name.encode("utf-8")).replace(
         b"__REGISTRY_ID__", registry_id.encode("utf-8")
     )

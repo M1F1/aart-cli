@@ -167,7 +167,22 @@ class MarketplaceArtifactRow:
 
     @property
     def compatible(self) -> bool:
-        return all(item.compatible for item in self.compatibility)
+        """Whether at least one measured harness is an eligible installation target.
+
+        The machine may detect harnesses an artifact does not declare. Those profiles are useful
+        evidence on Details, but they are not requested targets and cannot make an otherwise
+        installable artifact unavailable (D-260).
+        """
+
+        return bool(self.eligible_harnesses)
+
+    @property
+    def eligible_harnesses(self) -> tuple[str, ...]:
+        return tuple(item.profile for item in self.compatibility if item.compatible)
+
+    @property
+    def unavailable_harnesses(self) -> tuple[str, ...]:
+        return tuple(item.profile for item in self.compatibility if not item.compatible)
 
     @property
     def coordinate(self) -> ArtifactCoordinate:
@@ -329,7 +344,7 @@ def project_marketplace_rows(
             continue
         artifact = item.artifact.artifact
         compatibility = _compatibility(item, target)
-        compatible = all(decision.compatible for decision in compatibility)
+        compatible = any(decision.compatible for decision in compatibility)
         assert item.source.resolved_revision is not None
         rows.append(
             MarketplaceArtifactRow(
@@ -516,7 +531,10 @@ def render_artifact_detail(row: MarketplaceArtifactRow) -> Tuple[str, ...]:
         else f"{security.evidence_age_seconds}s old"
     )
     harness = tuple(
-        (item.profile, "compatible" if item.compatible else _harness_reason(item))
+        (
+            item.profile,
+            "eligible" if item.compatible else "detected, " + _harness_reason(item),
+        )
         for item in row.compatibility
     )
     remediation = security.remediation or ("none recorded",)
@@ -550,7 +568,7 @@ def render_artifact_detail(row: MarketplaceArtifactRow) -> Tuple[str, ...]:
             ),
         )
     )
-    lines.extend(_detail_section("harness", harness))
+    lines.extend(_detail_section("installation harnesses", harness))
     lines.extend(
         _detail_section(
             "install",

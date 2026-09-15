@@ -1,8 +1,7 @@
-"""SI-7 contracts: the uninstall that empties a scope leaves the repository as it found it.
+"""The uninstall that empties a scope leaves the repository as it found it.
 
-`LAF-17` failed twice by hand — a checkout that was clean before an install was dirty after
-uninstalling everything, because the emptied manifest, its lock, and the harness directories the
-install created all survived.  The assertions here are the ones that run was making with `git
+A checkout that was clean before an install must be clean after uninstalling everything: the
+emptied manifest, its lock, and the harness directories the install created must not survive.  The assertions here are the ones that run was making with `git
 status --porcelain`, plus the boundary that keeps the reclamation honest: a directory holding
 anything the install did not put there is never removed.
 """

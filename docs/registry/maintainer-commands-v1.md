@@ -2,13 +2,13 @@
 
 `aart registry` turns a local Git checkout into a canonical, reviewable AART registry. Ordinary
 mutations stop after reviewed managed-file writes. The explicit `publish --yes` workflow validates,
-audits, and commits every listed Git change; no registry command pushes.
+audits, and commits every listed Git change. Only `push` touches a remote, and only a review branch.
 
 ## Command contract
 
 | Command | Effect | Purpose |
 |---|---|---|
-| `init` | writes | Add protocol markers, registry CI, and inert optional-reporting templates |
+| `init` | writes | Add protocol markers, `.aart-version`, a README, registry CI, and — with `--usage-reporting-repository` — the usage-reporting templates |
 | `scaffold` | writes | Add one canonical native artifact manifest and starter payload |
 | `format` | writes, or reads with `--check` | Canonicalize every managed JSON document |
 | `validate` | reads | Validate protocol, compatibility, lock/index, native packages, and graph |
@@ -16,8 +16,14 @@ audits, and commits every listed Git change; no registry command pushes.
 | `build` | writes, or reads with `--check` | Compile the payload-free marketplace index from owned and locked artifacts |
 | `audit` | reads | Check review, provenance, setup, license, and currently available risk evidence |
 | `publish` | writes and commits with `--yes` | Plan lock/build, validate/audit the projection, list all Git paths, and create one commit without pushing |
+| `push` | pushes | Push the reviewed commit to a named branch; the remote's default branch is refused |
 | `test` | reads | Validate the registry at its minimum and/or a supplied latest compatible version |
 | `diff` | reads | Show deterministic canonical-format drift without changing the checkout |
+
+The authoring commands that bring content in — `scan`, `promote`, `adopt`, `check-upstream`,
+`discover`, `promote-native`, `refresh-native`, `vendor`, `vendor-batch`, `revendor` and
+`collection` — follow the same review-then-`--yes` boundary; `aart registry ACTION --help` states
+each one's inputs.
 
 Mutation requires a writable real directory containing `.git` (a directory or worktree gitfile).
 Managed symlinks and special files are rejected. Writes use exact snapshot and per-file digest
@@ -33,30 +39,30 @@ and `1` when drift exists. They never apply their plan. Human output describes e
 Start from an empty Git checkout:
 
 ```console
-git init company-agent-artifacts-registry
-aart registry init --source company-agent-artifacts-registry \
-  --source-id company-registry --display-name "Company Agent Artifacts" \
-  --usage-reporting-repository acme/company-agent-artifacts-registry
+git init company-registry
+aart registry init --source company-registry \
+  --source-id company-registry --display-name "Company Registry" \
+  --usage-reporting-repository acme/company-registry
 ```
 
-The generated workflow checks out AART into an isolated `.aart-tool` directory and installs it from
-that local checkout with `pip --no-deps`; it does not require PyPI or Nexus. `AART_REPOSITORY` and
-`AART_REF` repository variables can select a reviewed company mirror/ref and otherwise default to
-`M1F1/agent-artifacts` at `main`. It then runs format, strict/frozen validation, lock, build, audit,
-and minimum/latest compatibility checks. The workflow has read-only repository permissions and
-contains no commit or push step.
+The generated quality workflow puts the AART version pinned in `.aart-version` on the runner — from
+an index, a wheel, a path or a Git clone, chosen by repository variables — and proves the version
+it got matches the pin. It then runs format, strict/frozen validation, lock, build, audit, and
+minimum/latest compatibility checks. The workflow has read-only repository permissions and contains
+no commit or push step. [Rolling out AART on GitHub Enterprise Server](../ci/github-enterprise-rollout.md)
+lists the variables.
 
-Initialization also adds the usage-report Issue Form, validation workflow, and aggregation/Pages
-workflow. `--usage-reporting-repository OWNER/REPOSITORY` advertises those templates to consumers;
-without it Review explicitly says that the templates are inert. An effective AART configuration
-must still select this registry alias and choose `prompt` or `automatic`. Their untrusted-input and
+`--usage-reporting-repository OWNER/REPOSITORY` also adds the usage-report Issue Form, its
+validation workflow and the aggregation/Pages workflow, and advertises that repository to
+consumers. An effective AART configuration must still select this registry alias and choose
+`prompt` or `automatic`. Their untrusted-input and
 privacy contract is documented in
 [`optional usage reporting v1`](../reporting/usage-reporting-v1.md).
 
 Create a package with an explicit compatibility and installation contract:
 
 ```console
-aart registry scaffold --source company-agent-artifacts-registry skill review-python \
+aart registry scaffold --source company-registry skill review-python \
   --summary "Review Python changes against the company checklist." \
   --profile codex --profile tabnine --platform darwin --platform linux \
   --install-scope project --install-mode copy
@@ -83,8 +89,8 @@ unknown risk remains an explicit review warning. The stdlib-only baseline is doc
 [`baseline-v1.md`](../security/baseline-v1.md), and the registry evidence layout is documented in
 [`attestations-v1.md`](../security/attestations-v1.md).
 
-## Retired inputs
+## Other catalog formats
 
-Legacy catalogs and retired setup recipes are not accepted or translated by registry commands.
-Re-author the other repository to the native package contract first, then use
-`promote-native` to review and pin that canonical package.
+Registry commands accept only the native package contract; other catalog layouts are not
+translated. Re-author the other repository as a native source and use `promote-native`, or copy
+its content in with `vendor`, which records provenance.

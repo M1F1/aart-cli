@@ -1,4 +1,4 @@
-"""RR-2: `marketplace receipt show` renders the persisted record.
+"""`marketplace receipt show` renders the persisted record.
 
 The parity test here is structural rather than a list of field names: it walks the payload
 `--json` emits and requires each value to appear in the text. A field added to the receipt and
@@ -147,5 +147,5 @@ def test_a_credential_shaped_detail_in_a_step_is_redacted() -> None:
 
 
 # Collected by `unittest discover`, which sees `TestCase` subclasses and nothing
-# else; without this the functions above are imported and never run (`AD-41`).
+# else; without this the functions above are imported and never run.
 SetupReceiptShowTests = function_test_case(globals(), name="SetupReceiptShowTests")

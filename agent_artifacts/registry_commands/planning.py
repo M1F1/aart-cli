@@ -6,6 +6,10 @@ from collections import Counter
 from dataclasses import dataclass, replace
 from typing import cast
 
+from agent_artifacts.application.promotion import (
+    read_registry_version_records,
+    registry_catalog_entries,
+)
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.identifiers import ArtifactIdentity, ObjectDigest, SourceId
 from agent_artifacts.domain.result import Err, Ok, Result
@@ -79,6 +83,7 @@ from agent_artifacts.registry_maintenance.planning import (
     registry_native_content,
     resolve_native_acquisition,
 )
+from agent_artifacts.registry_maintenance.promoted import is_promoted_registry
 from agent_artifacts.registry_maintenance.vendoring import (
     VENDOR_IMPORTER_ID,
     CopyIntegrity,
@@ -125,13 +130,13 @@ from .templates import (
 
 REGISTRY_COMMAND_INVALID = DiagnosticCode("registry-command-invalid")
 REGISTRY_AUDIT_WARNING = DiagnosticCode("registry-audit-warning")
-# `LAF-45`: a report of what the audit did, as opposed to what it found. It carries no remediation
+# A report of what the audit did, as opposed to what it found. It carries no remediation
 # because there is nothing to remedy — an operator reads it to know the check ran at all.
 REGISTRY_AUDIT_NOTE = DiagnosticCode("registry-audit-note")
 
 
-# `RS-09`: the next step a refused registry command hands over. These are shared lines rather than
-# one sentence per call site, which `SI-6` already learned once on the object store: the operator's
+# The next step a refused registry command hands over. These are shared lines rather than
+# one sentence per call site because the operator's
 # next step is the same wherever the same problem is stated, and a distinct sentence per site
 # invents distinctions they do not have. Every `aart …` written here is parsed by the shipped CLI in
 # `tests/source_remediation_test.py`, so a command that stops existing fails the suite.
@@ -195,7 +200,7 @@ def _existing_package_remediation(
     base: str,
     identity: ArtifactIdentity,
 ) -> tuple[str, ...]:
-    """`RS-04`: `vendor` is create-only, so say which command is not.
+    """`vendor` is create-only, so say which command is not.
 
     Upstream moving is the ordinary reason to run `vendor` a second time, and `revendor` is the
     command that adopts movement — but only for a copy that records where it came from. An authored
@@ -302,7 +307,7 @@ def _note(message: str) -> Diagnostic:
 def _diagnostic(message: str, remediation: tuple[str, ...], *, warning: bool = False) -> Diagnostic:
     """One line of a `validate` or `audit` report, with what to do about it.
 
-    `RS-09`: a report is where these two commands state a problem, so a finding that names no next
+    A report is where these two commands state a problem, so a finding that names no next
     step is the same dead end as a refusal that names none. A warning gets one too — most of them
     describe a limit rather than a defect, and saying which is exactly what the operator needs.
     """
@@ -507,10 +512,15 @@ def plan_registry_init(
     # Every registry gets byte-identical files.  Where CI fetches AART from is a repository
     # variable, not something written in here at creation time, so these bytes never have to be
     # regenerated when a company moves the tool.
+    # Usage reporting is an optional service a registry may offer, and the manifest below already
+    # advertises it only when somebody named a destination.  The files were written either way,
+    # so a maintainer who declined the feature still got an Issue Form soliciting reports and two
+    # workflows to process them -- infrastructure for a service the registry does not offer, which
+    # invites contributions nothing will read (B-087).  One condition now governs both.
     templates = (
         (".gitignore", REGISTRY_GITIGNORE),
         (".github/workflows/aart-registry.yml", REGISTRY_CI_WORKFLOW),
-        *REPORTING_TEMPLATES,
+        *(REPORTING_TEMPLATES if options.usage_reporting_repository is not None else ()),
     )
     # The README is the one generated file a maintainer is meant to edit, so it is written when
     # absent and left alone otherwise -- never compared, never overwritten.  Managing it would
@@ -520,7 +530,14 @@ def plan_registry_init(
     written_once = tuple(
         (path, content)
         for path, content in (
-            ("README.md", render_registry_readme(options.registry_id, options.display_name)),
+            (
+                "README.md",
+                render_registry_readme(
+                    options.registry_id,
+                    options.display_name,
+                    usage_reporting=options.usage_reporting_repository is not None,
+                ),
+            ),
             # The pin is the version of the tool creating the registry -- the same number `init`
             # already writes as `requires_aart.min_inclusive`.  No inference is involved: AART
             # knows its own version, which is exactly what the deleted origin stamp did not.
@@ -684,6 +701,11 @@ def _payload(
                     (
                         ("name", options.name),
                         ("command", f"${{SCRIPT_DIR}}/{options.name}.sh"),
+                        # Complete enough to install, and deliberately the narrowest thing that is.
+                        # A scaffold an author has to finish before it works is better than one
+                        # that silently runs against every tool the harness has.
+                        ("event", "PreToolUse"),
+                        ("matcher", "Bash"),
                     )
                 )
             ),
@@ -804,7 +826,7 @@ def _adopted_authored(
     A foreign subtree almost never satisfies its kind's payload contract on its own, and no flag can
     carry file bytes. So `vendor` adopts the files the maintainer has already placed at the target
     path — the `payload/mcp.json` wrapper, a `SETUP.md`, a `setup/` recipe — and projects them
-    alongside the taken bytes, where `VN-2`'s refusals judge them. `artifact.json` and
+    alongside the taken bytes, where the projection's refusals judge them. `artifact.json` and
     `provenance.json` are excluded because the projection derives them.
     """
 
@@ -895,7 +917,7 @@ def plan_artifact_vendor(
 
 
 def _package_delivery(package: VendoredPackage) -> DeliveryFinding | None:
-    """What a consumer receives from the package this plan would write (design §7)."""
+    """What a consumer receives from the package this plan would write."""
 
     prefix = f"{package.base}/"
     return describe_delivery(
@@ -1056,7 +1078,7 @@ def plan_artifact_revendor(
         return files
     # The copy against its own record, before upstream is mentioned at all: a copy that is not the
     # copy cannot be discussed as current or as behind, and re-vendoring it would overwrite a
-    # difference the maintainer has not seen yet (design §5).
+    # difference the maintainer has not seen yet.
     integrity = verify_vendored_copy(
         files.value,
         vendored.base,
@@ -1095,7 +1117,7 @@ def plan_artifact_revendor(
     )
     if version is None:
         # The diff is rendered before the refusal, not instead of it: the maintainer cannot choose
-        # the version the movement deserves without first seeing the movement (design §4).
+        # the version the movement deserves without first seeing the movement.
         return Ok(drifted)
     manifest = vendored.manifest
     authored: list[tuple[str, bytes, bool]] = []
@@ -1332,6 +1354,27 @@ def plan_registry_lock(
     )
 
 
+def plan_promoted_registry_build(snapshot: SourceSnapshot) -> Result[RegistryWorkspacePlan]:
+    """Rebuild what the approved representation derives, which is its two catalogs and nothing else.
+
+    Version records, promotion records and package bytes are decisions somebody reviewed; a rebuild
+    that rewrote them would be inventing approvals. The catalogs are computed from those decisions,
+    so they are the only thing here that can be restored rather than re-decided (`B-057`).
+    """
+
+    records = read_registry_version_records(snapshot)
+    if isinstance(records, Err):
+        return records
+    catalogs = registry_catalog_entries(snapshot, records.value)
+    if isinstance(catalogs, Err):
+        return catalogs
+    return _plan(
+        RegistryOperation.BUILD,
+        snapshot,
+        tuple((path, content, False) for path, content in catalogs.value),
+    )
+
+
 def plan_registry_build(
     snapshot: SourceSnapshot,
     acquisitions: tuple[NativeReferenceAcquisition, ...],
@@ -1342,6 +1385,8 @@ def plan_registry_build(
     parsed = _registry_inputs(snapshot)
     if isinstance(parsed, Err):
         return parsed
+    if is_promoted_registry(snapshot):
+        return plan_promoted_registry_build(snapshot)
     registry, _source, entries = parsed.value
     files = _files(snapshot)
     assert isinstance(files, Ok)
@@ -1433,7 +1478,7 @@ def validate_registry_workspace(
     files = _files(snapshot)
     assert isinstance(files, Ok)
     # A package that contradicts its own provenance is malformed, and this is where well-formedness
-    # is decided.  It costs no network: the copy is checked against the record it carries (VI-2).
+    # is decided.  It costs no network: the copy is checked against the record it carries.
     vendored, unreadable = _vendored_packages(files.value, source)
     diagnostics.extend(unreadable)
     for package in vendored:
@@ -1458,8 +1503,13 @@ def validate_registry_workspace(
         diagnostics.append(_diagnostic("aart.lock.json must be a regular file", _RELOCK))
     if index_file is not None and not valid_index_file:
         diagnostics.append(_diagnostic("aart.index.json must be a regular file", _RELOCK))
-    if require_compiled and (not valid_lock_file or not valid_index_file):
-        diagnostics.append(_diagnostic("compiled registry requires lock and index", _RELOCK))
+    if require_compiled and not is_promoted_registry(snapshot):
+        # The approved representation compiles nothing: its version records carry the digests the
+        # older workspace kept in `aart.lock.json`, and `registry_native_content` has already held
+        # the registry to them through `validate_promoted_registry`. Requiring the older files here
+        # would be requiring a second representation of the same approvals (`B-057`).
+        if not valid_lock_file or not valid_index_file:
+            diagnostics.append(_diagnostic("compiled registry requires lock and index", _RELOCK))
     parsed_lock = None
     if lock_file is not None and lock_file.kind is SnapshotEntryKind.FILE:
         lock = parse_registry_lock(lock_file.content)
@@ -1539,7 +1589,7 @@ def vendored_copy_diagnostics(
     files: dict[str, SnapshotEntry],
     vendored: VendoredArtifactOrigin,
 ) -> tuple[Diagnostic, ...]:
-    """Check one vendored copy against the origin it records (VI-2, design §4).
+    """Check one vendored copy against the origin it records.
 
     A pure function of the committed snapshot: no network, no store, and the same answer in
     `validate`, in `audit`, and before a re-vendor. The mismatch is an error rather than a warning
@@ -1572,19 +1622,19 @@ def package_delivery_diagnostics(
     *,
     vendored: bool,
 ) -> tuple[Diagnostic, ...]:
-    """Report a descriptor that launches a file consumers never receive (VI-4).
+    """Report a descriptor that launches a file consumers never receive.
 
     An error rather than a warning: unlike a missing licence, this is not a fact about the world the
     maintainer may accept. It is an artifact that cannot start on any consumer machine.
 
-    `RS-01`: `VI-5` hung this off the vendoring delivery finding, so an `mcp` package authored in
-    place was never looked at. Nothing in the consequence depends on where the bytes came from — the
+    It is not tied to the vendoring delivery finding, so an `mcp` package authored in place is
+    checked too. Nothing in the consequence depends on where the bytes came from — the
     merge writes an empty entry either way — so the check runs for every package the audit walks.
 
     The audit is where it runs, not `registry validate`. `validate_registry_workspace` is also the
     consumer's gate on a candidate source, so a new hard failure there makes every registry already
     carrying such a descriptor unloadable on upgrade, for its subscribers as well as its maintainer.
-    That is the protocol break `VI-5` rejected. `registry audit` is maintainer-side and is what the
+    That would be a protocol break. `registry audit` is maintainer-side and is what the
     generated registry CI runs.
     """
 
@@ -1637,7 +1687,7 @@ def _shipped_digest(
     files: dict[str, SnapshotEntry],
     vendored: VendoredArtifactOrigin,
 ) -> ObjectDigest:
-    """The digest of the bytes this registry actually ships (design §5).
+    """The digest of the bytes this registry actually ships.
 
     Drift is a statement about the copy, not about the record: comparing upstream with
     `origin.input_digest` answers for a package that may no longer exist. A copy that cannot be
@@ -1702,10 +1752,10 @@ def _vendored_upstream_findings(
     Read-only by construction: it resolves and compares, and no caller can turn the answer into a
     write. An upstream that cannot be read is reported as unknown rather than as drift, because a
     maintainer who has lost access to an origin has a different problem from one who is behind it,
-    and neither of them is told their copy is current (design §6).
+    and neither of them is told their copy is current.
 
-    The disposition comes back with the findings so the audit can say how many copies it compared
-    (`LAF-45`). It is the same vocabulary `revendor --check` prints, deliberately: one answer about
+    The disposition comes back with the findings so the audit can say how many copies it compared.
+    It is the same vocabulary `revendor --check` prints, deliberately: one answer about
     one copy should not have two names depending on which command asked.
     """
 
@@ -1745,7 +1795,7 @@ def _vendored_upstream_findings(
 
 
 def _upstream_check_note(dispositions: tuple[NativeReferenceDisposition, ...]) -> Diagnostic:
-    """`LAF-45`: state that the check ran, including when it had nothing to report.
+    """State that the check ran, including when it had nothing to report.
 
     Every other outcome of `--check-upstream` prints a line. A registry whose copies are all
     current printed nothing, and so did a command run without the flag — so an operator reading a
@@ -1799,9 +1849,25 @@ def audit_registry_workspace(
     )
     if isinstance(native, Err):
         diagnostics.extend(native.diagnostics)
+    roots = tuple(f"{root}/" for root in source.artifact_roots)
+    owned = tuple(
+        (path, item)
+        for path, item in sorted(files.value.items())
+        if item.kind is SnapshotEntryKind.FILE
+        and path.endswith("/artifact.json")
+        and any(path.startswith(root) for root in roots)
+    )
+    # `QA-015`: a registry holding nothing has nothing to be partial about. The two findings below
+    # describe a limit rather than a defect, and on an empty registry the limit is the whole state
+    # of it, so they are reported as notes — what the audit did — exactly as `_upstream_check_note`
+    # reports having no vendored artifacts to check. One owned package or one external reference is
+    # enough to make them warnings again, because then an object exists that nobody assessed.
+    nothing_to_assess = not entries and not owned
     if not entries:
         diagnostics.append(
-            _diagnostic(
+            _note("registry contains no artifacts, so there is no provenance to check")
+            if nothing_to_assess
+            else _diagnostic(
                 "registry contains no external references; provenance coverage is partial",
                 _COVERAGE_LIMIT,
                 warning=True,
@@ -1841,14 +1907,7 @@ def audit_registry_workspace(
                             warning=True,
                         )
                     )
-    roots = tuple(f"{root}/" for root in source.artifact_roots)
-    for path, item in sorted(files.value.items()):
-        if (
-            item.kind is not SnapshotEntryKind.FILE
-            or not path.endswith("/artifact.json")
-            or not any(path.startswith(root) for root in roots)
-        ):
-            continue
+    for path, item in owned:
         manifest = parse_artifact_manifest(item.content, path=path)
         if isinstance(manifest, Err):
             diagnostics.extend(manifest.diagnostics)
@@ -1883,9 +1942,9 @@ def audit_registry_workspace(
                 else:
                     vendored = read.value
                     # The copy against the record, before anything is said about upstream: a copy
-                    # that is not the copy cannot be discussed as current or behind (design §5).
+                    # that is not the copy cannot be discussed as current or behind.
                     diagnostics.extend(vendored_copy_diagnostics(files.value, vendored))
-        # Outside the vendored branch on purpose (RS-01): what a consumer receives from an `mcp`
+        # Outside the vendored branch on purpose: what a consumer receives from an `mcp`
         # package is a property of the package, and an authored descriptor gets it wrong as easily
         # as a copied one.
         diagnostics.extend(
@@ -1897,7 +1956,7 @@ def audit_registry_workspace(
             diagnostics.append(
                 _diagnostic(
                     # Vendoring redistributes somebody else's work, so the omission is named as
-                    # what it is rather than folded into the generic finding (design §7).
+                    # what it is rather than folded into the generic finding.
                     f"vendored artifact redistributes upstream bytes with no declared license: "
                     f"{manifest.value.identity}"
                     if vendored is not None
@@ -1922,7 +1981,9 @@ def audit_registry_workspace(
     security_file = files.value.get("security/index.json")
     if security_file is None:
         diagnostics.append(
-            _diagnostic(
+            _note("registry contains no artifacts, so there is no installation risk to assess")
+            if nothing_to_assess
+            else _diagnostic(
                 "no per-object installation-risk evidence was supplied to registry audit",
                 _SECURITY_EVIDENCE,
                 warning=True,
@@ -2023,7 +2084,7 @@ def audit_registry_workspace(
                                 )
     if upstream_acquirer is not None:
         # Said once, at the end, and only when the caller asked for the check — its absence is what
-        # tells an operator the flag never reached the command (`LAF-45`).
+        # tells an operator the flag never reached the command.
         diagnostics.append(_upstream_check_note(tuple(upstream_dispositions)))
     return Ok(RegistryQualityReport((RegistryQualityCheck("audit", tuple(diagnostics)),)))
 

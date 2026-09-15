@@ -1,4 +1,4 @@
-"""Tests for WP-28: memory targets, the corrected tabnine record, the vibe
+"""Memory targets, the corrected tabnine record, the vibe
 partial profile, and the loader's tolerance of partial / memory overrides."""
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from agent_artifacts.profiles.model import MemoryTarget, Profile
 
 
 class TestMemoryTargets(unittest.TestCase):
-    """Each built-in profile carries the expected `memory` target (DESIGN-memory §4)."""
+    """Each built-in profile carries the expected `memory` target."""
 
     def test_claude_memory_is_file_claude_md(self) -> None:
         a = builtin()["claude"].memory
@@ -42,7 +42,7 @@ class TestMemoryTargets(unittest.TestCase):
 
 
 class TestVibePartialProfile(unittest.TestCase):
-    """The new vibe profile is a legitimate partial profile (DESIGN-memory §7.2)."""
+    """The new vibe profile is a legitimate partial profile."""
 
     def test_vibe_is_a_profile(self) -> None:
         v = builtin()["vibe"]
@@ -61,7 +61,7 @@ class TestVibePartialProfile(unittest.TestCase):
 
 
 class TestTabnineCorrectedTargets(unittest.TestCase):
-    """The corrected tabnine MCP/hooks targets (DESIGN-memory §6/§6.1/§6.2)."""
+    """The corrected tabnine MCP/hooks targets."""
 
     def test_tabnine_mcp_in_company_build_settings_file(self) -> None:
         m = builtin()["tabnine"].mcp

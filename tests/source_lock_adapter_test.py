@@ -146,7 +146,7 @@ class SourceLockAdapterTest(unittest.TestCase):
         return lock
 
     def test_a_busy_lock_reports_the_holder_its_age_and_the_stale_window(self) -> None:
-        """SI-6: "already running" is not actionable without knowing whether it really is.
+        """An "already running" lock is not actionable without knowing whether it really is.
 
         The four facts that decide whether to wait or to retry are the age, the pid, whether that
         pid is alive, and how long a holder must be silent before it is reclaimed.

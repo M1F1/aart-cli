@@ -1,6 +1,6 @@
-"""SL-4: no source operation writes anything beneath a project directory.
+"""No source operation writes anything beneath a project directory.
 
-Design §3 draws the boundary that makes `source remove` safe to offer at all: a subscription, its
+This is the boundary that makes `source remove` safe to offer at all: a subscription, its
 managed snapshot, the object store, and installed files are four different things, and source
 operations own only the first two.  That claim is what stops unsubscribing from silently deleting a
 skill out of someone's repository, so it is asserted here against the real CLI over a real project
@@ -123,7 +123,7 @@ class SourceOperationProjectIsolationTest(unittest.TestCase):
                 )
 
     def test_a_managed_symlink_survives_the_removal_of_the_source_that_supplied_it(self) -> None:
-        """Design §4: removal invalidates the snapshot and leaves the object store alone.
+        """Removal invalidates the snapshot and leaves the object store alone.
 
         A managed symlink points into the object store, so this is the installation that a
         snapshot-owning removal would break if it reclaimed objects on the way out.
@@ -160,7 +160,7 @@ class SourceOperationProjectIsolationTest(unittest.TestCase):
     def test_the_durable_manifest_outlives_the_subscription_and_reconciles_as_unavailable(
         self,
     ) -> None:
-        """Design §4: a project naming a removed alias reports it, rather than losing the record."""
+        """A project naming a removed alias reports it, rather than losing the record."""
 
         with _environment() as env:
             env.run("marketplace", "install", _COORDINATE, "--profile", "claude", "--yes")
@@ -189,7 +189,7 @@ class SourceOperationProjectIsolationTest(unittest.TestCase):
 
 
 class UninstallAfterSourceRemovalTest(unittest.TestCase):
-    """SI-3: uninstall plans from the manifest, so removing a subscription cannot strand a project.
+    """Uninstall plans from the manifest, so removing a subscription cannot strand a project.
 
     `source remove`'s review names uninstall as a valid exit.  That claim was false while uninstall
     resolved through the catalog first: with the subscription gone there was nothing to resolve

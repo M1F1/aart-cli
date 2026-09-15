@@ -34,6 +34,7 @@ from agent_artifacts.profiles.builtin import builtin
 from agent_artifacts.profiles.model import MergeSpec
 from agent_artifacts.protocol.hashing import json_digest
 from agent_artifacts.protocol.semver import SemVer
+from agent_artifacts.sources.model import HealthStatus
 from agent_artifacts.store.model import ReferenceKind, ReferenceReadRequest
 from tests.canonical_symlink_test import _fixture
 from tests.marketplace_fixtures import (
@@ -164,7 +165,7 @@ class CanonicalLifecycleTest(unittest.TestCase):
             self.assertEqual(removed.value.status, LifecycleStatus.REMOVED)
             remaining = json.loads(config_path.read_text())
             self.assertEqual(remaining, {"mcpServers": {"foreign": {"command": "keep-me"}}})
-            # The last record out of the scope takes the manifest with it (SI-7), so "no
+            # The last record out of the scope takes the manifest with it, so "no
             # installations remain" is now read from the absence of the state itself.
             self.assertFalse((project / ".agent-artifacts").exists())
 
@@ -305,6 +306,63 @@ class CanonicalLifecycleTest(unittest.TestCase):
                 federated,
             )
             self.assertEqual(unavailable.items[0].status, LifecycleStatus.SOURCE_UNAVAILABLE)
+
+    def test_a_source_that_could_not_be_checked_is_not_a_source_that_is_gone(self) -> None:
+        """CP-15/INV-218: last-known-good keeps serving, so it keeps reconciling.
+
+        `check_installations` is documented as fetch-free -- it compares a record against an
+        already-built catalog -- but the subscription test it starts from also required the
+        source's *live* health to be one of healthy, stale or degraded. `could-not-check` is none
+        of those, and it is exactly what a refused `aart source sync` leaves behind: the published
+        snapshot is intact and serving, and only the re-check against the origin failed.
+
+        The effect was that one invalid upstream revision made every installation from that source
+        report `source-unavailable` -- and `prepare_update` takes the same branch, so `aart
+        marketplace update` returned a terminal refusal for an installation that was current
+        against the snapshot on disk. The presence of a snapshot is already tested separately, one
+        line above, by requiring a resolved revision and a snapshot digest; health was answering a
+        question that check had already answered, and answering it wrong.
+        """
+
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            project, _paths, _location, _request, catalog, effective, _adapter = _install(
+                _fixture(root, "skill"), mode="copy"
+            )
+            state = _state(project)
+            self.assertEqual(
+                check_installations(state, LifecycleSelection("project"), catalog, effective)
+                .items[0]
+                .status,
+                LifecycleStatus.CURRENT,
+            )
+            # The same catalog the installation was made from, with one difference: the source
+            # health a refused sync leaves behind.  Everything the record is compared against --
+            # alias, kind, origin, ref, resolved revision, snapshot digest -- is unchanged, because
+            # the published snapshot is unchanged, and that is the whole point.
+            view = catalog.sources[0]
+            unchecked_view = replace(
+                view,
+                health=HealthStatus.CHECK_UNAVAILABLE,
+                diagnostics=(
+                    Diagnostic(
+                        DiagnosticCode("source-invalid"),
+                        Severity.ERROR,
+                        "aart-registry.json is present and does not parse",
+                    ),
+                ),
+            )
+            unchecked = replace(
+                catalog,
+                sources=(unchecked_view,),
+                items=tuple(replace(item, source=unchecked_view) for item in catalog.items),
+            )
+
+            outcome = check_installations(
+                state, LifecycleSelection("project"), unchecked, effective
+            )
+
+            self.assertEqual(outcome.items[0].status, LifecycleStatus.CURRENT)
 
     def test_reconcile_surfaces_upstream_changes_while_retaining_local_effect_detail(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -907,8 +965,7 @@ class CanonicalLifecycleTest(unittest.TestCase):
             assert isinstance(removed, Ok), removed
             self.assertEqual(removed.value.status, LifecycleStatus.REMOVED)
             # The subject here is that a `null` value is *found* and taken out. What it leaves is
-            # AART's own file with nothing in it, which `LAF-47` now reclaims — this assertion used
-            # to read `{"mcpServers": {}}`, which was the residue rather than the requirement.
+            # AART's own file with nothing in it, which uninstall reclaims.
             self.assertFalse(config_path.exists())
 
     def test_install_does_not_treat_an_existing_json_null_key_as_absent(self) -> None:
@@ -1260,9 +1317,9 @@ if __name__ == "__main__":
 
 
 class CreatedMergeFileReclamationTest(unittest.TestCase):
-    """`LAF-47` and `RS-10`: the merge file AART made, emptied and then left behind.
+    """The merge file AART made is removed once uninstall empties it, and only then.
 
-    Design: `docs/design/DESIGN-uninstall-file-reclamation.md`. Removal needs all three of: the
+    Removal needs all three of: the
     effect created the destination, the merge was already proven reversible, and what remains is the
     bare container chain on that effect's own `json_path`.
     """

@@ -1,0 +1,166 @@
+"""`QA-026`: the persistent footer names what the current screen can do.
+
+The accepted catalog makes shortcuts contextual.  A fixed footer makes two opposite promises at
+once: it hides Maintainer actions such as Registry rebuild, and advertises Space on screens where
+nothing is selectable.  These tests render the real frame and walk one advertised key so the
+legend cannot become a second, decorative keyboard map.
+"""
+
+from __future__ import annotations
+
+import unittest
+from dataclasses import replace
+
+from agent_artifacts.application.consumer_ui import ConsumerUiState
+from agent_artifacts.application.consumer_views import (
+    ConsumerScreen,
+    ConsumerSession,
+    ConsumerSettings,
+)
+from agent_artifacts.application.maintainer_views import MaintainerScreen
+from agent_artifacts.tui_consumer import CanonicalScreenSource, frame, run_consumer_shell
+from agent_artifacts.tui_layout import SECTION_RULE
+from tests.consumer_shell_test import FakeTerminal, screens
+
+
+def _state(screen, *, rows: tuple[str, ...] = ()) -> ConsumerUiState:
+    return ConsumerUiState(
+        ConsumerSession(screen),
+        settings=ConsumerSettings().with_maintainer_mode(True),
+        rows=rows,
+    )
+
+
+class ContextualKeyLegendTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.source = CanonicalScreenSource(screens())
+
+    def _form(self, screen, cursor: int) -> ConsumerUiState:
+        """A form as the shell draws it: its rows loaded and the cursor on one of them."""
+
+        state = _state(screen)
+        return replace(state, rows=self.source.rows(state), cursor=cursor)
+
+    def _footer(self, state: ConsumerUiState) -> str:
+        lines = frame(self.source, state)
+        boundary = max(index for index, line in enumerate(lines) if line == SECTION_RULE)
+        return "\n".join(lines[boundary + 1 :])
+
+    def test_registry_actions_are_in_the_footer_before_the_global_keys(self) -> None:
+        drawn = frame(self.source, _state(MaintainerScreen.REGISTRY))
+        footer = self._footer(_state(MaintainerScreen.REGISTRY))
+
+        for shortcut, action in (
+            ("n", "Initialize"),
+            ("b", "Rebuild"),
+            ("s", "Scan Repository"),
+            ("u", "Check upstream"),
+        ):
+            self.assertIn(f"[{shortcut}] {action}", footer)
+        self.assertLess(footer.index("[n] Initialize"), footer.index("[↑/↓]"))
+        self.assertFalse(any(line.startswith("Actions:") for line in drawn), drawn)
+
+    def test_an_advertised_registry_key_opens_the_screen_it_names(self) -> None:
+        terminal = FakeTerminal(ord("b"))
+
+        finished = run_consumer_shell(
+            self.source,
+            terminal,
+            state=_state(MaintainerScreen.REGISTRY),
+        )
+
+        self.assertTrue(finished.exited)
+        self.assertTrue(
+            # `QA-071`: a nested view names the parent it was reached through, so the heading is
+            # the trail rather than the screen alone.
+            any(
+                frame_lines[0] == "AART / Registry Maintainer / Rebuild Registry"
+                for frame_lines in terminal.frames
+            )
+        )
+
+    def test_each_maintainer_screen_names_its_own_shortcuts(self) -> None:
+        expected = {
+            MaintainerScreen.SOURCES: ("[a] Add Source", "[s] Sync"),
+            MaintainerScreen.CANDIDATES: ("[f] Filters", "[c] Collections"),
+            MaintainerScreen.CANDIDATE_DIFF: ("[v] Fast / Verbose",),
+            MaintainerScreen.SCAN_RESULT: ("[a] Adopt",),
+            MaintainerScreen.ADOPTED_ARTIFACTS: ("[Enter] Check upstream",),
+            MaintainerScreen.UPSTREAM_CHECK: ("[a] Review new version",),
+            MaintainerScreen.PROMOTION_MODE: ("[m] Toggle mode",),
+            MaintainerScreen.VALIDATION_DETAILS: ("[Enter] Policy",),
+        }
+
+        for screen, labels in expected.items():
+            with self.subTest(screen=screen):
+                footer = self._footer(_state(screen))
+                for label in labels:
+                    self.assertIn(label, footer)
+
+    def test_structural_keys_appear_only_where_the_screen_can_use_them(self) -> None:
+        dashboard = self._footer(
+            _state(ConsumerScreen.DASHBOARD, rows=(ConsumerScreen.MARKETPLACE.value,))
+        )
+        marketplace = self._footer(
+            _state(ConsumerScreen.MARKETPLACE, rows=("public/mcp/github@1.6.0",))
+        )
+
+        self.assertIn("[Enter] Open", dashboard)
+        self.assertNotIn("Space", dashboard)
+        self.assertIn("[Space] Select", marketplace)
+        self.assertIn("[/] Search", marketplace)
+        self.assertIn("[i] Install", marketplace)
+
+    def test_a_form_advertises_the_keys_that_edit_it(self) -> None:
+        """`QA-088`: a key the screen accepts belongs in the legend, not in a sentence.
+
+        Every form used to close with a line spelling out what typing, Backspace, Space and Enter
+        do -- four keys described in prose while the footer directly below advertised two of them.
+        The operator read it and said so: *"duzo z tego powinno byc w klawiszach u dolu a nie w
+        informacji"*.
+        """
+
+        for screen in (
+            ConsumerScreen.REGISTRY_ADD,
+            MaintainerScreen.SOURCE_ADD,
+            MaintainerScreen.REGISTRY_INIT,
+            MaintainerScreen.REPOSITORY_SCAN,
+        ):
+            with self.subTest(screen=screen):
+                footer = self._footer(self._form(screen, 0))
+
+                self.assertIn("[Type] Edit", footer)
+                self.assertIn("[Backspace] Delete", footer)
+                self.assertIn("[Enter] Next", footer)
+
+    def test_a_form_toggle_is_advertised_by_what_it_changes(self) -> None:
+        """The prose that said what Space does is gone, so the legend has to carry its meaning."""
+
+        expected = {
+            ConsumerScreen.REGISTRY_ADD: ("default", "[Space] Make default"),
+            MaintainerScreen.SOURCE_ADD: ("kind", "[Space] Switch kind"),
+            MaintainerScreen.REGISTRY_INIT: ("commit", "[Space] Local commit"),
+        }
+        for screen, (row, binding) in expected.items():
+            with self.subTest(screen=screen):
+                rows = self._form(screen, 0).rows
+                self.assertIn(binding, self._footer(self._form(screen, rows.index(row))))
+
+        scan = self._form(MaintainerScreen.REPOSITORY_SCAN, 0)
+        for cursor in range(len(scan.rows)):
+            self.assertNotIn(
+                "Space", self._footer(self._form(MaintainerScreen.REPOSITORY_SCAN, cursor))
+            )
+
+    def test_global_exit_and_help_keys_remain_visible_on_every_screen(self) -> None:
+        for screen in (ConsumerScreen.DASHBOARD, MaintainerScreen.REGISTRY):
+            with self.subTest(screen=screen):
+                footer = self._footer(_state(screen))
+                self.assertIn("[↑/↓] Move", footer)
+                self.assertIn("[Esc] Back", footer)
+                self.assertIn("[?] Help", footer)
+                self.assertIn("[q] Quit", footer)
+
+
+if __name__ == "__main__":
+    unittest.main()

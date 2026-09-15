@@ -8,11 +8,15 @@ from pathlib import Path
 class CompilerBoundaryTest(unittest.TestCase):
     def test_compiler_domain_and_application_have_no_durable_io_imports(self) -> None:
         root = Path(__file__).parents[1] / "agent_artifacts"
+        # `application/compiler.py` was here until CP-18 step 3 removed it: its callers had
+        # already disappeared, so it was parallel authority rather than shipped behaviour.  The
+        # two files left are the ones the marketplace, catalog and installation paths really
+        # import, which is what makes this boundary worth holding.
         files = (
             root / "compiler" / "model.py",
             root / "compiler" / "graph.py",
-            root / "application" / "compiler.py",
         )
+        self.assertTrue(all(path.exists() for path in files), files)
         forbidden = {
             "os",
             "pathlib",

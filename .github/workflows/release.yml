@@ -5,14 +5,18 @@ name: release
 # Triggers:
 #   * a stable vX.Y.Z tag push          -> build + upload as a workflow artifact
 #   * a published GitHub release        -> additionally attach the wheel to the release
-# `scripts/version.py check-tag` is the real gate: it rejects any tag that does not match the
-# source version the release contract governs, so the pattern below stays deliberately broad
-# rather than pinning one release and silently building nothing for the next.
+# `scripts/release_artifact.py` is the real gate: it rejects any wheel whose filename, metadata or
+# installed command disagrees with the tag it is being published under, so the pattern below stays
+# deliberately broad rather than pinning one release and silently building nothing for the next.
+#
+# It is also callable. GitHub raises no workflow event for anything done with the repository
+# `GITHUB_TOKEN`, so the tag and release that `release-please.yml` creates set nothing off -- that
+# workflow calls this one instead. The two event triggers stay for a tag pushed by a person.
 #
 # Portable to a GitHub Enterprise Server fork by setting repository variables only.  Every default
 # reproduces the public github.com run except one: `AART_REFERENCE_REGISTRY_URL` has no default,
 # because a default naming a github.com repository reproduces nothing on an instance that cannot
-# reach it.  See the note on that variable below.  See docs/ci/enterprise-fork-v1.md.
+# reach it.  See the note on that variable below.  See docs/ci/github-enterprise-rollout.md.
 #
 # Each job appears twice for the reason pr-check.yml records: a container's `credentials` block
 # cannot be conditional, so the condition moves to the job.  Both shapes share their steps through
@@ -23,24 +27,34 @@ on:
       - "v[0-9]+.[0-9]+.[0-9]+"
   release:
     types: [published]
+  workflow_call:
+    inputs:
+      tag:
+        description: The release tag to build and verify.
+        required: true
+        type: string
+      attach:
+        description: Whether the wheel should be attached to the release at that tag.
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: write  # required to attach assets to the release
 
 # Poetry builds the wheel and installs the developer tooling.  An image that keeps Poetry off
 # `PATH` -- `/opt/poetry/bin/poetry` is the common shape -- names it in this variable instead;
-# unset, every step falls back to plain `poetry`.  See docs/ci/enterprise-fork-v1.md.
+# unset, every step falls back to plain `poetry`.  See docs/ci/github-enterprise-rollout.md.
 env:
   AART_POETRY: ${{ vars.AART_POETRY }}
 
 jobs:
-  # No quality jobs here any more.  A release is cut from a commit that reached `main`, and
-  # nothing reaches `main` except through a pull request that passed all ten gates on the full
-  # interpreter matrix.  Re-running them at the tag proved the same tree a second time.  What is
-  # left is everything whose subject is the release itself: the tag matches the source version,
-  # the tagged commit is in `main`, reviewed notes exist, the eleven-item checklist passes, and
-  # `packaging-check` -- the one gate whose subject is the wheel rather than the source.
-  # See docs/ci/pr-check-and-release-split-v1.md.
+  # No quality jobs here.  A release is cut from a commit that reached `main`, and nothing reaches
+  # `main` except through a pull request that passed all ten gates on the full interpreter matrix.
+  # What this run checks is everything whose subject is the release itself: the tagged commit is in
+  # `main`, the release checklist passes, and `packaging-check` -- the one gate whose subject is the
+  # wheel rather than the source.
+  # See docs/ci/workflows-v1.md.
   release:
     if: vars.AART_IMAGE_USERNAME_SECRET == ''
     runs-on: ${{ fromJSON(vars.AART_RUNNER || '["ubuntu-latest"]') }}
@@ -64,24 +78,26 @@ jobs:
       # value lives only in the secret store.
       INDEX_PUBLISH_URL: ${{ vars.AART_INDEX_PUBLISH_URL }}
       AART_INDEX_PUBLISH_CREDENTIALS: ${{ secrets[vars.AART_INDEX_PUBLISH_CREDENTIALS_SECRET] }}
-      # No `GH_HOST` here any more: the release action attaches the wheel through the REST API at
-      # `GITHUB_API_URL`, which the runner sets to this instance.  `gh` defaulted to github.com,
-      # so a fork that forgot `AART_GH_HOST` uploaded to the wrong instance -- a mistake the
-      # variable could prevent but only if you knew to set it.  Now there is nothing to set.
+      # No `GH_HOST`: the release action attaches the wheel through the REST API at
+      # `GITHUB_API_URL`, which the runner sets to this instance, so there is nothing to set.
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          # Empty when this run was triggered by an event rather than called, and an empty `ref`
+          # is the default one -- which for a tag push is the tag.
+          ref: ${{ inputs.tag }}
           fetch-depth: 0
       - uses: ./.github/actions/release
         with:
           python: ${{ vars.AART_PYTHON || 'python' }}
           python-version: ${{ vars.AART_RELEASE_PYTHON_VERSION || '3.11' }}
           setup-python: ${{ vars.AART_CI_IMAGE == '' }}
-          tag: ${{ github.event.release.tag_name || github.ref_name }}
-          # A tag push builds and keeps the wheel; a published release also attaches it.
-          attach: ${{ github.event_name == 'release' }}
+          tag: ${{ inputs.tag || github.event.release.tag_name || github.ref_name }}
+          # A tag push builds and keeps the wheel; a published release also attaches it, and so
+          # does the release-please run that created the release the event never announced.
+          attach: ${{ inputs.attach || github.event_name == 'release' }}
 
   release-private-image:
     if: vars.AART_IMAGE_USERNAME_SECRET != ''
@@ -105,12 +121,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          # Empty when this run was triggered by an event rather than called, and an empty `ref`
+          # is the default one -- which for a tag push is the tag.
+          ref: ${{ inputs.tag }}
           fetch-depth: 0
       - uses: ./.github/actions/release
         with:
           python: ${{ vars.AART_PYTHON || 'python' }}
           python-version: ${{ vars.AART_RELEASE_PYTHON_VERSION || '3.11' }}
           setup-python: ${{ vars.AART_CI_IMAGE == '' }}
-          tag: ${{ github.event.release.tag_name || github.ref_name }}
-          # A tag push builds and keeps the wheel; a published release also attaches it.
-          attach: ${{ github.event_name == 'release' }}
+          tag: ${{ inputs.tag || github.event.release.tag_name || github.ref_name }}
+          # A tag push builds and keeps the wheel; a published release also attaches it, and so
+          # does the release-please run that created the release the event never announced.
+          attach: ${{ inputs.attach || github.event_name == 'release' }}

@@ -82,6 +82,10 @@ class MarketplaceSourceView:
     kind: SourceKind
     source_id: SourceId | None
     origin: str
+    # The *configured* ref, not the revision a fetch resolved it to.  A reviewed refresh has to
+    # state what it is about to ask the origin for, and a resolved commit answers a different
+    # question -- what the last fetch got (B-084).
+    ref: str | None
     resolved_revision: str | None
     snapshot_digest: ObjectDigest | None
     health: HealthStatus

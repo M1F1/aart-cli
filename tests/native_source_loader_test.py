@@ -128,7 +128,7 @@ def _five_package_entries():
             "guard",
             "aart-hook-v1",
             "hook.json",
-            b'{"command":"./guard.sh","name":"guard"}',
+            b'{"command":"./guard.sh","event":"PreToolUse","matcher":"Bash","name":"guard"}',
         ),
     )
     entries = [_json_entry("aart-source.json", _source_document())]

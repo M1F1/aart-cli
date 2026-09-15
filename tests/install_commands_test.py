@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import contextlib
 import unittest
 from unittest import mock
 
-from tests.versioning_test import ROOT, _load_script
+from tests.script_fixtures import ROOT
+from tests.script_fixtures import load_script as _load_script
 
 install_commands = _load_script("install_commands")
 github_api = _load_script("github_api")
@@ -52,40 +52,20 @@ class RepositoryUrlTest(unittest.TestCase):
             self.assertEqual(github_api.repository_url(), "https://ghe.example.org/platform/aart")
 
 
-class ReleaseBodyTest(unittest.TestCase):
-    def test_the_release_body_carries_the_commands_for_that_repository(self) -> None:
-        """A README cannot say this and a release can, so the release is where it is said."""
+class ReleasedVersionTest(unittest.TestCase):
+    """Which version the commands name, when nobody says.
 
-        cut_release = _load_script("cut_release")
-        notes = ROOT / "docs" / "release" / "github-release-v2.8.5.md"
-        published: dict = {}
+    `cut_release.py` used to compose this block into the release body it wrote, and read the
+    version out of `scripts/version.py`.  Both are gone: the release body is generated, and the
+    version is the release engine's.  So the default is read from the engine's own manifest --
+    a reader of that record, never a second opinion about it.
+    """
 
-        def record(url: str, **keywords: object) -> dict:
-            published.update(keywords["payload"])  # type: ignore[arg-type]
-            return {"html_url": "u"}
+    def test_the_default_version_is_the_one_the_release_engine_recorded(self) -> None:
+        import json
 
-        patches = (
-            mock.patch.object(cut_release, "_git"),
-            mock.patch.object(
-                cut_release.release_module, "wheel_digest", return_value=("w.whl", "sha256:0")
-            ),
-            mock.patch.object(
-                cut_release.github_api,
-                "origin",
-                return_value=("https://ghe.example.org/api/v3", "platform/aart"),
-            ),
-            mock.patch.object(cut_release.github_api, "token", return_value="t"),
-            mock.patch.object(cut_release.github_api, "json_request", side_effect=record),
-        )
-        with contextlib.ExitStack() as stack:
-            for patch in patches:
-                stack.enter_context(patch)
-            cut_release.publish("v2.8.5", "2.8.5", notes, "origin")
-
-        self.assertIn(
-            'pipx install "git+https://ghe.example.org/platform/aart.git@v2.8.5"',
-            published["body"],
-        )
+        manifest = json.loads((ROOT / ".release-please-manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual(install_commands.released_version(), manifest["."])
 
 
 if __name__ == "__main__":

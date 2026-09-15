@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import time
+from dataclasses import dataclass
 
 from agent_artifacts import command_outcome as _common
 from agent_artifacts.application.configuration import save_user_configuration_checked
@@ -41,6 +42,7 @@ from agent_artifacts.sources.model import (
     HealthStatus,
     SourceHealth,
     SourceIdentityTransition,
+    SourceSyncOutcome,
     source_instance_id,
     source_store_paths,
 )
@@ -211,15 +213,37 @@ def _recovery_error() -> Err:
     )
 
 
-def _add(request: Request) -> int:
+@dataclass(frozen=True, slots=True)
+class AddedConfiguredSource:
+    """The typed result shared by the CLI renderer and persistent TUI."""
+
+    source: ConfiguredSource
+    default_registry: SourceAlias | None
+    synchronized: SourceSyncOutcome
+    changed: bool
+
+
+@dataclass(frozen=True, slots=True)
+class RemovedConfiguredSource:
+    """The exact source and store effects of one completed unsubscribe."""
+
+    source: ConfiguredSource
+    default_registry: SourceAlias | None
+    snapshot_discarded: bool
+    changed: bool
+
+
+def add_configured_source(request: Request) -> Result[AddedConfiguredSource]:
+    """Run the canonical source-add transaction without choosing an output surface."""
+
     parsed = _parse_add_source(request)
     if isinstance(parsed, Err):
-        return _emit_error(request, _SOURCE_OPERATION, parsed)
+        return parsed
     runtime = load_runtime_configuration(request, content_required=False)
     if isinstance(runtime, Err):
-        return _emit_error(request, _SOURCE_OPERATION, runtime)
+        return runtime
     if runtime.value.loaded.recovery is not None:
-        return _emit_error(request, _SOURCE_OPERATION, _recovery_error())
+        return _recovery_error()
     now = int(time.time())
     view = build_source_stage(
         runtime.value.loaded.user_configuration,
@@ -228,7 +252,7 @@ def _add(request: Request) -> int:
         first_run=runtime.value.loaded.first_run is not None,
     )
     if isinstance(view, Err):
-        return _emit_error(request, _SOURCE_OPERATION, view)
+        return view
     planned = plan_source_addition(
         view.value,
         parsed.value,
@@ -245,22 +269,22 @@ def _add(request: Request) -> int:
         ),
     )
     if isinstance(planned, Err):
-        return _emit_error(request, _SOURCE_OPERATION, planned)
+        return planned
 
     # No configuration write is reachable until a fresh immutable snapshot validates.
     synchronized = sync_configured_source(parsed.value, data_root=runtime.value.paths.data_root)
     if isinstance(synchronized, Err):
-        return _emit_error(request, _SOURCE_OPERATION, synchronized)
+        return synchronized
 
     # Fetching may take time.  Fail closed if an actor changed config or policy after Review.
     current = load_runtime_configuration(request, content_required=False)
     if isinstance(current, Err):
-        return _emit_error(request, _SOURCE_OPERATION, current)
+        return current
     if current.value.loaded.recovery is not None:
-        return _emit_error(request, _SOURCE_OPERATION, _recovery_error())
+        return _recovery_error()
     unchanged = _review_changed(current.value, planned.value.before, planned.value.policy)
     if isinstance(unchanged, Err):
-        return _emit_error(request, _SOURCE_OPERATION, unchanged)
+        return unchanged
     finalized = finalize_source_addition(
         planned.value,
         # CFG02: the pre-write revalidation above catches ordinary drift, but a writer landing
@@ -275,39 +299,120 @@ def _add(request: Request) -> int:
         ),
     )
     if isinstance(finalized, Err):
-        return _emit_error(request, _SOURCE_OPERATION, finalized)
+        return finalized
+    return Ok(
+        AddedConfiguredSource(
+            parsed.value,
+            planned.value.after.default_registry,
+            synchronized.value,
+            finalized.value.changed,
+        )
+    )
+
+
+def remove_configured_source(
+    request: Request, *, expected_source: ConfiguredSource | None = None
+) -> Result[RemovedConfiguredSource]:
+    """Run the canonical unsubscribe transaction without choosing an output surface.
+
+    A TUI review may bind the complete source identity it showed.  In that case an alias that was
+    repointed between Review and confirmation is refused rather than removing an origin nobody
+    reviewed.  The CLI can omit the expectation because it plans and applies in one invocation.
+    """
+
+    if request.source_alias is None:
+        return _failure("config-invalid", "source remove requires --alias")
+    runtime = load_runtime_configuration(request, content_required=False)
+    if isinstance(runtime, Err):
+        return runtime
+    if runtime.value.loaded.recovery is not None:
+        return _recovery_error()
+    view = build_source_stage(
+        runtime.value.loaded.user_configuration,
+        runtime.value.loaded.effective.policy,
+        _health_by_alias(runtime.value, now=int(time.time())),
+        first_run=runtime.value.loaded.first_run is not None,
+    )
+    if isinstance(view, Err):
+        return view
+    try:
+        alias = SourceAlias(request.source_alias)
+    except ValueError:
+        return _failure("config-invalid", "source alias is not a valid slug")
+    planned = plan_source_removal(view.value, alias)
+    if isinstance(planned, Err):
+        return planned
+    if expected_source is not None and planned.value.source != expected_source:
+        return _failure(
+            "source-selection-invalid",
+            f"registry {alias} changed after Review",
+            "review the current Registry connection before disconnecting it",
+        )
+
+    discarded = discard_configured_source(
+        planned.value.source, data_root=runtime.value.paths.data_root
+    )
+    if isinstance(discarded, Err):
+        return discarded
+    finalized = finalize_source_removal(
+        planned.value,
+        lambda desired, policy: save_user_configuration_checked(
+            desired,
+            policy,
+            runtime.value.paths,
+            runtime.value.ports,
+            expected_digest=runtime.value.loaded.observed_digest,
+        ),
+    )
+    if isinstance(finalized, Err):
+        return finalized
+    return Ok(
+        RemovedConfiguredSource(
+            planned.value.source,
+            planned.value.after.default_registry,
+            discarded.value.existed,
+            finalized.value.changed,
+        )
+    )
+
+
+def _add(request: Request) -> int:
+    added = add_configured_source(request)
+    if isinstance(added, Err):
+        return _emit_error(request, _SOURCE_OPERATION, added)
+    result = added.value
 
     payload = {
         "schema_version": 1,
         "ok": True,
         "operation": _SOURCE_OPERATION,
-        "changed": finalized.value.changed,
+        "changed": result.changed,
         "source": _source_data(
-            parsed.value,
+            result.source,
             SourceHealth(
                 # A just-published current snapshot is necessarily current at the command's
                 # observation point; preserve diagnostics emitted by synchronization.
                 status=HealthStatus.HEALTHY,
                 age_seconds=0,
-                current=synchronized.value.current,
-                diagnostics=synchronized.value.diagnostics,
+                current=result.synchronized.current,
+                diagnostics=result.synchronized.diagnostics,
             ),
-            default_registry=planned.value.after.default_registry,
+            default_registry=result.default_registry,
         ),
         "sync": {
-            "disposition": synchronized.value.disposition.value,
-            "source_id": synchronized.value.current.declared_source_id.value,
-            "resolved_revision": synchronized.value.current.candidate.resolved_revision,
-            "snapshot_digest": str(synchronized.value.current.candidate.snapshot_digest),
+            "disposition": result.synchronized.disposition.value,
+            "source_id": result.synchronized.current.declared_source_id.value,
+            "resolved_revision": result.synchronized.current.candidate.resolved_revision,
+            "snapshot_digest": str(result.synchronized.current.candidate.snapshot_digest),
         },
     }
     if request.json:
         print(json.dumps(payload, indent=2))
     else:
         print(
-            f"source added: {parsed.value.alias.value}; "
-            f"snapshot {synchronized.value.disposition.value}; "
-            f"default={'yes' if planned.value.after.default_registry == parsed.value.alias else 'no'}"
+            f"source added: {result.source.alias.value}; "
+            f"snapshot {result.synchronized.disposition.value}; "
+            f"default={'yes' if result.default_registry == result.source.alias else 'no'}"
         )
     return _common.OK
 
@@ -369,43 +474,27 @@ def _remove(request: Request) -> int:
             print("Reviewed only; re-run with --yes to apply this exact removal.")
         return _common.OK
 
-    # The store goes first: a half-applied removal must leave a repairable subscription, never an
-    # origin that is unsubscribed while its managed snapshot still binds the old identity.
-    discarded = discard_configured_source(
-        planned.value.source, data_root=runtime.value.paths.data_root
-    )
-    if isinstance(discarded, Err):
-        return _emit_error(request, _REMOVE_OPERATION, discarded)
-    finalized = finalize_source_removal(
-        planned.value,
-        lambda desired, policy: save_user_configuration_checked(
-            desired,
-            policy,
-            runtime.value.paths,
-            runtime.value.ports,
-            expected_digest=runtime.value.loaded.observed_digest,
-        ),
-    )
-    if isinstance(finalized, Err):
-        return _emit_error(request, _REMOVE_OPERATION, finalized)
+    removed = remove_configured_source(request, expected_source=planned.value.source)
+    if isinstance(removed, Err):
+        return _emit_error(request, _REMOVE_OPERATION, removed)
     payload = {
         "schema_version": 1,
         "ok": True,
         "operation": _REMOVE_OPERATION,
         "finalized": True,
         "source": {
-            "alias": planned.value.source.alias.value,
-            "kind": planned.value.source.kind.value,
-            "location": redact_text(planned.value.source.location),
-            "ref": planned.value.source.ref,
+            "alias": removed.value.source.alias.value,
+            "kind": removed.value.source.kind.value,
+            "location": redact_text(removed.value.source.location),
+            "ref": removed.value.source.ref,
             "cleared_default": planned.value.cleared_default,
         },
-        "snapshot_discarded": discarded.value.existed,
+        "snapshot_discarded": removed.value.snapshot_discarded,
     }
     if request.json:
         print(json.dumps(payload, indent=2))
     else:
-        snapshot = "discarded" if discarded.value.existed else "none stored"
+        snapshot = "discarded" if removed.value.snapshot_discarded else "none stored"
         default = "; default registry cleared" if planned.value.cleared_default else ""
         print(f"source removed: {planned.value.source.alias.value}; snapshot {snapshot}{default}")
     return _common.OK
@@ -606,6 +695,45 @@ def _selected_sources(
     return Ok(selected)
 
 
+@dataclass(frozen=True, slots=True)
+class SynchronizedSource:
+    """One source's synchronization, as both front ends read it."""
+
+    source: ConfiguredSource
+    outcome: SourceSyncOutcome
+
+
+def sync_configured_sources(request: Request) -> Result[tuple[SynchronizedSource, ...]]:
+    """Refresh the managed snapshots of the requested sources, choosing no output surface.
+
+    This is the transaction behind both `aart source sync` and screen 21's reviewed refresh
+    (B-084).  It never writes user configuration and never changes a source identity: it refreshes
+    the managed snapshot for an already-configured origin and ref, which is exactly why a consumer
+    may run it without any of the authority `add` needs.
+
+    A refusal is returned whole rather than per source, because a partial refresh presented as a
+    success is the shape that lets an unreachable origin look refreshed.  The last known good
+    snapshot of every source stays on disk either way; `sync_configured_source` replaces one only
+    after a fresh snapshot validates.
+    """
+
+    runtime = load_runtime_configuration(request, content_required=False)
+    if isinstance(runtime, Err):
+        return runtime
+    if runtime.value.loaded.recovery is not None:
+        return _recovery_error()
+    selected = _selected_sources(runtime.value, request.source_alias)
+    if isinstance(selected, Err):
+        return selected
+    synchronized: list[SynchronizedSource] = []
+    for source in selected.value:
+        outcome = sync_configured_source(source, data_root=runtime.value.paths.data_root)
+        if isinstance(outcome, Err):
+            return outcome
+        synchronized.append(SynchronizedSource(source, outcome.value))
+    return Ok(tuple(synchronized))
+
+
 def _sync(request: Request) -> int:
     runtime = load_runtime_configuration(request, content_required=False)
     if isinstance(runtime, Err):
@@ -636,7 +764,7 @@ def _sync(request: Request) -> int:
             lines.append(f"{source.alias.value}: failed")
             # Remediation is rendered here for the same reason the single-operation renderer
             # renders it: a refusal an operator cannot act on is a dead end, and `sync` is where
-            # the `source resubscribe` line that 2.1.0 exists to deliver is produced.
+            # the `source resubscribe` line is produced.
             for item in synchronized.diagnostics:
                 lines.append(f"  {item.severity.value}: {item.message}")
                 lines.extend(f"    remediation: {line}" for line in item.remediation)

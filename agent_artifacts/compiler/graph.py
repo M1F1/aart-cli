@@ -752,7 +752,7 @@ def compile_marketplace_graph_phase(
     )
 
 
-def _supported(values: Iterable[object]) -> str:
+def supported_label(values: Iterable[object]) -> str:
     """Render the set an operator may choose from, sorted so the message is reproducible.
 
     A refusal that names only the rejected value leaves the caller guessing which value would
@@ -784,20 +784,22 @@ def evaluate_compatibility(
         payload.append(
             CompatibilityReason("artifact-removed", "artifact was removed from its source")
         )
-    if target.profile not in manifest.compatibility.profiles:
+    # D-231/D-261: an empty declaration is unconstrained, the same rule placement applies, so
+    # Artifact Details cannot call unavailable what installation would put in place.
+    if manifest.compatibility.profiles and target.profile not in manifest.compatibility.profiles:
         payload.append(
             CompatibilityReason(
                 "profile-unsupported",
                 f"profile {target.profile!r} is not supported; supported profiles: "
-                f"{_supported(manifest.compatibility.profiles)}",
+                f"{supported_label(manifest.compatibility.profiles)}",
             )
         )
-    if target.platform not in manifest.compatibility.platforms:
+    if manifest.compatibility.platforms and target.platform not in manifest.compatibility.platforms:
         payload.append(
             CompatibilityReason(
                 "platform-unsupported",
                 f"platform {target.platform!r} is not supported; supported platforms: "
-                f"{_supported(manifest.compatibility.platforms)}",
+                f"{supported_label(manifest.compatibility.platforms)}",
             )
         )
     if target.scope not in manifest.install.scopes:
@@ -805,7 +807,7 @@ def evaluate_compatibility(
             CompatibilityReason(
                 "scope-unsupported",
                 f"scope {target.scope!r} is not supported; supported scopes: "
-                f"{_supported(manifest.install.scopes)}",
+                f"{supported_label(manifest.install.scopes)}",
             )
         )
     if target.mode not in manifest.install.modes:
@@ -813,7 +815,7 @@ def evaluate_compatibility(
             CompatibilityReason(
                 "mode-unsupported",
                 f"mode {target.mode!r} is not supported; supported modes: "
-                f"{_supported(manifest.install.modes)}",
+                f"{supported_label(manifest.install.modes)}",
             )
         )
     available_effects = frozenset(target.effects)
@@ -831,7 +833,7 @@ def evaluate_compatibility(
                 CompatibilityReason(
                     "setup-platform-unsupported",
                     f"setup does not support platform {target.platform!r}; supported platforms: "
-                    f"{_supported(manifest.setup.platforms)}",
+                    f"{supported_label(manifest.setup.platforms)}",
                 )
             )
         available_setup = frozenset(target.setup_capabilities)

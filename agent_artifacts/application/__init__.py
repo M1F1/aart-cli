@@ -1,6 +1,5 @@
 """Application services orchestrating pure domain functions through injected ports."""
 
-from .compiler import CompilerPorts, CompilerSteps, compile_sources
 from .configuration import (
     ConfigurationPorts,
     ConfigurationRequest,
@@ -37,8 +36,6 @@ from .store import (
 )
 
 __all__ = [
-    "CompilerPorts",
-    "CompilerSteps",
     "ConfigurationPorts",
     "ConfigurationRequest",
     "SourceSyncPorts",
@@ -54,7 +51,6 @@ __all__ = [
     "finalize_source_addition",
     "finalize_source_management",
     "object_status",
-    "compile_sources",
     "load_configuration",
     "prepare_native_promotion",
     "prepare_artifact_scaffold",

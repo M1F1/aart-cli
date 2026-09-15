@@ -99,7 +99,7 @@ class ArtifactManifest:
 
 @dataclass(frozen=True, slots=True)
 class OriginProvenance:
-    kind: Literal["git"]
+    kind: Literal["git", "local"]
     url: str
     resolved_commit: str
     path: SafeRelativePath

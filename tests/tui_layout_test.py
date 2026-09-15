@@ -1,7 +1,7 @@
-"""WP-0: the pure layout kernel shared by every TUI renderer.
+"""The pure layout kernel shared by every TUI renderer.
 
 Everything here is decidable without a terminal, so the curses layer is left with painting and
-key handling only. See docs/design/DESIGN-tui-legibility.md.
+key handling only.
 """
 
 from __future__ import annotations
@@ -41,6 +41,20 @@ class WrapTests(unittest.TestCase):
 
     def test_empty_text_still_yields_one_line(self):
         self.assertEqual(layout.wrap("", width=80), ("",))
+
+
+class SectionTests(unittest.TestCase):
+    def test_explanatory_text_breathes_between_both_rules(self) -> None:
+        self.assertEqual(
+            layout.section(("Choose detail, installation scope and optional Maintainer Mode.",)),
+            (
+                layout.SECTION_RULE,
+                "",
+                "Choose detail, installation scope and optional Maintainer Mode.",
+                "",
+                layout.SECTION_RULE,
+            ),
+        )
 
 
 class ColumnsTests(unittest.TestCase):

@@ -141,6 +141,42 @@ class RegistryCliIntegrationTest(unittest.TestCase):
             self.assertEqual(_run("registry", "format", "--source", str(root), "--yes")[0], 0)
             self.assertNotEqual(marker.read_bytes(), noncanonical)
 
+    def test_a_confirmed_init_states_each_warning_once_on_the_human_path(self) -> None:
+        """`QA-014`/`D-182`: the review and the outcome are one run, not two reports.
+
+        A confirmed action prints its review and then its result. Before this, every warning the
+        review carried was printed again by the outcome, the outcome restated the review's own path
+        count as `observed:`, and the first follow-up command re-listed every changed path. The
+        `--json` envelope still carries the review and the outcome in full, so nothing was moved out
+        of the record — only out of the second printing of it.
+        """
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "registry"
+            root.mkdir()
+            _git(root, "init", "-q")
+
+            code, output = _run(
+                "registry",
+                "init",
+                "--source",
+                str(root),
+                "--source-id",
+                "company-registry",
+                "--display-name",
+                "Company Registry",
+                "--yes",
+            )
+
+            self.assertEqual(code, 0, output)
+            warnings = [line for line in output.splitlines() if "warning:" in line]
+            self.assertEqual(len(warnings), len(set(warnings)), output)
+            self.assertTrue(warnings, output)
+            self.assertEqual([line for line in output.splitlines() if "observed:" in line], [])
+            self.assertNotIn("git -C", output)
+            self.assertIn("review the working-tree diff afterward", output)
+            self.assertIn("init: Changed 6 managed paths.", output)
+
     def test_quality_commands_accept_a_read_only_registry_snapshot_without_git(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary) / "snapshot"

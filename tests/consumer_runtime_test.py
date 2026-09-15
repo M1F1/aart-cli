@@ -399,10 +399,22 @@ class ConsumerRuntimeTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw:
             paths = object_store_paths(str(Path(raw) / "data"))
             direct = configured_source("team", SourceKind.SOURCE_GIT)
-            empty = SourceSnapshot(native_snapshot().origin, ())
+            # A tree that *says* it is a native package source and then is not.  Claiming the
+            # marker is what makes this a broken native source rather than an authoring
+            # repository, and a broken one must still take nothing from this source into the
+            # consumer graph (B-094 widened admission, not this refusal).
+            broken_native = SourceSnapshot(
+                native_snapshot().origin,
+                tuple(
+                    replace(entry, content=b"{ not json\n")
+                    if str(entry.path) == "aart-source.json"
+                    else entry
+                    for entry in native_snapshot().entries
+                ),
+            )
             invalid_native = _graph_source(
                 direct,
-                _current(direct, "reference-native-source", empty),
+                _current(direct, "reference-native-source", broken_native),
                 paths,
             )
             registry = configured_source("company", SourceKind.REGISTRY_GIT)
@@ -425,6 +437,38 @@ class ConsumerRuntimeTest(unittest.TestCase):
             self.assertNotIsInstance(invalid_native, Ok)
             self.assertNotIsInstance(missing_index, Ok)
             self.assertNotIsInstance(malformed_index, Ok)
+
+    def test_an_authoring_source_contributes_nothing_and_takes_nothing_away(self) -> None:
+        """INV-199 at the consumer projection: a Source of Candidates is not Marketplace content.
+
+        An authoring repository declares no `aart-source.json` -- it declares `aart.yaml`
+        manifests, which compile to Candidates a maintainer has not approved yet.  Reading it as
+        a broken native package tree refused the *whole* projection, which is how one subscribed
+        author repository used to empty a consumer's Marketplace (B-094/QA-020).  The right
+        answer is an empty contribution, and the difference is only visible next to the broken
+        native tree above: that one still refuses.
+        """
+
+        with tempfile.TemporaryDirectory() as raw:
+            paths = object_store_paths(str(Path(raw) / "data"))
+            authoring = configured_source("authors", SourceKind.SOURCE_GIT)
+            snapshot = append_snapshot_file(
+                SourceSnapshot(native_snapshot().origin, ()),
+                "skills/review/aart.yaml",
+                b"schema: aart.dev/skill/v1\n",
+            )
+
+            projected = _graph_source(
+                authoring,
+                _current(authoring, "authors", snapshot),
+                paths,
+            )
+
+            self.assertIsInstance(projected, Ok)
+            assert isinstance(projected, Ok)
+            self.assertEqual(projected.value.artifacts, ())
+            self.assertEqual(projected.value.collections, ())
+            self.assertEqual(projected.value.alias, authoring.alias)
 
     def test_registry_runtime_rejects_missing_or_stale_lock_index_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

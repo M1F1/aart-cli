@@ -4,8 +4,16 @@ AART writes a complete account of every setup run — plan hash, timings, exit s
 per-step receipt — and persists it under the data root, bound to one installation
 (`setup_engine/io.py`).  The only reader is the run about to replace it
 (`setup_engine/application.py`, `_previous_record`).  This module is the read path everything
-else needs: given an already-parsed install state, it resolves where one installation's record
-lives and parses it, with no run in flight and nothing locked for writing.
+else needs: given an already-parsed install state, or a canonical installation receipt, it
+resolves where one installation's record lives and parses it, with no run in flight and nothing
+locked for writing.
+
+There are two stores that can say an artifact is installed, so there are two locators. The legacy
+one reads the pointer out of the retiring install-state manifest; the canonical one reads it off
+the receipt, which is where a configured install puts it (D-128). They differ only in where the
+pointer comes from: the file it names, the three absences it can report and the record it yields
+are the same, because an operator asking about a configured installation must get the same answer
+from the same command as one asking about a legacy installation (B-046).
 
 Reading never locks.  A read that blocked on the install-state write lock would make `receipt
 show` fail during an unrelated install, which is the opposite of what a reader is for.
@@ -17,6 +25,11 @@ import posixpath
 from dataclasses import dataclass
 
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from agent_artifacts.domain.receipts import (
+    ArtifactReceipt,
+    InstallationReceipt,
+    PlacedArtifactReceipt,
+)
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.install_state.model import InstallState
 from agent_artifacts.model import Err as LegacyErr
@@ -97,6 +110,52 @@ def locate_setup_record(
             scope=scope,
             setup_state_ref=installation.setup_state_ref,
             state_path=setup_state_file(data_root, installation.setup_state_ref),
+        )
+    )
+
+
+def locate_receipt_setup_record(
+    receipt: ArtifactReceipt,
+    *,
+    coordinate: str,
+    profile: str,
+    scope: InstallScope,
+    data_root: str,
+) -> Result[ReceiptLocation]:
+    """Resolve a *configured* installation's setup record location from its own receipt.
+
+    The canonical store writes no install-state manifest, so the receipt is what says the artifact
+    is installed and its `setup_state_ref` is what says a setup run was recorded for it. A receipt
+    that carries no pointer gets the same sentence the manifest-backed locator gives an
+    installation without one: the artifact is installed and no run has been recorded, which is not
+    the same claim as declaring no setup.
+
+    The scope this returns is the caller's, and it is provisional: the canonical store keeps one
+    receipt per coordinate and partitions nothing by scope, so only the record itself knows which
+    scope its run belongs to. `receipt_service` checks it after parsing rather than here, because
+    that check needs the record and this function is what finds it.
+    """
+
+    if not isinstance(receipt, (InstallationReceipt, PlacedArtifactReceipt)):
+        raise ValueError("locating a setup record needs an installation receipt")
+    if not receipt.setup_state_ref:
+        return _error(
+            RECEIPT_NO_SETUP,
+            f"{coordinate} is installed and no setup run has been recorded for it",
+            (
+                "if it declares setup, run it with: aart marketplace setup",
+                "setup planning refused for an unverified source needs: "
+                "--authorize-untrusted-source",
+                "check whether it declares setup at all with: aart marketplace list",
+            ),
+        )
+    return Ok(
+        ReceiptLocation(
+            coordinate=coordinate,
+            profile=profile,
+            scope=scope,
+            setup_state_ref=receipt.setup_state_ref,
+            state_path=setup_state_file(data_root, receipt.setup_state_ref),
         )
     )
 

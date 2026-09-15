@@ -124,11 +124,44 @@ class LifecycleEffect:
 
 
 @dataclass(frozen=True, slots=True)
+class PolicyStanding:
+    """Whether the policy in force would still permit this installation, and at what trust.
+
+    Separate from ``status`` because the two answer different questions and an artifact can need
+    both: an installation may be simultaneously out of date and no longer compliant, and collapsing
+    them would make one of those invisible. Product Specification 165.21 requires the compliance
+    half to be part of health rather than only a gate on new installs.
+
+    ``not-evaluated`` is not a pass. It is what is reported when the current trust cannot be
+    determined at all -- an artifact its source withdrew has no current trust to judge -- and
+    calling that compliant would assert a measurement nobody took, the same reason
+    ``InstalledHealth.UNKNOWN`` exists.
+    """
+
+    status: str = "not-evaluated"
+    detail: str = ""
+    trust: str = ""
+
+    def __post_init__(self) -> None:
+        if (
+            self.status not in {"compliant", "non-compliant", "not-evaluated"}
+            or not isinstance(self.detail, str)
+            or not isinstance(self.trust, str)
+            or "\r" in self.detail
+            or "\n" in self.detail
+            or (self.status == "non-compliant") != bool(self.detail)
+            or (self.status == "not-evaluated") == bool(self.trust)
+        ):
+            raise ValueError("policy standing is invalid")
+
+
+@dataclass(frozen=True, slots=True)
 class LifecycleItem:
     key: LifecycleKey
     status: LifecycleStatus
     effects: tuple[LifecycleEffect, ...] = ()
     detail: str = ""
+    policy: PolicyStanding = PolicyStanding()
 
     def __post_init__(self) -> None:
         if (
@@ -136,6 +169,7 @@ class LifecycleItem:
             or not isinstance(self.status, LifecycleStatus)
             or any(not isinstance(effect, LifecycleEffect) for effect in self.effects)
             or not isinstance(self.detail, str)
+            or not isinstance(self.policy, PolicyStanding)
             or "\r" in self.detail
         ):
             raise ValueError("lifecycle item outcome is invalid")

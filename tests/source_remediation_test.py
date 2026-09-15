@@ -1,6 +1,6 @@
-"""SL-5: every command AART names to an operator is one the shipped executable accepts.
+"""Every command AART names to an operator is one the shipped executable accepts.
 
-The 2026-08-13 dead end was as much a diagnostics failure as a missing-operation failure: `sync`
+A dead end is as much a diagnostics failure as a missing-operation failure: `sync`
 advised the operator to "review the configured origin before replacing this source", and there was
 no replace.  Rewriting that sentence fixes it once; this file is what keeps it fixed.
 
@@ -60,9 +60,13 @@ _BACKTICKED = re.compile(r"`(aart\s[^`]+)`")
 # a word ending in a colon is a label, and the marker is written into a config file rather than
 # offered to anyone as something to run.
 _BARE = re.compile(r"\baart\s+([a-z][a-z0-9-]*)(?![\w:/-])[^,;`\n]*")
-_REMOVED = re.compile(r"^\| `aart ([a-z][a-z0-9-]*)[^|]*\|", re.MULTILINE)
+# Top-level commands the project this repository was cut from removed before `0.0.1`.  They used to
+# be read out of the compatibility tables that removed them; those tables went with the rest of
+# that project's release history (D-275), and these names are what they carried.
+_REMOVED_COMMANDS = frozenset(
+    {"check", "install", "list", "migrate", "setup", "status", "uninstall", "update", "upstream"}
+)
 _PACKAGE = Path(cli.__file__).resolve().parent
-_RELEASE_DOCS = _PACKAGE.parent / "docs" / "release"
 _REGISTRY_FIXTURE = Path(__file__).parent / "fixtures" / "protocol" / "registry-v1"
 _FINDING_LINE = re.compile(r"^\s+(error|warning): ")
 _PLACEHOLDER = "PLACEHOLDER"
@@ -111,11 +115,11 @@ def _refusal(result) -> tuple[str, ...]:
 
 
 def _command_names() -> frozenset[str]:
-    """Every top-level command the parser defines, plus every one a release document removed.
+    """Every top-level command the parser defines, plus every one that was removed.
 
     The removed names carry as much weight as the live ones.  ``aart setup retry`` is prose to a
-    regex and a dead end to an operator, and the only durable record that ``setup`` was ever a
-    command is the compatibility table that removed it — so that table is what this reads.
+    regex and a dead end to an operator, so ``setup`` has to stay recognisable as a command name
+    after the parser stops defining it.
 
     ``_actions`` is private argparse state.  The alternative is a second hand-maintained list of
     top-level commands, which would drift from the parser exactly when it mattered.
@@ -127,12 +131,7 @@ def _command_names() -> frozenset[str]:
         if isinstance(action, argparse._SubParsersAction)
         for name in action.choices
     }
-    removed = {
-        name
-        for document in sorted(_RELEASE_DOCS.glob("compatibility-v*.md"))
-        for name in _REMOVED.findall(document.read_text(encoding="utf-8"))
-    }
-    return frozenset(live | removed)
+    return frozenset(live | _REMOVED_COMMANDS)
 
 
 _COMMAND_NAMES = _command_names()
@@ -401,7 +400,7 @@ class EveryVisibleCommandMentionTest(unittest.TestCase):
 
 
 class RegistryRefusalRemediationTest(unittest.TestCase):
-    """`RS-09`: a refused `registry` command must say what to do next.
+    """A refused `registry` command must say what to do next.
 
     The family emitted next-step lines after a *successful* action and nothing after a refusal, so
     the operator who most needed one got none. A list of the refusals that carry remediation would
@@ -477,7 +476,7 @@ class RegistryRefusalRemediationTest(unittest.TestCase):
             )
 
     def test_rs09_a_refused_registry_command_prints_a_next_step(self) -> None:
-        """Driven through the shipped CLI, because the renderer is where `LAF-52` went wrong."""
+        """Driven through the shipped CLI, because the renderer is where a next step gets dropped."""
 
         with _environment() as env:
             stdout = io.StringIO()
@@ -500,16 +499,14 @@ class RegistryRefusalRemediationTest(unittest.TestCase):
 class RendererParityTest(unittest.TestCase):
     """Parser parity proves a command exists; this proves the operator was shown it.
 
-    `--json` was never the problem: the JSON envelope carried the remediation all along.  Text mode
-    dropped it, and text mode is what a person sees.  Every family that renders both must render
+    The JSON envelope carries the remediation; text mode must not drop it, because text mode is
+    what a person sees.  Every family that renders both must render
     the same lines in both.
 
     Two families are absent because they have nothing to compare. `upgrade` defines no `--json`, so
     it has one renderer; `security` and `reporting` report through plain messages rather than a
-    diagnostic envelope. `registry` was present and vacuous — both renderers agreed on nothing,
-    because its refusals carried nothing. `RS-09` filled the field, and the same comparison then
-    found the second half of the defect: `_emit_report` printed the message and dropped the next
-    step, so the JSON envelope carried advice a person at a terminal never saw.
+    diagnostic envelope. `registry` refusals carry a next step, and `_emit_report` must print it as
+    well as the message.
     """
 
     def _both_renderers(self, env, *argv: str) -> tuple[tuple[str, ...], tuple[str, ...]]:

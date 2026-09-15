@@ -1,14 +1,11 @@
 """Make module-level ``test_*`` functions visible to ``unittest discover``.
 
-`AD-41`. Five test modules were written as bare functions rather than as `TestCase` methods.
-`unittest`'s loader collects `TestCase` subclasses and nothing else, so those fifty tests were
-imported by nobody and run by nothing: the file existed, the assertions were correct, and the
-gate that reports "unit OK" never executed a line of them. A test that cannot fail is not a
-test, and the surfaces they cover — the `--json` payload renderer, the receipt, verification —
-are exactly the ones a release note points at.
+Some test modules are written as bare functions rather than as `TestCase` methods. `unittest`'s
+loader collects `TestCase` subclasses and nothing else, so without help those tests would be
+imported by nobody and run by nothing, and the gate that reports "unit OK" would never execute a
+line of them. A test that cannot fail is not a test.
 
-The functions are left as they are. The loader is what was missing, so the loader is what this
-adds: one generated `TestCase` per module, carrying each function as a method under its own
+The functions are left as they are, and this module supplies the loader: one generated `TestCase` per module, carrying each function as a method under its own
 name, so a failure still reports which function failed.
 """
 

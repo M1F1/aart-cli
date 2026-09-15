@@ -1,0 +1,61 @@
+name: AART mutation adequacy
+description: >
+  Install the developer tools and run scoped mutation testing over one module.  Lives in an action
+  for the same reason the quality gates do: two jobs differ only in how their container image is
+  pulled, and a duplicated step list is a step list that drifts.
+
+inputs:
+  python:
+    description: Name of the interpreter to invoke.
+    required: true
+  python-version:
+    description: Interpreter version to install when the job runs without a container image.
+    required: true
+  setup-python:
+    description: '"true" when the job has no container image and so needs an interpreter installed.'
+    required: true
+  only:
+    description: The module to mutate.
+    required: true
+  tests:
+    description: The test files that claim to cover it, space separated.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    # See the note on the same step in `.github/actions/quality`: a container job usually runs as
+    # a different uid than the one `actions/checkout` wrote the workspace as.
+    - name: Trust the checked-out workspace
+      shell: bash
+      run: git config --global --add safe.directory "$PWD"
+
+    - name: Point pip at the internal index
+      uses: ./.github/actions/pip-index
+
+    - name: Set up Python
+      if: inputs.setup-python == 'true'
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install developer quality tools
+      shell: bash
+      run: ${{ inputs.python }} scripts/dev_tools.py install
+
+    # `scripts/mutants.py` is the canonical runner and the Makefile target wraps it, so calling it
+    # directly drops GNU Make from the list of things a CI image has to carry.  It is scoped by
+    # contract: `--only` is required, because mutating this repository whole is days of compute.
+    - name: Run scoped mutation testing
+      shell: bash
+      env:
+        ONLY: ${{ inputs.only }}
+        TESTS: ${{ inputs.tests }}
+      run: |
+        set -euo pipefail
+        if [ -n "$TESTS" ]; then
+          ${{ inputs.python }} scripts/mutants.py --only "$ONLY" --tests $TESTS
+        else
+          ${{ inputs.python }} scripts/mutants.py --only "$ONLY"
+        fi

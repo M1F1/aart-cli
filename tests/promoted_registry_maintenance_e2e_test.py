@@ -1,0 +1,185 @@
+"""CP-19 step 9: the registry promotion writes is the registry maintenance has to accept.
+
+`registry init` generates a workflow that gates every pull request with `format`, `validate`,
+`lock`, `build`, `audit` and `test`, and screen 46's Rebuild runs four of the same verbs locally.
+A promotion writes the approved versioned representation the Product Specification names -- the one
+a public consumer acquires and validates -- so the first real promoted artifact failed both gates
+with a refusal naming `artifact.json` at the *unversioned* path of the older authoring workspace
+(`QA-025`, `QA-032`, `B-057`).
+
+Nothing here is a fixture's idea of a registry: the workspace is built by the public `registry init`
+→ `registry scan` → `registry promote` chain, which is the same transaction the TUI applies.
+"""
+
+from __future__ import annotations
+
+import contextlib
+import io
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+from agent_artifacts import cli
+from agent_artifacts.domain.result import Ok
+from agent_artifacts.io.registry_bootstrap import refresh_registry_workspace
+from tests.maintainer_scan_cli_test import _author_checkout, _git
+
+_EVIDENCE = ("--validation-report", "sha256:" + "7" * 64, "--policy-result", "sha256:" + "8" * 64)
+
+#: What `.github/workflows/aart-registry.yml` runs on every pull request, in its order.
+GENERATED_GATE: tuple[tuple[str, ...], ...] = (
+    ("format", "--check"),
+    ("validate", "--strict", "--frozen"),
+    ("lock", "--check"),
+    ("build", "--check"),
+    ("audit",),
+    ("test", "--compatibility", "latest"),
+)
+
+
+def _cli(*argv: str) -> tuple[int, str]:
+    output = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
+            code = cli.main(list(argv))
+    except SystemExit as exit_request:
+        return int(exit_request.code or 0), output.getvalue()
+    return code, output.getvalue()
+
+
+class PromotedRegistryMaintenanceE2ETest(unittest.TestCase):
+    @contextlib.contextmanager
+    def _promoted_registry(self):
+        """An initialized registry checkout holding exactly one real local promotion."""
+
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw).resolve()
+            author = root / "author"
+            checkout = root / "registry"
+            author.mkdir()
+            checkout.mkdir()
+            _author_checkout(author)
+            _git(checkout, "init", "-q")
+            _git(checkout, "config", "user.name", "AART Test")
+            _git(checkout, "config", "user.email", "aart@example.invalid")
+
+            code, text = _cli(
+                "registry",
+                "init",
+                "--source",
+                str(checkout),
+                "--source-id",
+                "company-registry",
+                "--display-name",
+                "Company Registry",
+                "--yes",
+            )
+            self.assertEqual(code, 0, text)
+            common = (
+                "--source",
+                str(checkout),
+                "--checkout",
+                str(author),
+                "--source-alias",
+                "authors",
+                "--source-url",
+                "https://git.example/authors.git",
+                "--target-registry",
+                "company",
+            )
+            code, text = _cli("registry", "scan", *common, "--json")
+            self.assertEqual(code, 0, text)
+            candidate = json.loads(text)["candidates"][0]["candidate_id"]
+            code, text = _cli(
+                "registry",
+                "promote",
+                *common,
+                "--candidate",
+                candidate,
+                *_EVIDENCE,
+                "--yes",
+                "--json",
+            )
+            self.assertEqual(code, 0, text)
+            yield checkout
+
+    def test_the_generated_gate_accepts_the_registry_promotion_wrote(self) -> None:
+        with self._promoted_registry() as checkout:
+            failed = []
+            for verb, *arguments in GENERATED_GATE:
+                code, text = _cli("registry", verb, "--source", str(checkout), *arguments)
+                if code != 0:
+                    failed.append(f"{verb}: {text.strip().splitlines()[:3]}")
+
+            self.assertEqual(failed, [])
+
+    def test_maintenance_does_not_write_the_older_workspace_representation(self) -> None:
+        """`B-057` stays closed by one representation, not by producing both of them."""
+
+        with self._promoted_registry() as checkout:
+            for verb in ("lock", "build"):
+                code, text = _cli("registry", verb, "--source", str(checkout), "--yes")
+                self.assertEqual(code, 0, text)
+
+            self.assertFalse((checkout / "aart.lock.json").exists())
+            self.assertFalse((checkout / "aart.index.json").exists())
+            self.assertTrue((checkout / "registry/index.json").exists())
+
+    def test_a_rebuild_restores_a_catalog_somebody_damaged(self) -> None:
+        """What `build` means for this representation: the derived catalogs, and nothing else."""
+
+        with self._promoted_registry() as checkout:
+            catalog = checkout / "registry/index.json"
+            approved = catalog.read_bytes()
+            catalog.write_bytes(b'{"schema": "aart.dev/registry-index/v1"}')
+
+            code, text = _cli("registry", "build", "--source", str(checkout), "--check")
+
+            self.assertNotEqual(code, 0, text)
+
+            code, text = _cli("registry", "build", "--source", str(checkout), "--yes")
+
+            self.assertEqual(code, 0, text)
+            self.assertEqual(catalog.read_bytes(), approved)
+
+    def test_publish_gates_the_approved_representation_without_locking_it(self) -> None:
+        """Publish chains lock, build, validate and audit; the first of those has nothing to do."""
+
+        with self._promoted_registry() as checkout:
+            code, text = _cli("registry", "publish", "--source", str(checkout), "--yes")
+
+            self.assertEqual(code, 0, text)
+            self.assertFalse((checkout / "aart.lock.json").exists())
+            self.assertFalse((checkout / "aart.index.json").exists())
+
+    def test_screen_46_rebuilds_the_registry_a_promotion_left_behind(self) -> None:
+        """`QA-025`: the TUI's Rebuild is this port, and it ran the authoring workspace's reader."""
+
+        with self._promoted_registry() as checkout:
+            report = refresh_registry_workspace(root=str(checkout))
+
+            self.assertIsInstance(report, Ok, report)
+            self.assertEqual(
+                [(stage.name, stage.passed) for stage in report.value.stages],
+                [("lock", True), ("build", True), ("validate", True), ("audit", True)],
+            )
+
+    def test_a_damaged_version_record_is_still_refused(self) -> None:
+        """The dispatch may not become a way past the validator it dispatches to."""
+
+        with self._promoted_registry() as checkout:
+            record = checkout / "registry/versions/mcp/github-mcp/1.0.0.json"
+            content = json.loads(record.read_text(encoding="utf-8"))
+            content["payload_digest"] = "sha256:" + "0" * 64
+            record.write_text(json.dumps(content), encoding="utf-8")
+
+            code, text = _cli(
+                "registry", "validate", "--source", str(checkout), "--strict", "--frozen"
+            )
+
+            self.assertNotEqual(code, 0, text)
+
+
+if __name__ == "__main__":
+    unittest.main()

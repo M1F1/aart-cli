@@ -509,6 +509,7 @@ def _bandit(
             isinstance(rule, Err)
             or isinstance(path, Err)
             or isinstance(line, Err)
+            or not isinstance(severity, str)
             or severity not in severity_map
         ):
             return _error("Bandit finding is invalid")
@@ -619,6 +620,7 @@ def _shellcheck(
             isinstance(rule, Err)
             or isinstance(path, Err)
             or isinstance(line, Err)
+            or not isinstance(level, str)
             or level not in severity_map
         ):
             return _error("ShellCheck finding is invalid")

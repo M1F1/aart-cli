@@ -9,6 +9,10 @@ import stat
 import tempfile
 from pathlib import Path
 
+from agent_artifacts.application.maintainer_views import (
+    MaintainerRegistryWorkspaceView,
+    project_registry_workspace,
+)
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.io.git import GitProcessRequest, run_git_process
@@ -20,6 +24,7 @@ from agent_artifacts.protocol.native_tree import (
     SourceSnapshot,
 )
 from agent_artifacts.protocol.paths import SafeRelativePath, parse_relative_path
+from agent_artifacts.protocol.registry_schema import parse_registry_manifest
 from agent_artifacts.registry_commands.model import (
     RegistryApplyCommand,
     RegistryApplyReceipt,
@@ -28,6 +33,83 @@ from agent_artifacts.registry_commands.model import (
 from agent_artifacts.registry_commands.planning import project_registry_workspace_plan
 
 REGISTRY_WORKSPACE_INVALID = DiagnosticCode("registry-workspace-invalid")
+
+_REGISTRY_MARKER = "aart-registry.json"
+
+#: Long enough for local Git plumbing on a cold cache, short enough that a wedged process cannot
+#: hold a screen open. Nothing read here touches the network: every question is answered from refs
+#: this checkout already has, which is exactly why the answers are knowledge rather than fact.
+_READ_TIMEOUT_SECONDS = 10.0
+
+
+def _git_line(root: str, *arguments: str) -> str | None:
+    """One line of Git output, or `None` for any reason it could not be established."""
+
+    receipt = run_git_process(
+        GitProcessRequest(("git", "-C", root, *arguments), root, _READ_TIMEOUT_SECONDS, 4096)
+    )
+    if isinstance(receipt, Err):
+        return None
+    try:
+        text = receipt.value.stdout.decode("utf-8", errors="strict").strip()
+    except UnicodeDecodeError:
+        return None
+    return text or None
+
+
+def read_registry_workspace(root: str) -> MaintainerRegistryWorkspaceView | None:
+    """Where the registry in *root* has got to, read once and never during a draw (`QA-098`).
+
+    `None` means this project publishes no registry, which is a different answer from a registry
+    nothing could be read about -- that one comes back as a view in the `UNOBSERVED` state, so the
+    screen can say "not established" rather than inventing a state it did not observe.
+
+    Every question is answered from refs this checkout already holds, so the read stays local: the
+    remote branch reported is the one this checkout knows of, and how stale that knowledge is stays
+    the reader's own business. `[u] Check upstream` is the key that refreshes it.
+    """
+
+    if not isinstance(root, str) or not os.path.isabs(root):
+        return None
+    root = os.path.normpath(root)
+    marker = os.path.join(root, _REGISTRY_MARKER)
+    if not os.path.isfile(marker):
+        return None
+    name = _registry_name(marker) or os.path.basename(root)
+    commit = _git_line(root, "rev-parse", "--short", "HEAD")
+    branch = _git_line(root, "rev-parse", "--abbrev-ref", "HEAD")
+    remote_branch = _git_line(root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
+    unpushed: int | None = None
+    if remote_branch is not None:
+        counted = _git_line(root, "rev-list", "--count", f"{remote_branch}..HEAD")
+        unpushed = int(counted) if counted is not None and counted.isdigit() else None
+    return project_registry_workspace(
+        name,
+        commit=commit,
+        origin=_git_line(root, "remote", "get-url", "origin"),
+        # A detached HEAD reports the literal "HEAD", which names no branch anybody can push.
+        branch=None if branch == "HEAD" else branch,
+        remote_branch=remote_branch,
+        unpushed=unpushed,
+    )
+
+
+def _registry_name(marker: str) -> str | None:
+    """The registry's own id, from the file whose presence makes this a registry at all.
+
+    Read through the one parser the rest of the repository reads it with, so a half-written or
+    invalid marker names nothing rather than naming something wrong; the directory answers instead.
+    """
+
+    try:
+        with open(marker, "rb") as handle:
+            document = handle.read(1024 * 1024)
+    except OSError:
+        return None
+    manifest = parse_registry_manifest(document)
+    return None if isinstance(manifest, Err) else str(manifest.value.registry_id)
+
+
 REGISTRY_WORKSPACE_STALE = DiagnosticCode("registry-workspace-stale")
 REGISTRY_WORKSPACE_APPLY_FAILED = DiagnosticCode("registry-workspace-apply-failed")
 # `README.md` and `.aart-version` are here so the reader can *see* them, which is what lets
@@ -50,7 +132,9 @@ _ROOT_FILES = frozenset(
 # plan that writes an attestation is verified against a re-read snapshot, and `registry audit` reads
 # `security/index.json` out of that same snapshot — a root it could not see was a root whose
 # evidence it could never report.
-_ROOT_DIRECTORIES = frozenset({"entries", "artifacts", "collections", "security"})
+_ROOT_DIRECTORIES = frozenset(
+    {"entries", "artifacts", "collections", "security", "registry", "references"}
+)
 _GITHUB_DIRECTORIES = frozenset({".github", ".github/workflows", ".github/ISSUE_TEMPLATE"})
 _GITHUB_FILES = frozenset(
     {

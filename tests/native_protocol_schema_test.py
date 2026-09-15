@@ -263,14 +263,6 @@ class ArtifactManifestTest(unittest.TestCase):
                 _artifact_document(
                     "skill",
                     "aart-skill-v1",
-                    compatibility={"profiles": [], "platforms": ["darwin"]},
-                ),
-                "artifact-invalid",
-            ),
-            (
-                _artifact_document(
-                    "skill",
-                    "aart-skill-v1",
                     compatibility={"profiles": ["UPPER"], "platforms": ["darwin"]},
                 ),
                 "artifact-invalid",
@@ -294,6 +286,20 @@ class ArtifactManifestTest(unittest.TestCase):
             with self.subTest(document=document):
                 data = document if isinstance(document, str) else json.dumps(document)
                 self.assertEqual(_codes(parse_artifact_manifest(data)), (expected,))
+
+        unconstrained = _unwrap(
+            parse_artifact_manifest(
+                json.dumps(
+                    _artifact_document(
+                        "skill",
+                        "aart-skill-v1",
+                        compatibility={"profiles": [], "platforms": []},
+                    )
+                )
+            )
+        )
+        self.assertEqual(unconstrained.compatibility.profiles, ())
+        self.assertEqual(unconstrained.compatibility.platforms, ())
 
         complete = _artifact_document(
             "mcp",

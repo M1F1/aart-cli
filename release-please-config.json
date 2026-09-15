@@ -1,0 +1,33 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "python",
+  "include-v-in-tag": true,
+  "draft": false,
+  "prerelease": false,
+  "separate-pull-requests": false,
+  "bump-minor-pre-major": false,
+  "bump-patch-for-minor-pre-major": false,
+  "changelog-sections": [
+    { "type": "feat", "section": "Added" },
+    { "type": "fix", "section": "Fixed" },
+    { "type": "perf", "section": "Performance" },
+    { "type": "revert", "section": "Reverted" },
+    { "type": "refactor", "section": "Changed" },
+    { "type": "docs", "section": "Documentation" },
+    { "type": "security", "section": "Security" },
+    { "type": "build", "section": "Packaging" },
+    { "type": "test", "section": "Testing", "hidden": true },
+    { "type": "ci", "section": "Continuous integration", "hidden": true },
+    { "type": "chore", "section": "Housekeeping", "hidden": true }
+  ],
+  "packages": {
+    ".": {
+      "package-name": "aart-cli",
+      "changelog-path": "CHANGELOG.md",
+      "extra-files": [
+        { "type": "generic", "path": "agent_artifacts/__init__.py" },
+        { "type": "generic", "path": "README.md" }
+      ]
+    }
+  }
+}

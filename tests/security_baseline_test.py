@@ -725,6 +725,27 @@ class SecurityBaselineContentTest(unittest.TestCase):
         self.assertIn("unpinned-package-install", rules)
         self.assertTrue(all(item.message and item.remediation for item in assessment.findings))
 
+    def test_a_credential_named_by_its_assignment_is_found_without_a_known_prefix(self) -> None:
+        """The second detector, on its own.
+
+        `_SECRET_PREFIX` recognises the vendors whose tokens have a shape -- GitHub, AWS, Slack. The
+        assignment rule is what catches everything else: a value long enough to be real, sitting
+        next to a key that names a credential. Every other fixture here happens to carry a
+        prefix-shaped token as well, so the assignment branch was never the thing that decided, and
+        replacing its result with `None` changed nothing anywhere (found by `make mutants`).
+        """
+
+        # Prose, not JSON: `_json_findings` raises the same rule for a credential member, so a
+        # `.json` fixture would pass with the assignment branch removed entirely.
+        note = "# Review\n\nSet " + assignment("password", "n0t-a-vendor-shaped-value") + "\n"
+        candidate, indexed, _ = _fixture(
+            files=(("payload/SKILL.md", note.encode("utf-8"), False),),
+        )
+
+        assessment = _scan(candidate, indexed)
+
+        self.assertIn("embedded-credential", {item.rule_id for item in assessment.findings})
+
     def test_placeholder_credentials_are_not_reported_as_embedded_secrets(self) -> None:
         payload = b'{"server":{"env":{"API_TOKEN":"${ATLASSIAN_API_TOKEN}"}}}\n'
         candidate, indexed, _ = _fixture(

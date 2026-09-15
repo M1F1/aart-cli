@@ -3,8 +3,8 @@
 A native AART source is an acquired repository tree whose root contains `aart-source.json`.
 Artifact discovery is deliberately limited to the manifest's explicit `artifact_roots`; AART does
 not crawl arbitrary repository layouts during consumer installation. A foreign layout must be
-re-authored as a native source before it becomes a consumer input; AART does not convert legacy
-catalogs at runtime.
+re-authored as a native source before it becomes a consumer input; AART does not convert other
+catalog formats at runtime.
 
 The executable reference fixture is
 [`tests/fixtures/protocol/native-source-v1`](../../tests/fixtures/protocol/native-source-v1). It
@@ -82,14 +82,14 @@ consumers.
 
 Each direct `<collection-root>/<name>.json` file contains a one-line summary, structured artifact
 selectors with optional half-open version bounds, and optional references to other collections.
-P02 rejects duplicate selectors and direct self-reference; P03 owns full dangling/cycle graph
-validation.
+The source loader rejects duplicate selectors and direct self-reference; the graph compiler owns
+full dangling/cycle graph validation.
 
 ## Snapshot boundary
 
-The P02 loader consumes an already acquired immutable `SourceSnapshot`. Local and pinned-Git
+The loader consumes an already acquired immutable `SourceSnapshot`. Local and pinned-Git
 snapshots with the same files compile to the same frozen manifests and SHA-256 identities,
 regardless of entry order or explicit directory entries. Filesystem/network acquisition and
-last-known-good publication belong to SRC01. Protocol v1 rejects duplicate paths and rejects
+last-known-good publication belong to source acquisition. Protocol v1 rejects duplicate paths and rejects
 symlinks or special device/FIFO/socket entries inside the marker and declared artifact/collection
 roots. Unrelated repository content is not heuristically compiled.

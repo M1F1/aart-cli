@@ -16,53 +16,37 @@ from pathlib import Path
 from unittest import mock
 
 from tests.credential_fixtures import assignment
-from tests.versioning_test import ROOT, _load_script
+from tests.script_fixtures import ROOT
+from tests.script_fixtures import load_script as _load_script
 
 REFERENCE_ORIGIN = "https://github.com/M1F1/agent-artifacts-registry.git"
 REFERENCE_COMMIT = "a" * 40
 
 
-def _fixture_root(raw: str, release, *, complete: bool = True) -> Path:
+# Any version at all.  The checklist no longer rules on which one -- the release engine decides
+# it and writes it -- so pinning the fixture to a literal the script also holds would be testing
+# that two copies of a constant agree, which is the thing this release model removed.
+FIXTURE_VERSION = "7.3.1"
+
+
+def _fixture_root(raw: str, release, *, version: str = FIXTURE_VERSION) -> Path:
     root = Path(raw)
     for relative in release.SCHEMA_INPUTS:
         source = ROOT / relative
         target = root / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, target)
-    # Build the fixture at the version the release contract governs, so this test keeps asserting
-    # "a complete tree at the declared release version passes" rather than pinning one literal.
-    version = release.EXPECTED_VERSION
-    major, minor, patch = (int(part) for part in version.split("."))
     package = root / "agent_artifacts"
     package.mkdir(exist_ok=True)
     (package / "__init__.py").write_text(f'__version__ = "{version}"\n', encoding="utf-8")
-    (package / "runtime_contract.py").write_text(
-        "from agent_artifacts.protocol.semver import SemVer\n"
-        f"EXECUTABLE_VERSION = SemVer({major}, {minor}, {patch})\n",
-        encoding="utf-8",
-    )
     (root / "pyproject.toml").write_text(
         f'[project]\nname = "aart-cli"\nversion = "{version}"\ndependencies = []\n',
-        encoding="utf-8",
-    )
-    state = "complete" if complete else "pending"
-    (root / "PROGRESS.md").write_text(
-        "## Task ledger\n\n"
-        "| ID | Task | Depends on | Status | Branch | PR / merge | Gate evidence / notes |\n"
-        "|---|---|---|---|---|---|---|\n"
-        "| P00 | Plan | — | complete | — | — | — |\n"
-        f"| REL01 | Release | all | {state} | — | — | — |\n\n"
-        "## Current-task template\n",
         encoding="utf-8",
     )
     for relative in release.REQUIRED_RELEASE_DOCS:
         target = root / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(f"# AART {version}\n\nRelease evidence.\n", encoding="utf-8")
-    for relative in release.REQUIRED_PERSISTENT_DOCS:
-        target = root / relative
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text("# Carried forward\n\nEarlier-boundary evidence.\n", encoding="utf-8")
+        target.write_text("# AART\n\nRelease evidence.\n", encoding="utf-8")
     freeze = root / release.SCHEMA_FREEZE_PATH
     freeze.parent.mkdir(parents=True, exist_ok=True)
     freeze.write_bytes(release.schema_freeze_bytes(root))
@@ -94,6 +78,73 @@ def _unsafe_registry_runner(calls, registry, status, head, origin_head):
     return runner
 
 
+class TheDeclaredSchemaInputsExistTest(unittest.TestCase):
+    """`SCHEMA_INPUTS` is a hand-maintained tuple of paths, so a module can leave the tree
+    without the tuple noticing.  Every consumer of it -- the freeze, the checklist, this
+    file's own fixture builder -- then fails deep inside `shutil.copy2` with an errno and no
+    hint that a *release contract* is what broke.  This states the claim where it belongs."""
+
+    def test_every_declared_schema_input_is_a_file_in_the_tree(self) -> None:
+        release = _load_script("release")
+
+        missing = [
+            relative for relative in release.SCHEMA_INPUTS if not (ROOT / relative).is_file()
+        ]
+
+        self.assertEqual(
+            missing,
+            [],
+            "release.SCHEMA_INPUTS names files that no longer exist. A schema input is a "
+            "declared part of the release contract, reachable by path rather than by import, "
+            "so deleting one is a contract change: remove it from SCHEMA_INPUTS and run "
+            "`make release-freeze` in the same change.",
+        )
+
+    def test_the_committed_freeze_is_the_freeze_of_this_tree(self) -> None:
+        """D-275: a moved schema fails the pull request that moved it, not the release after it.
+
+        The freeze used to be compared only by `release.py check`, which runs after Release Please
+        has already created the tag and the GitHub Release -- so a schema edited without its freeze
+        surfaced as a published release with no wheel attached.  Holding the comparison here puts
+        it in the unit gate every pull request runs.
+        """
+
+        release = _load_script("release")
+
+        self.assertEqual(
+            (ROOT / release.SCHEMA_FREEZE_PATH).read_bytes(),
+            release.schema_freeze_bytes(ROOT),
+            "a normative schema input changed without its freeze. If the format change is "
+            "intended, run `make release-freeze` and commit docs/release/schema-freeze.json "
+            "with the change; if it is not, the schema edit is the defect.",
+        )
+
+    def test_there_is_one_freeze_and_it_names_no_release(self) -> None:
+        """D-275: one unversioned freeze, overwritten in place; git history is its record.
+
+        A `release_version` inside it would be a second copy of the number Release Please owns,
+        which is exactly the manual bookkeeping INV-091 and INV-098 forbid.
+        """
+
+        release = _load_script("release")
+        import json
+
+        frozen = json.loads((ROOT / release.SCHEMA_FREEZE_PATH).read_text(encoding="utf-8"))
+
+        self.assertEqual(release.SCHEMA_FREEZE_PATH, "docs/release/schema-freeze.json")
+        self.assertNotIn("release_version", frozen)
+        self.assertEqual(
+            sorted((ROOT / "docs" / "release").glob("schema-freeze*")),
+            [ROOT / release.SCHEMA_FREEZE_PATH],
+        )
+
+    def test_this_guard_is_not_vacuous(self) -> None:
+        release = _load_script("release")
+
+        self.assertTrue(release.SCHEMA_INPUTS)
+        self.assertFalse((ROOT / "agent_artifacts" / "no_such_schema.py").is_file())
+
+
 class ReleaseChecklistTest(unittest.TestCase):
     def test_complete_stable_tree_and_registry_return_deterministic_pass_receipt(self) -> None:
         release = _load_script("release")
@@ -107,7 +158,7 @@ class ReleaseChecklistTest(unittest.TestCase):
 
         self.assertEqual(first, second)
         self.assertEqual(first["status"], "passed")
-        self.assertEqual(first["version"], release.EXPECTED_VERSION)
+        self.assertEqual(first["version"], FIXTURE_VERSION)
         self.assertEqual(first["registry_commit"], REFERENCE_COMMIT)
         self.assertEqual(first["diagnostics"], [])
         self.assertEqual(
@@ -116,18 +167,22 @@ class ReleaseChecklistTest(unittest.TestCase):
         )
         self.assertTrue(all(item["passed"] for item in first["checks"]))
 
-    def test_incomplete_progress_version_mismatch_stale_schema_and_missing_docs_accumulate(
+    def test_an_undeclarable_version_a_stale_schema_and_a_missing_document_accumulate(
         self,
     ) -> None:
+        """Three unrelated refusals in one run, so the checklist reports all of them.
+
+        The version refusal is "the tree cannot say what version it is at all", which is a real
+        failure rather than a disagreement between copies.
+        """
+
         release = _load_script("release")
         with tempfile.TemporaryDirectory() as raw:
-            root = _fixture_root(raw, release, complete=False)
+            root = _fixture_root(raw, release)
             registry = root / "reference-registry"
             registry.mkdir()
-            (root / "agent_artifacts/__init__.py").write_text(
-                '__version__ = "1.0.0a1"\n', encoding="utf-8"
-            )
-            (root / release.REQUIRED_RELEASE_DOCS[1]).unlink()
+            (root / "agent_artifacts/__init__.py").write_text("# no version\n", encoding="utf-8")
+            (root / release.REQUIRED_RELEASE_DOCS[0]).unlink()
             schema = root / release.SCHEMA_INPUTS[0]
             schema.write_bytes(schema.read_bytes() + b"\n# changed after freeze\n")
 
@@ -140,21 +195,49 @@ class ReleaseChecklistTest(unittest.TestCase):
 
         codes = tuple(item["code"] for item in receipt["diagnostics"])
         self.assertEqual(receipt["status"], "failed")
-        self.assertIn("progress-incomplete", codes)
         self.assertIn("version-invalid", codes)
         self.assertIn("schema-freeze-stale", codes)
         self.assertIn("release-doc-missing", codes)
+        self.assertEqual(receipt["version"], "unknown")
 
-    def test_a_dropped_carried_forward_document_still_blocks_the_release(self) -> None:
-        """Migration and tutorial guides survive a release-series bump.
+    def test_the_checklist_does_not_rule_on_which_version_it_is_looking_at(self) -> None:
+        """INV-085, INV-098: the release engine decides the number; this reports it.
 
-        They describe an earlier boundary and so cannot be required to name the current version,
-        but a release must not silently ship without the 0.1.x migration guide or the onboarding
-        tutorials either.
+        A tree at any version passes.  The check that used to be here refused every version but
+        one typed into this script, which meant a release could not happen until somebody edited
+        the checklist to permit it.
         """
 
         release = _load_script("release")
-        for relative in release.REQUIRED_PERSISTENT_DOCS:
+        for version in ("0.0.1", "7.3.1", "41.0.0"):
+            with self.subTest(version=version), tempfile.TemporaryDirectory() as raw:
+                root = _fixture_root(raw, release, version=version)
+                registry = root / "reference-registry"
+                registry.mkdir()
+                seen: list[tuple[str, ...]] = []
+
+                def runner(command, cwd, environment, timeout_seconds, seen=seen):
+                    seen.append(command)
+                    return _successful_runner(command, cwd, environment, timeout_seconds)
+
+                receipt = release.check_release(root, registry, process_runner=runner)
+
+                self.assertEqual(receipt["status"], "passed")
+                self.assertEqual(receipt["version"], version)
+                # And the version the tree declares is the version the registry is reconciled
+                # against.  Without this the checklist could pass a constant to the registry and
+                # report a different number in its own receipt -- reconciling a release nobody is
+                # cutting, and saying nothing about having done so.
+                compatibility = [command for command in seen if "--latest-version" in command]
+                self.assertEqual(len(compatibility), 1, seen)
+                command = compatibility[0]
+                self.assertEqual(command[command.index("--latest-version") + 1], version)
+
+    def test_a_dropped_required_document_still_blocks_the_release(self) -> None:
+        """A release must not silently ship without its changelog or the onboarding tutorials."""
+
+        release = _load_script("release")
+        for relative in release.REQUIRED_RELEASE_DOCS:
             with self.subTest(document=relative), tempfile.TemporaryDirectory() as raw:
                 root = _fixture_root(raw, release)
                 registry = root / "reference-registry"
@@ -169,15 +252,16 @@ class ReleaseChecklistTest(unittest.TestCase):
                     tuple(item["code"] for item in receipt["diagnostics"]),
                 )
 
-    def test_a_carried_forward_document_need_not_name_the_current_version(self) -> None:
+    def test_a_required_document_need_not_name_the_current_version(self) -> None:
         release = _load_script("release")
         with tempfile.TemporaryDirectory() as raw:
             root = _fixture_root(raw, release)
             registry = root / "reference-registry"
             registry.mkdir()
-            # Mentions only the earlier boundary, exactly like the real migration guide.
-            (root / release.REQUIRED_PERSISTENT_DOCS[0]).write_text(
-                "# Migrating from AART 0.1.x to 1.0.0\n", encoding="utf-8"
+            # Names an unrelated version: the checklist does not reconcile documents against the
+            # number Release Please writes (INV-098).
+            (root / release.REQUIRED_RELEASE_DOCS[0]).write_text(
+                "# Changelog\n\n## 0.0.1\n", encoding="utf-8"
             )
 
             receipt = release.check_release(root, registry, process_runner=_successful_runner)
@@ -231,8 +315,9 @@ class ReleaseChecklistTest(unittest.TestCase):
 
             self.assertEqual(release.main(("freeze",), root=root), 1)
             self.assertFalse(freeze.exists())
+            # With no freeze at all there is nothing to read back: the write stands alone.
             self.assertEqual(release.main(("freeze", "--write"), root=root), 0)
-            self.assertTrue(freeze.is_file())
+            self.assertEqual(freeze.read_bytes(), release.schema_freeze_bytes(root))
 
         self.assertIn(
             "repository-dirty",
@@ -506,7 +591,7 @@ class ReleaseChecklistTest(unittest.TestCase):
 
 @unittest.skipIf(sys.version_info < (3, 11), "the stdlib wheel builder requires Python 3.11+")
 class WheelDigestEvidenceTest(unittest.TestCase):
-    """SI-8: the digest a verifier compares against is produced by a command, not by hand."""
+    """The digest a verifier compares against is produced by a command, not by hand."""
 
     def test_the_digest_names_the_published_wheel_and_repeats(self) -> None:
         release = _load_script("release")
@@ -514,7 +599,7 @@ class WheelDigestEvidenceTest(unittest.TestCase):
         first_name, first_digest = release.wheel_digest(ROOT)
         second_name, second_digest = release.wheel_digest(ROOT)
 
-        self.assertEqual(first_name, f"aart_cli-{release.EXPECTED_VERSION}-py3-none-any.whl")
+        self.assertEqual(first_name, f"aart_cli-{release.declared_version(ROOT)}-py3-none-any.whl")
         self.assertEqual(first_digest, second_digest)
         self.assertRegex(first_digest, r"^sha256:[0-9a-f]{64}$")
         self.assertEqual(first_name, second_name)
@@ -535,7 +620,7 @@ class WheelDigestEvidenceTest(unittest.TestCase):
 
 @unittest.skipIf(sys.version_info < (3, 11), "the stdlib wheel builder requires Python 3.11+")
 class WheelDigestArtifactTest(unittest.TestCase):
-    """`LAF-75`: the command hands over the wheel whose digest it prints.
+    """The command hands over the wheel whose digest it prints.
 
     The digest used to describe a wheel inside a temporary directory that was removed before the
     command returned, so the publisher had to build a second wheel by another route and attach

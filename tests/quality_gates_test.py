@@ -138,171 +138,6 @@ class DocsCheckTest(unittest.TestCase):
             self.assertEqual(docs_check._repository_markdown(root), ())
 
 
-class ResidueRegisterGateTest(unittest.TestCase):
-    """`RR-7`: the register is the single place, enforced rather than asserted.
-
-    Each test introduces one disagreement into a throwaway copy of the register's shape and
-    requires the gate to name it. A rule that cannot be made to fail is not a gate — that is
-    cluster `C6`'s whole complaint about closure recorded in prose.
-    """
-
-    HEADER = (
-        "# Residue register\n\n## Checked documents\n\n"
-        "- checked: `docs/plan/*.md`\n\n## Register\n\n"
-        "| ID | Severity | Found in | Disposition | Closed or made visible by |\n"
-        "|---|---|---|---|---|\n"
-    )
-
-    def _root(self, register: str, extra: dict[str, str] | None = None) -> pathlib.Path:
-        root = pathlib.Path(tempfile.mkdtemp())
-        self.addCleanup(lambda: __import__("shutil").rmtree(root, ignore_errors=True))
-        (root / "docs" / "testing").mkdir(parents=True)
-        (root / "docs" / "plan").mkdir(parents=True)
-        (root / "docs" / "testing" / "residue-register.md").write_text(register, encoding="utf-8")
-        for name, text in (extra or {}).items():
-            (root / name).write_text(text, encoding="utf-8")
-        return root
-
-    def _codes(self, root: pathlib.Path) -> set[str]:
-        docs_check = _load_script("docs_check")
-        return {item.code for item in docs_check._register_diagnostics(root)}
-
-    def test_a_stream_finding_absent_from_the_register_fails(self):
-        root = self._root(
-            self.HEADER + "| `LAF-52` | high | run | `open` | — |\n",
-            {
-                "docs/testing/residue-stream-2026-08-15.md": (
-                    "| ID | One line |\n|---|---|\n"
-                    "| `LAF-52` | in the register |\n"
-                    "| `LAF-99` | not in the register |\n"
-                )
-            },
-        )
-        self.assertIn("DOC008", self._codes(root))
-
-    def test_a_closure_claim_without_its_reproduction_fails(self):
-        root = self._root(self.HEADER + "| `LAF-52` | high | run | `closed` | — |\n")
-        self.assertIn("DOC007", self._codes(root))
-
-    def test_a_closed_finding_still_listed_as_shipped_open_fails(self):
-        root = self._root(
-            self.HEADER + "| `LAF-52` | high | run | `closed` | a reproduction |\n",
-            {"docs/plan/PLAN-x.md": "## Known defects shipped open\n\n- `LAF-52` is open\n"},
-        )
-        self.assertIn("DOC009", self._codes(root))
-
-    def test_laf69_a_document_calling_an_open_finding_closed_fails(self):
-        """The direction `DOC009` never covered: a claim of safety that is not there.
-
-        `DOC009` catches stale pessimism — a document still listing something the register has
-        closed. The reverse went unnoticed for a whole release: the register moved `LAF-61` back
-        to `open` and two release documents kept saying it was handled.
-        """
-
-        root = self._root(
-            self.HEADER + "| `LAF-52` | high | run | `open` | — |\n",
-            {
-                "docs/plan/PLAN-x.md": (
-                    "## Residues this release closes\n\n"
-                    "| Finding | Now | Established by |\n|---|---|---|\n"
-                    "| `LAF-52` — a planning failure reported as a number | `closed` | a claim |\n"
-                )
-            },
-        )
-        self.assertIn("DOC010", self._codes(root))
-
-    def test_laf69_a_document_calling_an_open_finding_visible_fails(self):
-        # The case that happened: `visible` is not `closed`, and neither of them is `open`.
-        root = self._root(
-            self.HEADER + "| `LAF-61` | medium | run | `open` | — |\n",
-            {
-                "docs/plan/PLAN-x.md": (
-                    "| Finding | Now | Established by |\n|---|---|---|\n"
-                    "| `LAF-61` — a working copy left behind | `visible` | `receipt verify` |\n"
-                )
-            },
-        )
-        self.assertIn("DOC010", self._codes(root))
-
-    def test_a_document_that_agrees_with_the_register_passes(self):
-        root = self._root(
-            self.HEADER + "| `LAF-61` | medium | run | `visible` | a probe |\n",
-            {
-                "docs/plan/PLAN-x.md": (
-                    "| Finding | Now | Established by |\n|---|---|---|\n"
-                    "| `LAF-61` — a working copy left behind | `visible` | `receipt verify` |\n"
-                )
-            },
-        )
-        self.assertEqual(self._codes(root), set())
-
-    def test_a_released_document_may_still_claim_a_closure_the_register_denies(self):
-        # Symmetry with the rule above it: a dated record is not edited to agree with today,
-        # in either direction.
-        root = self._root(
-            self.HEADER + "| `LAF-52` | high | run | `open` | — |\n",
-            {"docs/plan/kept.md": "# nothing here\n"},
-        )
-        (root / "docs" / "release").mkdir(parents=True)
-        (root / "docs" / "release" / "github-release-v2.5.0.md").write_text(
-            "| Finding | Now |\n|---|---|\n| `LAF-52` | `closed` |\n", encoding="utf-8"
-        )
-        self.assertEqual(self._codes(root), set())
-
-    def test_a_document_recounting_a_past_state_is_not_a_claim_about_today(self):
-        """Only the structured form is a claim: one cell, one disposition, nothing else in it.
-
-        Documents describe findings at length, and a history — *was `visible`, then reopened* — is
-        the register's own story. Reading a disposition out of prose is what the register exists to
-        stop documents doing, so the gate reads the table cell and nothing else.
-        """
-
-        root = self._root(
-            self.HEADER + "| `LAF-61` | medium | run | `open` | — |\n",
-            {
-                "docs/plan/PLAN-x.md": (
-                    "`LAF-61` was `visible` until the probe was measured.\n\n"
-                    "| Finding | History |\n|---|---|\n"
-                    "| `LAF-61` | claimed `visible`, then `open` again |\n"
-                )
-            },
-        )
-        self.assertEqual(self._codes(root), set())
-
-    def test_one_id_recorded_twice_fails(self):
-        root = self._root(
-            self.HEADER
-            + "| `LAF-52` | high | run | `open` | — |\n"
-            + "| `LAF-52` | high | run | `closed` | a reproduction |\n"
-        )
-        self.assertIn("DOC006", self._codes(root))
-
-    def test_a_released_document_may_disagree_because_it_is_dated(self):
-        # `github-release-v2.5.0.md` lists findings this register now records as closed, and it
-        # stays that way: it is evidence of what shipped, not a claim about today.
-        root = self._root(
-            self.HEADER + "| `LAF-52` | high | run | `closed` | a reproduction |\n",
-            {"docs/plan/kept.md": "# nothing here\n"},
-        )
-        (root / "docs" / "release").mkdir(parents=True)
-        (root / "docs" / "release" / "github-release-v2.5.0.md").write_text(
-            "## Known defects shipped open\n\n- `LAF-52`\n", encoding="utf-8"
-        )
-        self.assertEqual(self._codes(root), set())
-
-    def test_the_real_register_and_the_real_documents_agree(self):
-        docs_check = _load_script("docs_check")
-        self.assertEqual(docs_check._register_diagnostics(ROOT), ())
-
-    def test_every_finding_this_stream_gathered_has_a_disposition(self):
-        docs_check = _load_script("docs_check")
-        register = (ROOT / "docs" / "testing" / "residue-register.md").read_text(encoding="utf-8")
-        rows = docs_check._REGISTER_ROW_RE.findall(register)
-        self.assertEqual(len(rows), len({identifier for identifier, _ in rows}))
-        # The stream gathered twenty-eight; implementing the response to it added two more.
-        self.assertGreaterEqual(len(rows), 28)
-
-
 class MissingToolTest(unittest.TestCase):
     """A gate whose tool is absent must name the tool and the command that installs it.
 
@@ -365,6 +200,76 @@ class RepositoryRelativeLinkTest(unittest.TestCase):
             )
             found = docs_check.validate_markdown(bad, bad.read_text(encoding="utf-8"), root)
             self.assertEqual([item.code for item in found], ["DOC002"])
+
+
+class GateReportingTest(unittest.TestCase):
+    """What the last line of a run claims passed."""
+
+    def _run_reporting(self, *, skip: str) -> str:
+        quality = _load_script("quality")
+        recorded: list[str] = []
+
+        def fake_run(selected, temp_root, *, changed_only=False, base=None, executed=None):
+            assert executed is not None
+            executed.extend(name for name in selected if name != skip)
+            recorded.extend(executed)
+            return 0
+
+        captured = io.StringIO()
+        with (
+            unittest.mock.patch.object(quality, "_run", fake_run),
+            contextlib.redirect_stdout(captured),
+        ):
+            code = quality.main(("unit", "integration", "docs-check"))
+
+        self.assertEqual(code, 0)
+        return captured.getvalue()
+
+    def test_the_summary_names_the_gates_that_ran_rather_than_the_ones_requested(self) -> None:
+        """A gate named on the OK line has passed; a skipped one saying OK reads as green."""
+
+        printed = self._run_reporting(skip="integration")
+
+        self.assertIn("quality gates OK: unit, docs-check", printed)
+        self.assertNotIn("quality gates OK: unit, integration", printed)
+
+    def test_a_skipped_gate_is_still_named_so_it_cannot_disappear(self) -> None:
+        printed = self._run_reporting(skip="integration")
+
+        self.assertIn("skipped as redundant or out of scope: integration", printed)
+
+    def test_a_run_that_skips_nothing_says_nothing_about_skipping(self) -> None:
+        printed = self._run_reporting(skip="")
+
+        self.assertIn("quality gates OK: unit, integration, docs-check", printed)
+        self.assertNotIn("skipped", printed)
+
+
+class RedundantGateTest(unittest.TestCase):
+    def test_the_e2e_gate_is_recognised_as_a_subset_of_the_unit_gate(self) -> None:
+        quality = _load_script("quality")
+
+        redundant = quality.redundant_gates(("unit", "integration"))
+
+        self.assertEqual(tuple(redundant), ("integration",))
+        self.assertIn("unit gate", redundant["integration"])
+
+    def test_the_subset_is_proven_rather_than_assumed(self) -> None:
+        """Change either discovery pattern and the runner must stop skipping, not skip blindly."""
+
+        quality = _load_script("quality")
+        with unittest.mock.patch.object(quality, "_discovered", return_value=None):
+            self.assertEqual(quality.redundant_gates(("unit", "integration")), {})
+
+        with unittest.mock.patch.object(
+            quality, "_discovered", side_effect=[frozenset({"a"}), frozenset({"b"})]
+        ):
+            self.assertEqual(quality.redundant_gates(("unit", "integration")), {})
+
+    def test_a_gate_selected_alone_is_never_skipped(self) -> None:
+        quality = _load_script("quality")
+
+        self.assertEqual(quality.redundant_gates(("integration",)), {})
 
 
 class PackagingCheckTest(unittest.TestCase):

@@ -1,16 +1,16 @@
-"""CLI wiring (WP-19): argparse subcommands -> Request -> command dispatch -> exit code.
+"""CLI wiring: argparse subcommands -> Request -> command dispatch -> exit code.
 
-One core, two skins (docs/design/DESIGN.md §13). This module is the flag-mode skin: it parses ``argv``
+One core, two skins (Product Specification §33). This module is the flag-mode skin: it parses ``argv``
 into the frozen :class:`~agent_artifacts.model.Request`, dispatches to the matching command's
 ``run(request) -> int`` (the commands already map their `Result`s to the §7 exit-code
 vocabulary via ``commands._common.exit_code``), and returns that code. A bare invocation on a
-TTY launches the TUI (WP-20); otherwise it prints help.
+TTY launches the TUI; otherwise it prints help.
 
-WP-19 owns only the *wiring*: no decision logic lives here. argparse handles usage errors with
+This module owns only the *wiring*: no decision logic lives here. argparse handles usage errors with
 its own exit code ``2`` (== ``_common.USAGE``); ``--help`` exits ``0``.
 
-Contract with WP-20: the TUI module exposes ``tui.run() -> int``. It is imported lazily so the
-CLI works before that module exists.
+The TUI module exposes ``tui.run() -> int``. It is imported lazily so flag-mode commands do not
+load it.
 """
 
 from __future__ import annotations
@@ -57,7 +57,19 @@ def _run_marketplace(request: Request) -> int:
     return marketplace.run(request)
 
 
-# Command name -> handler. Value-keyed dispatch, not a class hierarchy (docs/design/DESIGN.md §14).
+def _run_doctor(request: Request) -> int:
+    from .commands import doctor
+
+    return doctor.run(request)
+
+
+def _run_reset(request: Request) -> int:
+    from .commands import reset
+
+    return reset.run(request)
+
+
+# Command name -> handler. Value-keyed dispatch, not a class hierarchy.
 DISPATCH: dict[str, Callable[[Request], int]] = {
     "upgrade": upgrade.run,
     "registry": _run_registry,
@@ -65,6 +77,8 @@ DISPATCH: dict[str, Callable[[Request], int]] = {
     "reporting": _run_reporting,
     "source": _run_source,
     "marketplace": _run_marketplace,
+    "doctor": _run_doctor,
+    "reset": _run_reset,
 }
 
 # Structured results used by interactive frontends. Flag mode retains ``DISPATCH`` and its
@@ -93,7 +107,7 @@ def _add_profile(p: argparse.ArgumentParser) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the full argparse parser mirroring docs/design/DESIGN.md §13."""
+    """Build the full argparse parser for the public command surface."""
     parser = argparse.ArgumentParser(
         prog="agent-artifacts",
         formatter_class=_HELP_FORMATTER,
@@ -122,13 +136,62 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub = parser.add_subparsers(dest="command", metavar="COMMAND")
 
+    sub.add_parser(
+        "reset",
+        formatter_class=_HELP_FORMATTER,
+        help="restore AART's per-user application state to factory defaults",
+        description=(
+            "Remove only AART-owned per-user configuration, managed source snapshots, receipts, "
+            "settings and caches after two exact typed confirmations. Projects, harness files, "
+            "organization policy and credentials owned by other applications are not removed."
+        ),
+    )
+
+    # doctor ------------------------------------------------------------------ #
+    p = sub.add_parser(
+        "doctor",
+        formatter_class=_HELP_FORMATTER,
+        help="report installed health, offline readiness, activity, credentials and configuration",
+        description=(
+            "Inspect the installed environment and report it in one place: measured drift with the "
+            "smallest policy-permitted reconciliation plans; offline readiness for each enabled "
+            "source, as metadata, canonical payload and runtime dependencies separately; any "
+            "working copy an interrupted run left behind; the recorded activity trail and what "
+            "each action can undo; credential health and which installations depend on it; and the "
+            "configuration this machine is ignoring, meaning disabled sources and fields your "
+            "organization's policy has locked. On its own the report changes nothing. With "
+            "--repair, review one exact installed artifact's plan; applying it requires both --yes "
+            "and the prior review's --expect digest. This command never reinstalls everything."
+        ),
+    )
+    p.add_argument(
+        "--repair",
+        dest="names",
+        nargs=1,
+        metavar="COORDINATE",
+        help="review one installed artifact's minimal repair plan",
+    )
+    _add_scope(p)
+    p.add_argument(
+        "--yes",
+        action="store_true",
+        help="apply the selected repair; requires --expect from a prior review",
+    )
+    p.add_argument(
+        "--expect",
+        metavar="DIGEST",
+        help="review digest returned by the prior --repair review",
+    )
+    _add_project(p)
+    _add_json(p)
+
     # upgrade ----------------------------------------------------------------- #
     p = sub.add_parser(
         "upgrade",
         help="reinstall AART from one explicit local wheel or checkout",
         description=(
             "Replace this AART executable from one reviewed local input. "
-            "AART 1.0 never discovers an index or source repository implicitly."
+            "AART never discovers an index or source repository implicitly."
         ),
     )
     upgrade_source = p.add_mutually_exclusive_group(required=True)
@@ -458,13 +521,13 @@ def build_parser() -> argparse.ArgumentParser:
         _add_json(lifecycle)
         return lifecycle
 
-    _add_lifecycle(
+    p_marketplace_install = _add_lifecycle(
         "install",
         "install configured-source artifacts for the selected harness profiles",
         coordinates="artifact or collection coordinate(s) to install",
         memory_mode=True,
     )
-    _add_lifecycle(
+    p_marketplace_update = _add_lifecycle(
         "update",
         "update installed artifacts against their configured sources",
         coordinates="artifact or collection coordinate(s) to update; omit for all installed",
@@ -488,21 +551,26 @@ def build_parser() -> argparse.ArgumentParser:
         coordinates="artifact or collection coordinate(s) whose setup should run",
         placement=False,
     )
-    p_marketplace_setup.add_argument(
-        "--authorize-untrusted-source",
-        action="store_true",
-        help="authorize setup declared by a source that is not company-reviewed",
-    )
-    p_marketplace_setup.add_argument(
-        "--authorize-custom-entrypoint",
-        action="store_true",
-        help="authorize a setup recipe that declares a non-standard entrypoint",
-    )
-    p_marketplace_setup.add_argument(
-        "--approve-setup-effects",
-        action="store_true",
-        help="approve every reviewed setup effect; without it each effect is declined",
-    )
+
+    def _add_setup_controls(parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            "--authorize-untrusted-source",
+            action="store_true",
+            help="authorize setup declared by a source that is not company-reviewed",
+        )
+        parser.add_argument(
+            "--authorize-custom-entrypoint",
+            action="store_true",
+            help="authorize a setup recipe that declares a non-standard entrypoint",
+        )
+        parser.add_argument(
+            "--approve-setup-effects",
+            action="store_true",
+            help="approve every reviewed setup effect; without it each effect is declined",
+        )
+
+    for setup_capable in (p_marketplace_install, p_marketplace_update, p_marketplace_setup):
+        _add_setup_controls(setup_capable)
 
     # `receipt` lives under `marketplace` rather than under a top-level `setup` group, because
     # `marketplace setup` already owns that word: a second `aart setup` would name two different
@@ -650,10 +718,9 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"minimum supported AART version (default: {DEFAULT_MINIMUM_AART})",
     )
     p_init.add_argument(
-        # The ceiling is the next major after the running release, not a literal.  A default of
-        # "2.0.0" was correct only while AART was 1.x; on 2.0.0 it collides with the floor above
-        # and every `registry init` is refused as an invalid window.  Both bounds come from the
-        # one place that derives them (`RS-02`), so a skin cannot drift from the boundary.
+        # The ceiling is the next major after the running release, not a literal: a literal
+        # ceiling collides with the floor above once AART reaches it.  Both bounds come from the
+        # one place that derives them, so a skin cannot drift from the boundary.
         "--maximum-version",
         default=DEFAULT_MAXIMUM_AART,
         metavar="VERSION",
@@ -732,6 +799,188 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_registry_finalize(p_collection)
     _add_json(p_collection)
+
+    p_scan = registry_sub.add_parser(
+        "scan",
+        help="discover native Candidates in one pinned author checkout",
+        description=(
+            "Read a clean Git author checkout at its exact HEAD, compile only explicit aart.json "
+            "or aart.yaml manifests, and report Candidate state. Source Scan never changes the "
+            "target registry and never promotes a Candidate."
+        ),
+    )
+    _add_registry_source(p_scan)
+    p_scan.add_argument(
+        "--checkout",
+        required=True,
+        dest="candidate_checkout",
+        metavar="DIR",
+        help="clean local Git checkout of the author source",
+    )
+    p_scan.add_argument(
+        "--source-alias",
+        required=True,
+        dest="candidate_source_alias",
+        metavar="ALIAS",
+        help="stable alias for the author source",
+    )
+    p_scan.add_argument(
+        "--source-url",
+        required=True,
+        dest="candidate_source_url",
+        metavar="URL",
+        help="credential-free provenance URL for the author source",
+    )
+    p_scan.add_argument(
+        "--target-registry",
+        required=True,
+        dest="target_registry_alias",
+        metavar="ALIAS",
+        help="trust-domain registry that may later review the Candidates",
+    )
+    _add_json(p_scan)
+
+    p_candidate_promote = registry_sub.add_parser(
+        "promote",
+        help="review or locally promote exact Candidate IDs as one registry transaction",
+        description=(
+            "Re-observe a clean pinned author checkout, select exact Candidate IDs, and plan one "
+            "atomic registry promotion. Without --yes this only reviews. With --yes it writes the "
+            "local registry checkout but never commits, pushes, merges, or publishes it."
+        ),
+    )
+    p_candidate_promote.add_argument(
+        "--source",
+        dest="source_dir",
+        required=True,
+        metavar="DIR",
+        help="writable local registry Git checkout",
+    )
+    p_candidate_promote.add_argument(
+        "--checkout",
+        required=True,
+        dest="candidate_checkout",
+        metavar="DIR",
+        help="clean local Git checkout of the author source",
+    )
+    p_candidate_promote.add_argument(
+        "--source-alias",
+        required=True,
+        dest="candidate_source_alias",
+        metavar="ALIAS",
+        help="stable alias for the author source",
+    )
+    p_candidate_promote.add_argument(
+        "--source-url",
+        required=True,
+        dest="candidate_source_url",
+        metavar="URL",
+        help="credential-free provenance URL for the author source",
+    )
+    p_candidate_promote.add_argument(
+        "--target-registry",
+        required=True,
+        dest="target_registry_alias",
+        metavar="ALIAS",
+        help="trust-domain registry receiving the promotion",
+    )
+    p_candidate_promote.add_argument(
+        "--candidate",
+        required=True,
+        action="append",
+        dest="promotion_candidate_ids",
+        metavar="SHA256",
+        help="exact Candidate ID selected during registry scan (repeatable)",
+    )
+    p_candidate_promote.add_argument(
+        "--validation-report",
+        required=True,
+        dest="promotion_validation_report",
+        metavar="DIGEST",
+        help="canonical SHA-256 digest of validation evidence",
+    )
+    p_candidate_promote.add_argument(
+        "--policy-result",
+        required=True,
+        dest="promotion_policy_result",
+        metavar="DIGEST",
+        help="canonical SHA-256 digest of the effective policy result",
+    )
+    p_candidate_promote.add_argument(
+        "--mode",
+        choices=("vendored", "referenced"),
+        default="vendored",
+        dest="promotion_mode",
+        help="enterprise default vendored, or explicit weaker referenced mode",
+    )
+    _add_registry_finalize(p_candidate_promote)
+    _add_json(p_candidate_promote)
+
+    p_adopt = registry_sub.add_parser(
+        "adopt",
+        help="scan explicit manifests and adopt selected artifacts without subscribing",
+        description=(
+            "Acquire one credential-free Git URL/ref without saving it as a Source, compile only "
+            "explicit aart.yaml/aart.json manifests, and report them. Repeat --artifact to prepare "
+            "selected immutable Registry copies. Without --yes this is review-only; with --yes it "
+            "writes the reviewed local transaction and never commits, pushes or merges."
+        ),
+    )
+    p_adopt.add_argument(
+        "--source",
+        dest="source_dir",
+        required=True,
+        metavar="DIR",
+        help="writable local registry Git checkout",
+    )
+    p_adopt.add_argument(
+        "--url",
+        dest="native_url",
+        required=True,
+        metavar="URL",
+        help="credential-free Git repository URL",
+    )
+    p_adopt.add_argument("--ref", required=True, metavar="REF", help="branch or tag to inspect")
+    p_adopt.add_argument(
+        "--artifact",
+        action="append",
+        dest="names",
+        metavar="KIND/NAME@VERSION",
+        help="exact scanned coordinate to adopt (repeatable; omit to scan only)",
+    )
+    _add_registry_finalize(p_adopt)
+    p_adopt.add_argument(
+        "--expect",
+        metavar="DIGEST",
+        help="also require the freshly prepared transaction to match this review digest",
+    )
+    _add_json(p_adopt)
+
+    p_check_adoption = registry_sub.add_parser(
+        "check-upstream",
+        help="compare one adopted artifact with its recorded upstream branch or tag",
+        description=(
+            "Read one repository-adopted Registry package, resolve its recorded branch or tag, "
+            "and distinguish unchanged, changed, missing, unreachable and invalid declarations. "
+            "A validated new version is review-only unless --yes is present; --expect can bind "
+            "finalization to a digest returned by a prior JSON review."
+        ),
+    )
+    p_check_adoption.add_argument(
+        "--source",
+        dest="source_dir",
+        required=True,
+        metavar="DIR",
+        help="writable local registry Git checkout",
+    )
+    p_check_adoption.add_argument("names", nargs=1, metavar="KIND/NAME@VERSION")
+    _add_registry_finalize(p_check_adoption)
+    p_check_adoption.add_argument(
+        "--expect",
+        metavar="DIGEST",
+        help="require the proposed transaction to match this prior review digest",
+    )
+    _add_json(p_check_adoption)
 
     p_discover = registry_sub.add_parser(
         "discover",
@@ -1056,6 +1305,32 @@ def build_parser() -> argparse.ArgumentParser:
     _add_registry_finalize(p_publish)
     _add_json(p_publish)
 
+    p_push = registry_sub.add_parser(
+        "push",
+        help="push the reviewed registry commit to its publication branch",
+        description=(
+            "Push the commit this checkout is on to a remote branch, so other people can review "
+            "it. The registry's default branch is refused by name: publication is a push to a "
+            "branch, and only a merge makes reviewed bytes the registry. AART never merges."
+        ),
+    )
+    _add_registry_source(p_push)
+    p_push.add_argument(
+        "--branch",
+        dest="publication_branch",
+        metavar="NAME",
+        required=True,
+        help="remote branch to publish to; the default branch is refused",
+    )
+    p_push.add_argument(
+        "--remote",
+        dest="publication_remote",
+        metavar="NAME",
+        default="origin",
+        help="Git remote to publish to (default: origin)",
+    )
+    _add_json(p_push)
+
     p_test = registry_sub.add_parser("test", help="run a compatibility validation fixture")
     _add_registry_source(p_test)
     p_test.add_argument(
@@ -1250,6 +1525,14 @@ def _to_request(args: argparse.Namespace) -> Request:
         setup_recipe=getattr(args, "setup_recipe", None),
         review_policy=getattr(args, "review_policy", None),
         registry_action=getattr(args, "registry_action", None),
+        candidate_checkout=getattr(args, "candidate_checkout", None),
+        candidate_source_alias=getattr(args, "candidate_source_alias", None),
+        candidate_source_url=getattr(args, "candidate_source_url", None),
+        target_registry_alias=getattr(args, "target_registry_alias", None),
+        promotion_candidate_ids=tuple(getattr(args, "promotion_candidate_ids", ()) or ()),
+        promotion_validation_report=getattr(args, "promotion_validation_report", None),
+        promotion_policy_result=getattr(args, "promotion_policy_result", None),
+        promotion_mode=getattr(args, "promotion_mode", "vendored"),
         check=bool(getattr(args, "check", False)),
         check_upstream=bool(getattr(args, "check_upstream", False)),
         strict=bool(getattr(args, "strict", False)),
@@ -1264,6 +1547,8 @@ def _to_request(args: argparse.Namespace) -> Request:
         discovery_accept_all=bool(getattr(args, "discovery_accept_all", False)),
         vendor_manifest=getattr(args, "vendor_manifest", None),
         publish_message=getattr(args, "publish_message", None),
+        publication_branch=getattr(args, "publication_branch", None),
+        publication_remote=getattr(args, "publication_remote", "origin"),
         artifact_version=getattr(args, "artifact_version", None),
         artifact_license=getattr(args, "artifact_license", None),
         minimum_version=getattr(args, "minimum_version", None),
@@ -1319,9 +1604,9 @@ def _to_request(args: argparse.Namespace) -> Request:
 # Entry point                                                                  #
 # --------------------------------------------------------------------------- #
 def _run_bare(parser: argparse.ArgumentParser, args: Optional[argparse.Namespace] = None) -> int:
-    """Bare invocation (docs/design/DESIGN.md §13): launch the TUI on a TTY, else print help."""
+    """Bare invocation: launch the TUI on a TTY, else print help."""
     if sys.stdin.isatty() and sys.stdout.isatty():
-        from . import tui  # WP-20: always present in the package.
+        from . import tui  # Always present in the package.
 
         kwargs = {}
         if args and getattr(args, "project", None):

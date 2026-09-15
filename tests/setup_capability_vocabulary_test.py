@@ -1,11 +1,9 @@
-"""SBC-9: the index and the consumer must be talking about the same thing.
+"""The index and the consumer must be talking about the same thing.
 
-`LAF-51`, found by walking the guided route on a real machine: the compiled index published the
-recipe's *declared* capabilities while the consumer recomputed the *policy* capabilities, and
-`_prepare_setup_plan` required the two to be equal. They cannot be — `filesystem` is not
-`managed-file`, `docker` is not `docker-build` — so setup planning refused every recipe beyond a
-keychain-only one, in `2.4.0` and on this branch alike, and no test noticed because each side was
-tested against itself.
+If the compiled index published the recipe's *declared* capabilities while the consumer
+recomputed the *policy* capabilities, and planning required the two to be equal, setup planning
+would refuse every recipe beyond a keychain-only one: `filesystem` is not `managed-file`, `docker`
+is not `docker-build`. Testing each side against itself would not notice.
 
 The two vocabularies still exist and should: an author declares that a recipe touches files, an
 organization decides whether it allows a managed-file write. What may not exist again is a gate that

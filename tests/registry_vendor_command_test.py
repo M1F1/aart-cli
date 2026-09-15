@@ -1,8 +1,8 @@
-"""VN-3: `registry vendor` copies a foreign subtree in, review first.
+"""`registry vendor` copies a foreign subtree in, review first.
 
 `promote-native` refuses any upstream that is not already a native AART source, which is most of
 them. The same fixture proves both halves here: one repository with no markers anywhere, refused by
-`promote-native` and vendored successfully — that is the whole point of the command (design §1).
+`promote-native` and vendored successfully — that is the whole point of the command.
 
 The review/finalize contract is the one every other registry mutation already uses, and vendoring
 adds a gate rather than relaxing one: without `--yes` nothing is written, and the plan refuses
@@ -155,7 +155,7 @@ class VendorCommandTest(unittest.TestCase):
             self.assertIn("declared version: 1.0.0", details)
 
     def test_the_review_says_the_copy_is_not_a_safety_claim(self) -> None:
-        """Design §3: a successful vendor means the bytes were copied and pinned, nothing more."""
+        """A successful vendor means the bytes were copied and pinned, nothing more."""
 
         with self._registry() as root:
             _code, output = _run(*_vendor_command(root, "--json"))
@@ -270,7 +270,7 @@ class VendorCommandTest(unittest.TestCase):
             self.assertFalse((root / _PACKAGE / "artifact.json").exists())
 
     def test_a_symlink_inside_the_subtree_refuses_the_vendor(self) -> None:
-        """VN-1's refusal has to reach the maintainer through the command (acceptance 7)."""
+        """The subtree refusal has to reach the maintainer through the command."""
 
         linked = _foreign_repository(
             SnapshotEntry(
@@ -306,7 +306,7 @@ class VendorCommandTest(unittest.TestCase):
             self.assertEqual(_tree_bytes(root), before)
 
     def test_rs04_the_refusal_names_revendor_when_the_package_is_a_vendored_copy(self) -> None:
-        """`RS-04`: `vendor` is create-only, so the maintainer who ran it wanted the other command.
+        """`vendor` is create-only, so the maintainer who ran it wanted the other command.
 
         Movement is the ordinary reason to run `vendor` twice, and `revendor` is the command that
         adopts it. A refusal that stops at *already exists* leaves the operator to find that out.

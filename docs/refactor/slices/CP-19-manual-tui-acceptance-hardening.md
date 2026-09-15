@@ -1,0 +1,243 @@
+# CP-19 — Manual TUI acceptance hardening
+
+Status: IMPLEMENTED — CLOSED; operator retest remains external acceptance
+
+## Goal
+
+Turn the post-refactor manual walkthrough into explicit, independently executable work without
+reopening the verified CP-13, CP-14 or CP-18 slices. Preserve every accepted safety boundary while
+making the persistent TUI understandable and recoverable for an operator who does not know its
+internal state model.
+
+## Product Specification authority
+
+- 161.1 and INV-187: accepted information hierarchy, safety and navigation semantics.
+- 161.7 and INV-199: Registry, Source, Candidate and Marketplace remain distinct.
+- 164.2 and INV-200/201: Source synchronization and explicit manifest discovery.
+- 165.28 and INV-242: a local commit is not publication; Git review/merge remains external.
+- D-185: interactive TUI guidance contains no CLI command text.
+
+## Scope and ordered work
+
+1. **Contextual footer (QA-026) — DONE.** Local bindings appear first, universal movement/back/help/
+   quit second. Keyboard events and labels share one binding authority (D-202).
+2. **Complete the real discovery run — DONE.** The run reached the consumer installation feedback
+   batch now owned by CP-20. Continue from the MCP promotion after the
+   prior Skill promotion is merged, the local checkout observes it and the configured Registry is
+   synchronized. Every new finding goes immediately to root `TODO.md` and receives a bounded CP-19
+   step or a backlog item; it is not implemented during the discovery pass.
+3. **Completed-sequence navigation (QA-027) — DONE.** Screen 34 binds `Enter → Sources`, with the
+   matching edge declared in the navigation map, because `_navigate` refuses a target the map does
+   not carry and a binding without it is a key that silently does nothing. Registry Maintainer
+   binds `c Candidates`, so a finished promotion is one key from the next one; screen 45's own
+   Enter still goes on to Registry, which is the precedent this generalizes (D-210). Confirmation
+   screens stay confirmations: a review still holding its action is not treated as a result.
+4. **Form lifecycle (QA-028) — DONE.** `_navigate` empties the draft the entered form owns, and only
+   that one. It is forward navigation only, which is exactly what separates opening a new form from
+   returning to a refused one: `_declined_preparation` and `_back` walk the session history and
+   touch no draft, so `QA-018`/`D-184` holds unchanged. Both add forms also say in words that they
+   add another one and change nothing already connected (D-211).
+5. **Review layout (QA-029) — DONE.** The rule — facts, one blank line, the single line saying what
+   a key press will do, nothing after it — is stated once in the pure layout kernel and applied at
+   the seams every screen already passes through: `tui_layout.separate` joins blocks with exactly
+   one blank and drops an empty one, `tui_layout.action_prompt` composes facts with the prompt, and
+   `is_action_prompt` recognises the prompt from the line itself so `CanonicalScreenSource.lines`
+   can lift whatever prompt a screen wrote and re-place it last, under the notice it is about. Four
+   review prompts stopped saying "below" about a plan that is now above them. The two Source Sync
+   screens were regrouped into what it is / where it stands / what it will do / the evidence. B-048
+   (refusal wrapping) stays separate: wrapping is a width decision, this is an ordering one (D-212).
+6. **Stable tabular projections (QA-030) — DONE.** The header is a row of the same grid rather than
+   a hand-spaced string, and `tui_layout.columns` lays the header and every row out together, so a
+   name wider than its column is cut there instead of pushing the columns after it right. The cursor
+   mark is its own column. Cutting is honest because the row under the cursor is repeated in full in
+   a `field_block` below the list — which is also where the verbose per-row detail line went, since
+   a detail under every row was part of the reported density. Screen 47's selectable rows are the
+   same table without a header and were moved onto the grid too; the other Maintainer lists are
+   label/indent blocks, not tables, and putting them on a grid would be a redesign (D-213).
+7. **Registry baseline diagnosis and recovery (QA-031/B-100) — DONE.** The exact snapshot equality
+   remains the refusal. Only after a mismatch, the configured IO seam observes Git top level,
+   configured origin, worktree status, HEAD and merge base and passes a typed cause to the pure
+   application seam. A clean descendant is unpublished work and explains Git review/merge → local
+   checkout update → Registry synchronization; a clean ancestor, uncommitted managed-path drift and
+   a different origin are separately named, all without embedding CLI commands (D-214).
+8. **Git publication transition (QA-034/B-102) — DONE.** Publication is presence on the canonical
+   consumer-visible branch (INV-242), so it is a property of the reading and not a field anything
+   in the accepted workflow writes. `load_published_registry_versions` applies the transition once,
+   at the consumer seams (`configured_offers`, `configured_selection`, `configured_installation`,
+   `offline_readiness`); maintainer-side readers keep the record as written (D-207).
+   `tests/git_publication_transition_e2e_test.py` drives the real sequence — promotion transaction,
+   review branch, `git merge --no-ff`, public sync, Marketplace, install receipt — and asserts the
+   merged records on disk still read `promoted-local`.
+9. **Canonical Registry maintenance and CI (QA-025/QA-032/B-057/B-099) — DONE.** The six generated
+   verbs dispatch on the representation they are handed instead of assuming the authoring workspace
+   (D-208). `is_promoted_registry` recognizes the approved shape by `registry/versions/`; `validate`
+   drops the compiled-lock requirement, because `validate_promoted_registry` is the stricter check;
+   `build` derives exactly `registry/index.json` and `registry/snapshot.json`; `lock` is a read-only
+   prepared curation; `publish` chains build, validate and audit with no lock half. Screen 46's
+   Rebuild reaches the same authority through `refresh_registry_workspace`, so it is repaired at the
+   same seam. Nothing writes a second legacy representation, and the generated workflow is unchanged
+   so already-scaffolded registries keep working.
+10. **Failed-action terminal state (QA-033/B-101) — DONE.** A confirmation that never happened and
+   an attempt that is over arrived as the same event, so the reducer could only treat both as
+   nothing. `ACTION_FAILED` separates them: `action` clears, `failed_action` records which run this
+   screen is the end of, the footer offers `Enter Back to list`, Enter navigates through the same
+   `_ACTION_RESULT` table a recorded run uses, and the review's prompt and heading say the run did
+   not happen (D-209). The screen does not move, because the refusal is drawn here. Held across four
+   confirmed action kinds, with `QA-024` preserved.
+11. **Workflow progress and back context (QA-036/QA-037) — DONE.** Typed workflow routes are checked
+   against `navigation_targets`, while session history determines which steps were actually visited.
+   Shared frame chrome renders `✓` completed, `▸` current and `·` upcoming, bounded to the content
+   measure. Back retains focus only when both screens share such a route; all Candidate-promotion
+   reverse edges preserve the same Candidate, while unrelated detail browsing still clears focus
+   (D-215).
+12. **Visual hierarchy and focus (QA-035/QA-038/QA-040/QA-041/QA-042) — DONE.** One restrained
+   section rule and card grouping in the layout kernel now compose Dashboard explanation/activity,
+   Registry records and footer chrome. Help is one key or related pair per line; the footer is one
+   adjacent width-bounded `[Key] Action` block with contextual actions first; the Registry card head
+   matching the stable cursor receives `>` (D-216).
+13. **Promotion mode explanation (QA-039) — DONE.** Domain-owned consequences define Vendored and
+   Referenced ownership, payload availability and upstream dependence. Promotion Review shows both
+   choices, marks the active one and Vendored's enterprise default, and labels `m` as `Toggle mode`
+   (D-217).
+14. **Registry/Source row truth (QA-043) — DONE.** Screen 21 projects only `registry-git`
+   connections. Registry Sync availability and command focus both use the visible row, so stale
+   navigation focus cannot target or enable another subject (D-218).
+15. **Batch verification — DONE WITH RECORDED TEST-ISOLATION FOLLOW-UP.** Every increment has a real RED/targeted mutation and the
+   1513-test focused family is green. Final `make quality` is green across all nine gates: 3653
+   tests, one skipped and 85.38% branch coverage. Two standalone `make integration` runs completed
+   380/381 E2Es but the real macOS Keychain test failed in Security.framework with `errSecParam`;
+   the same test passed alone and twice inside `make quality`. B-108 owns the test-isolation blocker.
+
+## Current manual checkpoint
+
+The operator merged Registry PR #1 at `f37d182` and synchronized it despite the known QA-032 false
+negative. The clean Consumer sees that Source as healthy, and its snapshot contains the promoted
+Skill's version, manifest and payload, but Marketplace offers zero artifacts. The version remains
+`promoted-local`; no public path applies the publication transition that CP-17 fixtures applied
+internally. This is blocking QA-034.
+
+Local Registry `main` now holds the second promotion at
+`259af24`, one commit ahead of published `origin/main`, and the repository-adopted
+`skill/commit-message-discipline@1.0.0` transaction is present as an uncommitted working-tree
+change. The procedure's required Rebuild run exposed QA-033: after `lock` refused on the legacy
+representation,
+the TUI remained on Review Rebuild and continued to advertise confirmation for a cleared plan.
+That run was the procedure's required QA-025 retest, not an operator detour: QA-025 is reopened
+because its real canonical input fails even though its route and ordering passed focused tests.
+
+Step 8 has since closed QA-034, so the Marketplace-to-lifecycle half of discovery can resume: a
+merged promotion is offered and installable without anything editing Registry JSON. Step 9 has since
+closed QA-025 and QA-032, so Rebuild and the Registry PR gate are retestable again. Do not discard
+the local MCP promotion or adoption transaction.
+
+## Evidence and gates
+
+Step 8 was RED against the shipped behaviour with the reported symptom itself: Marketplace listed
+`[]` where the merged branch's promotion belonged. Two targeted mutations were killed — removing the
+transition from `load_published_registry_versions`, and leaving the installation re-read on the raw
+loader so an install refuses the exact version Marketplace just offered. One older test asserted the
+replaced belief and was rewritten rather than deleted: `configured_selection_resolution_e2e_test`
+now holds that the configured branch publishes what it carries without rewriting it, plus a
+separate claim that an artifact the branch does not carry is still not found.
+
+Step 9 was RED through the public chain rather than a fixture: `registry init` → `registry scan` →
+`registry promote --yes`, then the six verbs the generated workflow runs, in its order. Four
+targeted mutations were killed — removing the promoted exemption from `validate`, disabling the
+promoted `lock` so it falls back to the authoring lock, disabling the approved reader in
+`registry_maintenance.planning`, and disabling the promoted `build` dispatch. Each turned the
+acceptance tests red, including the screen-46 rebuild claim.
+
+Step 10 was RED against the shipped reducer with the operator's own symptom: `Enter Confirm` still
+advertised over a discarded plan, and `key_event` still returning `CONFIRM_ACTION`. The claims are
+stated over four confirmed action kinds as subtests rather than over Registry rebuild alone, and the
+frame test asserts what the operator actually read — heading, prompt and footer — with the refusal
+still on screen, because losing the refusal would be the worse defect.
+
+QA-026 was RED against the fixed footer. A semantic mutation routing advertised `b Rebuild` to the
+initialization screen was killed by the headless shell walk. The focused 238-test interaction and
+boundary set, changed-module `mypy`, `ruff check`, `ruff format --check` and `make docs-check` were
+green. Full repository gates are intentionally deferred until step 15 at the operator's request.
+
+Step 5 was RED as a rule rather than as a screen: a sweep over every Consumer and Maintainer
+screen, run twice — once with no notice and once with one on it — plus the three maintainer reviews
+the sweep cannot reach without their typed views, in every presentation profile. Six targeted
+mutations were killed: dropping the blank in `action_prompt`, joining without a blank in `separate`,
+keeping a block's trailing blank, restoring the old `(*body, "", *notice)` order in `lines`, and
+un-grouping either Source Sync screen. The second of those initially survived, which is what the
+grouping claim and the join property were added to hold — the prompt rule alone had said nothing
+about the groups above it.
+
+The step-5 sweep also caught a step-4 regression that step 4's own targeted set had missed:
+`consumer_declined_preparation_test` planted a typed draft and *then* navigated into the form, so
+`D-211` emptied it. The claim is intact and still holds — a decline keeps what was typed — but its
+fixture now types on the form after opening it, which is what the shell actually does. The lesson is
+recorded rather than the fix alone: a targeted set chosen per-module misses reducer fixtures living
+under other names, so each remaining CP-19 step runs the whole `tui`/`consumer`/`maintainer`/
+`source`/`registry`/`setup` file set, not only the files it edited.
+
+Step 6 was RED on both screens with the operator's own two rows. Five targeted mutations were
+killed: hand-spaced padding, a header outside the grid, no focused block, the first row expanded
+instead of the focused one, and double-space concatenation on screen 47. The column claims the step
+depends on are stated as a Hypothesis property over generated names rather than assumed from
+`B-107`'s kernel, which the scoped advisory run still reports as largely unheld elsewhere.
+
+Step 7 was RED through configured promotion over four real temporary Git repositories: every case
+initially returned the same `synchronize or restore` sentence. The fix does not let Git decide the
+verdict and does not replace the snapshot check; it supplies context only when that exact check
+fails. Removing the context at the configured call site turns all four tests red. The whole focused
+TUI/consumer/maintainer/source/registry/setup/promotion/candidate set is green at 1612 tests plus
+639 subtests.
+
+Step 11 was RED both in the frame and reducer. Six flow families cover Candidate promotion,
+Registry initialization/rebuild, Source addition/sync and consumer installation; owning lists show
+no false workflow. Every reverse Candidate edge retains its subject. Removing the frame chrome
+turns all six projections red, and restoring the old unconditional focus reset turns the concrete
+Candidate Back test red. The 136 nearest navigation/shell/action tests plus 23 subtests are green;
+full gates remain deferred to step 15 by operator instruction.
+
+Step 12 was RED against the operator's four concrete frames. Five semantic mutations were killed
+independently: removing the Dashboard section, flattening cards, discarding Registry focus, joining
+two help bindings and removing keycaps from the footer. The 93 nearest layout/shell/Registry tests
+plus 182 subtests are green. Existing contextual-footer tests now locate the shared footer boundary
+instead of depending on removed `Keys here`/`Keys always` headings.
+
+Step 13 was RED on the missing mode choices, consequence text and honest toggle label. The domain
+now owns the complete meaning of both modes and the projection carries every enum member plus its
+selected state; the renderer only presents those facts. Changing Vendored's enterprise-default
+fact turns the exact explanation test red. The focused cross-family suite is green at 1513 tests
+(`D-217`).
+
+Step 14 was RED on authoring Sources appearing as actionable Registry rows and on stale navigation
+focus overriding the visible Registry sync target. Screen 21 now admits Registry connections only.
+A Source ordered before a Registry cannot hide it, and a Hypothesis property holds the command
+target for every single-line stale focus. `continue -> break` and removing Registry Sync from the
+row-owned action set each turn their named test red (`D-218`).
+
+Step 15 ran the full gates on the finished implementation. `make quality` is green: format, lint,
+typecheck, 3653 tests (one skipped), validation, 85.38% branch coverage, packaging, docs and secret
+shape. The first run exposed one stale CP-19 footer expectation, corrected from `Enter Back to list`
+to `[Enter] Back to list`; the complete rerun passed. Standalone `make integration` then reproduced
+the order-dependent real-Keychain failure twice after 191–193 seconds. The exact Keychain test passed
+alone in 2.151 seconds; diagnostic subset runs prove no environment/cwd/tempdir leak and no immediate
+retry recovery. B-108 records the remaining gate blocker without weakening or skipping the test.
+
+## Do not undo
+
+- Do not weaken the exact synchronized-baseline comparison to pass QA-031.
+- Do not put `aart ...` commands into TUI frames.
+- Do not reset a refused form on leave; reset a fresh form on entry.
+- Do not put an action prompt anywhere but last, and do not reintroduce `(*body, "", *notice)`:
+  the notice is what the reader is being asked about, so it belongs above the ask.
+- Do not re-widen a column literal to make a name fit. A list with a header puts the header on the
+  same grid as its rows, and a cut cell is repeated in full under the cursor.
+- Keep `key_event` as the only key interpreter and keep application code free of IO.
+- Never commit the embedded `superpowers-aart-test/` lab repository.
+- Do not make promotion write the authoring workspace as a second representation, and do not
+  weaken `validate_promoted_registry` to accept a registry missing its derived catalogs.
+
+## Exact next implementation action
+
+None in CP-19. Its implementation is committed at `e9616dd`, its full quality gate is green and
+the operator's next findings opened CP-20. B-108 remains recorded and is assigned to CP-20's final
+integration verification; do not weaken or skip the real macOS test. QA-039 and QA-043 remain in
+the operator's manual-retest list rather than keeping this implementation slice open.

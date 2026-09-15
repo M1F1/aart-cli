@@ -9,7 +9,7 @@ PYTHON ?= python
 REGISTRY ?=
 QUALITY = $(PYTHON) scripts/quality.py
 
-.PHONY: test unit integration system-matrix release-freeze release-check wheel validate clean lint format format-check typecheck coverage packaging-check docs-check secret-shape-check quality version-check version-show version-next-alpha version-bump-alpha version-finalize version-set
+.PHONY: check test unit integration system-matrix release-freeze release-check wheel validate clean lint format format-check typecheck coverage packaging-check docs-check secret-shape-check quality mutants manual-test-setup manual-test-setup-empty manual-test-reset manual-test-maintainer manual-test-consumer manual-test-shell-maintainer manual-test-shell-consumer
 
 # Aggregate. The Python discovery is the broad unit/regression gate; integration is end to end.
 test: unit integration
@@ -69,23 +69,50 @@ secret-shape-check:
 quality:
 	$(QUALITY)
 
-version-check:
-	$(PYTHON) scripts/version.py check
+# Mutation adequacy, advisory and always scoped (D-134). A suite that passes proves the code does
+# what the tests say; a killed mutant proves the test would have noticed if it did not.
+#
+#   make mutants ONLY=agent_artifacts/setup_render.py TESTS="tests/setup_render_test.py"
+#
+# Survivors are findings to read, not a number to drive to zero. Never weaken a test to move it.
+ONLY ?=
+TESTS ?=
+mutants:
+	@test -n "$(ONLY)" || { echo 'usage: make mutants ONLY=<path.py> [TESTS="<test files>"]'; exit 2; }
+	$(PYTHON) scripts/mutants.py --only $(ONLY) $(if $(TESTS),--tests $(TESTS),)
 
-version-show:
-	$(PYTHON) scripts/version.py show
+# The developer loop: every cheap gate in full, and only the tests the current change could have
+# reached. Falls back to the whole suite whenever it cannot prove what is safe to skip, and is
+# never the release gate -- run `make quality` before calling work verified.
+#   make check              changes against HEAD, plus untracked files
+#   make check SINCE=main   the whole branch's diff as well
+check:
+	$(QUALITY) --changed $(if $(SINCE),--since=$(SINCE),)
 
-version-next-alpha:
-	$(PYTHON) scripts/version.py next-alpha
+# Fresh, marker-bounded manual acceptance. These targets inject HOME/XDG only into the launched
+# process; they never ask the operator to export session-global variables.
+manual-test-setup:
+	$(PYTHON) scripts/manual_test.py setup
 
-version-bump-alpha:
-	$(PYTHON) scripts/version.py bump-alpha --write
+# The maintainer-first route: the Registry does not exist yet, so the TUI creates it.
+manual-test-setup-empty:
+	$(PYTHON) scripts/manual_test.py setup --empty-registry
 
-version-finalize:
-	$(PYTHON) scripts/version.py finalize --write
+manual-test-reset:
+	$(PYTHON) scripts/manual_test.py reset
 
-version-set:
-	$(PYTHON) scripts/version.py set "$(VERSION)" --write
+# The CLI route: an interactive shell already inside the lab's isolated HOME/XDG.
+manual-test-shell-maintainer:
+	$(PYTHON) scripts/manual_test.py shell maintainer
+
+manual-test-shell-consumer:
+	$(PYTHON) scripts/manual_test.py shell consumer
+
+manual-test-maintainer:
+	$(PYTHON) scripts/manual_test.py open maintainer
+
+manual-test-consumer:
+	$(PYTHON) scripts/manual_test.py open consumer
 
 # Remove build leftovers (safe: only the dist/ wheels and build/ tree).
 clean:

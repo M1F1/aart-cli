@@ -73,8 +73,7 @@ reaches the consumer's machine. `{"command": "node", "args": ["payload/index.js"
 a file that will not be there, and the vendor review refuses it. Launch the server the way a
 consumer can resolve it — `npx`, `uvx`, `docker`, an absolute path — or, if the bytes themselves must
 travel, vendor them as a `skill` or a `hook`, which do copy their payload. What each type delivers is
-tabulated in [the native source protocol](../protocol/native-source-v1.md), and why this asymmetry
-exists is in [the copy-integrity design](../design/DESIGN-vendored-copy-integrity.md).
+tabulated in [the native source protocol](../protocol/native-source-v1.md).
 
 `setup/installer.json` is a setup recipe v2 declaring what the server needs before it runs — here,
 an API token in the macOS keychain. **The path must be exactly `setup/installer.json`**: a v2 recipe
@@ -195,11 +194,11 @@ Nothing in those four commands knows what vendoring is. `artifact.json` is an or
  "summary":"Atlassian MCP server, vendored from upstream.","type":"mcp","version":"1.0.0"}
 ```
 
-The one document that marks it as a copy is `provenance.json`, which AART has read since `2.0.0`:
+The one document that marks it as a copy is `provenance.json`, which AART reads:
 
 ```json
 {"aart.vendor":{"authored":["SETUP.md","payload/mcp.json","setup/installer.json"],"ref":"v1.4.0"},
- "importer":{"id":"registry-vendor-v1","options_digest":"sha256:e00930d8…","version":"2.3.0"},
+ "importer":{"id":"registry-vendor-v1","options_digest":"sha256:e00930d8…","version":"0.1.0"},
  "origin":{"input_digest":"sha256:76f0be36…","kind":"git","path":"packages/atlassian-mcp",
            "resolved_commit":"4d9f2c1b7a3e5f80d6c4b2a19e8f7c6d5b4a3e21",
            "url":"https://github.com/example/atlassian-mcp.git"},
@@ -330,5 +329,5 @@ one company's network is committed to a registry others read.
 
 Both modules, their fields, what the review shows, and the equivalent commands for `SETUP.md` are in
 the [setup recipe reference](../protocol/setup-recipe-v2.md). An artifact that uses either must
-declare `requires_aart` `min_inclusive: "2.5.0"`; an older executable refuses an unknown module by
+declare a `requires_aart` range its consumers' AART satisfies; an older executable refuses an unknown module by
 name, which fails closed but still fails.

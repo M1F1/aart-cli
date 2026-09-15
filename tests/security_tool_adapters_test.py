@@ -530,6 +530,8 @@ class SecurityToolAdaptersTest(unittest.TestCase):
                 b'{"errors":["parse failed"],"results":[]}',
                 b'{"errors":[],"results":[1]}',
                 b'{"errors":[],"results":[{"filename":"payload/main.py",'
+                b'"issue_severity":1,"line_number":1,"test_id":"B1"}]}',
+                b'{"errors":[],"results":[{"filename":"payload/main.py",'
                 b'"issue_severity":"UNDEFINED","line_number":1,"test_id":"B1"}]}',
             ),
             "detect-secrets": (
@@ -551,6 +553,7 @@ class SecurityToolAdaptersTest(unittest.TestCase):
                 b"{}",
                 b"[1]",
                 b'[{"code":1,"file":"../outside","level":"warning","line":1}]',
+                b'[{"code":1,"file":"payload/install.sh","level":1,"line":1}]',
                 b'[{"code":1,"file":"payload/install.sh","level":"bad","line":1}]',
                 b'[{"code":1,"file":"payload/install.sh","level":"warning","line":0}]',
             ),

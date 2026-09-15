@@ -1,6 +1,6 @@
 # Registry maintenance planning v1
 
-IMP02 defines the review boundary for adding native references, promoting them into a registry, and
+This document defines the review boundary for adding native references, promoting them into a registry, and
 checking both native and materialized upstreams. The implementation is a pure functional planner
 over inert snapshots. Filesystem access, Git acquisition, credentials, commit, push, and pull-request
 creation remain outside this bounded context.
@@ -51,7 +51,7 @@ requires that exact digest. Both changed and no-op finalization recheck the curr
 the injected output port must return a receipt matching the reviewed digest, resulting input
 digest, and changed-path count.
 
-The port has no commit or push operation. REG01 will expose these planners through maintainer
-commands and registry quality gates; Git publication remains an explicit action after reviewing the
+The port has no commit or push operation. The `aart registry` maintainer commands and
+registry quality gates expose these planners; Git publication remains an explicit action after reviewing the
 generated diff. The consumer-side lock and index invariants are specified in
 [`registry protocol v1`](../protocol/registry-v1.md).

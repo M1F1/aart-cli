@@ -124,7 +124,7 @@ class SetupPlanningTests(unittest.TestCase):
         records = mark_unstarted_skipped(queue[1:], detail="Stopped after failure")
 
         self.assertEqual([record.status for record in records], ["skipped", "skipped"])
-        # SI-6: the retry is the canonical verb, not the `aart setup` group removed in 2.0.0.
+        # The retry is the canonical verb, not the `aart setup` group removed in 2.0.0.
         self.assertTrue(all("aart marketplace setup" in record.retry_command for record in records))
 
 

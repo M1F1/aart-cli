@@ -1,6 +1,6 @@
-"""VI-4: the review says what a consumer receives, and refuses a config that cannot run.
+"""The review says what a consumer receives, and refuses a config that cannot run.
 
-`LAF-46`: installing a vendored `mcp` wrote exactly one thing — the server entry merged into
+Installing a vendored `mcp` wrote exactly one thing — the server entry merged into
 `.mcp.json`. The copied payload stayed in the registry, so a descriptor whose command names a file
 inside the payload names a file that will never be on the consumer's machine. The `2.3.0` tutorial
 shipped exactly such an example.
@@ -100,7 +100,7 @@ class DeliveryDescriptionTest(unittest.TestCase):
                 self.assertIsNone(describe_delivery(kind, _payload(_descriptor("node"))))
 
     def test_a_descriptor_shaped_like_the_harness_file_starts_nothing(self) -> None:
-        """VI-5: `{"mcpServers": …}` parses, loads, installs, and merges an empty entry.
+        """`{"mcpServers": …}` parses, loads, installs, and merges an empty entry.
 
         It is the shape of the file the entry is merged *into*, which is why it is the mistake
         everyone makes — this repository's own vendoring fixtures made it, and so does the `2.3.0`
@@ -258,10 +258,10 @@ class VendorDeliveryReviewTest(unittest.TestCase):
 
 
 class OwnedMcpDeliveryTest(unittest.TestCase):
-    """`RS-01`: the same descriptor, authored in place instead of vendored.
+    """The same descriptor, authored in place instead of vendored.
 
-    `VI-5` hung the check off the vendoring delivery finding, so an `mcp` package a maintainer wrote
-    themselves was never checked at all. Nothing about the consequence depends on where the bytes
+    The check is not tied to the vendoring delivery finding, so an `mcp` package a maintainer wrote
+    themselves is checked too. Nothing about the consequence depends on where the bytes
     came from: the merge writes an empty entry either way, and the artifact starts nothing.
     """
 
@@ -326,7 +326,7 @@ class OwnedMcpDeliveryTest(unittest.TestCase):
             self.assertIn("mcp/atlassian", output)
 
     def test_rs01_an_owned_descriptor_naming_its_own_payload_file_fails_too(self) -> None:
-        """The withheld-payload half of the same check, `VI-4`'s finding on an owned package."""
+        """The withheld-payload half of the same check, on an owned package."""
 
         with self._owned(
             _descriptor("node", "payload/index.js"), **{"index.js": b"serve();\n"}

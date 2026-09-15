@@ -1,10 +1,10 @@
-"""VI-1: a vendored copy is checked against the origin it records, or the check refuses.
+"""A vendored copy is checked against the origin it records, or the check refuses.
 
-`LAF-41` is that `origin.input_digest` was written once and read by nothing: the lock and the index
-are derived from whatever bytes are present, so they agree with a substitution by construction, and
-the one document saying what the bytes were supposed to be was never consulted.
+The lock and the index are derived from whatever bytes are present, so they agree with a
+substitution by construction. `origin.input_digest` is the one document saying what the bytes were
+supposed to be, so it has to be consulted.
 
-Design §3 is the claim these tests hold: the taken subtree is recoverable from the package on disk,
+The claim these tests hold: the taken subtree is recoverable from the package on disk,
 so the digest is recomputable with no new field, no migration, and no network. The recomputation is
 exact only because two rules elsewhere hold — an authored file never collides with a taken one, and
 a Git tree holds no empty directory — so both are exercised here rather than assumed.
@@ -170,7 +170,7 @@ class VendoredCopyIntegrityTest(unittest.TestCase):
         self.assertFalse(_integrity(package, files).matches)
 
     def test_one_changed_byte_is_a_mismatch(self) -> None:
-        """The `LAF-41` reproduction, at the smallest scale that produces it."""
+        """A substitution, at the smallest scale that produces one."""
 
         files = _committed(package := _package())
         target = f"{package.base}/payload/index.js"

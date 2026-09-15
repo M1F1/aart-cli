@@ -19,13 +19,15 @@ from typing import Any, Callable, Mapping, Sequence
 
 ROOT = Path(__file__).resolve().parent.parent
 PYTHON = sys.executable
-# The release series this checklist governs.  REL01's `1.0.0` evidence is immutable: its
-# schema freeze, checklist, and release notes are never regenerated or edited.  A new release
-# series adds its own contract here and its own versioned documents beside the frozen ones.
-EXPECTED_VERSION = "0.0.1"
-RELEASE_CONTRACT_VERSION = 18
+# There is deliberately no `EXPECTED_VERSION` here.  A checklist that refuses every version but the
+# one somebody typed into a script is the manual bookkeeping INV-085 and INV-101 forbid.  The version
+# comes from one place, the release engine writes it, and this checklist reports it rather than
+# ruling on it.
+_DECLARED_VERSION_RE = re.compile(r'(?m)^__version__\s*=\s*"([^"]+)"')
 REFERENCE_REGISTRY_ORIGIN = "https://github.com/M1F1/agent-artifacts-registry"
-SCHEMA_FREEZE_PATH = f"docs/release/schema-freeze-v{RELEASE_CONTRACT_VERSION}.json"
+# One freeze, overwritten in place by `make release-freeze` in the change that moves a schema; git
+# history is its record (D-275).
+SCHEMA_FREEZE_PATH = "docs/release/schema-freeze.json"
 GIT_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 SCHEMA_INPUTS = (
     "agent_artifacts/configuration/schema.py",
@@ -44,18 +46,12 @@ SCHEMA_INPUTS = (
     "docs/protocol/native-source-v1.md",
     "docs/protocol/registry-v1.md",
 )
-# Documents that must exist *and* name this exact release.
+# Documents that must exist and say something.  They do not have to *name the release*: that would
+# be release bookkeeping wearing a checklist's clothes (INV-098).  The changelog is written by the
+# release engine, so what is checked is that it and the onboarding tutorials are here and have
+# content.
 REQUIRED_RELEASE_DOCS = (
     "CHANGELOG.md",
-    f"docs/release/compatibility-v{RELEASE_CONTRACT_VERSION}.md",
-    f"docs/release/release-checklist-v{RELEASE_CONTRACT_VERSION}.md",
-    f"docs/release/github-release-v{EXPECTED_VERSION}.md",
-)
-# Documents that stay shipped and referenced across release series.  They are still gated — a
-# release must not silently drop the 0.1.x migration guide or the onboarding tutorials — but they
-# describe an earlier boundary and are not expected to name the current version.
-REQUIRED_PERSISTENT_DOCS = (
-    "docs/release/migration-v1.md",
     "docs/tutorials/direct-source-v1.md",
     "docs/tutorials/company-registry-v1.md",
     "docs/tutorials/vendoring-v1.md",
@@ -82,8 +78,8 @@ PROTOCOL_VERSIONS = {
     "registry": 1,
     "reporting": 1,
     "security_assessment": 1,
-    # Raised for the 2.0.0 series: revision 1 is rejected at parse time rather than carried behind
-    # a compatibility branch, so the single supported revision is the one recorded here.
+    # Revision 1 is rejected at parse time rather than carried behind a compatibility branch, so
+    # the single supported revision is the one recorded here.
     "setup_recipe": 2,
 }
 
@@ -109,15 +105,19 @@ class RegistryEvidence:
     content_checks_ran: bool
 
 
-def _versioning():
-    path = ROOT / "scripts" / "version.py"
-    spec = importlib.util.spec_from_file_location("_aart_release_version", path)
-    if spec is None or spec.loader is None:
-        raise RuntimeError("cannot load scripts/version.py")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+def declared_version(root: Path = ROOT) -> str:
+    """What this tree says it is, read from the one file that says it.
+
+    This is a report, not a ruling.  Nothing here compares it to a tag, to `pyproject.toml` or to
+    a document: the release engine writes every place the version appears, so a disagreement is
+    not a thing a human can cause and not a thing a checklist has to police.
+    """
+
+    text = (root / "agent_artifacts" / "__init__.py").read_text(encoding="utf-8")
+    match = _DECLARED_VERSION_RE.search(text)
+    if match is None:
+        raise ValueError("agent_artifacts/__init__.py declares no __version__")
+    return match.group(1)
 
 
 def _sha256(content: bytes) -> str:
@@ -125,13 +125,18 @@ def _sha256(content: bytes) -> str:
 
 
 def schema_freeze_bytes(root: Path = ROOT) -> bytes:
+    """The freeze this tree's normative schema inputs produce.
+
+    It names no release.  A version inside it would be a second copy of the number Release Please
+    writes, and `schema-freeze-stale` has to go on meaning exactly one thing: a schema moved.
+    """
+
     inputs = [
         {"path": relative, "sha256": _sha256((root / relative).read_bytes())}
         for relative in SCHEMA_INPUTS
     ]
     document = {
         "protocol_versions": PROTOCOL_VERSIONS,
-        "release_version": EXPECTED_VERSION,
         "schema_inputs": inputs,
         "schema_version": 1,
     }
@@ -159,11 +164,9 @@ def wheel_digest(root: Path = ROOT, *, output_dir: Path | None = None) -> tuple[
     (``docs/release/wheel-reproducibility-v1.md``).
 
     ``output_dir`` receives that artifact, and the digest is then read back from the written file:
-    what the caller is handed is the file the printed digest describes.  `LAF-75`: the wheel used
-    to live in a temporary directory removed before this returned, which left the publisher to
-    build a second wheel by another route and attach that one — a *different* file, because a
-    build from the checkout carries no commit stamp.  `2.6.0` came within one ``curl`` of
-    publishing a digest line that did not describe its own attachment.
+    what the caller is handed is the file the printed digest describes.  A wheel kept in a temporary
+    directory would leave the publisher to build a second wheel by another route and attach that
+    one — a *different* file, because a build from the checkout carries no commit stamp.
     """
 
     inject = _script("inject_commit")
@@ -292,50 +295,13 @@ def _repository_diagnostics(
     require_main: bool,
 ) -> tuple[ReleaseDiagnostic, ...]:
     diagnostics: list[ReleaseDiagnostic] = []
-    versioning = _versioning()
+    # The version is read, not ruled on: Release Please decides it, so the checklist only requires
+    # that the tree can state one.
     try:
-        version = versioning.read_version(root)
-        if str(version) != EXPECTED_VERSION or not version.stable:
-            diagnostics.append(
-                _diagnostic(
-                    "repository",
-                    "version-not-stable",
-                    f"release source must be exactly stable {EXPECTED_VERSION}",
-                )
-            )
+        declared_version(root)
     except (OSError, ValueError) as error:
         diagnostics.append(_diagnostic("repository", "version-invalid", str(error)))
-    try:
-        progress = (root / "PROGRESS.md").read_text(encoding="utf-8")
-        incomplete = tuple(
-            task for task, status in versioning.task_states(progress) if status != "complete"
-        )
-        if incomplete:
-            diagnostics.append(
-                _diagnostic(
-                    "repository",
-                    "progress-incomplete",
-                    "incomplete release tasks: " + ", ".join(incomplete),
-                )
-            )
-    except (OSError, ValueError) as error:
-        diagnostics.append(_diagnostic("repository", "progress-invalid", str(error)))
     for relative in REQUIRED_RELEASE_DOCS:
-        path = root / relative
-        try:
-            text = path.read_text(encoding="utf-8")
-        except OSError:
-            text = ""
-        if EXPECTED_VERSION not in text:
-            diagnostics.append(
-                _diagnostic(
-                    "repository",
-                    "release-doc-missing",
-                    f"required {EXPECTED_VERSION} release document is missing "
-                    f"or incomplete: {relative}",
-                )
-            )
-    for relative in REQUIRED_PERSISTENT_DOCS:
         try:
             carried = (root / relative).read_text(encoding="utf-8").strip()
         except OSError:
@@ -345,7 +311,7 @@ def _repository_diagnostics(
                 _diagnostic(
                     "repository",
                     "release-doc-missing",
-                    f"carried-forward release document is missing or empty: {relative}",
+                    f"release document is missing or empty: {relative}",
                 )
             )
     if require_clean:
@@ -475,6 +441,7 @@ def _registry_diagnostics(
     root: Path,
     registry: Path,
     process_runner: ProcessRunner,
+    version: str,
 ) -> RegistryEvidence:
     if registry.is_symlink() or not registry.is_dir():
         return RegistryEvidence(
@@ -605,8 +572,11 @@ def _registry_diagnostics(
                 *source,
                 "--compatibility",
                 "all",
+                # The version under test is the one this tree declares, not one pinned in this
+                # script: reconciling a registry against a release nobody is cutting proves
+                # nothing about the release being cut.
                 "--latest-version",
-                EXPECTED_VERSION,
+                version,
             ),
         ),
     )
@@ -674,11 +644,17 @@ def check_release(
         require_clean=require_clean,
         require_main=require_main,
     )
+    # Read once and carried, so a tree that cannot say what version it is is reported by the
+    # `version-invalid` diagnostic above rather than by an exception out of a registry command.
+    try:
+        version = declared_version(root)
+    except (OSError, ValueError):
+        version = "unknown"
     # `registry is None` is the deliberate "this fork has no registry" case, not a missing
     # argument: the caller has to ask for it by name.  Reconciliation is then not performed, and
     # nothing pretends it was -- the seven registry checks report `skipped`, never `passed`.
     registry_evidence = (
-        _registry_diagnostics(root, registry, process_runner)
+        _registry_diagnostics(root, registry, process_runner, version)
         if registry is not None
         else RegistryEvidence((), None, False)
     )
@@ -707,10 +683,6 @@ def check_release(
         skipped_checks = frozenset(("registry-origin", *REGISTRY_CONTENT_CHECKS))
     elif not registry_evidence.content_checks_ran:
         failed_checks.update(REGISTRY_CONTENT_CHECKS)
-    try:
-        version = str(_versioning().read_version(root))
-    except (OSError, ValueError):
-        version = "unknown"
     return {
         "schema_version": 1,
         "status": "passed" if not diagnostics else "failed",

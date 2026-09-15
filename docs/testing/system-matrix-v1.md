@@ -1,6 +1,6 @@
-# AART 1.0 system matrix
+# System matrix
 
-The release system matrix is one auditable command over thirteen stable scenarios:
+The release system matrix is one auditable command over eleven stable scenarios:
 
 ```shell
 make system-matrix
@@ -19,7 +19,6 @@ output or paths.
 | `direct-only` | Local native source sync and canonical Copy installation without a registry |
 | `public-company-team` | Optional public/company registries plus a direct team source coexist |
 | `native-reference` | A native upstream is promoted by entry/lock/index reference only |
-| `foreign-import` | Legacy foreign content is staged, reviewed, applied atomically, and becomes a no-op |
 | `collision` | Ambiguous unqualified identity fails while a qualified company item resolves |
 | `trust-downgrade` | Trust change after Review is terminal and non-mutating |
 | `offline` | Cached install/lifecycle succeeds; missing cache returns a typed failure without Git |
@@ -28,7 +27,6 @@ output or paths.
 | `setup-partial` | Setup queue stop, retry, and rollback retain per-item terminal outcomes |
 | `security-provider-failure` | Optional analyzer timeout/crash/malformed output cannot become a core failure |
 | `reporting-absent` | Disabled or unavailable reporting performs no provider mutation and fails closed |
-| `migration-rollback` | Preview/apply and later-process rollback restore legacy state exactly |
 
 Run one scenario while diagnosing a failure:
 

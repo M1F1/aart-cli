@@ -57,6 +57,7 @@ class RegistryOperation(str, Enum):
     VENDOR_BATCH = "vendor-batch"
     PUBLISH = "publish"
     REVENDOR = "revendor"
+    CANDIDATE_PROMOTION = "candidate-promotion"
 
 
 class WorkspaceChangeKind(str, Enum):
@@ -203,7 +204,14 @@ def _managed_path(path: SafeRelativePath) -> bool:
         return True
     # `security/` carries committed assessment evidence.  It is not a registry input — the inputs
     # digest ignores it — so a plan may write evidence without making the lock and index stale.
-    return path.parts[0] in {"entries", "artifacts", "collections", "security"}
+    return path.parts[0] in {
+        "entries",
+        "artifacts",
+        "collections",
+        "security",
+        "registry",
+        "references",
+    }
 
 
 def registry_workspace_review_digest(
@@ -315,7 +323,7 @@ class VendoredArtifactCheck:
     """What re-resolving one vendored artifact's upstream found.
 
     The plan is present only when upstream moved *and* the maintainer supplied the version that
-    movement deserves (design §4). `up-to-date` has nothing to write, and `unreachable` must never
+    movement deserves. `up-to-date` has nothing to write, and `unreachable` must never
     be able to write: a maintainer who lost access to an upstream is told that, not that their copy
     is current.
     """

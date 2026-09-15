@@ -1,9 +1,9 @@
-"""Frozen data model — the shared contract for the whole system (WP-0).
+"""Frozen data model — the shared contract for the whole system.
 
 Everything here is immutable data: domain records, the effect/`Action` algebra, the
 `Plan`, the consumer manifest, and the `Result` type. No behaviour lives in this module;
 logic lives in the pure core (catalog/policy/merge/manifest/planners) and the imperative
-shell (io/executor/commands). See docs/plan/PLAN.md §2/§5 and docs/design/DESIGN.md §14.
+shell (io/executor/commands). See Product Specification §49.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ InstallScope = Literal["project", "user"]
 # explicit local/live-linked mode.
 InstallMode = Literal["copy", "symlink"]
 
-# Install modes for the `memory` instruction-file type (docs/design/DESIGN-memory.md §3.2). Default when
+# Install modes for the `memory` instruction-file type. Default when
 # unspecified is "prepend"; resolution precedence is CLI flag → frontmatter `mode:` → default.
 MemoryMode = Literal["replace", "prepend", "append", "skip"]
 
@@ -258,7 +258,7 @@ def source_label(resolved: Resolved) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# Effects as data — the Action algebra and the Plan (docs/design/DESIGN.md §14)            #
+# Effects as data — the Action algebra and the Plan (Product Specification §22)            #
 # --------------------------------------------------------------------------- #
 @dataclass(frozen=True, slots=True)
 class CopyTree:
@@ -302,7 +302,7 @@ class Warn:
 
 
 # --------------------------------------------------------------------------- #
-# Consumer manifest (docs/design/DESIGN.md §12)                                            #
+# Consumer manifest                                                                       #
 # --------------------------------------------------------------------------- #
 @dataclass(frozen=True, slots=True)
 class MergeProof:
@@ -410,6 +410,17 @@ class Request:
     setup_recipe: Optional[str] = None
     review_policy: Optional[str] = None
     registry_action: Optional[str] = None
+    # Maintainer Source Scan inputs are separate from both the writable registry checkout and
+    # consumer source subscriptions. The command observes one clean pinned author checkout and
+    # can only report Candidates.
+    candidate_checkout: Optional[str] = None
+    candidate_source_alias: Optional[str] = None
+    candidate_source_url: Optional[str] = None
+    target_registry_alias: Optional[str] = None
+    promotion_candidate_ids: Tuple[str, ...] = ()
+    promotion_validation_report: Optional[str] = None
+    promotion_policy_result: Optional[str] = None
+    promotion_mode: str = "vendored"
     check: bool = False
     # Resolve vendored origins during an audit.  Off by default: an audit that reached the network
     # unasked would fail offline and depend on somebody else's uptime in CI.
@@ -430,6 +441,11 @@ class Request:
     discovery_accept_all: bool = False
     vendor_manifest: Optional[str] = None
     publish_message: Optional[str] = None
+    # `D-228`: where a reviewed registry commit is published to.  The branch is required at the
+    # surface rather than defaulted, because the one branch AART must never push to is the one
+    # a subscriber reads, and a default would be a guess about which that is.
+    publication_branch: Optional[str] = None
+    publication_remote: str = "origin"
     artifact_version: Optional[str] = None
     # The licence the registry records for a vendored copy.  Stated by the maintainer, because a
     # licence read out of an upstream file is a reading of somebody else's document.

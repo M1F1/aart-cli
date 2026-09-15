@@ -1,4 +1,4 @@
-"""RR-4: what an undo would reverse, decided before anything is reversed.
+"""What an undo would reverse, decided before anything is reversed.
 
 `rollback_record` (`setup_runtime.py:1359`) already replays a record's receipts in reverse order
 with ownership checks, and already runs — once, on the failure path inside a run.  This module
@@ -83,7 +83,7 @@ def undo_digest(payload: Mapping[str, object]) -> str:
     """Bind a decision to the exact undo it was read from.
 
     Digested through the package's own JSON parser rather than a second canonicalization, so
-    the digest covers precisely the bytes `--json` printed — `SI-1`'s guarantee, over an undo.
+    the digest covers precisely the bytes `--json` printed.
     """
 
     parsed = parse_json(stdlib_json.dumps(payload))
@@ -158,12 +158,12 @@ def _disposition(receipt: Mapping[str, object]) -> tuple[str, str]:
 
     if module == "docker.build@1":
         if receipt.get("preexisting") is True:
-            # `LAF-58`. The tag keeps its name and points at what this run built; the id it
+            # The tag keeps its name and points at what this run built; the id it
             # pointed at beforehand was never recorded, so nothing can restore the binding.
             return KEEPS, (
                 "the tag named an image before this run, so it is not removed — but it now "
                 "points at what this run built, and the receipt never recorded the earlier "
-                "image id, so the undo cannot restore the original binding (LAF-58)"
+                "image id, so the undo cannot restore the original binding"
             )
         return REVERSES, "removes the image tag this run created"
 

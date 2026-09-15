@@ -1,11 +1,11 @@
-"""VN-5: a vendored copy does not go stale in silence, and cannot claim it is current.
+"""A vendored copy does not go stale in silence, and cannot claim it is current.
 
-A pin cannot rot; a copy can (design §6). `revendor` re-resolves the ref the copy was taken at and
+A pin cannot rot; a copy can. `revendor` re-resolves the ref the copy was taken at and
 answers with one of three dispositions. The load-bearing one is `unreachable`: a maintainer who has
 lost access to an upstream must be told that, and never told their copy is fine — so these tests
 check the exit code and the rendered check, not only the returned value.
 
-The other half is design §4. Upstream declares no version AART can trust, so a moved upstream is
+The other half is versioning. Upstream declares no version AART can trust, so a moved upstream is
 reported with its file-level diff and planned only once the maintainer states the version that
 movement deserves. Nothing here derives one.
 """
@@ -331,7 +331,7 @@ class RevendorTest(unittest.TestCase):
             )
 
     def test_an_unmoved_ref_says_so_rather_than_leaving_two_commits_unexplained(self) -> None:
-        """`LAF-42`: two differing commits under `up-to-date` is the healthy monorepo case."""
+        """Two differing commits under `up-to-date` is the healthy monorepo case."""
 
         with self._registry(_foreign_repository(), commit=_MOVED_COMMIT) as root:
             _code, output = _run(
@@ -357,7 +357,7 @@ class RevendorTest(unittest.TestCase):
             self.assertIn("the ref has not moved since this copy was taken", details)
 
     def test_a_copy_that_no_longer_matches_its_record_is_refused_before_the_network(self) -> None:
-        """`LAF-41`/`LAF-42`: drift is a statement about the bytes on disk, or it is nothing.
+        """Drift is a statement about the bytes on disk, or it is nothing.
 
         Upstream is never contacted, because nothing it could say makes this copy the copy its
         provenance describes — and re-vendoring over the difference would erase it unseen.

@@ -93,9 +93,8 @@ class TabnineMcpE2ETest(unittest.TestCase):
                         ],
                         "npx",
                     )
-                # AD-28 regression: 2.7.0 pinned these unmeasured standalone files as required and
-                # asserted that the company-proven settings files above did not exist. Flip that
-                # contract rather than accepting either destination silently.
+                # The unmeasured standalone files are not a destination; the company-proven
+                # settings files above are. Neither destination is accepted silently.
                 self.assertFalse((environment.project / ".tabnine/mcp_servers.json").exists())
                 self.assertFalse((environment.home / ".tabnine/mcp_servers.json").exists())
 

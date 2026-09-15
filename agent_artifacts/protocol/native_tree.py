@@ -115,7 +115,7 @@ def dependency_scope_error(
     ``requires`` resolves inside one registry and against artifacts that registry *owns*.  The old
     wording — ``skill/x requires missing skill/y`` — reads as "not published yet", so a maintainer
     depending on another registry's artifact waits for a publication that will never make the build
-    pass (``LAF-38``).  Two shapes are distinguished, because they have different fixes: an identity
+    pass.  Two shapes are distinguished, because they have different fixes: an identity
     this registry has nothing to say about, and one it *references* from another origin, which looks
     published from the index and is still not a dependency this registry can resolve.
     """
@@ -294,12 +294,21 @@ def _validate_primary_payload(
                 ARTIFACT_INVALID, f"{primary_path} must be a strict JSON object", primary_path
             )
         if artifact_type == "hook":
-            name = parsed.value.get("name")
-            command = parsed.value.get("command")
-            if not isinstance(name, str) or not name or not isinstance(command, str) or not command:
+            # Everything installing one needs, checked where an author still sees it. A hook that
+            # names no event and no matcher compiles into a package nothing can place: there is no
+            # slot to write the entry into and nothing for the harness to match it against, and
+            # discovering that on somebody else's machine is a worse place to discover it.
+            missing = [
+                field
+                for field in ("name", "command", "event", "matcher")
+                if not isinstance(parsed.value.get(field), str) or not parsed.value.get(field)
+            ]
+            if missing:
                 return _error(
                     ARTIFACT_INVALID,
-                    "payload/hook.json requires non-empty string name and command fields",
+                    "payload/hook.json requires non-empty string "
+                    + ", ".join(missing)
+                    + (" fields" if len(missing) > 1 else " field"),
                     primary_path,
                 )
         text_files = ()
@@ -704,7 +713,7 @@ def load_native_source(
 
     ``referenced_origins`` sharpens one refusal and changes no outcome: a registry knows which
     identities it references from another origin, and a plain native source knows nothing, so the
-    argument is optional and defaults to knowing nothing (SI-9).
+    argument is optional and defaults to knowing nothing.
     """
 
     validated = _validated_entries(snapshot)

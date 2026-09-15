@@ -10,9 +10,9 @@ route and never the only route**: the review renders the manual alternative befo
 after an incomplete outcome. Each module below therefore states the command a person runs to reach
 the same result by hand. A module whose effect could not be written that way would not belong here.
 
-The document, its fields, trust, consent, receipts, and rollback are specified in
-[`DESIGN-setup-installers.md`](../design/DESIGN-setup-installers.md). This file is the reference for
-what a recipe may *say*.
+Trust, consent, receipts, and rollback are specified in the
+[Product Specification](../product-specification/PRODUCT_SPECIFICATION.md). This file is the
+reference for what a recipe may *say*.
 
 ## Recipe shape
 
@@ -333,13 +333,13 @@ is reachable and the build itself works; only credentialed registry access does 
 pre-existing behaviour that already affects `docker.pull@1`, and the environment is narrow on
 purpose.
 
-**Publishing one of these modules withholds the registry from every older consumer, and no
-`requires_aart` floor prevents it.** The floor is an artifact-level bound, and the refusal happens
-before any artifact is considered: a recipe is parsed while the source snapshot is validated. On
-`2.4.0`, `source add` refuses the whole registry — `unknown or unsupported setup module
-'docker.build@1'` — and a consumer already subscribed keeps their last-known-good snapshot, with
-`source sync` failing (`unknown capabilities: trust-store`) and everything they already had still
+**Publishing a module newer than a consumer's AART withholds the whole registry from that
+consumer, and no `requires_aart` floor prevents it.** The floor is an artifact-level bound, and the
+refusal happens before any artifact is considered: a recipe is parsed while the source snapshot is
+validated. An executable that does not know the module refuses the registry at `source add` —
+`unknown or unsupported setup module` — and a consumer already subscribed keeps their
+last-known-good snapshot, with `source sync` failing and everything they already had still
 installable. Closed rather than silent, and named precisely, which is the correct failure; it is
 still a failure, and it applies to *every* artifact in that registry rather than to the one using
-the module. Raise the floor to `min_inclusive: "2.5.0"` anyway — it is true — but plan the rollout
+the module. Raise the artifact's `requires_aart` floor anyway — it is true — but plan the rollout
 around the consumers, not around the field.

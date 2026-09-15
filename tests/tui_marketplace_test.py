@@ -368,7 +368,7 @@ class TuiMarketplaceTest(unittest.TestCase):
 
 
 class ArtifactProjectionTest(unittest.TestCase):
-    """WP-2 of DESIGN-tui-legibility: one line per row, evidence in the pane and the record."""
+    """One line per row, evidence in the pane and the record."""
 
     def rows(self) -> tuple:
         catalog = _catalog()
@@ -403,7 +403,7 @@ class ArtifactProjectionTest(unittest.TestCase):
         self.assertTrue(all(len(cells) == 4 for cells in map(artifact_cells, rows)))
 
     def test_cells_are_ordered_so_a_narrow_caller_can_drop_a_suffix(self) -> None:
-        # Resolves the question WP-0 carried forward: below roughly fifty columns the kernel
+        # Below roughly fifty columns the kernel
         # shrinks a trailing cell to a meaningless stump, so the caller drops whole columns
         # instead. That only works if the cells are ordered by importance.
         rows = self.rows()
@@ -508,8 +508,7 @@ class ArtifactProjectionTest(unittest.TestCase):
         self.assertTrue(all(len(line) <= READABLE_MEASURE for line in prose))
 
     def test_the_flattened_row_renderer_is_gone(self) -> None:
-        # WP-3 step 9: the last caller (_canonical_choice) moved to these projections, so the
-        # one-line dump that started observation 7 no longer exists to be reached for.
+        # Every caller uses these projections, so no one-line dump exists to be reached for.
         import agent_artifacts.tui_marketplace as module
 
         self.assertFalse(hasattr(module, "render_marketplace_row"))

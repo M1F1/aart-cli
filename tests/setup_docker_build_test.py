@@ -1,4 +1,4 @@
-"""SBC-2: `docker.build@1` — an image built from the package, locally, owned only if created.
+"""`docker.build@1` — an image built from the package, locally, owned only if created.
 
 `docker.pull@1` names bytes fetched from elsewhere and can demand an immutable digest for them. A
 build has no digest before it runs, and two machines building one context get two image ids, so the
@@ -278,7 +278,7 @@ class AppliedBuildTest(unittest.TestCase):
         note = str(record.receipt[0]["recovery"])
         # This branch used to read "Rollback removes this tag, which only this run created",
         # which names neither Docker nor the tag — the same defect the sibling branch had, left
-        # standing on the branch an ordinary first install actually reaches (`AD-38`).
+        # standing on the branch an ordinary first install actually reaches.
         self.assertIn("Docker image tag", note)
         self.assertIn("aart/mcp/atlassian:1.4.0", note)
         self.assertIn("docker image rm", note)
@@ -294,7 +294,7 @@ class AppliedBuildTest(unittest.TestCase):
         self.assertEqual(docker.removed, [])
         note = str(record.receipt[0]["recovery"])
         # The tag is not "left alone": `docker build --tag` moved it to the image just built.
-        # What is left alone is the rollback, and the note has to say which (`AD-37`).
+        # What is left alone is the rollback, and the note has to say which.
         self.assertIn("now points at the image this run built", note)
         self.assertIn("aart/mcp/atlassian:1.4.0", note)
         # `docker image rm <tag>` deletes the image the server runs from when the tag is its last

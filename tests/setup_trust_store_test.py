@@ -1,4 +1,4 @@
-"""SBC-3: `trust-store.export-certificates@1` — a certificate is not a credential.
+"""`trust-store.export-certificates@1` — a certificate is not a credential.
 
 A corporate root CA is public by nature: it is what the interception proxy presents to every machine
 on the network. Routing it through the recipe's secret machinery would prompt a human for something

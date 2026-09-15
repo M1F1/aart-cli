@@ -1,4 +1,4 @@
-"""SBC-4: a container build file is read by the rules that already exist.
+"""A container build file is read by the rules that already exist.
 
 `_text_like` decided what the baseline may read: a known suffix, the executable bit, or a shebang. A
 file named `Dockerfile` has none of the three, so the assessment never opened it. That was tolerable

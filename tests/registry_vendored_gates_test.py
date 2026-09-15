@@ -1,7 +1,7 @@
-"""VI-2: a copy that contradicts its own record fails validate and audit.
+"""A copy that contradicts its own record fails validate and audit.
 
-`LAF-41` reproduced live: replace a vendored package's payload, re-run `registry lock --yes` and
-`registry build --yes`, and every gate stayed green. They stayed green by construction — the lock
+Replace a vendored package's payload, re-run `registry lock --yes` and `registry build --yes`, and
+the lock and index gates stay green by construction — the lock
 and the index are derived from the bytes that are there, so they agree with any substitution — which
 is why the reproduction here re-locks and re-builds before asserting, rather than tampering and
 checking validate alone.
@@ -176,7 +176,7 @@ class VendoredCopyGateTest(unittest.TestCase):
         self.assertTrue(_audit(registry).passed, _messages(_audit(registry)))
 
     def test_a_substituted_payload_fails_validate_and_audit_after_relocking(self) -> None:
-        """The `LAF-41` reproduction, end to end and offline."""
+        """A substituted payload, end to end and offline."""
 
         registry = _compiled(_tampered(_vendored_registry()))
         validated = _validate(registry, require_compiled=True)

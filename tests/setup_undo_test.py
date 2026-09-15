@@ -1,4 +1,4 @@
-"""RR-4: the undo review predicts what the real rollback does.
+"""The undo review predicts what the real rollback does.
 
 `plan_undo` is a projection of `_rollback_receipt`. A projection that drifts from what it
 projects is worse than none, because the operator approves the projection and the machine
@@ -192,7 +192,6 @@ class UndoReviewContentTest(unittest.TestCase):
         step = plan_undo(record)[0]
 
         self.assertEqual(step.disposition, KEEPS)
-        self.assertIn("LAF-58", step.reason)
         self.assertIn("cannot restore the original binding", step.reason)
 
     def test_a_pulled_image_warns_that_the_undo_will_report_incomplete(self) -> None:

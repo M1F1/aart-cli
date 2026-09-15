@@ -1,4 +1,4 @@
-"""SBC-5: what a consumer is actually shown before consenting to a build.
+"""What a consumer is actually shown before consenting to a build.
 
 The recipe is the guided route and never the only route: every setup-bearing package ships a
 package-root `SETUP.md`, and the review renders that manual alternative *before* consent. Two

@@ -11,9 +11,8 @@ Three steps, three commands, and a JSON manifest between them:
 each candidate one at a time and records your answer. `vendor` runs `aart registry vendor` for the
 ones you kept — the real command, with its real review and its three checks, once per artifact.
 
-This is `AD-08`'s stopgap, deliberately: an orchestration layer over `registry vendor`, never a
-replacement for it, which is the only shape `DESIGN-registry-vendoring.md` §10 leaves open for batch
-discovery. It decides nothing. It guesses no version. It holds no credentials — `git` and `aart` are
+It is deliberately an orchestration layer over `registry vendor`, never a replacement for it, so
+batch discovery reuses the one reviewed vendoring path. It decides nothing. It guesses no version. It holds no credentials — `git` and `aart` are
 the only programs it runs, and the only dependencies it has.
 
 **The repositories this is for do not speak AART**, so the scan reports two different things.
@@ -35,7 +34,7 @@ AART's own payload names, and nobody outside AART writes them.
 
 Project memory lands there too, and that one hurts. `CLAUDE.md`, `AGENTS.md` and `TABNINE.md` live
 at a repository root beside twenty other files, so the single most important document in a skills
-repository is the one shape `vendor` cannot take. That is `AD-11`. So there is a fourth command for
+repository is the one shape `vendor` cannot take. So there is a fourth command for
 exactly those:
 
     scripts/vendor_scan.py adopt candidates.json --source /path/to/registry --yes
@@ -261,7 +260,7 @@ def memory_hint(path: Path, root: Path) -> Hint:
 
     `CLAUDE.md`, `AGENTS.md`, `TABNINE.md` sit at a repository root beside twenty other files, and
     a `memory` payload must be a directory holding exactly that one Markdown file. So the shape
-    that matters most is the one `vendor` cannot take, which is `AD-11`. Reported here rather than
+    that matters most is the one `vendor` cannot take. Reported here rather than
     quietly dropped: a maintainer who never learns the file exists cannot decide anything about it.
     """
 
@@ -521,14 +520,14 @@ def command_adopt(args: argparse.Namespace) -> int:
     """Take a single loose document into the registry as an artifact you name and own.
 
     This is the answer to the hint `scan` reports for `CLAUDE.md`, `AGENTS.md` and `TABNINE.md`.
-    `registry vendor` cannot take a file (`AD-11`), so nothing here pretends to vendor: it scaffolds
+    `registry vendor` cannot take a file, so nothing here pretends to vendor: it scaffolds
     a package with `aart registry scaffold`, then puts the upstream document in as the payload. From
     that point AART treats it like any other artifact — under the tabnine profile a `memory` lands
     as project-root `TABNINE.md`, and each harness gets its own destination from its own profile.
 
     What is lost is the provenance link, and it cannot be faked: `artifact.json` rejects an unknown
     field, so there is nowhere honest to record the origin. The origin is printed for the commit
-    message instead, which is the only place it can live until `AD-11` is settled.
+    message instead, which is the only place it can live.
     """
 
     manifest = load(args.manifest)
@@ -617,7 +616,7 @@ def command_adopt(args: argparse.Namespace) -> int:
         return 0
 
     print("\nThese packages carry no provenance.json — `registry vendor` cannot take a single file")
-    print("(AD-11), so the origin has nowhere machine-readable to live. Put it in the commit:\n")
+    print("so the origin has nowhere machine-readable to live. Put it in the commit:\n")
     print(f"    Adopted from {manifest['url']} at {manifest['ref']}")
     for name, _, source_path in adopted:
         print(f"      {args.kind}/{name} ← {Path(source_path).name}")

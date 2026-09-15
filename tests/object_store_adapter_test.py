@@ -385,7 +385,7 @@ class ObjectStoreAdapterTest(unittest.TestCase):
             self.assertEqual(tuple(external.iterdir()), ())
 
     def test_an_unavailable_store_tells_the_operator_what_to_do_about_it(self) -> None:
-        """SI-6: an errno is a cause, not an instruction.
+        """An errno is a cause, not an instruction.
 
         Every `store-unavailable` failure is the same environment problem — the managed store could
         not be read or written — and it reached the operator as a bare `[Errno 13]` with nothing to

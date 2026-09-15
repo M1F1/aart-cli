@@ -61,10 +61,16 @@ class Diagnostic:
     location: SourceLocation | None = None
     remediation: tuple[str, ...] = ()
     details: tuple[tuple[str, str], ...] = ()
+    #: `QA-017`/`B-091`: the same next step, written for somebody who is already inside the
+    #: interactive application. `remediation` is the CLI's contract and says `aart …`; an
+    #: interactive frame that repeats it answers a refusal by sending the operator to a terminal.
+    #: Author order is kept, because this is prose rather than a set of independent options.
+    interactive: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "remediation", tuple(sorted(set(self.remediation))))
         object.__setattr__(self, "details", tuple(sorted(self.details)))
+        object.__setattr__(self, "interactive", tuple(self.interactive))
 
 
 def _location_key(location: SourceLocation | None) -> tuple[str, str, int, int, str]:

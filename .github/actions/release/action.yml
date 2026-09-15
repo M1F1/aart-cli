@@ -17,16 +17,6 @@ inputs:
   tag:
     description: The release tag under inspection.
     required: true
-  preconditions:
-    description: >
-      '"false" when the caller has already proven this exact tree in this same run -- the
-      eleven-item release checklist and the packaging gate.  The release button has:
-      `scripts/cut_release.py` runs both before it does anything, because they have to pass
-      *before* the tag exists -- the button either produces a tag and a release or produces
-      neither.  Running them again here proved the same tree a second time.  It is an input
-      rather than a guess, so a path that has not run them cannot skip them by accident.'
-    required: false
-    default: "true"
   attach:
     description: >
       '"true" when the wheel should be attached to the release.  Not read off the event: the
@@ -72,12 +62,7 @@ runs:
     # `--without-registry` is typed out rather than inferred from a missing `--registry`, so a
     # release that verifies less can only happen on purpose.  The checklist warns on every such
     # run and marks the seven registry checks `skipped`, never `passed`.
-    #
-    # Skipped only when the caller says it has already run it against this same tree -- see the
-    # `preconditions` input.  Every other step below still runs: they check the tag, the notes and
-    # the artefact, and none of those existed when the button ran its precondition.
     - name: Run stable release checklist
-      if: inputs.preconditions != 'false'
       shell: bash
       run: |
         set -euo pipefail
@@ -87,25 +72,16 @@ runs:
           ${{ inputs.python }} scripts/release.py check --without-registry
         fi
 
-    - name: Verify source version and release tag
-      shell: bash
-      env:
-        TAG: ${{ inputs.tag }}
-      run: ${{ inputs.python }} scripts/version.py check-tag "$TAG"
-
-    - name: Verify reviewed release notes
-      shell: bash
-      env:
-        TAG: ${{ inputs.tag }}
-      run: test -s "docs/release/github-release-${TAG}.md"
+    # No source-version-versus-tag step and no reviewed-notes file: the release engine writes the
+    # version and the release body, and what is worth proving at a tag is a property of the
+    # artifact -- which is what the two steps after the build do.  See INV-097, INV-098, INV-101.
 
     # The one quality gate the release run keeps.  Its subject is the wheel, not the source, so
     # the pull request that proved the source cannot have proven it: it builds a wheel in a
     # throwaway copy of the tree and imports the package back out of it.  Everything else the ten
     # gates check was already proven on the way to `main`.
-    # See docs/ci/pr-check-and-release-split-v1.md.
+    # See docs/ci/workflows-v1.md.
     - name: Check the packaged wheel
-      if: inputs.preconditions != 'false'
       shell: bash
       run: ${{ inputs.python }} scripts/packaging_check.py
 
@@ -116,6 +92,16 @@ runs:
     - name: Build wheel
       shell: bash
       run: ${{ inputs.python }} scripts/build_wheel.py
+
+    # The subject of a release run.  The tag is the released identity, so the archive about to be
+    # published has to agree with it -- in its filename, in its metadata, and in what the command
+    # inside it says when a clean environment runs it.  None of this was provable on the pull
+    # request: the wheel did not exist.  See scripts/release_artifact.py.
+    - name: Verify the artifact against the tag it is published under
+      shell: bash
+      env:
+        TAG: ${{ inputs.tag }}
+      run: ${{ inputs.python }} scripts/release_artifact.py --tag "$TAG"
 
     # Neither the GitHub CLI nor curl is installed in every CI image.  A real Enterprise image had
     # git, an internal index and a Python interpreter, and nothing else -- this step failed first on
@@ -166,18 +152,16 @@ runs:
 
     # There is no workflow-artifact copy of the wheel, and the reason is worth keeping.
     #
-    # The step used to appear twice, choosing a version with `if:`, because a GitHub Enterprise
-    # Server instance ships `upload-artifact@v4`, downloads it happily and then fails at run time:
+    # A GitHub Enterprise Server instance ships `upload-artifact@v4`, downloads it happily and then
+    # fails at run time:
     #
     #     GHESNotSupportedError: @actions/artifact v2.0.0+, upload-artifact@v4+ and
     #     download-artifact@v4+ are not currently supported on GHES.
     #
-    # github.com then closed the other half of that fork. It now refuses `upload-artifact@v3`
-    # outright -- and refuses it while *resolving* the action, before any `if:` is evaluated, so
-    # merely naming v3 in a file failed a run that would never have executed the step. One host
-    # cannot use v4, the other cannot name v3, and a single file cannot satisfy both.
+    # github.com refuses `upload-artifact@v3` while *resolving* the action, before any `if:` is
+    # evaluated, so merely naming v3 in a file fails a run. One host cannot use v4, the other cannot
+    # name v3, and a single file cannot satisfy both.
     #
-    # It did not need to. The wheel is attached to the release above, which is where anyone
-    # installing it looks; the artifact was a second copy of the same bytes with a shorter life.
-    # A run on a tag with no release still builds the wheel and so still proves it builds. This
-    # also retires `AART_ARTIFACT_V4`: one fewer thing a fork has to know about itself.
+    # It does not need to. The wheel is attached to the release above, which is where anyone
+    # installing it looks; an artifact would be a second copy of the same bytes with a shorter life.
+    # A run on a tag with no release still builds the wheel and so still proves it builds.

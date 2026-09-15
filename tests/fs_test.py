@@ -1,4 +1,4 @@
-"""Tests for agent_artifacts.io.fs (WP-6)."""
+"""Tests for agent_artifacts.io.fs."""
 
 from __future__ import annotations
 

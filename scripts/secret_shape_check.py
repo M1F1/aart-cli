@@ -5,7 +5,7 @@ A secret scanner reads bytes, not intent. Push protection at an organisation tha
 rejects a push carrying anything in the shape of a credential — including a redaction test's
 fixture, whose entire purpose is to prove the credential never escapes. Two of those fixtures
 are what made this repository unpushable to a GitHub Enterprise Server instance, which is to
-say unforkable into the enterprises `docs/ci/enterprise-fork-v1.md` is written for.
+say unforkable into the enterprises `docs/ci/github-enterprise-rollout.md` is written for.
 
 Fixing the four files that were reported would have left the rest, because the rejection said
 `scan incomplete: this push was large and we didn't finish on time`. So this gate holds the
