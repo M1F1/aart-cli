@@ -1,4 +1,4 @@
-"""RR-3: `marketplace receipt verify` asks the world, and says what it could not ask.
+"""`marketplace receipt verify` asks the world, and says what it could not ask.
 
 The probes are injected, so what is under test is the decision of which questions a receipt
 licenses — not whether this machine has a docker daemon.
@@ -102,7 +102,7 @@ def test_a_compensated_failure_receipt_makes_no_live_world_claim() -> None:
 
 
 def test_laf55_a_keychain_item_that_holds_nothing_is_reported_false() -> None:
-    # The condition LAF-55 describes: the step exited 0, the receipt records it, and the
+    # The step exited 0, the receipt records it, and the
     # Keychain is empty. Nothing but asking the Keychain can tell them apart.
     record = _record(
         {
@@ -219,7 +219,7 @@ def test_laf61_an_orphaned_run_directory_is_named_and_not_removed() -> None:
 
 
 def test_laf66_the_probe_reads_the_root_the_engine_writes_into() -> None:
-    """The real writer and the real reader, held together (`LAF-66`).
+    """The real writer and the real reader, held together.
 
     The test above drives a fake probe, so it proved the *claim* renders and never proved the
     probe looks anywhere real.  This one calls `new_run_directory` — the function a run actually
@@ -246,8 +246,7 @@ def test_laf66_the_probe_reads_the_root_the_engine_writes_into() -> None:
 def test_laf66_an_unreachable_run_root_is_unknown_and_never_true() -> None:
     """A probe that cannot ask says so.
 
-    `LAF-66` was not a missing check.  It was a check that answered `true` about a directory it had
-    never looked in, which is worse than no check.  An empty root is the one case where the probe
+    A check that answers `true` about a directory it never looked in is worse than no check.  An empty root is the one case where the probe
     genuinely cannot look, and it must not resolve to `()`, because `()` means *asked, and nothing
     was there*.
     """
@@ -277,8 +276,8 @@ def test_a_step_that_leaves_nothing_behind_licenses_no_claim() -> None:
 def test_rr10f_a_record_written_before_the_fix_is_reported_not_repaired() -> None:
     """The fix reaches records already on disk, without the fix editing them.
 
-    `RR-10A` corrects what is written from here on.  It does nothing about a record `2.5.0` wrote
-    with a credential in it, and rewriting one would destroy the evidence receipts exist to be.
+    The redactor governs what is written.  It does nothing about a record already on disk with a
+    credential in it, and rewriting one would destroy the evidence receipts exist to be.
     So `verify` says so and stops there, which is the same contract every other claim has.
     """
 
@@ -301,7 +300,7 @@ def test_rr10f_a_record_written_before_the_fix_is_reported_not_repaired() -> Non
 
 
 def test_rr10f_a_clean_record_says_it_checked() -> None:
-    # `LAF-45`'s lesson: a path with nothing to report says that it checked, rather than printing
+    # A path with nothing to report says that it checked, rather than printing
     # nothing and letting silence read as either success or a dropped flag.
     status, _detail = _statuses(_record(), _probes())[NO_CREDENTIAL_IN_RECORD]
 
@@ -309,12 +308,10 @@ def test_rr10f_a_clean_record_says_it_checked() -> None:
 
 
 def test_laf73_a_rollback_line_this_executable_rejects_is_reported_not_rewritten() -> None:
-    """`LAF-73`: the write path was fixed and the read path kept believing the old records.
+    """A rollback line the executable rejects is reported, not believed.
 
-    `RR-10E` corrected `rollback_command` for records written from now on. A record written
-    before it still carries *no command reverses a completed setup*, and the same executable that
-    holds both facts said nothing — an operator reading an old receipt does by hand what one
-    command does. Same contract as every other claim: report, name the command that works, and
+    A record can carry *no command reverses a completed setup* while the same executable accepts a
+    rollback command; staying silent would leave an operator doing by hand what one command does. Same contract as every other claim: report, name the command that works, and
     leave the record exactly as it is.
     """
 
@@ -334,7 +331,7 @@ def test_laf73_a_rollback_line_this_executable_rejects_is_reported_not_rewritten
 
 
 def test_laf73_the_command_this_release_writes_is_the_one_verify_accepts() -> None:
-    """The real writer and the real reader, driven together — `LAF-66`'s lesson.
+    """The real writer and the real reader, driven together.
 
     A fake probe that answers `True` would prove nothing about whether the string a run records
     is a string this CLI accepts. So the command comes from `rollback_command`, the function the
@@ -407,12 +404,12 @@ def test_the_payload_counts_each_status_once() -> None:
     )
 
     # Four claims, not three: the image, the Keychain item, the orphan directory, and the
-    # record-wide credential scan `RR-10F` added. The scan is `true` here, which is the point of
-    # it — a path with nothing to report says that it checked (`LAF-45`).
+    # record-wide credential scan. The scan is `true` here, which is the point of
+    # it — a path with nothing to report says that it checked.
     assert (payload["true"], payload["false"], payload["unknown"]) == (2, 1, 1)
     assert len(payload["claims"]) == 4
 
 
 # Collected by `unittest discover`, which sees `TestCase` subclasses and nothing
-# else; without this the functions above are imported and never run (`AD-41`).
+# else; without this the functions above are imported and never run.
 SetupVerifyTests = function_test_case(globals(), name="SetupVerifyTests")

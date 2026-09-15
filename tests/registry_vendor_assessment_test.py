@@ -1,9 +1,9 @@
-"""VN-4: the assessment is part of the review, and is committed with the copy.
+"""The assessment is part of the review, and is committed with the copy.
 
 Vendoring is the moment somebody else's bytes become this registry's responsibility, so the review
 that authorises it has to say what is in them. The baseline runs over the *projected package* — the
 copied payload and the maintainer's own wrapper in one object — because a scan that exempts the
-wrapper would miss the file most likely to run something (design §3).
+wrapper would miss the file most likely to run something.
 
 Nothing here is a verdict. A completed assessment that reports three findings has done its job; the
 maintainer decides. These tests hold the rendering to that: the findings are legible, the framing is
@@ -179,7 +179,7 @@ class VendorAssessmentTest(unittest.TestCase):
             self.assertTrue((root / _PACKAGE / "payload/lib/token.js").is_file())
 
     def test_the_rendered_review_claims_nothing_about_safety(self) -> None:
-        """Plan VN-4: no surface says verified, trusted, or safe — in text or in JSON."""
+        """No surface says verified, trusted, or safe — in text or in JSON."""
 
         planted = _foreign_repository(_file("servers/atlassian/lib/token.js", _LEAKED))
 

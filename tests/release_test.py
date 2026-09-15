@@ -172,10 +172,8 @@ class ReleaseChecklistTest(unittest.TestCase):
     ) -> None:
         """Three unrelated refusals in one run, so the checklist reports all of them.
 
-        Two of the four this used to assert are gone with the bookkeeping they policed: there is
-        no PROGRESS.md ledger to be incomplete and no pinned version for a tree to mismatch. What
-        replaced "the version is not the one we pinned" is "the tree cannot say what version it
-        is at all", which is a real failure rather than a disagreement between copies.
+        The version refusal is "the tree cannot say what version it is at all", which is a real
+        failure rather than a disagreement between copies.
         """
 
         release = _load_script("release")
@@ -593,7 +591,7 @@ class ReleaseChecklistTest(unittest.TestCase):
 
 @unittest.skipIf(sys.version_info < (3, 11), "the stdlib wheel builder requires Python 3.11+")
 class WheelDigestEvidenceTest(unittest.TestCase):
-    """SI-8: the digest a verifier compares against is produced by a command, not by hand."""
+    """The digest a verifier compares against is produced by a command, not by hand."""
 
     def test_the_digest_names_the_published_wheel_and_repeats(self) -> None:
         release = _load_script("release")
@@ -622,7 +620,7 @@ class WheelDigestEvidenceTest(unittest.TestCase):
 
 @unittest.skipIf(sys.version_info < (3, 11), "the stdlib wheel builder requires Python 3.11+")
 class WheelDigestArtifactTest(unittest.TestCase):
-    """`LAF-75`: the command hands over the wheel whose digest it prints.
+    """The command hands over the wheel whose digest it prints.
 
     The digest used to describe a wheel inside a temporary directory that was removed before the
     command returned, so the publisher had to build a second wheel by another route and attach

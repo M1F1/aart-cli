@@ -1,10 +1,10 @@
-"""VN-1: one subtree is taken from a repository that knows nothing about AART, or nothing is.
+"""One subtree is taken from a repository that knows nothing about AART, or nothing is.
 
-`promote-native` refuses any upstream that is not already a native source, which is most of them
-(design §1). Vendoring's first step is therefore taking a *part* of a foreign repository — no
+`promote-native` refuses any upstream that is not already a native source, which is most of them.
+Vendoring's first step is therefore taking a *part* of a foreign repository — no
 markers, no `artifact_roots`, no manifest — and every way that can go quietly wrong has to go loudly
 wrong instead: a typo in `--path` must not produce a valid empty package, and a link out of the
-taken subtree must be neither dropped nor followed (design §5).
+taken subtree must be neither dropped nor followed.
 """
 
 from __future__ import annotations
@@ -93,7 +93,7 @@ class SubtreeExtractionTest(unittest.TestCase):
         )
 
     def test_executable_bits_survive_the_taking(self) -> None:
-        """An install script arriving non-executable is debugged at the wrong layer (design §5)."""
+        """An install script arriving non-executable is debugged at the wrong layer."""
 
         taken = _taken(_foreign_repository())
 

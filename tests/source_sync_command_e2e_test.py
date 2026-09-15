@@ -11,7 +11,7 @@ That surface is where the invariant is worth something. A refusal that leaves th
 the *Marketplace* empty would satisfy every seam test above and still take the operator's registry
 away; so would one that left an installation half-rebound to a snapshot that was never accepted.
 These tests corrupt the upstream the way a publisher actually can — a root `aart-registry.json`
-that no longer parses (`RS-08`) — run the public verb, and then ask the other public verbs what
+that no longer parses — run the public verb, and then ask the other public verbs what
 the machine still knows.
 """
 
@@ -75,7 +75,7 @@ def _source_json(env: _Environment, *argv: str):
 
 
 def _break_upstream(location: Path) -> None:
-    """Publish a new revision that is invalid: new payload, unreadable marker (`RS-08`).
+    """Publish a new revision that is invalid: new payload, unreadable marker.
 
     Both halves are deliberate. The marker is what the fetch refuses on; the changed payload is
     what makes the refusal observable at all. An invalid revision that carried the same bytes as

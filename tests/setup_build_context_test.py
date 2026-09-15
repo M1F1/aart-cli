@@ -1,4 +1,4 @@
-"""SBC-1: a recipe can name the package it ships in, and AART hands it a copy.
+"""A recipe can name the package it ships in, and AART hands it a copy.
 
 The setup model has two address spaces — the consumer's home and their project — and every path a
 recipe may write resolves into one of them.  Nothing could name a *source*, so a step could not read

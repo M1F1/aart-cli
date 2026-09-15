@@ -1,4 +1,4 @@
-"""The terminal entry point, and what is left of the wizard it replaced.
+"""The terminal entry point, and the curses widgets and helpers it composes.
 
 ``run()`` is what ``cli._run_bare`` calls on a bare TTY. It composes the canonical consumer
 application once and runs it: over ``curses`` when the terminal can host it, and over a
@@ -6,9 +6,7 @@ line-oriented terminal when it cannot (D-115). Both are the same application -- 
 one reducer, one action handler -- because ERR05 permits a text fallback for exactly one condition,
 the terminal cannot host curses, and says nothing about the product changing.
 
-The legacy wizard that used to own both routes is gone: its curses shell (D-113), its text shell
-and the stages only that shell drove (D-116). What remains here are the curses widgets the
-surviving wizard stages still compose, and the composition and failure-rendering helpers the
+What lives here are the curses widgets the wizard stages compose, and the composition and failure-rendering helpers the
 canonical route uses. Nothing in this module decides anything semantic; that lives in
 ``application/`` and is reached through the injected handler.
 """
@@ -123,7 +121,7 @@ WriteFn = Callable[[str], None]
 def _dispatch(request: Request) -> int:
     """Route *request* through the same handlers the flag-mode CLI uses.
 
-    Prefers ``cli.DISPATCH`` (WP-19) when it exists; otherwise imports the command module
+    Prefers ``cli.DISPATCH`` when it exists; otherwise imports the command module
     for ``request.command`` directly. Both paths call the identical ``run`` function — this
     module duplicates **no** command logic.
     """
@@ -138,7 +136,7 @@ def _dispatch(request: Request) -> int:
         return int(dispatch[request.command](request))
 
     # Fallback: import the specific command module on demand (avoids importing all of them
-    # and keeps this independent of WP-19's merge state).
+    # and keeps this independent of the CLI's dispatch table).
     from importlib import import_module
 
     module = import_module(f".commands.{request.command}", package=__package__)
@@ -290,7 +288,7 @@ def _canonical_setup_run(
             scope=scope or "selected scope",
             status="planning-failed",
             detail=failure.detail,
-            # `aart setup` was removed in 2.0.0; the canonical verb re-runs the recipe. Planning
+            # `aart marketplace setup` re-runs the recipe. Planning
             # failed here, so no effect was applied and the profile/scope may not be known: the
             # coordinate alone is the most this failure can honestly say.
             retry_command=f"aart marketplace setup {key}",
@@ -403,7 +401,7 @@ def _canonical_setup_run(
         Everything between here and the item's own summary — approval prompts, and `security`
         taking the terminal to ask for a password twice while naming nothing — carries no
         artifact identity at all, and effect numbering restarts at 1 for each item, which reads
-        as a glitch rather than as a boundary (`AD-40`).
+        as a glitch rather than as a boundary.
         """
 
         write("")
@@ -438,12 +436,11 @@ def _canonical_setup_run(
                 )
             ),
             recovery=() if item.record is None else recovery_messages(item.record),
-            # The wizard is how setup is normally run, and it read no advisory at all: the
-            # measurement happened, the receipt carried it, and this surface printed nothing
-            # (`AD-36`).
+            # The wizard is how setup is normally run, so it prints the advisories the receipt
+            # carries.
             advisories=() if item.record is None else advisory_messages(item.record),
-            # The reload reminder is not here any more: it is a fact about the machine, not about
-            # this artifact, and one per item is how it stopped being read (`AD-39`).
+            # The reload reminder is not per item: it is a fact about the machine, not about this
+            # artifact, and it is printed once for the run.
             manual=None
             if setup_plan is None
             else project_setup_review(setup_plan.legacy_plan).manual,
@@ -816,9 +813,9 @@ class _CursesTerminal:
             return
 
         # The legend is placed on the bottom rows rather than merely drawn after the body: on a
-        # short screen it used to float directly under the text with the terminal blank beneath it,
-        # so the keys sat at a different height on every screen (`QA-068`). It is a block of several
-        # lines now, so the whole block is anchored, not just its last line.
+        # short screen a legend drawn directly under the text leaves the terminal blank beneath it,
+        # so the keys sit at a different height on every screen (`QA-068`). It is a block of several
+        # lines, so the whole block is anchored, not just its last line.
         #
         # A frame taller than the terminal is clipped in the body and keeps the legend whole, because
         # a long report that pushed the keys off screen would recreate the first-run trap the footer

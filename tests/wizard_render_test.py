@@ -1,4 +1,4 @@
-"""Issue #21 + WP-1: accessible, narrow-safe pure wizard rendering."""
+"""Accessible, narrow-safe pure wizard rendering."""
 
 from __future__ import annotations
 
@@ -55,8 +55,8 @@ class WizardOnboardingTests(unittest.TestCase):
         self.assertIn("aart", rendered)
         self.assertIn("User", rendered)
         self.assertIn("Maintainer", rendered)
-        # WP-3 step 3 gave onboarding a status bar saying enter=start, so the sentence that used
-        # to carry that key would now be its second copy.
+        # Onboarding has a status bar saying enter=start, so a sentence carrying that key would be
+        # its second copy.
         self.assertNotIn("Press Enter", rendered)
 
 

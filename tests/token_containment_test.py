@@ -1,8 +1,7 @@
-"""RR-10C: nothing token-shaped leaves AART except into the Keychain.
+"""Nothing token-shaped leaves AART except into the Keychain.
 
-`LAF-63` was found by reading a regex, and the regex was not where the damage was — `LAF-72` was.
-Two redactors existed with different rules, and the weaker one happened to sit on the path that
-writes to disk. Neither finding was reachable from a test of `redact_text`, because both were
+A regex is not where the damage happens: two redactors with different rules would let the weaker
+one sit on the path that writes to disk. A test of `redact_text` cannot reach that, because it is
 about *which* text reaches *which* exit.
 
 So this test is written against the exits, not the call sites. It plants credential-shaped values
@@ -17,13 +16,11 @@ channel a value could leave by:
     6. the review shown before anything is applied
 
 Channels 2 and 4 are walked structurally: every string anywhere in the payload is checked, so a
-field added later and forgotten fails this test without anyone remembering to extend it. That is
-the property `LAF-72` needed and did not have — the persisted record grew a field the redactor on
-that path did not cover, and nothing noticed for a release.
+field added later and forgotten fails this test without anyone remembering to extend it. A persisted
+record that grows a field the redactor on that path does not cover is caught here.
 
 What this cannot do is prove a *recipe* does not write a secret on purpose; a recipe that echoes
-its own input into a file it owns is doing what it was reviewed to do. `DESIGN-token-containment`
-§4.4 records that limit.
+its own input into a file it owns is doing what it was reviewed to do.
 """
 
 from __future__ import annotations
@@ -231,7 +228,7 @@ class TokenContainmentTest(unittest.TestCase):
             read_text=lambda _path: None,
             path_present=lambda _path: False,
             orphan_run_directories=lambda _plan_hash: (),
-            # `LAF-73`: answering `False` is the reporting path, which is the one that renders text.
+            # Answering `False` is the reporting path, which is the one that renders text.
             command_accepted=lambda _command: False,
         )
         results = verify_claims(plan_verification(self.record), probes=probes)
@@ -359,7 +356,7 @@ class RunDirectoryChannelTest(unittest.TestCase):
 
     def test_the_snapshot_saw_the_working_copy_it_is_asserting_about(self) -> None:
         # Without this the three tests below would pass on an empty list, which is the failure
-        # mode `LAF-66` was: a check that answers about a place it never looked.
+        # mode of a check that answers about a place it never looked.
         self.assertEqual(self.record.status, "configured")
         self.assertTrue(self.snapshots, "nothing was observed inside the run directory")
         self.assertTrue(
@@ -389,7 +386,7 @@ class RunDirectoryChannelTest(unittest.TestCase):
 
 
 class RecordedTokenIsReportedTest(unittest.TestCase):
-    """The other half of `RR-10F`: a record that already carries one is not silently accepted.
+    """The other half: a record that already carries one is not silently accepted.
 
     Every assertion above is about text this release writes. A machine that ran `2.5.0` has records
     on disk written by the weaker redactor, and a containment story that only covers new writes

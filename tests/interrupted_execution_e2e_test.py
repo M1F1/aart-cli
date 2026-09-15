@@ -174,11 +174,10 @@ class InterruptedExecutionE2ETest(unittest.TestCase):
             self.assertEqual(len(_working_copies(env)), 1, _working_copies(env))
 
     def test_receipt_verify_finds_the_working_copy_and_names_the_real_one(self) -> None:
-        """The public half of `LAF-66`, which is where that defect could still recur.
+        """The public half of the run-root contract.
 
-        `LAF-66` was one path derived in two places: the probe composed the run root from the
-        project root while the engine composed it from the data root, so the claim answered `true`
-        in every scope without ever looking where runs are made. `setup_verify_test` holds the
+        One path derived in two places — the probe from the project root, the engine from the data
+        root — would answer `true` in every scope without ever looking where runs are made. `setup_verify_test` holds the
         writer and the probe together; the remaining seam is the command that hands the probe its
         root, and nothing drove that. So this asserts the *identity* of the directory named -- the
         one the engine actually created -- rather than only that some path was reported.
@@ -235,7 +234,7 @@ class InterruptedExecutionE2ETest(unittest.TestCase):
             self.assertTrue(receipt["steps"], receipt)
 
     def test_verify_reports_the_working_copy_and_leaves_it_exactly_where_it_is(self) -> None:
-        """`LAF-61`: reported, named, and not tidied away.
+        """Reported, named, and not tidied away.
 
         Inspection that deletes its own evidence is worse than no inspection: the second operator
         to look finds a clean machine and no reason to distrust it.

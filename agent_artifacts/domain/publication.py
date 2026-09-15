@@ -1,7 +1,6 @@
 """Where a reviewed registry commit may be pushed, and the one place it may never go (`D-228`).
 
-Publication used to be somebody else's problem: AART made the local commit and the maintainer left
-the surface to type `git push`.  164.7 no longer reads that way.  The push is an action inside AART,
+Publication is not somebody else's problem (164.7).  The push is an action inside AART,
 and what keeps approval separate from publication is the *branch*: a registry publishes to a branch
 the maintainer configures, and never to the branch a consumer reads.  Only the merge makes reviewed
 bytes the registry, and AART never merges.

@@ -18,7 +18,7 @@ telling you to review the diff yourself — so a script that commits is a conven
 deliberately withholds, and the file list printed before the commit is what makes it honest. Pushing
 stays yours: it is the step that makes the change other people's problem.
 
-This is `AD-14`'s stopgap. The real thing is a maintainer verb in the CLI and a flow in the TUI, and
+This is a stopgap. The real thing is a maintainer verb in the CLI and a flow in the TUI, and
 `git` and `aart` remain the only programs run.
 """
 

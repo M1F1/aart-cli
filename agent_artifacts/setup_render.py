@@ -1,10 +1,9 @@
-"""RR-2A: the text renderer prints what the ``setup`` JSON payload carries.
+"""The text renderer prints what the ``setup`` JSON payload carries.
 
-`LAF-52` and `LAF-54` are one defect seen twice. The review path renders only
-``setup_queue.plans``, so a planning failure produces no line at all; the finalized path
-renders ``planned=0, failures=1``, a count over a payload that holds the reason, the artifact
-key and the manual route. Both are failures of rendering, not of storage — the design's §3.4
-rule is that counts may accompany content and may not replace it.
+A review that rendered only ``setup_queue.plans`` would print no line for a planning failure,
+and a finalized run that rendered only ``planned=0, failures=1`` would give a count over a payload
+that holds the reason, the artifact key and the manual route. The rule is that counts may
+accompany content and may not replace it.
 
 This module renders the payload dict itself rather than the objects it was built from, so the
 two outputs cannot drift: a field added to the payload is a field this renderer sees.
@@ -83,7 +82,7 @@ def render_verification_payload(
 
     claims = _rows(payload, "claims")
     if not claims:
-        # `LAF-45`: a receipt whose every step leaves nothing checkable is a real answer.
+        # A receipt whose every step leaves nothing checkable is a real answer.
         return ("Verification: this receipt records no claim that can be checked.",)
 
     lines: Tuple[str, ...] = ("Verification",)
@@ -113,7 +112,7 @@ def render_verification_payload(
 def receipt_payload(record: Any, *, location: Any) -> dict[str, Any]:
     """Project one persisted record into the value both `--json` and the text renderer read.
 
-    Built once, here, rather than in the command: `RR-2A` established that a text path
+    Built once, here, rather than in the command: a text path
     rendering different objects than the JSON path drifts, and a receipt read a week after the
     run is exactly where that drift would not be noticed.
     """
@@ -193,7 +192,7 @@ def render_receipt_payload(
 
     steps = _rows(payload, "steps")
     if not steps:
-        # `LAF-45` again: a receipt with no steps is a real outcome — a run that planned and
+        # A receipt with no steps is a real outcome — a run that planned and
         # applied nothing — and must not look like a renderer that gave up.
         return lines + ("Steps: none recorded; this run applied no effect.",)
     lines += ("Steps",)
@@ -293,10 +292,9 @@ def _failure_lines(failures: Sequence[Mapping[str, Any]], *, width: int) -> Tupl
 
 
 def _item_lines(items: Sequence[Mapping[str, Any]], *, width: int) -> Tuple[str, ...]:
-    """One block per item, opened by the same rule the wizard opens it with (`AD-40`).
+    """One block per item, opened by the same rule the wizard opens it with.
 
-    This used to be a sentence — `Setup configured: coord#profile/scope` — and a sentence does
-    not separate one item's output from the next one's when several are printed back to back.
+    A sentence — `Setup configured: coord#profile/scope` — does not separate one item's output from the next one's when several are printed back to back.
     The identity is written the way the wizard writes it, because two spellings of one artifact
     on two surfaces is a difference the operator has to translate.
     """
@@ -334,7 +332,7 @@ def _warning_lines(rows: Sequence[Mapping[str, Any]], *, width: int) -> Tuple[st
     """Print warnings last, because the operator reads the end of the run, not its middle.
 
     The body is `render_setup_advisories`, shared with the wizard: one implementation, so the two
-    surfaces cannot drift into saying different things about the same receipt (`AD-36`). Here each
+    surfaces cannot drift into saying different things about the same receipt. Here each
     row is headed by the artifact it belongs to, because this payload can carry several.
     """
 
@@ -374,7 +372,7 @@ def render_setup_payload(
     lines += _item_lines(items, width=width)
 
     if not plans and not failures and not items:
-        # `LAF-45`: a path that prints nothing on success is indistinguishable from a flag that
+        # A path that prints nothing on success is indistinguishable from a flag that
         # was dropped. This one says it looked.
         return ("Setup: no selected artifact declares a setup recipe; nothing to configure.",)
 

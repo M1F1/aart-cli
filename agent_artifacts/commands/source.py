@@ -764,7 +764,7 @@ def _sync(request: Request) -> int:
             lines.append(f"{source.alias.value}: failed")
             # Remediation is rendered here for the same reason the single-operation renderer
             # renders it: a refusal an operator cannot act on is a dead end, and `sync` is where
-            # the `source resubscribe` line that 2.1.0 exists to deliver is produced.
+            # the `source resubscribe` line is produced.
             for item in synchronized.diagnostics:
                 lines.append(f"  {item.severity.value}: {item.message}")
                 lines.extend(f"    remediation: {line}" for line in item.remediation)

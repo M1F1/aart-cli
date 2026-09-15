@@ -1,6 +1,6 @@
-"""VN-2: foreign bytes become an ordinary owned package, or the projection refuses.
+"""Foreign bytes become an ordinary owned package, or the projection refuses.
 
-Design §2 is the point of this package: a vendored artifact is not a new kind of thing. It is an
+The point of this package: a vendored artifact is not a new kind of thing. It is an
 owned package that happens to carry `provenance.json`, so every rule that already applies to owned
 content — the loader, the index projection, the security baseline's cross-check, `validate --strict
 --frozen` — applies to it without being taught anything. These tests hold that claim, because the
@@ -52,7 +52,7 @@ _COMMIT = "f" * 40
 _URL = "https://github.com/example/atlassian-mcp.git"
 # An `aart-mcp-v1` descriptor: `name` and a `server` object.  It was written here as
 # `{"mcpServers": …}` — the shape of the harness file the entry is merged *into* — which parses,
-# loads, installs, and starts nothing, because `server` is absent and the merge writes `{}` (VI-5).
+# loads, installs, and starts nothing, because `server` is absent and the merge writes `{}`.
 _MCP_JSON = (
     json.dumps(
         {"name": "atlassian", "server": {"command": "npx", "args": ["-y", "@example/atlassian"]}}
@@ -287,7 +287,7 @@ class AcquisitionOptionsDigestTest(unittest.TestCase):
         self.assertEqual(first, second)
 
     def test_two_refs_resolving_to_one_commit_are_two_standing_instructions(self) -> None:
-        """`VN-5`'s drift check compares instructions, not only outcomes."""
+        """The drift check compares instructions, not only outcomes."""
 
         tagged = acquisition_options_digest(_origin("v1.4.0"), _subtree())
         tracking = acquisition_options_digest(_origin("main"), _subtree())

@@ -1,4 +1,4 @@
-"""The imperative edge of `RR-3`: the questions, actually asked.
+"""The imperative edge of receipt verification: the questions, actually asked.
 
 Kept apart from `setup_verify` so the decision of *what to ask* stays testable without a docker
 daemon or a Keychain, and so this file can be read on its own for what it touches.
@@ -108,11 +108,11 @@ def _path_present(path: str) -> bool | None:
 
 
 def command_accepted(command: str) -> bool | None:
-    """Does this executable's own CLI accept the command a record recorded? (`LAF-73`)
+    """Does this executable's own CLI accept the command a record recorded?
 
     The parser is the shipped surface, so this cannot answer `True` for a command the executable
-    does not define — which is the whole point: a record written before `2.6.0` instructs the
-    operator to undo a setup by hand, and only the parser knows that instruction is now wrong.
+    does not define — which is the whole point: a record's recorded instruction can be wrong for
+    this executable, and only the parser knows that.
 
     ``parse_args`` writes to stderr and raises `SystemExit` rather than returning a verdict, so
     both streams are captured and the exit is read as the answer. Nothing is executed.
@@ -142,13 +142,13 @@ def command_accepted(command: str) -> bool | None:
 
 
 def orphan_run_directories(run_root: str, plan_hash: str) -> Tuple[str, ...] | None:
-    """Working copies an interrupted run left behind under the run root (`LAF-61`).
+    """Working copies an interrupted run left behind under the run root.
 
     The root is the one the run itself used, handed in rather than derived here.  This probe used
     to compose `<project_root>/.agent-artifacts/setup-runs`, while `new_run_directory` composes
     `<plan.run_root>/...` and `setup_engine/application.py` passes `run_root=location.data_root`.
     The two are never the same directory, so the claim answered `true` in every scope without ever
-    looking at the place runs are created (`LAF-66`).
+    looking at the place runs are created.
 
     Deriving the path in two places is what allowed them to disagree, so there is now one source
     for it and the caller supplies it.
@@ -176,7 +176,7 @@ def local_probes(*, project_root: str, run_root: str) -> VerificationProbes:
 
     `project_root` resolves the paths a recipe wrote into the project.  `run_root` is where the
     engine creates run directories, which is the data root and not the project.  They are separate
-    arguments because collapsing them is exactly the mistake `LAF-66` was.
+    arguments because collapsing them would check the wrong directory.
     """
 
     return VerificationProbes(

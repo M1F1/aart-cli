@@ -19,16 +19,14 @@ from typing import Any, Callable, Mapping, Sequence
 
 ROOT = Path(__file__).resolve().parent.parent
 PYTHON = sys.executable
-# There is deliberately no `EXPECTED_VERSION` here any more.  It pinned a release by hand, and a
-# checklist that refuses every version but the one somebody typed into a script is the manual
-# bookkeeping INV-085 and INV-101 forbid.  The version now comes from one place, the release
-# engine writes it, and this checklist reports it rather than ruling on it.
+# There is deliberately no `EXPECTED_VERSION` here.  A checklist that refuses every version but the
+# one somebody typed into a script is the manual bookkeeping INV-085 and INV-101 forbid.  The version
+# comes from one place, the release engine writes it, and this checklist reports it rather than
+# ruling on it.
 _DECLARED_VERSION_RE = re.compile(r'(?m)^__version__\s*=\s*"([^"]+)"')
 REFERENCE_REGISTRY_ORIGIN = "https://github.com/M1F1/agent-artifacts-registry"
 # One freeze, overwritten in place by `make release-freeze` in the change that moves a schema; git
-# history is its record (D-275).  It used to be a numbered series whose issued members were never
-# rewritten, each with a hand-written compatibility page and checklist beside it -- three documents
-# per format change, all describing releases of the project this repository was cut from.
+# history is its record (D-275).
 SCHEMA_FREEZE_PATH = "docs/release/schema-freeze.json"
 GIT_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 SCHEMA_INPUTS = (
@@ -48,11 +46,10 @@ SCHEMA_INPUTS = (
     "docs/protocol/native-source-v1.md",
     "docs/protocol/registry-v1.md",
 )
-# Documents that must exist and say something.  They used to have to *name the release*, which
-# meant every one of them was edited by hand at every release and the checklist was the thing that
-# noticed when one was missed -- release bookkeeping wearing a checklist's clothes (INV-098).  The
-# changelog is now written by the release engine, so what is left to check is that it and the
-# onboarding tutorials are still here and still have content.
+# Documents that must exist and say something.  They do not have to *name the release*: that would
+# be release bookkeeping wearing a checklist's clothes (INV-098).  The changelog is written by the
+# release engine, so what is checked is that it and the onboarding tutorials are here and have
+# content.
 REQUIRED_RELEASE_DOCS = (
     "CHANGELOG.md",
     "docs/tutorials/direct-source-v1.md",
@@ -81,8 +78,8 @@ PROTOCOL_VERSIONS = {
     "registry": 1,
     "reporting": 1,
     "security_assessment": 1,
-    # Raised for the 2.0.0 series: revision 1 is rejected at parse time rather than carried behind
-    # a compatibility branch, so the single supported revision is the one recorded here.
+    # Revision 1 is rejected at parse time rather than carried behind a compatibility branch, so
+    # the single supported revision is the one recorded here.
     "setup_recipe": 2,
 }
 
@@ -167,11 +164,9 @@ def wheel_digest(root: Path = ROOT, *, output_dir: Path | None = None) -> tuple[
     (``docs/release/wheel-reproducibility-v1.md``).
 
     ``output_dir`` receives that artifact, and the digest is then read back from the written file:
-    what the caller is handed is the file the printed digest describes.  `LAF-75`: the wheel used
-    to live in a temporary directory removed before this returned, which left the publisher to
-    build a second wheel by another route and attach that one — a *different* file, because a
-    build from the checkout carries no commit stamp.  `2.6.0` came within one ``curl`` of
-    publishing a digest line that did not describe its own attachment.
+    what the caller is handed is the file the printed digest describes.  A wheel kept in a temporary
+    directory would leave the publisher to build a second wheel by another route and attach that
+    one — a *different* file, because a build from the checkout carries no commit stamp.
     """
 
     inject = _script("inject_commit")
@@ -300,10 +295,8 @@ def _repository_diagnostics(
     require_main: bool,
 ) -> tuple[ReleaseDiagnostic, ...]:
     diagnostics: list[ReleaseDiagnostic] = []
-    # The version is read, not ruled on.  What used to be here -- "the source must be exactly
-    # stable 0.0.1", a sweep of the PROGRESS.md task ledger, and a demand that four documents each
-    # contain the version string -- was three ways of asking a human to have remembered something.
-    # The release engine remembers instead.
+    # The version is read, not ruled on: Release Please decides it, so the checklist only requires
+    # that the tree can state one.
     try:
         declared_version(root)
     except (OSError, ValueError) as error:

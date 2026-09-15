@@ -118,11 +118,8 @@ def _error(
 
 
 def _redact(value: str) -> str:
-    # One redactor, applied once.  This used to compose the configuration redactor with the setup
-    # redactor because they had different rules and neither was a superset of the other — which is
-    # precisely the arrangement that let `LAF-72` through, since the weaker of the two was the one
-    # on the write-to-disk path.  `RR-10A` left a single function; composing it with itself would
-    # only preserve the shape of the bug.
+    # One redactor, applied once.  Two redactors with different rules, neither a superset of the
+    # other, would let the weaker one decide what reaches disk.
     return " ".join(redact_text(value).split())[:512]
 
 
@@ -917,9 +914,8 @@ def execute_setup_queue(
 
     ``on_item_start`` is called with ``(position, total, plan)`` immediately before an item runs,
     and never for an item the queue skipped after stopping.  It exists because everything this
-    loop emits is item-scoped except the boundary between items, which nothing emitted at all: a
-    caller that prompts for consent had no moment at which to say whose setup was beginning
-    (`AD-40`).
+    loop emits is item-scoped except the boundary between items: without this, a
+    caller that prompts for consent would have no moment at which to say whose setup was beginning.
     """
 
     if len(plans) != len(reviewed_digests):

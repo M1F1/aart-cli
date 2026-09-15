@@ -1,8 +1,8 @@
-"""VI-6: the documented MCP descriptor is one the checks would pass.
+"""The documented MCP descriptor is one the checks would pass.
 
-`LAF-46` was a tutorial teaching an example that cannot run: a command naming a file inside
-`payload/`, which installation never delivers, written in the shape of the harness file rather than
-the artifact (`VI-5`). Prose can be corrected once and drift back, so the example itself is fed to
+A tutorial must not teach an example that cannot run: a command naming a file inside `payload/`,
+which installation never delivers, or the shape of the harness file rather than the artifact. Prose
+can be corrected once and drift back, so the example itself is fed to
 `describe_delivery` here — the same function the vendor review and `registry audit` use. A tutorial
 descriptor that would fail the review fails this test instead.
 """

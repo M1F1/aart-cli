@@ -75,7 +75,7 @@ _TRUST_RANK = {
 }
 _PLACEHOLDER = re.compile(r"\$\{([^}]+)\}")
 # The sidecar a memory ``replace`` parks displaced content in, sitting beside the destination so
-# the operator finds it without consulting install state (docs/design/DESIGN-memory.md §8.3).
+# the operator finds it without consulting install state.
 _BACKUP_SUFFIX = ".agent-artifacts-bak"
 
 

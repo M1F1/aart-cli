@@ -843,7 +843,7 @@ class ConfigurationGateTests(unittest.TestCase):
 
 
 class SetupQueueBoundaryOnTheCommandLineTest(unittest.TestCase):
-    """`AD-40` on the non-interactive surface, where the gap was wider than in the wizard.
+    """Item boundaries on the non-interactive surface, as in the wizard.
 
     This path prints its whole report after the run. While the run happens the terminal carries
     only `security` asking for a password twice while naming nothing and `Setup input:` asking

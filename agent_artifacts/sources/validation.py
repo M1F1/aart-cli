@@ -49,11 +49,10 @@ def validate_source_candidate(
     # no consumer-side gate compared the two documents that declare it — the publisher's own
     # `registry validate --strict --frozen` did, and the one-way adaptation rule says a consumer
     # does not soften a rule the publisher's tooling enforces.
-    # `RS-08`: a marker that is there must be readable. `SI-5` compared the two identities only when
-    # both documents parsed, which left a third state nobody chose — a broken `aart-registry.json`
-    # skipped the comparison in silence, and the file that declares the identity the whole
-    # subscription pins was never read. On the registry path the workspace validation refuses first;
-    # this is the same refusal on the direct/local path, where nothing refused at all.
+    # A marker that is there must be readable. Comparing the two identities only when both
+    # documents parse would leave a third state nobody chose — a broken `aart-registry.json` would
+    # skip the comparison in silence. On the registry path the workspace validation refuses first;
+    # this is the same refusal on the direct/local path.
     unreadable = _unreadable_registry_marker(request)
     if unreadable is not None:
         return Err((unreadable,))
@@ -166,13 +165,13 @@ def _root_entry(request: SourceValidationRequest, path: str):
 
 
 def _unreadable_registry_marker(request: SourceValidationRequest) -> Diagnostic | None:
-    """The refusal when a root `aart-registry.json` is present and cannot be read (`RS-08`).
+    """The refusal when a root `aart-registry.json` is present and cannot be read.
 
     Absence is not the case this answers: a source publishing `aart-source.json` alone is an
     ordinary native source and stays one.  What is refused is a snapshot that reserves the registry
     marker's name and then does not honour it — a directory under that name, or a document that
     does not parse.  Either way the identity comparison below has nothing to compare, and admitting
-    the subscription anyway is the silence `RS-08` records.
+    the subscription anyway would be silent about it.
     """
 
     entry = _root_entry(request, _REGISTRY_MARKER)

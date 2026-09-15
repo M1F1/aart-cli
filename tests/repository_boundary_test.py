@@ -64,7 +64,7 @@ class RepositoryBoundaryTest(unittest.TestCase):
         )
 
     def test_the_package_promises_no_credential_it_does_not_hold(self) -> None:
-        """AART reaches Git through system Git; nothing in it reads a token (vendoring design §9)."""
+        """AART reaches Git through system Git; nothing in it reads a token."""
 
         validate = _load_script("validate")
 

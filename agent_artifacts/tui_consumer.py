@@ -1339,8 +1339,8 @@ def doctor_rows(view: DoctorView, *, leaving_out: tuple[str, ...] = ()) -> tuple
 def doctor_issue_rows(view: DoctorView, rows: tuple[str, ...], current: str) -> tuple[str, ...]:
     """The repairable issues as rows, the cursor on the one `r` repairs (CP-23 task 14).
 
-    Repair is requested for the row under the cursor, and Doctor used to draw its list with no
-    cursor at all, so nothing on screen said which issue the key would act on.
+    Repair is requested for the row under the cursor, so the cursor is drawn: otherwise nothing on
+    screen would say which issue the key acts on.
     """
 
     if not isinstance(view, DoctorView):
@@ -1952,9 +1952,8 @@ def _workflow_chrome(state: ConsumerUiState) -> tuple[str, ...]:
 def _review_facts(state: ConsumerUiState, screens: "ConsumerScreens") -> tuple[str, ...]:
     """What a review is about, or -- once its confirmed run stopped -- what happened instead.
 
-    `QA-090`: a review used to draw one line, *"Press Enter to connect this registry."*, over a
-    legend that already offered `[Enter] Confirm`. The screen standing between a filled-in form and
-    an irreversible action therefore said nothing about what was about to happen, which 161.4
+    `QA-090`: a review that drew only *"Press Enter to connect this registry."* over a legend that
+    already offers `[Enter] Confirm` would say nothing about what is about to happen, which 161.4
     forbids: a screen states what it is and what state it is in without the reader deriving either.
     The decision is the legend's to advertise (`QA-088`); this is the review's subject, and it
     reads as view status because it is a statement rather than something to act on (`QA-087`).
@@ -1962,7 +1961,7 @@ def _review_facts(state: ConsumerUiState, screens: "ConsumerScreens") -> tuple[s
     A refusal replaces it rather than joining it. The screen keeps its name and its place, because
     the notice answers a question asked here, but the plan it described was discarded when the run
     stopped and describing it still would be describing something that no longer exists (`QA-033`).
-    The reason now stands *above* this, in the block `QA-093` gave it, so the sentence points up.
+    The reason stands *above* this, in the block `QA-093` gave it, so the sentence points up.
     """
 
     if state.failed_action is not None:
@@ -2307,8 +2306,8 @@ def run_consumer_shell(
             if not isinstance(update, ConsumerActionUpdate):
                 raise ValueError("a consumer action handler returned an invalid update")
             # An execution answers with what it established: a recording, or the fact that the
-            # attempt stopped. Both are answers to the same command, and the second is the one
-            # that used to have to arrive disguised as an empty recording (`QA-033`).
+            # attempt stopped. Both are answers to the same command, and the second must not arrive
+            # disguised as an empty recording (`QA-033`).
             expected = (
                 (ConsumerUiEventKind.ACTION_PREPARED,)
                 if command.kind is ConsumerUiCommandKind.PREPARE_ACTION

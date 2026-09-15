@@ -173,11 +173,10 @@ _LIFECYCLE_ACTIONS: dict[str, ConsumerAction] = {
 }
 _REQUIRES_COORDINATES = frozenset({"install", "uninstall", "setup"})
 _MUTATING = frozenset({"install", "update", "uninstall", "setup"})
-# `RS-07`: the actions that read what the project already has. Neither fetches anything, so neither
+# The actions that read what the project already has. Neither fetches anything, so neither
 # needs an enabled source to be answerable — an installed artifact is on disk whether or not the
-# subscription that delivered it is still configured. `uninstall` was exempted in `2.2.0` because
-# design §3 names it; `status` is the same kind of question and was left refusing, which meant the
-# operator who followed `source remove` could no longer read their own project.
+# subscription that delivered it is still configured, so an operator who ran `source remove` can
+# still read and clean up their own project.
 _PROJECT_LOCAL = frozenset({"uninstall", "status"})
 
 
@@ -779,10 +778,10 @@ def _setup_warnings(outcome) -> list[dict]:
 
     A secret that is wrong — truncated at the prompt, or simply the one stored months ago and
     rotated since — configures cleanly and fails much later, at the server, as one word in a
-    harness UI (`AD-34`, `AD-35`). The receipt knows; nothing read it until here.
+    harness UI. The receipt knows; nothing read it until here.
 
     The reading itself is `advisory_messages`, shared with the wizard, because this command was
-    the only surface that did it and the wizard is the one people use (`AD-36`).
+    the only surface that did it and the wizard is the one people use.
     """
 
     warnings: list[dict] = []
@@ -802,9 +801,9 @@ def _setup_warnings(outcome) -> list[dict]:
 
 
 def _setup_reminders(outcome) -> list[dict]:
-    """The reload a run cannot perform, carried the same way the advisories are (`AD-37`).
+    """The reload a run cannot perform, carried the same way the advisories are.
 
-    Once for the run, not once per artifact (`AD-39`).  Three servers writing exports to
+    Once for the run, not once per artifact.  Three servers writing exports to
     `~/.zshrc` need the shell reloaded once, and the row carries no artifact key because the
     reminder is a fact about the machine — the key said it belonged to one item, which is how
     the same instruction came to be printed three times and read none.
@@ -854,9 +853,9 @@ def _setup_payload(queue: ConsumerSetupQueue, outcome=None) -> dict:
                         coordinate=str(item.coordinate), profile=item.profile, scope=item.scope
                     )
                 ),
-                # `AD-42`: the wizard printed these and this path dropped them, so the note that
-                # says what a rollback would do to a Docker image — the whole of `AD-38` — was
-                # invisible to anyone running setup from the command line.
+                # The wizard prints these and so does this path, so the note that says what a
+                # rollback would do to a Docker image reaches anyone running setup from the
+                # command line.
                 "recovery": (
                     []
                     if item.record is None
@@ -899,9 +898,9 @@ def _run_setup_queue(
 
         This path prints its whole report after the run, so while the run is happening the only
         thing on the terminal is `security` asking for a password twice while naming nothing
-        (`AD-24`, `AD-32`) and `Setup input:` asking for a value. With several servers selected
+        and `Setup input:` asking for a value. With several servers selected
         that is an unlabelled sequence of credential prompts, and the wrong token typed into the
-        right-looking one is a credential handed to the wrong server (`AD-40`).
+        right-looking one is a credential handed to the wrong server.
 
         stderr, because stdout carries one JSON document and nothing else may enter it — the
         same rule the runtime's own prompts follow.
@@ -1808,7 +1807,7 @@ def _lifecycle(request: Request, action: str) -> int:
             )
             setup_data = _setup_payload(setup_queue)
             payload["setup"] = setup_data
-            # `LAF-54`: the plan renderer alone emits nothing when planning failed, so the
+            # The plan renderer alone emits nothing when planning failed, so the
             # operator approving effects was shown a setup queue and never told it will not run.
             setup_lines = tuple(
                 line for plan in setup_queue.plans for line in render_setup_review(plan.legacy_plan)
@@ -1887,7 +1886,7 @@ def _lifecycle(request: Request, action: str) -> int:
     if action == "setup" or any(item.setup_status == "pending" for item in outcome.items):
         setup_payload, setup_ok = _run_setup_queue(request, service.value, review, outcome)
         payload["setup"] = setup_payload
-        # `LAF-52`: the counts stay, at the end, after the content they used to replace.
+        # The counts stay, at the end, after the content they summarize.
         lines += render_setup_payload(setup_payload)
     # Install and update report the payload transaction they were asked to perform. Setup has its
     # own separately reviewed effects and consent flags, so declining or failing it does not turn a

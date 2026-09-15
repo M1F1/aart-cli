@@ -1,13 +1,13 @@
-"""Project a canonical package from foreign bytes (VN-2).
+"""Project a canonical package from foreign bytes.
 
-`VN-1` takes a subtree out of a repository that knows nothing about AART. This turns that subtree
+`sources.subtree` takes a subtree out of a repository that knows nothing about AART. This turns that subtree
 into an ordinary owned registry package: the taken bytes become `payload/`, the maintainer's authored
 `artifact.json` gives it an identity, and `provenance.json` records verifiably where the bytes came
 from and with what options.
 
-The result is deliberately not a new kind of thing (design §2). It is an owned package that happens
+The result is deliberately not a new kind of thing. It is an owned package that happens
 to carry `provenance.json`, so the index projection, the security baseline's cross-check, and the
-installer's credential-free-origin check all already apply to it, and a `2.0.0` consumer reads it.
+installer's credential-free-origin check all already apply to it, and any consumer reads it.
 
 What this module refuses is the package that would not load. A projection whose payload does not
 satisfy its declared kind is refused here, naming the document the kind requires, rather than
@@ -84,9 +84,8 @@ from agent_artifacts.store.model import ObjectCandidate, make_object_candidate
 
 VENDOR_IMPORTER_ID = "registry-vendor-v1"
 # A namespaced extension rather than a new provenance field: the release adds no schema revision,
-# and every AART from `2.0.0` already preserves unknown namespaced keys unchanged.  `origin` could
-# not hold it — that object rejects unknown fields, and widening it would be the format revision
-# this design promised not to make.
+# and AART preserves unknown namespaced keys unchanged.  `origin` could not hold it — that object
+# rejects unknown fields, and widening it would be a format revision.
 VENDOR_RECORD_KEY = "aart.vendor"
 _PAYLOAD_ROOT = "payload"
 # The one document each kind's payload cannot load without.  A vendored subtree rarely contains it,
@@ -185,7 +184,7 @@ class VendorOptions:
 class LicenseFinding:
     """What the taken subtree says about its own licence, and what it leaves unsettled.
 
-    Vendoring redistributes somebody else's work, so the omission has to be visible (design §7).
+    Vendoring redistributes somebody else's work, so the omission has to be visible.
     `identifier` is filled only where the licence file settles the SPDX identifier on its own;
     everything else is reported in `note` for a human to resolve, and refuses nothing.
     """
@@ -211,7 +210,7 @@ def vendor_options_digest(url: str, ref: str, path: SafeRelativePath) -> ObjectD
 
     Two vendorings of one upstream state must be comparable, so this covers the origin URL, the
     requested ref, and the taken path. The ref is included even though it moves: a tag and a branch
-    that happen to resolve to one commit are two different standing instructions, and `VN-5`'s drift
+    that happen to resolve to one commit are two different standing instructions, and the drift
     check compares instructions, not only outcomes.
     """
 
@@ -289,7 +288,7 @@ def read_vendor_record(provenance: Provenance) -> Result[VendorRecord]:
 
 @dataclass(frozen=True, slots=True)
 class CopyIntegrity:
-    """What the copy's own record says, and what the copy says (VI-1).
+    """What the copy's own record says, and what the copy says.
 
     Both digests are carried rather than a boolean, because every caller renders them: a maintainer
     told only that something mismatched has no way to record which copy of which package it was.
@@ -311,7 +310,7 @@ def verify_vendored_copy(
     authored: tuple[str, ...],
     recorded: ObjectDigest,
 ) -> Result[CopyIntegrity]:
-    """Recompute `origin.input_digest` from the package on disk (design §3).
+    """Recompute `origin.input_digest` from the package on disk.
 
     The taken subtree is recoverable from the copy, so the claim vendoring makes has a gate that
     needs no network and no new field. Two properties make the inverse of `project_vendored_package`
@@ -369,7 +368,7 @@ class DeliveryFinding:
     Vendoring copies a subtree into the registry; installing applies the effects the type declares.
     For `mcp` those effects touch one file of the payload, so the copied bytes and the delivered
     bytes are different sets — and a descriptor naming a file inside the payload names one that will
-    not be on the consumer's machine (`LAF-46`, design §7).
+    not be on the consumer's machine.
     """
 
     withheld: int
@@ -432,7 +431,7 @@ def describe_delivery(kind: str, payload: Mapping[str, bytes]) -> DeliveryFindin
         note,
         # An `aart-mcp-v1` descriptor is `{"name": …, "server": {…}}`.  A document shaped like the
         # harness file it ends up in — `{"mcpServers": {…}}` — parses, loads, installs, and merges
-        # an empty object: the artifact is delivered and starts nothing (VI-5).
+        # an empty object: the artifact is delivered and starts nothing.
         starts_nothing=not isinstance(server, JsonObject) or not server.entries,
     )
 
@@ -440,7 +439,7 @@ def describe_delivery(kind: str, payload: Mapping[str, bytes]) -> DeliveryFindin
 def mcp_descriptor_message(identity: ArtifactIdentity, *, vendored: bool) -> str:
     """The one sentence for a descriptor that installs successfully and starts nothing.
 
-    `RS-01`: the fault is in the descriptor, not in how the bytes arrived, so the sentence is the
+    The fault is in the descriptor, not in how the bytes arrived, so the sentence is the
     same for a package the maintainer authored. Only the noun changes — calling an authored package
     "vendored" would send its maintainer looking for an upstream that does not exist.
     """
@@ -744,7 +743,7 @@ def assess_vendored_package(
 
     The object assessed is the whole package, so the maintainer's own wrapper — the `mcp.json` they
     authored, the `install.sh` they added — is scanned with the copied payload rather than exempted
-    from it (design §3). The result is canonical local attestation evidence: it names the exact
+    from it. The result is canonical local attestation evidence: it names the exact
     object digest it describes, so a reader can tell whether it still applies.
     """
 

@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Stamp the current git commit into ``agent_artifacts/_commit.py`` (WP-21).
+"""Stamp the current git commit into ``agent_artifacts/_commit.py``.
 
 A build-time step: it overwrites ``agent_artifacts/_commit.py`` with the full git ``HEAD``
 sha (via ``git rev-parse HEAD``) so the built wheel records exactly which source it came
-from (docs/design/DESIGN.md §15, consumed by ``check`` / ``upgrade``). When git is unavailable or this
+from (consumed by ``check`` / ``upgrade``). When git is unavailable or this
 is not a checkout, it falls back to ``"unknown"``.
 
 It also stamps that commit's committer date as ``COMMIT_EPOCH``.  The wheel builder dates every
-archive member from it, so the published wheel reproduces from the tag instead of from the clock
-(SI-8); ``0`` means "no commit date known" and the builder falls back to a fixed epoch.
+archive member from it, so the published wheel reproduces from the tag instead of from the clock;
+``0`` means "no commit date known" and the builder falls back to a fixed epoch.
 
 Idempotent and re-runnable: it always rewrites the file from scratch and preserves the
 module docstring. Keep the committed source as ``COMMIT = "unknown"`` — only the wheel
@@ -24,12 +24,12 @@ ROOT = Path(__file__).resolve().parent.parent
 TARGET = ROOT / "agent_artifacts" / "_commit.py"
 
 # Kept verbatim so the rewritten module reads the same as the version-controlled one.
-DOCSTRING = '''"""Source commit the package was built from (docs/design/DESIGN.md §15).
+DOCSTRING = '''"""Source commit the package was built from.
 
-Generated at build time by ``scripts/inject_commit.py`` (WP-21). The ``"unknown"`` default
-is used for editable/dev installs and is only consulted by ``check`` / ``upgrade`` (WP-16/17).
+Generated at build time by ``scripts/inject_commit.py``. The ``"unknown"`` default
+is used for editable/dev installs and is only consulted by ``check`` / ``upgrade``.
 ``COMMIT_EPOCH`` is that commit's committer date, and is what dates every member of the built
-wheel so the archive reproduces from the tag rather than from the clock (SI-8).
+wheel so the archive reproduces from the tag rather than from the clock.
 """'''
 
 

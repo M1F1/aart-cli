@@ -1,4 +1,4 @@
-"""RR-5: the three receipt verbs are reachable from the shipped front end, on real records.
+"""The three receipt verbs are reachable from the shipped front end, on real records.
 
 Carried from the removed `tests/tui_receipt_test.py`, which made the same claims against the
 retired wizard skins.  What is asserted is front-end reachability rather than receipt logic --

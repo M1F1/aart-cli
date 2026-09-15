@@ -1,13 +1,9 @@
 #!/usr/bin/env python3
 """Verify the wheel a release is about to publish, against the tag that names it.
 
-The release run used to prove that a version pinned in a script matched a version written into
-three source files matched the tag somebody pushed.  Every one of those facts is a property of the
-source tree, and the pull request that put the tree on `main` had already proven the tree.  What it
-never proved -- what it could not have proven, because the archive did not exist yet -- is anything
-about the artifact.
-
-So the subject moved.  The tag is the released identity (INV-099); this asks whether the thing
+Every fact about the source tree is proven by the pull request that put the tree on `main`.  What a
+pull request cannot prove, because the archive does not exist yet, is anything about the artifact.
+That is this script's subject.  The tag is the released identity (INV-099); this asks whether the thing
 being shipped agrees with it, declares nothing at run time, and runs.
 
     python scripts/release_artifact.py --tag v1.4.0

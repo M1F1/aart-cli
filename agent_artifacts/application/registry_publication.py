@@ -1,7 +1,7 @@
 """Publishing a reviewed registry commit: one push, one branch, and never a merge (`D-228`).
 
-164.7 used to end the maintainer's work at the local commit and send them to a terminal to move it.
-That was never a safeguard — the same bytes were reviewed, validated and committed inside AART a
+Ending the maintainer's work at the local commit and sending them to a terminal to move it would be
+no safeguard — the same bytes were reviewed, validated and committed inside AART a
 moment earlier, and typing `git push` afterwards records no decision the surface did not already
 have.  What actually separates publication from approval is the branch: reviewed bytes land
 somewhere other people can look at them, and only a merge makes them the registry.

@@ -1,4 +1,4 @@
-"""SL-1/SL-6: synchronizing and removing a source from both human front-ends.
+"""Synchronizing and removing a source from both human front-ends.
 
 The dead end this covers is concrete: a subscribed origin whose managed snapshot no longer
 matches what the origin declares refuses every read path, and before these operations existed the

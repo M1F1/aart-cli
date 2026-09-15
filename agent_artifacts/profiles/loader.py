@@ -1,4 +1,4 @@
-"""Profile loader — WP-8. Built-ins overlaid by ``<project>/.agent-artifacts/profiles.json``."""
+"""Profile loader. Built-ins overlaid by ``<project>/.agent-artifacts/profiles.json``."""
 
 from __future__ import annotations
 
@@ -65,10 +65,10 @@ def _hook_target_from_dict(d: Mapping[str, Any]) -> HookTarget:
 
 
 def _profile_from_dict(record: Mapping[str, Any]) -> Profile:
-    """Build a ``Profile`` from a JSON-parsed dict (the §11 record shape).
+    """Build a ``Profile`` from a JSON-parsed dict (the profile record shape).
 
     Every artifact-type section is **optional**: a missing key yields ``None``
-    (this harness does not support that type — docs/design/DESIGN-memory.md §5), so partial
+    (this harness does not support that type), so partial
     profiles load without a ``KeyError``.
 
     Expected JSON shape (a partial ``vibe``-style profile + an ``memory`` target)::

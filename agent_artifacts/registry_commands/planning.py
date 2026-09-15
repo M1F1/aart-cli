@@ -130,13 +130,13 @@ from .templates import (
 
 REGISTRY_COMMAND_INVALID = DiagnosticCode("registry-command-invalid")
 REGISTRY_AUDIT_WARNING = DiagnosticCode("registry-audit-warning")
-# `LAF-45`: a report of what the audit did, as opposed to what it found. It carries no remediation
+# A report of what the audit did, as opposed to what it found. It carries no remediation
 # because there is nothing to remedy — an operator reads it to know the check ran at all.
 REGISTRY_AUDIT_NOTE = DiagnosticCode("registry-audit-note")
 
 
-# `RS-09`: the next step a refused registry command hands over. These are shared lines rather than
-# one sentence per call site, which `SI-6` already learned once on the object store: the operator's
+# The next step a refused registry command hands over. These are shared lines rather than
+# one sentence per call site because the operator's
 # next step is the same wherever the same problem is stated, and a distinct sentence per site
 # invents distinctions they do not have. Every `aart …` written here is parsed by the shipped CLI in
 # `tests/source_remediation_test.py`, so a command that stops existing fails the suite.
@@ -200,7 +200,7 @@ def _existing_package_remediation(
     base: str,
     identity: ArtifactIdentity,
 ) -> tuple[str, ...]:
-    """`RS-04`: `vendor` is create-only, so say which command is not.
+    """`vendor` is create-only, so say which command is not.
 
     Upstream moving is the ordinary reason to run `vendor` a second time, and `revendor` is the
     command that adopts movement — but only for a copy that records where it came from. An authored
@@ -307,7 +307,7 @@ def _note(message: str) -> Diagnostic:
 def _diagnostic(message: str, remediation: tuple[str, ...], *, warning: bool = False) -> Diagnostic:
     """One line of a `validate` or `audit` report, with what to do about it.
 
-    `RS-09`: a report is where these two commands state a problem, so a finding that names no next
+    A report is where these two commands state a problem, so a finding that names no next
     step is the same dead end as a refusal that names none. A warning gets one too — most of them
     describe a limit rather than a defect, and saying which is exactly what the operator needs.
     """
@@ -826,7 +826,7 @@ def _adopted_authored(
     A foreign subtree almost never satisfies its kind's payload contract on its own, and no flag can
     carry file bytes. So `vendor` adopts the files the maintainer has already placed at the target
     path — the `payload/mcp.json` wrapper, a `SETUP.md`, a `setup/` recipe — and projects them
-    alongside the taken bytes, where `VN-2`'s refusals judge them. `artifact.json` and
+    alongside the taken bytes, where the projection's refusals judge them. `artifact.json` and
     `provenance.json` are excluded because the projection derives them.
     """
 
@@ -917,7 +917,7 @@ def plan_artifact_vendor(
 
 
 def _package_delivery(package: VendoredPackage) -> DeliveryFinding | None:
-    """What a consumer receives from the package this plan would write (design §7)."""
+    """What a consumer receives from the package this plan would write."""
 
     prefix = f"{package.base}/"
     return describe_delivery(
@@ -1078,7 +1078,7 @@ def plan_artifact_revendor(
         return files
     # The copy against its own record, before upstream is mentioned at all: a copy that is not the
     # copy cannot be discussed as current or as behind, and re-vendoring it would overwrite a
-    # difference the maintainer has not seen yet (design §5).
+    # difference the maintainer has not seen yet.
     integrity = verify_vendored_copy(
         files.value,
         vendored.base,
@@ -1117,7 +1117,7 @@ def plan_artifact_revendor(
     )
     if version is None:
         # The diff is rendered before the refusal, not instead of it: the maintainer cannot choose
-        # the version the movement deserves without first seeing the movement (design §4).
+        # the version the movement deserves without first seeing the movement.
         return Ok(drifted)
     manifest = vendored.manifest
     authored: list[tuple[str, bytes, bool]] = []
@@ -1478,7 +1478,7 @@ def validate_registry_workspace(
     files = _files(snapshot)
     assert isinstance(files, Ok)
     # A package that contradicts its own provenance is malformed, and this is where well-formedness
-    # is decided.  It costs no network: the copy is checked against the record it carries (VI-2).
+    # is decided.  It costs no network: the copy is checked against the record it carries.
     vendored, unreadable = _vendored_packages(files.value, source)
     diagnostics.extend(unreadable)
     for package in vendored:
@@ -1589,7 +1589,7 @@ def vendored_copy_diagnostics(
     files: dict[str, SnapshotEntry],
     vendored: VendoredArtifactOrigin,
 ) -> tuple[Diagnostic, ...]:
-    """Check one vendored copy against the origin it records (VI-2, design §4).
+    """Check one vendored copy against the origin it records.
 
     A pure function of the committed snapshot: no network, no store, and the same answer in
     `validate`, in `audit`, and before a re-vendor. The mismatch is an error rather than a warning
@@ -1622,19 +1622,19 @@ def package_delivery_diagnostics(
     *,
     vendored: bool,
 ) -> tuple[Diagnostic, ...]:
-    """Report a descriptor that launches a file consumers never receive (VI-4).
+    """Report a descriptor that launches a file consumers never receive.
 
     An error rather than a warning: unlike a missing licence, this is not a fact about the world the
     maintainer may accept. It is an artifact that cannot start on any consumer machine.
 
-    `RS-01`: `VI-5` hung this off the vendoring delivery finding, so an `mcp` package authored in
-    place was never looked at. Nothing in the consequence depends on where the bytes came from — the
+    It is not tied to the vendoring delivery finding, so an `mcp` package authored in place is
+    checked too. Nothing in the consequence depends on where the bytes came from — the
     merge writes an empty entry either way — so the check runs for every package the audit walks.
 
     The audit is where it runs, not `registry validate`. `validate_registry_workspace` is also the
     consumer's gate on a candidate source, so a new hard failure there makes every registry already
     carrying such a descriptor unloadable on upgrade, for its subscribers as well as its maintainer.
-    That is the protocol break `VI-5` rejected. `registry audit` is maintainer-side and is what the
+    That would be a protocol break. `registry audit` is maintainer-side and is what the
     generated registry CI runs.
     """
 
@@ -1687,7 +1687,7 @@ def _shipped_digest(
     files: dict[str, SnapshotEntry],
     vendored: VendoredArtifactOrigin,
 ) -> ObjectDigest:
-    """The digest of the bytes this registry actually ships (design §5).
+    """The digest of the bytes this registry actually ships.
 
     Drift is a statement about the copy, not about the record: comparing upstream with
     `origin.input_digest` answers for a package that may no longer exist. A copy that cannot be
@@ -1752,10 +1752,10 @@ def _vendored_upstream_findings(
     Read-only by construction: it resolves and compares, and no caller can turn the answer into a
     write. An upstream that cannot be read is reported as unknown rather than as drift, because a
     maintainer who has lost access to an origin has a different problem from one who is behind it,
-    and neither of them is told their copy is current (design §6).
+    and neither of them is told their copy is current.
 
-    The disposition comes back with the findings so the audit can say how many copies it compared
-    (`LAF-45`). It is the same vocabulary `revendor --check` prints, deliberately: one answer about
+    The disposition comes back with the findings so the audit can say how many copies it compared.
+    It is the same vocabulary `revendor --check` prints, deliberately: one answer about
     one copy should not have two names depending on which command asked.
     """
 
@@ -1795,7 +1795,7 @@ def _vendored_upstream_findings(
 
 
 def _upstream_check_note(dispositions: tuple[NativeReferenceDisposition, ...]) -> Diagnostic:
-    """`LAF-45`: state that the check ran, including when it had nothing to report.
+    """State that the check ran, including when it had nothing to report.
 
     Every other outcome of `--check-upstream` prints a line. A registry whose copies are all
     current printed nothing, and so did a command run without the flag — so an operator reading a
@@ -1942,9 +1942,9 @@ def audit_registry_workspace(
                 else:
                     vendored = read.value
                     # The copy against the record, before anything is said about upstream: a copy
-                    # that is not the copy cannot be discussed as current or behind (design §5).
+                    # that is not the copy cannot be discussed as current or behind.
                     diagnostics.extend(vendored_copy_diagnostics(files.value, vendored))
-        # Outside the vendored branch on purpose (RS-01): what a consumer receives from an `mcp`
+        # Outside the vendored branch on purpose: what a consumer receives from an `mcp`
         # package is a property of the package, and an authored descriptor gets it wrong as easily
         # as a copied one.
         diagnostics.extend(
@@ -1956,7 +1956,7 @@ def audit_registry_workspace(
             diagnostics.append(
                 _diagnostic(
                     # Vendoring redistributes somebody else's work, so the omission is named as
-                    # what it is rather than folded into the generic finding (design §7).
+                    # what it is rather than folded into the generic finding.
                     f"vendored artifact redistributes upstream bytes with no declared license: "
                     f"{manifest.value.identity}"
                     if vendored is not None
@@ -2084,7 +2084,7 @@ def audit_registry_workspace(
                                 )
     if upstream_acquirer is not None:
         # Said once, at the end, and only when the caller asked for the check — its absence is what
-        # tells an operator the flag never reached the command (`LAF-45`).
+        # tells an operator the flag never reached the command.
         diagnostics.append(_upstream_check_note(tuple(upstream_dispositions)))
     return Ok(RegistryQualityReport((RegistryQualityCheck("audit", tuple(diagnostics)),)))
 

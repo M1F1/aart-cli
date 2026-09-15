@@ -1,6 +1,6 @@
-"""RR-5: one receipt service, two front-ends.
+"""One receipt service, two front-ends.
 
-`VN-9` established that a maintainer action existing only in the CLI is half-shipped.  The way
+A maintainer action existing only in the CLI is half-shipped.  The way
 to ship an action twice without writing it twice is for both skins to call the same functions
 and render the same lines — so this module owns resolving an installation to its persisted
 record, and projecting that record into the three payloads, and neither front-end owns any of
@@ -70,10 +70,9 @@ def load_receipt(
 
     Two stores can say an artifact is installed. The canonical receipt store is asked first, for
     the same reason `marketplace setup` resolves canonical receipts before the legacy catalogue
-    (D-128): it is the store a configured install writes, and the one the legacy manifest is being
-    retired in favour of. An installation the canonical store does not know is then looked for in
-    the manifest, so a machine holding only legacy installations answers exactly as before, and a
-    machine holding both answers for each from the store that recorded it (B-046).
+    (D-128): it is the store a configured install writes. An installation the canonical store does
+    not know is then looked for in the manifest, so a machine holding only manifest installations
+    still answers, and a machine holding both answers for each from the store that recorded it (B-046).
     """
 
     recorded = LocalReceiptStore(os.path.join(data_root, "state")).installations()

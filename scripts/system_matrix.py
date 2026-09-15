@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the named AART 1.0 system and fault-injection scenarios hermetically."""
+"""Run the named AART system and fault-injection scenarios hermetically."""
 
 from __future__ import annotations
 

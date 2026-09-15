@@ -1,12 +1,11 @@
-"""SI-5: the consumer refuses a registry whose two identity documents disagree.
+"""The consumer refuses a registry whose two identity documents disagree.
 
-Live acceptance v2 `LAF-37`: a registry whose `aart-registry.json` and `aart-source.json` declare
-different identities is refused by `registry validate --strict --frozen` — the publisher's own gate —
-and accepted by every consumer path. The value the entire subscription model pins is the one no
-consumer-side check looked at.
+A registry whose `aart-registry.json` and `aart-source.json` declare different identities is
+refused by `registry validate --strict --frozen` — the publisher's own gate — and must be refused by
+every consumer path too, because it is the value the entire subscription model pins.
 
-Design §2's second half applies the one-way adaptation rule: a consumer does not soften a rule the
-publisher's tooling already enforces. The agreement is now checked at acquisition, whenever a
+This applies the one-way adaptation rule: a consumer does not soften a rule the
+publisher's tooling already enforces. The agreement is checked at acquisition, whenever a
 snapshot carries both documents, on the direct/local path as well as the registry path.
 """
 
@@ -130,11 +129,10 @@ class IdentityAgreementTest(unittest.TestCase):
             self.assertNotIn("mirror", [item["alias"] for item in listed["sources"]])
 
     def test_rs08_a_registry_marker_that_does_not_parse_is_refused(self) -> None:
-        """`RS-08`: the skipped check, taken as its own decision.
+        """The skipped check, taken as its own decision.
 
-        `SI-5` compared the two identities only when both documents parsed, so a source shaped like
-        a registry whose `aart-registry.json` is broken was admitted in silence — the one file that
-        declares the identity the whole subscription model pins went unread, and nothing said so.
+        A source shaped like a registry whose `aart-registry.json` is broken must not be admitted in
+        silence — it is the one file that declares the identity the whole subscription model pins.
         A marker that is present must parse; there is no third state where it is ignored.
         """
 

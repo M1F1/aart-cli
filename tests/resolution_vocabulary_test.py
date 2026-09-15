@@ -1,9 +1,8 @@
-"""SI-3: a resolution failure names the layer that failed, not the artifact.
+"""A resolution failure names the layer that failed, not the artifact.
 
-Design §3 records the residue: three unrelated stressors — an alias that was never configured, one
-configured but never synchronized, and a cold cache read under `--offline` — all reported
-`artifact-not-found`, with empty remediation, about the one part of the request that was never
-wrong.  An operator sent to look for a correctly spelled name learns nothing.
+Three unrelated stressors — an alias that was never configured, one configured but never
+synchronized, and a cold cache read under `--offline` — must not all report `artifact-not-found`,
+with empty remediation, about the one part of the request that was never wrong.  An operator sent to look for a correctly spelled name learns nothing.
 
 Each case is driven through the real CLI, because the vocabulary is only worth anything if it
 survives to the JSON an agent reads.
@@ -97,7 +96,7 @@ class ResolutionFailureVocabularyTest(unittest.TestCase):
             self.assertEqual(diagnostic["remediation"], ["aart source sync --alias mirror"])
 
     def test_a_cold_cache_under_offline_says_so_rather_than_blaming_the_name(self) -> None:
-        """Closes live-acceptance v1 `LAF-19`."""
+        """A cold cache is not an unknown name."""
 
         with _environment() as env:
             _configure_cold_source(env)

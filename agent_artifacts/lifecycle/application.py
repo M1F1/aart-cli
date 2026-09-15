@@ -568,7 +568,7 @@ def _strip_managed_block(record: InstallationRecord, content: bytes) -> bytes | 
 def _is_bare_container_chain(document: JsonValue, json_path: str) -> bool:
     """True when `document` holds nothing but the empty containers on `json_path`.
 
-    `LAF-47`/`RS-10`: the emptiness that matters is the file's, not the container's. Every shipped
+    The emptiness that matters is the file's, not the container's. Every shipped
     profile merges under a path — `mcpServers`, `hooks.PreToolUse` — so a document tested for
     emptiness at its root is never empty after the last identity goes, and the removal below could
     not fire for any profile AART ships.
@@ -755,7 +755,7 @@ def prepare_uninstall(
     )
     # An uninstall reclaims the harness directories its own payload emptied; the last record out of
     # a scope also takes the scope's own files with it. Both are the install's litter rather than
-    # the operator's state (LAF-17).
+    # the operator's state.
     teardown = (
         None
         if conflicts

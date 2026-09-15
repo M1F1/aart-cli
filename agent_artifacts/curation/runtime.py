@@ -194,8 +194,8 @@ def _follow_up(
     changes: tuple[CurationChange, ...],
     action: CurationAction,
 ) -> tuple[str, ...]:
-    # `QA-014`: this used to lead with `git -C … diff -- <every reviewed path>`, which repeated the
-    # path list the review had just printed and was the longest line in a successful run.
+    # `QA-014`: this does not lead with `git -C … diff -- <every reviewed path>`, which would repeat
+    # the path list the review has just printed and be the longest line in a successful run.
     # `render_curation_review` already closes a mutating action with "AART will not commit or push;
     # review the working-tree diff afterward" — the same instruction, without the repetition and
     # without a shell command, which is also what keeps screen 46 free of one (`QA-017`).
@@ -434,10 +434,9 @@ class LocalCurationService:
         planned = prepare_registry_init(options, output=self.workspace)
         if isinstance(planned, Err):
             return planned
-        # `QA-013`/`D-180`: init no longer writes the usage-reporting templates unless a
-        # destination is named, so there is nothing inert left to warn about. Warning that an
-        # unchosen optional feature was not chosen is the same non-finding `QA-015` removed from
-        # the audit, and the review is read in the TUI where a flag name is not an action.
+        # `QA-013`/`D-180`: init writes the usage-reporting templates only when a destination is
+        # named, so there is nothing inert to warn about. Warning that an unchosen optional
+        # feature was not chosen is a non-finding (`QA-015`), and the review is read in the TUI where a flag name is not an action.
         warnings: tuple[str, ...] = ()
         # Two questions, two homes, and `init` owes the reader both.  *Which* AART is the
         # registry's own decision and is now pinned in a file it can review and revert; *where
@@ -561,7 +560,7 @@ class LocalCurationService:
 
         It always passes. AART is not qualified to adjudicate a licence, and a maintainer vendoring
         their own company's code has nothing to record; the obligation is to make the omission
-        visible rather than to block on it (design §7).
+        visible rather than to block on it.
         """
 
         recorded = request.artifact_license or finding.identifier
@@ -585,7 +584,7 @@ class LocalCurationService:
         Vendoring copies a subtree into the registry; installing an `mcp` merges one JSON object and
         copies nothing. A descriptor whose command names a file inside the payload names one that
         will not exist on any consumer machine, and a review that reported the copy while staying
-        silent about that would be describing a package nobody can start (`LAF-46`, design §7).
+        silent about that would be describing a package nobody can start.
         """
 
         details = [finding.note]
@@ -988,7 +987,7 @@ class LocalCurationService:
         if checked.disposition is NativeReferenceDisposition.UP_TO_DATE:
             # Two differing commits under `up-to-date` is the *normal* result of vendoring one
             # directory out of a monorepo, and it reads as a contradiction.  The line that
-            # reconciles them is printed where they are, not left in a docstring (`LAF-42`).
+            # reconciles them is printed where they are, not left in a docstring.
             details.append(
                 "the ref has not moved since this copy was taken"
                 if checked.resolved_commit == checked.recorded_commit
@@ -1036,7 +1035,7 @@ class LocalCurationService:
         if not integrity.value.matches:
             # Before the network, deliberately: nothing upstream says can make this copy the copy
             # its provenance describes, and re-vendoring over the difference would erase evidence
-            # the maintainer has not seen yet (design §5).
+            # the maintainer has not seen yet.
             return self._informational_review(
                 request,
                 current.value,
@@ -1062,7 +1061,7 @@ class LocalCurationService:
         if isinstance(acquired, Err):
             # An upstream that cannot be read is a disposition, not a crash: the maintainer needs to
             # be told their copy's provenance can no longer be checked, which is a different fact
-            # from the copy being current (design §6).
+            # from the copy being current.
             return self._informational_review(
                 request,
                 current.value,

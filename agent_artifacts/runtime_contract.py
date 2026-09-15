@@ -11,11 +11,9 @@ from agent_artifacts.protocol.semver import SemVer, parse_semver
 def _executable_version() -> SemVer:
     """The published version, read rather than written a second time.
 
-    This used to be `SemVer(0, 0, 1)`, a literal that had to be kept in step with
-    `agent_artifacts.__version__` and with `pyproject.toml` -- three values, independently
-    maintained, plus a script whose job was to prove they agreed.  That arrangement is what
-    INV-085 forbids.  There is now one literal, the release engine writes it, and this is
-    derived from it, so the two cannot disagree at all rather than being checked afterwards.
+    A second literal here would have to be kept in step with `agent_artifacts.__version__`, which
+    INV-085 forbids.  There is one literal, the release engine writes it, and this is derived from
+    it, so the two cannot disagree at all rather than being checked afterwards.
 
     A malformed version is raised at import.  This is the executable's published identity; a
     tool that cannot say which version it is has nothing sensible to do next.

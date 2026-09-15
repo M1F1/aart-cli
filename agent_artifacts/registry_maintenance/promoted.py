@@ -1,14 +1,12 @@
 """Reading the registry a promotion writes, for the commands that maintain it.
 
-Two registry representations exist during the migration and they are not interchangeable. The older
-authoring workspace holds `entries/*.json` plus one unversioned package per artifact, and compiles
+Two registry representations exist and they are not interchangeable. The authoring workspace holds `entries/*.json` plus one unversioned package per artifact, and compiles
 into `aart.lock.json` and `aart.index.json`. A promotion writes the approved representation the
 Product Specification names: `registry/versions/<kind>/<name>/<version>.json`, its promotion record,
 the two derived catalogs, and one package per *version* under `artifacts/<kind>/<name>/<version>/`.
 
-The maintenance commands were written against the first and were handed the second by the first real
-promotion, so every one of them refused a healthy registry by naming a file at a path nothing writes
-any more (`QA-025`, `QA-032`, `B-057`). This module is the missing half: it reads the approved
+Maintenance commands that read only the first would refuse a healthy promoted registry by naming a
+file at a path nothing writes (`QA-025`, `QA-032`, `B-057`). This module is the other half: it reads the approved
 representation through the same authority a public consumer validates it with, so the two answers
 cannot drift. It adds no third representation and writes nothing.
 """

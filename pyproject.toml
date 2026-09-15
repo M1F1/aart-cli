@@ -16,7 +16,7 @@ requires-python = ">=3.10"
 license = "MIT"
 authors = [{ name = "Michał Filek" }]
 keywords = ["ai", "skills", "mcp", "hooks", "agents", "opencode", "claude", "tabnine"]
-# Zero runtime dependencies — standard library only (docs/design/DESIGN.md §4/§15).
+# Zero runtime dependencies — standard library only (Product Specification §26).
 dependencies = []
 
 [project.scripts]

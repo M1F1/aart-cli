@@ -428,7 +428,7 @@ def run(request: Request) -> int:
     )
     if isinstance(offline, Err):
         return _emit_error(request, offline)
-    # The run root is the data root, not the project root: deriving it a second time is `LAF-66`.
+    # The run root is the data root, not the project root: deriving it a second time invites disagreement.
     orphaned = read_orphaned_runs(run_root=runtime.value.paths.data_root)
     recorded = LocalReceiptStore(os.path.join(runtime.value.paths.data_root, "state")).actions()
     if isinstance(recorded, Err):

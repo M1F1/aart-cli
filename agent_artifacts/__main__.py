@@ -1,4 +1,4 @@
-"""Enable ``python -m agent_artifacts`` (WP-0)."""
+"""Enable ``python -m agent_artifacts``."""
 
 from __future__ import annotations
 

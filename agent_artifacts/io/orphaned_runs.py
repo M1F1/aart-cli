@@ -10,10 +10,10 @@ from agent_artifacts.application.orphaned_runs import OrphanedRun, OrphanedRuns
 def read_orphaned_runs(*, run_root: str) -> OrphanedRuns:
     """Every directory under the run root, which a completed run removes and a stopped one does not.
 
-    The root is handed in rather than derived here. `LAF-66` was this path being composed in two
-    places that disagreed -- the probe from the project root, the engine from the data root -- so
-    the claim answered `true` in every scope without ever looking where runs are made. There is one
-    source for it and the caller supplies it, exactly as `orphan_run_directories` now does.
+    The root is handed in rather than derived here. Composing this path in two places lets them
+    disagree -- the probe from the project root, the engine from the data root -- and the claim
+    would answer `true` in every scope without ever looking where runs are made. There is one
+    source for it and the caller supplies it, exactly as `orphan_run_directories` does.
     """
 
     if not run_root:

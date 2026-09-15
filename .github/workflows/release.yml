@@ -49,12 +49,11 @@ env:
   AART_POETRY: ${{ vars.AART_POETRY }}
 
 jobs:
-  # No quality jobs here any more.  A release is cut from a commit that reached `main`, and
-  # nothing reaches `main` except through a pull request that passed all ten gates on the full
-  # interpreter matrix.  Re-running them at the tag proved the same tree a second time.  What is
-  # left is everything whose subject is the release itself: the tag matches the source version,
-  # the tagged commit is in `main`, reviewed notes exist, the eleven-item checklist passes, and
-  # `packaging-check` -- the one gate whose subject is the wheel rather than the source.
+  # No quality jobs here.  A release is cut from a commit that reached `main`, and nothing reaches
+  # `main` except through a pull request that passed all ten gates on the full interpreter matrix.
+  # What this run checks is everything whose subject is the release itself: the tagged commit is in
+  # `main`, the release checklist passes, and `packaging-check` -- the one gate whose subject is the
+  # wheel rather than the source.
   # See docs/ci/workflows-v1.md.
   release:
     if: vars.AART_IMAGE_USERNAME_SECRET == ''
@@ -79,10 +78,8 @@ jobs:
       # value lives only in the secret store.
       INDEX_PUBLISH_URL: ${{ vars.AART_INDEX_PUBLISH_URL }}
       AART_INDEX_PUBLISH_CREDENTIALS: ${{ secrets[vars.AART_INDEX_PUBLISH_CREDENTIALS_SECRET] }}
-      # No `GH_HOST` here any more: the release action attaches the wheel through the REST API at
-      # `GITHUB_API_URL`, which the runner sets to this instance.  `gh` defaulted to github.com,
-      # so a fork that forgot `AART_GH_HOST` uploaded to the wrong instance -- a mistake the
-      # variable could prevent but only if you knew to set it.  Now there is nothing to set.
+      # No `GH_HOST`: the release action attaches the wheel through the REST API at
+      # `GITHUB_API_URL`, which the runner sets to this instance, so there is nothing to set.
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout

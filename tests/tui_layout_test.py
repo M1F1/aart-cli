@@ -1,7 +1,7 @@
-"""WP-0: the pure layout kernel shared by every TUI renderer.
+"""The pure layout kernel shared by every TUI renderer.
 
 Everything here is decidable without a terminal, so the curses layer is left with painting and
-key handling only. See docs/design/DESIGN-tui-legibility.md.
+key handling only.
 """
 
 from __future__ import annotations

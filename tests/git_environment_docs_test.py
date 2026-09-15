@@ -1,4 +1,4 @@
-"""`LAF-49`: the Git subprocess environment is documented, and the document is fed from the code.
+"""The Git subprocess environment is documented, and the document is fed from the code.
 
 AART runs system Git with an allowlisted environment, so `https_proxy` never reaches it. That is
 deliberate — a proxy URL is one of the places a credential hides — and on a network whose only

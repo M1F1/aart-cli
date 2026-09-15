@@ -135,16 +135,16 @@ class CustomProtocolTests(unittest.TestCase):
             self.assertEqual(result.status, "rollback_incomplete")
             self.assertIn("rollback", result.detail)
             self.assertIn("custom.install@1", [item["module"] for item in result.receipt])
-            # SI-6: the rollback field names the artifact to undo, and now names the command that
+            # The rollback field names the artifact to undo, and now names the command that
             # does it.  It used to say `no command reverses a completed setup`, which was true
             # until `2.6.0` shipped `receipt undo` and then was a claim the same executable
-            # contradicted in every record it wrote (`LAF-65`).
+            # contradicted in every record it wrote.
             self.assertIn("mcp/atlassian", result.rollback_command)
             self.assertIn("aart marketplace receipt undo", result.rollback_command)
 
 
 class WrittenCommandFieldTests(unittest.TestCase):
-    """`LAF-65`: a record's own command fields must name commands that exist.
+    """A record's own command fields must name commands that exist.
 
     The remediation guard already hands every user-visible ``aart …`` *mention* to the shipped
     parser.  It never reached these two, because they are not printed prose — they are fields the

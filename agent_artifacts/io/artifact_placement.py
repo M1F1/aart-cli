@@ -373,7 +373,7 @@ def placement_for(
 
     # `QA-078`/`D-231`: what the artifact declares it supports and what it is installed into are
     # one answer. Narrowing happens here, once, rather than inside each per-profile loop, so the
-    # two screens that used to disagree read the same set.
+    # two screens read the same set.
     narrowed = _declared_narrowing(
         stored.value.candidate.entries,
         coordinate.artifact,

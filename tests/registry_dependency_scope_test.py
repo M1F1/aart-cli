@@ -1,10 +1,9 @@
-"""SI-9: `requires` is intra-registry, and the refusal says so.
+"""`requires` is intra-registry, and the refusal says so.
 
-`LAF-38` was filed as a question, not a defect: `registry build` refuses
-`skill/la-probe requires missing skill/using-residues` when the dependency lives in another
-configured registry.  The restriction is deliberate (design §7.2) — a cross-registry dependency
+`registry build` refuses `skill/la-probe requires missing skill/using-residues` when the dependency
+lives in another configured registry.  The restriction is deliberate — a cross-registry dependency
 breaks whenever a maintainer who does not own the artifact changes their own registry — and the
-defect was that nothing said so.  "requires missing" reads as "not published yet", so a maintainer
+refusal has to say so.  "requires missing" reads as "not published yet", so a maintainer
 waits for a publication that will never make the build pass.
 
 These tests hold the wording to the rule: every refusal is produced by the real planning path, never
@@ -117,7 +116,7 @@ class DependencyScopeRefusalTest(unittest.TestCase):
         self.assertNotIn("does not publish", message)
 
     def test_a_referenced_dependency_is_still_refused(self) -> None:
-        """SI-9 documents the restriction; it does not lift it (design §7.2, guardrail 1)."""
+        """The refusal documents the restriction; it does not lift it."""
 
         self.assertIsInstance(_compiled(_referencing(_requiring("helper"), "helper")), Err)
 
@@ -144,7 +143,7 @@ class DependencyScopeRefusalTest(unittest.TestCase):
 
 
 class DependencyScopeRemediationTest(unittest.TestCase):
-    """SI-6's rule, applied to the remediation SI-9 adds: every command named must exist."""
+    """Every command the remediation names must exist."""
 
     def test_every_command_the_remediation_names_is_one_the_parser_accepts(self) -> None:
         _message, remediation = _refusal(_compiled(_requiring("helper")))

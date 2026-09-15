@@ -1,4 +1,4 @@
-"""Pure layout kernel for the text and curses TUI (WP-0 of DESIGN-tui-legibility).
+"""Pure layout kernel for the text and curses TUI.
 
 Everything decidable without a terminal lives here: how wide content may be, how a record turns
 into aligned lines, how the status bar degrades, and how many rows the detail pane may claim. The
@@ -546,9 +546,8 @@ def footer_start(lines: Sequence[str]) -> int:
 def anchor(lines: Sequence[str], *, height: int) -> Tuple[str, ...]:
     """Pad above the footer so it sits on the bottom row of a terminal this tall (`QA-068`).
 
-    On a short screen the legend used to float directly under the body with the rest of the
-    terminal blank beneath it, so the eye had to hunt for the keys at a different height on every
-    screen. The padding goes above the footer rather than below it because below it there is
+    On a short screen a legend drawn directly under the body leaves the rest of the terminal blank
+    beneath it, so the eye has to hunt for the keys at a different height on every screen. The padding goes above the footer rather than below it because below it there is
     nothing: the footer is the last thing read, and last is where reading stops.
 
     A frame taller than the terminal is returned untouched. Deciding what to drop is clipping, and

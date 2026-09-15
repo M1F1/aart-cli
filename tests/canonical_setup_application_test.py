@@ -732,8 +732,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
             assert isinstance(first, Ok), first
             self.assertIs(first.value.setup_status, SetupExecutionStatus.CONFIGURED)
 
-            # Re-vendor the same version with changed package bytes, exactly as AD-27 was
-            # found. Marketplace update writes a fresh installation record without carrying
+            # Re-vendor the same version with changed package bytes. Marketplace update writes a fresh installation record without carrying
             # its setup pointer; the deterministic setup record and old CAS reference remain.
             updated_entries = tuple(
                 replace(entry, content=b"Updated manual setup instructions.\n")

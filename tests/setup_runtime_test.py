@@ -203,7 +203,7 @@ class SetupRuntimeTests(unittest.TestCase):
 
         Finding an item already there is the normal outcome of every run after the first. The
         run cannot know whether the credential was rotated since; the operator can, and could
-        not act on what they were never told (`AD-35`).
+        not act on what they were never told.
         """
 
         fake = FakeProcess()
@@ -432,7 +432,7 @@ class RemediationCommandTest(unittest.TestCase):
         """`~/.zshrc` is the path the operator recognises as theirs.
 
         The absolute form is correct and unreadable: it names one machine's home directory in a
-        command that is copied, pasted and shared (`AD-35`).
+        command that is copied, pasted and shared.
         """
 
         home = os.path.expanduser("~")
@@ -467,9 +467,8 @@ if __name__ == "__main__":
 class WizardSurfaceTest(unittest.TestCase):
     """What the receipt records has to reach the surface the operator actually runs.
 
-    `AD-34` and `AD-35` were both read by one command path. The wizard is how setup is normally
-    run, and it printed none of it: the measurement happened, the receipt carried it, and the
-    screen said `configured` (`AD-36`).
+    The wizard is how setup is normally run, so a measurement the receipt carries must not stop at
+    one command path while the screen says `configured`.
     """
 
     def _record(self, *, replaced: bool, length: int):
@@ -552,7 +551,7 @@ class ShellReloadReminderTest(unittest.TestCase):
     """A run that writes variables into a shell file says so, every time.
 
     No effect can source that file — a child process cannot alter its parent's environment — so
-    the most a run can do is stop the operator having to remember (`AD-37`).
+    the most a run can do is stop the operator having to remember.
     """
 
     def _record(self, *, with_shell: bool):
@@ -645,12 +644,11 @@ class SeveralShellFilesTest(unittest.TestCase):
 
 
 class RunReloadRemindersTest(unittest.TestCase):
-    """`AD-39`. The reminder is a fact about the machine, so the run prints it once.
+    """The reminder is a fact about the machine, so the run prints it once.
 
     Reloading a shell file is not a property of an artifact. Three servers appending exports to
     `~/.zshrc` need `source ~/.zshrc` run once, and printing the same three-line block after each
-    of them is how the instruction stopped being read at all. This was introduced in 2.8.3 by the
-    per-item call and found by rendering a three-server selection rather than by reading code.
+    of them is how the instruction stops being read at all.
     """
 
     def _record(self, path):

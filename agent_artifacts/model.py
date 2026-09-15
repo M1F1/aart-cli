@@ -1,9 +1,9 @@
-"""Frozen data model — the shared contract for the whole system (WP-0).
+"""Frozen data model — the shared contract for the whole system.
 
 Everything here is immutable data: domain records, the effect/`Action` algebra, the
 `Plan`, the consumer manifest, and the `Result` type. No behaviour lives in this module;
 logic lives in the pure core (catalog/policy/merge/manifest/planners) and the imperative
-shell (io/executor/commands). See docs/plan/PLAN.md §2/§5 and docs/design/DESIGN.md §14.
+shell (io/executor/commands). See Product Specification §49.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ InstallScope = Literal["project", "user"]
 # explicit local/live-linked mode.
 InstallMode = Literal["copy", "symlink"]
 
-# Install modes for the `memory` instruction-file type (docs/design/DESIGN-memory.md §3.2). Default when
+# Install modes for the `memory` instruction-file type. Default when
 # unspecified is "prepend"; resolution precedence is CLI flag → frontmatter `mode:` → default.
 MemoryMode = Literal["replace", "prepend", "append", "skip"]
 
@@ -258,7 +258,7 @@ def source_label(resolved: Resolved) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# Effects as data — the Action algebra and the Plan (docs/design/DESIGN.md §14)            #
+# Effects as data — the Action algebra and the Plan (Product Specification §22)            #
 # --------------------------------------------------------------------------- #
 @dataclass(frozen=True, slots=True)
 class CopyTree:
@@ -302,7 +302,7 @@ class Warn:
 
 
 # --------------------------------------------------------------------------- #
-# Consumer manifest (docs/design/DESIGN.md §12)                                            #
+# Consumer manifest                                                                       #
 # --------------------------------------------------------------------------- #
 @dataclass(frozen=True, slots=True)
 class MergeProof:

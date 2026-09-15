@@ -6,12 +6,12 @@ name: pr-check
 # checked against the *merge* of the branch and its base, so with "require branches to be up to
 # date before merging" turned on, the commit this run proves is the commit that lands.  A second
 # run after the merge would prove the same tree again, so there is none -- and that is also why
-# `on: push` is gone.  A branch pushed without a pull request is now checked by nothing, which is
+# there is no `on: push`.  A branch pushed without a pull request is checked by nothing, which is
 # the intent rather than an oversight.  See docs/ci/workflows-v1.md.
 #
 # Portable to a GitHub Enterprise Server fork by setting repository variables only.  Every default
 # below reproduces the public github.com run exactly, so an unconfigured fork behaves the way this
-# repository always has.  See docs/ci/github-enterprise-rollout.md for the variable list and for the two
+# repository does.  See docs/ci/github-enterprise-rollout.md for the variable list and for the two
 # things a variable cannot express.
 #
 # The gate job appears twice because a `container.credentials` block cannot be made conditional: an
@@ -44,9 +44,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 3.11 is here because the release run no longer runs the gates, and the release run was
-        # the only thing that ever exercised 3.11.  Dropping the gates from the release without
-        # adding it here would have retired an interpreter silently.
+        # 3.11 is here because the release run does not run the gates, so this matrix is the only
+        # place 3.11 is exercised.
         python-version: ${{ fromJSON(vars.AART_PYTHON_VERSIONS || '["3.10", "3.11", "3.14"]') }}
     env:
       # The tool's own gates need ruff, mypy and coverage.  That is the one place this repository

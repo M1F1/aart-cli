@@ -1926,9 +1926,8 @@ _SCREEN_BINDINGS: dict[ApplicationScreen, tuple[_ScreenBinding, ...]] = {
 
 #: What Space changes on each form that has something to change, said by name.
 #:
-#: `QA-088`: the sentence that used to carry this -- "Space toggles default", "Space switches
-#: kind" -- is gone from the screen, so a shared "Toggle" would have dropped the only word that
-#: said what the key is for.
+#: `QA-088`: no sentence on the screen says "Space toggles default" or "Space switches kind", so a
+#: shared "Toggle" would drop the only word that says what the key is for.
 _FORM_TOGGLE_LABELS: dict[ApplicationScreen, str] = {
     ConsumerScreen.REGISTRY_ADD: "Make default",
     MaintainerScreen.SOURCE_ADD: "Switch kind",

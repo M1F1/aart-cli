@@ -12,7 +12,7 @@ someone asks, and composed into the release body at the moment a release is cut.
 `lines()`, so the page and the terminal cannot come to disagree.
 
     python scripts/install_commands.py            # this checkout, at its current version
-    python scripts/install_commands.py --version 2.9.0
+    python scripts/install_commands.py --version 0.2.0
 
 The git form leads because it is the only one that needs nothing arranged first: it goes through
 git, and git already has the credentials you push with. The wheel URL is last and carries a warning,

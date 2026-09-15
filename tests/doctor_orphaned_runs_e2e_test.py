@@ -12,7 +12,7 @@ directory -- so the working copy asserted on is one the engine really created an
 clean up. Patching cleanup away would produce the same directory and prove nothing about when one
 is actually left.
 
-`LAF-61` governs what Doctor may then do about it: report, name, and leave. An inspection that
+Doctor may then do only this about it: report, name, and leave. An inspection that
 tidies away its own evidence is worse than none, because the second operator finds a clean machine
 and no reason to doubt it.
 """
@@ -95,8 +95,8 @@ class DoctorOrphanedRunsE2ETest(unittest.TestCase):
 
             found = payload["orphaned_runs"]["working_copies"]
             self.assertEqual(len(found), 1, found)
-            # The identity of the directory, not merely that some path was reported: `LAF-66` was
-            # exactly a path derived twice from two different roots.
+            # The identity of the directory, not merely that some path was reported: a path derived
+            # twice from two different roots would report the wrong one.
             self.assertEqual(found[0]["path"], str(left[0]))
 
     def test_the_working_copy_is_tied_back_to_the_run_that_left_it(self) -> None:
@@ -115,7 +115,7 @@ class DoctorOrphanedRunsE2ETest(unittest.TestCase):
             self.assertEqual(prefix, receipt["receipt"]["plan_hash"][:16])
 
     def test_doctor_reports_the_working_copy_and_leaves_it_exactly_where_it_is(self) -> None:
-        """`LAF-61`: reported, named, and not tidied away."""
+        """Reported, named, and not tidied away."""
 
         with _environment_whose_rollback_fails() as env:
             self._interrupted(env)
@@ -138,7 +138,7 @@ class DoctorOrphanedRunsE2ETest(unittest.TestCase):
             self.assertIn("Interrupted runs:", output)
             self.assertIn(str(left[0]), output)
             self.assertIn("not removed", output)
-            # The whole sentence, not the fragment: `LAF-61` is a promise about what the report
+            # The whole sentence, not the fragment: it is a promise about what the report
             # will not do, and scoped mutation showed "does not delete" alone leaves the rest of
             # the line free to say anything.
             self.assertIn(

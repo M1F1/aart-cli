@@ -1,11 +1,11 @@
-"""VN-6: what the copy is licensed under is recorded or visibly missing, and drift reaches CI.
+"""What the copy is licensed under is recorded or visibly missing, and drift reaches CI.
 
-Vendoring redistributes somebody else's work (design §7). AART is not qualified to adjudicate a
+Vendoring redistributes somebody else's work. AART is not qualified to adjudicate a
 licence, so nothing here refuses: the licence file is read where it settles the identifier by
 itself, the maintainer's own statement always wins, and everything else is reported for a human.
 What must not happen is a copy of foreign bytes carrying no licence and no finding.
 
-The second half is design §6 from CI's side. `registry audit` can resolve vendored origins and say
+The second half is drift, from CI's side. `registry audit` can resolve vendored origins and say
 which copies are behind upstream, read-only and without failing on the finding — and an origin it
 cannot read is reported as unknown, never as an up-to-date copy.
 """
@@ -256,7 +256,7 @@ class LicenseCaptureTest(_RegistryFixture):
 
 
 class VendoredAuditTest(_RegistryFixture):
-    """Design §6 and §7 from CI's side: findings that report, and an audit that still passes."""
+    """Drift and licences from CI's side: findings that report, and an audit that still passes."""
 
     @contextlib.contextmanager
     def _audited(self, upstream: SourceSnapshot, *vendor_flags: str):
@@ -329,7 +329,7 @@ class VendoredAuditTest(_RegistryFixture):
             self.assertNotIn("behind upstream", messages)
 
     def test_an_unmoved_upstream_raises_no_drift_finding(self) -> None:
-        """No *finding*, which is not the same as no output — see the `LAF-45` tests below."""
+        """No *finding*, which is not the same as no output — see the tests below."""
 
         with self._audited(_licensed(("LICENSE", _MIT))) as root:
             with patch(
@@ -347,7 +347,7 @@ class VendoredAuditTest(_RegistryFixture):
             self.assertNotIn("upstream", " ".join(findings))
 
     def test_laf45_a_completed_check_says_so_when_every_copy_is_current(self) -> None:
-        """`LAF-45`: silence on success is indistinguishable from a flag that was never passed.
+        """Silence on success is indistinguishable from a flag that was never passed.
 
         This is the whole finding. An operator running the audit in CI saw exactly nothing about
         the vendored artifacts when they were current, and exactly nothing when `--check-upstream`
@@ -436,7 +436,7 @@ class VendoredAuditTest(_RegistryFixture):
 
 
 class UnvendoredAuditTest(unittest.TestCase):
-    """`LAF-45` at its worst: a registry that vendors nothing said nothing either way."""
+    """A registry that vendors nothing still says the check ran."""
 
     def test_laf45_a_registry_with_nothing_vendored_still_says_the_check_ran(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

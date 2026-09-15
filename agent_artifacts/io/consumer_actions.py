@@ -1820,9 +1820,9 @@ class LocalConsumerActions:
         The screen stays where it is: the refusal answers a question asked here, and no result
         screen exists for a run that produced nothing. But the attempt is over -- the pending plan
         is discarded on the line above -- so this says the run failed rather than saying nothing
-        was recorded. The two used to be one event, and a review told it "nothing was recorded"
-        cannot tell an attempt that stopped from a confirmation that never happened, so it went on
-        advertising a key whose only answer was that nothing was prepared (`QA-033`).
+        was recorded. They are two events: a review told "nothing was recorded" cannot tell an attempt
+        that stopped from a confirmation that never happened, and would go on advertising a key whose
+        only answer is that nothing was prepared (`QA-033`).
         """
 
         self._pending, self._pending_action = None, None

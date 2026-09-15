@@ -1,6 +1,6 @@
-"""SL-5: every command AART names to an operator is one the shipped executable accepts.
+"""Every command AART names to an operator is one the shipped executable accepts.
 
-The 2026-08-13 dead end was as much a diagnostics failure as a missing-operation failure: `sync`
+A dead end is as much a diagnostics failure as a missing-operation failure: `sync`
 advised the operator to "review the configured origin before replacing this source", and there was
 no replace.  Rewriting that sentence fixes it once; this file is what keeps it fixed.
 
@@ -400,7 +400,7 @@ class EveryVisibleCommandMentionTest(unittest.TestCase):
 
 
 class RegistryRefusalRemediationTest(unittest.TestCase):
-    """`RS-09`: a refused `registry` command must say what to do next.
+    """A refused `registry` command must say what to do next.
 
     The family emitted next-step lines after a *successful* action and nothing after a refusal, so
     the operator who most needed one got none. A list of the refusals that carry remediation would
@@ -476,7 +476,7 @@ class RegistryRefusalRemediationTest(unittest.TestCase):
             )
 
     def test_rs09_a_refused_registry_command_prints_a_next_step(self) -> None:
-        """Driven through the shipped CLI, because the renderer is where `LAF-52` went wrong."""
+        """Driven through the shipped CLI, because the renderer is where a next step gets dropped."""
 
         with _environment() as env:
             stdout = io.StringIO()
@@ -499,16 +499,14 @@ class RegistryRefusalRemediationTest(unittest.TestCase):
 class RendererParityTest(unittest.TestCase):
     """Parser parity proves a command exists; this proves the operator was shown it.
 
-    `--json` was never the problem: the JSON envelope carried the remediation all along.  Text mode
-    dropped it, and text mode is what a person sees.  Every family that renders both must render
+    The JSON envelope carries the remediation; text mode must not drop it, because text mode is
+    what a person sees.  Every family that renders both must render
     the same lines in both.
 
     Two families are absent because they have nothing to compare. `upgrade` defines no `--json`, so
     it has one renderer; `security` and `reporting` report through plain messages rather than a
-    diagnostic envelope. `registry` was present and vacuous — both renderers agreed on nothing,
-    because its refusals carried nothing. `RS-09` filled the field, and the same comparison then
-    found the second half of the defect: `_emit_report` printed the message and dropped the next
-    step, so the JSON envelope carried advice a person at a terminal never saw.
+    diagnostic envelope. `registry` refusals carry a next step, and `_emit_report` must print it as
+    well as the message.
     """
 
     def _both_renderers(self, env, *argv: str) -> tuple[tuple[str, ...], tuple[str, ...]]:

@@ -59,9 +59,9 @@ def failure_detail(raw: str, *, limit: int = _DETAIL_LIMIT) -> str:
     """Redact, then keep the end of a failure transcript rather than its beginning.
 
     `docker build` prints progress first and the failing instruction last, so a head-truncated
-    detail is exactly the half that cannot explain the failure — a consumer was shown
-    `transferring dockerfile: 117B done` and never `did not complete successfully: exit code: 3`
-    (`LAF-59`).  Both ends can carry meaning, so the head is kept too and the middle is elided.
+    detail is exactly the half that cannot explain the failure — a consumer would see
+    `transferring dockerfile: 117B done` and never `did not complete successfully: exit code: 3`.
+    Both ends can carry meaning, so the head is kept too and the middle is elided.
 
     Redaction happens here rather than at the call site so the two steps cannot be ordered the
     wrong way round by a caller: truncating first could cut a secret in half and leave the half
@@ -134,7 +134,7 @@ def run_process(
 # `pwd.h` — 128 bytes, "max length, not counting NULL".  A longer secret is discarded past that
 # point with no error and no exit status, and because the tool prompts twice and compares, two
 # identically truncated pastes agree with each other.  An Atlassian API token is 193 bytes, so this
-# path cannot carry one at all (`AD-34`).
+# path cannot carry one at all.
 _PROMPT_CEILING = 128
 
 
@@ -307,7 +307,7 @@ def _minimal_env(runtime: SetupRuntime) -> dict[str, str]:
 def _docker_env(runtime: SetupRuntime) -> dict[str, str]:
     """`_minimal_env`, plus the two names the docker CLI needs to know who the user is.
 
-    `RS-12`: without `HOME` and without `DOCKER_CONFIG` the CLI finds no `config.json`, so it has
+    Without `HOME` and without `DOCKER_CONFIG` the CLI finds no `config.json`, so it has
     no credential store and no context, and every pull is anonymous.  Public images still arrive,
     which is why this survived several runs; a private base image cannot.
 
@@ -426,10 +426,10 @@ def _keychain_receipt(
         # Two things the old note did not say: that the account already had a value, and where
         # the command ends.  It read as advice to type something, when it is the undo for
         # something already done, and it was folded across three lines by the prose wrapper
-        # (`AD-36`).  The command is on its own line, printed whole.
+        # .  The command is on its own line, printed whole.
         #
         # `-w` with no value hands the terminal to `getpass(3)` and its 128-byte buffer, so the
-        # older advice sent the operator into the very ceiling this step warns about (`AD-34`).
+        # older advice sent the operator into the very ceiling this step warns about.
         # `-w "$(pbpaste)"` is the same tool taking the value from argv, where no ceiling exists.
         "recovery": (
             "This account already had a value in the Keychain and this run replaced it. To put "
@@ -456,9 +456,8 @@ def _advise(
     server needs — and both are fixed by the same command, so they are reported together instead
     of as two mechanisms the operator has to learn.
 
-    *Kept existing* is the common case and used to be silent.  A run that finds an item already
-    there leaves it alone and says "configured"; if the credential was rotated since, nothing
-    updated it and nothing said so (`AD-35`).
+    *Kept existing* is the common case.  A run that finds an item already there leaves it alone and
+    says "configured"; if the credential was rotated since, nothing updated it, so this says so.
 
     *Truncated* is the ceiling case.  The value is never read back into this process:
     `secret_length` counts it in a pipe between two children.  A stored length of exactly the
@@ -705,7 +704,7 @@ def _docker_apply(effect: SetupEffect, runtime: SetupRuntime) -> tuple[dict, boo
         "image": effect.target,
         "preexisting": False,
         # Names Docker and the image for the same reason the build note does: `tag` and
-        # `image` on their own read as anything (`AD-38`).  Unlike the build path, rollback
+        # `image` on their own read as anything.  Unlike the build path, rollback
         # genuinely leaves this one — a pulled image can back other containers — so the note
         # says who removes it and when, rather than implying the run will.
         "recovery": (
@@ -780,7 +779,7 @@ def _docker_build_apply(
         # The old note said the tag was "left alone", which is false: `docker build --tag` moves
         # it to the image just built.  What is left alone is the *undo*.  It also invited
         # `docker image rm <tag>` — measured `2026-08-19` to delete the image itself when the tag
-        # is its last reference, which is the image the server runs from (`AD-37`).
+        # is its last reference, which is the image the server runs from.
         "recovery": (
             f"Docker image tag {tag} pointed at another image before this run and now points at "
             "the image this run built. The earlier image was not recorded and no longer exists, "

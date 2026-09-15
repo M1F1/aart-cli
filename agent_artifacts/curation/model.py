@@ -71,7 +71,7 @@ class CurationRequest:
     members: tuple[str, ...] = ()
     vendor_manifest: str | None = None
     # `None` means the maintainer did not state one.  Re-vendoring needs that distinction: upstream
-    # movement without a stated version is reported, never applied (design §4), and a default would
+    # movement without a stated version is reported, never applied, and a default would
     # silently answer the one question the command exists to ask.
     artifact_version: str | None = "1.0.0"
     # The licence the registry records for a vendored copy.  `None` means the maintainer did not

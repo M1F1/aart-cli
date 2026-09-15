@@ -1,4 +1,4 @@
-"""`RS-12`: a docker step runs with the environment Docker needs to know who the user is.
+"""A docker step runs with the environment Docker needs to know who the user is.
 
 A setup run passes a deliberately small environment to every process it starts. Docker was in that
 environment with no `HOME` and no `DOCKER_CONFIG`, which means no `config.json`, which means every

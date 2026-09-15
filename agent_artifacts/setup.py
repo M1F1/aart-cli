@@ -116,7 +116,7 @@ _MODULES: Mapping[str, tuple[Optional[SetupCapability], frozenset[str], frozense
 # not the author's vocabulary above: an author declares that a recipe touches `filesystem`, while an
 # organization decides whether it will allow a `managed-file` write or a `docker-build`. Both the
 # index compiler and the consumer read this table, because publishing one vocabulary and recomputing
-# the other is how `LAF-51` made every non-trivial recipe unplannable.
+# the other would make every non-trivial recipe unplannable.
 _PLANNED_CAPABILITIES: Mapping[str, Tuple[str, ...]] = {
     "macos-keychain.store@1": ("keychain",),
     "shell.env-from-keychain@1": ("managed-file",),
@@ -135,9 +135,9 @@ _PLANNED_CAPABILITIES: Mapping[str, Tuple[str, ...]] = {
 _IDENTIFIER = re.compile(r"^[a-z][a-z0-9_]*$")
 _ENV_NAME = re.compile(r"^[A-Z_][A-Z0-9_]*$")
 _ARTIFACT_KEY = re.compile(r"^(skill|hook|mcp)/[A-Za-z0-9][A-Za-z0-9._-]*$")
-# The redactor is `redaction.redact_text`, imported above.  This module used to carry a second,
-# weaker one, and `dump_setup_state` — the function that writes to disk — used that one, so a
-# credentialed clone URL was hidden in a diagnostic and persisted in full (`LAF-72`).
+# The redactor is `redaction.redact_text`, imported above.  There is deliberately no second one: a
+# weaker redactor on `dump_setup_state` — the function that writes to disk — would hide a
+# credentialed clone URL in a diagnostic and persist it in full.
 _CANONICAL_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 _SETUP_STATE_REF = re.compile(r"^[a-z0-9][a-z0-9._-]{0,255}$")
 _TRUST_CLASSES = {
@@ -1075,7 +1075,7 @@ def public_text(value: str) -> str:
     yet consented to, so it is shown with the least of it that still reads as text.
 
     `redact_text` decides what counts as a credential; this decides how much of it to show.  There
-    is still only one answer to the first question, which is the point of `RR-10A`.
+    is only one answer to the first question.
     """
 
     return _REDACTED_ASSIGNMENT.sub(
@@ -1236,7 +1236,7 @@ def home_relative(path: str, home: str = "") -> str:
     """`~/.zshrc`, not `/Users/someone/.zshrc`.
 
     This path is printed for a person to copy.  Spelling out their home directory is noise, and it
-    reads like a value the tool baked in rather than one it found (`AD-35`).
+    reads like a value the tool baked in rather than one it found.
 
     `~` is left unquoted, because a quoted tilde is a literal one and the shell would look for a
     directory named `~`.  Anything needing quotes is quoted after the first slash, where quoting
@@ -1254,7 +1254,7 @@ def shell_reload_suffix(shell_file: str, home: str = "") -> str:
 
     Storing the secret alone changes nothing a running shell can see — the managed block is read
     when a shell starts — so the reload is joined to the command rather than left as a step to
-    remember (`AD-31`).
+    remember.
     """
 
     if not shell_file:
@@ -1306,9 +1306,8 @@ def advisory_messages(record: SetupStateRecord) -> Tuple[Mapping[str, object], .
     """Advisory findings a completed run recorded, in the shape every surface renders.
 
     The sibling of `recovery_messages`, and it exists for the same reason: a receipt field that no
-    surface reads is a fact the run established and threw away.  `AD-34`'s warning was read by the
-    JSON command path alone, so an operator who ran setup through the wizard — which is how it is
-    normally run — saw nothing at all (`AD-36`).
+    surface reads is a fact the run established and threw away.  Every surface renders these, the
+    wizard included, because the wizard is how setup is normally run.
     """
 
     shell_file = _shell_file_of(record.receipt)
@@ -1354,7 +1353,7 @@ def render_setup_advisories(
             lines += tuple(f"    {command}" for command in commands)
             # The last step nobody remembers. A server inherits its environment once, at start, so
             # a corrected Keychain and a reloaded shell still leave it authenticating as nobody
-            # until it is restarted (`AD-31`).
+            # until it is restarted.
             lines += ("  then restart the agent harness, or the server keeps what it started with",)
     return lines
 
@@ -1364,7 +1363,7 @@ def _recovery_lines(item: str, *, width: int) -> Tuple[str, ...]:
 
     `wrap` collapses embedded newlines, which is right for prose and wrong for the one part of a
     recovery note the operator has to copy.  A command folded across three lines is repaired by
-    hand before it can be run, and its continuation arrives with no indent at all (`AD-36`).
+    hand before it can be run, and its continuation arrives with no indent at all.
     """
 
     prose, _, command = item.partition("\n")
@@ -1382,7 +1381,7 @@ def shell_reload_reminder(record: SetupStateRecord) -> Tuple[Mapping[str, object
     A setup that writes variables into a shell file has changed nothing a shell already open can
     see, and no effect can fix that: a child process cannot alter its parent's environment, which
     is the same reason `cd` is not a program.  What it can do is stop the operator having to
-    remember (`AD-37`).
+    remember.
 
     The file is not guessed.  It is the `path` of the receipt written by the step that put the
     variables there, so this holds for any recipe without the recipe saying anything.
@@ -1409,7 +1408,7 @@ def _reminders_for(shell_files: Sequence[str]) -> Tuple[Mapping[str, object], ..
 def run_reload_reminders(
     records: Sequence[Optional[SetupStateRecord]],
 ) -> Tuple[Mapping[str, object], ...]:
-    """The same reminder, once for the run instead of once per artifact (`AD-39`).
+    """The same reminder, once for the run instead of once per artifact.
 
     `_shell_files_of` already returns each distinct file once, in write order, so the whole fix
     is to hand it every receipt in the run rather than one item's.  Reloading a shell is a fact
@@ -1449,7 +1448,7 @@ def render_recovery_notes(notes: Sequence[str], *, width: int = CONTENT_MEASURE)
 
     Each note is one sentence and, sometimes, one command, and the command is the part that must
     not be folded — `_recovery_lines` is what knows that. A second implementation on the other
-    surface is a second place for the fold to come back (`AD-42`).
+    surface is a second place for the fold to come back.
     """
 
     if not notes:
@@ -1465,7 +1464,7 @@ def setup_retry_command(*, coordinate: str, profile: str, scope: str) -> str:
 
     Both the wizard and the `--json` path print a retry, and a retry assembled twice is two
     commands that drift — the flags that authorize a setup queue are the whole difference between
-    one that runs and one that refuses (`AD-36`).
+    one that runs and one that refuses.
     """
 
     return (
@@ -1484,10 +1483,9 @@ SETUP_EFFECT_PROMPT = "Approve this exact effect? [y/N]: "
 def setup_queue_question(*, artifacts: int, steps: int) -> Tuple[str, ...]:
     """What is about to happen, in two lines, before the one question about it.
 
-    The wizard used to print every step in full and then ask whether to finalize the queue, and
-    then ask again about each step in turn.  That is a wall of text in front of someone who has
-    already decided -- they chose to install the artifact -- and reading all of it was the price
-    of answering any of it (`#113`).  The count is what a person needs to answer this question;
+    Printing every step in full and then asking whether to finalize the queue, and then again
+    about each step, is a wall of text in front of someone who has already decided -- they chose
+    to install the artifact.  The count is what a person needs to answer this question;
     the detail is one keystroke away for anyone who wants it.
     """
 
@@ -1536,7 +1534,7 @@ def setup_banner(
 
     A queue prints the same shapes for every item — effects, prompts, a `security` password
     request that names nothing — so without a boundary the run is one wall of text and the
-    operator cannot tell whose credential is being asked for (`AD-40`).  The profile is part of
+    operator cannot tell whose credential is being asked for.  The profile is part of
     the label rather than decoration: the queue is an artifacts x profiles product, so one MCP
     server selected for two harnesses is two items whose labels would otherwise be identical.
     The version is deliberately absent — a coordinate carries one, and two cannot be queued.
@@ -1574,7 +1572,7 @@ def render_run_summary(
     to the run", and a queue of six prints six blocks in which the one that failed is somewhere
     in the middle.  Two facts are run-scoped rather than item-scoped and belong only here: the
     tally, and reloading a shell file, which is a property of the machine and was printed once
-    per artifact before (`AD-39`).
+    per artifact before.
     """
 
     if not rows:
@@ -1634,7 +1632,7 @@ def render_setup_outcome(
 
     The heading is a rule rather than a sentence so that it closes the item visibly.  A queue
     prints these back to back, and a line that reads like prose does not separate one artifact's
-    output from the next one's (`AD-40`).
+    output from the next one's.
     """
 
     incomplete = status not in _SETUP_COMPLETE
@@ -1653,8 +1651,7 @@ def render_setup_outcome(
         width=width,
     )
     # Commands are headed and then printed whole on their own line, never as an aligned value: a
-    # field block wraps, and a folded command is pasted broken. This is the same fold `AD-34` and
-    # `AD-35` were opened about, and the retry was still being printed through it.
+    # field block wraps, and a folded command is pasted broken.
     for label, command in (("retry", retry_command), ("rollback", rollback_command)):
         if command:
             lines += (f"  {label}", f"    {public_text(redact_text(command))}")
@@ -1718,8 +1715,7 @@ def render_setup_review(plan: SetupPlan, *, width: int = CONTENT_MEASURE) -> Tup
 def retry_command(item: SetupQueueItem) -> str:
     """The command that runs this item's setup again.
 
-    `aart setup` was one of the nine top-level commands removed in `2.0.0`; the canonical verb is
-    `aart marketplace setup`, which re-runs the declared recipe for an installed artifact and is
+    The verb is `aart marketplace setup`, which re-runs the declared recipe for an installed artifact and is
     therefore the retry.  `--approve-setup-effects` is named because without it every reviewed
     effect is declined, and a retry that declines everything is not a retry.
     """
@@ -1734,15 +1730,9 @@ def retry_command(item: SetupQueueItem) -> str:
 def rollback_command(item: SetupQueueItem) -> str:
     """The command that reverses effects this item already applied.
 
-    This used to say *no command reverses a completed setup*, and that was true when it was
-    written: the engine reversed its own effects on a failed apply, and `rollback_setup` had no CLI
-    surface.  `2.6.0` gave it one, and the sentence became a field that every new record carried
-    and the same executable contradicted (`LAF-65`).
-
-    It is a written field and not printed prose, which is why it went stale unnoticed: nothing
-    reads a persisted record back and checks its claims against the command surface.  The test for
-    this parses the string with the real CLI parser, so the next time the surface moves, this fails
-    rather than lying.
+    It is a written field and not printed prose, so nothing would notice it going stale by reading
+    it.  The test for this parses the string with the real CLI parser, so the next time the command
+    surface moves, this fails rather than lying.
     """
 
     return rollback_command_for(item.artifact_type, item.artifact_name, item.profile, item.scope)
@@ -1751,10 +1741,10 @@ def rollback_command(item: SetupQueueItem) -> str:
 def rollback_command_for(artifact_type: str, artifact_name: str, profile: str, scope: str) -> str:
     """The same command, composed from a persisted record's own coordinates.
 
-    `LAF-73`: `verify` has to be able to say *this is the command that works* about a record
-    written before `2.6.0`, and it has only the record to say it from.  Composing the string
-    there as well would give the sentence two sources and one of them would go stale — which is
-    the whole shape of `LAF-65`.  So there is one function, and both callers use it.
+    `verify` has to be able to say *this is the command that works* about any persisted record,
+    and it has only the record to say it from.  Composing the string there as well would give the
+    sentence two sources and one of them would go stale.  So there is one function, and both
+    callers use it.
     """
 
     coordinate = shlex.quote(f"{artifact_type}/{artifact_name}")

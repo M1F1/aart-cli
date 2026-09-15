@@ -213,11 +213,11 @@ class RegistryCliTest(unittest.TestCase):
         self.assertEqual(request.registry_modes, ("symlink",))
 
     def test_laf90_init_pressed_through_names_a_window_the_running_aart_is_inside(self) -> None:
-        # `LAF-90`: `RS-02` replaced the dead literals in every registry action that reaches the
-        # boundary with both versions unset.  `init` is the one action that does not: it owns the
+        # Every registry action that reaches the boundary with both versions unset gets the
+        # running AART's window.  `init` is the one action that does not: it owns the
         # two flags, so it is the parser's defaults, not the boundary's fallback, that an operator
         # who supplies neither authors the registry from.  Left dead, those defaults author a
-        # registry the executable that wrote it then refuses to read.  The assertion is `RS-02`'s
+        # registry the executable that wrote it then refuses to read.  The assertion is the boundary's
         # own, applied to the one action its loop cannot cover.
         request = cli._to_request(
             cli.build_parser().parse_args(

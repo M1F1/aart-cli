@@ -7,8 +7,7 @@ cannot supply. This projection carries whatever the run root holds, keyed by the
 each run directory's own name encodes, so the global report can name a working copy without being
 told where to look.
 
-Reporting is the whole of it. `LAF-61` makes the probe report and never repair, and nothing here
-widens that: a working copy is named, and left.
+Reporting is the whole of it. The probe reports and never repairs, and nothing here widens that: a working copy is named, and left.
 
 "Nothing is there" and "we could not look" are kept apart deliberately. A run root that cannot be
 read is not an empty one, and an operator who is told there are no leftovers stops looking for

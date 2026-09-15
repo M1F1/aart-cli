@@ -16,7 +16,7 @@ are eight callers who would each have to hold them instead:
   * **Poetry ships whatever is in the package directory.** The allowlist below is a gate: a stray
     file dropped under `agent_artifacts/` fails the build rather than shipping inside it.
 
-The archive is byte-reproducible (SI-8, design §7.1): see docs/release/wheel-reproducibility-v1.md
+The archive is byte-reproducible: see docs/release/wheel-reproducibility-v1.md
 for what that now means and how to verify a published wheel.
 
 Builds on every supported Python version: Python 3.11+ uses stdlib ``tomllib`` and Python 3.10

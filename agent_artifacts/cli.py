@@ -1,16 +1,16 @@
-"""CLI wiring (WP-19): argparse subcommands -> Request -> command dispatch -> exit code.
+"""CLI wiring: argparse subcommands -> Request -> command dispatch -> exit code.
 
-One core, two skins (docs/design/DESIGN.md §13). This module is the flag-mode skin: it parses ``argv``
+One core, two skins (Product Specification §33). This module is the flag-mode skin: it parses ``argv``
 into the frozen :class:`~agent_artifacts.model.Request`, dispatches to the matching command's
 ``run(request) -> int`` (the commands already map their `Result`s to the §7 exit-code
 vocabulary via ``commands._common.exit_code``), and returns that code. A bare invocation on a
-TTY launches the TUI (WP-20); otherwise it prints help.
+TTY launches the TUI; otherwise it prints help.
 
-WP-19 owns only the *wiring*: no decision logic lives here. argparse handles usage errors with
+This module owns only the *wiring*: no decision logic lives here. argparse handles usage errors with
 its own exit code ``2`` (== ``_common.USAGE``); ``--help`` exits ``0``.
 
-Contract with WP-20: the TUI module exposes ``tui.run() -> int``. It is imported lazily so the
-CLI works before that module exists.
+The TUI module exposes ``tui.run() -> int``. It is imported lazily so flag-mode commands do not
+load it.
 """
 
 from __future__ import annotations
@@ -69,7 +69,7 @@ def _run_reset(request: Request) -> int:
     return reset.run(request)
 
 
-# Command name -> handler. Value-keyed dispatch, not a class hierarchy (docs/design/DESIGN.md §14).
+# Command name -> handler. Value-keyed dispatch, not a class hierarchy.
 DISPATCH: dict[str, Callable[[Request], int]] = {
     "upgrade": upgrade.run,
     "registry": _run_registry,
@@ -107,7 +107,7 @@ def _add_profile(p: argparse.ArgumentParser) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the full argparse parser mirroring docs/design/DESIGN.md §13."""
+    """Build the full argparse parser for the public command surface."""
     parser = argparse.ArgumentParser(
         prog="agent-artifacts",
         formatter_class=_HELP_FORMATTER,
@@ -191,7 +191,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="reinstall AART from one explicit local wheel or checkout",
         description=(
             "Replace this AART executable from one reviewed local input. "
-            "AART 1.0 never discovers an index or source repository implicitly."
+            "AART never discovers an index or source repository implicitly."
         ),
     )
     upgrade_source = p.add_mutually_exclusive_group(required=True)
@@ -718,10 +718,9 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"minimum supported AART version (default: {DEFAULT_MINIMUM_AART})",
     )
     p_init.add_argument(
-        # The ceiling is the next major after the running release, not a literal.  A default of
-        # "2.0.0" was correct only while AART was 1.x; on 2.0.0 it collides with the floor above
-        # and every `registry init` is refused as an invalid window.  Both bounds come from the
-        # one place that derives them (`RS-02`), so a skin cannot drift from the boundary.
+        # The ceiling is the next major after the running release, not a literal: a literal
+        # ceiling collides with the floor above once AART reaches it.  Both bounds come from the
+        # one place that derives them, so a skin cannot drift from the boundary.
         "--maximum-version",
         default=DEFAULT_MAXIMUM_AART,
         metavar="VERSION",
@@ -1605,9 +1604,9 @@ def _to_request(args: argparse.Namespace) -> Request:
 # Entry point                                                                  #
 # --------------------------------------------------------------------------- #
 def _run_bare(parser: argparse.ArgumentParser, args: Optional[argparse.Namespace] = None) -> int:
-    """Bare invocation (docs/design/DESIGN.md §13): launch the TUI on a TTY, else print help."""
+    """Bare invocation: launch the TUI on a TTY, else print help."""
     if sys.stdin.isatty() and sys.stdout.isatty():
-        from . import tui  # WP-20: always present in the package.
+        from . import tui  # Always present in the package.
 
         kwargs = {}
         if args and getattr(args, "project", None):

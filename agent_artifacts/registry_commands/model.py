@@ -323,7 +323,7 @@ class VendoredArtifactCheck:
     """What re-resolving one vendored artifact's upstream found.
 
     The plan is present only when upstream moved *and* the maintainer supplied the version that
-    movement deserves (design §4). `up-to-date` has nothing to write, and `unreachable` must never
+    movement deserves. `up-to-date` has nothing to write, and `unreachable` must never
     be able to write: a maintainer who lost access to an upstream is told that, not that their copy
     is current.
     """

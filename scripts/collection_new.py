@@ -14,7 +14,7 @@ A collection is the shipped name for a group of artifacts a colleague installs i
 Re-running with a name that already exists edits that collection: its current members come back
 pre-selected, so adding one artifact is a run through with one answer changed.
 
-This is `AD-07`'s stopgap. The real thing is a maintainer-mode verb in the CLI and a flow in the
+This is a stopgap. The real thing is a maintainer-mode verb in the CLI and a flow in the
 TUI; a script in `scripts/` is what stands in until that exists. Its only dependency is `aart`,
 and it only runs it to validate what it wrote.
 """
@@ -172,7 +172,7 @@ def check(aart: str, registry: Path) -> tuple[bool, list[str]]:
     """Ask `aart` what it thinks of the file just written, and say which complaints matter.
 
     `registry validate` is the only command that rejects a bad collection at this point —
-    `registry lock` accepts one it should not, which is `AD-10`. But validate also compares the
+    `registry lock` accepts one it should not. But validate also compares the
     compiled index against the sources, and a collection authored a second ago has deliberately
     invalidated exactly that. Those three complaints are the expected state, not a problem, so they
     are named here and separated out. Anything else validate says is about the collection.

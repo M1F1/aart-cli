@@ -1,4 +1,4 @@
-"""Tests for WP-8: built-in harness profiles + override loader."""
+"""Built-in harness profiles + override loader."""
 
 from __future__ import annotations
 
@@ -100,7 +100,7 @@ class TestBuiltinProfiles(unittest.TestCase):
 
     def test_tabnine_mcp(self) -> None:
         # The target company build demonstrably parses this settings.json mcpServers map. Keep the
-        # measured environment above documentation for other Tabnine builds (AD-04/AD-28).
+        # measured environment above documentation for other Tabnine builds.
         p = builtin()["tabnine"]
         self.assertIsInstance(p.mcp, MergeSpec)
         self.assertEqual(p.mcp.file, ".tabnine/agent/settings.json")
@@ -108,7 +108,7 @@ class TestBuiltinProfiles(unittest.TestCase):
         self.assertEqual(p.mcp.mode, "key")
 
     def test_tabnine_hooks(self) -> None:
-        # Corrected paths/events (docs/design/DESIGN-memory.md §6/§6.2).
+        # Corrected paths/events.
         p = builtin()["tabnine"]
         self.assertIsInstance(p.hooks, HookTarget)
         self.assertEqual(p.hooks.scripts_dir, ".tabnine/agent/hooks/<name>/")

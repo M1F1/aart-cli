@@ -89,7 +89,7 @@ class SourceAcquisitionE2ETest(unittest.TestCase):
 
 
 class SourceIdentityChangeRecoveryTest(unittest.TestCase):
-    """SL-7: the dead end an origin re-declaring its identity used to create, and its way out.
+    """The dead end an origin re-declaring its identity creates, and its way out.
 
     A republished registry that changes ``source_id`` makes every sync of the old subscription
     refuse: the managed snapshot still binds the origin to the identity it used to declare.  The
@@ -127,10 +127,9 @@ class SourceIdentityChangeRecoveryTest(unittest.TestCase):
         descriptor.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
 
     def test_a_republished_identity_is_adopted_by_resubscribing_under_the_same_alias(self) -> None:
-        """SL-7: the 2026-08-13 dead end, resolved with shipped commands only.
+        """A republished identity is adopted with shipped commands only.
 
-        Nothing here hand-edits configuration or deletes a directory from the data root, which is
-        exactly what the original reproduction required and what design §9 criterion 6 forbids.
+        Nothing here hand-edits configuration or deletes a directory from the data root.
         """
 
         with tempfile.TemporaryDirectory() as raw:

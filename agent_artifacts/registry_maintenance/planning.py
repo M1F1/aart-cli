@@ -147,7 +147,7 @@ def _referenced_origins(files: dict[str, SnapshotEntry]) -> dict[ArtifactIdentit
     """Which identities this registry references from another origin rather than owning.
 
     Read for one purpose: a `requires` naming a referenced identity is refused, and the refusal has
-    to say *that* rather than "missing" (SI-9).  A malformed entry is not this function's refusal to
+    to say *that* rather than "missing".  A malformed entry is not this function's refusal to
     make — the callers parse the workspace first and refuse there — so an unparseable set of entries
     means only that nothing extra is knowable.
     """
@@ -458,7 +458,7 @@ def _native_registry_content(
     if is_promoted_registry(snapshot):
         # The approved representation keeps one package per *version*, so the native-source loader
         # -- which is the authoring workspace's reader -- would refuse it by naming a path nothing
-        # writes any more.  Its approvals are read by the authority a public consumer uses.
+        # writes.  Its approvals are read by the authority a public consumer uses.
         collections = _collections_without_index(files)
         if isinstance(collections, Err):
             return collections

@@ -3,8 +3,8 @@
 An author declares a secret input's human name, purpose, acquisition instruction and format in its
 `help` (§154, INV-168). Installation asks for that value in three places: screen 07's form, the
 terminal lent to the provider's own prompt, and the CLI's refusal for an unanswered credential.
-Each one used to say less than the author wrote, and the lent terminal said nothing at all. This
-module is the one place those words are made, so the three cannot drift.
+This module is the one place those words are made, so the three cannot drift or say less than the
+author wrote.
 
 Several artifacts may need the same credential. They are grouped by what they say: owners with
 identical help share one explanation, and owners whose help differs each keep their own, so no

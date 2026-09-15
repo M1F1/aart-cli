@@ -1,4 +1,4 @@
-"""WP-30 tests: CLI/TUI surface for the `memory` artifact type.
+"""CLI/TUI surface for the `memory` artifact type.
 
 Pure wiring (mirrors cli_test.py): the marketplace handler is stubbed via ``cli.DISPATCH`` so
 we assert only that argv maps onto the right :class:`Request` fields — ``--memory-mode`` ->
@@ -48,7 +48,7 @@ class TestMemoryModeFlag(unittest.TestCase):
                 self.assertEqual(req.memory_mode, mode)
 
     def test_memory_mode_defaults_to_none(self):
-        # Absent flag -> None, so the planner applies the "prepend" default (DESIGN-memory §3.4).
+        # Absent flag -> None, so the planner applies the "prepend" default.
         _, req = _dispatch(
             ["marketplace", "install", "team/memory/house@1.0.0", "--profile", "claude"],
             command="marketplace",

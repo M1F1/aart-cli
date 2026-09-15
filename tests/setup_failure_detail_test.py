@@ -1,6 +1,6 @@
-"""RR-2B: a failure transcript keeps the end that explains it.
+"""A failure transcript keeps the end that explains it.
 
-`LAF-59`: BuildKit prints progress first and the failing instruction last, so head truncation
+BuildKit prints progress first and the failing instruction last, so head truncation
 shows a consumer the transfer line and never the exit code.
 """
 
@@ -73,5 +73,5 @@ def test_a_tiny_limit_still_keeps_the_end() -> None:
 
 
 # Collected by `unittest discover`, which sees `TestCase` subclasses and nothing
-# else; without this the functions above are imported and never run (`AD-41`).
+# else; without this the functions above are imported and never run.
 SetupFailureDetailTests = function_test_case(globals(), name="SetupFailureDetailTests")

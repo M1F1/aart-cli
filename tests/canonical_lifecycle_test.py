@@ -165,7 +165,7 @@ class CanonicalLifecycleTest(unittest.TestCase):
             self.assertEqual(removed.value.status, LifecycleStatus.REMOVED)
             remaining = json.loads(config_path.read_text())
             self.assertEqual(remaining, {"mcpServers": {"foreign": {"command": "keep-me"}}})
-            # The last record out of the scope takes the manifest with it (SI-7), so "no
+            # The last record out of the scope takes the manifest with it, so "no
             # installations remain" is now read from the absence of the state itself.
             self.assertFalse((project / ".agent-artifacts").exists())
 
@@ -965,8 +965,7 @@ class CanonicalLifecycleTest(unittest.TestCase):
             assert isinstance(removed, Ok), removed
             self.assertEqual(removed.value.status, LifecycleStatus.REMOVED)
             # The subject here is that a `null` value is *found* and taken out. What it leaves is
-            # AART's own file with nothing in it, which `LAF-47` now reclaims — this assertion used
-            # to read `{"mcpServers": {}}`, which was the residue rather than the requirement.
+            # AART's own file with nothing in it, which uninstall reclaims.
             self.assertFalse(config_path.exists())
 
     def test_install_does_not_treat_an_existing_json_null_key_as_absent(self) -> None:
@@ -1318,9 +1317,9 @@ if __name__ == "__main__":
 
 
 class CreatedMergeFileReclamationTest(unittest.TestCase):
-    """`LAF-47` and `RS-10`: the merge file AART made, emptied and then left behind.
+    """The merge file AART made is removed once uninstall empties it, and only then.
 
-    Design: `docs/design/DESIGN-uninstall-file-reclamation.md`. Removal needs all three of: the
+    Removal needs all three of: the
     effect created the destination, the merge was already proven reversible, and what remains is the
     bare container chain on that effect's own `json_path`.
     """

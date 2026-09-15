@@ -155,7 +155,7 @@ def validate_registry_graph(
             if dependency is None:
                 # Every artifact this index holds is in this registry, owned or referenced, so an
                 # identity absent from the map is absent from the registry — there is no second
-                # shape to distinguish here (SI-9).
+                # shape to distinguish here.
                 return dependency_scope_error(
                     REGISTRY_GRAPH_INVALID,
                     artifact.identity,

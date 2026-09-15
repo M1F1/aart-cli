@@ -1,12 +1,11 @@
-"""SI-4: an adopted identity change reconciles in the project, and `update` rebinds the record.
+"""An adopted identity change reconciles in the project, and `update` rebinds the record.
 
-Live acceptance v2 `LAF-33`: `source resubscribe` adopts a new upstream identity, rebinds the
-configuration and the snapshot store, and cannot touch installation records — project isolation
-forbids it, and AART does not know which projects exist.  Every installation made under the old
-identity therefore reported `source-unavailable` forever, `update` reported "selected canonical
-installations were not found", and the resubscription review promised the opposite.
+`source resubscribe` adopts a new upstream identity, rebinds the configuration and the snapshot
+store, and cannot touch installation records — project isolation forbids it, and AART does not know
+which projects exist.  Installations made under the old identity must still reconcile rather than
+report `source-unavailable` forever.
 
-Design §2 resolves it by separating two things the record had conflated: the *subscription* (alias,
+The model separates two things the record had conflated: the *subscription* (alias,
 kind, origin, ref) is what resolution follows; the identity the origin declares is evidence carried
 inside it.  These tests drive the whole shape through the real CLI — install under one identity,
 adopt another, then reconcile in the project that owns the installation.
@@ -59,7 +58,7 @@ class IdentityChangeReconciliationTest(unittest.TestCase):
                 self.assertIn(_NEW_IDENTITY, detail)
 
     def test_the_resubscribe_itself_changes_nothing_beneath_the_project(self) -> None:
-        """Design §2: the fix must not be `resubscribe` reaching into projects."""
+        """The fix must not be `resubscribe` reaching into projects."""
 
         with _environment() as staging:
             source = self._writable_source(staging.root)
@@ -142,7 +141,7 @@ class IdentityChangeReconciliationTest(unittest.TestCase):
                 self.assertEqual(declared, {_OLD_IDENTITY})
 
     def test_rs07_status_reports_the_project_when_the_only_subscription_is_removed(self) -> None:
-        """`RS-07`: the project still has installations, and `status` is what reads them.
+        """The project still has installations, and `status` is what reads them.
 
         The removal here is the one `source remove` tells an operator to take. Before this, the
         next `status` refused with `no-source-configured` — a message about the *configuration*
@@ -172,7 +171,7 @@ class IdentityChangeReconciliationTest(unittest.TestCase):
             with _environment(source) as env:
                 env.run("marketplace", "install", _COORDINATE, "--profile", "claude", "--yes")
                 # A second subscription, so this case stays what it is about: one subscription
-                # gone while another survives. `RS-07` covers the empty case separately.
+                # gone while another survives. The empty case is covered separately.
                 mirror = self._writable_source(env.root)
                 identity = json.loads((mirror / "aart-source.json").read_text(encoding="utf-8"))
                 identity["source_id"] = "mirror-reference-source"

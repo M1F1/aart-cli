@@ -384,8 +384,8 @@ def request_quit(session: WizardSession) -> WizardDecision:
 def onboarding_lines(frontend: Literal["text", "curses"]) -> Tuple[str, ...]:
     """Explain what the bar cannot: what aart does, the two roles, and where artifacts come from.
 
-    D11 removed the control list that used to live here. Keys are now permanently on screen in the
-    status bar, so repeating them on the first screen only delayed the first real choice.
+    Keys are permanently on screen in the status bar, so repeating them on the first screen would
+    only delay the first real choice.
     """
 
     del frontend  # Both frontends now say the same thing; the keys differed, the meaning did not.

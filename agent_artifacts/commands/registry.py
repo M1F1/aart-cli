@@ -82,7 +82,7 @@ _CAPABILITIES = EXECUTABLE_CAPABILITIES
 REGISTRY_COMMAND_INVALID = DiagnosticCode("registry-command-invalid")
 
 
-# `RS-09`: what an operator does next after this module refuses. The planning module carries the
+# What an operator does next after this module refuses. The planning module carries the
 # same idea for the refusals it raises; these are the ones raised before planning is reached, where
 # the problem is the invocation rather than the workspace.
 _READ_THE_ACTIONS = ("`aart registry --help` lists the actions this command accepts",)
@@ -269,11 +269,10 @@ def _curation_request(request: Request, action: CurationAction) -> Result[Curati
                 source_id=request.source_id,
                 display_name=request.display_name,
                 usage_reporting_repository=request.usage_reporting_repository,
-                # `RS-02`: only `init` declares a compatibility window, and only `init` reads one
+                # Only `init` declares a compatibility window, and only `init` reads one
                 # back, so every other action arrives here with both unset.  The substitute has to
-                # be the window of the AART that is running -- literals bound a registry to the
-                # release they were typed in, and `1.0.0`/`2.0.0` had already stopped a major
-                # short of the executable stamping them.
+                # be the window of the AART that is running; a literal would bind a registry to the
+                # release it was typed in.
                 minimum_version=request.minimum_version or DEFAULT_MINIMUM_AART,
                 maximum_version=request.maximum_version or DEFAULT_MAXIMUM_AART,
             )
@@ -296,8 +295,7 @@ def _run_curation(request: Request, action: CurationAction) -> int:
     if request.check:
         _emit_curation_review(request, review)
         # A failed check counts as drift.  Without this, `revendor --check` against an unreachable
-        # upstream would exit zero for having written nothing, which is the one reading design §6
-        # forbids.
+        # upstream would exit zero for having written nothing, which would read as a current copy.
         return (
             _common.OK
             if all(item.status == "unchanged" for item in review.changes)
@@ -339,9 +337,8 @@ def _emit_report(request: Request, action: str, report: RegistryQualityReport) -
         print(f"registry {check.name}: {'passed' if check.passed else 'failed'}")
         for diagnostic in check.diagnostics:
             print(f"  {diagnostic.severity.value}: {diagnostic.message}")
-            # `RS-09`: the JSON envelope carried remediation through `diagnostic_to_data` all along
-            # and this renderer dropped it, which is `LAF-52`'s shape one command family over. A
-            # report is where `validate` and `audit` state a refusal, so it renders the next step
+            # The JSON envelope carries remediation through `diagnostic_to_data`, and the text
+            # renderer must not drop it. A report is where `validate` and `audit` state a refusal, so it renders the next step
             # exactly as `_emit_error` does.
             for remediation in diagnostic.remediation:
                 print(f"    remediation: {remediation}")

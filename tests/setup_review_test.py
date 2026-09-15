@@ -181,7 +181,7 @@ class SetupReviewProjectionTests(unittest.TestCase):
             )
 
             # Every line is bounded except the command, which is printed whole on purpose: a
-            # folded command is pasted broken, which is the defect `AD-34` and `AD-35` closed.
+            # folded command is pasted broken, so it is never folded.
             prose = [line for line in rendered if not line.strip().startswith("aart ")]
             self.assertTrue(all(len(line) <= min(width, CONTENT_MEASURE) for line in prose))
             self.assertIn("    " + RETRY, rendered)
@@ -309,7 +309,7 @@ class SetupQueueQuestionTests(unittest.TestCase):
 
 
 class SetupBoundaryTests(unittest.TestCase):
-    """`AD-40`. A queue of six printed one wall of text with nothing saying whose turn it was.
+    """A queue of six must not print one wall of text with nothing saying whose turn it is.
 
     Every shape the run prints — effects, approval prompts, the `security` password request that
     names no artifact at all — is identical from item to item, and effect numbering restarts at 1

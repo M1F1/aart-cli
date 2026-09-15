@@ -1,4 +1,4 @@
-"""WP-21 tests: offline packaging — inject_commit + stdlib wheel builder.
+"""Offline packaging — inject_commit + stdlib wheel builder.
 
 Hermetic: inject_commit's source mutation is captured and restored; build_wheel is run
 against a throwaway copy of the project so the repo's real ``dist/`` is never touched.
@@ -202,10 +202,9 @@ class BuildWheelTest(_WheelBuildFixture, unittest.TestCase):
 
 @unittest.skipIf(sys.version_info < (3, 11), "stdlib wheel builder requires Python 3.11+")
 class ReproducibleWheelTest(_WheelBuildFixture, unittest.TestCase):
-    """SI-8: rebuilding one commit reproduces the published archive, not merely its contents.
+    """Rebuilding one commit reproduces the published archive, not merely its contents.
 
-    `LAF-30`'s probe failed this by hand — two builds of the same source differed, because every
-    member was dated from the clock. The assertions here compare whole-archive digests, so a
+    Two builds of the same source differ if any member is dated from the clock. The assertions here compare whole-archive digests, so a
     regression cannot pass by being "content-identical" while the bytes move.
     """
 

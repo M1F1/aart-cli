@@ -1,7 +1,7 @@
-"""Take one subtree of an acquired snapshot, for vendoring (VN-1).
+"""Take one subtree of an acquired snapshot, for vendoring.
 
 `registry promote-native` requires the upstream repository to already speak AART. Vendoring exists
-for the ones that do not (design §1), so what it acquires is a *part* of a repository that has no
+for the ones that do not, so what it acquires is a *part* of a repository that has no
 markers, no `artifact_roots`, and no manifest — `--path servers/foo` rather than a whole source.
 
 This module is that step and only that step: it re-roots one subtree of an already acquired
@@ -13,7 +13,7 @@ It acquires nothing itself. Everything AART already applies to a source snapshot
 already applied: credential-free URLs, a cleared Git environment, `SafeRelativePath`, and the
 refusals in `git.py` and `local.py`. What is added here fails closed in three ways — a subtree that
 would produce an empty package, an entry the canonical package format cannot carry, and a symlink
-whose target leaves the subtree (design §5).
+whose target leaves the subtree.
 """
 
 from __future__ import annotations

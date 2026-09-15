@@ -1,4 +1,4 @@
-"""IO-free AART 1.0 domain kernel.
+"""IO-free AART domain kernel.
 
 Bounded contexts import the smallest owning module directly; these re-exports support interfaces
 and adapters that intentionally work across the shared kernel boundary.

@@ -115,7 +115,7 @@ def dependency_scope_error(
     ``requires`` resolves inside one registry and against artifacts that registry *owns*.  The old
     wording — ``skill/x requires missing skill/y`` — reads as "not published yet", so a maintainer
     depending on another registry's artifact waits for a publication that will never make the build
-    pass (``LAF-38``).  Two shapes are distinguished, because they have different fixes: an identity
+    pass.  Two shapes are distinguished, because they have different fixes: an identity
     this registry has nothing to say about, and one it *references* from another origin, which looks
     published from the index and is still not a dependency this registry can resolve.
     """
@@ -713,7 +713,7 @@ def load_native_source(
 
     ``referenced_origins`` sharpens one refusal and changes no outcome: a registry knows which
     identities it references from another origin, and a plain native source knows nothing, so the
-    argument is optional and defaults to knowing nothing (SI-9).
+    argument is optional and defaults to knowing nothing.
     """
 
     validated = _validated_entries(snapshot)
