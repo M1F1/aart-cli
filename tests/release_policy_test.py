@@ -19,6 +19,8 @@ import pathlib
 import re
 import unittest
 
+from scripts import release_artifact
+
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 CONFIG = ROOT / "release-please-config.json"
 MANIFEST = ROOT / ".release-please-manifest.json"
@@ -155,6 +157,33 @@ class CommittedReleasePolicyTest(unittest.TestCase):
             for line in mentions:
                 with self.subTest(file=relative, line=line[:60]):
                     self.assertIn(marker, line)
+
+    def test_the_tag_the_engine_creates_is_one_the_release_run_accepts(self) -> None:
+        """INV-099: the release tag is the released identity, so both ends must spell it alike.
+
+        Release Please names a tag `<component>-v<version>` unless told otherwise, and the
+        component defaults to `package-name`. `release.yml` and `release_artifact.py` accept only
+        `vX.Y.Z`, so an engine left on its default would publish a GitHub Release whose wheel is
+        never built. The tag is derived here the way the engine derives it.
+        """
+
+        config = _config()
+        packages = config.get("packages")
+        assert isinstance(packages, dict)
+        root_package = packages["."]
+        assert isinstance(root_package, dict)
+        component = root_package.get("component", root_package.get("package-name", ""))
+        include_component = root_package.get(
+            "include-component-in-tag", config.get("include-component-in-tag", True)
+        )
+        include_v = root_package.get("include-v-in-tag", config.get("include-v-in-tag", True))
+        separator = root_package.get("tag-separator", config.get("tag-separator", "-"))
+        version = _released_version()
+        tag = f"{'v' if include_v else ''}{version}"
+        if include_component and component:
+            tag = f"{component}{separator}{tag}"
+
+        self.assertEqual(release_artifact.released_version(tag), version)
 
     def test_the_manifest_and_the_package_agree_because_one_engine_wrote_both(self) -> None:
         """INV-099: the manifest is the engine's record of the released identity."""
