@@ -5,7 +5,10 @@
 - PR #1 is merged. Release Please opened release PR #2.
 - D-277 fixes the two things that stopped #2 from becoming a working release: the tag name and the
   README version rewrites. After that fix is squash-merged, Release Please regenerates #2.
-- Merge #2 with **squash** once its `pr-check` is green. Then check that the release run built and
+- #2 was merged, but Release Please skipped it: its component check failed (D-278). After the D-278
+  fix merges, the next Release Please run releases #2 as `v0.1.0`, because its label is still
+  `autorelease: pending`.
+- Earlier step: #2 was merged with **squash** once its `pr-check` was green. Then check that the release run built and
   attached `aart_cli-0.1.0-py3-none-any.whl` to the `v0.1.0` release.
 - `pr-check` stays on for release PRs (INV-096, owner confirmed). B-129, a race between the manual lab
   and git's background repack that turned it red at random, is fixed.

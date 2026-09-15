@@ -23,7 +23,6 @@
   ],
   "packages": {
     ".": {
-      "package-name": "aart-cli",
       "changelog-path": "CHANGELOG.md",
       "extra-files": [
         { "type": "generic", "path": "agent_artifacts/__init__.py" }

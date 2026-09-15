@@ -6803,3 +6803,22 @@ are left as written.
 copy the engine keeps. Release-time verification of the merged release tree (ancestry aside)
 passed locally: `release.py check --without-registry`, `packaging_check.py`, `build_wheel.py` and
 `release_artifact.py --tag v0.1.0`.
+
+## D-278 — The release configuration names no component
+
+**Context.** Release PR #2 merged, and Release Please created no tag, GitHub Release or wheel. Its
+run logged `PR component: undefined does not match configured component: aart-cli`. With one pull
+request for the manifest, the release branch is `release-please--branches--main` and names no
+component. Release Please 17.3.0 (`BaseStrategy.buildRelease`) compares that component with
+`component || package-name`. `package-name` was `aart-cli`, so the merged PR was skipped. The label
+stayed `autorelease: pending`.
+
+**Decision.** `package-name` is removed from `release-please-config.json`. The Python strategy
+takes the project name from `pyproject.toml`, so no version update is lost.
+`test_a_merged_release_pr_is_one_the_engine_will_release` requires the configured component to be
+empty whenever release PRs are not separate. The fix is titled `ci:`, a hidden changelog type, so
+it does not open a 0.1.1 release PR.
+
+**Consequences.** The next Release Please run on `main` finds PR #2 still labelled
+`autorelease: pending` and releases it as `v0.1.0`. That run's `artifact` job then builds the
+wheel and attaches it. No tag or release is created by hand (INV-101).

@@ -192,7 +192,7 @@ class CommittedReleasePolicyTest(unittest.TestCase):
         """INV-099: the release tag is the released identity, so both ends must spell it alike.
 
         Release Please names a tag `<component>-v<version>` unless told otherwise, and the
-        component defaults to `package-name`. `release.yml` and `release_artifact.py` accept only
+        component defaults to `package-name`, which is why this repository sets neither. `release.yml` and `release_artifact.py` accept only
         `vX.Y.Z`, so an engine left on its default would publish a GitHub Release whose wheel is
         never built. The tag is derived here the way the engine derives it.
         """
@@ -214,6 +214,30 @@ class CommittedReleasePolicyTest(unittest.TestCase):
             tag = f"{component}{separator}{tag}"
 
         self.assertEqual(release_artifact.released_version(tag), version)
+
+    def test_a_merged_release_pr_is_one_the_engine_will_release(self) -> None:
+        """INV-099: a release PR that merges without becoming a release is a release that never was.
+
+        With one pull request for the whole manifest, the release branch is
+        `release-please--branches--main` and names no component. After the merge, Release Please
+        (17.3.0, `BaseStrategy.buildRelease`) compares that empty component with its own
+        `component || package-name`. When they differ it logs "PR component: undefined does not
+        match configured component" and creates no tag, no GitHub Release and no wheel. That
+        happened to 0.1.0 while `package-name` was `aart-cli`.
+        """
+
+        config = _config()
+        packages = config.get("packages")
+        assert isinstance(packages, dict)
+        root_package = packages["."]
+        assert isinstance(root_package, dict)
+        separate = root_package.get(
+            "separate-pull-requests", config.get("separate-pull-requests", False)
+        )
+        if separate:
+            self.skipTest("a separate release PR's branch carries its component")
+        configured = root_package.get("component") or root_package.get("package-name") or ""
+        self.assertEqual(configured, "", "the release branch names no component to match this")
 
     def test_the_manifest_and_the_package_agree_because_one_engine_wrote_both(self) -> None:
         """INV-099: the manifest is the engine's record of the released identity."""
