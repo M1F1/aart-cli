@@ -323,6 +323,11 @@ For the complete path, use the [walked company-registry tutorial for Tabnine](do
 The [vendoring tutorial](docs/tutorials/vendoring-v1.md) covers provenance and re-vendoring, and
 [porting an MCP server](docs/tutorials/mcp-servers-into-the-registry.md) covers setup recipes.
 
+An author team whose repository becomes a Source commits one `aart.yaml` beside each artifact. A
+complete MCP example — Python stdio server, `requirements.txt` dependencies, one Keychain secret and
+one per-harness setting — is [docs/examples/author-source/example-mcp/aart.yaml](docs/examples/author-source/example-mcp/aart.yaml),
+held to what AART accepts by `tests/author_manifest_example_test.py`.
+
 ## Repository variables
 
 Every knob in this project's CI, and in the workflows `registry init` writes, is a GitHub

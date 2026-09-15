@@ -1,0 +1,72 @@
+# AART author manifest for one MCP server.
+# Put this file next to the server code, e.g. <repo>/example-mcp/aart.yaml, and commit it.
+# AART reads only committed aart.yaml / aart.json files; everything else in the repo is ignored.
+# AART's YAML reader is a strict subset: write lists one `- item` per line, never `[a, b]`.
+# Held by tests/author_manifest_example_test.py.
+schema: aart.dev/mcp/v1
+
+artifact:
+  name: example-mcp          # lowercase slug, unique within this repository
+  kind: mcp
+  version: 1.0.0             # bump on every change you want the Registry to pick up
+  summary: Example MCP server exposing internal tools
+
+# Files (relative to this directory) that make up the installed payload.
+payload:
+  include:
+    - server.py
+    - requirements.txt
+
+transport:
+  type: stdio
+
+runtime:
+  type: python
+  version: ">=3.11"
+
+launch:
+  type: python
+  entrypoint: server.py
+
+# Python dependencies installed into the artifact's own virtual environment.
+python:
+  dependencies:
+    type: requirements
+    path: requirements.txt
+
+inputs:
+  # A secret: stored in the user's Keychain, injected as an environment variable at launch,
+  # never written to any file.
+  - id: api-token
+    kind: secret
+    required: true
+    inject:
+      type: environment
+      variable: EXAMPLE_API_TOKEN
+    help:
+      label: Example API token
+      description: Personal access token used by the server to call the Example API.
+      format_hint: starts with exa_
+      obtain_from:
+        label: Create one in Example settings → Access tokens
+        url: https://example.com/settings/tokens
+
+  # Ordinary configuration: asked at install, kept per harness, editable later in AART.
+  - id: base-url
+    kind: config
+    required: true
+    default: https://api.example.com
+    inject:
+      type: environment
+      variable: EXAMPLE_BASE_URL
+    help:
+      label: Example API base URL
+
+compatibility:
+  harnesses:
+    - claude
+    - opencode
+    - tabnine
+  platforms:
+    - darwin
+    - linux
