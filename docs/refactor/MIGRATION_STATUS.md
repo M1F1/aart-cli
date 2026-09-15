@@ -1,5 +1,10 @@
 # AART Refactor Migration Status
 
+**2026-09-15, 0.1.0 not released (D-278).** Merging release PR #2 produced no tag, release or wheel.
+Release Please skipped the PR because `package-name` gave it a component the release branch does
+not carry. `package-name` is removed and a test holds that. The next Release Please run on `main`
+releases #2 as `v0.1.0`.
+
 **2026-09-15, first release PR (D-277).** Release PR #2 failed `pr-check`, and would have tagged
 `aart-cli-v0.1.0`, which the release run refuses. Tags are now `vX.Y.Z`. The README writes `X.Y.Z`
 instead of a version the generic updater mangled, and is no longer rewritten by the engine. Two tests
