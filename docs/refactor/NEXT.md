@@ -5,6 +5,9 @@
 - PR #1 is merged. Release Please opened release PR #2.
 - D-277 fixes the two things that stopped #2 from becoming a working release: the tag name and the
   README version rewrites. After that fix is squash-merged, Release Please regenerates #2.
+- `v0.1.0` was tagged, but its wheel build failed: the release action installed no Poetry (D-279).
+  After the fix merges, merge the `0.1.1` release PR. It needs its workflows approved, then a
+  green `pr-check`. Then confirm the wheel is attached to `v0.1.1`.
 - #2 was merged, but Release Please skipped it: its component check failed (D-278). After the D-278
   fix merges, the next Release Please run releases #2 as `v0.1.0`, because its label is still
   `autorelease: pending`.
