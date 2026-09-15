@@ -6822,3 +6822,23 @@ it does not open a 0.1.1 release PR.
 **Consequences.** The next Release Please run on `main` finds PR #2 still labelled
 `autorelease: pending` and releases it as `v0.1.0`. That run's `artifact` job then builds the
 wheel and attaches it. No tag or release is created by hand (INV-101).
+
+## D-279 — The release run installs the locked build tools; 0.1.0 is superseded by 0.1.1
+
+**Context.** After D-278, Release Please created tag `v0.1.0` and its GitHub Release. The `artifact`
+job then failed `release-package-invalid`: `scripts/build_wheel.py` runs the Poetry CLI, and the
+release action installed no tools. Pull requests never saw this, because the quality action
+installs the locked developer tools before its gates. The local simulation before release used a
+developer environment that already had Poetry. A clean Python 3.11 virtualenv reproduces the
+failure.
+
+**Decision.**
+- `.github/actions/release/action.yml` points pip at the fork's index (`./.github/actions/pip-index`)
+  and runs `scripts/dev_tools.py install` before the checklist.
+  `test_the_release_run_installs_the_build_tools_before_it_builds` holds the order.
+- Every release step passed in a clean Python 3.11 virtualenv with only those tools: checklist,
+  packaging check, commit injection, wheel build and `release_artifact.py --tag v0.1.0`.
+- The workflow's local action is read from the tag, so `v0.1.0` cannot pick up the fix. The owner
+  chose a new patch release over moving a published tag (INV-101). The fix is titled `fix:`, and
+  Release Please releases it as `0.1.1` with its wheel. `v0.1.0` stays a GitHub Release with no
+  asset.

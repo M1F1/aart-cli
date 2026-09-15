@@ -66,6 +66,30 @@ class ReleaseWorkflowTest(unittest.TestCase):
         )
         self.assertIn('git merge-base --is-ancestor "$TAG_COMMIT" origin/main', release_steps)
 
+    def test_the_release_run_installs_the_build_tools_before_it_builds(self) -> None:
+        """`scripts/build_wheel.py` runs the Poetry CLI, and a clean runner has none.
+
+        The quality action installs the locked developer tools before its gates, so every pull
+        request built a wheel. The release action did not, so the first release run (0.1.0) failed
+        `release-package-invalid` before it built anything, after the tag and GitHub Release
+        already existed. The release installs the same locked tools, through the same index, before
+        the first step that builds.
+        """
+
+        steps = (ROOT / ".github/actions/release/action.yml").read_text(encoding="utf-8")
+        install = steps.find("scripts/dev_tools.py install")
+        self.assertNotEqual(install, -1, "the release run installs no build tools")
+        self.assertLess(steps.index("uses: ./.github/actions/pip-index"), install)
+        self.assertLess(steps.index("uses: actions/setup-python"), install)
+        for builder in (
+            "scripts/release.py check",
+            "scripts/packaging_check.py",
+            "scripts/build_wheel.py",
+            "scripts/release_artifact.py",
+        ):
+            with self.subTest(step=builder):
+                self.assertLess(install, steps.index(builder))
+
     def test_the_release_run_is_reachable_from_the_release_the_engine_creates(self) -> None:
         """GitHub raises no workflow event for anything done with the repository token.
 

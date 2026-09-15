@@ -1,5 +1,10 @@
 # AART Refactor Migration Status
 
+**2026-09-15, 0.1.0 has no wheel (D-279).** The release run failed before building: its action
+installed no Poetry, which the wheel build needs. It now installs the locked tools the quality
+action installs, and a test holds the order. Every release step passes in a clean virtualenv.
+`v0.1.0` cannot pick up the fix, so `0.1.1` is the first release with a wheel.
+
 **2026-09-15, 0.1.0 not released (D-278).** Merging release PR #2 produced no tag, release or wheel.
 Release Please skipped the PR because `package-name` gave it a component the release branch does
 not carry. `package-name` is removed and a test holds that. The next Release Please run on `main`
