@@ -505,6 +505,13 @@ Harness delivery must be one answer everywhere it is said (`QA-078`…`QA-080`, 
       day with the cursor on one. `v` shows that entry's review identity below the rows rather
       than widening every row (CP-23 task 14).
 
+Automated preflight for this walk (D-274): `tests/frame_matrix_test.py` records all 74 declared
+Consumer and Maintainer screens plus search, Help, quit, form, refusal and failure states. It checks
+every cursor in Fast and Verbose against the shared frame, key, literal-input and `v` laws, and
+checks the same composed frame through text and curses terminals, including clipped footer
+retention. This does not check off the manual observations above; task 15 still requires the owner
+to walk them.
+
 Expected: Dashboard, lists, help and footer have a readable hierarchy with visible focus
 (`QA-035`/`QA-038`/`QA-040`/`QA-041`/`QA-042`).
 

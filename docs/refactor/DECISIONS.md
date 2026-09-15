@@ -6665,3 +6665,36 @@ edit:
 - Typing on a freshly opened 22c appends to the current value. The configuration shell E2E now
   clears the field before typing, and asserts both the prefilled row and the `old → new` line.
 - 22a's values are shown as held, so 22c and 22d show them the same way.
+
+## D-274 — The all-screen frame contract is held by an explicit recorded-state matrix
+
+Date: 2026-09-15 (CP-23 task 14, eighth increment).
+
+**Context.** The incremental frame audit had exercised every catalog screen somewhere in the UI
+tests, but no one test proved that the complete Consumer and Maintainer catalogs obeyed the same
+laws. Deriving the expected catalog from the enums inside the fixture builder would make that test
+self-fulfilling: a newly declared screen would silently gain an empty fallback state and still count
+as covered. Twenty-two action/result screens also cannot be reached by an ordinary key walk without
+performing imperative work.
+
+**Decision.** `tests/screen_cases.py` is the recorded state inventory for the frame contract.
+
+- Its expected catalog is an explicit tuple, deliberately not derived from either enum. Adding a
+  screen therefore fails until a meaningful state is recorded for it.
+- Ordinary states reuse the real Dashboard, Marketplace, installation and maintainer projections.
+  Reviewed/results screens use the existing typed fixtures for registry actions, configuration,
+  Activity, source sync, validation, promotion, lifecycle/provenance, immutable-version conflicts,
+  Collection Candidates and the approved Registry. They do not imitate imperative work in the
+  renderer.
+- Modal states are recorded separately: search entry/result, Help, quit confirmation, both
+  configuration forms, a refused review and a failed action.
+- `tests/frame_matrix_test.py` applies the shared frame, advertised-key, literal-input and `v` laws
+  to every cursor in Fast and Verbose. It also proves every offered row acts, both terminal
+  projections receive the composed frame, clipping preserves the footer, and generated interleaved
+  move/`v` sequences retain the laws.
+
+**Consequences.** The matrix contains all 74 declared screens plus eight conditional states. It
+confirmed that the suspected empty-22b and no-row-21d cases do not advertise the reported controls
+when their real sources and entered state are used, so 14.8 needs no production exception or repair.
+A future screen or conditional mode must supply a real recorded state and pass the same laws; there
+is no per-screen frame-law allowlist.

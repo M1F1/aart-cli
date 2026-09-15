@@ -1507,7 +1507,7 @@ The six previously owed 16.1 targeted mutations were also run and killed:
 
   The full suite and scoped mutmut remain task 15's.
 
-### Task 14 — Frame and Verbose contract on every view (IN PROGRESS)
+### Task 14 — Frame and Verbose contract on every view (DONE, D-268–D-274)
 
 #### 14.1 — The shared order is §167's (DONE, D-268)
 
@@ -1744,40 +1744,30 @@ The six previously owed 16.1 targeted mutations were also run and killed:
   recorded states, `v` properties and text/curses equivalence.
 
 
-#### 14.8 — the recorded matrix (IN PROGRESS, nothing committed in code yet)
+#### 14.8 — the recorded matrix (DONE, D-274)
 
-- **Plan:**
-  - `tests/screen_cases.py` collects the drawn states by walking real keys from each fixture
-    source's Dashboard. Every advertised non-universal key is pressed on every cursor. A
-    PREPARE_ACTION is answered with ACTION_PREPARED (or ACTION_FAILED to cover refusals), and an
-    EXECUTE_ACTION with ACTION_RECORDED. Each step is followed by `_reload`. Screens the walk
-    cannot reach start from fixture-seeded states.
-  - `tests/frame_matrix_test.py` checks:
-    - the set of screens reached equals `ConsumerScreen ∪ MaintainerScreen`, so a new screen
-      fails coverage;
-    - `frame_violations`, `key_violations`, `literal_violations` and `toggle_violations` on
-      every recorded state and every cursor, in both profiles;
-    - every offered row acting;
-    - help, quit-pending and searching states;
-    - text/curses equivalence (`_CursesTerminal` with a fake stdscr, tall and clipped, where the
-      footer stays whole) and `_TextTerminal`;
-    - Hypothesis over move/toggle sequences.
-- **Walk probe so far:** this scratch walk is not committed. Over the sources of
-  `consumer_install_flow_shell_test.screens()`, `consumer_marketplace_shell_test.screens()`,
-  `maintainer_candidate_shell_test._views()`, `MaintainerRegistryShellTest`,
-  `maintainer_validation_views_test._views(required live-acceptance)` and
-  `maintainer_bulk_promotion_test._views`, it reaches 52 of 74 screens in about a second.
-- **Not reached, with the fixture to seed each:**
-  - **06–11 and 17:** ACTION_PREPARED for INSTALL/UPDATE needs `semantic_identity` and
-    `selection_identity`, and INSTALL with `config_draft` goes to 07.
-  - **21c/21d:** `consumer_registry_refresh_test`.
-  - **22b–22d:** `configuration_edit_test` helpers.
-  - **26/27:** `consumer_shell_test.screens()` (Activity records).
-  - **34:** `MaintainerSourceSyncResultView`, as in `action_prompt_layout_test.py:216`.
-  - **41–45:** `maintainer_promotion_test.PromotionShellTest`.
-  - **49:** `MaintainerProvenanceShellTest`.
-  - **50:** `MaintainerVersionConflictShellTest._conflict()`.
-  - **52:** `MaintainerCollectionCandidateShellTest`.
-- **Candidate findings to confirm under the matrix:**
-  - 22b offering `[Space] Select` with no rows;
-  - 21d's focus when entered from 21 with no registry row.
+- **Recorded cases:** `tests/screen_cases.py` names all 74 catalog screens explicitly; it does not
+  derive the expected inventory from the enums. Consumer installation, Marketplace, Registry,
+  configuration and Activity states use their existing sources. Maintainer source sync,
+  validation, promotion, Registry, lifecycle/provenance, immutable-version-conflict and Collection
+  states use the real typed projections from their focused fixtures. Eight additional cases record
+  searching, a filtered list, Help, quit confirmation, both active configuration forms, a refused
+  review and a failed action.
+- **Matrix laws:** `tests/frame_matrix_test.py` checks every recorded cursor in Fast and Verbose
+  with `frame_violations`, `key_violations`, `literal_violations` and `toggle_violations`; checks
+  that every offered row has a local or Enter action; and runs Hypothesis over interleaved move/`v`
+  sequences. `_TextTerminal` receives the exact composed frame, a tall fake curses terminal draws
+  its anchored equivalent, and a clipped one retains the complete footer and rule.
+- **Findings:** the two walk-probe candidates were not product defects. Populated 22b has its
+  harness rows when Space is offered, and entered 21d has the reviewed registry focus. The matrix
+  design itself did have a coverage hole when the prospective expected set was enum-derived; the
+  explicit `RECORDED_SCREENS` inventory closes it, so a new enum member fails before it can acquire
+  a fallback case. No production change or screen-specific exception was needed in 14.8.
+- **Focused evidence:** 242 task-14 tests pass, including the six matrix/property/terminal tests.
+  `make typecheck format-check lint secret-shape-check` passes; `docs-check` is recorded after this
+  close-out. Four targeted semantic mutations were killed:
+  - removing Doctor from the recorded catalog failed exact coverage;
+  - making `v` change focus as well as presentation failed 302 matrix states;
+  - stealing literal `v` from configuration text entry failed eight form states;
+  - dropping the curses footer failed all 74 clipped projections.
+- The full suite, scoped `mutmut` and the owner's manual acceptance remain task 15, as requested.

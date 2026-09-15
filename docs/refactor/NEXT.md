@@ -1,9 +1,13 @@
 # AART Refactor — Next Work
 
-## Current objective — CP-23 (2026-09-14)
+## Current objective — CP-23 (2026-09-15)
 
-**CP-22 is CLOSED. CP-23 tasks 01–13 and owner task 16 are done; task 14 is next** (the all-screen
-frame/Verbose audit, including the new 07 form and 22a–22d screens), then task 15 closes the batch.
+**CP-22 is CLOSED. CP-23 tasks 01–14 and owner task 16 are done; task 15 is next.** Task 14's
+all-screen Frame/Verbose audit is complete (D-268–D-274): an explicit recorded inventory covers all
+74 Consumer and Maintainer screens plus eight conditional states, every cursor in both profiles
+passes the shared frame/key/literal/`v` laws, and text/tall-curses/clipped-curses projections agree.
+No per-screen exception was introduced. Task 15 now runs the full suite, scoped `mutmut`, remaining
+batch gates and the owner's manual acceptance.
 Task 16.4–16.5 (D-267): from screen 22a an ordinary value is edited for one, a chosen set or all
 installed harnesses. The edit is a reviewed CONFIGURATION-only lifecycle over those files: it is
 compare-and-swap against the reviewed digests, it is refused when the installation has unrelated
@@ -74,11 +78,10 @@ Per-task work runs only the verifying gates; the full suite is task 15 (owner in
 Task 01's detailed evidence is in
 [`slices/CP-23-actionable-tui-workflows.md`](slices/CP-23-actionable-tui-workflows.md).
 
-**Next product action: task 11**, make Artifact Details' selection/install/detail controls real and
-make its compatibility wording agree with task 10's eligible, unselected and explicitly selected
-target states. Continue the ordered fifteen-task plan; CP-23 as a whole is not implemented or
-verified. Task 15 retains the full-batch/manual acceptance requirement, and task 14 retains the
-complete screen/state audit. No human manual acceptance is claimed for task 10.
+**Next product action: task 15.** Run the complete CP-23 verification batch: full tests and gates,
+the scoped advisory mutation analysis, and the recorded manual walkthrough. CP-23 as a whole is not
+verified until that work and the owner's manual acceptance are complete. No human acceptance is
+claimed by task 14's automated matrix.
 
 The accepted owner revisions remain Product Specification §167 and D-249–D-250: remove TUI push
 capability (done, D-255), offer explicit Skill harness choice in task 10, carry credential guidance

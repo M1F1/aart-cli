@@ -1,6 +1,11 @@
 # AART Refactor Migration Status
 
-**2026-09-14: CP-22 CLOSED; CP-23 tasks 01–13 and owner task 16 done; task 14 next, then 15.**
+**2026-09-15: CP-22 CLOSED; CP-23 tasks 01–14 and owner task 16 done; task 15 next.**
+Task 14 (D-268–D-274) now enforces §167's Frame/Verbose contract without per-screen exceptions.
+The final recorded matrix explicitly inventories all 74 Consumer and Maintainer screens, adds eight
+modal/form/failure states, checks every cursor in Fast and Verbose, and proves text and curses
+projection including clipped footer retention. The 242 focused task-14 tests pass; four final
+targeted mutations were killed. Full-suite, scoped `mutmut` and manual acceptance remain task 15.
 Task 16.4–16.5 (D-267): screens 22b–22d edit one ordinary value for a chosen harness subset as a
 reviewed CONFIGURATION-only lifecycle, with compare-and-swap against the reviewed digests and a
 refusal when the installation has unrelated drift. The receipt it records holds only digests. An
@@ -70,11 +75,11 @@ and 193 subtests pass, including a Hypothesis row-selection property and real lo
 Scoped mutation analysis is recorded; format, lint, typecheck, unit (3,978 OK) and validate
 passed. Per-task work runs only the verifying gates; the full suite is task 15.
 
-Tasks 16, 14 and 15 remain pending in [`CP-23`](slices/CP-23-actionable-tui-workflows.md); the
-next product step is owner task 16, user variables and credentials per artifact and harness. The entire batch and its manual acceptance are still
-open. Owner requirements in §167/D-249–D-250 retain manual publication, explicit target choice,
-credential acquisition guidance, and complete Frame/Verbose compliance with no standard in-TUI
-exceptions. No human retest, all-screen audit, or new CP-22 gate result is claimed.
+Only task 15 remains pending in [`CP-23`](slices/CP-23-actionable-tui-workflows.md). The entire batch
+and its manual acceptance are still open. Owner requirements in §167/D-249–D-250 retain manual
+publication, explicit target choice, credential acquisition guidance, and complete Frame/Verbose
+compliance with no standard in-TUI exceptions. The automated all-screen audit is complete; no human
+retest or new CP-22 gate result is claimed.
 The operator's manual lab and untracked notes remain untouched.
 
 ## Historical CP-22 checkpoint (2026-09-11; closed above)
