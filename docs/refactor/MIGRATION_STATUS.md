@@ -3,7 +3,7 @@
 **2026-09-15, first release PR (D-277).** Release PR #2 failed `pr-check`, and would have tagged
 `aart-cli-v0.1.0`, which the release run refuses. Tags are now `vX.Y.Z`. The README writes `X.Y.Z`
 instead of a version the generic updater mangled, and is no longer rewritten by the engine. Two tests
-hold both. B-129 records a Python 3.14 lab-reset flake from the same run.
+hold both. B-129 fixes a random `pr-check` failure: the manual lab raced git's background repack.
 
 **2026-09-15, fresh start (D-276).** The predecessor project's plans, designs, PRD, progress logs,
 residue register, task-era boundary notes and CHANGELOG are deleted; git history keeps them.

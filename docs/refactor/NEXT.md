@@ -7,8 +7,8 @@
   README version rewrites. After that fix is squash-merged, Release Please regenerates #2.
 - Merge #2 with **squash** once its `pr-check` is green. Then check that the release run built and
   attached `aart_cli-0.1.0-py3-none-any.whl` to the `v0.1.0` release.
-- `pr-check` stays on for release PRs (INV-096, owner confirmed). B-129 is a Python 3.14 flake that
-  can turn it red.
+- `pr-check` stays on for release PRs (INV-096, owner confirmed). B-129, a race between the manual lab
+  and git's background repack that turned it red at random, is fixed.
 
 ## Current objective — CP-23 (2026-09-15)
 

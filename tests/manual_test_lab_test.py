@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 import shutil
 import stat
@@ -83,6 +84,30 @@ class ManualTestLabTest(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = pathlib.Path(temporary.name) / "manual-lab"
+
+    def test_no_git_the_lab_starts_repacks_in_the_background(self) -> None:
+        """B-129: git 2.55 repacks after a commit in a detached process.
+
+        The lab copies and deletes its repositories straight after committing to them, so a
+        background repack raced both: `clone --bare` failed with "hardlink different from source",
+        and a reset failed with "Directory not empty" on a `.git`. Every git the lab starts, its
+        own or one under the CLI it runs, has automatic maintenance switched off.
+        """
+
+        from scripts.manual_test import _run
+
+        repo = pathlib.Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, repo, True)
+        subprocess.run(("git", "init", "-q", str(repo)), check=True)
+        for environment in (None, {"PATH": os.environ["PATH"]}):
+            with self.subTest(environment="inherited" if environment is None else "given"):
+                self.assertEqual(
+                    _run(("git", "config", "--get", "maintenance.auto"), cwd=repo, env=environment),
+                    "false",
+                )
+                self.assertEqual(
+                    _run(("git", "config", "--get", "gc.auto"), cwd=repo, env=environment), "0"
+                )
 
     def test_setup_builds_a_fresh_ecosystem_with_a_credential_mcp(self) -> None:
         from scripts.manual_test import setup_lab
