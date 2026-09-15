@@ -1,4 +1,4 @@
-"""SBC-6: a module that is not written down does not exist to a maintainer.
+"""A module that is not written down does not exist to a maintainer.
 
 Until now the modules lived only in `_MODULES` and in a design document, which explains why the
 protocol is shaped as it is and is not something you can write a recipe from. The reference covers
@@ -43,7 +43,7 @@ class EveryModuleIsDocumentedTest(unittest.TestCase):
     def test_the_reference_states_the_limits_rather_than_hiding_them(self) -> None:
         self.assertIn("only as offline as its `FROM` line", self.text)
         self.assertIn("private base image will not authenticate", self.text)
-        self.assertIn('min_inclusive: "2.5.0"', self.text)
+        self.assertIn("no `requires_aart` floor prevents it", self.text)
 
 
 class TheWorkedArtifactIsRealTest(unittest.TestCase):

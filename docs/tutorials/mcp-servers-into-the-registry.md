@@ -2,7 +2,7 @@
 
 This is the procedure for turning one MCP server from `agent-mcp-servers` into an AART artifact that
 a colleague installs and sets up in two commands. It was written by porting `company-atlassian`
-first, against the `2.6.1` wheel, and every command and error message below was run rather than
+first, and every command and error message below was run rather than
 recalled.
 
 The shape it assumes is the one you described: **each server keeps its own `server.py` upstream, and
@@ -158,8 +158,7 @@ one path, and nothing else. Three consequences:
 - **A directory is the unit when you take a directory.** Give each server its own directory holding
   what you want copied and nothing else, or accept that its unused neighbours are copied too.
 - **A single file is re-rooted under its basename.** `--path servers/<name>/server.py` yields
-  `payload/server.py` alone. This closed `AD-11`; the sentence that used to stand here — that a loose
-  file cannot be vendored at all — described the behaviour before that repair.
+  `payload/server.py` alone.
 - **You cannot trim the copy afterwards.** `provenance.json` records a digest of what was taken, and
   `registry audit` recomputes it from the package on disk.
 
@@ -414,7 +413,7 @@ Atlassian calls, which is upstream's decision to change, not the registry's.
 scripts/registry_publish.py --source /path/to/registry --yes
 ```
 
-`lock`, `build`, `validate`, `audit`, then one commit listing every file. See `AD-14`.
+`lock`, `build`, `validate`, `audit`, then one commit listing every file.
 
 ## 6. A worked run: three files upstream, one you want
 

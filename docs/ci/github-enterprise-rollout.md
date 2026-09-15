@@ -206,7 +206,7 @@ aart registry init --source . --source-id corp-registry --display-name "Corp Reg
 | `--source-id` | the registry's stable identity. Consumers see it; do not change it later |
 | `--display-name` | the human-readable name |
 | `--usage-reporting-repository platform/agent-registry` | optional. Also writes the usage-report issue form and the `aart-usage-validate` and `aart-usage-dashboard` workflows |
-| `--minimum-version`, `--maximum-version` | the AART version window the registry declares; defaults are `0.0.1` and `1.0.0` (exclusive) |
+| `--minimum-version`, `--maximum-version` | the AART version window the registry declares; defaults are the running AART's version and the next major version (exclusive) |
 
 `.aart-version` holds the version of the `aart` you just ran. That is the version the registry's CI
 will run, and bumping it later is a pull request.

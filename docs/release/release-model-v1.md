@@ -1,13 +1,9 @@
 # The release model
 
-**Status: built.** `release-please-config.json`, `.release-please-manifest.json`,
+`release-please-config.json`, `.release-please-manifest.json`,
 `.github/workflows/release-please.yml` and `.github/workflows/release.yml` match this page.
 
-This is the live procedure. The numbered release checklists, compatibility pages and schema
-freezes that recorded the releases of the project this repository was cut from are gone (D-275);
-git history keeps them.
-
-## What a release is now
+## What a release is
 
 ```text
 pull request, titled as a Conventional Commit
@@ -71,13 +67,6 @@ carrying `<!-- x-release-please-version -->`, and `runtime_contract.EXECUTABLE_V
 Nothing compares any of them to anything. There is no gate proving they agree, because nothing can
 disagree — which is the point of INV-085, and is not the same claim as "the copies are checked".
 
-What this removed: `scripts/version.py` and its `_MIRRORS` table, `scripts/bump_version.py`,
-`scripts/changelog.py`, `scripts/release_docs.py`, `scripts/prepare_release.py`,
-`scripts/cut_release.py`, `.github/workflows/cut-release.yml`,
-`.github/actions/cut-release/`, the `version-*` Makefile targets, the `DOC011` changelog-shape
-gate, the `scripts/version.py check` half of the `validate` gate, and the release checklist's
-pinned `EXPECTED_VERSION`, PROGRESS.md ledger sweep and "every document names this version" rule.
-
 ## What the release run proves
 
 Its subject is the artifact. The source was proven by the pull request that put it on `main`;
@@ -112,18 +101,15 @@ The unit gate compares the committed freeze with the tree
 without its freeze fails the pull request that moved it. `scripts/release.py check` compares it
 again at the tag.
 
-## The wall this hit, and where the answer went
+## Why the release engine calls the release run
 
 GitHub raises no workflow event for anything done with the repository `GITHUB_TOKEN`. The tag and
 the GitHub Release that Release Please creates therefore start nothing: a release run waiting for
 `push: tags` or `release: published` would wait forever.
 
 `release.yml` is `workflow_call`-able for exactly this reason, and `release-please.yml` calls it
-when the release-please step reports `release_created`. Its two event triggers stay, for a tag a
-person pushes.
-
-The retired release button hit the same wall and answered it the same way. The answer outlived the
-button.
+when the release-please step reports `release_created`. Its two event triggers serve a tag a
+person pushes and a release a person publishes.
 
 ## What is deliberately not automatic
 
@@ -136,5 +122,5 @@ effect. That distinction is INV-105, and it is why the workflow contains nothing
 `release-please.yml` reads one repository variable, `AART_RUNNER`. It reads no image, no
 interpreter and no index, because the action it runs brings its own runtime. Everything else about
 a fork's release — where it runs, which image, which index, which registry, where the wheel is
-published — is unchanged and is on
+published — is on
 [`github-enterprise-rollout.md`](../ci/github-enterprise-rollout.md).

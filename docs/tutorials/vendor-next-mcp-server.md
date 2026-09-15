@@ -5,8 +5,8 @@ directory out of a foreign repository that knows nothing about AART. It takes th
 `company-atlassian` package — vendored `server.py`, authored `Dockerfile`, authored descriptor,
 authored recipe — as the shape to copy.
 
-It is written to be executed either by a person or by an agent. Every command below was run against
-AART `2.7.1`; every error message quoted was produced, not recalled.
+It is written to be executed either by a person or by an agent. Every command below was run; every
+error message quoted was produced, not recalled.
 
 [`mcp-servers-into-the-registry.md`](mcp-servers-into-the-registry.md) is the authority on the setup
 recipe itself — the nine modules, their fields, why there is no `shell.run@1`, and the complete
@@ -45,10 +45,10 @@ Fill these in first. Every later command is a substitution of these values.
 | `VERSION` | version **this registry** publishes the copy under | `1.0.0` |
 | `IMAGE` | the image the descriptor names — `aart/mcp/$NAME:$VERSION` when the recipe builds it | `aart/mcp/sentry:1.0.0` |
 | `VARS` | every environment variable the server needs, named once | `SENTRY_TOKEN`, `SENTRY_ORG` |
-| `CONSUMER` | absolute path to the project the install is tested in — **never the registry** | `/Users/mifi/code/agent-artifacts-live-acceptance-project` |
+| `CONSUMER` | absolute path to the project the install is tested in — **never the registry** | `/home/me/code/acceptance-project` |
 | `ALIAS` | the alias this registry is configured under in `CONSUMER` | `company` |
-| `REGISTRY_URL` | this registry's Git URL, once it is pushed | `https://github.com/acme/agent-artifacts-registry.git` |
-| `REGISTRY_PATH` | this registry's absolute path, for testing before pushing | `/Users/mifi/code/agent-artifacts-registry-2` |
+| `REGISTRY_URL` | this registry's Git URL, once it is pushed | `https://github.com/acme/agent-registry.git` |
+| `REGISTRY_PATH` | this registry's absolute path, for testing before pushing | `/home/me/code/agent-registry` |
 | `PROFILES` | harness profiles | `tabnine` |
 | `PLATFORMS` | platforms | `darwin` |
 
@@ -122,7 +122,7 @@ artifact installs cleanly, reports success, and points at an image that does not
 ### 2.2 The one thing that differs most between servers
 
 Not the layout — the **variable join**. A credential passes through four documents, and the name is
-written out separately in each one. Nothing in AART compares them, which is `AD-30` and `AD-31`.
+written out separately in each one. Nothing in AART compares them.
 
 | Where | What it says | Example |
 |---|---|---|
@@ -157,13 +157,13 @@ Read it in order, because every line of it matters:
   changes.
 - **`2>/dev/null` swallows the failure.** A denied Keychain prompt or a missing item produces an
   **empty** variable, not an absent one and not an error. The server then starts with an empty
-  credential and reports success, which is the shape of `AD-31`.
+  credential and reports success.
 - **Only a login shell reads it.** An app launched from Dock or Spotlight never sourced `~/.zshrc`, so
   it has none of these variables. Restart the harness from a terminal where `printenv` shows them.
 - **A symlinked `~/.zshrc` refuses the whole step** — the normal result of keeping dotfiles in a
   repository. The refusal is `refusing to edit symlink: <path>`, reported as a missing prerequisite,
   and it lands **before** any input is collected and before the first effect: nothing is built,
-  nothing is typed, nothing is written (`AD-26`, closed). The plan does not predict it, because
+  nothing is typed, nothing is written. The plan does not predict it, because
   planning never touches the filesystem, so it appears only when you apply. Check `ls -l ~/.zshrc`
   first; if it is a link, remove the link before running setup:
 
@@ -226,8 +226,7 @@ later:
 
 - AART copies `server` verbatim, so `${ATLASSIAN_API_TOKEN}` reaches the harness file as those
   literal characters. The expansion is the harness's job.
-- The name inside `${…}` and the name the recipe exports must be identical. That is the join in §2.2,
-  and it is the whole of `AD-30` and `AD-31`.
+- The name inside `${…}` and the name the recipe exports must be identical. That is the join in §2.2.
 
 **The envelope is the whole point.** `name` becomes the key under `mcpServers`; `server` becomes the
 value, copied verbatim. A document shaped like the harness file itself — `{"mcpServers": {…}}` — has
@@ -273,7 +272,6 @@ subtracts exactly those authored paths before recomputing the origin digest — 
 else; it is re-rooted under its basename, so it arrives as `payload/server.py` and the intermediate
 directories disappear. Measured `2026-08-18`: a lone file vendors cleanly, `provenance.json` records
 `"path": "servers/<name>/server.py"`, and the package holds exactly that file plus what you authored.
-This is `AD-11`, closed — older documents still say a loose file cannot be vendored at all.
 
 Take the directory only when the server genuinely runs several of its own files. Then `--path` names
 the directory and copies it **whole**: no `--include`, no `--exclude`, and no trimming afterwards,
@@ -345,7 +343,7 @@ non-payload alike:
 
 One field of the recipe surprises everyone once: **`help_urls` is required.** A recipe without it is
 refused with `invalid setup installer for mcp/<NAME>: missing field(s): help_urls`. Supply the page a
-reader needs in order to produce the credential — and know that AART renders it nowhere (`AD-32`), so
+reader needs in order to produce the credential — and know that AART renders it nowhere, so
 repeat the link in `SETUP.md`, which is the one document a reader can actually reach.
 
 Check three lines in the review before going further:
@@ -456,7 +454,7 @@ behind, which is what produces `installation effect ownership must be unique acr
 the next install. Uninstall under the old alias before re-adding.
 
 Then, before every install, re-synchronize. Source health reports the snapshot's age, not its
-agreement with the origin (`AD-16`), so a registry that moved still reads as healthy until you sync:
+agreement with the origin, so a registry that moved still reads as healthy until you sync:
 
 ```sh
 aart source sync --alias "$ALIAS"
