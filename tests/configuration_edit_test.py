@@ -42,6 +42,8 @@ from agent_artifacts.tui_consumer import (
     CanonicalScreenSource,
     _reload,
     compose_frame,
+    configuration_review_status,
+    configuration_value_status,
     frame,
     screens_from,
 )
@@ -360,6 +362,69 @@ class ConfigurationReviewNamesTheChangeTest(unittest.TestCase):
 
         self.assertIn(f"Review identity: {_DIGEST}", status)
         self.assertIn("claude: old-team → new-team", status)
+
+
+class ConfigurationStatusWordsTest(unittest.TestCase):
+    """22c and 22d's status, line for line (task 15: mutmut found the words and groups unheld)."""
+
+    _KIND = (
+        "This is ordinary configuration stored beside the artifact.",
+        "Credentials stay with their provider and are not accepted here.",
+    )
+
+    def test_a_shared_value_says_what_is_changed_where_and_nothing_about_differing(self) -> None:
+        held = (("claude", "same"), ("tabnine", "same"))
+
+        status = configuration_value_status("c", "org", ("claude", "tabnine"), held)
+
+        self.assertEqual(
+            status, ("Change org for c", "Harnesses: claude, tabnine", "", *self._KIND)
+        )
+
+    def test_differing_values_list_each_harness_and_a_harness_with_none_is_not_set(self) -> None:
+        held = (("claude", "team-a"), ("tabnine", None))
+
+        status = configuration_value_status("c", "org", ("claude", "tabnine"), held)
+
+        self.assertEqual(
+            status,
+            (
+                "Change org for c",
+                "Harnesses: claude, tabnine",
+                "",
+                "The chosen harnesses hold different values, so the field starts empty:",
+                "  claude: team-a",
+                "  tabnine: not set",
+                "",
+                *self._KIND,
+            ),
+        )
+
+    def test_the_review_names_every_risk_and_says_read_only_when_there_is_none(self) -> None:
+        plan = _configure_plan("claude", "tabnine")
+        held = (("claude", "team-a"),)
+        for risks, said in (
+            ((), "Risks: read only."),
+            (
+                ("local-mutation", "configuration-mutation"),
+                "Risks: local mutation, configuration mutation.",
+            ),
+        ):
+            with self.subTest(risks=risks):
+                status = configuration_review_status(
+                    replace(plan, risks=risks), "org", held, "new", PresentationProfile.FAST
+                )
+
+                self.assertEqual(
+                    status,
+                    (
+                        f"Change org for {plan.artifact}",
+                        "  claude: team-a → new",
+                        "  tabnine: not set → new",
+                        "",
+                        said,
+                    ),
+                )
 
 
 if __name__ == "__main__":

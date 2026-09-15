@@ -178,7 +178,7 @@ class FailedActionFrameTest(unittest.TestCase):
             ConsumerActionKind.REGISTRY_REBUILD, MaintainerScreen.REGISTRY_REBUILD_REVIEW
         )
 
-        self.assertIn("did not run", drawn[0])
+        self.assertTrue(drawn[0].endswith(" - did not run"), drawn[0])
 
     def test_the_reason_it_stopped_is_still_on_the_screen(self) -> None:
         """The refusal is why the screen did not move; losing it would be the worse defect."""

@@ -2812,6 +2812,14 @@ failure had no identified cause, one green closing sequence is evidence that the
 currently clear, not proof that the intermittent condition can never recur; retain this item for a
 future recurrence with the exact order and Security.framework diagnostics.
 
+**Recurred at CP-23 task 15 (2026-09-15, `085d5df`).** The standalone `make integration` ran 393
+tests in 246.8 seconds and failed once, in the same test:
+`mcp_stdio_e2e_test.InstalledMcpServerTest.test_the_real_keychain_delivers_the_secret_to_the_launched_server`.
+`/usr/bin/security create-keychain` returned status 206 for a unique temporary Keychain. The same
+test passed inside the green 4,273-test `make quality` run just before. It was not retried or
+skipped. The condition is therefore still live, and the standalone integration gate is not green for
+CP-23.
+
 ## B-109 — `Diagnostic` accepts a message that is not a string
 
 Found while reading `make mutants` survivors for CP-21 step 9 (`agent_artifacts/domain/publication.py`,
@@ -2886,6 +2894,13 @@ finding it. Related to `B-110`, which is the other way this command fails with a
 CP-23 task 01 reproduced this with `consumer_ui_state_test.py` during the clean-test phase.
 The successful advisory retry used the example/E2E Source suites; the generated cursor property
 remained enabled in ordinary tests and the deliberate mutation proof. No health check was disabled.
+
+CP-23 task 15 is the case this item warned about. With `configuration_edit_test`,
+`frame_matrix_test` and the other property-bearing files left out, 49 survivors inside task 14's
+own functions looked unheld, and several of them were only held by the excluded files. A cheap way
+to tell the two apart without disabling anything: after a run, execute
+`MUTANT_UNDER_TEST=<module>.<mutant> python -m unittest <modules>` inside the kept `mutants/`
+copy. The trampoline switches to that mutant under plain `unittest`, Hypothesis included.
 
 ## B-112 — `make mutants` mutates no class methods in `consumer_views.py`
 
@@ -3063,6 +3078,8 @@ subject-less record for an unused reference. Two other items were noticed and le
 - Screen 23 still prints `Actions: verify, replace.` above `[Enter] Open` (task 14's audit).
 - 24a's trail reads "Review Credential Action" even when it shows Verify's answer.
 
+Both were fixed by CP-23 task 14.6 (D-272); the receipt gap remains.
+
 Noncritical: no receipt is claimed, the outcome is stated where the action lands, and no value is
 involved.
 
@@ -3080,3 +3097,48 @@ Likely fix: the transaction attributes the shared credential component to one ow
 owners depend on it, or re-inspects shared references between members. It needs its own review of
 receipts and repair ownership. Noncritical to task 13: the guidance for both owners is shown on
 screen 07 and on the lent terminal, and the second artifact fails visibly rather than silently.
+
+## B-122 — Advisory mutation survivors outside CP-23's claims in the TUI modules
+
+Found 2026-09-15 by CP-23 task 15's scoped `mutmut` runs, whose working copies are kept under
+`/private/tmp/cp23-task15-*`.
+
+| module | mutants | killed | survived | no test | timeout |
+|---|---:|---:|---:|---:|---:|
+| `tui_consumer.py` | 3,957 | 1,912 | 1,892 | 151 | 2 |
+| `tui_maintainer.py` | 1,501 | 624 | 782 | 95 | 0 |
+| `application/consumer_ui.py` | 2,292 | 1,111 | 1,166 | 15 | 0 |
+
+The survivors CP-23 owned became tests or were shown equivalent (slice, task 15). The rest cluster
+in large, older surfaces:
+
+- **`tui_consumer`:**
+  - `CanonicalScreenSource._body` (418), `description` (130) and `detail` (61);
+  - `_remediation_change`, `_review_facts`, `render_lifecycle_plan`, `render_credential_review`,
+    `render_marketplace_artifact` and `render_lifecycle_outcome`.
+- **`tui_maintainer`:** `render_maintainer_candidate_diff`, `render_maintainer_candidate`,
+  `maintainer_workspace_detail`, `render_maintainer_registry`, the version-conflict, promotion-review
+  and provenance renderers.
+- **`consumer_ui`:** `key_event` (454), `reduce_consumer_ui` (269) and `key_bindings` (148).
+
+Many are string-case and `XX…XX` wording mutations on prose that tests check with `assertIn`
+fragments. Some would be killed by the property files that B-111 keeps out of `TESTS`. A few are
+type-guard messages. None is known to break a Product Specification invariant, because the frame,
+key and `v` laws are held over all 74 screens by `frame_matrix_test` (D-274).
+
+The useful follow-up is per renderer: exact expected lines for the facts a screen promises, and a
+B-111 fix so the property files can join the selection. Do not chase the figure itself (D-134).
+
+Named claims in `consumer_ui` that are still unheld:
+- a result arriving while a quit confirmation is pending clears it (`quit_pending=False` in
+  `_action_prepared`, `_action_recorded`, `_action_failed` and `_declined_preparation`);
+- a recorded promotion on Registry Commit clears the selection and sets `registry_commit_applied`
+  with a `LOAD_SCREEN` of that screen (`_action_recorded` mutants 2–24);
+- a declined preparation hides Help and clears search.
+
+## B-123 — `maintainer_registry_rebuild_test.py` leaves file reads unclosed
+
+Found 2026-09-15 in CP-23 task 15's `make quality` output. Two `ResourceWarning: unclosed file`
+warnings come from reads in `tests/maintainer_registry_rebuild_test.py`. They do not fail the gate,
+and no product code is implicated. The fix is `pathlib.Path.read_text` or a `with` block.
+

@@ -1,6 +1,6 @@
 # CP-23 — Actionable TUI workflows after the fourth manual run
 
-Status: IN PROGRESS — TASKS 01–13 AND OWNER TASK 16 DONE; TASK 14 IN PROGRESS, then 15
+Status: IMPLEMENTED — TASKS 01–16 DONE; AWAITING THE OWNER'S MANUAL ACCEPTANCE (TASK 15) AND A GREEN STANDALONE `make integration` (B-108)
 
 Date: 2026-09-14. Authority: the product owner's manual screen reports and request to create CP-23
 and close CP-22, followed by the all-screen audit and credential guidance requirements.
@@ -1771,3 +1771,109 @@ The six previously owed 16.1 targeted mutations were also run and killed:
   - stealing literal `v` from configuration text entry failed eight form states;
   - dropping the curses footer failed all 74 clipped projections.
 - The full suite, scoped `mutmut` and the owner's manual acceptance remain task 15, as requested.
+
+#### 15 — closing evidence (IMPLEMENTED; awaiting the owner's manual acceptance)
+
+Task 15 was started by Codex, which ran the full gates and the three scoped `mutmut` runs before
+reaching its usage limit. Claude finished it from the recorded outputs. Nothing below was re-run to
+get a better result.
+
+- **`make quality`, one run at `085d5df`:** green.
+  - format-check, lint and typecheck (260 source files);
+  - unit: 4,273 tests, 1 skipped, 0 failures;
+  - validate;
+  - coverage: a second run of the same 4,273 tests, 85.94% branch coverage;
+  - packaging-check, docs-check and secret-shape-check.
+  - The built-in integration step was skipped as redundant: its 393 tests are among the unit run's.
+  - Two `ResourceWarning`s for unclosed file reads in `maintainer_registry_rebuild_test.py` are not
+    failures (B-123).
+- **`make integration`, one run:** 393 tests, **1 error**, which is B-108 recurring.
+  - `mcp_stdio_e2e_test.InstalledMcpServerTest.test_the_real_keychain_delivers_the_secret_to_the_launched_server`
+    failed when `/usr/bin/security create-keychain` returned status 206 for its unique temporary
+    Keychain.
+  - No real login Keychain and no credential value were involved.
+  - It was not retried, skipped or weakened. The separate integration gate is therefore **not
+    green**, and B-108 records the recurrence.
+- **Scoped advisory `mutmut`** (D-134; the working copies are kept under `/private/tmp/cp23-task15-*`
+  because of B-110).
+  - Property-test files had to be left out of `TESTS` (B-111). That exclusion alone made several
+    task-14 claims look unheld, so every survivor inside a CP-23 function was re-run against the
+    full focused modules through mutmut's own `MUTANT_UNDER_TEST` switch, with plain `unittest`.
+
+  | module | mutants | killed | survived | no test | timeout |
+  |---|---:|---:|---:|---:|---:|
+  | `tui_consumer.py` | 3,957 | 1,912 | 1,892 | 151 | 2 |
+  | `tui_maintainer.py` | 1,501 | 624 | 782 | 95 | 0 |
+  | `application/consumer_ui.py` | 2,292 | 1,111 | 1,166 | 15 | 0 |
+
+  - A first `consumer_ui.py` attempt aborted in its clean-test phase on B-111, so it is not a result.
+  - **In-slice survivors turned into tests:**
+    - **`_fitted` (D-272):**
+      - a trail exactly `CONTENT_MEASURE` long;
+      - a lone overlong place;
+      - area kept, then area dropped;
+      - the last place kept when even it does not fit;
+      - the failure suffix counting towards the measure.
+    - **`_screen_title`:** Verify named `Verification` while the provider is still being asked.
+    - **`_heading`:** the failed trail ends with ` - did not run`.
+    - **`configuration_value_status` and `configuration_review_status` (D-273):** both line for
+      line, including `not set`, several risks, and `read only` when there are none.
+    - **Maintainer (D-271):**
+      - `maintainer_registry_detail`: observed and unobserved;
+      - `maintainer_registry_rows`: registries separated, and no working tree without a workspace;
+      - `maintainer_bulk_promotion_status`: nothing composed, nothing promotable, refused, and
+        silent when there are offers.
+    - Tests were added to `frame_wording_test`, `configuration_edit_test`,
+      `maintainer_screen_rows_test` and `failed_action_terminal_state_test`.
+    - Re-run against those modules, 46 of 49 consumer survivors and 17 of 30 maintainer survivors
+      are now killed.
+  - **Left standing, with reasons:**
+    - `_fitted` 4, 10 and 11 are equivalent. `(1, 1)` falls back to the same `["…", last]`, and
+      `>=`/`head - 1` only admit shapes longer than a whole trail that already failed to fit.
+    - The maintainer ones are the wording of internal type-guard `ValueError`s, one guard's
+      `or`→`and`, and a default cursor no alias can equal.
+    - The bulk of the survivors are outside CP-23's claims:
+      - `tui_consumer`: `CanonicalScreenSource._body` (418), `description` (130) and the older
+        renderers;
+      - `consumer_ui`: `key_event` (454), `reduce_consumer_ui` (269) and `key_bindings` (148),
+        whose exact-key properties live in the excluded Hypothesis files.
+    - They are recorded as B-122 rather than inflating this slice.
+  - **`consumer_ui.py` action transitions.** The 72 survivors in `_action_prepared`,
+    `_action_recorded`, `_action_failed` and `_declined_preparation` were re-run against 18
+    non-E2E action, form, credential, configuration and matrix modules; 27 were killed.
+    - The CP-23-owned remainder was screen 07's config-draft branch (16.2): entering Required
+      Inputs cleared no earlier review identities and loaded no named screen. It is now held by
+      `install_time_config_form_test`'s
+      `test_a_preparation_that_needs_answers_opens_07_without_the_previous_review`, which kills
+      mutants 14, 15, 16, 30 and 32.
+    - Still standing:
+      - `quit_pending=False` removals, which are equivalent unless a result arrives while a quit is
+        pending;
+      - the pre-CP-23 Registry Commit landing (`registry_commit_applied`, from CP-19/21);
+      - Help/search reset on a declined preparation.
+    - These go to B-122.
+- **The complete screen/state matrix** is task 14's `tests/frame_matrix_test.py` (D-274). It covers
+  74 screens plus 8 conditional states, every cursor in Fast and Verbose, text, tall-curses and
+  clipped-curses projections, and Hypothesis over move/`v` sequences.
+- **Before/after through the production composition.** "Before" was captured by the task 14 audit
+  at `4394645` with `tui_consumer.frame`. "After" was rendered from `tests/screen_cases.py` at this
+  close-out.
+
+  | screen | before | after |
+  |---|---|---|
+  | 09 Ready | `1 credential(s) stored securely` twice, once from effects and once from inputs | the one effect line |
+  | 23 Credential Details | ends `Actions: verify, replace.` above `[Enter] Open` | facts only; the legend offers the keys |
+  | 24a (Replace) | `… / Credential Details / Credential Action / Review Credential Action`, 142 characters | `AART / Credential Details / Credential Action / Review Replacement` |
+  | 22c | `> github-org` empty although every harness held a value | `> github-org [old-team]`, unaccepted |
+  | 22d | `Review configure for …`, `Components changing: configuration:claude.`, `Review identity: sha256:…` | `Change github-org for public/mcp/github@1.6.0`, `claude: old-team → new-team`, `tabnine: other-team → new-team`, `Risks: local mutation.`; the identity is Verbose only |
+
+- **Manual acceptance: not run.** The Git-backed walk is the owner's, in the marker-owned manual
+  lab and the owner's own terminal: Source → Candidate → local commit → manual publication →
+  Registry Sync → Marketplace → selected-harness install → guided credential entry →
+  Success/receipt → credential lifecycle. It needs the lab state and a provider prompt that agents
+  must not touch. `docs/testing/TUI_MANUAL_WALKTHROUGH.md` now ends with a CP-23 acceptance
+  checklist naming what each step must show.
+- **Candidate Product Specification revision:** the §96/§97 note stands as recorded under task 16.
+- **Status:** IMPLEMENTED. `plan.json` marks CP-23.15 `blocked` on that walk, and it becomes
+  VERIFIED only when the walk passes. B-108 must also be green in a standalone `make integration`
+  before a release gate is claimed.

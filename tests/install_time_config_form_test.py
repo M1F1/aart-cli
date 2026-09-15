@@ -238,6 +238,45 @@ class InstallTimeConfigFormRenderingTest(unittest.TestCase):
 
         self.assertFalse(prepared.config_form_active)
 
+    def test_a_preparation_that_needs_answers_opens_07_without_the_previous_review(self) -> None:
+        """Task 15: nothing held that the form replaces an earlier plan's identities (mutmut)."""
+
+        review = replace(
+            _state(),
+            session=ConsumerSession(
+                ConsumerScreen.REVIEW_SELECTION,
+                history=(ConsumerScreen.MARKETPLACE,),
+                semantic_identity="semantic",
+                selection_identity="selection",
+                review_digest="sha256:" + "1" * 64,
+            ),
+            config_draft=InstallationConfigDraft(),
+            config_form_active=False,
+        )
+        needs = ConsumerUiEvent(
+            ConsumerUiEventKind.ACTION_PREPARED,
+            action=ConsumerActionKind.INSTALL,
+            config_draft=_draft(),
+        )
+
+        prepared, commands = reduce_consumer_ui(review, needs)
+        elsewhere, ignored = reduce_consumer_ui(
+            replace(review, session=replace(review.session, screen=ConsumerScreen.READY)), needs
+        )
+
+        self.assertIs(prepared.session.screen, ConsumerScreen.REQUIRED_INPUTS)
+        self.assertIsNone(prepared.session.semantic_identity)
+        self.assertIsNone(prepared.session.selection_identity)
+        self.assertIsNone(prepared.session.review_digest)
+        self.assertEqual(prepared.config_draft, _draft())
+        self.assertTrue(prepared.config_form_active)
+        self.assertEqual(
+            commands,
+            (ConsumerUiCommand(ConsumerUiCommandKind.LOAD_SCREEN, ConsumerScreen.REQUIRED_INPUTS),),
+        )
+        self.assertIs(elsewhere.session.screen, ConsumerScreen.READY)
+        self.assertEqual(ignored, ())
+
 
 class _MemoryCredentialProvider:
     """A provider reference/observation fake; it never receives or stores credential material."""

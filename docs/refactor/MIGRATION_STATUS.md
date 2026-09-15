@@ -1,6 +1,25 @@
 # AART Refactor Migration Status
 
-**2026-09-15: CP-22 CLOSED; CP-23 tasks 01–14 and owner task 16 done; task 15 next.**
+**2026-09-15: CP-22 CLOSED; CP-23 IMPLEMENTED (tasks 01–16), awaiting the owner's manual
+acceptance.**
+
+Task 15's recorded gates:
+- **`make quality`:** green at `085d5df`. 4,273 tests with 1 skipped, 85.94% branch coverage, and
+  packaging, docs and secret shape all pass.
+- **Standalone `make integration`:** 393 tests with 1 error, B-108's temporary-Keychain creation
+  recurring. It was not retried or skipped.
+- **Scoped `mutmut`:**
+
+  | module | killed | survived |
+  |---|---:|---:|
+  | `tui_consumer` | 1,912 | 1,892 |
+  | `tui_maintainer` | 624 | 782 |
+  | `consumer_ui` | 1,111 | 1,166 |
+
+  The CP-23-owned survivors were re-run against the full focused modules. They became tests or were
+  shown equivalent; the rest are B-122.
+
+Before/after frames and the acceptance checklist are in the slice and the walkthrough.
 Task 14 (D-268–D-274) now enforces §167's Frame/Verbose contract without per-screen exceptions.
 The final recorded matrix explicitly inventories all 74 Consumer and Maintainer screens, adds eight
 modal/form/failure states, checks every cursor in Fast and Verbose, and proves text and curses

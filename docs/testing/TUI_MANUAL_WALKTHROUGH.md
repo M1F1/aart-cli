@@ -532,6 +532,44 @@ Checkpoint for Act II:
 
 ---
 
+## CP-23 acceptance — what closes the slice
+
+CP-23 is IMPLEMENTED, and its full gates and the frame matrix are recorded in the slice. It becomes
+VERIFIED only when this walk passes in your lab and your terminal; no agent runs it. Walk Acts I
+and II in order and check these links of the chain, each at the step that owns it:
+
+- [ ] **Source → Candidate (steps 4–5).** Sync explains itself after Add Source. Candidates is a
+      table with the row under the cursor described only in Verbose.
+- [ ] **Candidate → local commit (steps 6–7).** `v` folds diffs; there is no `f`, `d` guidance, or
+      `p` on Validation. The commit is receipted, and the Candidate reads **Promoted locally** after
+      a restart.
+- [ ] **Manual publication → Registry Sync (steps 8 and 10).** The TUI never pushes. It says to
+      publish with Git, then sync.
+- [ ] **Marketplace → selected-harness install (step 11).**
+  - The focused description shows in Verbose.
+  - Artifact Details `i` works.
+  - Harnesses are chosen explicitly, one or several.
+  - Remediation says what changes.
+- [ ] **Guided credential entry (step 11).** Screen 07 and the lent terminal show the author's help
+      in the same words. The value never appears on screen or in AART's data.
+- [ ] **Success and receipt (step 11).** `View installed`, `View receipt` and `Done` are rows that
+      work.
+- [ ] **Credential lifecycle (step 12).**
+  - Credential Action rows Verify, Replace and Delete when unused; 24a is named **Review
+    Replacement**, **Review Deletion** or **Verification**.
+  - The provider asks, and Details has no `Actions:` sentence.
+  - Configuration edits open on the held value and review `harness: old → new`.
+- [ ] **On every screen you pass:**
+  - the trail fits one line;
+  - `v` changes only the presentation;
+  - every key in the footer does what it says;
+  - a narrow or short terminal keeps the whole footer.
+
+File anything that fails as a CP-23 finding in [`TODO.md`](../../TODO.md). When everything passes,
+record it in the slice's task 15 evidence and mark CP-23.15 done.
+
+---
+
 ## When you are done
 
 ```sh

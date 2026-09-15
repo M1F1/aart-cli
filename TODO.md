@@ -137,7 +137,9 @@ Each new entry records:
 
 #### CP-23 — fourth manual TUI run (2026-09-14)
 
-IN PROGRESS. Tasks 01–14 and owner task 16 are implemented; the complete tasks, evidence
+IMPLEMENTED. Tasks 01–16 are implemented and task 15's gates are recorded. Two things remain:
+the owner's manual acceptance walk (the walkthrough's "CP-23 acceptance" checklist) and a green
+standalone `make integration` (B-108). The complete tasks, evidence
 requirements and acceptance criteria are in
 [`CP-23`](docs/refactor/slices/CP-23-actionable-tui-workflows.md); `docs/refactor/plan.json` is the
 machine-readable task list. Task 15 retains the full verification and manual acceptance.
@@ -157,7 +159,7 @@ machine-readable task list. Task 15 retains the full verification and manual acc
 - [x] 13 — Carry explicit credential purpose/acquisition guidance from Source to installation.
 - [x] 16 — Owner request: user variables and credentials area per artifact/harness (ConfigInput at install, files at the installed location, credentials only in the provider, edit per harness or all).
 - [x] 14 — Enforce the shared skeleton without in-TUI exceptions; verify `v` on every screen.
-- [ ] 15 — Targeted mutations, scoped mutmut, full gates and manual acceptance.
+- [ ] 15 — Targeted mutations, scoped mutmut, full gates and manual acceptance. Mutations and gates are recorded; the owner's manual acceptance is still open.
 
 #### CP-22 — closed by the operator (2026-09-14)
 

@@ -628,7 +628,7 @@
         {
           "id": "15",
           "title": "Targeted mutations, scoped mutmut, full gates and manual acceptance",
-          "status": "todo"
+          "status": "blocked"
         }
       ]
     }

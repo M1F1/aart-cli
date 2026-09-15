@@ -26,6 +26,7 @@ from agent_artifacts.application.consumer_views import (
 )
 from agent_artifacts.tui_consumer import (
     CanonicalScreenSource,
+    _fitted,
     _reload,
     compose_frame,
     render_credential,
@@ -95,6 +96,14 @@ class ReviewTitleTest(unittest.TestCase):
                 self.assertTrue(trail.endswith(f" / {title}"), trail)
                 self.assertEqual(frame_violations(source, state), ())
 
+    def test_verify_is_named_a_verification_while_the_provider_is_still_being_asked(self) -> None:
+        source, state = _reviewing("verify")
+        assert state.action is not None
+
+        trail = compose_frame(source, state).trail[0]
+
+        self.assertTrue(trail.endswith(" / Verification"), trail)
+
 
 class TrailFitsTheMeasureTest(unittest.TestCase):
     def _trail(self, *history: ConsumerScreen, screen: ConsumerScreen) -> str:
@@ -126,6 +135,44 @@ class TrailFitsTheMeasureTest(unittest.TestCase):
         self.assertEqual(
             trail, "AART / User Variables And Credentials / Artifact Variables And Credentials"
         )
+
+
+class TrailEllipsisTest(unittest.TestCase):
+    """Which places `_fitted` keeps, measured against exact trail lengths (task 15's survivors)."""
+
+    def test_a_trail_exactly_as_long_as_the_measure_is_kept_whole(self) -> None:
+        # "AART / " + place + " / T" is 11 characters around the place.
+        steps = ["a" * (CONTENT_MEASURE - 11)]
+
+        self.assertEqual(len(" / ".join(("AART", *steps, "T"))), CONTENT_MEASURE)
+        self.assertEqual(_fitted(steps, "T", ""), steps)
+
+    def test_a_lone_place_too_long_to_fit_is_not_elided_into_nothing(self) -> None:
+        steps = ["a" * CONTENT_MEASURE]
+
+        self.assertEqual(_fitted(steps, "T", ""), steps)
+
+    def test_the_area_and_the_last_place_are_kept_when_they_fit(self) -> None:
+        steps = ["area", "m" * CONTENT_MEASURE, "last"]
+
+        self.assertEqual(_fitted(steps, "T", ""), ["area", "…", "last"])
+
+    def test_the_area_goes_before_the_last_place_does(self) -> None:
+        steps = ["a" * 60, "m" * 10, "l" * 30]
+
+        self.assertEqual(_fitted(steps, "T", ""), ["…", "l" * 30])
+
+    def test_a_last_place_that_cannot_fit_is_still_the_one_kept(self) -> None:
+        for steps in (["a" * 10, "l" * 95], ["a" * 10, "m" * 10, "l" * 95]):
+            with self.subTest(places=len(steps)):
+                self.assertEqual(_fitted(steps, "T", ""), ["…", "l" * 95])
+
+    def test_the_failure_suffix_counts_towards_the_measure(self) -> None:
+        # "AART / " + place + " / b / T" is 15 characters around the place: it fits exactly.
+        steps = ["a" * (CONTENT_MEASURE - 15), "b"]
+
+        self.assertEqual(_fitted(steps, "T", ""), steps)
+        self.assertEqual(_fitted(steps, "T", " - did not run"), ["…", "b"])
 
 
 if __name__ == "__main__":

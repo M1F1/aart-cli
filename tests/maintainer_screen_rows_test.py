@@ -24,9 +24,12 @@ from agent_artifacts.application.consumer_views import (
     project_dashboard,
 )
 from agent_artifacts.application.maintainer_views import (
+    MaintainerBulkPromotionView,
     MaintainerCandidateFilter,
     MaintainerScreen,
     MaintainerViews,
+    MaintainerWorkingTreeState,
+    MaintainerWorkingTreeView,
     project_maintainer_collection_candidate,
     project_maintainer_collection_validation,
     project_maintainer_dashboard,
@@ -37,6 +40,12 @@ from agent_artifacts.tui_consumer import (
     ConsumerScreens,
     _reload,
     compose_frame,
+)
+from agent_artifacts.tui_maintainer import (
+    maintainer_bulk_promotion_status,
+    maintainer_registry_detail,
+    maintainer_registry_rows,
+    render_maintainer_registry,
 )
 from tests import (
     maintainer_bulk_promotion_test,
@@ -187,6 +196,54 @@ class RegistryMaintainerTest(_Contract):
         self.assertNotIn(snapshot, "\n".join(fixture.source.actions(state)))
         self.assertIn(f"Snapshot: {snapshot}", compose_frame(fixture.source, state).described)
 
+    def test_46_registries_are_separated_and_the_working_tree_needs_a_workspace(self) -> None:
+        fixture = maintainer_registry_view_test.MaintainerRegistryShellTest()
+        fixture.setUp()
+        company, other = fixture.view, replace(fixture.view, alias="other")
+
+        rows = maintainer_registry_rows((company, other), cursor="other")
+        without = maintainer_registry_rows((company,))
+        no_workspace = maintainer_registry_rows((company,), registry_workspace_present=False)
+
+        self.assertEqual(
+            rows,
+            (
+                *render_maintainer_registry(company),
+                "",
+                *render_maintainer_registry(other, selected=True),
+            ),
+        )
+        self.assertIn("    Working tree: matches the approved snapshot", without)
+        self.assertEqual(no_workspace, render_maintainer_registry(company, show_working_tree=False))
+        self.assertNotIn("    Working tree: matches the approved snapshot", no_workspace)
+
+    def test_46_detail_spells_out_what_was_observed_and_only_that(self) -> None:
+        fixture = maintainer_registry_view_test.MaintainerRegistryShellTest()
+        fixture.setUp()
+        view = fixture.view
+        (promotion,) = view.transactions
+        unobserved = replace(
+            view,
+            revision=None,
+            working_tree=MaintainerWorkingTreeView(MaintainerWorkingTreeState.UNOBSERVED, None),
+            transactions=(),
+        )
+
+        self.assertEqual(
+            maintainer_registry_detail(view),
+            (
+                f"Revision: {view.revision}",
+                f"Snapshot: {view.snapshot}",
+                f"Working tree observed: {view.working_tree.digest}",
+                f"Promotion {promotion.snapshot_after} ({promotion.mode})",
+                *(f"  {candidate}" for candidate in promotion.candidate_ids),
+            ),
+        )
+        self.assertEqual(
+            maintainer_registry_detail(unobserved),
+            ("Revision: none", f"Snapshot: {view.snapshot}"),
+        )
+
 
 class BulkPromotionTest(_Contract):
     def test_47_candidates_are_cursor_rows_and_refusals_are_the_view_status(self) -> None:
@@ -204,6 +261,25 @@ class BulkPromotionTest(_Contract):
         self.assertKeepsTheFrame(source, replace(state, selection=state.rows))
         status = "\n".join(compose_frame(source, state).status)
         self.assertIn("Not promotable: mcp/jira-mcp", status)
+
+    def test_47_status_says_why_nothing_can_be_promoted_and_is_silent_otherwise(self) -> None:
+        empty = MaintainerBulkPromotionView("company", ())
+        refused = MaintainerBulkPromotionView("company", (), refusals=("the registry is invalid",))
+        module = maintainer_bulk_promotion_test
+        offered = module._views(EffectivePolicy(), module._scan(("github-mcp",))).bulk_promotions
+
+        self.assertEqual(
+            maintainer_bulk_promotion_status(()), ("Bulk promotion has nothing composed yet.",)
+        )
+        self.assertEqual(
+            maintainer_bulk_promotion_status((empty,)),
+            ("company", "  No Candidate of this registry can be promoted right now."),
+        )
+        self.assertEqual(
+            maintainer_bulk_promotion_status((refused,)), ("company", "  - the registry is invalid")
+        )
+        self.assertTrue(offered and all(view.candidates for view in offered))
+        self.assertEqual(maintainer_bulk_promotion_status(offered), ())
 
 
 class RepositoryAdoptionTest(_Contract):

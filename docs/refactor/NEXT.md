@@ -2,12 +2,29 @@
 
 ## Current objective — CP-23 (2026-09-15)
 
-**CP-22 is CLOSED. CP-23 tasks 01–14 and owner task 16 are done; task 15 is next.** Task 14's
-all-screen Frame/Verbose audit is complete (D-268–D-274): an explicit recorded inventory covers all
-74 Consumer and Maintainer screens plus eight conditional states, every cursor in both profiles
-passes the shared frame/key/literal/`v` laws, and text/tall-curses/clipped-curses projections agree.
-No per-screen exception was introduced. Task 15 now runs the full suite, scoped `mutmut`, remaining
-batch gates and the owner's manual acceptance.
+**CP-22 is CLOSED. CP-23 is IMPLEMENTED: tasks 01–16 are done in code, and task 15's gates are
+recorded.** Two things remain, and neither is agent work.
+
+1. **The owner's manual acceptance walk.**
+   - `docs/testing/TUI_MANUAL_WALKTHROUGH.md`, Acts I–II, finishing with its "CP-23 acceptance"
+     checklist.
+   - It runs in the marker-owned lab and the owner's terminal.
+   - When it passes, record it in the slice's task 15 evidence and run
+     `handoff-plan done CP-23.15`. `plan.json` holds CP-23.15 as `blocked` on it.
+2. **A green standalone `make integration`.**
+   - The one task-15 run failed on the B-108 temporary-Keychain creation, `security` status 206,
+     in `mcp_stdio_e2e_test`.
+   - `make quality` was green: 4,273 tests, 1 skipped, 85.94% branch coverage.
+   - Resolve B-108's isolation, or re-run and record what happens. Do not skip the test.
+
+Task 15 also:
+- ran the scoped advisory `mutmut` over `tui_consumer.py`, `tui_maintainer.py` and
+  `consumer_ui.py`;
+- turned every CP-23-owned survivor into a test or argued it equivalent;
+- recorded the older remainder as B-122.
+
+Agents can pick up B-122's per-renderer exact-line tests, B-111 or B-123 without waiting on the
+walk.
 Task 16.4–16.5 (D-267): from screen 22a an ordinary value is edited for one, a chosen set or all
 installed harnesses. The edit is a reviewed CONFIGURATION-only lifecycle over those files: it is
 compare-and-swap against the reviewed digests, it is refused when the installation has unrelated
