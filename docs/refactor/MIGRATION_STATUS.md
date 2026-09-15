@@ -1,5 +1,12 @@
 # AART Refactor Migration Status
 
+**2026-09-15, fresh start (D-276).** The predecessor project's plans, designs, PRD, progress logs,
+residue register, task-era boundary notes and CHANGELOG are deleted; git history keeps them.
+Manual-acceptance items now live in `docs/testing/manual-acceptance.md`, and the register's open rows
+are B-125, unverified. `docs_check.py` keeps only DOC001/DOC002. Code comments no longer cite finding
+ids, program tags or predecessor versions. The GitHub Enterprise rollout is documented in
+`docs/ci/github-enterprise-rollout.md`; `registry push` without `origin/HEAD` is B-126.
+
 **2026-09-15, release readiness for PR #1 (D-275).** The first Release Please release would have
 been published with no wheel: `release.py check` failed `schema-freeze-stale` after the tag. There
 is now one unversioned `docs/release/schema-freeze.json`, refreshed by `make release-freeze` in the

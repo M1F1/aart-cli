@@ -9,6 +9,8 @@
   commit.
 - A release PR opened with `GITHUB_TOKEN` starts no `pr-check` run. INV-096 requires the release PR
   to satisfy the quality contract; recorded as B-124.
+- D-276 reset the history: `CHANGELOG.md` is only a header, so the first Release Please entry is
+  `0.1.0`. B-125 lists findings carried over from the deleted residue register, none re-verified.
 
 ## Current objective — CP-23 (2026-09-15)
 
@@ -223,7 +225,7 @@ rather than sitting on a finished epic.
 are done. The operator's second manual TUI run walked the maintainer route from an empty Registry
 through initialization, Sources, Candidates, promotion and publication, then the consumer route
 through Marketplace, install and credentials; its findings are `QA-058` through `QA-084` in
-[`TODO.md`](../../TODO.md), the slice document is
+`TODO.md` (retired; git history keeps it), the slice document is
 [`slices/CP-21-second-manual-tui-run.md`](slices/CP-21-second-manual-tui-run.md), and the raw
 transcripts are the operator's own `nowe bledy i znaleziska.txt` (untracked).
 

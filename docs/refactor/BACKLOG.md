@@ -3163,3 +3163,84 @@ Not reclassified as critical yet: the release PR changes only the version litera
 `CHANGELOG.md`, and the tree it sits on passed `pr-check` when it reached `main`.
 
 Evidence/links: INV-096; `.github/workflows/release-please.yml`; D-275.
+
+## B-125 — Open findings carried over from the deleted residue register
+
+Recorded 2026-09-15 by D-276. `docs/testing/residue-register.md` is deleted; its open and deferred
+rows are summarized here so they are not lost. **None has been re-verified against the current
+tree.** Most were measured on predecessor-project wheels in August 2026, and some may already be
+fixed. Check each against the code before acting on it. Git history keeps the full rows.
+
+Rows about the deleted documents themselves are not carried over.
+
+Setup and receipts:
+- A Docker tag rebound by a setup run cannot be restored by undo, because the earlier image id is
+  never captured.
+- A docker build's image differs from a hand build (file modes, per-build mtimes, buildx defaults).
+- `custom.install@1` scripts get no `HOME`, so tools that read dotfiles misbehave; the verify probe's
+  environment differs from the adapters it checks.
+- A long failing `RUN` instruction is reduced to a fragment in the failure detail.
+- A completed undo reports `skipped`, which reads as "setup never ran".
+- `receipt verify`'s record-wide claims render as their own opposite.
+- A setup recipe can collect a secret that an MCP descriptor cannot reference, so every stage can
+  report success on a server that was never authenticated.
+- A truncated Keychain secret passes every check setup performs.
+- `help_urls` are parsed and validated but rendered nowhere.
+- Recovery-note paths are folded mid-word and are not home-relative.
+- Every declared input is prompted before the run finds the item needs nothing.
+- `usage report projection failed` names nothing actionable.
+- A retry is offered for a JSON path collision the same command cannot fix.
+- Outside a terminal, the `START` rule continues the previous prompt's line.
+- The token-containment test's "walked structurally" claim holds for channel 2 but not channel 4.
+- Recipe format: no `_comment` field; no shell-rc module by that name; the package root refuses any
+  extra top-level file.
+
+Sources, store and lifecycle:
+- `source add` refuses `file://` locations, and local-source symlink refusals are worded differently
+  on the two channels.
+- Removing a source does not remove its content; a review that says it changes nothing writes to the
+  durable store.
+- The object store's garbage collector has no caller; several `application/` functions are
+  unreachable, and `fp.py` duplicates `domain/result.py`.
+- `agent_artifacts/io/cache.py` is imported by nothing.
+- Reclaiming a merge file depends on uninstall order; an emptied harness directory outlives its file.
+- `uninstall` with no coordinate advises `marketplace list`, which refuses when no source is
+  configured.
+- The ownership gate warns for one of the two effects an artifact can use.
+- A project profile override replaces the whole profile, silently dropping absent sections.
+- An unexplained write to a real data root was observed during a sandboxed session (high).
+
+Registry, security and release:
+- `registry scaffold` cannot scaffold a setup-bearing artifact.
+- `revendor` cannot narrow a vendored subtree.
+- `registry init` and `registry validate` disagree about a workspace holding only `aart-source.json`.
+- The registry group renders failure two ways; `reporting` and `upgrade` have no `--json`.
+- `security scan` needs an object envelope no command emits; `security analyzers` lists analyzers it
+  cannot run.
+- The SPDX allowlist rule in `registry_publication.py` is not applied by any gate.
+- `wheel-digest` builds the working tree while stamping `HEAD`; `make wheel` dirties a tracked file.
+- Two curses helpers keep a flag-dependent return type.
+- The index-version boundary for setup-bearing artifacts is not enforced.
+
+## B-126 — `registry push` refuses every branch when `origin/HEAD` is not set
+
+Found 2026-09-15 while writing `docs/ci/github-enterprise-rollout.md`. Severity: medium.
+`_configured_registry_branch` in `agent_artifacts/commands/registry.py` resolves the consumer branch
+from `refs/remotes/<remote>/HEAD` and otherwise falls back to the current branch. A repository that
+was `git init`ed and pushed, or cloned while empty, has no `origin/HEAD`, so every checked-out branch
+is treated as the consumer branch and refused. The rollout manual tells the reader to run
+`git remote set-head origin --auto`. A fix would read the remote's default branch with
+`git ls-remote --symref` or refuse with that command as the remediation.
+
+## B-127 — `scripts/vendor_scan.py` still says `registry vendor` cannot take a single file
+
+Found 2026-09-15 during the D-276 comment sweep. The vendoring tutorials say a lone file vendors
+cleanly and is re-rooted under its basename, but `vendor_scan.py`'s docstrings and its `adopt`
+output still say a single file cannot be vendored. Verify the current behaviour, then either route
+`adopt` through `registry vendor` or correct the text.
+
+## B-128 — Decide whether to keep the `agent-artifacts` command alias
+
+Recorded 2026-09-15 by D-276. The wheel still installs `agent-artifacts` beside `aart`, and the
+package is still `agent_artifacts`. Both are names from the predecessor project. Dropping the alias
+is a breaking change for anyone who scripted it, so it waits for an explicit decision.

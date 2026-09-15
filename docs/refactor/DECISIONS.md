@@ -6743,3 +6743,38 @@ consumers stands: `domain/outcomes.py` is still a schema input, and retiring it 
 **Consequences.** The release checklist no longer fails on this tree for the freeze. Older plans,
 PROGRESS entries and the CHANGELOG's hand-written sections that link to the deleted documents are
 reduced to plain text where a link would break; their prose is historical and left as written.
+
+## D-276 — The repository starts its history at 0.1.0
+
+**Context.** The repository was cut from a predecessor project and carried its history:
+- `PLAN.md`, `PROGRESS.md`, `TODO.md` and `feedback.md`;
+- `docs/plan/`, `docs/design/`, `docs/product/`;
+- per-iteration live-acceptance progress files, briefs and the residue register in `docs/testing/`;
+- task-era boundary notes (`docs/compiler`, `docs/installation`, `docs/store`, `docs/state`,
+  `docs/tui`, `docs/configuration/config-policy-v1.md`, `docs/marketplace/federated-marketplace-v1.md`,
+  `docs/distribution`, two `docs/registry` notes);
+- a 1,000-line CHANGELOG of predecessor releases.
+
+Code comments cited finding ids (`LAF-`, `RS-`, `AD-`), work-program tags (`WP-`, `RR-`, `SI-`,
+`VI-`, `VN-`, `SL-`) and predecessor version numbers. The owner asked for the repository to read as
+a product that has just started.
+
+**Decision.**
+- The files above are deleted; git history keeps them. The Product Specification is the only design
+  authority, and code references to deleted design documents point to it or are removed.
+- `TODO.md`'s manual-acceptance items move to `docs/testing/manual-acceptance.md`. The residue
+  register's open rows are summarized, unverified, in B-125.
+- `CHANGELOG.md` is reset to its header. Release Please writes the first entry at `0.1.0`.
+- `scripts/docs_check.py` keeps DOC001/DOC002 (Markdown and links). DOC003–DOC010 checked the
+  structure of the deleted plan, progress and register documents and are removed with their tests.
+- Comments state current behaviour. Finding ids, program tags and "this used to…" narratives are
+  removed. `D-`, `B-`, `CP-`, `INV-` and `QA-` ids stay, because `docs/refactor/` still defines
+  every one of them.
+- Kept on purpose: `docs/refactor/` (the handoff record), `REFERENCE_REGISTRY_ORIGIN`, the
+  `agent_artifacts` package name, the `.agent-artifacts/` project directory, the `agent-artifacts`
+  command alias (B-128), and legacy-rejection fixtures that name the predecessor repository.
+- `docs/ci/github-enterprise-rollout.md` and `docs/ci/workflows-v1.md` describe rolling the tool
+  and a registry out on GitHub Enterprise Server.
+
+**Consequences.** Older entries in `docs/refactor/` still name deleted files. They are history and
+are left as written.
