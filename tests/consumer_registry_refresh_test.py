@@ -15,6 +15,7 @@ one thing screen 21 must never do.
 from __future__ import annotations
 
 import datetime as dt
+import os
 import pathlib
 import tempfile
 import unittest
@@ -237,7 +238,7 @@ class RegistryRefreshCompositionTest(unittest.TestCase):
 
         for alias in ("company", "platform-ai"):
             with self.subTest(alias=alias):
-                with _environment() as env, mock.patch.dict(env.xdg, clear=False):
+                with _environment() as env, mock.patch.dict(os.environ, env.xdg, clear=False):
                     actions = self._composed(env)
                     refresher = actions._registry_refresh
                     self.assertIsNotNone(refresher)
@@ -260,7 +261,7 @@ class RegistryRefreshCompositionTest(unittest.TestCase):
         from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
         from tests.configured_install_command_e2e_test import _environment
 
-        with _environment() as env, mock.patch.dict(env.xdg, clear=False):
+        with _environment() as env, mock.patch.dict(os.environ, env.xdg, clear=False):
             actions = self._composed(env)
             before = actions._context.offers
             actions._registry_refresh = lambda alias: Err(
@@ -295,7 +296,7 @@ class RegistryRefreshCompositionTest(unittest.TestCase):
 
         from tests.configured_install_command_e2e_test import _environment
 
-        with _environment() as env, mock.patch.dict(env.xdg, clear=False):
+        with _environment() as env, mock.patch.dict(os.environ, env.xdg, clear=False):
             actions = self._composed(env)
             installed_before = actions.source().screens.installed
             calls: list[str] = []
@@ -341,7 +342,7 @@ class RegistryRefreshCompositionTest(unittest.TestCase):
 
         from tests.configured_install_command_e2e_test import _environment
 
-        with _environment() as env, mock.patch.dict(env.xdg, clear=False):
+        with _environment() as env, mock.patch.dict(os.environ, env.xdg, clear=False):
             actions = self._composed(env)
             called: list[str] = []
             actions._registry_refresh = lambda alias: called.append(alias)  # type: ignore[assignment,func-returns-value]
@@ -378,7 +379,7 @@ class RegistryRefreshCompositionTest(unittest.TestCase):
     def test_an_unreviewed_execution_is_refused(self) -> None:
         from tests.configured_install_command_e2e_test import _environment
 
-        with _environment() as env, mock.patch.dict(env.xdg, clear=False):
+        with _environment() as env, mock.patch.dict(os.environ, env.xdg, clear=False):
             actions = self._composed(env)
             called: list[str] = []
             actions._registry_refresh = lambda alias: called.append(alias)  # type: ignore[assignment,func-returns-value]

@@ -13,6 +13,7 @@ exact identity, and runs the same canonical source-add transaction the CLI runs.
 
 from __future__ import annotations
 
+import os
 import unittest
 from unittest import mock
 
@@ -171,7 +172,7 @@ class MaintainerSourceAdditionCompositionTest(unittest.TestCase):
     def test_success_names_the_source_and_explains_discovery_without_claiming_promotion(self):
         from tests.configured_install_command_e2e_test import _environment
 
-        with _environment() as env, mock.patch.dict(env.xdg, clear=False):
+        with _environment() as env, mock.patch.dict(os.environ, env.xdg, clear=False):
             actions = self._composed(env)
             actions._source_connection = lambda _draft: Ok(actions._context)
             draft = SourceDraft("local-authors", "source-local", str(env.project), "")
@@ -201,7 +202,7 @@ class MaintainerSourceAdditionCompositionTest(unittest.TestCase):
         from tests.configured_install_command_e2e_test import _environment
         from tests.maintainer_source_sync_application_test import _failure
 
-        with _environment() as env, mock.patch.dict(env.xdg, clear=False):
+        with _environment() as env, mock.patch.dict(os.environ, env.xdg, clear=False):
             actions = self._composed(env)
             connector = mock.Mock(return_value=_failure("Source connection refused"))
             actions._source_connection = connector
@@ -250,7 +251,7 @@ class MaintainerSourceAdditionCompositionTest(unittest.TestCase):
             with self.subTest(kind=draft.kind):
                 from tests.configured_install_command_e2e_test import _environment
 
-                with _environment() as env, mock.patch.dict(env.xdg, clear=False):
+                with _environment() as env, mock.patch.dict(os.environ, env.xdg, clear=False):
                     actions = self._composed(env)
                     connector = actions._source_connection
                     self.assertIsNotNone(connector)
@@ -274,7 +275,7 @@ class MaintainerSourceAdditionCompositionTest(unittest.TestCase):
 
         from tests.configured_install_command_e2e_test import _environment
 
-        with _environment() as env, mock.patch.dict(env.xdg, clear=False):
+        with _environment() as env, mock.patch.dict(os.environ, env.xdg, clear=False):
             actions = self._composed(env)
             calls: list[SourceDraft] = []
             actions._source_connection = lambda value: (
@@ -300,7 +301,7 @@ class MaintainerSourceAdditionCompositionTest(unittest.TestCase):
     def test_a_kind_screen_21a_owns_is_refused_by_this_form(self) -> None:
         from tests.configured_install_command_e2e_test import _environment
 
-        with _environment() as env, mock.patch.dict(env.xdg, clear=False):
+        with _environment() as env, mock.patch.dict(os.environ, env.xdg, clear=False):
             actions = self._composed(env)
             called: list[SourceDraft] = []
             actions._source_connection = lambda value: called.append(value)  # type: ignore[assignment,func-returns-value]

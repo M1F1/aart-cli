@@ -8,6 +8,7 @@ resolved commit and every path before confirmation reaches the adoption port.
 
 from __future__ import annotations
 
+import os
 import unittest
 from dataclasses import replace
 from datetime import date
@@ -333,7 +334,7 @@ class RepositoryAdoptionActionTest(unittest.TestCase):
                 calls.append(("apply", reviewed, digest))
                 return Ok(reviewed)
 
-        with _environment() as env, mock.patch.dict(env.xdg, clear=False):
+        with _environment() as env, mock.patch.dict(os.environ, env.xdg, clear=False):
             actions = self._composed(env)
             actions._repository_scan = lambda draft: (  # type: ignore[assignment]
                 calls.append(("scan", draft)) or Ok(scan)
@@ -420,7 +421,7 @@ class RepositoryAdoptionActionTest(unittest.TestCase):
                 calls.append((reviewed, digest))
                 return Ok(reviewed)
 
-        with _environment() as env, mock.patch.dict(env.xdg, clear=False):
+        with _environment() as env, mock.patch.dict(os.environ, env.xdg, clear=False):
             actions = self._composed(env)
             actions._adopted_artifacts = (_ADOPTED,)  # type: ignore[attr-defined]
             actions._repository_upstream_check = lambda coordinate: (  # type: ignore[attr-defined]

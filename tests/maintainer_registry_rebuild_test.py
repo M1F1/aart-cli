@@ -322,7 +322,7 @@ class MaintainerRegistryRebuildActionTest(unittest.TestCase):
     def test_the_review_names_the_stages_it_will_run_and_no_command_line(self) -> None:
         from tests.configured_install_command_e2e_test import _environment
 
-        with _environment() as env, mock.patch.dict(env.xdg, clear=False):
+        with _environment() as env, mock.patch.dict(os.environ, env.xdg, clear=False):
             _repository(str(env.project))
             created = bootstrap_registry_workspace(
                 root=str(env.project), registry_id="acme-registry", display_name="ACME Registry"
@@ -341,7 +341,7 @@ class MaintainerRegistryRebuildActionTest(unittest.TestCase):
     def test_two_different_stage_choices_are_two_different_plans(self) -> None:
         from tests.configured_install_command_e2e_test import _environment
 
-        with _environment() as env, mock.patch.dict(env.xdg, clear=False):
+        with _environment() as env, mock.patch.dict(os.environ, env.xdg, clear=False):
             _repository(str(env.project))
             created = bootstrap_registry_workspace(
                 root=str(env.project), registry_id="acme-registry", display_name="ACME Registry"
@@ -357,7 +357,7 @@ class MaintainerRegistryRebuildActionTest(unittest.TestCase):
     def test_a_project_with_no_registry_is_refused_on_the_review(self) -> None:
         from tests.configured_install_command_e2e_test import _environment
 
-        with _environment() as env, mock.patch.dict(env.xdg, clear=False):
+        with _environment() as env, mock.patch.dict(os.environ, env.xdg, clear=False):
             actions = self._composed(env)
             refused = self._prepare(actions, "all")
 
@@ -367,7 +367,7 @@ class MaintainerRegistryRebuildActionTest(unittest.TestCase):
     def test_one_confirmation_really_rebuilds_this_project_registry(self) -> None:
         from tests.configured_install_command_e2e_test import _environment
 
-        with _environment() as env, mock.patch.dict(env.xdg, clear=False):
+        with _environment() as env, mock.patch.dict(os.environ, env.xdg, clear=False):
             _repository(str(env.project))
             created = bootstrap_registry_workspace(
                 root=str(env.project), registry_id="acme-registry", display_name="ACME Registry"
@@ -412,7 +412,7 @@ class MaintainerRegistryRebuildShellTest(unittest.TestCase):
         from tests.configured_install_command_e2e_test import _environment
         from tests.consumer_shell_test import ENTER, FakeTerminal
 
-        with _environment() as env, _mock.patch.dict(env.xdg, clear=False):
+        with _environment() as env, _mock.patch.dict(os.environ, env.xdg, clear=False):
             _repository(str(env.project))
             created = bootstrap_registry_workspace(
                 root=str(env.project), registry_id="acme-registry", display_name="ACME Registry"

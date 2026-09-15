@@ -230,7 +230,7 @@ class FailedActionShellTest(unittest.TestCase):
         from tests.consumer_shell_test import ENTER, FakeTerminal
         from tests.maintainer_registry_rebuild_test import _repository
 
-        with _environment() as env, mock.patch.dict(env.xdg, clear=False):
+        with _environment() as env, mock.patch.dict(os.environ, env.xdg, clear=False):
             _repository(str(env.project))
             created = bootstrap_registry_workspace(
                 root=str(env.project), registry_id="acme-registry", display_name="ACME Registry"

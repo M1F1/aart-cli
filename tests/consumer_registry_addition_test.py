@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import unittest
 from unittest import mock
 
@@ -107,7 +108,7 @@ class RegistryAdditionInteractionTest(unittest.TestCase):
             "stable",
             False,
         )
-        with _environment() as env, mock.patch.dict(env.xdg, clear=False):
+        with _environment() as env, mock.patch.dict(os.environ, env.xdg, clear=False):
             composed = tui._canonical_consumer_actions(
                 project=str(env.project), user_home=str(env.home), today=tui.date.today()
             )
@@ -132,7 +133,7 @@ class RegistryAdditionInteractionTest(unittest.TestCase):
         from agent_artifacts import tui
         from tests.configured_install_command_e2e_test import _environment
 
-        with _environment() as env, mock.patch.dict(env.xdg, clear=False):
+        with _environment() as env, mock.patch.dict(os.environ, env.xdg, clear=False):
             composed = tui._canonical_consumer_actions(
                 project=str(env.project), user_home=str(env.home), today=tui.date.today()
             )
@@ -157,7 +158,7 @@ class RegistryAdditionInteractionTest(unittest.TestCase):
         from tests.configured_install_command_e2e_test import _environment
 
         draft = RegistryDraft("team", "https://git.example.test/team/registry.git", "main", False)
-        with _environment() as env, mock.patch.dict(env.xdg, clear=False):
+        with _environment() as env, mock.patch.dict(os.environ, env.xdg, clear=False):
             composed = tui._canonical_consumer_actions(
                 project=str(env.project), user_home=str(env.home), today=tui.date.today()
             )

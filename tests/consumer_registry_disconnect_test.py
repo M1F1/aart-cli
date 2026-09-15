@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import unittest
 from unittest import mock
 
@@ -67,7 +68,7 @@ class RegistryDisconnectActionTest(unittest.TestCase):
         environment = _environment()
         env = environment.__enter__()
         self.addCleanup(environment.__exit__, None, None, None)
-        patcher = mock.patch.dict(env.xdg, clear=False)
+        patcher = mock.patch.dict(os.environ, env.xdg, clear=False)
         patcher.start()
         self.addCleanup(patcher.stop)
         composed = tui._canonical_consumer_actions(

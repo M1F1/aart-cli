@@ -399,7 +399,7 @@ class MaintainerRegistryInitActionTest(unittest.TestCase):
     def test_the_review_states_all_five_stages_and_that_nothing_is_published(self) -> None:
         from tests.configured_install_command_e2e_test import _environment
 
-        with _environment() as env, mock.patch.dict(env.xdg, clear=False):
+        with _environment() as env, mock.patch.dict(os.environ, env.xdg, clear=False):
             actions = self._composed(env)
             prepared = self._prepare(
                 actions, RegistryInitDraft("acme-registry", "ACME Registry", "", False)
@@ -416,7 +416,7 @@ class MaintainerRegistryInitActionTest(unittest.TestCase):
     def test_an_unusable_identifier_is_refused_before_anything_is_prepared(self) -> None:
         from tests.configured_install_command_e2e_test import _environment
 
-        with _environment() as env, mock.patch.dict(env.xdg, clear=False):
+        with _environment() as env, mock.patch.dict(os.environ, env.xdg, clear=False):
             actions = self._composed(env)
             update = self._prepare(actions, RegistryInitDraft("", "ACME Registry", "", False))
 
@@ -428,7 +428,7 @@ class MaintainerRegistryInitActionTest(unittest.TestCase):
 
         from tests.configured_install_command_e2e_test import _environment
 
-        with _environment() as env, mock.patch.dict(env.xdg, clear=False):
+        with _environment() as env, mock.patch.dict(os.environ, env.xdg, clear=False):
             actions = self._composed(env)
             prepared = self._prepare(
                 actions, RegistryInitDraft("acme-registry ", " ACME Registry", " ", False)
@@ -445,7 +445,7 @@ class MaintainerRegistryInitActionTest(unittest.TestCase):
 
         from tests.configured_install_command_e2e_test import _environment
 
-        with _environment() as env, mock.patch.dict(env.xdg, clear=False):
+        with _environment() as env, mock.patch.dict(os.environ, env.xdg, clear=False):
             # A registry is a Git repository: canonical mutation refuses to write anywhere the
             # maintainer could not review and revert what it wrote.
             _repository(str(env.project))
@@ -487,7 +487,7 @@ class MaintainerRegistryInitActionTest(unittest.TestCase):
 
         from tests.configured_install_command_e2e_test import _environment
 
-        with _environment() as env, mock.patch.dict(env.xdg, clear=False):
+        with _environment() as env, mock.patch.dict(os.environ, env.xdg, clear=False):
             actions = self._composed(env)
             quiet = self._prepare(
                 actions, RegistryInitDraft("acme-registry", "ACME Registry", "", False)
@@ -508,7 +508,7 @@ class MaintainerRegistryInitActionTest(unittest.TestCase):
                 RegistryBootstrapStage("lock", False, ("upstream reference is unreachable",)),
             )
         )
-        with _environment() as env, mock.patch.dict(env.xdg, clear=False):
+        with _environment() as env, mock.patch.dict(os.environ, env.xdg, clear=False):
             from agent_artifacts.io.consumer_actions import RegistryBootstrapCompletion
 
             actions = self._composed(env)
