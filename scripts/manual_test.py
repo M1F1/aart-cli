@@ -49,11 +49,27 @@ class ManualLab:
     branch: str
 
 
+# Git repacks in a detached process after a commit or push. The lab copies and deletes its
+# repositories straight afterwards, and a repack still writing into one raced both (B-129), so no git
+# the lab starts, directly or under the CLI, runs automatic maintenance.
+_NO_BACKGROUND_GIT = (("maintenance.auto", "false"), ("gc.auto", "0"))
+
+
+def _without_background_git(env: dict[str, str] | None) -> dict[str, str]:
+    environment = dict(os.environ if env is None else env)
+    count = int(environment.get("GIT_CONFIG_COUNT", "0"))
+    for offset, (key, value) in enumerate(_NO_BACKGROUND_GIT):
+        environment[f"GIT_CONFIG_KEY_{count + offset}"] = key
+        environment[f"GIT_CONFIG_VALUE_{count + offset}"] = value
+    environment["GIT_CONFIG_COUNT"] = str(count + len(_NO_BACKGROUND_GIT))
+    return environment
+
+
 def _run(argv: tuple[str, ...], *, cwd: Path, env: dict[str, str] | None = None) -> str:
     completed = subprocess.run(
         argv,
         cwd=cwd,
-        env=env,
+        env=_without_background_git(env),
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,

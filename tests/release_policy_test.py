@@ -19,6 +19,8 @@ import pathlib
 import re
 import unittest
 
+from scripts import release_artifact
+
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 CONFIG = ROOT / "release-please-config.json"
 MANIFEST = ROOT / ".release-please-manifest.json"
@@ -30,6 +32,11 @@ MANIFEST = ROOT / ".release-please-manifest.json"
 _ASSIGNED = re.compile(
     r'(?m)^\s*(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*"(?P<value>\d+\.\d+\.\d+[^"]*)"'
 )
+# Release Please's generic updater pattern: the first match on a marked line is replaced whole,
+# including whatever it takes for a pre-release or build suffix.
+_ENGINE_VERSION = re.compile(r"\d+\.\d+\.\d+(?P<rest>-[\w.]+|\+[-\w.]+)?")
+# The places the README would quote this package's release: a tag, a wheel, an index pin.
+_README_RELEASE = re.compile(r"(?:aart_cli-|aart-cli==|@v|--tag v|tag -f v|origin v)\d+\.\d+\.\d+")
 _SEMVER_LITERAL = re.compile(
     r"(?m)^\s*(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*SemVer\("
     r"(?P<major>\d+),\s*(?P<minor>\d+),\s*(?P<patch>\d+)\s*\)"
@@ -137,24 +144,76 @@ class CommittedReleasePolicyTest(unittest.TestCase):
         self.assertIn("pyproject.toml", found)
         self.assertIn("agent_artifacts/__init__.py", found)
 
-    def test_every_prose_mention_of_the_release_is_on_a_line_the_engine_rewrites(self) -> None:
-        """INV-101: a README that quotes a version is a version somebody has to remember.
+    def test_every_line_the_engine_rewrites_holds_exactly_one_version_it_can_rewrite(self) -> None:
+        """INV-101: a line the engine rewrites wrongly is worse than a line it never touches.
 
-        The install table names an exact wheel and an exact tag, which is the whole reason it is
-        useful, so the answer is not to delete the version -- it is to make the engine write it.
-        The generic updater rewrites annotated lines only, so an *un*annotated mention is a copy
-        that will go stale, and that is what this refuses.
+        The generic updater replaces only the *first* version on a marked line, and its pattern
+        reads anything after a hyphen as a pre-release. The first release PR showed both: a table
+        row quoting three versions had one rewritten, and `aart_cli-0.0.1-py3-none-any.whl` became
+        `aart_cli-0.1.0-none-any.whl`. So a marked line may hold one version, bare.
         """
 
         marker = "x-release-please-version"
-        version = _released_version()
-        for relative in ("README.md",):
+        config = _config()
+        packages = config.get("packages")
+        assert isinstance(packages, dict)
+        root_package = packages["."]
+        assert isinstance(root_package, dict)
+        generic = [
+            entry if isinstance(entry, str) else str(entry["path"])
+            for entry in root_package.get("extra-files", ())
+            if isinstance(entry, str) or entry.get("type", "generic") == "generic"
+        ]
+        self.assertGreater(len(generic), 0)
+        for relative in generic:
             text = (ROOT / relative).read_text(encoding="utf-8")
-            mentions = [line for line in text.split("\n") if version in line]
-            self.assertGreater(len(mentions), 0, f"{relative} no longer names the release at all")
-            for line in mentions:
+            marked = [line for line in text.split("\n") if marker in line]
+            self.assertGreater(len(marked), 0, f"{relative} is listed but carries no marker")
+            for line in marked:
                 with self.subTest(file=relative, line=line[:60]):
-                    self.assertIn(marker, line)
+                    found = list(_ENGINE_VERSION.finditer(line))
+                    self.assertEqual(len(found), 1, "the engine rewrites only the first version")
+                    self.assertIsNone(
+                        found[0].group("rest"), "the engine reads this as a pre-release"
+                    )
+
+    def test_the_readme_writes_the_release_as_a_placeholder(self) -> None:
+        """INV-101: the README shows the shape of a command; the exact one is on the release.
+
+        `scripts/install_commands.py` prints the exact commands and the release body carries them,
+        so a version written into the README is a copy with nothing to gain from it.
+        """
+
+        text = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertEqual(_README_RELEASE.findall(text), [])
+        self.assertIn("X.Y.Z", text)
+
+    def test_the_tag_the_engine_creates_is_one_the_release_run_accepts(self) -> None:
+        """INV-099: the release tag is the released identity, so both ends must spell it alike.
+
+        Release Please names a tag `<component>-v<version>` unless told otherwise, and the
+        component defaults to `package-name`. `release.yml` and `release_artifact.py` accept only
+        `vX.Y.Z`, so an engine left on its default would publish a GitHub Release whose wheel is
+        never built. The tag is derived here the way the engine derives it.
+        """
+
+        config = _config()
+        packages = config.get("packages")
+        assert isinstance(packages, dict)
+        root_package = packages["."]
+        assert isinstance(root_package, dict)
+        component = root_package.get("component", root_package.get("package-name", ""))
+        include_component = root_package.get(
+            "include-component-in-tag", config.get("include-component-in-tag", True)
+        )
+        include_v = root_package.get("include-v-in-tag", config.get("include-v-in-tag", True))
+        separator = root_package.get("tag-separator", config.get("tag-separator", "-"))
+        version = _released_version()
+        tag = f"{'v' if include_v else ''}{version}"
+        if include_component and component:
+            tag = f"{component}{separator}{tag}"
+
+        self.assertEqual(release_artifact.released_version(tag), version)
 
     def test_the_manifest_and_the_package_agree_because_one_engine_wrote_both(self) -> None:
         """INV-099: the manifest is the engine's record of the released identity."""

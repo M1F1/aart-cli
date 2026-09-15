@@ -6778,3 +6778,28 @@ a product that has just started.
 
 **Consequences.** Older entries in `docs/refactor/` still name deleted files. They are history and
 are left as written.
+
+## D-277 — Release tags are `vX.Y.Z`, and the README names no release
+
+**Context.** The first release PR (#2) could not have become a working release, for two reasons:
+- Release Please names a tag `<component>-v<version>` by default, so it would have tagged
+  `aart-cli-v0.1.0`. `release.yml` and `release_artifact.py` accept only `vX.Y.Z`.
+- Its `pr-check` failed on every Python version. The generic updater rewrites only the first version
+  on a marked line and reads anything after a hyphen as a pre-release. In the README install table
+  one of three versions per row moved, and `aart_cli-0.0.1-py3-none-any.whl` became
+  `aart_cli-0.1.0-none-any.whl`. The README's example commands naming `v0.1.0` also became unmarked
+  mentions of the release.
+
+**Decision.**
+- `include-component-in-tag: false`. A test derives the engine's tag from the committed config and
+  parses it with `release_artifact.released_version`.
+- The README writes `X.Y.Z` wherever a command needs a release, like `<repository>` for the address.
+  The exact commands come from `scripts/install_commands.py` and the release body. `README.md` is
+  no longer an `extra-files` entry.
+- The prose-mention test is replaced by two tests: every line a generic updater rewrites holds exactly
+  one bare version, and the README quotes no tag, wheel or index pin of a release.
+
+**Consequences.** INV-101 holds with no copy of the version in the README at all, rather than a
+copy the engine keeps. Release-time verification of the merged release tree (ancestry aside)
+passed locally: `release.py check --without-registry`, `packaging_check.py`, `build_wheel.py` and
+`release_artifact.py --tag v0.1.0`.

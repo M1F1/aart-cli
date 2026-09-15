@@ -3244,3 +3244,20 @@ output still say a single file cannot be vendored. Verify the current behaviour,
 Recorded 2026-09-15 by D-276. The wheel still installs `agent-artifacts` beside `aart`, and the
 package is still `agent_artifacts`. Both are names from the predecessor project. Dropping the alias
 is a breaking change for anyone who scripted it, so it waits for an explicit decision.
+
+## B-129 — RESOLVED: the manual lab raced git's background repack
+
+Found 2026-09-15 in `pr-check`, once on Python 3.14 (release PR #2) and once on 3.10 (PR #3).
+Reclassified as critical because it turns required checks red at random, including a release PR's.
+- `manual_test_lab_test.test_setup_builds_a_fresh_ecosystem_with_a_credential_mcp` failed in two ways:
+  - `reset_lab` hit `Directory not empty` on `repositories/registry/.git`;
+  - `git clone --bare` hit `hardlink different from source` on `objects/pack/tmp_idx_*`.
+- Cause: the runner's git 2.55 runs automatic maintenance in a detached process after a commit.
+  The lab copies and deletes a repository straight after committing to it, so a repack still
+  writing there raced both operations.
+- Fix: `scripts/manual_test.py:_run` sets `maintenance.auto=false` and `gc.auto=0` through
+  `GIT_CONFIG_COUNT`, which also reaches the CLI's own git. Test:
+  `test_no_git_the_lab_starts_repacks_in_the_background`. Targeted mutation:
+  `maintenance.auto=true` turns it red.
+- Other test helpers that commit and then copy or delete a repository could race the same way;
+  none has been seen failing.

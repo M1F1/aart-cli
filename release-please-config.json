@@ -2,6 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "release-type": "python",
   "include-v-in-tag": true,
+  "include-component-in-tag": false,
   "draft": false,
   "prerelease": false,
   "separate-pull-requests": false,
@@ -25,8 +26,7 @@
       "package-name": "aart-cli",
       "changelog-path": "CHANGELOG.md",
       "extra-files": [
-        { "type": "generic", "path": "agent_artifacts/__init__.py" },
-        { "type": "generic", "path": "README.md" }
+        { "type": "generic", "path": "agent_artifacts/__init__.py" }
       ]
     }
   }

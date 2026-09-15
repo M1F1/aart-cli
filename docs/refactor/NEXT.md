@@ -1,16 +1,14 @@
 # AART Refactor — Next Work
 
-## Before merging PR #1 (2026-09-15)
+## Releasing 0.1.0 (2026-09-15)
 
-- Enable **Settings → Actions → General → Allow GitHub Actions to create and approve pull
-  requests**. `can_approve_pull_request_reviews` is `false`, so Release Please cannot open its
-  release PR.
-- Merge with **squash**. The PR body's `BEGIN_COMMIT_OVERRIDE` block is read only for a squash
-  commit.
-- A release PR opened with `GITHUB_TOKEN` starts no `pr-check` run. INV-096 requires the release PR
-  to satisfy the quality contract; recorded as B-124.
-- D-276 reset the history: `CHANGELOG.md` is only a header, so the first Release Please entry is
-  `0.1.0`. B-125 lists findings carried over from the deleted residue register, none re-verified.
+- PR #1 is merged. Release Please opened release PR #2.
+- D-277 fixes the two things that stopped #2 from becoming a working release: the tag name and the
+  README version rewrites. After that fix is squash-merged, Release Please regenerates #2.
+- Merge #2 with **squash** once its `pr-check` is green. Then check that the release run built and
+  attached `aart_cli-0.1.0-py3-none-any.whl` to the `v0.1.0` release.
+- `pr-check` stays on for release PRs (INV-096, owner confirmed). B-129, a race between the manual lab
+  and git's background repack that turned it red at random, is fixed.
 
 ## Current objective — CP-23 (2026-09-15)
 

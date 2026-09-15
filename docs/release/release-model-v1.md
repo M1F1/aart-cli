@@ -57,12 +57,16 @@ that agree today.
 `agent_artifacts/__init__.py` holds the only version literal in the tree:
 
 ```python
-__version__ = "0.0.1"  # x-release-please-version
+__version__ = "X.Y.Z"  # x-release-please-version
 ```
 
-`pyproject.toml` is rewritten by Release Please's Python release type, `README.md` on the lines
-carrying `<!-- x-release-please-version -->`, and `runtime_contract.EXECUTABLE_VERSION` parses
-`__version__` rather than declaring its own.
+`pyproject.toml` is rewritten by Release Please's Python release type, and
+`runtime_contract.EXECUTABLE_VERSION` parses `__version__` rather than declaring its own.
+
+`README.md` names no release. It writes `X.Y.Z` where a command needs one, and the exact commands
+come from `scripts/install_commands.py` and the release body. The generic updater cannot keep a
+README current: it rewrites only the first version on a marked line, and it reads the `-py3` of a
+wheel filename as a pre-release.
 
 Nothing compares any of them to anything. There is no gate proving they agree, because nothing can
 disagree — which is the point of INV-085, and is not the same claim as "the copies are checked".

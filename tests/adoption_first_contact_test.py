@@ -6,7 +6,7 @@ import re
 import unittest
 from pathlib import Path
 
-from agent_artifacts import __version__, cli, model, wizard
+from agent_artifacts import cli, model, wizard
 
 _ROOT = Path(__file__).resolve().parents[1]
 _README = (_ROOT / "README.md").read_text(encoding="utf-8")
@@ -167,11 +167,11 @@ class ReadmeAdoptionTest(unittest.TestCase):
                 self.assertGreaterEqual(section.count(installer), 3)
         # One placeholder, defined once, used everywhere an address would have gone.
         self.assertIn("`<repository>` is the address of the", section)
-        self.assertGreaterEqual(section.count("git+<repository>.git@v"), 3)
-        # Taken from the executable, not written here: a literal passes while the README goes
-        # stale, which is exactly how 2.8.0 nearly shipped a matrix still naming 2.7.1.  A wheel
-        # filename is not an address, so it stays whole.
-        self.assertGreaterEqual(section.count(f"./aart_cli-{__version__}-py3-none-any.whl"), 3)
+        # The release is a placeholder too: the exact version is printed by
+        # `scripts/install_commands.py` and carried by the release body, so nothing here goes stale.
+        self.assertIn("`X.Y.Z` is the release you want", section)
+        self.assertGreaterEqual(section.count("git+<repository>.git@vX.Y.Z"), 3)
+        self.assertGreaterEqual(section.count("./aart_cli-X.Y.Z-py3-none-any.whl"), 3)
         self.assertIn("The editable install is for working on AART itself", _README)
 
     def test_the_enterprise_section_still_says_which_sources_stop_working(self) -> None:
@@ -185,7 +185,7 @@ class ReadmeAdoptionTest(unittest.TestCase):
 
         start = _README.index("### On a private Enterprise instance")
         section = _README[start : _README.index("The editable install is", start)]
-        self.assertIn(f'"aart-cli=={__version__}"', section)
+        self.assertIn('"aart-cli==X.Y.Z"', section)
         self.assertIn("Release wheel by URL", section)
         self.assertIn("**No.**", section)
 
