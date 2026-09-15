@@ -374,6 +374,28 @@ class ManualTestLabTest(unittest.TestCase):
         reset_lab(self.root)
         self.assertFalse(self.root.exists())
 
+    def test_reset_clears_a_payload_delivered_into_a_read_only_directory(self) -> None:
+        """Setup failed on a real lab: a vendored payload directory is `r-x`, its files writable.
+
+        Unlinking needs write permission on the directory holding the file, not on the file, so
+        making the file writable -- all the old error handler did -- could never let it go.
+        """
+
+        from scripts.manual_test import reset_lab, setup_lab
+
+        setup_lab(self.root)
+        payload = self.root / "repositories/registry/.agent-artifacts/runtimes/lab/mcp/payload"
+        payload.mkdir(parents=True)
+        (payload / "server.py").write_text("owned\n")
+        (payload / "mcp.json").write_text("{}\n")
+        (payload / "mcp.json").chmod(stat.S_IRUSR)
+        payload.chmod(stat.S_IRUSR | stat.S_IXUSR)
+        self.addCleanup(lambda: payload.is_dir() and payload.chmod(stat.S_IRWXU))
+
+        reset_lab(self.root)
+
+        self.assertFalse(self.root.exists())
+
     def test_the_marker_is_the_last_thing_a_reset_removes(self) -> None:
         """The ordering that decides whether a failed reset is recoverable.
 

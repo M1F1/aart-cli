@@ -106,6 +106,10 @@ def reset_lab(raw_root: Path) -> None:
         raise ValueError(f"manual-test root is not a real directory: {root}")
 
     def remove_read_only(function, path: str, _error) -> None:
+        # Removing an entry needs write permission on the directory holding it, and a delivered
+        # payload directory is read-only even where its files are not.
+        parent = os.path.dirname(path)
+        os.chmod(parent, os.lstat(parent).st_mode | stat.S_IWUSR | stat.S_IXUSR)
         observed = os.lstat(path)
         if stat.S_ISLNK(observed.st_mode):
             function(path)

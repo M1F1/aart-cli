@@ -1873,6 +1873,13 @@ get a better result.
   Success/receipt → credential lifecycle. It needs the lab state and a provider prompt that agents
   must not touch. `docs/testing/TUI_MANUAL_WALKTHROUGH.md` now ends with a CP-23 acceptance
   checklist naming what each step must show.
+- **Lab reset fix before the walk (2026-09-15).** The owner's `make manual-test-setup-empty` failed
+  in `reset_lab`: the lab Registry's vendored payload directory is `r-x`, and removing an entry
+  needs write permission on its parent. The error handler only made the entry itself writable, so
+  the retry failed again. It now also makes the parent writable and searchable.
+  `manual_test_lab_test.test_reset_clears_a_payload_delivered_into_a_read_only_directory` reproduced
+  the same `PermissionError` before the fix and passes after it. All 12 lab tests pass, as do
+  format-check, lint and typecheck.
 - **Candidate Product Specification revision:** the §96/§97 note stands as recorded under task 16.
 - **Status:** IMPLEMENTED. `plan.json` marks CP-23.15 `blocked` on that walk, and it becomes
   VERIFIED only when the walk passes. B-108 must also be green in a standalone `make integration`
