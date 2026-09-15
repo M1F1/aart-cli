@@ -114,7 +114,7 @@ def missing_poetry(name: str) -> str:
         "It builds the wheel, so a build without it cannot happen.\n"
         "Install it (https://python-poetry.org/docs/#installation), or name it:\n"
         "  AART_POETRY=/opt/poetry/bin/poetry python scripts/build_wheel.py\n"
-        "In CI, set the AART_POETRY repository variable -- see docs/ci/enterprise-fork-v1.md."
+        "In CI, set the AART_POETRY repository variable -- see docs/ci/github-enterprise-rollout.md."
     )
 
 

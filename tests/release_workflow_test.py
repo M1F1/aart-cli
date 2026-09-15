@@ -15,7 +15,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
         stays is everything the pull request could not have proven: the tag matches the source
         version, the tagged commit is in `main`, the checklist passes, and the wheel itself is
         sound.
-        See docs/ci/pr-check-and-release-split-v1.md.
+        See docs/ci/workflows-v1.md.
         """
 
         workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")

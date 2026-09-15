@@ -7,11 +7,11 @@ name: pr-check
 # date before merging" turned on, the commit this run proves is the commit that lands.  A second
 # run after the merge would prove the same tree again, so there is none -- and that is also why
 # `on: push` is gone.  A branch pushed without a pull request is now checked by nothing, which is
-# the intent rather than an oversight.  See docs/ci/pr-check-and-release-split-v1.md.
+# the intent rather than an oversight.  See docs/ci/workflows-v1.md.
 #
 # Portable to a GitHub Enterprise Server fork by setting repository variables only.  Every default
 # below reproduces the public github.com run exactly, so an unconfigured fork behaves the way this
-# repository always has.  See docs/ci/enterprise-fork-v1.md for the variable list and for the two
+# repository always has.  See docs/ci/github-enterprise-rollout.md for the variable list and for the two
 # things a variable cannot express.
 #
 # The gate job appears twice because a `container.credentials` block cannot be made conditional: an
@@ -29,7 +29,7 @@ permissions:
 
 # Poetry builds the wheel.  An image that keeps Poetry off `PATH` -- `/opt/poetry/bin/poetry` is
 # the common shape -- names it in this variable instead; unset, every step falls back to plain
-# `poetry`.  See docs/ci/enterprise-fork-v1.md.
+# `poetry`.  See docs/ci/github-enterprise-rollout.md.
 env:
   AART_POETRY: ${{ vars.AART_POETRY }}
 

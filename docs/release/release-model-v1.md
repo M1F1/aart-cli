@@ -137,4 +137,4 @@ effect. That distinction is INV-105, and it is why the workflow contains nothing
 interpreter and no index, because the action it runs brings its own runtime. Everything else about
 a fork's release — where it runs, which image, which index, which registry, where the wheel is
 published — is unchanged and is on
-[`enterprise-fork-v1.md`](../ci/enterprise-fork-v1.md).
+[`github-enterprise-rollout.md`](../ci/github-enterprise-rollout.md).

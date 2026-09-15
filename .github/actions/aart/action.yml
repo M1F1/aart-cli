@@ -9,7 +9,7 @@ description: >
 inputs:
   path:
     description: >
-      An agent-artifacts source tree already on the runner, usually baked into the CI image.
+      An aart-cli source tree already on the runner, usually baked into the CI image.
       Wins when set, and needs neither git nor the network.
     required: false
     default: ""

@@ -447,9 +447,10 @@ class LocalCurationService:
             "pull request and the gates run against the new version before it is merged",
             "where CI fetches that version from is a repository variable, first one set wins: "
             "AART_PACKAGE (package index), AART_WHEEL_URL (released wheel), AART_TOOL_PATH "
-            "(already on the runner), then AART_TOOL_URL (git clone). Setting none reaches "
-            "github.com, which an Enterprise instance cannot; set one on the organisation so it "
-            "configures every registry at once",
+            "(already on the runner), then AART_TOOL_URL (git clone). Setting none clones "
+            "M1F1/aart-cli from the instance the registry runs on, which fails wherever that "
+            "repository is absent or needs a login; set one on the organisation so it configures "
+            "every registry at once",
         )
         return Ok(self._workspace_review(request, planned.value, warnings=warnings))
 

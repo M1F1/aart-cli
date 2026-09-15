@@ -1,6 +1,6 @@
 """The Enterprise fork contract: every knob is a variable, and every variable is documented.
 
-`docs/ci/enterprise-fork-v1.md` promises two things that prose alone cannot keep true.  First,
+`docs/ci/github-enterprise-rollout.md` promises two things that prose alone cannot keep true.  First,
 that an unconfigured fork behaves exactly like the public run, which is a claim about *defaults*.
 Second, that the variable table is complete, which is a claim about the workflows.  A variable
 added to a workflow and not to the page fails here, the same way
@@ -20,7 +20,7 @@ from agent_artifacts.registry_commands.templates import (
 )
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-PAGE = ROOT / "docs" / "ci" / "enterprise-fork-v1.md"
+PAGE = ROOT / "docs" / "ci" / "github-enterprise-rollout.md"
 ACTION = ROOT / ".github" / "actions" / "aart" / "action.yml"
 # The two workflows that run *this repository's* toolchain, and so have to be told where the
 # interpreter, the image and the index are.  `release-please.yml` is deliberately not here: it
@@ -526,7 +526,7 @@ class TheContainerSwitchTest(unittest.TestCase):
     one are both rejected before the job starts, and filling it with a placeholder makes an
     anonymous pull fail a `docker login` it never needed.  The `secrets` context is not even
     readable at `container:` itself.  So the switch lives at `if:`, the one place a choice
-    survives, and every containerised job is emitted twice.  `docs/ci/enterprise-fork-v1.md`
+    survives, and every containerised job is emitted twice.  `docs/ci/github-enterprise-rollout.md`
     records the runs that established each of those facts.
     """
 

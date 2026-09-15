@@ -384,7 +384,7 @@ class FindingPoetryTest(unittest.TestCase):
 
         message = str(raised.exception)
         self.assertIn("AART_POETRY", message)
-        self.assertIn("docs/ci/enterprise-fork-v1.md", message)
+        self.assertIn("docs/ci/github-enterprise-rollout.md", message)
         # The message a bare `python -m poetry` would have produced instead.
         self.assertNotIn("cannot be directly executed", message)
 

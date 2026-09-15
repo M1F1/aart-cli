@@ -16,7 +16,7 @@ name: release
 # Portable to a GitHub Enterprise Server fork by setting repository variables only.  Every default
 # reproduces the public github.com run except one: `AART_REFERENCE_REGISTRY_URL` has no default,
 # because a default naming a github.com repository reproduces nothing on an instance that cannot
-# reach it.  See the note on that variable below.  See docs/ci/enterprise-fork-v1.md.
+# reach it.  See the note on that variable below.  See docs/ci/github-enterprise-rollout.md.
 #
 # Each job appears twice for the reason pr-check.yml records: a container's `credentials` block
 # cannot be conditional, so the condition moves to the job.  Both shapes share their steps through
@@ -44,7 +44,7 @@ permissions:
 
 # Poetry builds the wheel and installs the developer tooling.  An image that keeps Poetry off
 # `PATH` -- `/opt/poetry/bin/poetry` is the common shape -- names it in this variable instead;
-# unset, every step falls back to plain `poetry`.  See docs/ci/enterprise-fork-v1.md.
+# unset, every step falls back to plain `poetry`.  See docs/ci/github-enterprise-rollout.md.
 env:
   AART_POETRY: ${{ vars.AART_POETRY }}
 
@@ -55,7 +55,7 @@ jobs:
   # left is everything whose subject is the release itself: the tag matches the source version,
   # the tagged commit is in `main`, reviewed notes exist, the eleven-item checklist passes, and
   # `packaging-check` -- the one gate whose subject is the wheel rather than the source.
-  # See docs/ci/pr-check-and-release-split-v1.md.
+  # See docs/ci/workflows-v1.md.
   release:
     if: vars.AART_IMAGE_USERNAME_SECRET == ''
     runs-on: ${{ fromJSON(vars.AART_RUNNER || '["ubuntu-latest"]') }}

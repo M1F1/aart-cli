@@ -82,7 +82,7 @@ runs:
     # the pull request that proved the source cannot have proven it: it builds a wheel in a
     # throwaway copy of the tree and imports the package back out of it.  Everything else the ten
     # gates check was already proven on the way to `main`.
-    # See docs/ci/pr-check-and-release-split-v1.md.
+    # See docs/ci/workflows-v1.md.
     - name: Check the packaged wheel
       shell: bash
       run: ${{ inputs.python }} scripts/packaging_check.py

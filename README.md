@@ -413,7 +413,7 @@ creates no new secrets, and the index URL stays a bare host — the credential i
 step, with both halves re-masked first, because GitHub masks the whole `user:pass` it was given and
 neither half after a split.
 
-[The Enterprise fork contract](docs/ci/enterprise-fork-v1.md) is the full page. Its runbook is the
+[The Enterprise fork contract](docs/ci/github-enterprise-rollout.md) is the full page. Its runbook is the
 ordered version of everything above — mirror this repository onto the instance, set its variables,
 choose how registries will fetch it, and only then run `registry init` — followed by every
 variable in reference form, what was walked, and what was not.
