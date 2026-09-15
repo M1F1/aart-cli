@@ -6698,3 +6698,48 @@ confirmed that the suspected empty-22b and no-row-21d cases do not advertise the
 when their real sources and entered state are used, so 14.8 needs no production exception or repair.
 A future screen or conditional mode must supply a real recorded state and pass the same laws; there
 is no per-screen frame-law allowlist.
+
+## D-275 — One unversioned schema freeze, held at pull request time
+
+Date: 2026-09-15 (release readiness for the first Release Please release, PR #1).
+
+**Context.** `scripts/release.py check` failed with `schema-freeze-stale`: the refactor changed
+`protocol/native_models.py`, `protocol/native_schema.py` and `setup.py`, and
+`docs/release/schema-freeze-v18.json` predates them. Nothing compared the freeze before the release
+run, which Release Please starts only after it has created the tag and the GitHub Release, so the
+first release would have been published with no wheel attached. The rule of record (D-154) was a
+numbered contract series: an issued freeze is never rewritten, and a format change issues
+`RELEASE_CONTRACT_VERSION + 1` with its own freeze, a hand-written `compatibility-vN.md` and a
+`release-checklist-vN.md`. `docs/release/` held 66 such documents plus `migration-v1.md`, every one
+describing releases 1.0.0–2.8.5 of the project `aart-cli` was cut from; `aart-cli` itself started
+again at `0.0.1`. The owner decided that history is not wanted and that one file should replace
+three.
+
+**Decision.**
+
+- `docs/release/schema-freeze.json` is the only freeze. It is overwritten in place by
+  `make release-freeze` in the change that moves a schema input; git history is its record. It
+  carries no `release_version`: that would be a second copy of the number Release Please owns
+  (INV-091, INV-098). `RELEASE_CONTRACT_VERSION`, `frozen_release_version` and
+  `freeze --release-version` are removed.
+- No compatibility page or checklist document is required per format change. What changed reaches
+  the CHANGELOG through the Conventional Commit; whether it breaks anyone is the `!` in the title
+  that decides the version. The procedure is `release-model-v1.md` and the checklist is the script.
+- `REQUIRED_RELEASE_DOCS` is the changelog and the three onboarding tutorials;
+  `REQUIRED_PERSISTENT_DOCS` is gone with `migration-v1.md`.
+- The unit gate holds the freeze: `tests/release_test.py` asserts the committed freeze equals the
+  tree's, so a schema moved without its freeze fails the pull request. The release run still checks
+  it at the tag.
+- The numbered compatibility, checklist, freeze and GitHub release documents and `migration-v1.md`
+  are deleted. `tests/source_remediation_test.py` read the names of removed top-level commands out
+  of the compatibility tables; it now holds those nine names explicitly, so the set it checks is
+  unchanged. The residue register stops listing `compatibility-v18.md` and
+  `release-checklist-v18.md` as checked documents.
+
+**Supersedes.** D-154's immutability rule for issued freezes. D-154's point about path-referenced
+consumers stands: `domain/outcomes.py` is still a schema input, and retiring it is now an edit to
+`SCHEMA_INPUTS` plus a refreshed freeze in the same change rather than a new contract series.
+
+**Consequences.** The release checklist no longer fails on this tree for the freeze. Older plans,
+PROGRESS entries and the CHANGELOG's hand-written sections that link to the deleted documents are
+reduced to plain text where a link would break; their prose is historical and left as written.

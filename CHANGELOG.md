@@ -554,7 +554,7 @@ any before it, and that fix is the *Fixed* entry below.
 ### Known defects shipped open
 
 Eight findings from the acceptance run ship unfixed, listed with their blast radius in
-[`compatibility-v13.md`](docs/release/compatibility-v13.md) and with their transcripts in the ledger.
+`compatibility-v13.md` and with their transcripts in the ledger.
 The two that change what a consumer should do: **nothing a consumer can invoke reverses a setup that
 succeeded**, though every effect's review line promises otherwise; and **an unattended keychain step
 stores an empty secret and reports success**, so a secret-bearing recipe should be set up
@@ -737,7 +737,7 @@ versions identical to v9 and differs in two inputs, neither of them a parsed fie
 
 No protocol revision, schema, store layout, or on-disk format changed, and no `requires_aart` window
 needs re-authoring: `>= 2.0.0, < 3.0.0` admits this release. A `2.2.0` data root is fully readable by
-`2.1.0` and `2.0.0`. See [compatibility-v10.md](docs/release/compatibility-v10.md).
+`2.1.0` and `2.0.0`. See compatibility-v10.md.
 
 ## 2.1.0 — 2026-08-13
 
@@ -784,7 +784,7 @@ schema freeze is byte-identical to v8 in every declared input.
 
 No protocol revision, schema, store layout, or on-disk format changed, and no `requires_aart` window
 needs re-authoring: `>= 2.0.0, < 3.0.0` admits this release. A `2.1.0` data root is fully readable by
-`2.0.0`. See [compatibility-v9.md](docs/release/compatibility-v9.md).
+`2.0.0`. See compatibility-v9.md.
 
 ## 2.0.0 — 2026-08-13
 
@@ -1077,6 +1077,6 @@ for agent artifacts.
 - Delivery is from a local checkout or local wheel. Nexus/PyPI publication remains future work and
   is not required by any runtime, registry, state, Copy, or Symlink contract.
 
-See the [compatibility matrix](docs/release/compatibility-v1.md),
+See the compatibility matrix,
 `migration guide`, and
-[release evidence](docs/release/release-checklist-v1.md).
+release evidence.

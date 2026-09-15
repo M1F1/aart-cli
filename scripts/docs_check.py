@@ -217,7 +217,7 @@ def _claim_diagnostics(
     and `docs-check` passed.
 
     A claim is a table row that names a finding and carries a cell that is *exactly* one
-    disposition (`_CLAIM_CELL_RE`) — the shape `compatibility-v14.md` already uses. Released
+    disposition (`_CLAIM_CELL_RE`). Released
     documents are outside the checked list in this direction too: a dated record is not edited to
     agree with today.
     """

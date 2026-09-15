@@ -19,18 +19,17 @@ from typing import Any, Callable, Mapping, Sequence
 
 ROOT = Path(__file__).resolve().parent.parent
 PYTHON = sys.executable
-# The release series this checklist governs.  Its schema freeze is immutable: once issued, it is
-# never regenerated or edited (D-154).  A new release series adds its own contract here and its
-# own versioned documents beside the frozen ones.
-#
 # There is deliberately no `EXPECTED_VERSION` here any more.  It pinned a release by hand, and a
 # checklist that refuses every version but the one somebody typed into a script is the manual
 # bookkeeping INV-085 and INV-101 forbid.  The version now comes from one place, the release
 # engine writes it, and this checklist reports it rather than ruling on it.
-RELEASE_CONTRACT_VERSION = 18
 _DECLARED_VERSION_RE = re.compile(r'(?m)^__version__\s*=\s*"([^"]+)"')
 REFERENCE_REGISTRY_ORIGIN = "https://github.com/M1F1/agent-artifacts-registry"
-SCHEMA_FREEZE_PATH = f"docs/release/schema-freeze-v{RELEASE_CONTRACT_VERSION}.json"
+# One freeze, overwritten in place by `make release-freeze` in the change that moves a schema; git
+# history is its record (D-275).  It used to be a numbered series whose issued members were never
+# rewritten, each with a hand-written compatibility page and checklist beside it -- three documents
+# per format change, all describing releases of the project this repository was cut from.
+SCHEMA_FREEZE_PATH = "docs/release/schema-freeze.json"
 GIT_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 SCHEMA_INPUTS = (
     "agent_artifacts/configuration/schema.py",
@@ -52,18 +51,10 @@ SCHEMA_INPUTS = (
 # Documents that must exist and say something.  They used to have to *name the release*, which
 # meant every one of them was edited by hand at every release and the checklist was the thing that
 # noticed when one was missed -- release bookkeeping wearing a checklist's clothes (INV-098).  The
-# changelog is now written by the release engine and the release body with it, so what is left to
-# check is that the contract's own documents are still here and still have content.
+# changelog is now written by the release engine, so what is left to check is that it and the
+# onboarding tutorials are still here and still have content.
 REQUIRED_RELEASE_DOCS = (
     "CHANGELOG.md",
-    f"docs/release/compatibility-v{RELEASE_CONTRACT_VERSION}.md",
-    f"docs/release/release-checklist-v{RELEASE_CONTRACT_VERSION}.md",
-)
-# Documents that stay shipped and referenced across release series.  They are still gated — a
-# release must not silently drop the 0.1.x migration guide or the onboarding tutorials — but they
-# describe an earlier boundary and are not expected to name the current version.
-REQUIRED_PERSISTENT_DOCS = (
-    "docs/release/migration-v1.md",
     "docs/tutorials/direct-source-v1.md",
     "docs/tutorials/company-registry-v1.md",
     "docs/tutorials/vendoring-v1.md",
@@ -132,32 +123,23 @@ def declared_version(root: Path = ROOT) -> str:
     return match.group(1)
 
 
-def frozen_release_version(root: Path = ROOT) -> str:
-    """The release the schema freeze was issued for, read back out of the freeze itself.
-
-    An issued freeze is immutable (D-154), so the release it records is the freeze's own data --
-    not a copy of a version that has to be kept in step with anything.  Reading it back is what
-    lets `schema-freeze-stale` go on meaning exactly one thing: a normative schema moved.
-    """
-
-    document = json.loads((root / SCHEMA_FREEZE_PATH).read_text(encoding="utf-8"))
-    return str(document["release_version"])
-
-
 def _sha256(content: bytes) -> str:
     return "sha256:" + hashlib.sha256(content).hexdigest()
 
 
-def schema_freeze_bytes(root: Path = ROOT, *, release_version: str | None = None) -> bytes:
+def schema_freeze_bytes(root: Path = ROOT) -> bytes:
+    """The freeze this tree's normative schema inputs produce.
+
+    It names no release.  A version inside it would be a second copy of the number Release Please
+    writes, and `schema-freeze-stale` has to go on meaning exactly one thing: a schema moved.
+    """
+
     inputs = [
         {"path": relative, "sha256": _sha256((root / relative).read_bytes())}
         for relative in SCHEMA_INPUTS
     ]
     document = {
         "protocol_versions": PROTOCOL_VERSIONS,
-        "release_version": (
-            frozen_release_version(root) if release_version is None else release_version
-        ),
         "schema_inputs": inputs,
         "schema_version": 1,
     }
@@ -326,7 +308,7 @@ def _repository_diagnostics(
         declared_version(root)
     except (OSError, ValueError) as error:
         diagnostics.append(_diagnostic("repository", "version-invalid", str(error)))
-    for relative in (*REQUIRED_RELEASE_DOCS, *REQUIRED_PERSISTENT_DOCS):
+    for relative in REQUIRED_RELEASE_DOCS:
         try:
             carried = (root / relative).read_text(encoding="utf-8").strip()
         except OSError:
@@ -731,15 +713,6 @@ def _parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True)
     freeze = commands.add_parser("freeze", help="write exact schema-freeze evidence")
     freeze.add_argument("--write", action="store_true", help="required write acknowledgement")
-    # An issued freeze records the release it was taken for and is never rewritten (D-154), so
-    # regenerating one keeps the release it already names.  Only a freeze being issued for the
-    # first time has one to state, and stating it is the point: it is evidence about a release,
-    # not a mirror of a version somebody has to maintain.
-    freeze.add_argument(
-        "--release-version",
-        default=None,
-        help="the release this freeze is issued for (default: the one it already records)",
-    )
     digest = commands.add_parser(
         "wheel-digest", help="build the wheel this commit publishes and print its digest"
     )
@@ -772,7 +745,7 @@ def main(argv: Sequence[str] | None = None, *, root: Path = ROOT) -> int:
             print("release error: refusing to write schema freeze without --write", file=sys.stderr)
             return 1
         try:
-            content = schema_freeze_bytes(root, release_version=args.release_version)
+            content = schema_freeze_bytes(root)
             destination = root / SCHEMA_FREEZE_PATH
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_bytes(content)

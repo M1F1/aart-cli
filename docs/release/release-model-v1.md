@@ -3,9 +3,9 @@
 **Status: built.** `release-please-config.json`, `.release-please-manifest.json`,
 `.github/workflows/release-please.yml` and `.github/workflows/release.yml` match this page.
 
-This is the live procedure. Everything under `release-checklist-v1.md` through
-`release-checklist-v18.md` is a dated record of releases cut under the model this replaced, and is
-left as written.
+This is the live procedure. The numbered release checklists, compatibility pages and schema
+freezes that recorded the releases of the project this repository was cut from are gone (D-275);
+git history keeps them.
 
 ## What a release is now
 
@@ -94,6 +94,23 @@ proving it again at the tag proves the same tree twice.
 The fourth is the one a pull request could not have run: the wheel did not exist yet. It is also
 where "zero runtime dependencies" is finally checked on the thing a user installs rather than on
 the source that claims it.
+
+## The schema freeze
+
+`docs/release/schema-freeze.json` pins the sha256 of every file that defines a format other people
+depend on — the manifest an author commits, the registry, configuration, installation state,
+setup recipes, usage reports, security assessments — listed as `SCHEMA_INPUTS` in
+`scripts/release.py`. It is one file, overwritten in place,
+and it names no release.
+
+A change that edits one of those files runs `make release-freeze` and commits the new freeze with
+it. That is the moment a person says *yes, this changes a format*; whether the change breaks
+anyone is said where the version is decided, in the pull request title (`!` for a break).
+
+The unit gate compares the committed freeze with the tree
+(`tests/release_test.py::test_the_committed_freeze_is_the_freeze_of_this_tree`), so a schema moved
+without its freeze fails the pull request that moved it. `scripts/release.py check` compares it
+again at the tag.
 
 ## The wall this hit, and where the answer went
 

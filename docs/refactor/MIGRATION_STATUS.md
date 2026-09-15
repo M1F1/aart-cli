@@ -1,5 +1,15 @@
 # AART Refactor Migration Status
 
+**2026-09-15, release readiness for PR #1 (D-275).** The first Release Please release would have
+been published with no wheel: `release.py check` failed `schema-freeze-stale` after the tag. There
+is now one unversioned `docs/release/schema-freeze.json`, refreshed by `make release-freeze` in the
+change that moves a schema input and compared by the unit gate on every pull request. The 67
+numbered release documents of the predecessor project are deleted. The TUI registry tests now patch
+`os.environ` with their XDG directories, which had failed every Linux CI job. The PR is titled
+`feat:` with a `BEGIN_COMMIT_OVERRIDE` block, so its squash releases `0.1.0`. Still outside the
+repository: the setting that lets GitHub Actions create pull requests is off, so Release Please
+cannot open its release PR until the owner enables it.
+
 **2026-09-15: CP-22 CLOSED; CP-23 IMPLEMENTED (tasks 01–16), awaiting the owner's manual
 acceptance.**
 

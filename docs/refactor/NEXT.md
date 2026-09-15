@@ -1,5 +1,15 @@
 # AART Refactor — Next Work
 
+## Before merging PR #1 (2026-09-15)
+
+- Enable **Settings → Actions → General → Allow GitHub Actions to create and approve pull
+  requests**. `can_approve_pull_request_reviews` is `false`, so Release Please cannot open its
+  release PR.
+- Merge with **squash**. The PR body's `BEGIN_COMMIT_OVERRIDE` block is read only for a squash
+  commit.
+- A release PR opened with `GITHUB_TOKEN` starts no `pr-check` run. INV-096 requires the release PR
+  to satisfy the quality contract; recorded as B-124.
+
 ## Current objective — CP-23 (2026-09-15)
 
 **CP-22 is CLOSED. CP-23 is IMPLEMENTED: tasks 01–16 are done in code, and task 15's gates are

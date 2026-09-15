@@ -1,10 +1,9 @@
 # The environment AART gives Git
 
 Every remote AART reaches — a configured source, a promoted native reference, a vendored subtree —
-is reached by running system Git. AART holds no credentials of its own;
-[`compatibility-v10-addendum.md`](../release/compatibility-v10-addendum.md) states that rule and
-this page states the mechanism underneath it: **the Git subprocess is given an allowlisted
-environment, not the operator's.**
+is reached by running system Git. AART holds no credentials of its own, and this page states the
+mechanism underneath that rule: **the Git subprocess is given an allowlisted environment, not the
+operator's.**
 
 Everything not named below is dropped. That is the design, and it is why a machine that can clone a
 repository at a shell prompt can still fail to clone it through AART. This page exists so that

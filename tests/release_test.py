@@ -43,15 +43,13 @@ def _fixture_root(raw: str, release, *, version: str = FIXTURE_VERSION) -> Path:
         f'[project]\nname = "aart-cli"\nversion = "{version}"\ndependencies = []\n',
         encoding="utf-8",
     )
-    for relative in (*release.REQUIRED_RELEASE_DOCS, *release.REQUIRED_PERSISTENT_DOCS):
+    for relative in release.REQUIRED_RELEASE_DOCS:
         target = root / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(f"# AART {version}\n\nRelease evidence.\n", encoding="utf-8")
+        target.write_text("# AART\n\nRelease evidence.\n", encoding="utf-8")
     freeze = root / release.SCHEMA_FREEZE_PATH
     freeze.parent.mkdir(parents=True, exist_ok=True)
-    # The freeze records the release it was issued for; a fixture has no earlier freeze to read
-    # that back out of, so the fixture states it.
-    freeze.write_bytes(release.schema_freeze_bytes(root, release_version=version))
+    freeze.write_bytes(release.schema_freeze_bytes(root))
     return root
 
 
@@ -98,23 +96,46 @@ class TheDeclaredSchemaInputsExistTest(unittest.TestCase):
             [],
             "release.SCHEMA_INPUTS names files that no longer exist. A schema input is a "
             "declared part of the release contract, reachable by path rather than by import, "
-            "so deleting one is a contract change: it needs a new RELEASE_CONTRACT_VERSION "
-            "and its own freeze, not an edit to the frozen one.",
+            "so deleting one is a contract change: remove it from SCHEMA_INPUTS and run "
+            "`make release-freeze` in the same change.",
         )
 
-    def test_the_frozen_document_covers_exactly_the_declared_inputs(self) -> None:
-        # Paths only, deliberately.  The *hashes* in an issued freeze are release-time evidence
-        # and drift the moment a schema file is edited afterwards; `make release-check` is where
-        # that is answered, by re-cutting the freeze.  The *path list* is the declaration itself,
-        # and a freeze that no longer covers it is a bookkeeping error at any point in the cycle.
+    def test_the_committed_freeze_is_the_freeze_of_this_tree(self) -> None:
+        """D-275: a moved schema fails the pull request that moved it, not the release after it.
+
+        The freeze used to be compared only by `release.py check`, which runs after Release Please
+        has already created the tag and the GitHub Release -- so a schema edited without its freeze
+        surfaced as a published release with no wheel attached.  Holding the comparison here puts
+        it in the unit gate every pull request runs.
+        """
+
+        release = _load_script("release")
+
+        self.assertEqual(
+            (ROOT / release.SCHEMA_FREEZE_PATH).read_bytes(),
+            release.schema_freeze_bytes(ROOT),
+            "a normative schema input changed without its freeze. If the format change is "
+            "intended, run `make release-freeze` and commit docs/release/schema-freeze.json "
+            "with the change; if it is not, the schema edit is the defect.",
+        )
+
+    def test_there_is_one_freeze_and_it_names_no_release(self) -> None:
+        """D-275: one unversioned freeze, overwritten in place; git history is its record.
+
+        A `release_version` inside it would be a second copy of the number Release Please owns,
+        which is exactly the manual bookkeeping INV-091 and INV-098 forbid.
+        """
+
         release = _load_script("release")
         import json
 
         frozen = json.loads((ROOT / release.SCHEMA_FREEZE_PATH).read_text(encoding="utf-8"))
 
+        self.assertEqual(release.SCHEMA_FREEZE_PATH, "docs/release/schema-freeze.json")
+        self.assertNotIn("release_version", frozen)
         self.assertEqual(
-            [entry["path"] for entry in frozen["schema_inputs"]],
-            list(release.SCHEMA_INPUTS),
+            sorted((ROOT / "docs" / "release").glob("schema-freeze*")),
+            [ROOT / release.SCHEMA_FREEZE_PATH],
         )
 
     def test_this_guard_is_not_vacuous(self) -> None:
@@ -163,7 +184,7 @@ class ReleaseChecklistTest(unittest.TestCase):
             registry = root / "reference-registry"
             registry.mkdir()
             (root / "agent_artifacts/__init__.py").write_text("# no version\n", encoding="utf-8")
-            (root / release.REQUIRED_RELEASE_DOCS[1]).unlink()
+            (root / release.REQUIRED_RELEASE_DOCS[0]).unlink()
             schema = root / release.SCHEMA_INPUTS[0]
             schema.write_bytes(schema.read_bytes() + b"\n# changed after freeze\n")
 
@@ -214,16 +235,11 @@ class ReleaseChecklistTest(unittest.TestCase):
                 command = compatibility[0]
                 self.assertEqual(command[command.index("--latest-version") + 1], version)
 
-    def test_a_dropped_carried_forward_document_still_blocks_the_release(self) -> None:
-        """Migration and tutorial guides survive a release-series bump.
-
-        They describe an earlier boundary and so cannot be required to name the current version,
-        but a release must not silently ship without the 0.1.x migration guide or the onboarding
-        tutorials either.
-        """
+    def test_a_dropped_required_document_still_blocks_the_release(self) -> None:
+        """A release must not silently ship without its changelog or the onboarding tutorials."""
 
         release = _load_script("release")
-        for relative in release.REQUIRED_PERSISTENT_DOCS:
+        for relative in release.REQUIRED_RELEASE_DOCS:
             with self.subTest(document=relative), tempfile.TemporaryDirectory() as raw:
                 root = _fixture_root(raw, release)
                 registry = root / "reference-registry"
@@ -238,15 +254,16 @@ class ReleaseChecklistTest(unittest.TestCase):
                     tuple(item["code"] for item in receipt["diagnostics"]),
                 )
 
-    def test_a_carried_forward_document_need_not_name_the_current_version(self) -> None:
+    def test_a_required_document_need_not_name_the_current_version(self) -> None:
         release = _load_script("release")
         with tempfile.TemporaryDirectory() as raw:
             root = _fixture_root(raw, release)
             registry = root / "reference-registry"
             registry.mkdir()
-            # Mentions only the earlier boundary, exactly like the real migration guide.
-            (root / release.REQUIRED_PERSISTENT_DOCS[0]).write_text(
-                "# Migrating from AART 0.1.x to 1.0.0\n", encoding="utf-8"
+            # Names an unrelated version: the checklist does not reconcile documents against the
+            # number Release Please writes (INV-098).
+            (root / release.REQUIRED_RELEASE_DOCS[0]).write_text(
+                "# Changelog\n\n## 0.0.1\n", encoding="utf-8"
             )
 
             receipt = release.check_release(root, registry, process_runner=_successful_runner)
@@ -300,19 +317,9 @@ class ReleaseChecklistTest(unittest.TestCase):
 
             self.assertEqual(release.main(("freeze",), root=root), 1)
             self.assertFalse(freeze.exists())
-            # An issued freeze records the release it was taken for and is never rewritten, so a
-            # regeneration reads that release back out of it.  With no freeze to read, the run
-            # has to be told -- it does not invent one, and it does not leave the field out.
-            self.assertEqual(release.main(("freeze", "--write"), root=root), 1)
-            self.assertFalse(freeze.exists())
-            self.assertEqual(
-                release.main(
-                    ("freeze", "--write", "--release-version", FIXTURE_VERSION), root=root
-                ),
-                0,
-            )
-            self.assertTrue(freeze.is_file())
-            self.assertEqual(release.frozen_release_version(root), FIXTURE_VERSION)
+            # With no freeze at all there is nothing to read back: the write stands alone.
+            self.assertEqual(release.main(("freeze", "--write"), root=root), 0)
+            self.assertEqual(freeze.read_bytes(), release.schema_freeze_bytes(root))
 
         self.assertIn(
             "repository-dirty",

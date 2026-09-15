@@ -1801,6 +1801,10 @@ therefore a contract change — a new `RELEASE_CONTRACT_VERSION` with its own fr
 document and checklist — and the same cut should be reviewed for whether any *other* entry in
 `SCHEMA_INPUTS` has likewise stopped describing a wire surface.
 
+**Update (D-275, 2026-09-15).** The numbered contract series is gone. Retiring the module is now
+removing it from `SCHEMA_INPUTS` and running `make release-freeze` in the same change; the review
+of the other inputs still applies.
+
 Not critical: the module costs 104 lines and no behaviour, the reachability test states its
 position honestly, and `TheDeclaredSchemaInputsExistTest` now prevents the deletion being
 attempted by accident. It becomes critical only if a Product Specification invariant turns on the
@@ -3142,3 +3146,20 @@ Found 2026-09-15 in CP-23 task 15's `make quality` output. Two `ResourceWarning:
 warnings come from reads in `tests/maintainer_registry_rebuild_test.py`. They do not fail the gate,
 and no product code is implicated. The fix is `pathlib.Path.read_text` or a `with` block.
 
+
+## B-124 — The Release Please pull request starts no `pr-check` run
+
+Found 2026-09-15 while preparing PR #1 for its first release. Severity: medium, and a gap against a
+MUST: INV-096 says a generated release PR must satisfy the normal quality contract before it becomes
+a release. `release-please.yml` authenticates with `GITHUB_TOKEN`, and GitHub raises no workflow
+event for a pull request that token opens or updates, so `pr-check` never runs on the release PR.
+`main` has no branch protection either, so nothing stops the merge.
+
+The usual fixes are a GitHub App token or a fine-grained PAT for the release-please step, or a
+`workflow_dispatch`/`pull_request_target` route that runs the gates on the release branch. Each
+touches repository secrets or settings the owner holds, which is why this is not done inline.
+
+Not reclassified as critical yet: the release PR changes only the version literals and
+`CHANGELOG.md`, and the tree it sits on passed `pr-check` when it reached `main`.
+
+Evidence/links: INV-096; `.github/workflows/release-please.yml`; D-275.
