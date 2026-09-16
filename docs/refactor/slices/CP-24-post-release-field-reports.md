@@ -1,6 +1,6 @@
 # CP-24 — Field reports from the first released version
 
-Status: IN PROGRESS — tasks 01–03 done (D-280 to D-282); task 04 next
+Status: IN PROGRESS — tasks 01–04 done (D-280 to D-283); task 05 next
 
 Date: 2026-09-16. Authority: the product owner's GitHub issues #7 and #8 against the released
 `v0.1.1`, and the owner's instruction that the Source Sync failure is the priority because it takes
@@ -182,6 +182,25 @@ Install its Python dependencies with uv
 - Cover: only `pip` available, only `uv`, both, neither, and an artifact with no Python
   dependencies.
 - Targeted mutation: collapse the selection so both lines return; the new test must go red.
+
+**Done (D-283).** The planner was offering what the installer never does. `chosen_installer`
+(`agent_artifacts/domain/python_runtime.py`) is now the single rule for which backend runs out of
+every backend that could: `select_python_installer` ends in it, and `allowed_remediations` reduces
+each dependency contract to that one offer (`_one_installer_per_contract`) after the policy filter,
+so narrowing policy narrows which backend is named rather than removing the offer. The rendering was
+left alone: `remediation_change` renders one line per remediation, and there is now one.
+
+Evidence:
+- `tests/environment_planning_test.py` — `PythonInstallerOfferTest`: both backends usable is one
+  offer naming the one `select_python_installer` would pick; only `pip` and only `uv` each name
+  themselves; a policy narrowed to `uv` names `uv`; a `uv` lock names `uv`; no backend at all is no
+  offer; an artifact with no Python dependencies is offered no installer. The order the platform
+  reports its backends in does not change the answer.
+- Targeted mutation: making the reduction a no-op returns both offers and turns the new tests red
+  (3 failures, all in `PythonInstallerOfferTest`). Verified.
+- Gates: `lint`, `format-check`, `typecheck`, `docs-check`; `make unit` at the task's close.
+- Backlog: B-132 — choosing the backend in the review, if that demand appears, is one choice with
+  one selected.
 
 ### 05 — Effect counts must be reconcilable with what was asked for
 

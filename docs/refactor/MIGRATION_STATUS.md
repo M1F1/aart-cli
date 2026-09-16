@@ -14,7 +14,10 @@ the pin, so a refusal after the fetch leaves the Source as it was rather than pi
 whose Candidates were never recorded. **2026-09-16, CP-24.03 done (D-282).** `aart doctor` reports a Candidate history that does not bind
 its pinned snapshot and names the repair, and the Maintainer Source Sync will now run over that
 state instead of refusing it -- so a store already in it is repaired by a command rather than by
-deleting files. Tasks 04 to 06, the installation reports from issue #7, are next.
+deleting files. **2026-09-16, CP-24.04 done (D-283).** An installation review offers one Python
+backend per dependency contract -- the one that will run -- because selection and review now share
+`chosen_installer`; a policy narrowed to one backend narrows which is named rather than removing the
+offer. Tasks 05 and 06, the rest of the installation reports from issue #7, are next.
 
 **2026-09-15, 0.1.0 has no wheel (D-279).** The release run failed before building: its action
 installed no Poetry, which the wheel build needs. It now installs the locked tools the quality

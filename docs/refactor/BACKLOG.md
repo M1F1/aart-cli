@@ -3273,3 +3273,12 @@ registries. Not critical to CP-24; a test with one Candidate per registry would 
 
 Same run: replacing `published_at_epoch_seconds` with `None` survives. The field is rendered in the
 Source detail, so a rendering assertion over a known publication time would hold it.
+
+## B-132 — A review offers no way to choose the Python backend
+
+CP-24.04 (D-283) reduced a dependency contract to one offer, naming the backend that will run, which
+is what issue #7 asked for. A reader who wants the other usable backend still has only policy
+(`allowed_python_installers`) to say so, and policy is not where a one-off choice belongs. If that
+demand appears, it is one choice with one selected — never two changes to approve — and the selection
+rule (`chosen_installer`) already takes a preference, so the work is carrying the reader's answer to
+it. Not critical: the backend that runs is now the one the review names.

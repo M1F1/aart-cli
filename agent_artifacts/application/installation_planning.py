@@ -25,7 +25,11 @@ from agent_artifacts.domain.plans import (
     PlannedRemediation,
 )
 from agent_artifacts.domain.policies import EffectivePolicy, policy_to_data
-from agent_artifacts.domain.python_runtime import installers_for_lock
+from agent_artifacts.domain.python_runtime import (
+    PythonInstaller,
+    chosen_installer,
+    installers_for_lock,
+)
 from agent_artifacts.domain.remediations import (
     ConfigureCredential,
     ConfigureHarness,
@@ -367,6 +371,36 @@ def _possible_remediations(
     return ()
 
 
+def _one_installer_per_contract(
+    options: list[PlannedRemediation],
+) -> list[PlannedRemediation]:
+    """Reduce every dependency contract to the single offer that names the backend that will run.
+
+    Two backends can be readable, available and permitted at once, but installing runs exactly one
+    of them (`chosen_installer`). Offering both reads as two changes to approve where there is one,
+    so the review is narrowed to the same choice the install would make.
+    """
+
+    usable: dict[RequirementId, set[PythonInstaller]] = {}
+    for option in options:
+        if isinstance(option.remediation, InstallPythonPackages):
+            contract = usable.setdefault(option.remediation.requirement, set())
+            contract.add(PythonInstaller(option.remediation.installer))
+    selected = {
+        requirement: chosen_installer(installers) for requirement, installers in usable.items()
+    }
+    return [
+        option
+        for option in options
+        if not isinstance(option.remediation, InstallPythonPackages)
+        or option.remediation.installer == _installer_name(selected[option.remediation.requirement])
+    ]
+
+
+def _installer_name(installer: PythonInstaller | None) -> str | None:
+    return None if installer is None else installer.value
+
+
 def allowed_remediations(
     assessments: tuple[OwnedAssessment, ...],
     facts: EnvironmentFacts,
@@ -403,7 +437,7 @@ def allowed_remediations(
             ):
                 continue
             options.append(PlannedRemediation(remediation, assessment.requirement.owners, risk))
-    return tuple(sorted(options, key=lambda item: item.sort_key))
+    return tuple(sorted(_one_installer_per_contract(options), key=lambda item: item.sort_key))
 
 
 def _policy_failure(message: str) -> Err:

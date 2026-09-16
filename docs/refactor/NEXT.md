@@ -35,8 +35,12 @@ is what task 01's tolerance covers.
 with both revisions and the remedy, and exits non-zero; the Maintainer Source Sync performs the
 repair, which it previously refused to do over exactly that state.
 
-Start at **task 04**: the installation review names the same installer twice (issue #7). Tasks 04
-to 06 are the installation reports; task 07 runs the gates and cuts the release.
+**Task 04 is done (D-283).** A dependency contract is one offer, naming the backend that will run:
+`chosen_installer` is the single rule, used by both `select_python_installer` and
+`allowed_remediations`, so the review can no longer name a backend the install would not choose.
+
+Start at **task 05**: `2 launcher(s) written` for one MCP server (issue #7). Task 06 is the missing
+progress while an installation runs; task 07 runs the gates and cuts the release.
 
 Reproduction for tasks 01–03, from the owner's own store: a pinned revision and a Candidate history
 recorded at a different one. `read_maintainer_views` then refuses everything with

@@ -6963,3 +6963,28 @@ over a real Git repository: refresh outside the screens, doctor exits 1 and name
 Source Sync, doctor exits 0 and the Candidate is back. Targeted mutations: treating unbound history
 as bound turns the review test red; dropping the finding from doctor's verdict turns the end-to-end
 test red.
+
+## D-283 — One dependency contract is one offer, naming the backend that will run
+
+**Context.** CP-24 task 04, from issue #7: a review of one artifact listed both `Install its Python
+dependencies with pip` and `Install its Python dependencies with uv`. Two mutually exclusive offers
+read as two changes AART will make. The planner produced them: `_possible_remediations`
+(`agent_artifacts/application/installation_planning.py`) returned one `InstallPythonPackages` per
+backend in `readable & available`, while installing has only ever run one of them —
+`select_python_installer` takes the preference when it is usable and otherwise the first by name.
+The review and the install disagreed about how many changes there are.
+
+**Decision.** The tie-break moves into the domain as `chosen_installer`
+(`agent_artifacts/domain/python_runtime.py`): given every backend that could run, it returns the one
+that will, honouring a preference only when that preference is among them. `select_python_installer`
+now ends in it, and `allowed_remediations` reduces each dependency contract to that one offer
+(`_one_installer_per_contract`) *after* the policy filter, so narrowing policy narrows which backend
+is named rather than removing the offer. Nothing about the rendering changed: `remediation_change`
+renders one line per remediation, and there is now one remediation.
+
+**Consequences.** A review names the backend that will run, and approving it approves what happens.
+The choice is one rule in one place, so the two cannot drift apart again: a review listing a backend
+the installer would not have chosen is now impossible by construction rather than by coincidence.
+Where the reader should genuinely choose between backends, that is a selection to design (B-132),
+not two changes to approve. Targeted mutation: making the reduction a no-op returns both offers and
+turns `test_two_usable_backends_are_one_offer_naming_the_one_that_will_run` red. Verified.
