@@ -257,6 +257,28 @@ nothing is recorded as an `invalid` Candidate.
 
 - [ ] Put it back (`git revert --no-edit HEAD && git push`) before continuing.
 
+A Source whose Candidate history was recorded at another revision than the snapshot it has pinned
+shows `Attention` and lists no Candidates. `aart source sync` produces exactly that, because the
+consumer refresh moves the pin and writes no Candidate history — writing it is Maintainer
+authority. It takes a minute to prove, and it is the failure the first released version could not
+recover from (issue #8, D-280 to D-282):
+
+- [ ] Push a commit to one author repository, then refresh it from outside the screens:
+
+```sh
+aart source sync
+aart doctor
+```
+
+Expected: `aart doctor` exits non-zero and its `Candidate history` section names the Source, the
+revision its history was recorded at, the revision now pinned, and the remedy — `run Source Sync on
+<alias> to rebuild its Candidate history`. Every other Source, Candidate and Registry still loads.
+
+- [ ] Do what it says: **Sources** → that Source → `s` (**Sync**), and confirm.
+
+Expected: the Source reports the new commit and its Candidates are listed again; `aart doctor` exits
+zero and its `Candidate history` section is gone. Nothing under the data root is edited by hand.
+
 ## 6 — Review a Candidate
 
 - [ ] Open a Candidate. Press `d` (**Diff**), then `v` (**Fast / Verbose**) to fold the bounded

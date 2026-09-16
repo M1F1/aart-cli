@@ -11,8 +11,10 @@ ignored rather than fatal: that Source reads `ATTENTION` and names the remedy, i
 projected nowhere, and every other Source, Candidate and Registry still loads. Misfiled and
 unreadable history still refuse. **2026-09-16, CP-24.02 done (D-281).** A Source Sync compiles and reconciles before it publishes
 the pin, so a refusal after the fetch leaves the Source as it was rather than pinning a revision
-whose Candidates were never recorded. Task 03, the repair path for a store already in that state,
-is next.
+whose Candidates were never recorded. **2026-09-16, CP-24.03 done (D-282).** `aart doctor` reports a Candidate history that does not bind
+its pinned snapshot and names the repair, and the Maintainer Source Sync will now run over that
+state instead of refusing it -- so a store already in it is repaired by a command rather than by
+deleting files. Tasks 04 to 06, the installation reports from issue #7, are next.
 
 **2026-09-15, 0.1.0 has no wheel (D-279).** The release run failed before building: its action
 installed no Poetry, which the wheel build needs. It now installs the locked tools the quality
@@ -46,8 +48,11 @@ numbered release documents of the predecessor project are deleted. The TUI regis
 repository: the setting that lets GitHub Actions create pull requests is off, so Release Please
 cannot open its release PR until the owner enables it.
 
-**2026-09-15: CP-22 CLOSED; CP-23 IMPLEMENTED (tasks 01–16), awaiting the owner's manual
-acceptance.**
+**2026-09-16: CP-23 CLOSED by the owner.** Tasks 01–16 are done in code and task 15's gates are
+recorded below. The manual acceptance walk was never recorded in this repository; the owner closed
+the slice on 2026-09-16 rather than waiting for it, so no manual result is claimed here.
+
+**2026-09-15: CP-22 CLOSED; CP-23 IMPLEMENTED (tasks 01–16).**
 
 Task 15's recorded gates:
 - **`make quality`:** green at `085d5df`. 4,273 tests with 1 skipped, 85.94% branch coverage, and
@@ -140,8 +145,8 @@ and 193 subtests pass, including a Hypothesis row-selection property and real lo
 Scoped mutation analysis is recorded; format, lint, typecheck, unit (3,978 OK) and validate
 passed. Per-task work runs only the verifying gates; the full suite is task 15.
 
-Only task 15 remains pending in [`CP-23`](slices/CP-23-actionable-tui-workflows.md). The entire batch
-and its manual acceptance are still open. Owner requirements in §167/D-249–D-250 retain manual
+[`CP-23`](slices/CP-23-actionable-tui-workflows.md) is closed by the owner; its manual acceptance
+walk was never recorded here, and nothing in this document claims it passed. Owner requirements in §167/D-249–D-250 retain manual
 publication, explicit target choice, credential acquisition guidance, and complete Frame/Verbose
 compliance with no standard in-TUI exceptions. The automated all-screen audit is complete; no human
 retest or new CP-22 gate result is claimed.

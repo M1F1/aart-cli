@@ -1,6 +1,6 @@
 # CP-23 — Actionable TUI workflows after the fourth manual run
 
-Status: IMPLEMENTED — TASKS 01–16 DONE; AWAITING THE OWNER'S MANUAL ACCEPTANCE (TASK 15) AND A GREEN STANDALONE `make integration` (B-108)
+Status: CLOSED BY THE OWNER, 2026-09-16 — TASKS 01–16 DONE IN CODE; THE MANUAL ACCEPTANCE WALK AND A GREEN STANDALONE `make integration` (B-108) WERE NEVER RECORDED
 
 Date: 2026-09-14. Authority: the product owner's manual screen reports and request to create CP-23
 and close CP-22, followed by the all-screen audit and credential guidance requirements.
@@ -1881,6 +1881,7 @@ get a better result.
   the same `PermissionError` before the fix and passes after it. All 12 lab tests pass, as do
   format-check, lint and typecheck.
 - **Candidate Product Specification revision:** the §96/§97 note stands as recorded under task 16.
-- **Status:** IMPLEMENTED. `plan.json` marks CP-23.15 `blocked` on that walk, and it becomes
-  VERIFIED only when the walk passes. B-108 must also be green in a standalone `make integration`
-  before a release gate is claimed.
+- **Status:** CLOSED on the owner's instruction, 2026-09-16, without the walk being recorded here.
+  What is claimed is what was measured: the gates above. No manual acceptance result is claimed,
+  and B-108 was never recorded green in a standalone `make integration`. The walk in
+  `docs/testing/TUI_MANUAL_WALKTHROUGH.md` remains worth running; it is no longer a blocker.

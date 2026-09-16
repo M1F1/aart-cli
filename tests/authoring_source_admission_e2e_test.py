@@ -558,6 +558,56 @@ class MonitoredSourceFlowTest(unittest.TestCase):
             assert isinstance(composed, Ok)
             self.assertEqual(composed.value.dashboard.candidate_count, 1)
 
+    def test_doctor_names_a_history_that_does_not_bind_the_pin_and_sync_repairs_it(self) -> None:
+        """CP-24.03: the way back, end to end, with no file moved by hand.
+
+        The owner's store held Candidate history from an earlier revision. Nothing said so
+        outside the screens that would not load, `aart source sync` reported `unchanged` and wrote
+        nothing, and the only recovery found was `mv .../candidates .../candidates.bak`.
+        """
+
+        with _environment() as env:
+            env.synchronize_registry()
+            self.assertEqual(env.add_author_source()[0], 0)
+            synced = self._sync(env)
+
+            # Exactly how the reported store came about: the consumer refresh moves the pin and
+            # writes no Candidate history, because writing it is Maintainer authority.
+            moved = env.author.publish(UPDATED_SKILL_BODY)
+            refreshed = env.run("source", "sync")
+            self.assertEqual(refreshed[0], 0, refreshed[1])
+            self.assertNotEqual(moved, synced.scan.revision)
+
+            code, payload = env.run("doctor")
+
+            self.assertEqual(code, 1, payload)
+            assert payload is not None
+            reported = payload["candidate_history"]["unbound"]
+            self.assertEqual(
+                reported,
+                [
+                    {
+                        "alias": "superpowers",
+                        "pinned_revision": moved,
+                        "recorded_revision": synced.scan.revision,
+                        "remediation": (
+                            "run Source Sync on superpowers to rebuild its Candidate history"
+                        ),
+                    }
+                ],
+            )
+
+            repaired = self._sync(env)
+
+            self.assertEqual(repaired.scan.revision, moved)
+            code, payload = env.run("doctor")
+            self.assertEqual(code, 0, payload)
+            assert payload is not None
+            self.assertEqual(payload["candidate_history"]["unbound"], [])
+            composed = read_maintainer_views(_effective(env), data_root=env.paths.data_root)
+            assert isinstance(composed, Ok)
+            self.assertEqual(composed.value.dashboard.candidate_count, 1)
+
 
 class PromotionFromAnAdmittedGitSourceTest(unittest.TestCase):
     """The last leg: a Candidate compiled from the admitted repository becomes Registry content.

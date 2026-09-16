@@ -1,6 +1,6 @@
 # CP-24 — Field reports from the first released version
 
-Status: IN PROGRESS — tasks 01–02 done (D-280, D-281); task 03 next
+Status: IN PROGRESS — tasks 01–03 done (D-280 to D-282); task 04 next
 
 Date: 2026-09-16. Authority: the product owner's GitHub issues #7 and #8 against the released
 `v0.1.1`, and the owner's instruction that the Source Sync failure is the priority because it takes
@@ -141,6 +141,29 @@ is what covers it; that is why both tasks exist.
   registry mutation.
 - Acceptance: from the exact store in task 01's characterization, the documented command returns
   the tool to a working state, proven end to end.
+
+**Done (D-282).** Three things were wrong, and the third was the one that left no way back: the
+only writer of Candidate history refused to run over a store it had written. `_bound_history` in
+`agent_artifacts/application/maintainer_sync.py` now decides whether stored history describes the
+pin; `_baseline` starts from no baseline when it does not, instead of refusing, and Candidate state
+carries forward only from history that binds. History carrying another Source's alias still
+refuses. `read_unbound_candidate_histories` reads the same disagreement outside the screens, and
+`aart doctor` reports it under `candidate_history.unbound` with both revisions and the remedy,
+exiting non-zero. No new repair kind was added to `aart doctor --repair`: rebuilding Candidate
+history is a Maintainer Source Sync, which is already reviewed, leased and refuses registry
+mutations. Doctor names it; Sync performs it.
+
+Evidence:
+- `tests/authoring_source_admission_e2e_test.py` — the whole loop over a real Git repository and a
+  real store: `aart source sync` moves the pin and writes no history (which is how the reported
+  store came about), `aart doctor` exits 1 and names the remedy, Source Sync rebuilds, doctor exits
+  0 and the Candidate is back. Nothing under the data root is touched by hand.
+- `tests/maintainer_source_sync_application_test.py` — a Sync can be reviewed over history that
+  does not bind the pin, and its baseline is empty rather than the stale one.
+- `docs/testing/TUI_MANUAL_WALKTHROUGH.md` section 5 records the loop as a check.
+- Targeted mutations: treating unbound history as bound turns the review test red; dropping the
+  finding from doctor's verdict turns the end-to-end test red. Verified.
+- Gates: `lint`, `format-check`, `typecheck`, `docs-check`; `make unit` at the task's close.
 
 ### 04 — A review must name the installer that will actually run
 

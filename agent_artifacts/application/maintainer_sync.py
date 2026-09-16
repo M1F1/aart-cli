@@ -136,16 +136,37 @@ class SourceSyncBaseline:
             raise ValueError("Source Sync baseline is invalid")
 
 
+def _bound_history(
+    current: CurrentSource | None,
+    history: SourceScan | None,
+) -> SourceScan | None:
+    """The stored history if it describes the pinned snapshot, and nothing otherwise.
+
+    A history recorded at another revision is not this pin's baseline, so a Sync starts from no
+    baseline and rebuilds it.  Refusing instead is what left the reported store with no way back:
+    the only writer of Candidate history refused to run over exactly the state it had written
+    (issue #8, D-282).
+    """
+
+    if history is None or current is None:
+        return None
+    if history.revision != current.candidate.resolved_revision:
+        return None
+    return history
+
+
 def _baseline(
     current: CurrentSource | None,
     history: SourceScan | None,
 ) -> Result[SourceSyncBaseline]:
-    if history is not None and (
-        current is None
-        or history.source_alias != current.candidate.alias
-        or history.revision != current.candidate.resolved_revision
+    # Misfiled history -- another Source's alias -- is a defect, not a state to synchronize out of.
+    if (
+        history is not None
+        and current is not None
+        and history.source_alias != current.candidate.alias
     ):
-        return _error("Candidate history does not bind the current configured Source snapshot")
+        return _error("Candidate history belongs to another configured Source")
+    history = _bound_history(current, history)
     history_digest = None
     if history is not None:
         serialized = serialize_source_scan(history)
@@ -380,6 +401,9 @@ def execute_source_sync(
     observed = _baseline(current.value, history.value)
     if isinstance(observed, Err):
         return _release(observed, ports, lease.value)
+    # Candidate state carries forward only from history that describes what is pinned; a Scan from
+    # another revision is not a previous observation of this one.
+    bound_history = _bound_history(current.value, history.value)
     if observed.value != prepared.baseline:
         return _release(
             _error(
@@ -416,11 +440,11 @@ def execute_source_sync(
         request.source.alias,
         pinned.resolved_revision,
         compiled.value.artifacts,
-        previous=() if history.value is None else history.value.history,
+        previous=() if bound_history is None else bound_history.history,
         approved=prepared.approved.versions,
         target_registry=prepared.target_registry,
         collections=compiled.value.collections,
-        previous_collections=(() if history.value is None else history.value.collection_history),
+        previous_collections=(() if bound_history is None else bound_history.collection_history),
     )
     if isinstance(reconciled, Err):
         return _release(reconciled, ports, lease.value)

@@ -327,6 +327,35 @@ class MaintainerSourceSyncApplicationTest(unittest.TestCase):
                 self.assertNotIn("publish", ports.events)
                 self.assertNotIn("write-history", ports.events)
 
+    def test_a_sync_can_be_reviewed_over_history_that_does_not_bind_the_pin(self) -> None:
+        """CP-24.03: the only writer of Candidate history must run over a store it left behind.
+
+        Preparing refused when the stored history named another revision, so the state issue #8
+        reported could not be repaired by the command that would have rebuilt it -- only by
+        deleting the history by hand.
+        """
+
+        ports = _Ports()
+        first = _unwrap(prepare_source_sync(_request(), None, None, ports.approved))
+        _unwrap(execute_source_sync(first, first.review_digest, ports.ports()))
+        pinned, bound = ports.current, ports.history
+        ports.candidate = _candidate_for(_collection_snapshot())
+        second = _unwrap(
+            prepare_source_sync(_request(), ports.current, ports.history, ports.approved)
+        )
+        _unwrap(execute_source_sync(second, second.review_digest, ports.ports()))
+        unbound = ports.history
+        assert pinned is not None and bound is not None and unbound is not None
+        self.assertNotEqual(unbound.revision, pinned.candidate.resolved_revision)
+
+        prepared = prepare_source_sync(_request(), pinned, unbound, ports.approved)
+
+        self.assertIsInstance(prepared, Ok)
+        assert isinstance(prepared, Ok)
+        self.assertEqual(prepared.value.baseline.revision, pinned.candidate.resolved_revision)
+        self.assertIsNone(prepared.value.baseline.history_digest)
+        self.assertEqual(prepared.value.baseline.candidate_count, 0)
+
     def test_a_compile_refusal_never_advances_the_pin_it_could_not_reconcile(self) -> None:
         """CP-24.02: the pin and the Candidate history move together or not at all.
 

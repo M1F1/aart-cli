@@ -31,30 +31,32 @@ needing a Sync and names the remedy, and every other Source loads. Its evidence 
 refusal leaves the Source exactly as it was. The only window left is the two adjacent writes, which
 is what task 01's tolerance covers.
 
-Start at **task 03**: the repair path. `aart source sync` refreshes snapshots and writes no
-Candidate history, so it cannot rebuild a history that does not bind the pin; the owner was left
-with `mv …/candidates …/candidates.bak`. Prefer `aart doctor`, which already reports and repairs.
+**Task 03 is done (D-282).** `aart doctor` names a Candidate history that does not bind the pin,
+with both revisions and the remedy, and exits non-zero; the Maintainer Source Sync performs the
+repair, which it previously refused to do over exactly that state.
+
+Start at **task 04**: the installation review names the same installer twice (issue #7). Tasks 04
+to 06 are the installation reports; task 07 runs the gates and cuts the release.
 
 Reproduction for tasks 01–03, from the owner's own store: a pinned revision and a Candidate history
 recorded at a different one. `read_maintainer_views` then refuses everything with
 `maintainer-composition-invalid`, `aart source sync` reports `unchanged` and writes no history, and
 the only recovery found was moving `<data root>/sources/<instance-id>/candidates` aside.
 
-CP-23 stays open on the owner's manual acceptance walk; it is recorded below and is not blocked by
-CP-24.
+**CP-23 is CLOSED** — the owner closed it on 2026-09-16 rather than recording the manual
+acceptance walk in the repository. What that leaves open is written below, as facts rather than as
+blockers.
 
-## Current objective — CP-23 (2026-09-15)
+## Closed — CP-23 (2026-09-15, closed 2026-09-16)
 
-**CP-22 is CLOSED. CP-23 is IMPLEMENTED: tasks 01–16 are done in code, and task 15's gates are
-recorded.** Two things remain, and neither is agent work.
+**CP-22 is CLOSED. CP-23 is CLOSED: tasks 01–16 are done in code and task 15's gates are
+recorded.** Two things were never recorded, and the owner closed the slice anyway; neither is agent
+work and neither blocks CP-24.
 
-1. **The owner's manual acceptance walk.**
+1. **The owner's manual acceptance walk was not recorded here.**
    - `docs/testing/TUI_MANUAL_WALKTHROUGH.md`, Acts I–II, finishing with its "CP-23 acceptance"
-     checklist.
-   - It runs in the marker-owned lab and the owner's terminal.
-   - When it passes, record it in the slice's task 15 evidence and run
-     `handoff-plan done CP-23.15`. `plan.json` holds CP-23.15 as `blocked` on it.
-2. **A green standalone `make integration`.**
+     checklist, is still the walk to run, and it is worth running.
+2. **A green standalone `make integration` was never recorded.**
    - The one task-15 run failed on the B-108 temporary-Keychain creation, `security` status 206,
      in `mcp_stdio_e2e_test`.
    - `make quality` was green: 4,273 tests, 1 skipped, 85.94% branch coverage.

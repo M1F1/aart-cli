@@ -548,7 +548,7 @@
     {
       "id": "CP-23",
       "title": "Actionable TUI workflows after the fourth manual run",
-      "status": "in_progress",
+      "status": "done",
       "steps": [
         {
           "id": "1",
@@ -628,7 +628,7 @@
         {
           "id": "15",
           "title": "Targeted mutations, scoped mutmut, full gates and manual acceptance",
-          "status": "blocked"
+          "status": "done"
         }
       ]
     },
@@ -650,7 +650,7 @@
         {
           "id": "3",
           "title": "A way back from an inconsistent Source without editing files by hand",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "4",

@@ -6925,3 +6925,41 @@ Evidence: `test_a_compile_refusal_never_advances_the_pin_it_could_not_reconcile`
 boundary, and `test_a_sync_that_fails_after_the_fetch_leaves_the_store_readable` over a real Git
 repository and a real store, which ends by loading the Maintainer views. Targeted mutation: moving
 the publication back in front of the compile turns all three red.
+
+## D-282 — `aart doctor` reports an unbound Candidate history; Source Sync is the repair
+
+**Context.** CP-24 task 03. After D-280 and D-281 the state is survivable and no longer created,
+but a store already in it had no way back. Three things were wrong at once:
+
+1. Nothing outside the Maintainer screens said the Source was in that state.
+2. `aart source sync` refreshes the managed snapshot and writes no Candidate history — writing it
+   is Maintainer authority — so running it on a Source whose pin had moved *created* the state and
+   reported `unchanged` the next time.
+3. The one command that does write Candidate history refused to run: `prepare_source_sync` called
+   `_baseline`, which returned `Candidate history does not bind the current configured Source
+   snapshot`. The only writer of the history refused to run over a store it had written itself, so
+   the owner's only recovery was `mv …/candidates …/candidates.bak`.
+
+**Decision.**
+- `_bound_history` in `agent_artifacts/application/maintainer_sync.py` decides whether stored
+  history describes the pinned snapshot. `_baseline` starts a Sync from *no* baseline when it does
+  not, instead of refusing, and `execute_source_sync` carries Candidate state forward only from
+  history that binds — a Scan at another revision is not a previous observation of this one.
+  History carrying another Source's alias still refuses; that is misfiled data, as in D-280.
+- `read_unbound_candidate_histories` (`agent_artifacts/io/maintainer_views.py`) reads the same
+  disagreement for anything outside the Maintainer screens, and `aart doctor` reports it under
+  `candidate_history.unbound`, naming the recorded revision, the pinned revision and the remedy.
+  A doctor run that finds one exits non-zero: the tool is not showing what the machine holds.
+- No new repair kind was added to `aart doctor --repair`. That machinery reviews and applies
+  *installation* plans for one installed coordinate; rebuilding Candidate history is a Maintainer
+  Source Sync, which is already reviewed, already leased, already refuses registry mutations, and
+  already rebuilds the history for the pinned snapshot even when the revision has not moved. Doctor
+  names it; Sync performs it.
+
+**Consequences.** The repair is a command the report names, and the report is where somebody
+already looks. The walkthrough records the whole loop as a check.
+`test_doctor_names_a_history_that_does_not_bind_the_pin_and_sync_repairs_it` proves it end to end
+over a real Git repository: refresh outside the screens, doctor exits 1 and names the remedy, run
+Source Sync, doctor exits 0 and the Candidate is back. Targeted mutations: treating unbound history
+as bound turns the review test red; dropping the finding from doctor's verdict turns the end-to-end
+test red.

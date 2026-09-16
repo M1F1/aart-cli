@@ -17,6 +17,7 @@ from agent_artifacts.application.maintainer_promotion import (
 from agent_artifacts.application.maintainer_sync import ApprovedRegistryState
 from agent_artifacts.application.maintainer_views import (
     MaintainerViews,
+    UnboundCandidateHistory,
     project_maintainer_bulk_promotion,
     project_maintainer_candidate_lifecycle,
     project_maintainer_candidates,
@@ -59,7 +60,11 @@ from .registry_promotion import FilesystemPromotionOutput
 from .registry_workspace import read_registry_workspace
 from .source_store import read_current_source
 
-__all__ = ["MAINTAINER_COMPOSITION_INVALID", "read_maintainer_views"]
+__all__ = [
+    "MAINTAINER_COMPOSITION_INVALID",
+    "read_maintainer_views",
+    "read_unbound_candidate_histories",
+]
 
 MAINTAINER_COMPOSITION_INVALID = DiagnosticCode("maintainer-composition-invalid")
 
@@ -337,3 +342,56 @@ def read_maintainer_views(
         )
     except ValueError as error:
         return _error(f"cannot project durable Candidates: {error}")
+
+
+def read_unbound_candidate_histories(
+    effective: EffectiveConfiguration,
+    *,
+    data_root: str,
+    observed_at_epoch_seconds: int | None = None,
+) -> Result[tuple[UnboundCandidateHistory, ...]]:
+    """Name every authoring Source whose stored Candidate history does not bind its pin.
+
+    The Maintainer screens say this per Source as a diagnostic.  This reads the same disagreement
+    for anything outside them -- `aart doctor` above all, which is where somebody looks when the
+    tool is not showing what they expect (D-282).  It reads and never writes.
+    """
+
+    if not isinstance(effective, EffectiveConfiguration) or not isinstance(data_root, str):
+        return _error("reading Candidate history bindings needs configuration and a data root")
+    now = int(time.time()) if observed_at_epoch_seconds is None else observed_at_epoch_seconds
+    if not isinstance(now, int) or isinstance(now, bool) or now < 0:
+        return _error("reading Candidate history bindings needs a non-negative observation time")
+    unbound: list[UnboundCandidateHistory] = []
+    for configured in effective.configuration.sources:
+        if configured.kind is SourceKind.REGISTRY_GIT:
+            continue
+        paths = source_store_paths(data_root, source_instance_id(configured))
+        health = source_status(
+            SourceStatusRequest(
+                CurrentSourceRequest(paths, configured.alias),
+                now,
+                effective.configuration.sync.max_age_seconds,
+            ),
+            read_current_source,
+        )
+        history = read_candidate_history(candidate_history_paths(paths))
+        if isinstance(history, Err):
+            return history
+        scan = history.value
+        if scan is None:
+            continue
+        try:
+            bound = scan_binds_current_pin(configured, health, scan)
+        except ValueError as error:
+            return _error(f"cannot bind Candidate history for {configured.alias}: {error}")
+        if bound:
+            continue
+        unbound.append(
+            UnboundCandidateHistory(
+                configured.alias.value,
+                None if health.current is None else health.current.candidate.resolved_revision,
+                scan.revision,
+            )
+        )
+    return Ok(tuple(unbound))

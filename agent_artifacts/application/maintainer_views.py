@@ -2548,8 +2548,25 @@ def _source_status(configured: ConfiguredSource, health: SourceHealth) -> Mainta
 
 UNBOUND_SCAN_DIAGNOSTIC = (
     "Candidate history was recorded at another revision than the pinned snapshot; "
-    "synchronize this Source again to rebuild it"
+    "run Source Sync on this Source to rebuild it from the pinned snapshot"
 )
+
+
+@dataclass(frozen=True, slots=True)
+class UnboundCandidateHistory:
+    """One Source whose stored Candidate history was recorded at another revision than its pin.
+
+    Reported outside the Maintainer screens as well, because this is what somebody sees when the
+    tool is not doing what they expect and they reach for `aart doctor` (issue #8, D-282).
+    """
+
+    alias: str
+    pinned_revision: str | None
+    recorded_revision: str
+
+    @property
+    def remedy(self) -> str:
+        return f"run Source Sync on {self.alias} to rebuild its Candidate history"
 
 
 def scan_binds_current_pin(

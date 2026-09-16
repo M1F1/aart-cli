@@ -28,6 +28,7 @@ from agent_artifacts.application.consumer_views import (
     project_lifecycle_plan,
     receipt_detail_to_data,
 )
+from agent_artifacts.application.maintainer_views import UnboundCandidateHistory
 from agent_artifacts.application.offline_readiness import (
     OfflineReadiness,
     offline_readiness_to_data,
@@ -51,6 +52,7 @@ from agent_artifacts.io.configured_repair_action import (
 )
 from agent_artifacts.io.consumer_machine import read_installed_inspections
 from agent_artifacts.io.credentials import MacOsKeychainProvider
+from agent_artifacts.io.maintainer_views import read_unbound_candidate_histories
 from agent_artifacts.io.offline_readiness import read_offline_readiness
 from agent_artifacts.io.orphaned_runs import read_orphaned_runs
 from agent_artifacts.io.receipt_store import LocalReceiptStore
@@ -256,6 +258,27 @@ def _offline_lines(readiness: OfflineReadiness) -> tuple[str, ...]:
     return tuple(lines)
 
 
+def _candidate_history_lines(unbound: tuple[UnboundCandidateHistory, ...]) -> tuple[str, ...]:
+    """Say which Sources hold Candidate history that does not describe what they have pinned.
+
+    Silence when there is none: a section that prints "all clear" for a state nobody has ever seen
+    is noise in a report people read when something is already wrong.
+    """
+
+    if not unbound:
+        return ()
+    lines = ["Candidate history"]
+    for item in unbound:
+        pinned = "nothing pinned" if item.pinned_revision is None else item.pinned_revision[:12]
+        lines.append(
+            f"{item.alias}: history recorded at {item.recorded_revision[:12]}, "
+            f"snapshot pinned at {pinned}"
+        )
+        lines.append("  its Candidates are not shown until this is rebuilt")
+        lines.append(f"  remediation: {item.remedy}")
+    return tuple(lines)
+
+
 def _run_repair(
     request: Request,
     *,
@@ -430,6 +453,14 @@ def run(request: Request) -> int:
         return _emit_error(request, offline)
     # The run root is the data root, not the project root: deriving it a second time invites disagreement.
     orphaned = read_orphaned_runs(run_root=runtime.value.paths.data_root)
+    # What the Maintainer screens say per Source, said here too: this is where somebody looks when
+    # a Source's Candidates have gone quiet, and the repair is a command, not a file to delete.
+    unbound = read_unbound_candidate_histories(
+        runtime.value.loaded.effective,
+        data_root=runtime.value.paths.data_root,
+    )
+    if isinstance(unbound, Err):
+        return _emit_error(request, unbound)
     recorded = LocalReceiptStore(os.path.join(runtime.value.paths.data_root, "state")).actions()
     if isinstance(recorded, Err):
         return _emit_error(request, recorded)
@@ -465,7 +496,7 @@ def run(request: Request) -> int:
 
     payload = {
         "schema_version": 1,
-        "ok": not view.attention_count,
+        "ok": not view.attention_count and not unbound.value,
         "operation": _OPERATION,
         "observed_at": datetime.now(timezone.utc).isoformat(),
         "summary": {
@@ -476,6 +507,17 @@ def run(request: Request) -> int:
         "repairs": repairs,
         "offline_readiness": offline_readiness_to_data(offline.value),
         "orphaned_runs": orphaned_runs_to_data(orphaned),
+        "candidate_history": {
+            "unbound": [
+                {
+                    "alias": item.alias,
+                    "pinned_revision": item.pinned_revision,
+                    "recorded_revision": item.recorded_revision,
+                    "remediation": item.remedy,
+                }
+                for item in unbound.value
+            ]
+        },
         "activity": activity_view_to_data(timeline),
         "recorded_actions": [_action_data(item) for item in recorded.value],
         "credentials": [_credential_data(item) for item in credentials],
@@ -492,6 +534,8 @@ def run(request: Request) -> int:
                     *_offline_lines(offline.value),
                     "",
                     *orphaned_run_lines(orphaned),
+                    "",
+                    *_candidate_history_lines(unbound.value),
                     "",
                     *_activity_lines(recorded.value, timeline, PresentationProfile.FAST),
                     "",
