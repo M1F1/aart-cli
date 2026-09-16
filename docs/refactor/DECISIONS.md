@@ -6988,3 +6988,28 @@ the installer would not have chosen is now impossible by construction rather tha
 Where the reader should genuinely choose between backends, that is a selection to design (B-132),
 not two changes to approve. Targeted mutation: making the reduction a no-op returns both offers and
 turns `test_two_usable_backends_are_one_offer_naming_the_one_that_will_run` red. Verified.
+
+## D-284 — A review counts what a change is, not which effect kind carries it
+
+**Context.** CP-24 task 05, from issue #7: installing one MCP server reported `2 launcher(s)
+written`. Both files are `WriteFile` effects, and `_OUTCOMES` (`agent_artifacts/tui_consumer.py`)
+maps one effect kind to one phrase, so the counter called both launchers. They are not the same
+thing: one is the executable launcher a harness runs, the other the configuration file that harness
+reads, one file per harness (D-264, INV-179). Installing into two harnesses said `3 launcher(s)
+written`. The same table left a placement -- a Skill delivered into a harness, which has no launcher
+at all -- as `1 other change`.
+
+**Decision.** `EffectView` carries an `outcome` alongside its `kind`: what the change is to the
+person reading it. `_outcome` (`agent_artifacts/application/consumer_views.py`) returns the kind
+unchanged for every effect whose kind already says one thing, and splits `write-file` into
+`write-launcher` and `write-configuration` on the `executable` flag the plan already carries -- read,
+never guessed, because the launcher is the file written executable. `_OUTCOMES` is keyed by outcome,
+phrases the two separately, and names the delivery and merge effects a placement plans instead of
+counting them as "other change".
+
+**Consequences.** One server installed into one harness reads `1 launcher(s) written` and
+`1 configuration file(s) written`, and into two harnesses `1 launcher(s) written` and
+`2 configuration file(s) written` -- a number somebody can reconcile with their own request. The
+canonical plan is untouched: this is projection and wording, so no review digest changes. Targeted
+mutation: collapsing `_outcome` back to one phrase for every `write-file` turns the new tests red.
+Verified.

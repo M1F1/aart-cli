@@ -396,6 +396,9 @@ class EffectView:
     summary: str
     inspectable: bool
     reversible: bool
+    #: What this change is to somebody reading it, where the effect kind alone does not say. It is
+    #: the kind for every effect whose kind is already unambiguous; see `_outcome`.
+    outcome: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -566,6 +569,22 @@ def _summary(data: dict[str, object]) -> str:
     return kind if not details else f"{kind}: {details}"
 
 
+def _outcome(data: dict[str, object]) -> str:
+    """What a change is to the person reading it, where its effect kind covers more than one thing.
+
+    One `write-file` is the executable launcher a harness runs; another is the configuration file
+    that harness reads, one per harness (D-264). A single count over the kind therefore told somebody
+    installing one MCP server that two launchers would be written, which is a number they cannot
+    reconcile with what they asked for. The plan already distinguishes them -- a launcher is written
+    executable and a configuration file is not -- so the distinction is read, never guessed.
+    """
+
+    kind = str(data["kind"])
+    if kind != "write-file":
+        return kind
+    return "write-launcher" if data.get("executable") else "write-configuration"
+
+
 @dataclass(frozen=True, slots=True)
 class ConsumerPlanView:
     canonical: InstallPlan
@@ -639,6 +658,7 @@ def project_install_plan(
                 _summary(data),
                 bool(capabilities["inspectable"]),
                 bool(capabilities["reversible"]),
+                _outcome(data),
             )
         )
     return ConsumerPlanView(

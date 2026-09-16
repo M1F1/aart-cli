@@ -1,6 +1,6 @@
 # CP-24 — Field reports from the first released version
 
-Status: IN PROGRESS — tasks 01–04 done (D-280 to D-283); task 05 next
+Status: IN PROGRESS — tasks 01–05 done (D-280 to D-284); task 06 next
 
 Date: 2026-09-16. Authority: the product owner's GitHub issues #7 and #8 against the released
 `v0.1.1`, and the owner's instruction that the Source Sync failure is the priority because it takes
@@ -220,6 +220,26 @@ Reported in issue #7: installing one MCP server reported `2 launcher(s) written`
   recognize, say what each is for; if one is not a launcher, count it as what it is. A count the
   reader cannot reconcile with their own request is the defect, not the number.
 - Cover a single-harness install, a multi-harness install and an artifact with no launcher.
+
+**Done (D-284).** Both files are `WriteFile` effects and the counter keyed on the effect kind, so it
+called the harness's configuration file a launcher. `EffectView` now carries an `outcome` beside its
+`kind` -- what the change is to the reader -- and `_outcome`
+(`agent_artifacts/application/consumer_views.py`) splits `write-file` on the `executable` flag the
+plan already carries: the launcher is the file written executable, the configuration file is not.
+`_OUTCOMES` is keyed by outcome and also names the delivery and merge effects a placement plans,
+which had been counted as "other change". The canonical plan is untouched, so no review digest moves.
+
+Evidence:
+- `tests/install_review_counts_test.py` — one server into one harness reads `1 launcher(s) written`
+  and `1 configuration file(s) written`, never `2 launcher(s) written`; into two harnesses, one
+  launcher and two configuration files; an artifact that configures nothing reports only its
+  launcher; a Skill placement, which has no launcher at all, reads `1 harness file(s) delivered`
+  rather than `1 other change`.
+- Characterization: before the fix those three read `2 launcher(s) written`, `3 launcher(s)
+  written` and `1 other change`.
+- Targeted mutation: collapsing `_outcome` back to one phrase for every `write-file` turns the new
+  tests red. Verified.
+- Gates: `lint`, `format-check`, `typecheck`, `docs-check`; `make unit` at the task's close.
 
 ### 06 — Show which step of an installation is running
 

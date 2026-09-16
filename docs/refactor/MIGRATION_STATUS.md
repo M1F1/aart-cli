@@ -17,7 +17,11 @@ state instead of refusing it -- so a store already in it is repaired by a comman
 deleting files. **2026-09-16, CP-24.04 done (D-283).** An installation review offers one Python
 backend per dependency contract -- the one that will run -- because selection and review now share
 `chosen_installer`; a policy narrowed to one backend narrows which is named rather than removing the
-offer. Tasks 05 and 06, the rest of the installation reports from issue #7, are next.
+offer. **2026-09-16, CP-24.05 done (D-284).** An installation review counts what each change is
+rather than which effect kind carries it, so one MCP server no longer reports two launchers written:
+the launcher and each harness's configuration file are counted apart, and a placement's deliveries
+are named instead of counted as "other change". Task 06, the missing progress while an installation
+runs, is next.
 
 **2026-09-15, 0.1.0 has no wheel (D-279).** The release run failed before building: its action
 installed no Poetry, which the wheel build needs. It now installs the locked tools the quality

@@ -284,7 +284,19 @@ _OUTCOMES: dict[str, str] = {
     f"store-{_CREDENTIAL}": "credential(s) stored securely",
     "unconfigure-harness": "harness connection(s) removed",
     f"verify-{_CREDENTIAL}": "credential(s) verified",
-    "write-file": "launcher(s) written",
+    # Keyed by outcome rather than by effect kind: one `write-file` is the launcher a harness runs
+    # and another is the configuration file it reads, and calling both launchers is a count nobody
+    # can reconcile with one server (issue #7, D-284).
+    "write-configuration": "configuration file(s) written",
+    "write-launcher": "launcher(s) written",
+    # An artifact that starts nothing has no launcher at all. What it does instead is delivered and
+    # merged, and each of those is named rather than counted as "other change".
+    "deliver-artifact": "harness file(s) delivered",
+    "withdraw-artifact": "harness file(s) withdrawn",
+    "merge-managed-block": "managed block(s) written",
+    "unmerge-managed-block": "managed block(s) removed",
+    "merge-settings-entry": "harness setting(s) written",
+    "unmerge-settings-entry": "harness setting(s) removed",
 }
 
 
@@ -810,7 +822,7 @@ def render_ready(view: ConsumerPlanView, profile: PresentationProfile) -> tuple[
         raise ValueError("ready rendering needs a consumer plan and presentation profile")
     if profile is PresentationProfile.VERBOSE:
         return _verbose_plan(view)
-    outcomes = Counter(_OUTCOMES.get(item.kind, "other change") for item in view.effects)
+    outcomes = Counter(_OUTCOMES.get(item.outcome, "other change") for item in view.effects)
     lines = ["Ready to install", f"{len(view.selection.resolved)} artifact(s) will be installed."]
     lines.extend(f"  {count} {name}" for name, count in sorted(outcomes.items()))
     # The final review names the intent confirmed on screen 05. Updates have no target picker and

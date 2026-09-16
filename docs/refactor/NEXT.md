@@ -39,8 +39,12 @@ repair, which it previously refused to do over exactly that state.
 `chosen_installer` is the single rule, used by both `select_python_installer` and
 `allowed_remediations`, so the review can no longer name a backend the install would not choose.
 
-Start at **task 05**: `2 launcher(s) written` for one MCP server (issue #7). Task 06 is the missing
-progress while an installation runs; task 07 runs the gates and cuts the release.
+**Task 05 is done (D-284).** A review counts what each change is rather than which effect kind
+carries it: the launcher and each harness's configuration file are counted separately, and a
+placement's deliveries are named instead of being "other change".
+
+Start at **task 06**: an installation reports nothing while it runs (issue #7). Task 07 runs the
+gates and cuts the release.
 
 Reproduction for tasks 01–03, from the owner's own store: a pinned revision and a Candidate history
 recorded at a different one. `read_maintainer_views` then refuses everything with
