@@ -199,8 +199,15 @@ Evidence:
 - Targeted mutation: making the reduction a no-op returns both offers and turns the new tests red
   (3 failures, all in `PythonInstallerOfferTest`). Verified.
 - Gates: `lint`, `format-check`, `typecheck`, `docs-check`; `make unit` at the task's close.
+- Scoped mutants: `agent_artifacts/domain/python_runtime.py` with `python_runtime_test.py` and
+  `environment_planning_test.py` — 94 mutants, 53 killed, 31 survived, 10 unreached. The two
+  survivors inside `chosen_installer` drop the sort key, which is equivalent: `PythonInstaller`
+  subclasses `str`, so ordering by name is the default ordering. The rest are the serialization
+  helpers, outside this task's claims, recorded as B-133. Two Hypothesis properties needed
+  `differing_executors` suppressed to run under mutmut at all, for the reason
+  `doctor_properties_test` records.
 - Backlog: B-132 — choosing the backend in the review, if that demand appears, is one choice with
-  one selected.
+  one selected. B-133 — the serialized shape of a dependency specification is unheld.
 
 ### 05 — Effect counts must be reconcilable with what was asked for
 

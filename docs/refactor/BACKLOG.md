@@ -3282,3 +3282,11 @@ is what issue #7 asked for. A reader who wants the other usable backend still ha
 demand appears, it is one choice with one selected — never two changes to approve — and the selection
 rule (`chosen_installer`) already takes a preference, so the work is carrying the reader's answer to
 it. Not critical: the backend that runs is now the one the review names.
+
+## B-133 — A Python dependency specification's serialized shape is unheld
+
+Found by scoped mutants over `agent_artifacts/domain/python_runtime.py` during CP-24.04: every
+mutant of `dependency_spec_to_data` survives (16 of them), as do the `artifact_environment_to_data`
+mutants, which the scoped test set does not reach at all. Both functions are the canonical shape a
+plan and a receipt carry, so a key renamed or a value dropped is a compatibility change nothing
+notices. Not critical to CP-24; one round-trip assertion per function would hold them.

@@ -6,7 +6,7 @@ import dataclasses
 import json
 import unittest
 
-from hypothesis import given
+from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from agent_artifacts.application.installation_planning import (
@@ -72,6 +72,11 @@ from agent_artifacts.domain.selection import (
     ResolvedSelection,
     VersionConstraint,
 )
+
+# `differing_executors` is suppressed for the reason `doctor_properties_test` records: the scoped
+# `make mutants` run re-runs the same test method object from a fresh runner per mutant, which is
+# what the check detects. These properties are pure functions of generated input.
+MUTATION_SETTINGS = settings(suppress_health_check=(HealthCheck.differing_executors,))
 
 
 def _digest(character: str) -> ObjectDigest:
@@ -517,6 +522,7 @@ class CanonicalInstallPlanningTest(unittest.TestCase):
         self.assertEqual(result.diagnostics[0].code, NO_ALLOWED_REMEDIATION)
         self.assertIn("non-interactive", result.diagnostics[0].message)
 
+    @MUTATION_SETTINGS
     @given(st.permutations(("github", "jira")))
     def test_intent_order_cannot_change_review_identity(self, names: tuple[str, ...]) -> None:
         artifacts = {
