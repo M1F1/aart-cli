@@ -6842,3 +6842,49 @@ failure.
   chose a new patch release over moving a published tag (INV-101). The fix is titled `fix:`, and
   Release Please releases it as `0.1.1` with its wheel. `v0.1.0` stays a GitHub Release with no
   asset.
+
+## D-280 — Candidate history that does not bind the pin is ignored, not fatal
+
+**Context.** CP-24 task 01, reported by the product owner as issue #8 against `v0.1.1`. One Source
+of several held a Candidate history recorded at a revision other than its pinned snapshot. The
+whole application then refused to load:
+
+```
+The local AART state could not be loaded.
+  error [maintainer-composition-invalid]: cannot bind Candidate history for agent-mcp-servers:
+  maintainer Source scan does not bind the current pinned Source
+```
+
+`project_maintainer_source` raised on the mismatch, `read_maintainer_views` turned the raise into a
+refusal of every view, and one inconsistent Source hid every other Source, every Candidate and
+every Registry. The only recovery was deleting a file inside the data root by hand — and the
+message named neither the file nor any command. `aart source sync` did not clear it, because it
+refreshes snapshots and never rewrites Candidate history (CP-24 task 03 owns the repair path).
+
+The earlier contract was deliberate: a projection must not present a Scan from one revision as
+Candidate data for another. That part stands. What did not follow is that the reader must refuse
+everything else along with it. A Sync pins the snapshot before it records the Scan (CP-24 task 02),
+so any interrupted Sync leaves exactly this state; it is a field state, not a corruption.
+
+**Decision.**
+- `scan_binds_current_pin` (`agent_artifacts/application/maintainer_views.py`) decides, once, if a
+  stored Scan is Candidate data for the snapshot pinned right now. `project_maintainer_source`
+  projects only a Scan that binds: an unbound one contributes no manifests, no Candidate states and
+  no target registries, the Source reads `ATTENTION`, and its diagnostics carry
+  `UNBOUND_SCAN_DIAGNOSTIC`, which names the remedy — synchronize this Source again.
+  `tui_maintainer` already renders diagnostics as `Attention: …`.
+- `read_maintainer_views` (`agent_artifacts/io/maintainer_views.py`) uses the same predicate before
+  it adds a Scan to the list that feeds collection candidates and validations, so tolerating the
+  Scan for the Source view cannot leak its Candidates into the rest of the composition.
+- A Scan carrying **another Source's alias**, and health belonging to another alias, still raise
+  and still refuse the composition. Those are misfiled data, not a state a Maintainer can repair.
+  Unreadable history (`candidate-history-invalid`) still refuses too: nothing can say what it holds.
+- This reverses the refusal half of the CP-14 contract on the owner's authority (issue #8).
+  `test_history_from_the_previous_pinned_revision_refuses_composition` and
+  `test_source_projection_refuses_a_scan_from_another_revision` are replaced by tests of the new
+  contract rather than deleted.
+
+**Consequences.** Sources are independent again: one Source in this state costs its own Candidates
+and nothing else. A Hypothesis property over pinned/stored revision pairs holds that loading never
+fails the composition. Targeted mutations: making the revision comparison always true, and dropping
+the predicate from the reader, each turn the characterization tests red.

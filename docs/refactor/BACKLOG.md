@@ -3261,3 +3261,15 @@ Reclassified as critical because it turns required checks red at random, includi
   `maintenance.auto=true` turns it red.
 - Other test helpers that commit and then copy or delete a repository could race the same way;
   none has been seen failing.
+
+## B-130 — Nothing holds which registries a Source view names
+
+Found by scoped mutants over `agent_artifacts/application/maintainer_views.py` during CP-24.01.
+Replacing the union of the Candidate and collection target registries with an intersection kills no
+test: `MaintainerSourceView.target_registries` is asserted nowhere with a Source scanned for two
+registries. Not critical to CP-24; a test with one Candidate per registry would hold it.
+
+## B-131 — A Source view's last successful sync time is unheld
+
+Same run: replacing `published_at_epoch_seconds` with `None` survives. The field is rendered in the
+Source detail, so a rendering assertion over a known publication time would hold it.

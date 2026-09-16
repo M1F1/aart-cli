@@ -1,6 +1,6 @@
 # CP-24 — Field reports from the first released version
 
-Status: NOT STARTED
+Status: IN PROGRESS — task 01 done (D-280); task 02 next
 
 Date: 2026-09-16. Authority: the product owner's GitHub issues #7 and #8 against the released
 `v0.1.1`, and the owner's instruction that the Source Sync failure is the priority because it takes
@@ -65,6 +65,30 @@ The local AART state could not be loaded.
   reports that Source as needing synchronization, and never fails the composition.
 - Targeted mutation: make the revision comparison always true; the characterization test must go
   red.
+
+**Done (D-280).** `scan_binds_current_pin` in `agent_artifacts/application/maintainer_views.py`
+decides once whether a stored Scan is Candidate data for the pin. `project_maintainer_source`
+projects only a Scan that binds; an unbound one contributes no manifests, no Candidate states and
+no registries, the Source reads `ATTENTION`, and `UNBOUND_SCAN_DIAGNOSTIC` names the remedy.
+`read_maintainer_views` applies the same predicate before a Scan reaches the collection and
+validation lists. A misfiled alias, health belonging to another alias, and unreadable history all
+still refuse — those are not field states.
+
+Evidence:
+- `tests/maintainer_composition_test.py` — three characterization tests through the composed
+  reader (the Source reads as needing a Sync, its collection Candidates do not leak, and the other
+  Sources still load), plus the property
+  `test_any_stored_scan_either_binds_the_pin_or_asks_for_a_sync` over pinned/stored revision pairs.
+- `tests/maintainer_views_test.py` — the projection-level statement of the same contract, that a
+  misfiled alias still raises, and that the remedy is added to the Source's own redacted
+  diagnostics rather than replacing them.
+- Targeted mutations: making the revision comparison always true, and dropping the predicate from
+  the reader, each turn the characterization tests red. Verified.
+- Scoped mutants: `agent_artifacts/io/maintainer_views.py` 336 killed, 0 survivors.
+  `agent_artifacts/application/maintainer_views.py` leaves survivors only outside this task's
+  claims — the exception texts, the pre-existing type-validation guard, the registry union and the
+  published-at field. The last two are in `BACKLOG.md` as B-130 and B-131.
+- Gates: `make unit`, `lint`, `format-check`, `typecheck`.
 
 ### 02 — A Source Sync that fails after pinning must leave a state the tool can still read
 

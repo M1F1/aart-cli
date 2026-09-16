@@ -635,12 +635,12 @@
     {
       "id": "CP-24",
       "title": "Field reports from the first released version",
-      "status": "todo",
+      "status": "in_progress",
       "steps": [
         {
           "id": "1",
           "title": "A stale Candidate scan must not make the whole local state unloadable",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "2",

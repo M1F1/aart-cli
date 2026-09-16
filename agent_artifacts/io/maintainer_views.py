@@ -30,6 +30,7 @@ from agent_artifacts.application.maintainer_views import (
     project_maintainer_source,
     project_maintainer_validation,
     project_maintainer_version_conflict,
+    scan_binds_current_pin,
 )
 from agent_artifacts.application.promotion import (
     PromotionAudit,
@@ -114,8 +115,12 @@ def read_maintainer_views(
             return history
         try:
             projected.append(project_maintainer_source(configured, health, history.value))
-            if history.value is not None:
-                scans.append(history.value)
+            # Only history that binds the pinned snapshot is Candidate data.  The projection says
+            # so for the Source itself; the collection and validation lists below are fed from
+            # here, so the same rule has to hold for them.
+            scanned = history.value
+            if scanned is not None and scan_binds_current_pin(configured, health, scanned):
+                scans.append(scanned)
         except ValueError as error:
             return _error(f"cannot bind Candidate history for {configured.alias}: {error}")
     sources = tuple(projected)

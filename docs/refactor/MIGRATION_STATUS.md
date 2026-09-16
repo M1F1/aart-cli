@@ -4,7 +4,13 @@
 A Source whose stored Candidate history does not bind its pinned revision makes the whole local
 state unloadable, with no repair short of deleting files; the installation review names an
 installer twice, counts effects a reader cannot reconcile, and reports nothing while it installs.
-CP-24 carries all of it and ends by releasing the fixes. Nothing is implemented yet.
+CP-24 carries all of it and ends by releasing the fixes.
+
+**2026-09-16, CP-24.01 done (D-280).** Candidate history that does not bind the pinned snapshot is
+ignored rather than fatal: that Source reads `ATTENTION` and names the remedy, its Candidates are
+projected nowhere, and every other Source, Candidate and Registry still loads. Misfiled and
+unreadable history still refuse. Tasks 02 and 03 -- the Sync ordering that creates the state, and
+the repair path -- are next.
 
 **2026-09-15, 0.1.0 has no wheel (D-279).** The release run failed before building: its action
 installed no Poetry, which the wheel build needs. It now installs the locked tools the quality

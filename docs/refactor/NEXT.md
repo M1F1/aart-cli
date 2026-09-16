@@ -21,11 +21,15 @@
 **CP-24 is the active slice.** It carries the owner's field reports against the released `v0.1.1`,
 as GitHub issues #7 and #8, and ends by releasing the fixes.
 `docs/refactor/slices/CP-24-post-release-field-reports.md` holds the seven ordered tasks;
-`plan.json` holds them as CP-24.1 to CP-24.7, all `todo`.
+`plan.json` holds them as CP-24.1 to CP-24.7.
 
-Start at **task 01**. It is the priority the owner named: a Source whose stored Candidate history
-does not bind its pinned revision takes the whole application down, and tasks 02 and 03 are the
-same defect from the writing end and from the missing repair.
+**Task 01 is done (D-280).** A stored Candidate history that does not bind the pinned revision is
+no longer projected as Candidate data and no longer refuses the composition: that Source reads as
+needing a Sync and names the remedy, and every other Source loads. Its evidence is in the slice.
+
+Start at **task 02**: `execute_source_sync` advances the pin before it writes the history, so every
+failure in between creates the state task 01 now tolerates. Task 03 then gives the Maintainer the
+repair that `aart source sync` does not perform today.
 
 Reproduction for tasks 01–03, from the owner's own store: a pinned revision and a Candidate history
 recorded at a different one. `read_maintainer_views` then refuses everything with

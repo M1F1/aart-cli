@@ -18,7 +18,9 @@ from agent_artifacts.application.maintainer import (
     reconcile_source_scan,
 )
 from agent_artifacts.application.maintainer_views import (
+    UNBOUND_SCAN_DIAGNOSTIC,
     MaintainerScreen,
+    MaintainerSourceStatus,
     MaintainerViews,
     project_maintainer_dashboard,
     project_maintainer_source,
@@ -30,6 +32,7 @@ from agent_artifacts.domain.candidates import (
     FindingSeverity,
     assess_candidate,
 )
+from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.identifiers import SourceAlias
 from agent_artifacts.domain.result import Ok
 from agent_artifacts.sources.model import HealthStatus, SourceHealth
@@ -126,13 +129,63 @@ class MaintainerProjectionTest(unittest.TestCase):
         self.assertEqual(source.ready_count, 1)
         self.assertEqual(source.invalid_count, 0)
 
-    def test_source_projection_refuses_a_scan_from_another_revision(self) -> None:
+    def test_a_scan_from_another_revision_is_projected_as_needing_a_sync(self) -> None:
+        """CP-24.01: not Candidate data for this pin, so not projected as any -- and not fatal."""
+
         configured = configured_source("authors", SourceKind.SOURCE_GIT)
         health = source_state(
             configured,
             "author-source",
             display_order=0,
             resolved_revision="b" * 40,
+        ).health
+
+        projected = project_maintainer_source(configured, health, _scan())
+
+        self.assertEqual(projected.status, MaintainerSourceStatus.ATTENTION)
+        self.assertEqual(projected.manifest_count, 0)
+        self.assertEqual(projected.candidate_count, 0)
+        self.assertEqual(projected.target_registries, ())
+        self.assertEqual(projected.diagnostics[-1], UNBOUND_SCAN_DIAGNOSTIC)
+
+    def test_the_sync_remedy_is_added_to_the_source_own_diagnostics_not_instead_of_them(
+        self,
+    ) -> None:
+        """Whatever health already had to say is still said, redacted, and said first."""
+
+        configured = configured_source("authors", SourceKind.SOURCE_GIT)
+        state = source_state(
+            configured,
+            "author-source",
+            display_order=0,
+            resolved_revision="b" * 40,
+        )
+        health = dataclasses.replace(
+            state.health,
+            diagnostics=(
+                Diagnostic(
+                    DiagnosticCode("source-stale"),
+                    Severity.WARNING,
+                    "snapshot for https://token@authors.example is older than the policy allows",
+                ),
+            ),
+        )
+
+        projected = project_maintainer_source(configured, health, _scan())
+
+        self.assertEqual(len(projected.diagnostics), 2)
+        self.assertNotIn("token", projected.diagnostics[0])
+        self.assertEqual(projected.diagnostics[-1], UNBOUND_SCAN_DIAGNOSTIC)
+
+    def test_a_scan_carrying_another_source_alias_is_still_a_programming_error(self) -> None:
+        """Stale history is a state the Maintainer can repair; misfiled history is a defect."""
+
+        configured = configured_source("mirrors", SourceKind.SOURCE_GIT)
+        health = source_state(
+            configured,
+            "mirror-source",
+            display_order=0,
+            resolved_revision="a" * 40,
         ).health
 
         with self.assertRaises(ValueError):
