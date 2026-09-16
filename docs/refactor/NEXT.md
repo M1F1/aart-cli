@@ -43,8 +43,12 @@ repair, which it previously refused to do over exactly that state.
 carries it: the launcher and each harness's configuration file are counted separately, and a
 placement's deliveries are named instead of being "other change".
 
-Start at **task 06**: an installation reports nothing while it runs (issue #7). Task 07 runs the
-gates and cuts the release.
+**Task 06 is done (D-285).** An installation says which step is running and which are done:
+`execute_repair` announces each step to an observer it is given, the shell lends the handler a
+redraw for the duration of one execution, and the running report is drawn in the shared frame.
+
+Start at **task 07**: run the gates and the scoped targeted mutations, then cut the release the
+owner asked for (expected `0.1.2`, a patch — every CP-24 change is a fix).
 
 Reproduction for tasks 01–03, from the owner's own store: a pinned revision and a Candidate history
 recorded at a different one. `read_maintainer_views` then refuses everything with

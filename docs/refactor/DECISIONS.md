@@ -7013,3 +7013,36 @@ counting them as "other change".
 canonical plan is untouched: this is projection and wording, so no review digest changes. Targeted
 mutation: collapsing `_outcome` back to one phrase for every `write-file` turns the new tests red.
 Verified.
+
+## D-285 — An execution announces its steps to a callback it is lent, never to a terminal
+
+**Context.** CP-24 task 06, from issue #7: the Ready screen lists what will happen, and then the
+installation runs silently until it is over. The only place that knows how far a plan has got is the
+loop in `execute_repair` (`agent_artifacts/application/execution.py`), and that loop is application
+code: it must not reach for a terminal, and the rendering must stay a pure projection so the report
+and the review cannot disagree.
+
+**Decision.** `execute_repair` takes an optional `observe: ProgressObserver`. It announces each step
+twice -- once when the step starts, with no status, and once with the `StepOutcome` it got -- as a
+`StepProgress` carrying the component, the effect, `index` of `total`, the status and the detail.
+The announcement is the plan's own steps in the order they run, so it is the review projected, not a
+second list. `execute_installation` and `execute_lifecycle` thread `observe` through (a lifecycle
+announces its primary run only, never a restoration), and `_member_observer` stamps the artifact on
+each report of a transaction member. `project_running_installation`
+(`agent_artifacts/application/consumer_views.py`) folds the reports into a `RunningInstallationView`
+by keeping the latest report per index, and `render_running` (`agent_artifacts/tui_consumer.py`)
+draws it in the same shape the finished report uses, with `▸` for the step that is running.
+
+The shell binds the two. `run_consumer_shell` lends a reporting handler a redraw callback for the
+duration of one execution and takes it back in a `finally`, exactly as the credential terminal
+handover already does; the handler is recognized by the `ProgressReportingHandler` protocol, so a
+handler that cannot report is simply never lent one. `LocalConsumerActions.observe_progress`
+(`agent_artifacts/io/consumer_actions.py`) accumulates the reports and projects them, and passes no
+observer at all when nobody is watching.
+
+**Consequences.** The reader sees which step is running and which are done, inside the shared frame
+every other screen is drawn in -- no screen-specific skeleton (CP-22/CP-23). Rendering performs no
+IO and holds no state: the view is a fold over what the execution already said. Nothing is written
+to the plan, the receipt or any digest, so an installation that reports and one that does not are
+the same installation. Targeted mutation: disabling the shell binding so the handler is never lent a
+reporter turns three shell tests red. Verified.

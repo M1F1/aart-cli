@@ -1,6 +1,6 @@
 # CP-24 — Field reports from the first released version
 
-Status: IN PROGRESS — tasks 01–05 done (D-280 to D-284); task 06 next
+Status: IN PROGRESS — tasks 01–06 done (D-280 to D-285); task 07 next
 
 Date: 2026-09-16. Authority: the product owner's GitHub issues #7 and #8 against the released
 `v0.1.1`, and the owner's instruction that the Source Sync failure is the priority because it takes
@@ -253,6 +253,36 @@ silently.
 - Cover: a fast install, a long step, a failing step (the failed step is named), and a narrow
   terminal. Property test: the steps reported are exactly the effects reviewed, in the order they
   run.
+
+**Done (D-285).** The execution loop is the only place that knows where it has got to, so it is the
+place that says so: `execute_repair` takes an optional `observe` and announces each step twice --
+once when it starts, once with the outcome it got -- as a `StepProgress` (component, effect, `index`
+of `total`, status, detail). What it announces is the plan's own steps in the order they run, so the
+report is the review projected rather than a second list. `execute_installation`,
+`execute_lifecycle`, `complete_installation_action` and `complete_configured_installation` thread it
+through; a lifecycle announces its primary run only, never a restoration.
+`project_running_installation` folds the reports into a `RunningInstallationView` and
+`render_running` draws it in the finished report's shape with `▸` on the running step. The shell
+lends a reporting handler a redraw callback for the duration of one execution and takes it back in a
+`finally`, the way the credential terminal handover already works, and recognizes such a handler by
+the `ProgressReportingHandler` protocol.
+
+Evidence:
+- `tests/installation_progress_test.py` — each step announced at its start and again when done; a
+  plan with nothing to do announces nothing; the step that failed is the one named and the rest are
+  reported as not attempted, never as started; an announcement says which component and which
+  effect. Property (Hypothesis, over which components diverge): what is announced is exactly the
+  reviewed plan's steps, in the order they run, numbered 1..n of n.
+- `tests/running_installation_screen_test.py` — the steps are drawn while they run (`▸ launcher`,
+  then `✓ launcher` beside `▸ harness:tabnine`, then `(2 of 2 done)`), inside the shared frame
+  (`AART /` heading, section rule, `[q] Quit`); a failed step is named where it failed; the reporter
+  is given back when the execution is over, and the handler is never left reporting into nothing; a
+  long step detail keeps the report inside the structured measure, because the running report is the
+  finished report's shape rather than a screen-specific skeleton.
+- Characterization: before the fix nothing was drawn between the Ready screen and the outcome.
+- Targeted mutation: disabling the shell binding (`if False and reporting ...`) so the handler is
+  never lent a reporter turns three shell tests red plus one error. Verified.
+- Gates: `lint`, `format-check`, `typecheck`, `docs-check`; `make unit` at the task's close.
 
 ### 07 — Gates, targeted mutations and the release
 

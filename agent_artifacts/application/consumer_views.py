@@ -62,6 +62,7 @@ from .execution import (
     InstallationExecutionStatus,
     LifecycleExecutionOutcome,
     LifecycleExecutionStatus,
+    StepProgress,
 )
 from .installation_proposal import InstallationProposal
 from .intents import (
@@ -1137,6 +1138,71 @@ def project_lifecycle_plan(plan: LifecyclePlan) -> LifecyclePlanView:
         tuple(_risk_label(item.name) for item in repair.risks),
         repair.complete,
         str(repair.review_digest),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class RunningStepView:
+    """One step of a plan that is running now, or has just finished."""
+
+    component: str
+    effect: str
+    status: str
+    detail: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class RunningInstallationView:
+    """What a reviewed plan has done so far, while it is still doing it.
+
+    It is a projection of the plan's own steps, so what is reported while it runs cannot say
+    anything the review did not: the same components, the same effects, the same order.
+    """
+
+    artifact: str
+    steps: tuple[RunningStepView, ...]
+    done: int
+    total: int
+
+    @property
+    def finished(self) -> bool:
+        return self.done == self.total
+
+
+#: What a step that has been reached but has not finished reads as. It is not a `StepStatus`,
+#: because the execution has no outcome to report for it yet.
+RUNNING = "running"
+
+
+def project_running_installation(reports: tuple[StepProgress, ...]) -> RunningInstallationView:
+    """Fold the reports a running plan has made so far into one screen's worth of state.
+
+    Each step is held once, at the latest thing said about it, so a step announced as reached and
+    then as applied is one line that changed rather than two lines. Pure: it is given what the
+    execution said and reads nothing.
+    """
+
+    if any(not isinstance(item, StepProgress) for item in reports):
+        raise ValueError("a running installation is projected from step progress reports")
+    latest: dict[int, StepProgress] = {}
+    for report in reports:
+        latest[report.index] = report
+    total = max((item.total for item in reports), default=0)
+    artifacts = {str(item.artifact) for item in reports if item.artifact is not None}
+    steps = tuple(
+        RunningStepView(
+            str(item.component),
+            str(effect_to_data(item.effect)["kind"]),
+            RUNNING if item.status is None else item.status.value,
+            item.detail,
+        )
+        for _, item in sorted(latest.items())
+    )
+    return RunningInstallationView(
+        artifacts.pop() if len(artifacts) == 1 else "",
+        steps,
+        sum(1 for item in latest.values() if item.status is not None),
+        total,
     )
 
 

@@ -28,6 +28,7 @@ from dataclasses import dataclass
 from datetime import date
 
 from agent_artifacts.application.consumer_session import ConsumerMachine
+from agent_artifacts.application.execution import ProgressObserver
 from agent_artifacts.application.installation_action import (
     CompletedInstallationAction,
     PreparedInstallationAction,
@@ -315,6 +316,7 @@ def complete_configured_installation(
     offline: bool = False,
     interactive_credentials: bool = False,
     credential_handover: TerminalHandover | None = None,
+    observe: ProgressObserver | None = None,
 ) -> Result[CompletedConfiguredInstallation]:
     """Execute the confirmed review, record it, and re-read the machine it left behind.
 
@@ -386,6 +388,7 @@ def complete_configured_installation(
         lock=LocalMutationLock(host.state_root, host.lock_scope),
         store=LocalReceiptStore(host.state_root),
         recorded_at=recorded_at,
+        observe=observe,
     )
     if isinstance(completed, Err):
         return completed

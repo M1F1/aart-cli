@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass, replace
-from typing import Protocol
+from typing import Callable, Protocol, TypeAlias, runtime_checkable
 
 from agent_artifacts.application.consumer_session import ConsumerMachine
 from agent_artifacts.application.consumer_ui import (
@@ -59,6 +59,7 @@ from agent_artifacts.application.consumer_views import (
     ReceiptDetailView,
     RegistryView,
     RemediationView,
+    RunningInstallationView,
     navigation_targets,
     project_collection,
     project_registries,
@@ -208,6 +209,7 @@ __all__ = [
     "render_lifecycle_plan",
     "render_marketplace_artifact",
     "render_progress",
+    "render_running",
     "render_transaction_progress",
     "render_transaction_success",
     "render_ready",
@@ -551,6 +553,8 @@ _STEP_MARKS: dict[str, str] = {
     "failed": "✗",
     "interrupted": "…",
     "not-attempted": "·",
+    # A step that has been reached and has not finished. It is the only mark that means "now".
+    "running": "▸",
 }
 
 
@@ -849,6 +853,32 @@ def render_ready(view: ConsumerPlanView, profile: PresentationProfile) -> tuple[
             "Show details for the full plan.",
         )
     )
+    return tuple(lines)
+
+
+def render_running(view: RunningInstallationView, profile: PresentationProfile) -> tuple[str, ...]:
+    """Screen 10 while the reviewed plan is still running.
+
+    Same shape as the finished report, because it is the same list: the steps somebody reviewed, in
+    the order they run, one of them marked as the one running now. Drawing performs no IO -- what is
+    drawn is what the execution has already said.
+    """
+
+    if not isinstance(view, RunningInstallationView) or not isinstance(
+        profile, PresentationProfile
+    ):
+        raise ValueError("running rendering needs a running view and presentation profile")
+    heading = f"Installing {view.artifact}" if view.artifact else "Installing"
+    lines = [f"{heading} ({view.done} of {view.total} done)"]
+    for item in view.steps:
+        mark = _STEP_MARKS.get(item.status, "·")
+        if profile is PresentationProfile.VERBOSE:
+            detail = f" ({item.detail})" if item.detail else ""
+            lines.append(f"  {mark} {item.component}: {item.effect}{detail}")
+        else:
+            lines.append(f"  {mark} {item.component}")
+    if not view.steps:
+        lines.append("  Nothing to do.")
     return tuple(lines)
 
 
@@ -1787,6 +1817,22 @@ class ConsumerActionHandler(Protocol):
     def handle(self, command: ConsumerUiCommand) -> ConsumerActionUpdate: ...
 
 
+#: Where a handler says a running plan has got to. The shell binds one for the duration of an
+#: execution and takes it back afterwards, exactly as the terminal is lent to a credential prompt.
+ProgressReporter: TypeAlias = Callable[[RunningInstallationView], None]
+
+
+@runtime_checkable
+class ProgressReportingHandler(Protocol):
+    """An action handler that can report a running plan step by step.
+
+    Separate from `ConsumerActionHandler` because reporting is optional: a handler that runs no
+    effects, or one in a test, has nothing to report and should not have to say so.
+    """
+
+    def observe_progress(self, report: ProgressReporter | None) -> None: ...
+
+
 _HELP_LINES: tuple[str, ...] = (
     "Keyboard help",
     "[↑/↓] Move",
@@ -2256,6 +2302,23 @@ class ConsumerSettingsWriter(Protocol):
     def __call__(self, settings: ConsumerSettings) -> None: ...
 
 
+def _progress_redraw(
+    terminal: ConsumerTerminal,
+    source: "CanonicalScreenSource",
+    state: ConsumerUiState,
+) -> "ProgressReporter":
+    """Draw the frame this execution was started from, with the step it has reached.
+
+    Bound to the source and state the loop is holding, so the running report lands inside the same
+    shared frame as every other screen -- heading, body, footer -- with no skeleton of its own.
+    """
+
+    def redraw(view: RunningInstallationView) -> None:
+        terminal.draw(frame(source.with_running(view), state))
+
+    return redraw
+
+
 def run_consumer_shell(
     source: ConsumerScreenSource,
     terminal: ConsumerTerminal,
@@ -2310,11 +2373,24 @@ def run_consumer_shell(
                 continue
             if action_handler is None:
                 raise ValueError("a consumer action needs an injected action handler")
-            # The running screen is observable before the synchronous effect boundary returns.
-            # A future streaming handler can redraw individual steps without changing this command.
+            # The running screen is observable before the synchronous effect boundary returns, and
+            # again on every step: a handler that can report its progress redraws this same frame
+            # with the step it has reached, so a long install is never a still screen (issue #7).
+            reporting = command.kind is ConsumerUiCommandKind.EXECUTE_ACTION and isinstance(
+                action_handler, ProgressReportingHandler
+            )
             if command.kind is ConsumerUiCommandKind.EXECUTE_ACTION:
                 terminal.draw(frame(active_source, current))
-            update = action_handler.handle(command)
+            if reporting and isinstance(active_source, CanonicalScreenSource):
+                running_source, running_state = active_source, current
+                action_handler.observe_progress(  # type: ignore[attr-defined]
+                    _progress_redraw(terminal, running_source, running_state)
+                )
+            try:
+                update = action_handler.handle(command)
+            finally:
+                if reporting:
+                    action_handler.observe_progress(None)  # type: ignore[attr-defined]
             if not isinstance(update, ConsumerActionUpdate):
                 raise ValueError("a consumer action handler returned an invalid update")
             # An execution answers with what it established: a recording, or the fact that the
@@ -2453,6 +2529,9 @@ class ConsumerScreens:
     #: exists until these values have been accepted and bound.
     installation_inputs: tuple[InputView, ...] = ()
     configurations: tuple[ConfigurationFileView, ...] = ()
+    #: Where a reviewed plan has got to while it is still running. It is held apart from `outcome`
+    #: because it is not a result: it is replaced on every step and dropped the moment there is one.
+    running: RunningInstallationView | None = None
 
     def offered(self, key: str) -> MarketplaceEntry | None:
         return next((item for item in self.marketplace if item.key == key), None)
@@ -2663,6 +2742,7 @@ def screens_from(
     plan: ConsumerPlanView | None = None,
     lifecycle: LifecyclePlanView | None = None,
     outcome: LifecycleOutcomeView | None = None,
+    running: RunningInstallationView | None = None,
     transaction: ReceiptDetailView | None = None,
     notice: tuple[str, ...] = (),
     pending_setup: tuple[DeclaredArtifactSetup, ...] = (),
@@ -2721,6 +2801,7 @@ def screens_from(
         adoption_upstream,
         installation_inputs,
         machine.configurations,
+        running,
     )
 
 
@@ -2845,6 +2926,15 @@ class CanonicalScreenSource:
     @property
     def screens(self) -> ConsumerScreens:
         return self._screens
+
+    def with_running(self, view: RunningInstallationView | None) -> "CanonicalScreenSource":
+        """The same screens, showing where a plan that is running now has got to.
+
+        A copy rather than a mutation: the source the loop is holding is what somebody reviewed
+        from, and a running plan is over in a moment.
+        """
+
+        return CanonicalScreenSource(replace(self._screens, running=view))
 
     def rows(self, state: ConsumerUiState) -> tuple[str, ...]:
         screen, query = state.session.screen, state.search
@@ -4143,6 +4233,10 @@ class CanonicalScreenSource:
                 else render_lifecycle_plan(screens.lifecycle, profile)
             )
         if screen in _OUTCOME_SCREENS:
+            # A plan that is running now outranks whatever the last one produced: this is the
+            # screen somebody is watching while it runs, and the previous result is not news.
+            if screens.running is not None:
+                return render_running(screens.running, profile)
             if screen in _TRANSACTION_SCREENS and screens.transaction is not None:
                 if screen is ConsumerScreen.SUCCESS:
                     return render_transaction_success(

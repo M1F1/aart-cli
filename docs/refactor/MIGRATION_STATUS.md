@@ -20,8 +20,11 @@ backend per dependency contract -- the one that will run -- because selection an
 offer. **2026-09-16, CP-24.05 done (D-284).** An installation review counts what each change is
 rather than which effect kind carries it, so one MCP server no longer reports two launchers written:
 the launcher and each harness's configuration file are counted apart, and a placement's deliveries
-are named instead of counted as "other change". Task 06, the missing progress while an installation
-runs, is next.
+are named instead of counted as "other change". **2026-09-16, CP-24.06 done (D-285).** An
+installation no longer runs silently: `execute_repair` announces each step -- the reviewed plan's
+own steps, in the order they run -- to an observer it is given, the shell lends a reporting handler
+a redraw for the duration of one execution and takes it back afterwards, and the running report is
+drawn in the frame every other screen uses. Task 07, the gates and the release, is next.
 
 **2026-09-15, 0.1.0 has no wheel (D-279).** The release run failed before building: its action
 installed no Poetry, which the wheel build needs. It now installs the locked tools the quality

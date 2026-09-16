@@ -660,12 +660,12 @@
         {
           "id": "5",
           "title": "Effect counts are reconcilable with what was asked for",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "6",
           "title": "Show which step of an installation is running",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "7",
