@@ -16,6 +16,25 @@
 - `pr-check` stays on for release PRs (INV-096, owner confirmed). B-129, a race between the manual lab
   and git's background repack that turned it red at random, is fixed.
 
+## Current objective — CP-24 (2026-09-16)
+
+**CP-24 is the active slice.** It carries the owner's field reports against the released `v0.1.1`,
+as GitHub issues #7 and #8, and ends by releasing the fixes.
+`docs/refactor/slices/CP-24-post-release-field-reports.md` holds the seven ordered tasks;
+`plan.json` holds them as CP-24.1 to CP-24.7, all `todo`.
+
+Start at **task 01**. It is the priority the owner named: a Source whose stored Candidate history
+does not bind its pinned revision takes the whole application down, and tasks 02 and 03 are the
+same defect from the writing end and from the missing repair.
+
+Reproduction for tasks 01–03, from the owner's own store: a pinned revision and a Candidate history
+recorded at a different one. `read_maintainer_views` then refuses everything with
+`maintainer-composition-invalid`, `aart source sync` reports `unchanged` and writes no history, and
+the only recovery found was moving `<data root>/sources/<instance-id>/candidates` aside.
+
+CP-23 stays open on the owner's manual acceptance walk; it is recorded below and is not blocked by
+CP-24.
+
 ## Current objective — CP-23 (2026-09-15)
 
 **CP-22 is CLOSED. CP-23 is IMPLEMENTED: tasks 01–16 are done in code, and task 15's gates are

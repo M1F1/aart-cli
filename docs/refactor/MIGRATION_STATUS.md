@@ -1,5 +1,11 @@
 # AART Refactor Migration Status
 
+**2026-09-16, CP-24 opened.** The owner filed issues #7 and #8 against the released `v0.1.1`.
+A Source whose stored Candidate history does not bind its pinned revision makes the whole local
+state unloadable, with no repair short of deleting files; the installation review names an
+installer twice, counts effects a reader cannot reconcile, and reports nothing while it installs.
+CP-24 carries all of it and ends by releasing the fixes. Nothing is implemented yet.
+
 **2026-09-15, 0.1.0 has no wheel (D-279).** The release run failed before building: its action
 installed no Poetry, which the wheel build needs. It now installs the locked tools the quality
 action installs, and a test holds the order. Every release step passes in a clean virtualenv.

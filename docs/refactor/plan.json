@@ -631,6 +631,48 @@
           "status": "blocked"
         }
       ]
+    },
+    {
+      "id": "CP-24",
+      "title": "Field reports from the first released version",
+      "status": "todo",
+      "steps": [
+        {
+          "id": "1",
+          "title": "A stale Candidate scan must not make the whole local state unloadable",
+          "status": "todo"
+        },
+        {
+          "id": "2",
+          "title": "A Source Sync that fails after pinning leaves a readable state",
+          "status": "todo"
+        },
+        {
+          "id": "3",
+          "title": "A way back from an inconsistent Source without editing files by hand",
+          "status": "todo"
+        },
+        {
+          "id": "4",
+          "title": "A review names the installer that will actually run",
+          "status": "todo"
+        },
+        {
+          "id": "5",
+          "title": "Effect counts are reconcilable with what was asked for",
+          "status": "todo"
+        },
+        {
+          "id": "6",
+          "title": "Show which step of an installation is running",
+          "status": "todo"
+        },
+        {
+          "id": "7",
+          "title": "Gates, targeted mutations and the release",
+          "status": "todo"
+        }
+      ]
     }
   ]
 }
