@@ -296,10 +296,23 @@ def _candidate(
     )
 
 
-def _sync_locked(
+@dataclass(frozen=True)
+class ResolvedSourceSnapshot:
+    """A validated snapshot that is ready to publish, and the pin it would replace.
+
+    Resolving and publishing are separate so that a caller doing more than pinning -- the
+    Maintainer Sync, which also has to compile and reconcile the snapshot into Candidate history --
+    can do all of its refusing before the pointer moves.  See D-281.
+    """
+
+    current: CurrentSource | None
+    validated: ValidatedSourceCandidate
+
+
+def _resolve_locked(
     request: SourceSyncRequest,
     ports: SourceSyncPorts,
-) -> Result[SourceSyncOutcome]:
+) -> Result[ResolvedSourceSnapshot | SourceSyncOutcome]:
     instance_id = source_instance_id(request.source)
     paths = source_store_paths(request.data_root, instance_id)
     current_result = ports.read_current(CurrentSourceRequest(paths, request.source.alias))
@@ -345,16 +358,27 @@ def _sync_locked(
             ),
         )
         return _retained(changed_identity, current, request.fallback)
+    return Ok(ResolvedSourceSnapshot(current, validated.value))
+
+
+def _publish_locked(
+    request: SourceSyncRequest,
+    ports: SourceSyncPorts,
+    resolved: ResolvedSourceSnapshot,
+) -> Result[SourceSyncOutcome]:
+    paths = source_store_paths(request.data_root, source_instance_id(request.source))
+    current = resolved.current
+    validated = resolved.validated
     published = ports.publish(
-        SourcePublishCommand(paths, validated.value, request.observed_at_epoch_seconds)
+        SourcePublishCommand(paths, validated, request.observed_at_epoch_seconds)
     )
     if isinstance(published, Err):
         return _retained(published, current, request.fallback)
-    expected = validated.value.candidate
+    expected = validated.candidate
     if (
         published.value.current.candidate.snapshot_digest != expected.snapshot_digest
         or published.value.current.candidate.resolved_revision != expected.resolved_revision
-        or published.value.current.declared_source_id != validated.value.declared_source_id
+        or published.value.current.declared_source_id != validated.declared_source_id
     ):
         return _failure(
             "source-invalid",
@@ -363,7 +387,7 @@ def _sync_locked(
     unchanged = current is not None and (
         current.candidate.snapshot_digest == expected.snapshot_digest
         and current.candidate.resolved_revision == expected.resolved_revision
-        and current.declared_source_id == validated.value.declared_source_id
+        and current.declared_source_id == validated.declared_source_id
     )
     disposition = SyncDisposition.UNCHANGED if unchanged else SyncDisposition.PUBLISHED
     return Ok(SourceSyncOutcome(disposition, published.value.current))
@@ -396,6 +420,52 @@ def sync_source(
     return outcome
 
 
+def _leased(request: SourceSyncRequest, lease: SourceLockLease) -> Err | None:
+    if not request.source.enabled:
+        return _failure("source-invalid", "disabled source cannot be synchronized")
+    paths = source_store_paths(request.data_root, source_instance_id(request.source))
+    if not isinstance(lease, SourceLockLease) or lease.lock_directory != paths.lock_directory:
+        return _failure(
+            "source-lock-invalid",
+            "source synchronization lease does not belong to the configured Source instance",
+        )
+    return None
+
+
+def resolve_source_while_locked(
+    request: SourceSyncRequest,
+    ports: SourceSyncPorts,
+    lease: SourceLockLease,
+) -> Result[ResolvedSourceSnapshot | SourceSyncOutcome]:
+    """Fetch and validate a snapshot without pinning it, through a wider transaction's lease.
+
+    An ``Ok`` holding a :class:`SourceSyncOutcome` is a synchronization that already ended --
+    offline, or a refusal the request's fallback turned into the retained snapshot -- and there is
+    nothing left to publish.  Anything else is a snapshot the caller may still refuse.
+    """
+
+    refused = _leased(request, lease)
+    if refused is not None:
+        return refused
+    return _resolve_locked(request, ports)
+
+
+def publish_source_while_locked(
+    request: SourceSyncRequest,
+    ports: SourceSyncPorts,
+    lease: SourceLockLease,
+    resolved: ResolvedSourceSnapshot,
+) -> Result[SourceSyncOutcome]:
+    """Pin a snapshot :func:`resolve_source_while_locked` already validated, under the same lease."""
+
+    refused = _leased(request, lease)
+    if refused is not None:
+        return refused
+    if not isinstance(resolved, ResolvedSourceSnapshot):
+        return _failure("source-invalid", "publishing a Source needs a resolved snapshot")
+    return _publish_locked(request, ports, resolved)
+
+
 def sync_source_while_locked(
     request: SourceSyncRequest,
     ports: SourceSyncPorts,
@@ -408,15 +478,12 @@ def sync_source_while_locked(
     nesting the ordinary :func:`sync_source` lock around that wider transaction.
     """
 
-    if not request.source.enabled:
-        return _failure("source-invalid", "disabled source cannot be synchronized")
-    paths = source_store_paths(request.data_root, source_instance_id(request.source))
-    if not isinstance(lease, SourceLockLease) or lease.lock_directory != paths.lock_directory:
-        return _failure(
-            "source-lock-invalid",
-            "source synchronization lease does not belong to the configured Source instance",
-        )
-    return _sync_locked(request, ports)
+    resolved = resolve_source_while_locked(request, ports, lease)
+    if isinstance(resolved, Err):
+        return resolved
+    if isinstance(resolved.value, SourceSyncOutcome):
+        return Ok(resolved.value)
+    return publish_source_while_locked(request, ports, lease, resolved.value)
 
 
 def discard_source(

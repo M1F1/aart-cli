@@ -54,9 +54,10 @@ from agent_artifacts.configuration.schema import (
     parse_user_configuration,
     user_configuration_bytes,
 )
+from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.policies import EffectivePolicy
 from agent_artifacts.domain.registry import PromotionMode
-from agent_artifacts.domain.result import Ok
+from agent_artifacts.domain.result import Err, Ok
 from agent_artifacts.io.candidate_store import candidate_history_paths, read_candidate_history
 from agent_artifacts.io.maintainer_promotion import (
     complete_configured_candidate_promotion,
@@ -66,9 +67,12 @@ from agent_artifacts.io.maintainer_sync import (
     complete_configured_source_sync,
     prepare_configured_source_sync,
 )
+from agent_artifacts.io.maintainer_views import read_maintainer_views
 from agent_artifacts.io.registry_promotion import FilesystemPromotionOutput
+from agent_artifacts.io.source_store import read_current_source
 from agent_artifacts.sources.git import acquire_git_snapshot
 from agent_artifacts.sources.model import (
+    CurrentSourceRequest,
     GitSnapshotRequest,
     source_instance_id,
     source_store_paths,
@@ -419,7 +423,7 @@ class MonitoredSourceFlowTest(unittest.TestCase):
             offline=False,
         )
 
-    def _sync(self, env: _Environment, alias: str = "superpowers"):
+    def _sync_result(self, env: _Environment, alias: str = "superpowers"):
         """One reviewed Source Sync, exactly as the screen performs it: prepare then confirm."""
 
         with mock.patch(
@@ -428,11 +432,14 @@ class MonitoredSourceFlowTest(unittest.TestCase):
         ):
             prepared = self._prepare(env, alias)
             assert isinstance(prepared, Ok), prepared
-            completed = complete_configured_source_sync(
+            return complete_configured_source_sync(
                 _effective(env),
                 prepared.value,
                 reviewed_digest=prepared.value.review_digest,
             )
+
+    def _sync(self, env: _Environment, alias: str = "superpowers"):
+        completed = self._sync_result(env, alias)
         assert isinstance(completed, Ok), completed
         return completed.value
 
@@ -504,6 +511,52 @@ class MonitoredSourceFlowTest(unittest.TestCase):
                 [item.candidate.artifact.coordinate.artifact.name for item in history.value.active],
                 ["verification-before-completion"],
             )
+
+    def test_a_sync_that_fails_after_the_fetch_leaves_the_store_readable(self) -> None:
+        """CP-24.02 over a real store: the pin and the Candidate history move together.
+
+        Issue #8's state was written here. The Sync fetched a new revision, pinned it, and only
+        then compiled -- so a compile that failed left a Source pinned at a revision whose
+        Candidates were never recorded, which the reader then refused to load at all.
+        """
+
+        with _environment() as env:
+            env.synchronize_registry()
+            self.assertEqual(env.add_author_source()[0], 0)
+            first = self._sync(env)
+            source = next(
+                item
+                for item in _effective(env).configuration.sources
+                if item.alias == SourceAlias("superpowers")
+            )
+            paths = source_store_paths(env.paths.data_root, source_instance_id(source))
+
+            env.author.publish(UPDATED_SKILL_BODY)
+            with mock.patch(
+                "agent_artifacts.io.maintainer_sync.compile_author_source",
+                return_value=Err(
+                    (
+                        Diagnostic(
+                            DiagnosticCode("authoring-source-invalid"),
+                            Severity.ERROR,
+                            "compilation failed",
+                        ),
+                    )
+                ),
+            ):
+                refused = self._sync_result(env)
+
+            self.assertIsInstance(refused, Err)
+            current = read_current_source(CurrentSourceRequest(paths, SourceAlias("superpowers")))
+            history = read_candidate_history(candidate_history_paths(paths))
+            assert isinstance(current, Ok) and current.value is not None
+            assert isinstance(history, Ok) and history.value is not None
+            self.assertEqual(current.value.candidate.resolved_revision, first.scan.revision)
+            self.assertEqual(history.value.revision, first.scan.revision)
+            composed = read_maintainer_views(_effective(env), data_root=env.paths.data_root)
+            self.assertIsInstance(composed, Ok)
+            assert isinstance(composed, Ok)
+            self.assertEqual(composed.value.dashboard.candidate_count, 1)
 
 
 class PromotionFromAnAdmittedGitSourceTest(unittest.TestCase):

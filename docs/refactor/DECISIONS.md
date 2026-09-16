@@ -6888,3 +6888,40 @@ so any interrupted Sync leaves exactly this state; it is a field state, not a co
 and nothing else. A Hypothesis property over pinned/stored revision pairs holds that loading never
 fails the composition. Targeted mutations: making the revision comparison always true, and dropping
 the predicate from the reader, each turn the characterization tests red.
+
+## D-281 — A Source Sync publishes the pin only after everything that can refuse has refused
+
+**Context.** CP-24 task 02, the writing end of the state D-280 now tolerates. `execute_source_sync`
+advanced the pin inside `sync_source_while_locked` and only then compiled the snapshot, reconciled
+the Scan and wrote Candidate history. Every refusal in between — a compile failure, a reconcile
+failure, an attempted registry mutation — left the Source pinned at a revision whose Candidates
+were never recorded. That is exactly the store the product owner reported in issue #8.
+
+The slice offered three shapes: write both in one transaction, do not publish the pin until the
+history is ready, or record that the two are known to disagree. There is no transaction across the
+snapshot store and the Candidate store, and recording a disagreement adds a third state without
+removing the second.
+
+**Decision.** The pin is published last. `agent_artifacts/application/sources.py` splits
+`_sync_locked` into `_resolve_locked` (read current, offline, acquire, validate, identity) and
+`_publish_locked` (publish, receipt check, disposition), exposed as `resolve_source_while_locked`
+and `publish_source_while_locked` with `ResolvedSourceSnapshot` between them.
+`sync_source_while_locked` composes the two and behaves exactly as before, so `aart source sync`
+and every other caller are unchanged.
+
+`execute_source_sync` resolves, compiles and reconciles against the *resolved* candidate, and only
+then publishes the pointer and writes the history. An `Ok` carrying a `SourceSyncOutcome` from the
+resolve step is a synchronization that already ended — offline, or a refusal the request's fallback
+retained — and its snapshot is the one already pinned, so it compiles from that and publishes
+nothing.
+
+**Consequences.** The window is now two adjacent writes: publishing the pointer and writing the
+history. A failure between them still leaves a pin the history does not bind, which is why D-280
+stays — the two tasks are one defect seen from both ends, and the reader must survive it. Everything
+that actually refused in the field happens before the first write.
+
+Evidence: `test_a_compile_refusal_never_advances_the_pin_it_could_not_reconcile` and
+`test_a_refusal_after_a_pin_already_exists_keeps_that_pin_and_its_history` at the application
+boundary, and `test_a_sync_that_fails_after_the_fetch_leaves_the_store_readable` over a real Git
+repository and a real store, which ends by loading the Maintainer views. Targeted mutation: moving
+the publication back in front of the compile turns all three red.

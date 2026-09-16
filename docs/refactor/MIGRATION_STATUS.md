@@ -9,8 +9,10 @@ CP-24 carries all of it and ends by releasing the fixes.
 **2026-09-16, CP-24.01 done (D-280).** Candidate history that does not bind the pinned snapshot is
 ignored rather than fatal: that Source reads `ATTENTION` and names the remedy, its Candidates are
 projected nowhere, and every other Source, Candidate and Registry still loads. Misfiled and
-unreadable history still refuse. Tasks 02 and 03 -- the Sync ordering that creates the state, and
-the repair path -- are next.
+unreadable history still refuse. **2026-09-16, CP-24.02 done (D-281).** A Source Sync compiles and reconciles before it publishes
+the pin, so a refusal after the fetch leaves the Source as it was rather than pinning a revision
+whose Candidates were never recorded. Task 03, the repair path for a store already in that state,
+is next.
 
 **2026-09-15, 0.1.0 has no wheel (D-279).** The release run failed before building: its action
 installed no Poetry, which the wheel build needs. It now installs the locked tools the quality

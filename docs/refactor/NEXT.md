@@ -27,9 +27,13 @@ as GitHub issues #7 and #8, and ends by releasing the fixes.
 no longer projected as Candidate data and no longer refuses the composition: that Source reads as
 needing a Sync and names the remedy, and every other Source loads. Its evidence is in the slice.
 
-Start at **task 02**: `execute_source_sync` advances the pin before it writes the history, so every
-failure in between creates the state task 01 now tolerates. Task 03 then gives the Maintainer the
-repair that `aart source sync` does not perform today.
+**Task 02 is done (D-281).** A Sync now compiles and reconciles before it publishes the pin, so a
+refusal leaves the Source exactly as it was. The only window left is the two adjacent writes, which
+is what task 01's tolerance covers.
+
+Start at **task 03**: the repair path. `aart source sync` refreshes snapshots and writes no
+Candidate history, so it cannot rebuild a history that does not bind the pin; the owner was left
+with `mv …/candidates …/candidates.bak`. Prefer `aart doctor`, which already reports and repairs.
 
 Reproduction for tasks 01–03, from the owner's own store: a pinned revision and a Candidate history
 recorded at a different one. `read_maintainer_views` then refuses everything with

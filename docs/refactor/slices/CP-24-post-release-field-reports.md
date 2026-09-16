@@ -1,6 +1,6 @@
 # CP-24 — Field reports from the first released version
 
-Status: IN PROGRESS — task 01 done (D-280); task 02 next
+Status: IN PROGRESS — tasks 01–02 done (D-280, D-281); task 03 next
 
 Date: 2026-09-16. Authority: the product owner's GitHub issues #7 and #8 against the released
 `v0.1.1`, and the owner's instruction that the Source Sync failure is the priority because it takes
@@ -104,6 +104,28 @@ Evidence:
 - Characterization: a compile refusal after a successful fetch. Assert the store afterwards, then
   assert the next `read_maintainer_views` loads.
 - Integration test at the IO boundary, with a real store on disk.
+
+**Done (D-281).** The pin is published last. `agent_artifacts/application/sources.py` splits the
+locked synchronization into `resolve_source_while_locked` and `publish_source_while_locked` with
+`ResolvedSourceSnapshot` between them; `sync_source_while_locked` composes the two and behaves as
+before. `execute_source_sync` compiles and reconciles the resolved candidate first, then publishes
+the pointer, then writes the history. A synchronization that already ended in the resolve step
+(offline, or a refusal the fallback retained) compiles from the snapshot already pinned and
+publishes nothing.
+
+Evidence:
+- `tests/maintainer_source_sync_application_test.py` — a compile refusal reaches neither `publish`
+  nor `write-history` and leaves no pin; with a Source already established, the pin and its history
+  both survive untouched and still bind each other; the event order is asserted end to end.
+- `tests/authoring_source_admission_e2e_test.py` — the same over a real Git repository and a real
+  store: after the failed Sync the store still pins the previous revision, its history still binds
+  it, and `read_maintainer_views` loads with the Candidate still there.
+- Targeted mutation: moving the publication back in front of the compile turns all three red.
+  Verified.
+- Gates: `make unit`, `lint`, `format-check`, `typecheck`, `docs-check`.
+
+The remaining window is the two adjacent writes, publish then write-history. Task 01's tolerance
+is what covers it; that is why both tasks exist.
 
 ### 03 — A way back from an inconsistent Source without editing files by hand
 

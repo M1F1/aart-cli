@@ -10,14 +10,16 @@ configured Source instance lease. Registry state is read-only input throughout.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Callable, cast
 
 from agent_artifacts.application.candidate_history import serialize_source_scan
 from agent_artifacts.application.maintainer import SourceScan, reconcile_source_scan
 from agent_artifacts.application.sources import (
+    ResolvedSourceSnapshot,
     SourceSyncPorts,
     SourceSyncRequest,
-    sync_source_while_locked,
+    publish_source_while_locked,
+    resolve_source_while_locked,
 )
 from agent_artifacts.configuration.model import SourceKind
 from agent_artifacts.configuration.policy import redact_text
@@ -388,10 +390,20 @@ def execute_source_sync(
             lease.value,
         )
 
-    synchronized = sync_source_while_locked(request, ports.sync, lease.value)
-    if isinstance(synchronized, Err):
-        return _release(synchronized, ports, lease.value)
-    pinned = synchronized.value.current.candidate
+    # Resolved, not synchronized: the pointer is published further down, after everything that can
+    # refuse has refused.  A Sync that pinned a revision and then failed to record its Candidates
+    # left a Source nothing could read (issue #8, D-280); the two now move together.  An `Ok`
+    # holding an outcome is a synchronization that already ended -- offline, or a refusal the
+    # fallback retained -- and its snapshot is the one already pinned.
+    resolved = resolve_source_while_locked(request, ports.sync, lease.value)
+    if isinstance(resolved, Err):
+        return _release(resolved, ports, lease.value)
+    retained = resolved.value if isinstance(resolved.value, SourceSyncOutcome) else None
+    pinned = (
+        retained.current.candidate
+        if retained is not None
+        else cast(ResolvedSourceSnapshot, resolved.value).validated.candidate
+    )
     compiled = ports.compile(
         pinned.snapshot,
         request.source.alias,
@@ -416,6 +428,15 @@ def execute_source_sync(
         return _release(
             _error("Source Sync attempted to produce registry mutations"), ports, lease.value
         )
+    if retained is not None:
+        synchronized = retained
+    else:
+        published = publish_source_while_locked(
+            request, ports.sync, lease.value, cast(ResolvedSourceSnapshot, resolved.value)
+        )
+        if isinstance(published, Err):
+            return _release(published, ports, lease.value)
+        synchronized = published.value
     written = ports.write_history(paths, reconciled.value)
     if isinstance(written, Err):
         return _release(written, ports, lease.value)
@@ -431,7 +452,7 @@ def execute_source_sync(
     result = Ok(
         SourceSyncExecutionResult(
             prepared.review_digest,
-            synchronized.value,
+            synchronized,
             reconciled.value,
             compiled.value.refusals,
         )

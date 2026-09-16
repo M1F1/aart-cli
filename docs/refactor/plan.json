@@ -645,7 +645,7 @@
         {
           "id": "2",
           "title": "A Source Sync that fails after pinning leaves a readable state",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "3",
