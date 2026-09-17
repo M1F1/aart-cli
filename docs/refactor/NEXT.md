@@ -1,5 +1,14 @@
 # AART Refactor — Next Work
 
+## Post-review installation documentation (2026-09-17)
+
+README now shows one parameterized, publicly readable Release-wheel download and two alternative
+local-wheel installs (`pipx` or `uv tool`). `curl -fL` is followed by a ZIP archive check before
+either installer runs, to catch an HTML sign-in page saved as `.whl`. It is not a checksum or an
+authentication mechanism: private Enterprise Releases still need an authenticated download or an
+internal index. B-136 holds the optional checksum follow-up; no release pipeline changed (D-303).
+PR #18 was green before this documentation-only commit; its new run must be checked after push.
+
 ## CP-25.16 — credential-shaped test fixtures done (2026-09-17)
 
 The owner added task 16 to the current stream after the first full `make quality` reached its last

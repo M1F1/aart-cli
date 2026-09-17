@@ -3334,3 +3334,20 @@ Changing a PR title alone still does not retrigger the current workflow; that se
 question is out of scope.
 Promotion condition: Met by the owner's explicit CP-25.15 instruction on 2026-09-17 (D-300).
 The task is implemented; see the slice's acceptance evidence.
+
+## B-136 — Publish a per-release checksum for wheel download verification
+
+Status: OPEN
+Discovered in: CP-25 post-review Enterprise installation discussion (2026-09-17)
+Why useful: A checksum distributed with each wheel would let an operator verify downloaded bytes
+before `pipx` or `uv tool` installs them, including when a release URL returned unexpected content.
+Why noncritical now: The release action already verifies the wheel against the tag before attaching
+it, and the owner asked for a simple README command without checksum for now. A downloaded wheel's
+archive shape is checked before the documented install, but that is not an authenticity check.
+Potential approach: Publish a checksum as a distinct release asset or an explicitly supported
+release-metadata field, then document a fail-closed verify-before-install command for public and
+Enterprise releases. Decide how the expected digest is authenticated, not just where it is copied.
+Invariants touched: INV-098, INV-099; release artifact integrity and supply-chain provenance.
+Evidence/links: `README.md` installation section and `.github/actions/release/action.yml`.
+Promotion condition: Owner requests a verifiable download contract or a release acceptance test
+requires client-side digest comparison.

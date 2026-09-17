@@ -1,5 +1,12 @@
 # AART Refactor Migration Status
 
+**2026-09-17, post-review install guidance (D-303).** README gained a parameterized public
+Release-wheel download and `pipx`/`uv tool` alternatives. A ZIP test catches a sign-in page before
+installation, and the private-Enterprise boundary is stated explicitly. The example was exercised
+against the public `v0.1.2` wheel; `docs_check` passed. B-136 records optional checksum publication.
+No release workflow or runtime code changed. PR #18's matrix was green before this docs update and
+must be rechecked after it is pushed.
+
 **2026-09-17, CP-25.16 done; CP-25 code and gates verified (D-301).** The first full
 `make quality` after task 15 reached its last gate and failed `secret-shape-check`: two new
 redaction tests each contained a fake token-shaped literal. Both now assemble that fixture through

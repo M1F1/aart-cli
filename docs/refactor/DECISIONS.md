@@ -7479,3 +7479,16 @@ preserving its released version files, then open draft PR
 reporting withdrawal`. The title passes `scripts/conventional_title.py` and is the expected
 release-semantic squash title. Do not add a breaking `!` or merge before the required `pr-check`
 matrix is green and the owner approves the PR.
+
+## D-303 — Show wheel-first installation without promising anonymous private access
+
+**Context.** A private Enterprise fork's direct wheel URL gave `pipx` an invalid wheel, while
+`git+` required the pinned `poetry-core` build backend unavailable on the user's index. The owner
+asked for a small parameterized README example for `pipx` and `uv tool`, deferring checksum work.
+
+**Decision.** Document a public-readable Release URL with only repository address and version as
+inputs, download the already-built wheel once, check its ZIP archive shape, and choose one local
+installer. The check is before install so an HTML sign-in page is refused before any package runs.
+Do not claim that `curl` authenticates to private Enterprise, that ZIP validation is an
+authenticity check, or that `git+` needs no build backend. A per-release checksum is B-136, not a
+silent promise in this README example. No release or runtime code changes.

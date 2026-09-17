@@ -468,3 +468,8 @@ integration gate was explicitly redundant with 395 tests already included in uni
 changed production Python module to scope mutmut over; the red-first scanner and deliberate
 literal-restoration mutation are the task's adequacy evidence. CP-25's code and gates are verified;
 the release PR and the owner's version-title choice remain outside this result.
+
+Post-review documentation follow-up (D-303): the README now shows a parameterized public
+Release-wheel download checked as an archive before choosing `pipx` or `uv tool`. It does not
+pretend that `curl` authenticates to a private Enterprise release or that ZIP integrity is a
+cryptographic checksum. B-136 holds that optional later contract; CP-25 is not reopened.

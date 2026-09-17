@@ -49,8 +49,36 @@ both filled in.
 | Downloaded wheel | `python -m pip install --no-deps ./aart_cli-X.Y.Z-py3-none-any.whl` | `pipx install ./aart_cli-X.Y.Z-py3-none-any.whl` | `uv tool install ./aart_cli-X.Y.Z-py3-none-any.whl` |
 | Release wheel by URL | `python -m pip install --no-deps <the wheel's address on the release>` | `pipx install <the wheel's address on the release>` | `uv tool install <the wheel's address on the release>` |
 
-The Git row leads because it is the only one that needs nothing arranged first: `git+https://` goes
-through git, and git uses the credentials you already push with.
+To install a wheel from a **publicly readable** release, set the repository address and released
+version, then download and check that the response is an archive. Replace the example host,
+organization and version with yours:
+
+```sh
+AART_REPO="https://ghe.example.com/ORG/aart-cli"
+AART_VERSION="X.Y.Z"
+AART_WHEEL="aart_cli-${AART_VERSION}-py3-none-any.whl"
+curl -fL --output "$AART_WHEEL" "$AART_REPO/releases/download/v${AART_VERSION}/$AART_WHEEL" &&
+python3 -m zipfile -t "$AART_WHEEL" >/dev/null
+```
+
+If the download and archive check succeed, install with `pipx`:
+
+```sh
+pipx install --force "./$AART_WHEEL"
+```
+
+Or use `uv` instead:
+
+```sh
+uv tool install --force "./$AART_WHEEL"
+```
+
+The archive check catches an HTML sign-in page saved with a `.whl` name; it is not a checksum or
+authenticity check. On a private release, an unauthenticated `curl` cannot fetch the wheel at all.
+
+The Git row needs no pre-downloaded wheel: `git+https://` uses your Git credentials. It does build
+from source, however, so its environment must be able to obtain the pinned `poetry-core` build
+backend. The downloaded-wheel route avoids that build requirement.
 
 `pipx` and `uv tool` create an isolated tool environment. AART has no runtime dependencies. The
 release wheel is byte-reproducible from its tag; see
@@ -63,7 +91,7 @@ sources work at all.
 
 | Source | Works on a private instance |
 |---|---|
-| Tagged Git repository, no clone | **Yes.** git authenticates, so this row needs nothing set up |
+| Tagged Git repository, no clone | Yes, if git authenticates **and** the build environment can obtain `poetry-core==2.4.0` |
 | Downloaded wheel | Yes, once the file is on disk -- see below for getting it there |
 | Internal index, once the wheel is published to it | Yes. Add `--index-url <your index>` (`--default-index` for `uv`) and ask for `"aart-cli==X.Y.Z"` |
 | Release wheel by URL | **No.** See below |
