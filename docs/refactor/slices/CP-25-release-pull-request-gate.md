@@ -267,17 +267,22 @@ not an implicit telemetry opt-in; it is the injection boundary a future explicit
 adapter can implement. The old `UsageReport` payload and GitHub-issue provider do not survive under
 a new name. D-292 records this distinction.
 
-## Open decisions for the owner
+## Decisions at planning time — resolved
 
 1. **The version this releases as.** Removing a public CLI verb is a breaking change. This
    repository sets `bump-minor-pre-major: false`, so a `!` in the pull request title takes `0.1.x`
    straight to **`1.0.0`**. The alternatives are to accept that, or to classify it as `feat:`
    (`0.2.0`) on the argument that `aart reporting` was never in the Product Specification and so was
-   never part of the contract a version promises. This is the owner's call, not a derivable one.
+   never part of the contract a version promises. The owner chose `0.2.0` on 2026-09-17 (D-302);
+   draft PR #18 uses a `feat:` title without `!`.
 2. **Whether to keep the `github-issues` special case** in the registry schema as a no-op, so an
    existing registry's advertisement still validates with its repository coordinate required. The
    recommendation is to remove it: nothing consumes it, and a validation rule that guards nothing is
    the drift this repository keeps finding.
+
+The `github-issues` special case was removed in task 07 (D-292). Neither planning question remains
+open. Draft PR [#18](https://github.com/M1F1/aart-cli/pull/18) carries the completed slice on top
+of `v0.1.2`; its `pr-check` matrix is the remaining external verification before review and merge.
 
 ## What the acceptance record already says
 

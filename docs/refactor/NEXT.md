@@ -6,17 +6,17 @@ The owner added task 16 to the current stream after the first full `make quality
 gate and failed: two CP-25 redaction tests wrote token-shaped fake values directly into tracked
 source. Both now use `tests.credential_fixtures.access_token()` (D-301). Full `make quality` is
 green: 4,441 tests (1 skipped), 86.07% branch coverage, all non-redundant gates passed. The
-branch and PR remain uncreated; the local branch must be moved onto current `origin/main` before
-publication, because the old branch base predates `v0.1.2` and would otherwise show a version
-regression in the PR diff. After that move, recheck the tree and rerun the relevant gates.
+branch was rebased onto current `origin/main` to avoid a `v0.1.2` version regression. Draft PR
+[#18](https://github.com/M1F1/aart-cli/pull/18) is open; its `pr-check` matrix is pending. The
+owner chose `0.2.0` (D-302), so its squash title stays `feat:` without `!`.
 
 ## CI feedback follow-up — CP-25.15 done (2026-09-17)
 
 The owner requested a fail-fast pull-request title check after an Enterprise fork smoke PR titled
 `test` reached `scripts/conventional_title.py` only after the quality gates, then promoted B-135 to
 CP-25.15. The existing check now runs first in `.github/actions/quality/action.yml`; a test holds
-the ordering (D-300). This does not change release semantics, and the next critical step remains
-the full quality gate, then the release PR after the owner's version-title choice.
+the ordering (D-300). This does not change release semantics; the remaining external gate is
+draft PR #18's `pr-check`.
 
 ## Current objective — CP-25 (2026-09-17)
 
@@ -32,15 +32,13 @@ The written task scope is in
 split into separate scope and backend choices because they
 affect different planning contracts; both halves are done.
 
-**The next executable step is preparing the branch against current `origin/main`.** The full
-`make quality` passed on the present tree; after moving the branch, check its diff and gates again
-before opening the pull request. Read the decision below about the version first, because it is
-the owner's and it is made by the pull request's title.
+**The next executable step is watching draft PR #18's `pr-check` to completion.** Full local
+`make quality` passed before the clean rebase; the PR matrix now verifies the rebased tree. Do not
+merge before it is green and the owner approves the review.
 
-**Still the owner's to decide, and not to be decided for them:** the version this branch releases.
-The commits are written as `feat:`/`fix:`, which makes it `0.2.0`; a `feat!:` PR title makes it
-`1.0.0`, because `bump-minor-pre-major: false` sends a breaking change straight past `0.3.0`. Under
-squash merge the PR title decides, not the commits.
+**Version decision made by the owner:** `0.2.0` (D-302). PR #18 is titled `feat: complete CP-25
+consumer fixes and reporting withdrawal`; under squash merge that title is the release-semantic
+commit. Do not add a `!`, which would make this `1.0.0` under the current policy.
 
 The earlier planning baseline was intentionally stopped during coverage. It has now been superseded
 by the complete green `make quality` recorded above for CP-25.16.
@@ -62,7 +60,7 @@ by the complete green `make quality` recorded above for CP-25.16.
   whole suite (INV-096 rewritten, D-290). B-129, a race between the manual lab and git's background
   repack that turned it red at random, is fixed.
 
-## Current objective — CP-25 (2026-09-17)
+## Historical CP-25 mid-slice snapshot (2026-09-17)
 
 **CP-25 is the active slice. CP-25.10 is part-done and is the next thing to finish**: the scope
 seam is complete and held (D-295), but no screen or key lets a person make the choice before
@@ -76,10 +74,8 @@ issues: #11 (two tasks), #12, #16 and #17.
 `docs/refactor/slices/CP-25-release-pull-request-gate.md` holds the ordered tasks and their
 acceptance criteria; `plan.json` holds them as CP-25.1 to CP-25.14.
 
-**One decision is still the owner's**, recorded and deliberately not taken by an agent: the version
-the withdrawal releases. The commit is written as `feat:`, which makes it `0.2.0`; `feat!:` would
-make it `1.0.0`, because `bump-minor-pre-major: false` sends a breaking change straight past
-`0.3.0`. The pull request title is what decides it under squash merge, not the commit.
+The then-open version question was resolved by the owner after this snapshot: `0.2.0` (D-302).
+The pull request title, not the individual commits, decides it under squash merge.
 
 ## Closed — CP-24 (2026-09-16)
 

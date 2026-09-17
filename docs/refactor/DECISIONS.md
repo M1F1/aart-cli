@@ -7466,3 +7466,16 @@ skipped), 86.07% branch coverage, packaging and docs checks, and the final secre
 The integration gate reported its 395 tests as already included in unit. No production Python
 module changed in this task, so no module-scoped mutmut run is applicable; the targeted
 literal-restoration mutation holds the gate's claim.
+
+## D-302 — Release CP-25 as 0.2.0 through a feat-titled pull request
+
+**Context.** With `bump-minor-pre-major: false`, a `feat!:` squash title would jump from the
+current `0.1.2` directly to `1.0.0`; `feat:` gives `0.2.0`. The reporting withdrawal removes an
+old public verb, so this was an owner decision rather than an agent inference.
+
+**Decision.** The owner explicitly chose `0.2.0`. Rebase CP-25 onto current `origin/main`,
+preserving its released version files, then open draft PR
+[#18](https://github.com/M1F1/aart-cli/pull/18) titled `feat: complete CP-25 consumer fixes and
+reporting withdrawal`. The title passes `scripts/conventional_title.py` and is the expected
+release-semantic squash title. Do not add a breaking `!` or merge before the required `pr-check`
+matrix is green and the owner approves the PR.

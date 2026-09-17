@@ -6,14 +6,15 @@ redaction tests each contained a fake token-shaped literal. Both now assemble th
 `tests.credential_fixtures.access_token()`; 28 focused tests and the scanner pass. A targeted
 restore of one literal made the scanner red with exactly two findings. The rerun of full
 `make quality` passed: 4,441 tests (1 skipped), 86.07% branch coverage, and every non-redundant
-gate green. The branch and PR have not been created, and the owner's release-version title choice
-remains open.
+gate green. The branch was rebased onto current `origin/main` without changing release-version
+files and opened as draft PR #18 (D-302). Its matrix is pending; the owner chose `0.2.0`,
+expressed by the PR's `feat:` title.
 
 **2026-09-17, CP-25.15 done (D-300).** The owner promoted B-135 into CP-25 after a fork smoke PR
 titled `test` spent a full quality run before being refused. The unchanged title validator is now
 the composite quality action's first step. A red-first workflow-ordering test holds that it runs
 before setup and the gates; the title syntax and release semantics are unchanged. The full quality
-gate remains outstanding before CP-25 is verified and released.
+gate was later completed as recorded above; this earlier pending status is superseded.
 
 **2026-09-17, CP-25.13 done (D-298).** Screen 22a draws Configuration and Credentials as two
 sections: a blank after each heading and one between a completed Configuration block and the
