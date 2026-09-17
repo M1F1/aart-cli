@@ -1,5 +1,9 @@
 # AART Refactor Migration Status
 
+**2026-09-17, CP-25.12 done (D-297).** Screen 22 parts one artifact's group from the next with a
+single empty line (issue #12). The separator is drawn and never a row, so the cursor still lands on
+artifacts only and search, selection and Fast/Verbose are untouched.
+
 **2026-09-17, CP-25.11 done (D-296).** The Python dependency backend is a per-install choice
 seeded by Settings (issue #11b). `preferred_installer` was inert plumbing -- supplied by nothing,
 held by no test -- so every install took the name-ordered default. Settings now carry the

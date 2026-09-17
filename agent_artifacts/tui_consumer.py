@@ -346,6 +346,11 @@ def render_user_inputs_area(
 
     lines: list[str] = []
     for coordinate in rows:
+        # One empty line between groups and nowhere else (issue #12). Three lines about one
+        # artifact touching three about the next left the reader counting indentation to tell
+        # whose Credentials line they were reading, which is what a grouped list is for.
+        if lines:
+            lines.append("")
         configurations = screens.configurations_for(coordinate)
         credentials = screens.credentials_for(coordinate)
         mark = ">" if coordinate == current_row else " "

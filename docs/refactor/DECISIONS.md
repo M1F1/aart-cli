@@ -7349,3 +7349,19 @@ being installed, stores `uv` as the preference and reads the mark off the drawn 
 so inserting a control above Maintainer Mode silently toggled its neighbour instead. They now count
 from `SETTING_ROWS`. A test that addresses a row by its position is a test that passes for the wrong
 reason as soon as the screen grows.
+
+## D-297 — A grouped list separates its groups, and nothing else changes
+
+**Context.** Screen 22 draws each installed artifact as three lines — its coordinate, its
+Configuration summary, its Credentials summary — and adjacent groups touched (issue #12). Reading
+down the list, the only thing telling you whose Credentials line you were on was indentation, which
+is exactly the work a grouped list is supposed to do for the reader.
+
+**Decision.** One empty line between groups, drawn by the renderer when it already has lines, so
+there is no leading blank and no trailing one. The separator is drawn, never a row: `rows` is still
+one entry per artifact, so the cursor, search, selection and every keystroke mean what they meant.
+Fast and Verbose are untouched, and the empty state is still its own single line.
+
+**What the work found.** The targeted mutation — deleting the separator — fails only the
+multi-artifact assertions, which is the shape a layout claim should have: the zero- and one-artifact
+cases are about a list with nothing to separate and must stay green under it.

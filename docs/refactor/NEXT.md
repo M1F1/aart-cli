@@ -10,9 +10,9 @@ product issue in `M1F1/aart-cli`: #9, #10, #11, #12, #16 and #17 (D-291).
 
 The written task scope is in
 [`slices/CP-25-release-pull-request-gate.md`](slices/CP-25-release-pull-request-gate.md), and
-`plan.json` is the executable status authority. Tasks 04–11 are done (D-292 to D-296). **The next
-executable task is CP-25.12 — issue #12, separating artifact rows on User Variables and
-Credentials**, followed by 13–14 (#16, #17) in issue order. #11 was split into separate scope and
+`plan.json` is the executable status authority. Tasks 04–12 are done (D-292 to D-297). **The next
+executable task is CP-25.13 — issue #16, separating Configuration from Credentials on screen 22a**,
+followed by 14 (#17). #11 was split into separate scope and
 backend choices because they affect different planning contracts; both halves are now done.
 
 **Still the owner's to decide, and not to be decided for them:** the version this branch releases.
