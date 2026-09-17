@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.1.2](https://github.com/M1F1/aart-cli/compare/v0.1.1...v0.1.2) (2026-09-17)
+
+
+### Fixed
+
+* **install:** name one Python backend per dependency contract in a review ([ba443a6](https://github.com/M1F1/aart-cli/commit/ba443a6596e0cc8b5e909ddf3683176b7ffc2dda))
+* **install:** say which step of an installation is running ([ba443a6](https://github.com/M1F1/aart-cli/commit/ba443a6596e0cc8b5e909ddf3683176b7ffc2dda))
+* **maintainer:** keep the local state loadable when one Source's history is stale ([ba443a6](https://github.com/M1F1/aart-cli/commit/ba443a6596e0cc8b5e909ddf3683176b7ffc2dda))
+* **maintainer:** name the repair for a stale Candidate history and let Sync perform it ([ba443a6](https://github.com/M1F1/aart-cli/commit/ba443a6596e0cc8b5e909ddf3683176b7ffc2dda))
+* **maintainer:** pin a Source revision only once its Candidates are reconciled ([ba443a6](https://github.com/M1F1/aart-cli/commit/ba443a6596e0cc8b5e909ddf3683176b7ffc2dda))
+* **requirements:** let an executable requirement name the file it really is ([ba443a6](https://github.com/M1F1/aart-cli/commit/ba443a6596e0cc8b5e909ddf3683176b7ffc2dda))
+* **review:** count what each change is, not which effect kind carries it ([ba443a6](https://github.com/M1F1/aart-cli/commit/ba443a6596e0cc8b5e909ddf3683176b7ffc2dda))
+
+
+### Documentation
+
+* **cp-24:** record the field reports, the decisions and the manual checks ([ba443a6](https://github.com/M1F1/aart-cli/commit/ba443a6596e0cc8b5e909ddf3683176b7ffc2dda))
+
 ## [0.1.1](https://github.com/M1F1/aart-cli/compare/v0.1.0...v0.1.1) (2026-09-15)
 
 
