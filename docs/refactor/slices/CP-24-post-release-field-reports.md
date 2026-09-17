@@ -409,6 +409,11 @@ Evidence:
   owner's container run, where `Path(sys.executable).name` is `python3.11`.
 - Targeted mutation: `"/" in value` → `"//" in value`, so a single path separator slips through.
   Three tests turn red, including the property. Verified.
+- Corrected after the first CI run: the "carries a path or padding" property was written as
+  `st.text().filter(...)`, which throws away most of what Hypothesis generates. That is slow, badly
+  distributed, and a `filter_too_much` health-check failure on all three interpreters -- it passed
+  here and failed there, which is exactly what a filter-heavy strategy does. The offending character
+  is now built into the input rather than waited for.
 - Gates: `lint`, `format-check`, `typecheck`, `docs-check`, and a full `make unit`.
 
 ### 10 — CI takes its interpreter from an image, and `setup-python` is gone

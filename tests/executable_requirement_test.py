@@ -100,13 +100,19 @@ class ExecutableNameTest(unittest.TestCase):
         )
 
     @given(
-        st.text(min_size=1).filter(
-            lambda name: "/" in name or "\\" in name or name.strip() != name or not name.strip()
-        )
+        st.text(),
+        # Built rather than filtered: asking Hypothesis for arbitrary text and keeping only the
+        # inputs that happen to carry one of these throws away most of what it generates, which is
+        # slow, badly distributed, and a health-check failure on a slower interpreter.  Putting the
+        # offending character in by hand states the claim more directly anyway.
+        st.sampled_from(("/", "\\", " ", "\t", "\n", "\r", "\x00", "\x7f")),
+        st.text(),
     )
-    def test_nothing_carrying_a_path_or_padding_gets_through(self, name: str) -> None:
+    def test_nothing_carrying_a_path_or_padding_gets_through(
+        self, head: str, offender: str, tail: str
+    ) -> None:
         with self.assertRaises(ValueError):
-            ExecutableRequirement(RequirementId("interpreter"), name)
+            ExecutableRequirement(RequirementId("interpreter"), head + offender + tail)
 
 
 class ExecutableRemediationTest(unittest.TestCase):
