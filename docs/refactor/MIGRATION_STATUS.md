@@ -1,5 +1,57 @@
 # AART Refactor Migration Status
 
+**2026-09-16, CP-24 opened.** The owner filed issues #7 and #8 against the released `v0.1.1`.
+A Source whose stored Candidate history does not bind its pinned revision makes the whole local
+state unloadable, with no repair short of deleting files; the installation review names an
+installer twice, counts effects a reader cannot reconcile, and reports nothing while it installs.
+CP-24 carries all of it and ends by releasing the fixes.
+
+**2026-09-16, CP-24.01 done (D-280).** Candidate history that does not bind the pinned snapshot is
+ignored rather than fatal: that Source reads `ATTENTION` and names the remedy, its Candidates are
+projected nowhere, and every other Source, Candidate and Registry still loads. Misfiled and
+unreadable history still refuse. **2026-09-16, CP-24.02 done (D-281).** A Source Sync compiles and reconciles before it publishes
+the pin, so a refusal after the fetch leaves the Source as it was rather than pinning a revision
+whose Candidates were never recorded. **2026-09-16, CP-24.03 done (D-282).** `aart doctor` reports a Candidate history that does not bind
+its pinned snapshot and names the repair, and the Maintainer Source Sync will now run over that
+state instead of refusing it -- so a store already in it is repaired by a command rather than by
+deleting files. **2026-09-16, CP-24.04 done (D-283).** An installation review offers one Python
+backend per dependency contract -- the one that will run -- because selection and review now share
+`chosen_installer`; a policy narrowed to one backend narrows which is named rather than removing the
+offer. **2026-09-16, CP-24.05 done (D-284).** An installation review counts what each change is
+rather than which effect kind carries it, so one MCP server no longer reports two launchers written:
+the launcher and each harness's configuration file are counted apart, and a placement's deliveries
+are named instead of counted as "other change". **2026-09-16, CP-24.06 done (D-285).** An
+installation no longer runs silently: `execute_repair` announces each step -- the reviewed plan's
+own steps, in the order they run -- to an observer it is given, the shell lends a reporting handler
+a redraw for the duration of one execution and takes it back afterwards, and the running report is
+drawn in the frame every other screen uses. **2026-09-17, CP-24.07 done in the repository
+(D-286).** Full `make quality` is green (4,325 tests, 85.96% branch coverage) and so is a standalone
+`make integration` (395 tests, B-108 did not reproduce); the scoped mutation runs over
+`execution.py` and `consumer_views.py` turned every survivor inside this slice's claims into a test.
+What is left is the owner's: merge #14, then #13 with its `fix:` title and commit override, then the
+Release Please pull request, which cuts `0.1.2`.
+
+**2026-09-17, CP-24 extended and flattened to one pull request.** The owner ran the gates in a
+container on their Enterprise instance; three failures there were about the machine rather than the
+product, and became tasks 08, 09 and 10. The two open pull requests were flattened into #14
+(`fix/cp-24-01-stale-scan` -> `main`), which carries the `fix:` title and the commit override;
+`plan/cp-24` is not to be merged. **2026-09-17, CP-24.08 done (D-287).** A test whose subject is a
+permission stands down where permissions do not apply: `tests/privileges.py` holds the one guard,
+the sealed-lab test in `tests/manual_test_lab_test.py` carries it, and the two files that had grown
+their own copy were moved onto it. No product code changed.
+ **2026-09-17, CP-24.09 done (D-288).** An executable requirement
+may name the file it really is -- `python3.11`, `node20`, `clang-15` -- because `executable_name`
+holds a file name's rule rather than an identifier's, while `RequirementId` stays kebab-case.
+`InstallExecutable` moved onto the same rule: planning derives one from the requirement's own
+executable name, so a machine that can install `python3.11` would have crashed the planner at the
+moment it offered to.
+ **2026-09-17, CP-24.10 done (D-289).** `actions/setup-python` is gone
+from every workflow and every composite action: a step-level `if:` decides whether a step runs, not
+whether its action is fetched, so an instance that does not carry it could never have escaped it by
+configuration. Every job now takes its interpreter from a container image, and unset `AART_CI_IMAGE`
+falls back to the official `python:<version>` image per matrix entry, so the public run still
+exercises all three interpreters. The same trap in the registry template's Pages job is B-134.
+
 **2026-09-15, 0.1.0 has no wheel (D-279).** The release run failed before building: its action
 installed no Poetry, which the wheel build needs. It now installs the locked tools the quality
 action installs, and a test holds the order. Every release step passes in a clean virtualenv.
@@ -32,8 +84,11 @@ numbered release documents of the predecessor project are deleted. The TUI regis
 repository: the setting that lets GitHub Actions create pull requests is off, so Release Please
 cannot open its release PR until the owner enables it.
 
-**2026-09-15: CP-22 CLOSED; CP-23 IMPLEMENTED (tasks 01–16), awaiting the owner's manual
-acceptance.**
+**2026-09-16: CP-23 CLOSED by the owner.** Tasks 01–16 are done in code and task 15's gates are
+recorded below. The manual acceptance walk was never recorded in this repository; the owner closed
+the slice on 2026-09-16 rather than waiting for it, so no manual result is claimed here.
+
+**2026-09-15: CP-22 CLOSED; CP-23 IMPLEMENTED (tasks 01–16).**
 
 Task 15's recorded gates:
 - **`make quality`:** green at `085d5df`. 4,273 tests with 1 skipped, 85.94% branch coverage, and
@@ -126,8 +181,8 @@ and 193 subtests pass, including a Hypothesis row-selection property and real lo
 Scoped mutation analysis is recorded; format, lint, typecheck, unit (3,978 OK) and validate
 passed. Per-task work runs only the verifying gates; the full suite is task 15.
 
-Only task 15 remains pending in [`CP-23`](slices/CP-23-actionable-tui-workflows.md). The entire batch
-and its manual acceptance are still open. Owner requirements in §167/D-249–D-250 retain manual
+[`CP-23`](slices/CP-23-actionable-tui-workflows.md) is closed by the owner; its manual acceptance
+walk was never recorded here, and nothing in this document claims it passed. Owner requirements in §167/D-249–D-250 retain manual
 publication, explicit target choice, credential acquisition guidance, and complete Frame/Verbose
 compliance with no standard in-TUI exceptions. The automated all-screen audit is complete; no human
 retest or new CP-22 gate result is claimed.

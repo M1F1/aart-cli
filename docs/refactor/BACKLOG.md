@@ -3261,3 +3261,45 @@ Reclassified as critical because it turns required checks red at random, includi
   `maintenance.auto=true` turns it red.
 - Other test helpers that commit and then copy or delete a repository could race the same way;
   none has been seen failing.
+
+## B-130 — Nothing holds which registries a Source view names
+
+Found by scoped mutants over `agent_artifacts/application/maintainer_views.py` during CP-24.01.
+Replacing the union of the Candidate and collection target registries with an intersection kills no
+test: `MaintainerSourceView.target_registries` is asserted nowhere with a Source scanned for two
+registries. Not critical to CP-24; a test with one Candidate per registry would hold it.
+
+## B-131 — A Source view's last successful sync time is unheld
+
+Same run: replacing `published_at_epoch_seconds` with `None` survives. The field is rendered in the
+Source detail, so a rendering assertion over a known publication time would hold it.
+
+## B-132 — A review offers no way to choose the Python backend
+
+CP-24.04 (D-283) reduced a dependency contract to one offer, naming the backend that will run, which
+is what issue #7 asked for. A reader who wants the other usable backend still has only policy
+(`allowed_python_installers`) to say so, and policy is not where a one-off choice belongs. If that
+demand appears, it is one choice with one selected — never two changes to approve — and the selection
+rule (`chosen_installer`) already takes a preference, so the work is carrying the reader's answer to
+it. Not critical: the backend that runs is now the one the review names.
+
+## B-133 — A Python dependency specification's serialized shape is unheld
+
+Found by scoped mutants over `agent_artifacts/domain/python_runtime.py` during CP-24.04: every
+mutant of `dependency_spec_to_data` survives (16 of them), as do the `artifact_environment_to_data`
+mutants, which the scoped test set does not reach at all. Both functions are the canonical shape a
+plan and a receipt carry, so a key renamed or a value dropped is a compatibility change nothing
+notices. Not critical to CP-24; one round-trip assertion per function would hold them.
+
+## B-134 — The registry's Pages escape hatch does not escape anything
+
+Found while removing `actions/setup-python` (CP-24.10). The same trap the tool's own workflows had
+sits in the registry template `registry init` writes: `actions/upload-pages-artifact@v3` and
+`actions/deploy-pages@v4` are referenced from a job that always runs, with `AART_PAGES` read at step
+level. An action is resolved during "Set up job", before any step condition is read, so an instance
+that does not carry those actions fails the usage-dashboard workflow even with `AART_PAGES=false` —
+the escape hatch the rollout page documents. The fix is the same shape as CP-24.10's: move the
+condition to job level, so the publishing job is skipped rather than its steps. Out of scope for
+CP-24, which is about the tool's own release; the registry template is a separate contract and
+`plan_registry_init` refuses a registry whose managed file has drifted, so changing it is a
+migration rather than an edit.

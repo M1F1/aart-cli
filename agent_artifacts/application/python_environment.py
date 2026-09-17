@@ -21,6 +21,7 @@ from agent_artifacts.domain.python_runtime import (
     PyProjectSpec,
     PythonDependencySpec,
     PythonInstaller,
+    chosen_installer,
     compatible_installers,
     spec_descriptor_path,
     spec_kind,
@@ -89,10 +90,9 @@ def select_python_installer(
                 ("permitted", _names(permitted)),
             ),
         )
-    if preferred is not None and preferred in candidates:
-        return Ok(preferred)
-    # Ordered by name so the same three sets always yield the same choice.
-    return Ok(sorted(candidates, key=lambda item: item.value)[0])
+    selected = chosen_installer(candidates, preferred)
+    assert selected is not None
+    return Ok(selected)
 
 
 def dependency_installation(

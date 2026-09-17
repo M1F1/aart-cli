@@ -22,7 +22,7 @@ from typing import Callable, Protocol, TypeAlias
 
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.effects import Effect, effect_to_data
-from agent_artifacts.domain.identifiers import ObjectDigest
+from agent_artifacts.domain.identifiers import ArtifactCoordinate, ObjectDigest
 from agent_artifacts.domain.plans import install_plan_to_data
 from agent_artifacts.domain.policies import EffectivePolicy
 from agent_artifacts.domain.reconciliation import (
@@ -65,7 +65,9 @@ __all__ = [
     "LifecycleExecutionStatus",
     "MutationLockPort",
     "ReviewedTransaction",
+    "ProgressObserver",
     "StepOutcome",
+    "StepProgress",
     "StepStatus",
     "execute_repair",
     "execute_installation",
@@ -146,6 +148,45 @@ class StepOutcome:
         if not isinstance(self.detail, str):
             raise ValueError("step outcome detail is invalid")
         object.__setattr__(self, "detail", " ".join(self.detail.split()))
+
+
+@dataclass(frozen=True, slots=True)
+class StepProgress:
+    """Where a running plan has got to, announced as it happens.
+
+    One step produces two of these: `status` is None when it is reached, and the outcome's status
+    when it is over. A step nobody attempted is announced once, finished, because it never started.
+    `index` counts from one within the plan being run, which is the plan somebody reviewed, so the
+    running report and the review are the same list in the same order.
+    """
+
+    component: ComponentId
+    effect: Effect
+    index: int
+    total: int
+    status: StepStatus | None = None
+    detail: str = ""
+    #: Whose plan this step belongs to, for a transaction with more than one member. A single
+    #: repair has no coordinate to add and leaves it unset.
+    artifact: ArtifactCoordinate | None = None
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.component, ComponentId)
+            or not (self.status is None or isinstance(self.status, StepStatus))
+            or not isinstance(self.index, int)
+            or not isinstance(self.total, int)
+            or not 1 <= self.index <= self.total
+            or not (self.artifact is None or isinstance(self.artifact, ArtifactCoordinate))
+        ):
+            raise ValueError("step progress is invalid")
+        object.__setattr__(self, "detail", " ".join(self.detail.split()))
+
+
+#: How a caller is told where a running plan has got to. It is called on the thread the plan runs
+#: on, between steps, and whatever it does with the report is the caller's business: this module
+#: neither draws nor writes anything.
+ProgressObserver: TypeAlias = Callable[[StepProgress], None]
 
 
 @dataclass(frozen=True, slots=True)
@@ -326,6 +367,7 @@ def execute_repair(
     *,
     inspect: Callable[[], CurrentState],
     allow_incomplete: bool = False,
+    observe: ProgressObserver | None = None,
 ) -> Result[ExecutionOutcome]:
     """Run `plan`, then inspect again and report what is actually true.
 
@@ -351,45 +393,67 @@ def execute_repair(
 
     steps: list[StepOutcome] = []
     stopped = False
-    for step in plan.steps:
+    total = len(plan.steps)
+
+    def record(outcome: StepOutcome, index: int) -> None:
+        """Keep the outcome and say the step is over, so the two can never disagree."""
+
+        steps.append(outcome)
+        if observe is not None:
+            observe(
+                StepProgress(
+                    outcome.component,
+                    outcome.effect,
+                    index,
+                    total,
+                    outcome.status,
+                    outcome.detail,
+                )
+            )
+
+    for index, step in enumerate(plan.steps, start=1):
         if stopped:
-            steps.append(StepOutcome(step.component, step.effect, StepStatus.NOT_ATTEMPTED))
+            record(StepOutcome(step.component, step.effect, StepStatus.NOT_ATTEMPTED), index)
             continue
+        if observe is not None:
+            observe(StepProgress(step.component, step.effect, index, total))
         interpreter = _dispatch(step.effect, interpreters)
         if interpreter is None:
-            steps.append(
+            record(
                 StepOutcome(
                     step.component,
                     step.effect,
                     StepStatus.FAILED,
                     f"no interpreter here carries out {type(step.effect).__name__}",
-                )
+                ),
+                index,
             )
             stopped = True
             continue
         try:
             applied = interpreter.apply(step.effect)
         except KeyboardInterrupt:
-            steps.append(
+            record(
                 StepOutcome(
                     step.component,
                     step.effect,
                     StepStatus.INTERRUPTED,
                     "execution was interrupted; current state will be inspected",
-                )
+                ),
+                index,
             )
             stopped = True
             continue
         except (OSError, RuntimeError, ValueError) as error:
-            steps.append(StepOutcome(step.component, step.effect, StepStatus.FAILED, str(error)))
+            record(StepOutcome(step.component, step.effect, StepStatus.FAILED, str(error)), index)
             stopped = True
             continue
         if isinstance(applied, Err):
             detail = "; ".join(diagnostic.message for diagnostic in applied.diagnostics)
-            steps.append(StepOutcome(step.component, step.effect, StepStatus.FAILED, detail))
+            record(StepOutcome(step.component, step.effect, StepStatus.FAILED, detail), index)
             stopped = True
             continue
-        steps.append(StepOutcome(step.component, step.effect, StepStatus.APPLIED, applied.value))
+        record(StepOutcome(step.component, step.effect, StepStatus.APPLIED, applied.value), index)
 
     try:
         current = inspect()
@@ -439,6 +503,7 @@ def _execute_lifecycle_locked(
     policy: EffectivePolicy,
     interpreters: tuple[EffectInterpreter, ...],
     inspect: Callable[[DesiredState], CurrentState],
+    observe: ProgressObserver | None = None,
 ) -> Result[LifecycleExecutionOutcome]:
     try:
         current = inspect(reviewed.intent.desired)
@@ -458,6 +523,7 @@ def _execute_lifecycle_locked(
         reviewed.intent.desired,
         interpreters,
         inspect=lambda: inspect(reviewed.intent.desired),
+        observe=observe,
     )
     if isinstance(primary, Err):
         return primary
@@ -526,12 +592,23 @@ def _preflight_installation(
     return Ok(None)
 
 
+def _member_observer(
+    observe: ProgressObserver | None, artifact: ArtifactCoordinate
+) -> ProgressObserver | None:
+    """The same observer, with every report saying which member of the transaction it is about."""
+
+    if observe is None:
+        return None
+    return lambda progress: observe(replace(progress, artifact=artifact))
+
+
 def _execute_installation_locked(
     proposal: ReviewedTransaction,
     *,
     policy: EffectivePolicy,
     interpreters: tuple[EffectInterpreter, ...],
     inspect: Callable[[DesiredState], CurrentState],
+    observe: ProgressObserver | None = None,
 ) -> Result[InstallationExecutionOutcome]:
     preflight = _preflight_installation(proposal, policy=policy, inspect=inspect)
     if isinstance(preflight, Err):
@@ -554,6 +631,7 @@ def _execute_installation_locked(
             policy=policy,
             interpreters=interpreters,
             inspect=inspect,
+            observe=_member_observer(observe, reviewed.intent.desired.artifact),
         )
         if isinstance(executed, Err):
             artifacts.append(
@@ -573,6 +651,7 @@ def execute_installation(
     interpreters: tuple[EffectInterpreter, ...],
     inspect: Callable[[DesiredState], CurrentState],
     lock: MutationLockPort,
+    observe: ProgressObserver | None = None,
 ) -> Result[InstallationExecutionOutcome]:
     """Execute one single-or-bulk transaction under one lease and one review boundary.
 
@@ -597,6 +676,7 @@ def execute_installation(
             policy=policy,
             interpreters=interpreters,
             inspect=inspect,
+            observe=observe,
         )
     finally:
         released = lock.release(acquired.value)
@@ -617,6 +697,7 @@ def execute_lifecycle(
     interpreters: tuple[EffectInterpreter, ...],
     inspect: Callable[[DesiredState], CurrentState],
     lock: MutationLockPort,
+    observe: ProgressObserver | None = None,
 ) -> Result[LifecycleExecutionOutcome]:
     """Execute one reviewed intent under its scope lease.
 
@@ -637,6 +718,7 @@ def execute_lifecycle(
             policy=policy,
             interpreters=interpreters,
             inspect=inspect,
+            observe=_member_observer(observe, reviewed.intent.desired.artifact),
         )
     finally:
         released = lock.release(acquired.value)

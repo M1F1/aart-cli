@@ -6842,3 +6842,310 @@ failure.
   chose a new patch release over moving a published tag (INV-101). The fix is titled `fix:`, and
   Release Please releases it as `0.1.1` with its wheel. `v0.1.0` stays a GitHub Release with no
   asset.
+
+## D-280 — Candidate history that does not bind the pin is ignored, not fatal
+
+**Context.** CP-24 task 01, reported by the product owner as issue #8 against `v0.1.1`. One Source
+of several held a Candidate history recorded at a revision other than its pinned snapshot. The
+whole application then refused to load:
+
+```
+The local AART state could not be loaded.
+  error [maintainer-composition-invalid]: cannot bind Candidate history for agent-mcp-servers:
+  maintainer Source scan does not bind the current pinned Source
+```
+
+`project_maintainer_source` raised on the mismatch, `read_maintainer_views` turned the raise into a
+refusal of every view, and one inconsistent Source hid every other Source, every Candidate and
+every Registry. The only recovery was deleting a file inside the data root by hand — and the
+message named neither the file nor any command. `aart source sync` did not clear it, because it
+refreshes snapshots and never rewrites Candidate history (CP-24 task 03 owns the repair path).
+
+The earlier contract was deliberate: a projection must not present a Scan from one revision as
+Candidate data for another. That part stands. What did not follow is that the reader must refuse
+everything else along with it. A Sync pins the snapshot before it records the Scan (CP-24 task 02),
+so any interrupted Sync leaves exactly this state; it is a field state, not a corruption.
+
+**Decision.**
+- `scan_binds_current_pin` (`agent_artifacts/application/maintainer_views.py`) decides, once, if a
+  stored Scan is Candidate data for the snapshot pinned right now. `project_maintainer_source`
+  projects only a Scan that binds: an unbound one contributes no manifests, no Candidate states and
+  no target registries, the Source reads `ATTENTION`, and its diagnostics carry
+  `UNBOUND_SCAN_DIAGNOSTIC`, which names the remedy — synchronize this Source again.
+  `tui_maintainer` already renders diagnostics as `Attention: …`.
+- `read_maintainer_views` (`agent_artifacts/io/maintainer_views.py`) uses the same predicate before
+  it adds a Scan to the list that feeds collection candidates and validations, so tolerating the
+  Scan for the Source view cannot leak its Candidates into the rest of the composition.
+- A Scan carrying **another Source's alias**, and health belonging to another alias, still raise
+  and still refuse the composition. Those are misfiled data, not a state a Maintainer can repair.
+  Unreadable history (`candidate-history-invalid`) still refuses too: nothing can say what it holds.
+- This reverses the refusal half of the CP-14 contract on the owner's authority (issue #8).
+  `test_history_from_the_previous_pinned_revision_refuses_composition` and
+  `test_source_projection_refuses_a_scan_from_another_revision` are replaced by tests of the new
+  contract rather than deleted.
+
+**Consequences.** Sources are independent again: one Source in this state costs its own Candidates
+and nothing else. A Hypothesis property over pinned/stored revision pairs holds that loading never
+fails the composition. Targeted mutations: making the revision comparison always true, and dropping
+the predicate from the reader, each turn the characterization tests red.
+
+## D-281 — A Source Sync publishes the pin only after everything that can refuse has refused
+
+**Context.** CP-24 task 02, the writing end of the state D-280 now tolerates. `execute_source_sync`
+advanced the pin inside `sync_source_while_locked` and only then compiled the snapshot, reconciled
+the Scan and wrote Candidate history. Every refusal in between — a compile failure, a reconcile
+failure, an attempted registry mutation — left the Source pinned at a revision whose Candidates
+were never recorded. That is exactly the store the product owner reported in issue #8.
+
+The slice offered three shapes: write both in one transaction, do not publish the pin until the
+history is ready, or record that the two are known to disagree. There is no transaction across the
+snapshot store and the Candidate store, and recording a disagreement adds a third state without
+removing the second.
+
+**Decision.** The pin is published last. `agent_artifacts/application/sources.py` splits
+`_sync_locked` into `_resolve_locked` (read current, offline, acquire, validate, identity) and
+`_publish_locked` (publish, receipt check, disposition), exposed as `resolve_source_while_locked`
+and `publish_source_while_locked` with `ResolvedSourceSnapshot` between them.
+`sync_source_while_locked` composes the two and behaves exactly as before, so `aart source sync`
+and every other caller are unchanged.
+
+`execute_source_sync` resolves, compiles and reconciles against the *resolved* candidate, and only
+then publishes the pointer and writes the history. An `Ok` carrying a `SourceSyncOutcome` from the
+resolve step is a synchronization that already ended — offline, or a refusal the request's fallback
+retained — and its snapshot is the one already pinned, so it compiles from that and publishes
+nothing.
+
+**Consequences.** The window is now two adjacent writes: publishing the pointer and writing the
+history. A failure between them still leaves a pin the history does not bind, which is why D-280
+stays — the two tasks are one defect seen from both ends, and the reader must survive it. Everything
+that actually refused in the field happens before the first write.
+
+Evidence: `test_a_compile_refusal_never_advances_the_pin_it_could_not_reconcile` and
+`test_a_refusal_after_a_pin_already_exists_keeps_that_pin_and_its_history` at the application
+boundary, and `test_a_sync_that_fails_after_the_fetch_leaves_the_store_readable` over a real Git
+repository and a real store, which ends by loading the Maintainer views. Targeted mutation: moving
+the publication back in front of the compile turns all three red.
+
+## D-282 — `aart doctor` reports an unbound Candidate history; Source Sync is the repair
+
+**Context.** CP-24 task 03. After D-280 and D-281 the state is survivable and no longer created,
+but a store already in it had no way back. Three things were wrong at once:
+
+1. Nothing outside the Maintainer screens said the Source was in that state.
+2. `aart source sync` refreshes the managed snapshot and writes no Candidate history — writing it
+   is Maintainer authority — so running it on a Source whose pin had moved *created* the state and
+   reported `unchanged` the next time.
+3. The one command that does write Candidate history refused to run: `prepare_source_sync` called
+   `_baseline`, which returned `Candidate history does not bind the current configured Source
+   snapshot`. The only writer of the history refused to run over a store it had written itself, so
+   the owner's only recovery was `mv …/candidates …/candidates.bak`.
+
+**Decision.**
+- `_bound_history` in `agent_artifacts/application/maintainer_sync.py` decides whether stored
+  history describes the pinned snapshot. `_baseline` starts a Sync from *no* baseline when it does
+  not, instead of refusing, and `execute_source_sync` carries Candidate state forward only from
+  history that binds — a Scan at another revision is not a previous observation of this one.
+  History carrying another Source's alias still refuses; that is misfiled data, as in D-280.
+- `read_unbound_candidate_histories` (`agent_artifacts/io/maintainer_views.py`) reads the same
+  disagreement for anything outside the Maintainer screens, and `aart doctor` reports it under
+  `candidate_history.unbound`, naming the recorded revision, the pinned revision and the remedy.
+  A doctor run that finds one exits non-zero: the tool is not showing what the machine holds.
+- No new repair kind was added to `aart doctor --repair`. That machinery reviews and applies
+  *installation* plans for one installed coordinate; rebuilding Candidate history is a Maintainer
+  Source Sync, which is already reviewed, already leased, already refuses registry mutations, and
+  already rebuilds the history for the pinned snapshot even when the revision has not moved. Doctor
+  names it; Sync performs it.
+
+**Consequences.** The repair is a command the report names, and the report is where somebody
+already looks. The walkthrough records the whole loop as a check.
+`test_doctor_names_a_history_that_does_not_bind_the_pin_and_sync_repairs_it` proves it end to end
+over a real Git repository: refresh outside the screens, doctor exits 1 and names the remedy, run
+Source Sync, doctor exits 0 and the Candidate is back. Targeted mutations: treating unbound history
+as bound turns the review test red; dropping the finding from doctor's verdict turns the end-to-end
+test red.
+
+## D-283 — One dependency contract is one offer, naming the backend that will run
+
+**Context.** CP-24 task 04, from issue #7: a review of one artifact listed both `Install its Python
+dependencies with pip` and `Install its Python dependencies with uv`. Two mutually exclusive offers
+read as two changes AART will make. The planner produced them: `_possible_remediations`
+(`agent_artifacts/application/installation_planning.py`) returned one `InstallPythonPackages` per
+backend in `readable & available`, while installing has only ever run one of them —
+`select_python_installer` takes the preference when it is usable and otherwise the first by name.
+The review and the install disagreed about how many changes there are.
+
+**Decision.** The tie-break moves into the domain as `chosen_installer`
+(`agent_artifacts/domain/python_runtime.py`): given every backend that could run, it returns the one
+that will, honouring a preference only when that preference is among them. `select_python_installer`
+now ends in it, and `allowed_remediations` reduces each dependency contract to that one offer
+(`_one_installer_per_contract`) *after* the policy filter, so narrowing policy narrows which backend
+is named rather than removing the offer. Nothing about the rendering changed: `remediation_change`
+renders one line per remediation, and there is now one remediation.
+
+**Consequences.** A review names the backend that will run, and approving it approves what happens.
+The choice is one rule in one place, so the two cannot drift apart again: a review listing a backend
+the installer would not have chosen is now impossible by construction rather than by coincidence.
+Where the reader should genuinely choose between backends, that is a selection to design (B-132),
+not two changes to approve. Targeted mutation: making the reduction a no-op returns both offers and
+turns `test_two_usable_backends_are_one_offer_naming_the_one_that_will_run` red. Verified.
+
+## D-284 — A review counts what a change is, not which effect kind carries it
+
+**Context.** CP-24 task 05, from issue #7: installing one MCP server reported `2 launcher(s)
+written`. Both files are `WriteFile` effects, and `_OUTCOMES` (`agent_artifacts/tui_consumer.py`)
+maps one effect kind to one phrase, so the counter called both launchers. They are not the same
+thing: one is the executable launcher a harness runs, the other the configuration file that harness
+reads, one file per harness (D-264, INV-179). Installing into two harnesses said `3 launcher(s)
+written`. The same table left a placement -- a Skill delivered into a harness, which has no launcher
+at all -- as `1 other change`.
+
+**Decision.** `EffectView` carries an `outcome` alongside its `kind`: what the change is to the
+person reading it. `_outcome` (`agent_artifacts/application/consumer_views.py`) returns the kind
+unchanged for every effect whose kind already says one thing, and splits `write-file` into
+`write-launcher` and `write-configuration` on the `executable` flag the plan already carries -- read,
+never guessed, because the launcher is the file written executable. `_OUTCOMES` is keyed by outcome,
+phrases the two separately, and names the delivery and merge effects a placement plans instead of
+counting them as "other change".
+
+**Consequences.** One server installed into one harness reads `1 launcher(s) written` and
+`1 configuration file(s) written`, and into two harnesses `1 launcher(s) written` and
+`2 configuration file(s) written` -- a number somebody can reconcile with their own request. The
+canonical plan is untouched: this is projection and wording, so no review digest changes. Targeted
+mutation: collapsing `_outcome` back to one phrase for every `write-file` turns the new tests red.
+Verified.
+
+## D-285 — An execution announces its steps to a callback it is lent, never to a terminal
+
+**Context.** CP-24 task 06, from issue #7: the Ready screen lists what will happen, and then the
+installation runs silently until it is over. The only place that knows how far a plan has got is the
+loop in `execute_repair` (`agent_artifacts/application/execution.py`), and that loop is application
+code: it must not reach for a terminal, and the rendering must stay a pure projection so the report
+and the review cannot disagree.
+
+**Decision.** `execute_repair` takes an optional `observe: ProgressObserver`. It announces each step
+twice -- once when the step starts, with no status, and once with the `StepOutcome` it got -- as a
+`StepProgress` carrying the component, the effect, `index` of `total`, the status and the detail.
+The announcement is the plan's own steps in the order they run, so it is the review projected, not a
+second list. `execute_installation` and `execute_lifecycle` thread `observe` through (a lifecycle
+announces its primary run only, never a restoration), and `_member_observer` stamps the artifact on
+each report of a transaction member. `project_running_installation`
+(`agent_artifacts/application/consumer_views.py`) folds the reports into a `RunningInstallationView`
+by keeping the latest report per index, and `render_running` (`agent_artifacts/tui_consumer.py`)
+draws it in the same shape the finished report uses, with `▸` for the step that is running.
+
+The shell binds the two. `run_consumer_shell` lends a reporting handler a redraw callback for the
+duration of one execution and takes it back in a `finally`, exactly as the credential terminal
+handover already does; the handler is recognized by the `ProgressReportingHandler` protocol, so a
+handler that cannot report is simply never lent one. `LocalConsumerActions.observe_progress`
+(`agent_artifacts/io/consumer_actions.py`) accumulates the reports and projects them, and passes no
+observer at all when nobody is watching.
+
+**Consequences.** The reader sees which step is running and which are done, inside the shared frame
+every other screen is drawn in -- no screen-specific skeleton (CP-22/CP-23). Rendering performs no
+IO and holds no state: the view is a fold over what the execution already said. Nothing is written
+to the plan, the receipt or any digest, so an installation that reports and one that does not are
+the same installation. Targeted mutation: disabling the shell binding so the handler is never lent a
+reporter turns three shell tests red. Verified.
+
+## D-286 — A survivor inside the slice's own claims becomes a test, not a number
+
+**Context.** CP-24 task 07 ran the gates and the scoped advisory mutation work for the whole batch.
+`make quality` and a standalone `make integration` were green. The mutation runs over the two
+modules this slice gave new behaviour to were not: `agent_artifacts/application/execution.py` left
+18 survivors inside task 06's own claims, and `agent_artifacts/application/consumer_views.py` left
+16 in `project_running_installation`. `_member_observer` could be replaced by a no-op,
+`execute_lifecycle` could drop its observer entirely, a finished step could be numbered or named
+anything, and the fold could drop the artifact, the effect kind and the detail. The drawn count was
+passing by accident too: a test asserting only that `(2 of 2 done)` appears somewhere is satisfied
+by a count that is wrong at every step before the last.
+
+**Decision.** Every one of those became a test, in the files that already claim the behaviour, and
+each was verified by applying the mutation by hand and watching the named test turn red. The
+production code did not change: what was missing was the claim, not the behaviour. The survivors
+outside this slice's claims -- CP-12's transaction preflight guards, the diagnostic strings, and the
+older Consumer projections -- stay as findings; B-122 already records the last of those.
+
+**Consequences.** `make unit` went from 4,316 tests to 4,325, and the scoped `execution.py` run from
+254 killed with 170 unreached to 327 killed with 57 unreached. The slice's evidence log now records
+one targeted mutation per task and this run's classification, so the next agent can see which
+claims are held rather than infer it from a percentage.
+
+Also recorded, because it cost an hour: after mutating a file by hand, clear `__pycache__` before
+re-running. `sum(1 ...)` and `sum(2 ...)` are the same length, so the byte-compiled cache of the
+mutated source was accepted for the restored source, and the restored code appeared to fail its own
+test. The tool's own runs are unaffected -- mutmut works in its own copy -- but a hand mutation in
+the working tree is not.
+
+## D-287 — A test whose subject is a permission stands down where permissions do not apply
+
+**Context.** The owner's first container run of the gates on an Enterprise instance failed
+`tests/manual_test_lab_test.py`'s sealed-lab test: it seals a directory read-only and asserts that a
+blunt `rm -rf` fails, which is the whole reason the refusal prints a longer command. The job runs as
+root, root ignores the mode bits, the delete succeeds, and the test fails for a reason that has
+nothing to do with the behaviour it guards. Two other files had already met this and each had grown
+its own inline `skipIf`, worded differently and testing the predicate differently.
+
+**Decision.** One shared guard, `tests/privileges.py`: `running_as_root()` and
+`skip_if_root(relied_on)`. The guard reads `os.geteuid` at call time rather than capturing it at
+import, so a test can say what it would do on a machine it is not running on, and it takes what the
+test relies on rather than a whole sentence, so every skip reason reads `root ignores <the thing>`
+and names something concrete. The alternative — weakening the assertion so it passes as root too —
+was rejected: it would delete the claim rather than place it. A test with no subject on this machine
+should say so, not pass vacuously.
+
+**Consequences.** `tests/scope_teardown_test.py` and `tests/fs_test.py` were moved onto the shared
+guard and their private copies are gone. The guard itself is now held by `tests/privileges_test.py`,
+because the failure it prevents is otherwise invisible: a guard that never skips looks exactly like
+a test that never needed one, right up to the container run where it does. No product code changed.
+
+## D-288 — An executable requirement names a file, and a file name is not a slug
+
+**Context.** The owner's container run failed with `ValueError: executable requirement is invalid`
+because the image's interpreter is `python3.11` and `ExecutableRequirement` was validating its name
+with `_ID_RE`, the canonical-slug pattern `RequirementId` uses. `python3.11`, `node20` and `clang-15`
+are ordinary executable names that no author could express. The Product Specification lists
+`ExecutableRequirement` among the requirement types and constrains its name nowhere, so this was an
+implementation choice to correct rather than a contract to break.
+
+**Decision.** `executable_name(value, label)` holds the rule a file name really has: one non-empty
+line, no path separator, no whitespace, no control character, not `.` or `..` — a name a shell could
+look up on `PATH` by itself. A requirement says *which* executable, never *where*, so a path is
+still refused, and `RequirementId` stays kebab-case, because an identifier is this project's to
+shape while an executable's name belongs to whoever built the machine.
+
+**Consequences.** `InstallExecutable` had to move with it. `allowed_remediations` derives one
+whenever the environment advertises an installer capability under the requirement's own executable
+name, and that dataclass was validating with the remediation module's `_token`: a machine that can
+install `python3.11` would have crashed the planner at the moment it offered to. Both ends now share
+`executable_name`. The remediation module's other names — credential providers, runtimes, harnesses
+— keep `_token`, because those are this project's vocabulary rather than the machine's.
+
+## D-289 — CI takes its interpreter from an image, and `actions/setup-python` is gone
+
+**Context.** The owner's Enterprise instance does not carry `actions/setup-python@v5`, and their run
+failed at "Set up job" with `repository not found` even with `AART_CI_IMAGE` set and the step
+conditioned to skip. The reason is the resolution rule: a step-level `if:` decides whether a step
+**runs**, not whether its action is **fetched**. Every action a job references is resolved during
+"Set up job", before any condition is read. Only a job-level `if` — a skipped job — prevents
+resolution. So the escape hatch the workflows and the rollout page both offered could not work, and
+no amount of configuration could have made it work.
+
+**Decision.** Remove the reference. No workflow and no composite action in this repository names
+`actions/setup-python`, and the `python-version` and `setup-python` inputs went with it. Every job
+runs in a container and takes its interpreter from the image. `AART_CI_IMAGE` unset falls back to
+`python:${{ matrix.python-version }}` in `pr-check` and to `python:$AART_RELEASE_PYTHON_VERSION` in
+`release` and `deep-quality`, so the public run still exercises 3.10, 3.11 and 3.14 — one official
+image each, rather than one runner with three downloads. `AART_CI_IMAGE` still replaces all of them
+and `AART_PYTHON` still names the interpreter inside the image, so a fork's configuration is
+unchanged.
+
+**Consequences.** The prerequisite list changed shape: a runner that can run container jobs, and a
+registry it can pull from, in place of an action from github.com. The rollout page's two claims that
+an image "skips" the action were wrong for the resolution reason above and are corrected, with the
+rule written down where the next reader of that page will meet it. The tests that hold the workflow
+shape were rewritten first, because they are where the old shape was written down.
+
+Recorded rather than fixed: the same trap sits in the registry template `registry init` writes,
+where `actions/upload-pages-artifact@v3` is referenced from an always-running job, which defeats the
+documented `AART_PAGES=false` escape hatch. That is a separate contract with a migration attached —
+`BACKLOG.md` B-134.

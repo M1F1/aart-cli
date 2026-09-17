@@ -8,12 +8,6 @@ inputs:
   python:
     description: Name of the interpreter to invoke.
     required: true
-  python-version:
-    description: Interpreter version to install when the job runs without a container image.
-    required: true
-  setup-python:
-    description: '"true" when the job has no container image and so needs an interpreter installed.'
-    required: true
 
 runs:
   using: composite
@@ -33,14 +27,6 @@ runs:
 
     - name: Point pip at the internal index
       uses: ./.github/actions/pip-index
-
-    - name: Set up Python
-      # Skipped when a container image is in use: it downloads an interpreter from github.com,
-      # which is the first step to fail on a runner with no egress.
-      if: inputs.setup-python == 'true'
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ inputs.python-version }}
 
     # Poetry decides *what* the tools are -- semantic-version ranges in pyproject.toml, resolved
     # to exact versions in poetry.lock -- and pip installs them.  The split is forced, not

@@ -49,7 +49,9 @@ from agent_artifacts.application.consumer_views import (
     ConsumerSettings,
     HarnessTargetView,
     LifecyclePlanView,
+    RunningInstallationView,
     project_lifecycle_plan,
+    project_running_installation,
     target_choice_problems,
 )
 from agent_artifacts.application.credential_guidance import (
@@ -61,6 +63,7 @@ from agent_artifacts.application.credential_lifecycle import (
     credential_plan_to_data,
     plan_credential_mutation,
 )
+from agent_artifacts.application.execution import StepProgress
 from agent_artifacts.application.installed_setup import DeclaredArtifactSetup
 from agent_artifacts.application.maintainer_promotion import (
     CandidatePromotionExecutionResult,
@@ -528,6 +531,12 @@ class LocalConsumerActions:
     holding it is a convenience, and the confirmation is the authority.
     """
 
+    #: Where to say a running plan has got to, while one is running. Bound by whoever draws, for
+    #: the duration of one execution, and None the rest of the time -- a route with no screen (the
+    #: CLI, a test) never asks for one and never pays for one. Declared on the class so that every
+    #: instance has an answer, however it was constructed.
+    _progress: Callable[[RunningInstallationView], None] | None = None
+
     def __init__(
         self,
         context: ConsumerActionContext,
@@ -580,6 +589,11 @@ class LocalConsumerActions:
         self._adoption_upstream: AdoptionUpstreamCheck | None = None
         self._promotion_transaction: PreparedCandidatePromotionTransaction | None = None
         self._promotion_result: CandidatePromotionExecutionResult | None = None
+
+    def observe_progress(self, report: Callable[[RunningInstallationView], None] | None) -> None:
+        """Take the screen's progress reporter for one execution, or give it back (None)."""
+
+        self._progress = report
 
     # -- preferences --------------------------------------------------------- #
 
@@ -2252,6 +2266,16 @@ class LocalConsumerActions:
                 ),
             )
         recorded_at, today = self._moment()
+        reports: list[StepProgress] = []
+
+        def observe(progress: StepProgress) -> None:
+            # Accumulated here rather than in the projection so the screen is a fold of everything
+            # said so far, not just the latest step.
+            reports.append(progress)
+            report = self._progress
+            if report is not None:
+                report(project_running_installation(tuple(reports)))
+
         completed = complete_configured_installation(
             pending.prepared,
             expected_review_digest=pending.prepared.review_digest,
@@ -2264,6 +2288,7 @@ class LocalConsumerActions:
             offline=self._context.offline,
             interactive_credentials=True,
             credential_handover=self._terminal_handover,
+            observe=None if self._progress is None else observe,
         )
         if isinstance(completed, Err):
             return self._failed(command, _refusal(completed.diagnostics))

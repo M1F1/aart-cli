@@ -6,7 +6,7 @@ import dataclasses
 import json
 import unittest
 
-from hypothesis import given
+from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from agent_artifacts.application.installation_planning import (
@@ -19,6 +19,7 @@ from agent_artifacts.application.installation_planning import (
     assess_requirements,
     prepare_install_plan,
 )
+from agent_artifacts.application.python_environment import select_python_installer
 from agent_artifacts.domain.candidates import CandidateId
 from agent_artifacts.domain.effects import (
     ConfigureHarness,
@@ -40,17 +41,23 @@ from agent_artifacts.domain.inspection import (
     RemediationCapabilityKind,
     environment_facts_to_data,
 )
-from agent_artifacts.domain.plans import install_plan_to_data
+from agent_artifacts.domain.plans import PlannedRemediation, install_plan_to_data
 from agent_artifacts.domain.policies import EffectivePolicy, PolicyOverlay, compose_policy
+from agent_artifacts.domain.python_runtime import PyProjectSpec
 from agent_artifacts.domain.registry import (
     PromotionMode,
     PublicationStage,
     RegistryArtifactVersion,
 )
-from agent_artifacts.domain.remediations import ConfigureCredential, InstallRuntime
+from agent_artifacts.domain.remediations import (
+    ConfigureCredential,
+    InstallPythonPackages,
+    InstallRuntime,
+)
 from agent_artifacts.domain.requirements import (
     CredentialRequirement,
     ExecutableRequirement,
+    PythonPackageRequirement,
     RequirementId,
     RequirementState,
     RuntimeRequirement,
@@ -65,6 +72,11 @@ from agent_artifacts.domain.selection import (
     ResolvedSelection,
     VersionConstraint,
 )
+
+# `differing_executors` is suppressed for the reason `doctor_properties_test` records: the scoped
+# `make mutants` run re-runs the same test method object from a fresh runner per mutant, which is
+# what the check detects. These properties are pure functions of generated input.
+MUTATION_SETTINGS = settings(suppress_health_check=(HealthCheck.differing_executors,))
 
 
 def _digest(character: str) -> ObjectDigest:
@@ -254,6 +266,135 @@ class RemediationPolicyTest(unittest.TestCase):
         self.assertEqual(effective.risk_ceiling, RiskClass.LOCAL_MUTATION)
 
 
+class PythonInstallerOfferTest(unittest.TestCase):
+    """One dependency contract is one change to approve, named by the backend that will run it."""
+
+    def _options(
+        self,
+        facts_installers: tuple[str, ...],
+        *,
+        policy: EffectivePolicy | None = None,
+        lock_format: str | None = None,
+        requirement: PythonPackageRequirement | None = None,
+    ) -> tuple[PlannedRemediation, ...]:
+        owner = ArtifactCoordinate(
+            SourceAlias("company"), ArtifactIdentity("mcp", "github"), "1.0.0"
+        )
+        dependencies = requirement or PythonPackageRequirement(
+            RequirementId("python-packages"),
+            "requirements",
+            "requirements.txt",
+            lock_format=lock_format,
+        )
+        aggregated = aggregate_requirements(((owner, (dependencies,)),))
+        assert isinstance(aggregated, Ok), aggregated
+        facts = EnvironmentFacts(
+            "darwin",
+            (EnvironmentFact(dependencies.id, FactState.UNAVAILABLE),),
+            tuple(
+                RemediationCapability(RemediationCapabilityKind.PYTHON_INSTALLER, name)
+                for name in facts_installers
+            ),
+        )
+        assessments = assess_requirements(aggregated.value, facts)
+        return allowed_remediations(assessments, facts, policy or EffectivePolicy())
+
+    def _spec_choice(
+        self,
+        facts_installers: tuple[str, ...],
+        *,
+        policy: EffectivePolicy | None = None,
+        lock_format: str | None = None,
+    ) -> str:
+        spec = PyProjectSpec("pyproject.toml", lock_format=lock_format)
+        facts = EnvironmentFacts(
+            "darwin",
+            (),
+            tuple(
+                RemediationCapability(RemediationCapabilityKind.PYTHON_INSTALLER, name)
+                for name in facts_installers
+            ),
+        )
+        chosen = select_python_installer(spec, facts, policy or EffectivePolicy())
+        assert isinstance(chosen, Ok), chosen
+        return chosen.value.value
+
+    def test_two_usable_backends_are_one_offer_naming_the_one_that_will_run(self) -> None:
+        options = self._options(("pip", "uv"))
+
+        self.assertEqual(len(options), 1)
+        self.assertEqual(
+            options[0].remediation,
+            InstallPythonPackages(
+                RequirementId("python-packages"), self._spec_choice(("pip", "uv"))
+            ),
+        )
+
+    def test_the_only_backend_the_platform_runs_is_the_one_offered(self) -> None:
+        for available in (("pip",), ("uv",)):
+            with self.subTest(available=available):
+                options = self._options(available)
+
+                self.assertEqual(len(options), 1)
+                self.assertEqual(
+                    options[0].remediation,
+                    InstallPythonPackages(RequirementId("python-packages"), available[0]),
+                )
+
+    def test_policy_narrowing_to_one_backend_leaves_that_backend_named(self) -> None:
+        policy = EffectivePolicy(allowed_python_installers=frozenset({"uv"}))
+
+        options = self._options(("pip", "uv"), policy=policy)
+
+        self.assertEqual(len(options), 1)
+        self.assertEqual(
+            options[0].remediation,
+            InstallPythonPackages(RequirementId("python-packages"), "uv"),
+        )
+
+    def test_a_lock_narrows_the_offer_to_the_backend_that_wrote_it(self) -> None:
+        options = self._options(("pip", "uv"), lock_format="uv")
+
+        self.assertEqual(len(options), 1)
+        self.assertEqual(
+            options[0].remediation,
+            InstallPythonPackages(RequirementId("python-packages"), "uv"),
+        )
+
+    def test_no_backend_the_platform_runs_is_no_offer_at_all(self) -> None:
+        self.assertEqual(self._options(()), ())
+
+    def test_an_artifact_without_dependencies_is_offered_no_installer(self) -> None:
+        owner = ArtifactCoordinate(
+            SourceAlias("company"), ArtifactIdentity("mcp", "github"), "1.0.0"
+        )
+        executable = ExecutableRequirement(RequirementId("git"), "git")
+        aggregated = aggregate_requirements(((owner, (executable,)),))
+        assert isinstance(aggregated, Ok), aggregated
+        facts = EnvironmentFacts(
+            "darwin",
+            (EnvironmentFact(executable.id, FactState.UNAVAILABLE),),
+            (RemediationCapability(RemediationCapabilityKind.PYTHON_INSTALLER, "pip"),),
+        )
+
+        options = allowed_remediations(
+            assess_requirements(aggregated.value, facts), facts, EffectivePolicy()
+        )
+
+        self.assertEqual(options, ())
+
+    def test_every_pair_of_usable_backends_is_still_one_offer(self) -> None:
+        for available in (("pip", "uv"), ("uv", "pip")):
+            with self.subTest(available=available):
+                installers = {
+                    option.remediation.installer
+                    for option in self._options(available)
+                    if isinstance(option.remediation, InstallPythonPackages)
+                }
+
+                self.assertEqual(len(installers), 1)
+
+
 class CanonicalInstallPlanningTest(unittest.TestCase):
     def test_one_bulk_plan_deduplicates_effects_and_retains_all_owners(self) -> None:
         github = _resolved("github", character="1")
@@ -381,6 +522,7 @@ class CanonicalInstallPlanningTest(unittest.TestCase):
         self.assertEqual(result.diagnostics[0].code, NO_ALLOWED_REMEDIATION)
         self.assertIn("non-interactive", result.diagnostics[0].message)
 
+    @MUTATION_SETTINGS
     @given(st.permutations(("github", "jira")))
     def test_intent_order_cannot_change_review_identity(self, names: tuple[str, ...]) -> None:
         artifacts = {

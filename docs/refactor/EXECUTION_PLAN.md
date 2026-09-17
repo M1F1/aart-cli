@@ -169,6 +169,18 @@ Product Specification §167 records the owner's
 revisions. The ordered tasks and completion criteria are in
 `docs/refactor/slices/CP-23-actionable-tui-workflows.md`; start at task 01.
 
+### CP-24 — Field reports from the first released version
+
+Repair what `v0.1.1` does to somebody using it, from the owner's GitHub issues #7 and #8. First,
+and the reason the slice exists: a Source whose stored Candidate history no longer binds its pinned
+revision makes the **whole** local state unloadable, and the only way back is deleting files by
+hand. That is one defect from three ends — the projection that refuses, the Sync that can leave the
+state, and the missing repair. Then the installation review: an installer named twice for one
+artifact, effect counts a reader cannot reconcile with their own request, and an installation that
+reports nothing while it runs. The slice ends by cutting the release that carries the fixes. The
+ordered tasks and completion criteria are in
+`docs/refactor/slices/CP-24-post-release-field-reports.md`; start at task 01.
+
 ## Dependency order
 
 ```text
@@ -179,6 +191,8 @@ CP-08 → CP-09 → CP-10 → CP-11 → CP-12 → CP-13 → CP-14 → CP-15
                                            CP-16 → CP-17 → CP-18 → CP-19
                                                                      ↓
                                            CP-23 ← CP-22 ← CP-21 ← CP-20
+     ↓
+   CP-24
 ```
 
 Parallelism is allowed only when slices do not share unsettled domain contracts and neither depends

@@ -31,6 +31,7 @@ from .execution import (
     EffectInterpreter,
     InstallationExecutionOutcome,
     MutationLockPort,
+    ProgressObserver,
     execute_installation,
 )
 from .installation_offer import ArtifactPlacement, InstallationOffer, offer_installation
@@ -180,6 +181,7 @@ def complete_installation_action(
     lock: MutationLockPort,
     store: ReceiptStorePort,
     recorded_at: str,
+    observe: ProgressObserver | None = None,
 ) -> Result[CompletedInstallationAction]:
     """Execute and record only the exact prepared review the caller confirmed."""
 
@@ -199,6 +201,7 @@ def complete_installation_action(
         interpreters=interpreters,
         inspect=inspect,
         lock=lock,
+        observe=observe,
     )
     if isinstance(executed, Err):
         return executed

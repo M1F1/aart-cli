@@ -10,6 +10,7 @@ interpreter (INV-045, INV-046).
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import TypeAlias
@@ -114,6 +115,25 @@ def compatible_installers(spec: PythonDependencySpec) -> frozenset[PythonInstall
     """Which backends can install this specification, as a property of the specification alone."""
 
     return installers_for_lock(spec.lock_format if isinstance(spec, PyProjectSpec) else None)
+
+
+def chosen_installer(
+    candidates: Iterable[PythonInstaller],
+    preferred: PythonInstaller | None = None,
+) -> PythonInstaller | None:
+    """The one backend that will run, out of every backend that could.
+
+    Selection and review have to agree: a review that lists two usable backends reads as two changes
+    AART will make, when installing only ever runs one of them. One rule decides it for both, and it
+    is ordered by name so the same candidates always yield the same choice.
+    """
+
+    usable = frozenset(candidates)
+    if not usable:
+        return None
+    if preferred is not None and preferred in usable:
+        return preferred
+    return sorted(usable, key=lambda item: item.value)[0]
 
 
 @dataclass(frozen=True, slots=True)

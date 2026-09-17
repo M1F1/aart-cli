@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 
-from hypothesis import given
+from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from agent_artifacts.application.python_environment import (
@@ -249,7 +249,14 @@ class EnvironmentPlanningTest(unittest.TestCase):
                 self.assertFalse(effect.capabilities.reversible)
 
 
+# `differing_executors` is suppressed for the reason `doctor_properties_test` records: the scoped
+# `make mutants` run re-runs the same test method object from a fresh runner per mutant, which is
+# what the check detects. These properties are pure functions of generated input.
+MUTATION_SETTINGS = settings(suppress_health_check=(HealthCheck.differing_executors,))
+
+
 class InstallerPolicyPropertyTest(unittest.TestCase):
+    @MUTATION_SETTINGS
     @given(
         parent=st.sets(st.sampled_from(("pip", "uv")), min_size=0, max_size=2),
         child=st.sets(st.sampled_from(("pip", "uv")), min_size=0, max_size=2),
@@ -265,6 +272,7 @@ class InstallerPolicyPropertyTest(unittest.TestCase):
         self.assertLessEqual(composed.allowed_python_installers, base.allowed_python_installers)
         self.assertLessEqual(composed.allowed_python_installers, frozenset(child))
 
+    @MUTATION_SETTINGS
     @given(installers=st.sets(st.sampled_from(("pip", "uv")), min_size=1, max_size=2))
     def test_a_selected_installer_is_always_compatible_with_the_specification(
         self, installers: set[str]

@@ -35,6 +35,8 @@ class EnvironmentInspectionIntegrationTest(unittest.TestCase):
             marker.write_text("unchanged", encoding="utf-8")
             requirements = (
                 RuntimeRequirement(RequirementId("python"), "python", ">=3.10"),
+                # Whatever this interpreter is called -- `python3.11` in a container image, `python`
+                # in a virtualenv -- naming it is the author's right, so the model must take it.
                 ExecutableRequirement(
                     RequirementId("python-executable"), Path(sys.executable).name
                 ),
@@ -52,6 +54,13 @@ class EnvironmentInspectionIntegrationTest(unittest.TestCase):
             facts = {item.requirement: item for item in result.value.facts}
             self.assertEqual(facts[RequirementId("python")].state, FactState.AVAILABLE)
             self.assertEqual(facts[RequirementId("workspace-read")].state, FactState.AVAILABLE)
+            # Inspected rather than refused: the name reached `shutil.which` and came back with an
+            # answer.  Which answer depends on whether this interpreter is on `PATH` by that name,
+            # which is the machine's business and not this test's.
+            self.assertIn(
+                facts[RequirementId("python-executable")].state,
+                (FactState.AVAILABLE, FactState.UNAVAILABLE),
+            )
             self.assertEqual(
                 facts[RequirementId("missing-executable")].state,
                 FactState.UNAVAILABLE,

@@ -262,9 +262,11 @@ class MaintainerSourceSyncApplicationTest(unittest.TestCase):
         self.assertEqual(prepared.value.target_registry, SourceAlias("company"))
         self.assertIsNone(prepared.value.baseline.revision)
 
-    def test_confirmed_sync_publishes_compiles_reconciles_and_reads_back_under_one_lease(
+    def test_confirmed_sync_compiles_reconciles_publishes_and_reads_back_under_one_lease(
         self,
     ) -> None:
+        """CP-24.02 fixed the order: the pointer moves after the last thing that can refuse."""
+
         ports = _Ports()
         prepared = _unwrap(prepare_source_sync(_request(), None, None, ports.approved))
 
@@ -287,8 +289,8 @@ class MaintainerSourceSyncApplicationTest(unittest.TestCase):
                 "current",
                 "acquire-local",
                 "validate",
-                "publish",
                 "compile",
+                "publish",
                 "write-history",
                 "history",
                 "release",
@@ -325,7 +327,44 @@ class MaintainerSourceSyncApplicationTest(unittest.TestCase):
                 self.assertNotIn("publish", ports.events)
                 self.assertNotIn("write-history", ports.events)
 
-    def test_failure_after_publication_releases_lease_and_does_not_publish_history(self) -> None:
+    def test_a_sync_can_be_reviewed_over_history_that_does_not_bind_the_pin(self) -> None:
+        """CP-24.03: the only writer of Candidate history must run over a store it left behind.
+
+        Preparing refused when the stored history named another revision, so the state issue #8
+        reported could not be repaired by the command that would have rebuilt it -- only by
+        deleting the history by hand.
+        """
+
+        ports = _Ports()
+        first = _unwrap(prepare_source_sync(_request(), None, None, ports.approved))
+        _unwrap(execute_source_sync(first, first.review_digest, ports.ports()))
+        pinned, bound = ports.current, ports.history
+        ports.candidate = _candidate_for(_collection_snapshot())
+        second = _unwrap(
+            prepare_source_sync(_request(), ports.current, ports.history, ports.approved)
+        )
+        _unwrap(execute_source_sync(second, second.review_digest, ports.ports()))
+        unbound = ports.history
+        assert pinned is not None and bound is not None and unbound is not None
+        self.assertNotEqual(unbound.revision, pinned.candidate.resolved_revision)
+
+        prepared = prepare_source_sync(_request(), pinned, unbound, ports.approved)
+
+        self.assertIsInstance(prepared, Ok)
+        assert isinstance(prepared, Ok)
+        self.assertEqual(prepared.value.baseline.revision, pinned.candidate.resolved_revision)
+        self.assertIsNone(prepared.value.baseline.history_digest)
+        self.assertEqual(prepared.value.baseline.candidate_count, 0)
+
+    def test_a_compile_refusal_never_advances_the_pin_it_could_not_reconcile(self) -> None:
+        """CP-24.02: the pin and the Candidate history move together or not at all.
+
+        Issue #8's state was made here. Everything that can refuse -- fetching, validating,
+        compiling, reconciling -- now runs before the pointer is published, so a refusal leaves
+        the Source exactly as it was instead of pinning a revision whose Candidates were never
+        recorded.
+        """
+
         ports = _Ports()
         ports.fail_compile = True
         prepared = _unwrap(prepare_source_sync(_request(), None, None, ports.approved))
@@ -334,8 +373,33 @@ class MaintainerSourceSyncApplicationTest(unittest.TestCase):
 
         self.assertIsInstance(result, Err)
         self.assertEqual(ports.events[-1], "release")
+        self.assertNotIn("publish", ports.events)
         self.assertNotIn("write-history", ports.events)
+        self.assertIsNone(ports.current)
         self.assertIsNone(ports.history)
+
+    def test_a_refusal_after_a_pin_already_exists_keeps_that_pin_and_its_history(self) -> None:
+        """The same claim where it is felt: an established Source stays readable."""
+
+        ports = _Ports()
+        first = _unwrap(prepare_source_sync(_request(), None, None, ports.approved))
+        self.assertIsInstance(execute_source_sync(first, first.review_digest, ports.ports()), Ok)
+        pinned, recorded = ports.current, ports.history
+        assert pinned is not None and recorded is not None
+        ports.fail_compile = True
+        again = _unwrap(
+            prepare_source_sync(_request(), ports.current, ports.history, ports.approved)
+        )
+        ports.events.clear()
+
+        result = execute_source_sync(again, again.review_digest, ports.ports())
+
+        self.assertIsInstance(result, Err)
+        self.assertNotIn("publish", ports.events)
+        self.assertNotIn("write-history", ports.events)
+        self.assertEqual(ports.current, pinned)
+        self.assertEqual(ports.history, recorded)
+        self.assertEqual(ports.history.revision, ports.current.candidate.resolved_revision)
 
     def test_changed_source_baseline_refuses_under_lease_before_acquisition(self) -> None:
         ports = _Ports()

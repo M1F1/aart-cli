@@ -24,6 +24,29 @@ def _single_line(value: str, label: str) -> str:
     return value
 
 
+def executable_name(value: str, label: str) -> str:
+    """A name a shell could look up on `PATH` by itself, rather than a slug of our own devising.
+
+    `python3.11`, `node20` and `clang-15` are ordinary executable names: dots and digits belong to
+    whoever built the machine, not to this project. What a name may not be is a *location* -- the
+    requirement says which executable, never where -- nor anything a shell would have to be told how
+    to read: padding, whitespace, or a control character.
+    """
+
+    _single_line(value, label)
+    if (
+        "/" in value
+        or "\\" in value
+        or any(
+            character.isspace() or ord(character) < 0x20 or ord(character) == 0x7F
+            for character in value
+        )
+        or value in {".", ".."}
+    ):
+        raise ValueError(f"{label} must be an executable's name, not a path")
+    return value
+
+
 @dataclass(frozen=True, slots=True, order=True)
 class RequirementId:
     value: str
@@ -69,8 +92,9 @@ class ExecutableRequirement:
     executable: str
 
     def __post_init__(self) -> None:
-        if not isinstance(self.id, RequirementId) or _ID_RE.fullmatch(self.executable) is None:
+        if not isinstance(self.id, RequirementId):
             raise ValueError("executable requirement is invalid")
+        executable_name(self.executable, "executable requirement")
 
 
 @dataclass(frozen=True, slots=True)

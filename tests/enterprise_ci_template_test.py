@@ -223,8 +223,9 @@ class DefaultsReproduceThePublicRunTest(unittest.TestCase):
             workflow = _read(path)
             self.assertIn("fromJSON(vars.AART_RUNNER || '[\"ubuntu-latest\"]')", workflow)
             self.assertIn("vars.AART_PIP_INDEX_URL || 'https://pypi.org/simple'", workflow)
-            # An unset image must leave the job on the runner's own environment.
-            self.assertIn("container: ${{ vars.AART_CI_IMAGE }}", workflow)
+            # An unset image must leave the public run exactly as it was, which now means the
+            # official image for the interpreter that job is about rather than the bare runner.
+            self.assertIn("container: ${{ vars.AART_CI_IMAGE ||", workflow)
 
     def test_the_registry_url_is_the_switch_and_carries_no_default(self) -> None:
         """One variable decides whether a release reconciles against a registry at all.
@@ -259,19 +260,56 @@ class DefaultsReproduceThePublicRunTest(unittest.TestCase):
         self.assertIn("if: env.REFERENCE_REGISTRY_URL != ''", action)
         self.assertIn("--without-registry", action)
 
-    def test_setup_python_is_skipped_only_when_an_image_carries_one(self) -> None:
-        """The decision still belongs to the variable; only the place it is read moved.
+    def test_no_workflow_and_no_action_names_setup_python(self) -> None:
+        """`QA-088`: a step-level `if:` decides whether a step runs, not whether it is fetched.
 
-        The steps live in a composite action now, because two jobs that differ solely in how
-        their image is pulled must not differ in what they run.  An action cannot read `vars`,
-        so the job passes the answer down and the action acts on it.
+        Every action a job references is resolved during "Set up job", before any condition is
+        read.  So an instance that does not carry `actions/setup-python` could not escape it by
+        setting `AART_CI_IMAGE` -- the reference itself had to go, and this is the claim that it
+        stays gone.  A comment may still name it; a `uses:` may not.
         """
 
-        for path in WORKFLOWS:
-            self.assertIn("setup-python: ${{ vars.AART_CI_IMAGE == '' }}", _read(path))
-        for action in ("quality", "release"):
-            body = _read(ROOT / ".github" / "actions" / action / "action.yml")
-            self.assertIn("if: inputs.setup-python == 'true'", body)
+        for path in (*WORKFLOWS, ROOT / ".github" / "workflows" / "deep-quality.yml", *ACTIONS):
+            with self.subTest(path=path.relative_to(ROOT)):
+                self.assertNotIn("setup-python", _uncommented(_read(path)))
+
+    def test_every_job_takes_its_interpreter_from_an_image(self) -> None:
+        """What replaced it: the interpreter comes from the container, never from a download.
+
+        The public default is an official `python:<version>` image per matrix entry, so the three
+        interpreters the gates have always exercised are still three interpreters.  A fork that
+        sets `AART_CI_IMAGE` replaces all of them with its own, exactly as before.
+        """
+
+        gates = _read(ROOT / ".github" / "workflows" / "pr-check.yml")
+        self.assertIn(
+            "container: ${{ vars.AART_CI_IMAGE || format('python:{0}', matrix.python-version) }}",
+            gates,
+        )
+        for path in (
+            ROOT / ".github" / "workflows" / "release.yml",
+            ROOT / ".github" / "workflows" / "deep-quality.yml",
+        ):
+            with self.subTest(path=path.relative_to(ROOT)):
+                body = _read(path)
+                self.assertIn(
+                    "container: ${{ vars.AART_CI_IMAGE || format('python:{0}',"
+                    " vars.AART_RELEASE_PYTHON_VERSION || '3.11') }}",
+                    body,
+                )
+
+    def test_the_rollout_page_no_longer_promises_an_escape_that_never_worked(self) -> None:
+        """The page told a reader to have the action available, and that an image skips it.
+
+        Neither was true once the reference was gone, and the second was never true. Prose may
+        still name the action -- the page explains why it left, which is what an operator who read
+        the old advice needs -- but nothing the reader acts on may ask for it. The rows are what
+        they act on: the prerequisites, the variables, and what a variable cannot change.
+        """
+
+        rows = [line for line in _read(PAGE).splitlines() if line.lstrip().startswith("|")]
+        for row in rows:
+            self.assertNotIn("setup-python", row)
 
 
 class ToolNeedsNoPackagingTest(unittest.TestCase):

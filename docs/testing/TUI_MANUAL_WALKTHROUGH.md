@@ -257,6 +257,28 @@ nothing is recorded as an `invalid` Candidate.
 
 - [ ] Put it back (`git revert --no-edit HEAD && git push`) before continuing.
 
+A Source whose Candidate history was recorded at another revision than the snapshot it has pinned
+shows `Attention` and lists no Candidates. `aart source sync` produces exactly that, because the
+consumer refresh moves the pin and writes no Candidate history — writing it is Maintainer
+authority. It takes a minute to prove, and it is the failure the first released version could not
+recover from (issue #8, D-280 to D-282):
+
+- [ ] Push a commit to one author repository, then refresh it from outside the screens:
+
+```sh
+aart source sync
+aart doctor
+```
+
+Expected: `aart doctor` exits non-zero and its `Candidate history` section names the Source, the
+revision its history was recorded at, the revision now pinned, and the remedy — `run Source Sync on
+<alias> to rebuild its Candidate history`. Every other Source, Candidate and Registry still loads.
+
+- [ ] Do what it says: **Sources** → that Source → `s` (**Sync**), and confirm.
+
+Expected: the Source reports the new commit and its Candidates are listed again; `aart doctor` exits
+zero and its `Candidate history` section is gone. Nothing under the data root is edited by hand.
+
 ## 6 — Review a Candidate
 
 - [ ] Open a Candidate. Press `d` (**Diff**), then `v` (**Fast / Verbose**) to fold the bounded
@@ -424,6 +446,15 @@ Harness delivery must be one answer everywhere it is said (`QA-078`…`QA-080`, 
       unselected harness must not appear as a delivery.
       Where the plan stores a credential, Ready counts `credential(s) stored securely` once; where
       the credential already exists, it says nothing is stored (D-272).
+- [ ] On **Ready** for an MCP install, the counts must be reconcilable with what you asked for
+      (D-284): `1 launcher(s) written` and one `configuration file(s) written` per chosen harness --
+      never `2 launcher(s) written` for one server. For the Skill, the deliveries are named as
+      harness files, never as `other change`.
+- [ ] Where a Python dependency could be installed by either backend, **Remediation** offers it
+      once, naming the backend that will run (D-283), not `pip` and `uv` as two changes.
+- [ ] While the installation runs, the screen names the step running (`▸`) and the ones already
+      done (`✓`), counting `(n of m done)`, inside the same frame as every other screen (D-285).
+      A short install may pass quickly; `dummy-mcp` into two harnesses is the one to watch.
 - [ ] After the Skill install, inspect the project: both
       `.opencode/skills/manual-check/SKILL.md` and
       `.tabnine/agent/skills/manual-check/SKILL.md` exist; `.claude/skills/manual-check` does not.

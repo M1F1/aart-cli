@@ -16,18 +16,95 @@
 - `pr-check` stays on for release PRs (INV-096, owner confirmed). B-129, a race between the manual lab
   and git's background repack that turned it red at random, is fixed.
 
-## Current objective — CP-23 (2026-09-15)
+## Current objective — CP-24 (2026-09-16)
 
-**CP-22 is CLOSED. CP-23 is IMPLEMENTED: tasks 01–16 are done in code, and task 15's gates are
-recorded.** Two things remain, and neither is agent work.
+**CP-24 is the active slice.** It carries the owner's field reports against the released `v0.1.1`,
+as GitHub issues #7 and #8, and ends by releasing the fixes.
+`docs/refactor/slices/CP-24-post-release-field-reports.md` holds the ordered tasks;
+`plan.json` holds them as CP-24.1 to CP-24.10. Tasks 08-10 were added on 2026-09-17, after the
+owner ran the gates in a container on their Enterprise instance and three things broke that have
+nothing to do with the product: a permission test run as root, an interpreter whose file name the
+requirement model rejects, and `actions/setup-python`, which that instance does not carry.
 
-1. **The owner's manual acceptance walk.**
+**Task 01 is done (D-280).** A stored Candidate history that does not bind the pinned revision is
+no longer projected as Candidate data and no longer refuses the composition: that Source reads as
+needing a Sync and names the remedy, and every other Source loads. Its evidence is in the slice.
+
+**Task 02 is done (D-281).** A Sync now compiles and reconciles before it publishes the pin, so a
+refusal leaves the Source exactly as it was. The only window left is the two adjacent writes, which
+is what task 01's tolerance covers.
+
+**Task 03 is done (D-282).** `aart doctor` names a Candidate history that does not bind the pin,
+with both revisions and the remedy, and exits non-zero; the Maintainer Source Sync performs the
+repair, which it previously refused to do over exactly that state.
+
+**Task 04 is done (D-283).** A dependency contract is one offer, naming the backend that will run:
+`chosen_installer` is the single rule, used by both `select_python_installer` and
+`allowed_remediations`, so the review can no longer name a backend the install would not choose.
+
+**Task 05 is done (D-284).** A review counts what each change is rather than which effect kind
+carries it: the launcher and each harness's configuration file are counted separately, and a
+placement's deliveries are named instead of being "other change".
+
+**Task 06 is done (D-285).** An installation says which step is running and which are done:
+`execute_repair` announces each step to an observer it is given, the shell lends the handler a
+redraw for the duration of one execution, and the running report is drawn in the shared frame.
+
+**Task 07 is done in the repository (D-286).** Full `make quality` (4,325 tests, 85.96% branch
+coverage) and a standalone `make integration` (395 tests) are both green — B-108 did not reproduce.
+The scoped mutation runs over `execution.py` and `consumer_views.py` left 34 survivors inside this
+slice's own claims; all of them are now tests, each verified by hand.
+
+**Task 08 is done (D-287).** A test whose subject is a permission stands down where permissions
+do not apply. `tests/privileges.py` is the one guard; the sealed-lab test now carries it and the two
+files that had their own copy were moved onto it.
+
+**Task 09 is done (D-288).** An executable requirement may name the file it really is:
+`executable_name` is the rule (no path separator, no whitespace, no control character, not `.` or
+`..`), `RequirementId` stays kebab-case, and `InstallExecutable` moved onto the same rule, because
+planning derives one from the requirement's own executable name.
+
+**Task 10 is done (D-289).** No workflow and no composite action names `actions/setup-python`,
+and every job takes its interpreter from a container image: unset, `AART_CI_IMAGE` falls back to the
+official `python:<version>` image, one per matrix entry, so the public run still exercises 3.10,
+3.11 and 3.14. The rollout page's two claims that an image "skips" the action are corrected; the
+same trap in the registry template is `BACKLOG.md` B-134.
+
+**One pull request carries the whole stream.** On 2026-09-17 the two open pull requests were
+flattened, at the owner's instruction, into **#14** (`fix/cp-24-01-stale-scan` → `main`): it already
+held the plan commit, so it took the `fix:` title and the `BEGIN_COMMIT_OVERRIDE` block, and #13 was
+closed unmerged. `plan/cp-24` is not to be merged.
+
+**What is left is the owner's:**
+
+1. merge **#14** into `main` — squash. Its title is a `fix:` and it carries a
+   `BEGIN_COMMIT_OVERRIDE` block, so Release Please cuts **`0.1.2`**. The owner chose the patch over
+   `feat:`/`0.2.0` on 2026-09-17: task 06 is the repair of a silence they reported.
+2. approve the workflows on the Release Please pull request and merge it;
+3. confirm the release run attaches `aart_cli-0.1.2-py3-none-any.whl` to `v0.1.2`.
+
+Still open, and not agent work: the owner's manual acceptance walk
+(`docs/testing/TUI_MANUAL_WALKTHROUGH.md`), which now carries the three CP-24 checks.
+
+Reproduction for tasks 01–03, from the owner's own store: a pinned revision and a Candidate history
+recorded at a different one. `read_maintainer_views` then refuses everything with
+`maintainer-composition-invalid`, `aart source sync` reports `unchanged` and writes no history, and
+the only recovery found was moving `<data root>/sources/<instance-id>/candidates` aside.
+
+**CP-23 is CLOSED** — the owner closed it on 2026-09-16 rather than recording the manual
+acceptance walk in the repository. What that leaves open is written below, as facts rather than as
+blockers.
+
+## Closed — CP-23 (2026-09-15, closed 2026-09-16)
+
+**CP-22 is CLOSED. CP-23 is CLOSED: tasks 01–16 are done in code and task 15's gates are
+recorded.** Two things were never recorded, and the owner closed the slice anyway; neither is agent
+work and neither blocks CP-24.
+
+1. **The owner's manual acceptance walk was not recorded here.**
    - `docs/testing/TUI_MANUAL_WALKTHROUGH.md`, Acts I–II, finishing with its "CP-23 acceptance"
-     checklist.
-   - It runs in the marker-owned lab and the owner's terminal.
-   - When it passes, record it in the slice's task 15 evidence and run
-     `handoff-plan done CP-23.15`. `plan.json` holds CP-23.15 as `blocked` on it.
-2. **A green standalone `make integration`.**
+     checklist, is still the walk to run, and it is worth running.
+2. **A green standalone `make integration` was never recorded.**
    - The one task-15 run failed on the B-108 temporary-Keychain creation, `security` status 206,
      in `mcp_stdio_e2e_test`.
    - `make quality` was green: 4,273 tests, 1 skipped, 85.94% branch coverage.

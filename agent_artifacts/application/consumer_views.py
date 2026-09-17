@@ -62,6 +62,7 @@ from .execution import (
     InstallationExecutionStatus,
     LifecycleExecutionOutcome,
     LifecycleExecutionStatus,
+    StepProgress,
 )
 from .installation_proposal import InstallationProposal
 from .intents import (
@@ -396,6 +397,9 @@ class EffectView:
     summary: str
     inspectable: bool
     reversible: bool
+    #: What this change is to somebody reading it, where the effect kind alone does not say. It is
+    #: the kind for every effect whose kind is already unambiguous; see `_outcome`.
+    outcome: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -566,6 +570,22 @@ def _summary(data: dict[str, object]) -> str:
     return kind if not details else f"{kind}: {details}"
 
 
+def _outcome(data: dict[str, object]) -> str:
+    """What a change is to the person reading it, where its effect kind covers more than one thing.
+
+    One `write-file` is the executable launcher a harness runs; another is the configuration file
+    that harness reads, one per harness (D-264). A single count over the kind therefore told somebody
+    installing one MCP server that two launchers would be written, which is a number they cannot
+    reconcile with what they asked for. The plan already distinguishes them -- a launcher is written
+    executable and a configuration file is not -- so the distinction is read, never guessed.
+    """
+
+    kind = str(data["kind"])
+    if kind != "write-file":
+        return kind
+    return "write-launcher" if data.get("executable") else "write-configuration"
+
+
 @dataclass(frozen=True, slots=True)
 class ConsumerPlanView:
     canonical: InstallPlan
@@ -639,6 +659,7 @@ def project_install_plan(
                 _summary(data),
                 bool(capabilities["inspectable"]),
                 bool(capabilities["reversible"]),
+                _outcome(data),
             )
         )
     return ConsumerPlanView(
@@ -1117,6 +1138,71 @@ def project_lifecycle_plan(plan: LifecyclePlan) -> LifecyclePlanView:
         tuple(_risk_label(item.name) for item in repair.risks),
         repair.complete,
         str(repair.review_digest),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class RunningStepView:
+    """One step of a plan that is running now, or has just finished."""
+
+    component: str
+    effect: str
+    status: str
+    detail: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class RunningInstallationView:
+    """What a reviewed plan has done so far, while it is still doing it.
+
+    It is a projection of the plan's own steps, so what is reported while it runs cannot say
+    anything the review did not: the same components, the same effects, the same order.
+    """
+
+    artifact: str
+    steps: tuple[RunningStepView, ...]
+    done: int
+    total: int
+
+    @property
+    def finished(self) -> bool:
+        return self.done == self.total
+
+
+#: What a step that has been reached but has not finished reads as. It is not a `StepStatus`,
+#: because the execution has no outcome to report for it yet.
+RUNNING = "running"
+
+
+def project_running_installation(reports: tuple[StepProgress, ...]) -> RunningInstallationView:
+    """Fold the reports a running plan has made so far into one screen's worth of state.
+
+    Each step is held once, at the latest thing said about it, so a step announced as reached and
+    then as applied is one line that changed rather than two lines. Pure: it is given what the
+    execution said and reads nothing.
+    """
+
+    if any(not isinstance(item, StepProgress) for item in reports):
+        raise ValueError("a running installation is projected from step progress reports")
+    latest: dict[int, StepProgress] = {}
+    for report in reports:
+        latest[report.index] = report
+    total = max((item.total for item in reports), default=0)
+    artifacts = {str(item.artifact) for item in reports if item.artifact is not None}
+    steps = tuple(
+        RunningStepView(
+            str(item.component),
+            str(effect_to_data(item.effect)["kind"]),
+            RUNNING if item.status is None else item.status.value,
+            item.detail,
+        )
+        for _, item in sorted(latest.items())
+    )
+    return RunningInstallationView(
+        artifacts.pop() if len(artifacts) == 1 else "",
+        steps,
+        sum(1 for item in latest.values() if item.status is not None),
+        total,
     )
 
 

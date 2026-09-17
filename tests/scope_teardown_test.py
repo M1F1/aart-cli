@@ -8,7 +8,6 @@ anything the install did not put there is never removed.
 
 from __future__ import annotations
 
-import os
 import shutil
 import subprocess
 import tempfile
@@ -26,6 +25,7 @@ from agent_artifacts.lifecycle.model import ScopeTeardown
 from tests.canonical_lifecycle_test import _install, _state
 from tests.canonical_symlink_test import _fixture
 from tests.marketplace_lifecycle_e2e_test import _COORDINATE, _environment
+from tests.privileges import skip_if_root
 
 _MEMORY = "reference/memory/house"
 
@@ -183,7 +183,7 @@ class ScopeTeardownApplyTest(unittest.TestCase):
             self.assertEqual(note.read_text(encoding="utf-8"), "keep\n")
 
 
-@unittest.skipIf(os.geteuid() == 0, "root ignores the directory permissions this test relies on")
+@skip_if_root("the directory permissions this test relies on")
 class ScopeTeardownFailureTest(unittest.TestCase):
     def test_state_that_cannot_be_reclaimed_is_reported_rather_than_raised(self) -> None:
         # The uninstall is already proven when teardown runs.  Litter it cannot clear is the

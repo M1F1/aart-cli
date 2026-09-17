@@ -2546,6 +2546,52 @@ def _source_status(configured: ConfiguredSource, health: SourceHealth) -> Mainta
     return MaintainerSourceStatus.ATTENTION
 
 
+UNBOUND_SCAN_DIAGNOSTIC = (
+    "Candidate history was recorded at another revision than the pinned snapshot; "
+    "run Source Sync on this Source to rebuild it from the pinned snapshot"
+)
+
+
+@dataclass(frozen=True, slots=True)
+class UnboundCandidateHistory:
+    """One Source whose stored Candidate history was recorded at another revision than its pin.
+
+    Reported outside the Maintainer screens as well, because this is what somebody sees when the
+    tool is not doing what they expect and they reach for `aart doctor` (issue #8, D-282).
+    """
+
+    alias: str
+    pinned_revision: str | None
+    recorded_revision: str
+
+    @property
+    def remedy(self) -> str:
+        return f"run Source Sync on {self.alias} to rebuild its Candidate history"
+
+
+def scan_binds_current_pin(
+    configured: ConfiguredSource,
+    health: SourceHealth,
+    scan: SourceScan,
+) -> bool:
+    """Say whether a stored Scan is Candidate data for the snapshot pinned *right now*.
+
+    A Scan recorded at another revision describes artifacts that are not in the pinned snapshot,
+    so nothing may read it as Candidate data for this Source. That is a state to state, not a
+    contradiction: Sync pins the snapshot before it records the Scan, so an interrupted Sync
+    leaves exactly this. A Scan carrying another Source's alias is not stale, it is misfiled --
+    that stays a programming error and raises.
+
+    Both callers decide what to do when there is no Scan at all before they reach here, so this
+    asks for one rather than answering `False` for the absence of a question.
+    """
+
+    if scan.source_alias != configured.alias:
+        raise ValueError("maintainer Source scan belongs to another configured Source")
+    current = health.current
+    return current is not None and scan.revision == current.candidate.resolved_revision
+
+
 def project_maintainer_source(
     configured: ConfiguredSource,
     health: SourceHealth,
@@ -2563,19 +2609,17 @@ def project_maintainer_source(
     current = health.current
     if current is not None and current.candidate.alias != configured.alias:
         raise ValueError("maintainer Source health belongs to another configured Source")
-    if scan is not None:
-        if (
-            scan.source_alias != configured.alias
-            or current is None
-            or scan.revision != current.candidate.resolved_revision
-        ):
-            raise ValueError("maintainer Source scan does not bind the current pinned Source")
+    # Only a Scan that binds the current pin is projected as Candidate data.  An unbound one used
+    # to refuse the whole composition, which hid every other Source and every Registry behind one
+    # Source nobody could repair without deleting files by hand (issue #8, D-280).
+    bound = scan if scan is not None and scan_binds_current_pin(configured, health, scan) else None
+    unbound = scan is not None and bound is None
     candidate_states_to_count = (
         ()
-        if scan is None
+        if bound is None
         else (
-            *(bundle.candidate.state for bundle in scan.active),
-            *(candidate.state for candidate in scan.collection_active),
+            *(bundle.candidate.state for bundle in bound.active),
+            *(candidate.state for candidate in bound.collection_active),
         )
     )
     counts = Counter(candidate_states_to_count)
@@ -2584,27 +2628,28 @@ def project_maintainer_source(
         sorted(
             {
                 bundle.candidate.target_registry.value
-                for bundle in (() if scan is None else scan.active)
+                for bundle in (() if bound is None else bound.active)
             }
             | {
                 candidate.target_registry.value
-                for candidate in (() if scan is None else scan.collection_active)
+                for candidate in (() if bound is None else bound.collection_active)
             }
         )
     )
+    diagnostics = tuple(redact_text(item.message) for item in health.diagnostics)
     return MaintainerSourceView(
         configured.alias.value,
         configured.kind.value,
         configured.location,
         configured.ref,
         configured.enabled,
-        _source_status(configured, health),
+        MaintainerSourceStatus.ATTENTION if unbound else _source_status(configured, health),
         None if current is None else current.candidate.resolved_revision,
         None if current is None else current.published_at_epoch_seconds,
-        0 if scan is None else scan.manifest_count,
+        0 if bound is None else bound.manifest_count,
         candidate_states,
         registries,
-        tuple(redact_text(item.message) for item in health.diagnostics),
+        diagnostics + (UNBOUND_SCAN_DIAGNOSTIC,) if unbound else diagnostics,
     )
 
 

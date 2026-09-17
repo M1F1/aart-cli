@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 from typing import TypeAlias
 
-from .requirements import RequirementId
+from .requirements import RequirementId, executable_name
 
 _TOKEN_RE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 
@@ -49,7 +49,7 @@ class InstallExecutable:
     def __post_init__(self) -> None:
         if not isinstance(self.requirement, RequirementId):
             raise ValueError("executable remediation requires a requirement id")
-        _token(self.executable, "executable")
+        executable_name(self.executable, "executable remediation")
 
 
 @dataclass(frozen=True, slots=True)
