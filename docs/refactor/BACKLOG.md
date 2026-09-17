@@ -3351,3 +3351,34 @@ Invariants touched: INV-098, INV-099; release artifact integrity and supply-chai
 Evidence/links: `README.md` installation section and `.github/actions/release/action.yml`.
 Promotion condition: Owner requests a verifiable download contract or a release acceptance test
 requires client-side digest comparison.
+
+## B-137 — `doctor` crashes when a source's local alias differs from its registry's own alias
+
+Status: OPEN
+Discovered in: CP-25 follow-up / running the released `aart doctor` against a real machine
+(2026-09-17)
+Why useful: `aart doctor` exits with an unhandled `ValueError: offline source readiness is
+inconsistent` and a Python traceback. The failing clause is
+`agent_artifacts/application/offline_readiness.py:56`,
+`any(item.coordinate.source != self.alias for item in self.artifacts)`. A configured source's alias
+is a *local* name for a remote origin, but the coordinates published inside that registry carry the
+registry's own alias. The invariant assumes the two are equal, which is false for any source added
+under a name the registry does not itself use. Reproduced on a real configuration: alias
+`ci-registry` (kind `registry-git`, ref `qa/publish-v1`) serving
+`aart-test-registry/skill/verification-before-completion@1.0.0`. Reproduced on the CP-25 branch as
+well as on the released 0.1.2, so it is not a regression introduced by this slice.
+Why noncritical when discovered: CP-25 was complete and its pull request already green; this is
+neither caused by nor required for any of its fourteen tasks, so recording it is correct rather than
+expanding the slice. It is, however, the most user-visible failure shape there is — the diagnostic
+command itself crashing — and the owner may reasonably want it fixed before 0.2.0 ships.
+Potential approach: Decide first which value is authoritative. Either the invariant is wrong and
+should compare against the coordinate's source alias rather than the local one (probably by dropping
+that clause and keeping the grouping key explicit), or the io layer is wrong to group a registry's
+foreign-aliased coordinates under the local alias, in which case
+`agent_artifacts/io/offline_readiness.py:93` should partition by `coordinate.source`. Whichever is
+chosen, `read_offline_readiness` must return an `Err` diagnostic rather than letting a domain
+`ValueError` escape to the CLI: INV-175 is that AART says when it cannot do something. A regression
+test should construct a source whose configured alias differs from its published coordinates.
+Promotion condition: Promote if the owner wants `doctor` dependable for 0.2.0, or as soon as any
+user configures a source under an alias of their own choosing — which the `source add` interface
+invites.
