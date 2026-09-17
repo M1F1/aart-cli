@@ -276,6 +276,22 @@ def scope_from_row(row: str) -> str | None:
     return scope if scope in ("project", "user") else None
 
 
+#: How screen 05 addresses one Python-backend row. A separate prefix from `scope:` because the two
+#: questions are answered separately and a shared prefix would make one keystroke ambiguous.
+INSTALLER_ROW_PREFIX = "installer:"
+
+
+def installer_row(installer: str) -> str:
+    return f"{INSTALLER_ROW_PREFIX}{installer}"
+
+
+def installer_from_row(row: str) -> str | None:
+    if not isinstance(row, str) or not row.startswith(INSTALLER_ROW_PREFIX):
+        return None
+    installer = row[len(INSTALLER_ROW_PREFIX) :]
+    return installer if installer in ("pip", "uv") else None
+
+
 def target_row(harness: str) -> str:
     return f"{TARGET_ROW_PREFIX}{harness}"
 
@@ -624,6 +640,10 @@ class ConsumerPlanView:
     #: plan whose scope is not the operator's to choose (an update keeps where it already is).
     #: Screen 05 draws it only when there is something to decide (issue #11a, D-295).
     scope_choice: InstallScopeChoiceView | None = None
+    #: Which Python backend may resolve this selection's dependencies and which one is going to,
+    #: or `None` when nothing here declares Python dependencies -- then there is no question to
+    #: ask, rather than a question with one answer (issue #11b).
+    installer_choice: PythonInstallerChoiceView | None = None
 
     @property
     def semantic_identity(self) -> str:
@@ -2078,12 +2098,97 @@ def offer_install_scopes(
     return Ok(InstallScopeChoiceView(offered, preferred if preferred in common else offered[0]))
 
 
+#: A selection with no Python dependencies, or none the offered backends all satisfy.
+PYTHON_INSTALLER_UNAVAILABLE = DiagnosticCode("python-installer-unavailable")
+
+#: The complete backend vocabulary, in the order the flow offers it.
+_PYTHON_INSTALLERS: tuple[str, ...] = ("pip", "uv")
+
+
+@dataclass(frozen=True, slots=True)
+class PythonInstallerChoiceView:
+    """The backends that could resolve this operation's dependencies, and which one is going to.
+
+    The twin of `InstallScopeChoiceView` and deliberately a separate type: scope decides where an
+    artifact's files land, the backend decides what resolves its Python dependencies, and one
+    answer is not evidence about the other (issue #11b).
+    """
+
+    offered: tuple[str, ...]
+    selected: str
+
+    def __post_init__(self) -> None:
+        if (
+            not self.offered
+            or tuple(sorted(set(self.offered))) != self.offered
+            or not set(self.offered) <= set(_PYTHON_INSTALLERS)
+            or self.selected not in self.offered
+        ):
+            raise ValueError("Python installer choice is invalid")
+
+    @property
+    def is_a_choice(self) -> bool:
+        """Whether there is anything to decide, or only something to disclose."""
+
+        return len(self.offered) > 1
+
+    def choose(self, installer: str) -> PythonInstallerChoiceView:
+        if installer not in self.offered:
+            raise ValueError("Python installer was not offered")
+        return replace(self, selected=installer)
+
+
+def offer_python_installers(
+    usable: tuple[tuple[str, ...], ...],
+    *,
+    preferred: str,
+) -> Result[PythonInstallerChoiceView]:
+    """Which backends every dependency contract in this selection can be installed by.
+
+    `usable` is one entry per artifact that declares Python dependencies, already narrowed by the
+    planner to what this specification, this machine and this policy allow. An empty `usable` is
+    not a choice with no answer but a question that does not arise -- nothing here needs Python --
+    and an empty intersection is refused rather than resolved, because running two backends for one
+    reviewed install is the thing `chosen_installer` exists to prevent.
+    """
+
+    if not usable:
+        return Err(
+            (
+                Diagnostic(
+                    PYTHON_INSTALLER_UNAVAILABLE,
+                    Severity.ERROR,
+                    "nothing in this selection declares Python dependencies",
+                ),
+            )
+        )
+    common = set(_PYTHON_INSTALLERS)
+    for item in usable:
+        common &= set(item)
+    if not common:
+        return Err(
+            (
+                Diagnostic(
+                    PYTHON_INSTALLER_UNAVAILABLE,
+                    Severity.ERROR,
+                    "this selection has no Python installer every artifact can be installed by",
+                ),
+            )
+        )
+    offered = tuple(sorted(common))
+    return Ok(PythonInstallerChoiceView(offered, preferred if preferred in common else offered[0]))
+
+
 @dataclass(frozen=True, slots=True)
 class ConsumerSettings:
     profile: PresentationProfile = PresentationProfile.FAST
     default_scope: str = "project"
     show_updates: bool = True
     maintainer_mode: bool = False
+    #: Which backend resolves Python dependencies when more than one could. `pip` is the default
+    #: because every Python that can build an environment already has it, so the preference starts
+    #: on the backend that is never the reason an install cannot run (issue #11b).
+    python_installer: str = "pip"
 
     def __post_init__(self) -> None:
         if (
@@ -2091,6 +2196,7 @@ class ConsumerSettings:
             or self.default_scope not in {"project", "user"}
             or not isinstance(self.show_updates, bool)
             or not isinstance(self.maintainer_mode, bool)
+            or self.python_installer not in set(_PYTHON_INSTALLERS)
         ):
             raise ValueError("consumer settings are invalid")
 
@@ -2117,6 +2223,8 @@ class ConsumerSettings:
             )
         if row == "show-updates":
             return replace(self, show_updates=not self.show_updates)
+        if row == "python-installer":
+            return replace(self, python_installer="uv" if self.python_installer == "pip" else "pip")
         if row == "maintainer-mode":
             return self.with_maintainer_mode(not self.maintainer_mode)
         raise ValueError(f"no consumer setting is named {row}")
@@ -2148,6 +2256,7 @@ SUCCESS_PURPOSE: dict[ConsumerScreen, str] = {
 SETTING_ROWS: tuple[str, ...] = (
     "detail-level",
     "default-scope",
+    "python-installer",
     "show-updates",
     "maintainer-mode",
 )
@@ -2157,6 +2266,8 @@ SETTING_PURPOSE: dict[str, str] = {
     "Verbose shows them.",
     "default-scope": "Where an install lands when nothing asks for somewhere else: "
     "Project writes into this checkout, User writes into your home.",
+    "python-installer": "Which backend resolves Python dependencies when an artifact's "
+    "contract and this machine allow either: pip is universally present, uv is faster.",
     "show-updates": "Whether the Dashboard counts the installed artifacts a registry "
     "offers a newer version of.",
     "maintainer-mode": "Whether this installation authors artifacts as well as installing "
@@ -2165,8 +2276,8 @@ SETTING_PURPOSE: dict[str, str] = {
 """What each setting changes, for the block `[v]` opens (`QA-097`).
 
 Every row a cursor can sit on describes itself, the way the rebuild stages have since `QA-089`.
-Four rows that change behaviour and no row that says what it changes left the reader toggling a
-setting to find out what it did.
+Every row that changes behaviour says what it changes; a row that did not left the reader toggling
+a setting to find out what it did.
 """
 
 
@@ -2178,6 +2289,7 @@ def settings_to_data(view: ConsumerSettings) -> dict[str, object]:
     return {
         "detail_level": view.profile.value,
         "default_scope": view.default_scope,
+        "python_installer": view.python_installer,
         "show_updates": view.show_updates,
         "maintainer_mode": view.maintainer_mode,
     }
@@ -2193,7 +2305,13 @@ def settings_from_data(data: object) -> Result[ConsumerSettings]:
 
     if not isinstance(data, dict):
         return Err((_settings_invalid("stored consumer settings must be a JSON object"),))
-    known = {"detail_level", "default_scope", "show_updates", "maintainer_mode"}
+    known = {
+        "detail_level",
+        "default_scope",
+        "python_installer",
+        "show_updates",
+        "maintainer_mode",
+    }
     unknown = sorted(set(data) - known)
     if unknown:
         return Err(
@@ -2205,6 +2323,9 @@ def settings_from_data(data: object) -> Result[ConsumerSettings]:
     scope = data.get("default_scope", "project")
     if scope not in {"project", "user"}:
         return Err((_settings_invalid("stored default scope must be project or user"),))
+    installer = data.get("python_installer", "pip")
+    if installer not in set(_PYTHON_INSTALLERS):
+        return Err((_settings_invalid("stored Python installer must be pip or uv"),))
     updates = data.get("show_updates", True)
     maintainer = data.get("maintainer_mode", False)
     if not isinstance(updates, bool) or not isinstance(maintainer, bool):
@@ -2221,6 +2342,7 @@ def settings_from_data(data: object) -> Result[ConsumerSettings]:
             cast(str, scope),
             updates,
             maintainer,
+            cast(str, installer),
         )
     )
 

@@ -37,6 +37,7 @@ from agent_artifacts.application.installation_action import (
 )
 from agent_artifacts.application.installed_setup import DeclaredArtifactSetup
 from agent_artifacts.application.marketplace_resolution import ResolutionPolicy
+from agent_artifacts.application.python_environment import usable_python_installers
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.harness import Scope
 from agent_artifacts.domain.identifiers import ArtifactCoordinate, ObjectDigest
@@ -180,10 +181,18 @@ class PreparedConfiguredInstallation:
 
     draft: ConfiguredInstallationDraft
     action: PreparedInstallationAction | None = None
+    #: One entry per artifact that declares Python dependencies: the backends that could install
+    #: it here, before `chosen_installer` narrows them to the one that will. It is reported from
+    #: this layer because this is where the machine was measured; deriving it again anywhere else
+    #: would let the offer a screen draws disagree with the plan the same run produced (issue
+    #: #11b). Empty while the draft is not ready, because no offer is drawn before review.
+    python_installers: tuple[tuple[str, ...], ...] = ()
 
     def __post_init__(self) -> None:
-        if not isinstance(self.draft, ConfiguredInstallationDraft) or (
-            self.action is not None and not isinstance(self.action, PreparedInstallationAction)
+        if (
+            not isinstance(self.draft, ConfiguredInstallationDraft)
+            or (self.action is not None and not isinstance(self.action, PreparedInstallationAction))
+            or any(not isinstance(item, tuple) or not item for item in self.python_installers)
         ):
             raise ValueError("a prepared configured installation is invalid")
         if self.draft.ready is not (self.action is not None):
@@ -269,6 +278,15 @@ def prepare_configured_installation(
     capabilities = local_remediation_capabilities(
         host, credential_providers, interpreter=base_interpreter
     )
+    facts = EnvironmentFacts(platform_name(), remediation_capabilities=capabilities)
+    # An artifact with no usable backend contributes nothing rather than an empty entry: whether
+    # that is fatal is the planner's to say, and it says so below with the three sets that emptied.
+    measured = (
+        tuple(sorted(item.value for item in usable_python_installers(spec, facts, policy)))
+        for spec in (placement.description.dependencies for placement in placements.value)
+        if spec is not None
+    )
+    usable = tuple(item for item in measured if item)
     registry = LocalHarnessRegistry(host.harness_root)
     providers = {provider.provider: provider for provider in credential_providers}
     observations = []
@@ -283,7 +301,7 @@ def prepare_configured_installation(
         draft.selection,
         placements.value,
         policy=policy,
-        facts=EnvironmentFacts(platform_name(), remediation_capabilities=capabilities),
+        facts=facts,
         inspect=LocalEnvironmentInspector(capabilities),
         observe=lambda planned: observe_planned_installation(
             planned, registry=registry, credential_providers=credential_providers
@@ -297,7 +315,7 @@ def prepare_configured_installation(
     if isinstance(prepared, Err):
         return prepared
     try:
-        return Ok(PreparedConfiguredInstallation(draft, prepared.value))
+        return Ok(PreparedConfiguredInstallation(draft, prepared.value, usable))
     except ValueError as error:
         return _error(f"this configured installation cannot be prepared: {error}")
 

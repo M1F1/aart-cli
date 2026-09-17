@@ -747,7 +747,7 @@
         {
           "id": "11",
           "title": "The Python dependency backend is an explicit per-install choice seeded by Settings",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "12",

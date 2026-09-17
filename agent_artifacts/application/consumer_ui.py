@@ -27,6 +27,7 @@ from .consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     ConsumerSettings,
+    installer_from_row,
     is_screen_identifier,
     keeps_focus,
     navigation_targets,
@@ -417,11 +418,16 @@ class ConsumerUiCommand:
     #: on the command rather than being read from Settings at the boundary, so what was reviewed is
     #: what is executed even if the preference changes in between (issue #11a).
     install_scope: str = ""
+    #: Which backend resolves Python dependencies for this one operation, empty meaning "follow the
+    #: preference". Separate from `install_scope`: where files land and what resolves them are two
+    #: questions, and answering one is not answering the other (issue #11b).
+    python_installer: str = ""
 
     def __post_init__(self) -> None:
         if (
             not isinstance(self.kind, ConsumerUiCommandKind)
             or self.install_scope not in ("", "project", "user")
+            or self.python_installer not in ("", "pip", "uv")
             or (
                 self.screen is not None
                 and not isinstance(self.screen, (ConsumerScreen, MaintainerScreen))
@@ -550,6 +556,10 @@ class ConsumerUiState:
     #: The scope this installation chose for itself, or empty to follow `settings.default_scope`.
     #: A one-off choice never rewrites the preference (issue #11a).
     install_scope: str = ""
+    #: Which backend resolves Python dependencies for this one operation, empty meaning "follow the
+    #: preference". Separate from `install_scope`: where files land and what resolves them are two
+    #: questions, and answering one is not answering the other (issue #11b).
+    python_installer: str = ""
     candidate_filter: MaintainerCandidateFilter = MaintainerCandidateFilter()
     #: Which promotion the Maintainer is reviewing. Screen 42 chooses it; screens 41 and 43 obey
     #: it. Both modes are composed, so this selects a projection rather than causing one.
@@ -589,6 +599,7 @@ class ConsumerUiState:
             not isinstance(self.session, ConsumerSession)
             or not isinstance(self.settings, ConsumerSettings)
             or self.install_scope not in ("", "project", "user")
+            or self.python_installer not in ("", "pip", "uv")
             or not _rows_valid(self.rows)
             or not isinstance(self.cursor, int)
             or isinstance(self.cursor, bool)
@@ -1045,6 +1056,27 @@ def _toggle_selection(
                     focus=state.focus,
                     config_answers=state.config_draft.answers,
                     install_scope=scope,
+                    python_installer=state.python_installer,
+                ),
+            )
+        installer = installer_from_row(key)
+        if installer is not None:
+            # The same reasoning as the scope: the plan records which backend will resolve the
+            # dependencies, so choosing another one is a different plan to review, not the same
+            # plan relabelled (issue #11b). Settings keep saying what they said.
+            chosen_installer = replace(state, python_installer=installer, quit_pending=False)
+            if state.action is not ConsumerActionKind.INSTALL:
+                return chosen_installer, ()
+            return chosen_installer, (
+                ConsumerUiCommand(
+                    ConsumerUiCommandKind.PREPARE_ACTION,
+                    action=ConsumerActionKind.INSTALL,
+                    selection=state.selection,
+                    targets=state.targets,
+                    focus=state.focus,
+                    config_answers=state.config_draft.answers,
+                    install_scope=state.install_scope,
+                    python_installer=installer,
                 ),
             )
         harness = target_from_row(key)
@@ -1069,6 +1101,7 @@ def _toggle_selection(
                 focus=request_focus,
                 config_answers=state.config_draft.answers,
                 install_scope=state.install_scope,
+                python_installer=state.python_installer,
             ),
         )
     if key in state.selection:
@@ -1241,6 +1274,9 @@ def _request_action(
             focus=state.focus,
             config_answers=state.config_draft.answers,
             install_scope=(state.install_scope if action is ConsumerActionKind.INSTALL else ""),
+            python_installer=(
+                state.python_installer if action is ConsumerActionKind.INSTALL else ""
+            ),
         )
         return prepared, (
             command,
@@ -1325,6 +1361,7 @@ def _request_action(
             state.repository_scan_draft if action is ConsumerActionKind.REPOSITORY_SCAN else None
         ),
         install_scope=(state.install_scope if action is ConsumerActionKind.INSTALL else ""),
+        python_installer=(state.python_installer if action is ConsumerActionKind.INSTALL else ""),
         config_answers=(
             state.config_draft.answers
             if action is ConsumerActionKind.INSTALL

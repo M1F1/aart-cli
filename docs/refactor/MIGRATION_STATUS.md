@@ -1,5 +1,15 @@
 # AART Refactor Migration Status
 
+**2026-09-17, CP-25.11 done (D-296).** The Python dependency backend is a per-install choice
+seeded by Settings (issue #11b). `preferred_installer` was inert plumbing -- supplied by nothing,
+held by no test -- so every install took the name-ordered default. Settings now carry the
+preference, Review Selection offers the backends this contract, machine and policy all allow, and
+one operation may differ from the preference without rewriting it. The offer is reported from the
+preparation that measured the machine, so a screen cannot offer what the plan would refuse. Two
+findings: the composition's preference survived a mutation until a test authored an artifact that
+really declares Python dependencies, and four tests addressed settings rows by ordinal and broke
+when a control was inserted above them.
+
 **2026-09-17, CP-25.10 done (D-295).** An installation's scope travels with the operation instead
 of being re-read from Settings at the effect boundary, so one install can differ from the preference
 without rewriting it (issue #11a). `offer_install_scopes` computes the offer as the intersection of

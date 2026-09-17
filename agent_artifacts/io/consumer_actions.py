@@ -51,8 +51,10 @@ from agent_artifacts.application.consumer_views import (
     HarnessTargetView,
     InstallScopeChoiceView,
     LifecyclePlanView,
+    PythonInstallerChoiceView,
     RunningInstallationView,
     offer_install_scopes,
+    offer_python_installers,
     project_lifecycle_plan,
     project_running_installation,
     target_choice_problems,
@@ -113,6 +115,7 @@ from agent_artifacts.domain.inputs import (
     SecretProviderReference,
 )
 from agent_artifacts.domain.policies import EffectivePolicy
+from agent_artifacts.domain.python_runtime import PythonInstaller
 from agent_artifacts.domain.receipts import ArtifactReceipt, InstallationReceipt, InstalledRecord
 from agent_artifacts.domain.reconciliation import DesiredState
 from agent_artifacts.domain.result import Err, Ok, Result
@@ -643,6 +646,19 @@ class LocalConsumerActions:
         named = chosen or self._context.settings.default_scope
         scope = Scope.USER if named == "user" else Scope.PROJECT
         return host if host.scope is scope else replace(host, scope=scope)
+
+    def _installer_choice(
+        self, prepared: PreparedConfiguredInstallation, preferred: PythonInstaller
+    ) -> PythonInstallerChoiceView | None:
+        """Which Python backends this prepared installation could be resolved by.
+
+        The usable sets come back from the preparation that measured this machine, so the offer and
+        the plan are the same measurement rather than two that can drift. `None` means the question
+        does not arise: nothing in the selection declares Python dependencies (issue #11b).
+        """
+
+        offered = offer_python_installers(prepared.python_installers, preferred=preferred.value)
+        return offered.value if isinstance(offered, Ok) else None
 
     def _scope_choice(self, plan: ConsumerPlanView, chosen: str) -> InstallScopeChoiceView | None:
         """Which scopes this selection may install into, seeded by the preference.
@@ -1490,6 +1506,7 @@ class LocalConsumerActions:
     ) -> ConsumerActionUpdate:
         context = self._context
         host = self._host(command.install_scope)
+        preferred = PythonInstaller(command.python_installer or context.settings.python_installer)
         sources: tuple[InputValueSource, ...] = tuple(
             PromptedConfigValue(InputId(identifier), value)
             for identifier, value in command.config_answers
@@ -1504,6 +1521,7 @@ class LocalConsumerActions:
             credential_providers=context.credential_providers,
             resolvers=context.credential_providers,
             previous=previous,
+            preferred_installer=preferred,
         )
         if isinstance(prepared, Err):
             return self._declined(command, _refusal(prepared.diagnostics))
@@ -1549,6 +1567,7 @@ class LocalConsumerActions:
                     credential_providers=context.credential_providers,
                     resolvers=context.credential_providers,
                     previous=previous,
+                    preferred_installer=preferred,
                 )
                 if isinstance(prepared, Err):
                     return self._declined(command, _refusal(prepared.diagnostics))
@@ -1615,6 +1634,7 @@ class LocalConsumerActions:
             action.flow.plan,
             targets=targets,
             scope_choice=self._scope_choice(action.flow.plan, command.install_scope),
+            installer_choice=self._installer_choice(prepared.value, preferred),
         )
         chosen: tuple[str, ...] = ()
         reviewed = prepared.value
@@ -1635,6 +1655,7 @@ class LocalConsumerActions:
                     credential_providers=context.credential_providers,
                     resolvers=context.credential_providers,
                     previous=previous,
+                    preferred_installer=preferred,
                 )
                 if isinstance(narrowed, Err):
                     return self._declined(command, _refusal(narrowed.diagnostics))

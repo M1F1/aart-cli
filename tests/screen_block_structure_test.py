@@ -353,6 +353,7 @@ class SettingsBlockTest(TestCase):
                 "> Detail level: Fast",
                 "Installation",
                 "  Default scope: Project",
+                "  Python installer: pip",
                 "Updates",
                 "  Show available updates: on",
                 "Advanced",

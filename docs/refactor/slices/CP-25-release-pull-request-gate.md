@@ -1,7 +1,8 @@
 # CP-25 — release gating, usage-reporting withdrawal, and post-release field reports
 
 Status: IN PROGRESS — tasks 01–03 done (D-290), 04–07 done and committed as `7af06be` (D-292),
-08 done (D-293), 09 done (D-294), 10 done (D-295); tasks 11–14 are planned and not started.
+08 done (D-293), 09 done (D-294), 10 done (D-295), 11 done (D-296); tasks 12–14 are planned and
+not started.
 
 The slice carries two unrelated subjects because the owner added the second while the first was in
 flight. They share nothing but the release they will go out in, and they are ordered so that the
@@ -102,6 +103,8 @@ Acceptance: `packaging-check validate docs-check release-bump` in **15.26 s** ag
 | 10 | `_host` ignores its `chosen` argument and reads `settings.default_scope` again | **Survived** every unit-level test in the module, because none of them installed anything. The test that kills it drives the real TUI from a Project default to a User install and asserts the files reached the home and not the project. Writing it also found a third `PREPARE_ACTION` site — the re-prepare after harness selection — that did not carry the scope, where the choice would have silently reverted (D-295) |
 | 10 | Every scope row is drawn as the selected one (`'(*)' if scope == selected else '( )'` → `'(*)'`) | `…_the_offer_opens_on_the_stored_preference` and `…_choosing_the_other_scope_moves_the_mark_to_it` red. This is the screen half: a radio that always reads as chosen tells the operator their choice was taken when nothing was sent (D-295) |
 | 09 | `"Installed: " + ", ".join(row.installed_statuses)` → `"Installed"` on the Fast row | Three tests red, all of them about that one claim: `…_a_current_installation_is_named_with_its_harness`, `…_an_update_available_installation_is_not_flattened_into_installed` and `…_the_renderer_reports_exactly_what_the_projection_recorded`. Flattening the status loses the difference between `current` and `update-available`, which is the difference between nothing to do and something to do (D-294) |
+| 11 | `preferred=preferred_installer` → `preferred=None` in `plan_artifact_installation` | `…_the_preference_decides_which_backend_the_plan_records` red, alone (D-296) |
+| 11 | The composition's preference pinned to `pip` (`PythonInstaller(command.python_installer or settings.python_installer)` → `PythonInstaller("pip")`) | **Survived**, the same shape of finding as task 10's: every test that could have seen it used an artifact with no Python dependencies, so the composition was never asked. Killed now by a drive over an artifact that really declares a `requirements` contract, with a `uv` stub on `PATH` so both backends are reported without uv being installed (D-296) |
 
 **Where 04–07 ran.** In a copy of the working tree under the session scratchpad, not in the
 repository, because a full `make quality` was running at the time and `scripts/quality.py` fails any

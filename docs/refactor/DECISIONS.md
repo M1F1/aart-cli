@@ -7308,3 +7308,44 @@ keypress of every existing install onto a different control, which the fixture `
 suddenly installing into the project a test had just chosen to leave. Harnesses are drawn as boxes
 and the scope as a radio, so the one answer does not read as one more harness. The second targeted
 mutation — marking every scope row selected — was killed by the two tests that read the mark.
+
+## D-296 — The Python dependency backend is chosen per installation, not per machine
+
+**Context.** `preferred_installer` already ran from `prepare_configured_installation` down to
+`chosen_installer`, and nothing ever supplied it: every install took the name-ordered default
+(issue #11b). It was inert plumbing, and no test noticed, because no test passed it. Settings had
+no preference to supply either, so an operator who wanted uv had no way to say so.
+
+**Decision.** The backend is a per-operation choice travelling on `ConsumerUiCommand.python_installer`,
+empty meaning "follow the preference", alongside but separate from `install_scope` (D-295): where an
+artifact's files land and what resolves its dependencies are two questions, and answering one is not
+answering the other. `ConsumerSettings.python_installer` stores the preference and defaults to `pip`,
+the backend every Python that can build an environment already has, so the default is never itself
+the reason an install cannot run. A one-off choice does not rewrite it.
+
+**What may be offered.** `usable_python_installers` names the intersection `select_python_installer`
+was already taking — specification, platform, policy — so the offer and the plan are one rule rather
+than two that can drift. `prepare_configured_installation` reports it per artifact on
+`PreparedConfiguredInstallation.python_installers`, measured where the machine was measured;
+deriving it again in the frontend would let a screen offer a backend the plan then refuses, which
+the operator would read as a fault in their own choice. `offer_python_installers` intersects those
+sets: empty input is not a choice with no answer but a question that does not arise, and an empty
+intersection is refused rather than resolved, because running two backends for one reviewed install
+is what `chosen_installer` exists to prevent.
+
+**The screen.** Review Selection draws the backends after the scope rows, for the reason the scope
+rows follow the harnesses: each is an amendment to a plan that already exists, and the cursor opens
+on the screen's own subject. Backends are radios; only a real choice is drawn.
+
+**What the work found.** Two targeted mutations. Dropping the preference inside
+`plan_artifact_installation` was killed immediately. Pinning the composition's preference to `pip`
+**survived** the whole module, exactly as the `_host` mutation did in D-295 and for the same reason:
+every test that could see it worked on an artifact with no Python dependencies, so the composition
+was never asked the question. The test that kills it authors an artifact that really declares a
+`requirements` contract, puts a `uv` stub on `PATH` so the machine reports both backends without uv
+being installed, stores `uv` as the preference and reads the mark off the drawn screen.
+
+**A second finding.** Four tests reached settings rows by ordinal — `cursor=3`, `range(3)` —
+so inserting a control above Maintainer Mode silently toggled its neighbour instead. They now count
+from `SETTING_ROWS`. A test that addresses a row by its position is a test that passes for the wrong
+reason as soon as the screen grows.

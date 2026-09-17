@@ -60,6 +60,8 @@ from agent_artifacts.application.consumer_views import (
     RegistryView,
     RemediationView,
     RunningInstallationView,
+    installer_from_row,
+    installer_row,
     navigation_targets,
     project_collection,
     project_registries,
@@ -1331,18 +1333,28 @@ def render_settings(view: ConsumerSettings, focus: str = "") -> tuple[str, ...]:
     values = {
         "detail-level": f"Detail level: {view.profile.value.title()}",
         "default-scope": f"Default scope: {view.default_scope.title()}",
+        "python-installer": f"Python installer: {view.python_installer}",
         "show-updates": f"Show available updates: {'on' if view.show_updates else 'off'}",
         "maintainer-mode": f"Maintainer Mode: {'on' if view.maintainer_mode else 'off'}",
     }
     headings = {
         "detail-level": "Experience",
         "default-scope": "Installation",
+        "python-installer": "Installation",
         "show-updates": "Updates",
         "maintainer-mode": "Advanced",
     }
     groups: list[tuple[str, ...]] = []
+    previous = ""
     for row in SETTING_ROWS:
-        groups.append((headings[row], f"{'> ' if row == focus else '  '}{values[row]}"))
+        drawn = f"{'> ' if row == focus else '  '}{values[row]}"
+        # Rows under the same heading are one group: two controls about installation are two
+        # controls, not two sections, and repeating the heading would read as the latter.
+        if headings[row] == previous and groups:
+            groups[-1] = (*groups[-1], drawn)
+        else:
+            groups.append((headings[row], drawn))
+        previous = headings[row]
     return separate(*groups)
 
 
@@ -2989,7 +3001,15 @@ class CanonicalScreenSource:
                 if plan.scope_choice is not None and plan.scope_choice.is_a_choice
                 else ()
             )
-            return (*eligible, *stale, *scopes)
+            # The backend rows sit after the scope rows for the same reason the scope rows sit
+            # after the harnesses: each is an amendment to a plan that already exists, and the
+            # cursor opens on the screen's own subject.
+            installers = (
+                tuple(installer_row(item) for item in plan.installer_choice.offered)
+                if plan.installer_choice is not None and plan.installer_choice.is_a_choice
+                else ()
+            )
+            return (*eligible, *stale, *scopes, *installers)
         if screen is ConsumerScreen.REMEDIATION:
             # CP-23 task 08: Continue is a row, so it is a control rather than a printed string.
             return () if self._screens.plan is None else (ConsumerScreen.READY.value,)
@@ -3799,17 +3819,27 @@ class CanonicalScreenSource:
         """
 
         cursor = ">" if row == state.current_row else " "
-        scope = scope_from_row(row)
-        if scope is None:
-            harness = target_from_row(row)
-            return f"{cursor} {'[x]' if harness in state.targets else '[ ]'} {harness}"
         plan = self._screens.plan
-        selected = (
-            plan.scope_choice.selected
-            if plan is not None and plan.scope_choice is not None
-            else state.install_scope
-        )
-        return f"{cursor} {'(*)' if scope == selected else '( )'} Install into: {scope.title()}"
+        scope = scope_from_row(row)
+        if scope is not None:
+            selected = (
+                plan.scope_choice.selected
+                if plan is not None and plan.scope_choice is not None
+                else state.install_scope
+            )
+            return f"{cursor} {'(*)' if scope == selected else '( )'} Install into: {scope.title()}"
+        installer = installer_from_row(row)
+        if installer is not None:
+            chosen = (
+                plan.installer_choice.selected
+                if plan is not None and plan.installer_choice is not None
+                else state.python_installer
+            )
+            return (
+                f"{cursor} {'(*)' if installer == chosen else '( )'} Dependencies with: {installer}"
+            )
+        harness = target_from_row(row)
+        return f"{cursor} {'[x]' if harness in state.targets else '[ ]'} {harness}"
 
     def _body(self, state: ConsumerUiState) -> tuple[str, ...]:
         screen, profile = state.session.screen, state.session.profile
