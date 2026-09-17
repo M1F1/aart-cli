@@ -37,9 +37,10 @@ from agent_artifacts.tui_consumer import (
     screens_from,
 )
 from tests.consumer_session_test import TOKEN, inspection, observed
+from tests.credential_fixtures import access_token
 
 COORDINATE = "public/mcp/github@1.6.0"
-SECRET = "ghp_thisisnotarealtokenandmustnotbedrawn"
+SECRET = access_token()
 
 
 def _configuration(*values: tuple[str, str]) -> ConfigurationFileView:

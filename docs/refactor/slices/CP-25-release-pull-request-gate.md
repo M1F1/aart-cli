@@ -2,7 +2,10 @@
 
 Status: IN PROGRESS — tasks 01–03 done (D-290), 04–07 done and committed as `7af06be` (D-292),
 08 done (D-293), 09 done (D-294), 10 done (D-295), 11 done (D-296), 12 done (D-297),
-13 done (D-298), 14 done (D-299). **All 14 tasks are done.**
+13 done (D-298), 14 done (D-299), 15 done (D-300), 16 done (D-301). All 16 tasks are done.
+
+The owner's Enterprise fork smoke PR exposed late feedback for an invalid PR title. B-135 first
+recorded it as a follow-up; the owner then explicitly promoted it to CP-25.15 (D-300).
 
 The slice carries two unrelated subjects because the owner added the second while the first was in
 flight. They share nothing but the release they will go out in, and they are ordered so that the
@@ -424,3 +427,39 @@ Red first: project- and user-scope installations, one payload with multiple harn
 a missing owned component and a shared/unowned path. Drive at least one installation through the
 public TUI and reopen Installed Artifact Details in a new session so the paths are proven durable,
 not borrowed from the just-completed plan.
+
+### 15 — Pull-request title validation fails fast (B-135)
+
+The Enterprise fork smoke PR was titled `test`, which `scripts/conventional_title.py` correctly
+refused — but only after `scripts/quality.py` ran. Move the existing title-validation step to the
+start of `.github/actions/quality/action.yml`, before workspace trust, release-scope validation,
+index setup, developer-tool installation and the canonical gates. Keep the validator, title binding,
+event guard, workflow shape and required `pr-check` name unchanged. This is feedback ordering, not
+a new release rule. Changing the title alone still does not retrigger this workflow.
+
+Red first: a workflow-shape test asserting that the title step precedes every other composite
+step failed in five subtests on the old action; after the move, the title tests and ordering test
+pass (11 focused tests total). Targeted mutation: moving the title step behind workspace trust
+turned exactly the ordering test red, for the trust step, and restoring it made the test green
+again. Full `make quality` remains the slice verification gate before the release PR.
+
+### 16 — Redaction tests assemble credential-shaped fixtures at run time
+
+The first full `make quality` after task 15 passed format, lint, typecheck, unit, validate,
+coverage, packaging and docs checks, then failed at `secret-shape-check`. Two tests added during
+CP-25.13 and CP-25.14 each stored a token-shaped fake value as a source literal. The gate reported
+two findings per line: a quoted value assigned to a credential-naming key and a token prefix with
+issued-token length. A value can be fake and still trigger Enterprise push protection; weakening
+the scanner is not an acceptable fix.
+
+Use `tests.credential_fixtures.access_token()` in both tests, preserving the redaction assertions
+and the run-time token shape while writing no token-shaped literal into tracked source. Red first:
+`python3 scripts/secret_shape_check.py` reported four findings across the two lines. Green:
+28 focused tests and the scanner passed. Targeted mutation: restoring the literal in one file
+produced exactly its two expected scanner findings; restoring the factory made it green again.
+Full `make quality` then passed: 4,441 unit tests (1 skipped), 86.07% branch coverage,
+format-check, lint, typecheck, validate, packaging-check, docs-check and secret-shape-check. The
+integration gate was explicitly redundant with 395 tests already included in unit. There was no
+changed production Python module to scope mutmut over; the red-first scanner and deliberate
+literal-restoration mutation are the task's adequacy evidence. CP-25's code and gates are verified;
+the release PR and the owner's version-title choice remain outside this result.

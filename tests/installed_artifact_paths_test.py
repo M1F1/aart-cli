@@ -53,6 +53,7 @@ from tests.consumer_application_e2e_test import (
     _at,
     _drive,
 )
+from tests.credential_fixtures import access_token
 
 DIGEST = ObjectDigest("sha256", "a" * 64)
 ROOT = "/home/dev/.local/share/aart/artifacts/skill/code-review"
@@ -62,7 +63,7 @@ USER_DELIVERY = "/home/dev/.claude/skills/code-review/SKILL.md"
 COORDINATE = ArtifactCoordinate(
     SourceAlias("company"), ArtifactIdentity("skill", "code-review"), "1.2.0"
 )
-SECRET = "ghp_thisisnotarealtokenandmustnotbedrawn"
+SECRET = access_token()
 EFFECT = CopyTree(f"{ROOT}/payload", f"{ROOT}/payload")
 
 

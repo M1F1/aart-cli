@@ -1,5 +1,23 @@
 # AART Refactor — Next Work
 
+## CP-25.16 — credential-shaped test fixtures done (2026-09-17)
+
+The owner added task 16 to the current stream after the first full `make quality` reached its last
+gate and failed: two CP-25 redaction tests wrote token-shaped fake values directly into tracked
+source. Both now use `tests.credential_fixtures.access_token()` (D-301). Full `make quality` is
+green: 4,441 tests (1 skipped), 86.07% branch coverage, all non-redundant gates passed. The
+branch and PR remain uncreated; the local branch must be moved onto current `origin/main` before
+publication, because the old branch base predates `v0.1.2` and would otherwise show a version
+regression in the PR diff. After that move, recheck the tree and rerun the relevant gates.
+
+## CI feedback follow-up — CP-25.15 done (2026-09-17)
+
+The owner requested a fail-fast pull-request title check after an Enterprise fork smoke PR titled
+`test` reached `scripts/conventional_title.py` only after the quality gates, then promoted B-135 to
+CP-25.15. The existing check now runs first in `.github/actions/quality/action.yml`; a test holds
+the ordering (D-300). This does not change release semantics, and the next critical step remains
+the full quality gate, then the release PR after the owner's version-title choice.
+
 ## Current objective — CP-25 (2026-09-17)
 
 **CP-25 is the active slice.** Tasks 01–03 completed the release-pull-request gate (D-290).
@@ -10,13 +28,13 @@ product issue in `M1F1/aart-cli`: #9, #10, #11, #12, #16 and #17 (D-291).
 
 The written task scope is in
 [`slices/CP-25-release-pull-request-gate.md`](slices/CP-25-release-pull-request-gate.md), and
-`plan.json` is the executable status authority. Tasks 04–14 are done (D-292 to D-299). **Every
-task in CP-25 is now done.** #11 was split into separate scope and backend choices because they
+`plan.json` is the executable status authority. Tasks 04–16 are done (D-292 to D-301). #11 was
+split into separate scope and backend choices because they
 affect different planning contracts; both halves are done.
 
-**The next executable step is not a task in the plan — it is the release.** Run the full
-`make quality` on a clean tree, then open the pull request. Nothing is left to implement, so a new
-increment should not be invented: read the decision below about the version first, because it is
+**The next executable step is preparing the branch against current `origin/main`.** The full
+`make quality` passed on the present tree; after moving the branch, check its diff and gates again
+before opening the pull request. Read the decision below about the version first, because it is
 the owner's and it is made by the pull request's title.
 
 **Still the owner's to decide, and not to be decided for them:** the version this branch releases.
@@ -24,10 +42,8 @@ The commits are written as `feat:`/`fix:`, which makes it `0.2.0`; a `feat!:` PR
 `1.0.0`, because `bump-minor-pre-major: false` sends a breaking change straight past `0.3.0`. Under
 squash merge the PR title decides, not the commits.
 
-The requested clean baseline was rerun before this planning update. Format, lint, typecheck and the
-unit gate (4,356 tests, 1 skipped) passed. The run was intentionally stopped during coverage when
-the owner asked to review the newly written tasks before implementation; therefore it is not a
-complete green `make quality` result and must be rerun before any slice is called verified.
+The earlier planning baseline was intentionally stopped during coverage. It has now been superseded
+by the complete green `make quality` recorded above for CP-25.16.
 
 ## Releasing 0.1.0 (2026-09-15)
 

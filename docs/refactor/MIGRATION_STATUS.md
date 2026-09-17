@@ -1,5 +1,20 @@
 # AART Refactor Migration Status
 
+**2026-09-17, CP-25.16 done; CP-25 code and gates verified (D-301).** The first full
+`make quality` after task 15 reached its last gate and failed `secret-shape-check`: two new
+redaction tests each contained a fake token-shaped literal. Both now assemble that fixture through
+`tests.credential_fixtures.access_token()`; 28 focused tests and the scanner pass. A targeted
+restore of one literal made the scanner red with exactly two findings. The rerun of full
+`make quality` passed: 4,441 tests (1 skipped), 86.07% branch coverage, and every non-redundant
+gate green. The branch and PR have not been created, and the owner's release-version title choice
+remains open.
+
+**2026-09-17, CP-25.15 done (D-300).** The owner promoted B-135 into CP-25 after a fork smoke PR
+titled `test` spent a full quality run before being refused. The unchanged title validator is now
+the composite quality action's first step. A red-first workflow-ordering test holds that it runs
+before setup and the gates; the title syntax and release semantics are unchanged. The full quality
+gate remains outstanding before CP-25 is verified and released.
+
 **2026-09-17, CP-25.13 done (D-298).** Screen 22a draws Configuration and Credentials as two
 sections: a blank after each heading and one between a completed Configuration block and the
 Credentials heading (issue #16). The spacing manufactures no row -- `rows` still comes from the

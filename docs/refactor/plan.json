@@ -763,6 +763,16 @@
           "id": "14",
           "title": "Installed Artifact Details names the exact owned installation paths",
           "status": "done"
+        },
+        {
+          "id": "15",
+          "title": "Validate the pull request title before expensive quality work",
+          "status": "done"
+        },
+        {
+          "id": "16",
+          "title": "Keep credential-shaped redaction fixtures out of tracked source",
+          "status": "done"
         }
       ]
     }

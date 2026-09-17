@@ -3305,3 +3305,32 @@ condition to job level, so the publishing job is skipped rather than its steps. 
 CP-24, which is about the tool's own release; the registry template is a separate contract and
 `plan_registry_init` refuses a registry whose managed file has drifted, so changing it is a
 migration rather than an edit.
+
+## B-135 — PROMOTED TO CP-25.15: validate the pull request title before expensive quality work
+
+Status: PROMOTED
+Discovered in: CP-25 follow-up / Enterprise fork CI smoke test (2026-09-17)
+Why useful: A smoke PR titled `test` ran the quality gates before
+`scripts/conventional_title.py` rejected its title. The existing check is the last step of
+`.github/actions/quality/action.yml`, so an invalid release-semantic input wastes the full gate run
+on every matrix interpreter before giving the operator an actionable error.
+Why noncritical when discovered: The title was already refused by the required `pr-check`; this
+changed feedback latency, not merge safety or release classification. The owner explicitly added it
+to CP-25 as task 15 after the first fourteen tasks were complete (D-300).
+Potential approach: Move the existing title-validation step to the very beginning of the composite
+action, before workspace trust, release-PR scope checking, pip-index setup, developer-tool
+installation and `scripts/quality.py`. Keep the same `pull_request` guard, `PR_TITLE` binding and
+validator. Do not add a second workflow or change branch protection. First add a workflow-shape test
+that fails on the present ordering; then move the step and run the relevant gates. A targeted
+ordering mutation must turn the new test red.
+Invariants touched: INV-090 and INV-092 (the title remains the release-semantic input); INV-103
+(feedback latency). No product or release-policy semantics change.
+Evidence/links: `.github/actions/quality/action.yml`, `scripts/conventional_title.py`,
+`tests/release_workflow_test.py`; owner's CI smoke report: `pull request title is not a conventional
+commit: 'test'` after the full gate run.
+Acceptance: An invalid title reaches the validator as the action's first step and fails before any
+tool installation or quality gate; `test: verify fork CI` continues to the unchanged full gate set.
+Changing a PR title alone still does not retrigger the current workflow; that separate event-policy
+question is out of scope.
+Promotion condition: Met by the owner's explicit CP-25.15 instruction on 2026-09-17 (D-300).
+The task is implemented; see the slice's acceptance evidence.

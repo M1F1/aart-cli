@@ -7429,3 +7429,40 @@ should have: every test about *which* paths appear stays green, because the muta
 is said when nobody looked. A real-TUI drive confirmed the case in the wild: after installing and
 reopening in a fresh composition, the delivery read `matched` and the payload `unobserved`, and
 reading `_reported` showed that was truthful rather than a broken join.
+
+## D-300 — Pull-request title validation precedes every expensive CI action step
+
+**Context.** An Enterprise fork smoke PR titled `test` correctly failed the Conventional Commit
+validator, but the validator was last in the shared quality action. The required matrix ran its
+full quality gates first, so a cheap, actionable refusal arrived only after expensive work.
+
+**Decision.** At the owner's explicit instruction, promote B-135 into CP-25.15. Move the existing
+validator step to the beginning of `.github/actions/quality/action.yml`, before workspace trust,
+release-scope checking, index setup, tool installation and the canonical gates. It reads only the
+checked-out release configuration and Python already present in the job image, so it needs none of
+those prior steps. Keep the event guard, `PR_TITLE` binding, accepted-type policy and `pr-check`
+aggregation unchanged; there is no second workflow or branch-protection setting to coordinate.
+
+**Boundary.** The `pull_request` trigger still does not include `edited`. Editing a PR title alone
+will not start a fresh run; solving that event-policy issue is separate from making the next run
+fail fast. The ordering test proved the intended position: temporarily moving the title step
+behind workspace trust made it red, and restoring the first-step order made it green again.
+
+## D-301 — Redaction tests assemble token-shaped values instead of committing them
+
+**Context.** The first full `make quality` after CP-25.15 passed its preceding gates and failed
+the final `secret-shape-check`. CP-25.13 and CP-25.14 had each added a quoted fake token assigned
+to `SECRET`. The gate found both the assignment and the token shape on each line. Enterprise push
+protection scans shapes, not intent, so a fake literal still threatens the branch push.
+
+**Decision.** At the owner's instruction, include this gate repair as CP-25.16. Build both
+redaction fixtures with the existing `tests.credential_fixtures.access_token()` helper. Keep the
+redaction assertions and scanner unchanged; do not suppress or weaken the gate. The first
+scanner run was red in exactly those two test files, the focused tests and scanner are green after
+the change, and deliberately restoring one literal turns the scanner red again.
+
+**Verification.** Full `make quality` passed after the fixture change: 4,441 unit tests (1
+skipped), 86.07% branch coverage, packaging and docs checks, and the final secret-shape check.
+The integration gate reported its 395 tests as already included in unit. No production Python
+module changed in this task, so no module-scoped mutmut run is applicable; the targeted
+literal-restoration mutation holds the gate's claim.

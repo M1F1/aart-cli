@@ -122,6 +122,21 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn("if: github.event_name == 'pull_request'", quality)
         self.assertIn("PR_TITLE: ${{ github.event.pull_request.title }}", quality)
 
+    def test_an_invalid_pull_request_title_fails_before_quality_work_begins(self) -> None:
+        """A malformed title must not spend a full interpreter-matrix run first."""
+
+        quality = (ROOT / ".github/actions/quality/action.yml").read_text(encoding="utf-8")
+        title = quality.index("- name: Validate the pull request title")
+        for later_step in (
+            "- name: Trust the checked-out workspace",
+            "- name: Refuse the narrow release gate to anything but release bookkeeping",
+            "- name: Point pip at the internal index",
+            "- name: Install developer quality tools",
+            "- name: Run canonical quality gates",
+        ):
+            with self.subTest(step=later_step):
+                self.assertLess(title, quality.index(later_step))
+
     def test_workflow_follows_the_tag_instead_of_pinning_one_release(self) -> None:
         """A pinned trigger silently builds nothing for the next release.
 
