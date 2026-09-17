@@ -14,6 +14,7 @@ from agent_artifacts.application.consumer_ui import (
     reduce_consumer_ui,
 )
 from agent_artifacts.application.consumer_views import (
+    SETTING_ROWS,
     ApplicationScreen,
     ConsumerScreen,
     ConsumerSession,
@@ -186,7 +187,9 @@ class MaintainerModeBoundaryTest(unittest.TestCase):
         terminal = _Terminal(
             *(DOWN for _ in range(7)),
             ENTER,
-            *(DOWN for _ in range(3)),
+            # Counted from the row list rather than written as a number, so adding a setting
+            # above Maintainer Mode moves the cursor rather than silently toggling its neighbour.
+            *(DOWN for _ in range(SETTING_ROWS.index("maintainer-mode"))),
             ENTER,
             ESCAPE,
             *(DOWN for _ in range(8)),

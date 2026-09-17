@@ -430,7 +430,6 @@ class Request:
     source_id: Optional[str] = None
     display_name: Optional[str] = None
     # Optional registry-owned GitHub Issues destination advertised by ``registry init``.
-    usage_reporting_repository: Optional[str] = None
     summary: Optional[str] = None
     collection_members: Tuple[str, ...] = ()
     # Discovery emits, and batch vendoring consumes, one reviewable JSON manifest.  The checkout
@@ -474,9 +473,6 @@ class Request:
     publisher_source_id: Optional[str] = None
     security_registry_inputs_digest: Optional[str] = None
     publisher_trust: Optional[str] = None
-    reporting_action: Optional[str] = None
-    reporting_input: Optional[str] = None
-    reporting_output: Optional[str] = None
     # Canonical configured-source command surface.
     source_action: Optional[str] = None
     source_alias: Optional[str] = None

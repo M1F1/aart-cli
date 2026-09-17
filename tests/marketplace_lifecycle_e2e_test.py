@@ -22,7 +22,6 @@ from agent_artifacts import cli
 from agent_artifacts.application.sources import SourceSyncPorts, SourceSyncRequest, sync_source
 from agent_artifacts.configuration.model import (
     ConfiguredSource,
-    ReportingSettings,
     SourceKind,
     SyncSettings,
     UserConfiguration,
@@ -93,9 +92,7 @@ class _Environment:
         config_path = Path(self.paths.user_config_file)
         config_path.parent.mkdir(parents=True, exist_ok=True)
         config_path.write_bytes(
-            user_configuration_bytes(
-                UserConfiguration(1, (self.source,), None, SyncSettings(), ReportingSettings())
-            )
+            user_configuration_bytes(UserConfiguration(1, (self.source,), None, SyncSettings()))
         )
         self._synchronize()
 

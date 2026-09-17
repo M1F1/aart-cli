@@ -73,7 +73,6 @@ def _configuration(*sources: ConfiguredSource, default: str | None = None) -> Us
         sources,
         None if default is None else SourceAlias(default),
         baseline.sync,
-        baseline.reporting,
     )
 
 

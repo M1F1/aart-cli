@@ -42,7 +42,6 @@ from agent_artifacts import cli
 from agent_artifacts.configuration.model import (
     ConfiguredSource,
     OrganizationPolicy,
-    ReportingSettings,
     SourceAlias,
     SourceKind,
     SyncSettings,
@@ -186,11 +185,7 @@ class _Environment:
         config_path.write_bytes(
             user_configuration_bytes(
                 UserConfiguration(
-                    1,
-                    (self.registry_source,),
-                    self.registry_source.alias,
-                    SyncSettings(),
-                    ReportingSettings(),
+                    1, (self.registry_source,), self.registry_source.alias, SyncSettings()
                 )
             )
         )

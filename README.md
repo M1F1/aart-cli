@@ -49,8 +49,72 @@ both filled in.
 | Downloaded wheel | `python -m pip install --no-deps ./aart_cli-X.Y.Z-py3-none-any.whl` | `pipx install ./aart_cli-X.Y.Z-py3-none-any.whl` | `uv tool install ./aart_cli-X.Y.Z-py3-none-any.whl` |
 | Release wheel by URL | `python -m pip install --no-deps <the wheel's address on the release>` | `pipx install <the wheel's address on the release>` | `uv tool install <the wheel's address on the release>` |
 
-The Git row leads because it is the only one that needs nothing arranged first: `git+https://` goes
-through git, and git uses the credentials you already push with.
+### The short way: copy the wheel's link, paste one line
+
+The full shape of a wheel install names the version three times, which is three chances to mistype
+it. With `uv`, where `<repository>` is the address you are reading this in and `X.Y.Z` is the
+release you want:
+
+```sh
+uv tool install --force "<repository>/releases/download/vX.Y.Z/aart_cli-X.Y.Z-py3-none-any.whl"
+```
+
+Nobody should type that. **Copy the link instead, and let the shell read your clipboard.** On the
+release page, under **Assets**, right-click `aart_cli-X.Y.Z-py3-none-any.whl` and choose *Copy link
+address*. Then paste whichever of these you use -- each one is complete as written, with no
+placeholder left to fill in:
+
+```sh
+uv tool install --force "$(pbpaste)"
+```
+
+```sh
+pipx install --python "$(command -v python3)" --force "$(pbpaste)"
+```
+
+```sh
+python -m pip install --no-deps --force-reinstall "$(pbpaste)"
+```
+
+The version never appears, because the address you copied already carries it. `uv tool` and `pipx`
+build an isolated tool environment; the `pip` line installs into **whatever environment is active
+right now**, so use it deliberately.
+
+`pbpaste` is macOS. The same line works elsewhere by swapping it for your clipboard reader --
+`wl-paste` on Wayland, `xclip -o -selection clipboard` on X11, `powershell.exe Get-Clipboard` under
+WSL.
+
+Two things that make this fail, both worth recognising:
+
+- **The clipboard holds something else.** Copying a shell command from a page and then running one
+  of these makes the installer try to install that command as a package name. Check with
+  `pbpaste` alone before you paste.
+- **The release is private.** `pip`, `pipx` and `uv` send no token when fetching a URL, so a
+  private asset returns a sign-in page and the installer fails on a corrupt archive. Use the
+  download-first blocks below instead.
+
+### When the wheel has to be downloaded first
+
+A private release cannot be installed from its URL at all, for the reason above. Download the file
+with something that does authenticate -- the instance's own web UI, or a CLI you are already signed
+in to -- and install the path:
+
+```sh
+uv tool install --force ./aart_cli-X.Y.Z-py3-none-any.whl
+```
+
+```sh
+pipx install --python "$(command -v python3)" --force ./aart_cli-X.Y.Z-py3-none-any.whl
+```
+
+`pipx` is handed `python3` explicitly because the interpreter it cached as its own default may be a
+different or a broken one; whichever it is must be 3.10 or newer. If an install fails complaining
+about a corrupt archive, the downloaded file is probably a saved sign-in page rather than a wheel --
+`python3 -m zipfile -t aart_cli-X.Y.Z-py3-none-any.whl` says so in one line.
+
+The Git row needs no pre-downloaded wheel: `git+https://` uses your Git credentials. It does build
+from source, however, so its environment must be able to obtain the pinned `poetry-core` build
+backend. The downloaded-wheel route avoids that build requirement.
 
 `pipx` and `uv tool` create an isolated tool environment. AART has no runtime dependencies. The
 release wheel is byte-reproducible from its tag; see
@@ -63,7 +127,7 @@ sources work at all.
 
 | Source | Works on a private instance |
 |---|---|
-| Tagged Git repository, no clone | **Yes.** git authenticates, so this row needs nothing set up |
+| Tagged Git repository, no clone | Yes, if git authenticates **and** the build environment can obtain `poetry-core==2.4.0` |
 | Downloaded wheel | Yes, once the file is on disk -- see below for getting it there |
 | Internal index, once the wheel is published to it | Yes. Add `--index-url <your index>` (`--default-index` for `uv`) and ask for `"aart-cli==X.Y.Z"` |
 | Release wheel by URL | **No.** See below |
@@ -277,8 +341,7 @@ passed, what is dropped, and what to configure instead — `https_proxy` is drop
 proxy that is the whole failure.
 
 `registry init` turns an empty checkout into a registry: the two JSON markers, a `.gitignore`,
-the quality workflow (plus the two usage-reporting workflows when `--usage-reporting-repository` is
-given), a `README.md` describing the registry it just made, and a `.aart-version` pinning the AART
+the quality workflow, a `README.md` describing the registry it just made, and a `.aart-version` pinning the AART
 that created it. Those last two are written only when absent — they are the files
 you own afterwards, and AART never compares or overwrites them. The workflows and the JSON are
 managed: hand-edit one and `init` refuses the registry.
@@ -289,10 +352,8 @@ set repository variables — no file in the registry changes. See
 
 ```sh
 # Create a registry
-aart registry init --source . --source-id company --display-name "Company Registry" \
-  --usage-reporting-repository acme/agent-registry
-aart registry init --source . --source-id company --display-name "Company Registry" \
-  --usage-reporting-repository acme/agent-registry --yes
+aart registry init --source . --source-id company --display-name "Company Registry"
+aart registry init --source . --source-id company --display-name "Company Registry" --yes
 
 # Author a package, or review a native package from another repository
 aart registry scaffold skill code-review --source . --summary "Review code." \
@@ -370,7 +431,6 @@ aart doctor
 aart reset
 aart registry init|scaffold|collection|scan|promote|adopt|check-upstream|discover|format|promote-native|vendor|vendor-batch|revendor|refresh-native|validate|lock|build|audit|publish|push|test|diff
 aart security scan|show|verify|analyzers|suites
-aart reporting validate-event|validate-issue|aggregate
 aart upgrade --wheel FILE | --source-checkout DIR
 ```
 
@@ -468,6 +528,17 @@ and a real one did not. Run a single gate with `make <gate>`.
 
 Four of the ten — `unit`, `integration`, `validate`, `docs-check` — need nothing installed beyond
 Python itself.
+
+One more gate exists that the full run does not include:
+
+| Gate | Command | Depends on |
+|---|---|---|
+| `release-bump` | `unittest` over the release policy, release, packaging and install-command tests | stdlib |
+
+It is selectable by name and deliberately outside `make quality`, because every module it names is
+already discovered by `unit` and the full run would prove one thing twice. It exists for the release
+pull request, which is gated on what it changes rather than on everything (INV-096); see
+[`docs/ci/workflows-v1.md`](docs/ci/workflows-v1.md).
 
 ## Releasing
 

@@ -4,8 +4,6 @@ import unittest
 
 from agent_artifacts.configuration.model import (
     ConfiguredSource,
-    ReportingMode,
-    ReportingSettings,
     SourceKind,
     SyncMode,
     SyncSettings,
@@ -44,16 +42,14 @@ class ConfigurationPolicyTest(unittest.TestCase):
             """{
               "schema_version":1,
               "sources":[{"alias":"company","kind":"registry-git","url":"https://github.company.example/agents/registry.git","ref":"main","enabled":true}],
-              "sync":{"mode":"auto","max_age_seconds":900},
-              "reporting":{"mode":"disabled"}
+              "sync":{"mode":"auto","max_age_seconds":900}
             }"""
         )
         policy = _policy(
             """{
               "schema_version":1,
               "allowed_git_hosts":["github.company.example"],
-              "allowed_repository_prefixes":["agents/"],
-              "reporting":{"mode":"prompt","destination":"company","deny_public_destinations":true}
+              "allowed_repository_prefixes":["agents/"]
             }"""
         )
 
@@ -72,35 +68,7 @@ class ConfigurationPolicyTest(unittest.TestCase):
         self.assertEqual(str(result.value.configuration.default_registry), "company")
         self.assertIs(result.value.configuration.sync.mode, SyncMode.MANUAL)
         self.assertEqual(result.value.configuration.sync.max_age_seconds, 10)
-        self.assertIs(result.value.configuration.reporting.mode, ReportingMode.PROMPT)
-        self.assertEqual(str(result.value.configuration.reporting.destination), "company")
-        self.assertEqual(result.value.locked_fields, ("reporting.destination", "reporting.mode"))
-
-    def test_policy_rejects_cli_override_before_any_effect(self) -> None:
-        result = apply_configuration(
-            _config('{"schema_version":1}'),
-            RuntimeOverrides(reporting_mode=ReportingMode.AUTOMATIC),
-            _policy('{"schema_version":1,"reporting":{"mode":"disabled"}}'),
-        )
-
-        self.assertIsInstance(result, Err)
-        assert isinstance(result, Err)
-        self.assertEqual(result.diagnostics[0].code.value, "source-policy-denied")
-
-        destination_result = apply_configuration(
-            _config(
-                """{
-                  "schema_version":1,
-                  "sources":[
-                    {"alias":"company","kind":"registry-git","url":"https://example.test/company.git","ref":"main","enabled":true},
-                    {"alias":"other","kind":"registry-git","url":"https://example.test/other.git","ref":"main","enabled":true}
-                  ]
-                }"""
-            ),
-            RuntimeOverrides(reporting_destination=SourceAlias("other")),
-            _policy('{"schema_version":1,"reporting":{"mode":"prompt","destination":"company"}}'),
-        )
-        self.assertIsInstance(destination_result, Err)
+        self.assertEqual(result.value.locked_fields, ())
 
     def test_policy_checks_direct_sources_hosts_prefixes_and_required_aliases(self) -> None:
         direct = _config(
@@ -171,26 +139,7 @@ class ConfigurationPolicyTest(unittest.TestCase):
         )
         self.assertIsInstance(direct_denied, Err)
 
-        locked_override = apply_configuration_for_source_management(
-            company_only,
-            _policy('{"schema_version":1,"reporting":{"mode":"disabled"}}'),
-            RuntimeOverrides(reporting_mode=ReportingMode.PROMPT),
-        )
-        self.assertIsInstance(locked_override, Err)
-
-    def test_public_reporting_destination_is_denied_and_diagnostics_are_redacted(self) -> None:
-        config = _config(
-            """{
-              "schema_version":1,
-              "sources":[{"alias":"public","kind":"registry-git","url":"https://github.com/example/public.git","ref":"main","enabled":true}],
-              "reporting":{"mode":"prompt","destination":"public"}
-            }"""
-        )
-        policy = _policy('{"schema_version":1,"reporting":{"deny_public_destinations":true}}')
-
-        result = apply_configuration(config, RuntimeOverrides(), policy)
-
-        self.assertIsInstance(result, Err)
+    def test_diagnostics_are_redacted(self) -> None:
         self.assertEqual(
             redact_text(
                 "failed "
@@ -213,7 +162,6 @@ class ConfigurationPolicyTest(unittest.TestCase):
         invalid_runtime = (
             RuntimeOverrides(max_age_seconds=-1),
             RuntimeOverrides(default_registry=SourceAlias("missing")),
-            RuntimeOverrides(reporting_mode=ReportingMode.AUTOMATIC),
         )
         for overrides in invalid_runtime:
             with self.subTest(overrides=overrides):
@@ -228,13 +176,7 @@ class ConfigurationPolicyTest(unittest.TestCase):
         local = ConfiguredSource(
             SourceAlias("local"), SourceKind.SOURCE_LOCAL, "/work/source", None, True
         )
-        direct = UserConfiguration(
-            1,
-            (malformed_git, local),
-            None,
-            SyncSettings(),
-            ReportingSettings(),
-        )
+        direct = UserConfiguration(1, (malformed_git, local), None, SyncSettings())
         denied = apply_configuration(
             direct,
             RuntimeOverrides(),
@@ -244,20 +186,18 @@ class ConfigurationPolicyTest(unittest.TestCase):
         assert isinstance(denied, Err)
         self.assertGreaterEqual(len(denied.diagnostics), 3)
 
-    def test_allowed_constraints_and_private_reporting_destination_succeed(self) -> None:
+    def test_allowed_constraints_succeed(self) -> None:
         configuration = _config(
             """{
               "schema_version":1,
-              "sources":[{"alias":"private","kind":"registry-git","url":"https://git.company.test/team/registry.git","ref":"main","enabled":true}],
-              "reporting":{"mode":"automatic","destination":"private"}
+              "sources":[{"alias":"private","kind":"registry-git","url":"https://git.company.test/team/registry.git","ref":"main","enabled":true}]
             }"""
         )
         policy = _policy(
             """{
               "schema_version":1,
               "allowed_git_hosts":["git.company.test"],
-              "allowed_repository_prefixes":["team/"],
-              "reporting":{"deny_public_destinations":true}
+              "allowed_repository_prefixes":["team/"]
             }"""
         )
 
@@ -265,28 +205,6 @@ class ConfigurationPolicyTest(unittest.TestCase):
             apply_configuration(configuration, RuntimeOverrides(), policy),
             Ok,
         )
-
-    def test_reporting_destination_must_remain_an_enabled_registry(self) -> None:
-        local = ConfiguredSource(
-            SourceAlias("local"), SourceKind.SOURCE_LOCAL, "/work/source", None, True
-        )
-        configuration = UserConfiguration(
-            1,
-            (local,),
-            None,
-            SyncSettings(),
-            ReportingSettings(ReportingMode.PROMPT, SourceAlias("local")),
-        )
-
-        result = apply_configuration(
-            configuration,
-            RuntimeOverrides(),
-            _policy('{"schema_version":1}'),
-        )
-
-        self.assertIsInstance(result, Err)
-        assert isinstance(result, Err)
-        self.assertEqual(result.diagnostics[0].code.value, "source-policy-denied")
 
 
 if __name__ == "__main__":

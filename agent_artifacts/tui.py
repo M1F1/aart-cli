@@ -21,7 +21,6 @@ from dataclasses import dataclass, replace
 from datetime import date
 from typing import Callable, List, Literal, Mapping, Optional, Sequence, Tuple
 
-from . import __version__
 from .application.consumer_ui import (
     ConsumerUiEventKind,
     ConsumerUiState,
@@ -33,7 +32,7 @@ from .application.consumer_ui import (
     opening_state,
 )
 from .application.consumer_views import ConsumerScreen, ConsumerSession
-from .application.installed_setup import DeclaredArtifactSetup
+from .application.installed_setup import DeclaredArtifactSetup, SetupRunState
 from .configuration.model import ConfiguredSource
 from .configuration.paths import ConfigPaths
 from .consumer import (
@@ -64,15 +63,6 @@ from .io.maintainer_views import read_maintainer_views
 from .model import (
     Request,
 )
-from .reporting.application import ReportingApplicationService
-from .reporting.model import ReportingPlan, UsageReport
-from .reporting.projection import (
-    RegistryUsageReport,
-    SetupReportState,
-    usage_report_from_consumer,
-    usage_reports_by_registry_from_consumer,
-)
-from .reporting.runtime import load_local_reporting_service
 from .setup import (
     SETUP_EFFECT_PROMPT,
     SETUP_QUEUE_PROMPT,
@@ -146,10 +136,10 @@ def _dispatch(request: Request) -> int:
 @dataclass(frozen=True, slots=True)
 class _CanonicalSetupRun:
     exit_code: int
-    reporting: Tuple[SetupReportState, ...]
+    states: Tuple[SetupRunState, ...]
 
 
-def _setup_reporting_failure(status: str) -> Tuple[str, str] | None:
+def _setup_state_failure(status: str) -> Tuple[str, str] | None:
     if status in {"configured", "already-configured", "not-required"}:
         return None
     if status == "verification-failed":
@@ -161,7 +151,7 @@ def _setup_reporting_failure(status: str) -> Tuple[str, str] | None:
     return ("setup-installer", f"setup-{status}")
 
 
-def _setup_reporting_key(
+def _setup_state_key(
     review: ConsumerReview,
     coordinate: ArtifactCoordinate,
     profile: str,
@@ -226,7 +216,6 @@ class _CanonicalTerminalCompletion:
     service: ConsumerApplicationService | ConfiguredSetupService
     review: ConsumerReview
     outcome: ConsumerOutcome
-    reporting: ReportingApplicationService | None
     pending_setup: tuple[DeclaredArtifactSetup, ...]
     source: Callable[[tuple[DeclaredArtifactSetup, ...]], ConsumerScreenSource]
 
@@ -236,7 +225,6 @@ class _CanonicalTerminalCompletion:
             self.service,
             self.review,
             self.outcome,
-            self.reporting,
             read=conversation.read,
             write=conversation.write,
         )
@@ -297,7 +285,7 @@ def _canonical_setup_run(
             write(line)
     if not queue.plans:
         plan_failures = tuple(
-            SetupReportState(
+            SetupRunState(
                 failure.key,
                 "planning-failed",
                 failure_phase="queue",
@@ -346,8 +334,8 @@ def _canonical_setup_run(
             ):
                 write(line)
         declined = tuple(
-            SetupReportState(
-                _setup_reporting_key(
+            SetupRunState(
+                _setup_state_key(
                     review,
                     plan.request.coordinate,
                     plan.request.profile,
@@ -361,7 +349,7 @@ def _canonical_setup_run(
             for plan in queue.plans
         )
         planning = tuple(
-            SetupReportState(
+            SetupRunState(
                 failure.key,
                 "planning-failed",
                 failure_phase="queue",
@@ -470,21 +458,21 @@ def _canonical_setup_run(
         reminders=run_reload_reminders(tuple(item.record for item in setup_outcome.items)),
     ):
         write(line)
-    reported_states: List[SetupReportState] = []
+    reported_states: List[SetupRunState] = []
     for item in setup_outcome.items:
         key = f"{item.coordinate}#{item.profile}/{item.scope}"
-        reporting_key = _setup_reporting_key(
+        state_key = _setup_state_key(
             review,
             item.coordinate,
             item.profile,
             item.scope,
         )
         status = item.setup_status.value
-        failure_spec = _setup_reporting_failure(status)
+        failure_spec = _setup_state_failure(status)
         setup_plan = plan_by_key.get(key)
         reported_states.append(
-            SetupReportState(
-                reporting_key,
+            SetupRunState(
+                state_key,
                 status,
                 None if setup_plan is None else setup_plan.recipe_digest,
                 None if failure_spec is None else failure_spec[0],
@@ -492,7 +480,7 @@ def _canonical_setup_run(
             )
         )
     reported_states.extend(
-        SetupReportState(
+        SetupRunState(
             queue_failure.key,
             "planning-failed",
             failure_phase="queue",
@@ -506,68 +494,10 @@ def _canonical_setup_run(
     )
 
 
-def _offer_prepared_usage_report(
-    service: ReportingApplicationService,
-    plan: ReportingPlan,
-    *,
-    read: ReadFn,
-    write: WriteFn,
-) -> None:
-    target = f"{plan.destination.host}/{plan.destination.repository}"
-    if plan.destination.mode.value == "prompt":
-        answer = _read_line(read, f"Share this redacted usage report with {target}? [y/N]: ")
-        if answer is None or answer.strip().lower() not in ("y", "yes"):
-            write("Usage report was not submitted.")
-            return
-    write("Exact redacted usage report payload:")
-    write(plan.payload.decode("utf-8").strip())
-    if plan.destination.mode.value == "prompt":
-        answer = _read_line(read, "Open the prefilled GitHub issue? [y/N]: ")
-        if answer is None or answer.strip().lower() not in ("y", "yes"):
-            write("Usage report was not submitted.")
-            return
-    submitted = service.submit(plan)
-    if isinstance(submitted, DomainErr):
-        write("warning: usage report submission failed; the artifact outcome is unchanged")
-        return
-    write(
-        "Usage report opened in the browser."
-        if submitted.value.status == "browser-opened"
-        else "Usage report submitted."
-    )
-
-
-def _offer_routed_usage_reports(
-    service: ReportingApplicationService | None,
-    combined: UsageReport,
-    routed: Tuple[RegistryUsageReport, ...],
-    *,
-    read: ReadFn,
-    write: WriteFn,
-) -> None:
-    if service is None:
-        return
-    selected_aliases = {report.source_alias for report in routed}
-    for notice in service.notices:
-        if notice.source_alias in selected_aliases:
-            write(f"Usage report not offered for registry {notice.source_alias}: {notice.reason}.")
-    prepared = service.prepare_routed(combined, routed)
-    if isinstance(prepared, DomainErr):
-        write("warning: usage reports could not be prepared; the artifact outcome is unchanged")
-        return
-    if prepared.value:
-        write("Optional redacted usage reports are available for these artifact registries:")
-        for plan in prepared.value:
-            write(f"  - {plan.destination.host}/{plan.destination.repository}")
-    for plan in prepared.value:
-        _offer_prepared_usage_report(service, plan, read=read, write=write)
-
-
 def _complete_canonical_consumer_action(
     consumer: ConsumerApplicationService | ConfiguredSetupService,
     review: ConsumerReview,
     outcome: ConsumerOutcome,
-    reporting: ReportingApplicationService | None,
     *,
     read: ReadFn,
     write: WriteFn,
@@ -576,27 +506,6 @@ def _complete_canonical_consumer_action(
     if failure_context is not None:
         failure_context.capture_operation("setup")
     setup = _canonical_setup_run(consumer, review, outcome, read=read, write=write)
-    if failure_context is not None:
-        failure_context.capture_operation("reporting")
-    try:
-        event = usage_report_from_consumer(
-            review,
-            outcome,
-            setup.reporting,
-            aart_version=__version__,
-            interface="tui",
-        )
-        routed = usage_reports_by_registry_from_consumer(
-            review,
-            outcome,
-            setup.reporting,
-            aart_version=__version__,
-            interface="tui",
-        )
-    except ValueError:
-        write("warning: usage report projection failed; the artifact outcome is unchanged")
-        return setup.exit_code
-    _offer_routed_usage_reports(reporting, event, routed, read=read, write=write)
     return setup.exit_code
 
 
@@ -1167,7 +1076,6 @@ def _canonical_consumer_actions(
             root=project_root,
             registry_id=draft.registry_id,
             display_name=draft.display_name,
-            usage_reporting_repository=draft.usage_reporting or None,
             commit=draft.commit,
         )
         if isinstance(report, DomainErr):
@@ -1248,12 +1156,12 @@ def _canonical_consumer_actions(
         host: InstallationHost,
     ) -> ConsumerActionCompletion:
         # A registry can be connected without restarting the shell. Re-read here so setup and
-        # reporting after the next install use the configuration that authorized that install,
+        # setup after the next install uses the configuration that authorized that install,
         # never the snapshot from before onboarding.
         current_configuration = _canonical_consumer_configuration(paths)
         if isinstance(current_configuration, DomainErr):
             return _UnavailableTerminalCompletion(
-                "setup/reporting completion is unavailable; the installed payload is unchanged",
+                "setup completion is unavailable; the installed payload is unchanged",
                 completed.pending_setup,
                 source,
             )
@@ -1265,21 +1173,15 @@ def _canonical_consumer_actions(
         )
         if isinstance(projected, DomainErr):
             return _UnavailableTerminalCompletion(
-                "setup/reporting completion is unavailable; the installed payload is unchanged",
+                "setup completion is unavailable; the installed payload is unchanged",
                 completed.pending_setup,
                 source,
             )
         review, outcome, service = projected.value
-        reporting_result = load_local_reporting_service(
-            user_home=home,
-            configuration=current_configuration.value.configuration,
-        )
-        reporting = reporting_result.value if isinstance(reporting_result, DomainOk) else None
         return _CanonicalTerminalCompletion(
             service,
             review,
             outcome,
-            reporting,
             completed.pending_setup,
             source,
         )

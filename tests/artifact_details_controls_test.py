@@ -25,6 +25,7 @@ from agent_artifacts.application.consumer_views import (
     ConsumerSession,
     PresentationProfile,
     project_dashboard,
+    target_from_row,
 )
 from agent_artifacts.configuration.model import SourceKind
 from agent_artifacts.domain.harness import Scope
@@ -398,7 +399,13 @@ class DetailsAgreesWithReviewSelectionE2ETest(unittest.TestCase):
                 row, review, _terminal, _ = self._details_then_review(_skill(harnesses))
 
                 self.assertIs(review.session.screen, ConsumerScreen.REVIEW_SELECTION)
-                offered = tuple(item.removeprefix("target:") for item in review.rows)
+                # Screen 05 also carries the installation-scope rows (issue #11a), which are a
+                # different question; the harnesses are the target rows.
+                offered = tuple(
+                    harness
+                    for harness in (target_from_row(item) for item in review.rows)
+                    if harness is not None
+                )
                 self.assertEqual(row.eligible_harnesses, offered)
                 self.assertTrue(set(expected) >= set(offered))
                 self.assertIn("claude", offered)

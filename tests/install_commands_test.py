@@ -39,6 +39,31 @@ class LinesTest(unittest.TestCase):
         self.assertIn("send no token", block)
         self.assertIn("sign-in page", block)
 
+    def test_the_wheel_can_be_installed_from_the_clipboard_by_every_installer(self) -> None:
+        """The reader is already on the page holding the link; typing the version is the only work
+        left, and it is the only step that can go wrong silently."""
+
+        block = install_commands.lines("https://ghe.example.org/platform/aart", "2.9.0")
+
+        for command in (
+            'uv tool install --force "$(pbpaste)"',
+            'pipx install --python "$(command -v python3)" --force "$(pbpaste)"',
+            'python -m pip install --no-deps --force-reinstall "$(pbpaste)"',
+        ):
+            with self.subTest(command=command):
+                self.assertIn(command, block)
+
+    def test_the_clipboard_form_says_what_to_copy_and_what_breaks_it(self) -> None:
+        """A command that reads the clipboard is only correct if the clipboard is. The two ways it
+        is not -- a non-macOS reader and a clipboard holding something else -- are named where the
+        command is, not in a page somebody would have to already suspect."""
+
+        block = install_commands.lines("https://ghe.example.org/platform/aart", "2.9.0")
+
+        self.assertIn("Copy link address", block)
+        self.assertIn("wl-paste", block)
+        self.assertIn("pbpaste` is macOS", block)
+
 
 class RepositoryUrlTest(unittest.TestCase):
     def test_an_instance_and_github_com_are_told_apart(self) -> None:

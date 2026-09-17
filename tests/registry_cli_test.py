@@ -80,14 +80,12 @@ class RegistryCliTest(unittest.TestCase):
         self.assertTrue(captured[0].check)
         self.assertTrue(captured[0].json)
 
-    def test_init_preserves_the_optional_usage_reporting_repository(self) -> None:
-        request = cli._to_request(
+    def test_init_rejects_the_withdrawn_usage_reporting_option(self) -> None:
+        with self.assertRaises(SystemExit) as raised:
             cli.build_parser().parse_args(
                 [
                     "registry",
                     "init",
-                    "--source",
-                    "/tmp/registry",
                     "--source-id",
                     "company",
                     "--display-name",
@@ -96,14 +94,7 @@ class RegistryCliTest(unittest.TestCase):
                     "acme/agent-artifacts-registry",
                 ]
             )
-        )
-        curation = registry_command._curation_request(request, CurationAction.INIT)
-        assert isinstance(curation, Ok), curation
-
-        self.assertEqual(
-            curation.value.usage_reporting_repository,
-            "acme/agent-artifacts-registry",
-        )
+        self.assertEqual(raised.exception.code, 2)
 
     def test_the_compatibility_ceiling_defaults_to_the_running_aart(self) -> None:
         # The upper compatibility point is whichever AART is publishing, not a version frozen in

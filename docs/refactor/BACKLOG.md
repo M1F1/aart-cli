@@ -3274,14 +3274,16 @@ registries. Not critical to CP-24; a test with one Candidate per registry would 
 Same run: replacing `published_at_epoch_seconds` with `None` survives. The field is rendered in the
 Source detail, so a rendering assertion over a known publication time would hold it.
 
-## B-132 — A review offers no way to choose the Python backend
+## B-132 — SCHEDULED AS CP-25.11: a review offers no way to choose the Python backend
 
 CP-24.04 (D-283) reduced a dependency contract to one offer, naming the backend that will run, which
 is what issue #7 asked for. A reader who wants the other usable backend still has only policy
 (`allowed_python_installers`) to say so, and policy is not where a one-off choice belongs. If that
 demand appears, it is one choice with one selected — never two changes to approve — and the selection
 rule (`chosen_installer`) already takes a preference, so the work is carrying the reader's answer to
-it. Not critical: the backend that runs is now the one the review names.
+it. The owner requested that choice in issue #11 and moved every open issue into CP-25 on
+2026-09-17. D-291 schedules it as CP-25.11; the backend that runs must remain the one the review
+names.
 
 ## B-133 — A Python dependency specification's serialized shape is unheld
 
@@ -3291,7 +3293,7 @@ mutants, which the scoped test set does not reach at all. Both functions are the
 plan and a receipt carry, so a key renamed or a value dropped is a compatibility change nothing
 notices. Not critical to CP-24; one round-trip assertion per function would hold them.
 
-## B-134 — The registry's Pages escape hatch does not escape anything
+## B-134 — SCHEDULED AS CP-25.06: the registry's Pages escape hatch does not escape anything
 
 Found while removing `actions/setup-python` (CP-24.10). The same trap the tool's own workflows had
 sits in the registry template `registry init` writes: `actions/upload-pages-artifact@v3` and
@@ -3303,3 +3305,80 @@ condition to job level, so the publishing job is skipped rather than its steps. 
 CP-24, which is about the tool's own release; the registry template is a separate contract and
 `plan_registry_init` refuses a registry whose managed file has drifted, so changing it is a
 migration rather than an edit.
+
+## B-135 — PROMOTED TO CP-25.15: validate the pull request title before expensive quality work
+
+Status: PROMOTED
+Discovered in: CP-25 follow-up / Enterprise fork CI smoke test (2026-09-17)
+Why useful: A smoke PR titled `test` ran the quality gates before
+`scripts/conventional_title.py` rejected its title. The existing check is the last step of
+`.github/actions/quality/action.yml`, so an invalid release-semantic input wastes the full gate run
+on every matrix interpreter before giving the operator an actionable error.
+Why noncritical when discovered: The title was already refused by the required `pr-check`; this
+changed feedback latency, not merge safety or release classification. The owner explicitly added it
+to CP-25 as task 15 after the first fourteen tasks were complete (D-300).
+Potential approach: Move the existing title-validation step to the very beginning of the composite
+action, before workspace trust, release-PR scope checking, pip-index setup, developer-tool
+installation and `scripts/quality.py`. Keep the same `pull_request` guard, `PR_TITLE` binding and
+validator. Do not add a second workflow or change branch protection. First add a workflow-shape test
+that fails on the present ordering; then move the step and run the relevant gates. A targeted
+ordering mutation must turn the new test red.
+Invariants touched: INV-090 and INV-092 (the title remains the release-semantic input); INV-103
+(feedback latency). No product or release-policy semantics change.
+Evidence/links: `.github/actions/quality/action.yml`, `scripts/conventional_title.py`,
+`tests/release_workflow_test.py`; owner's CI smoke report: `pull request title is not a conventional
+commit: 'test'` after the full gate run.
+Acceptance: An invalid title reaches the validator as the action's first step and fails before any
+tool installation or quality gate; `test: verify fork CI` continues to the unchanged full gate set.
+Changing a PR title alone still does not retrigger the current workflow; that separate event-policy
+question is out of scope.
+Promotion condition: Met by the owner's explicit CP-25.15 instruction on 2026-09-17 (D-300).
+The task is implemented; see the slice's acceptance evidence.
+
+## B-136 — Publish a per-release checksum for wheel download verification
+
+Status: OPEN
+Discovered in: CP-25 post-review Enterprise installation discussion (2026-09-17)
+Why useful: A checksum distributed with each wheel would let an operator verify downloaded bytes
+before `pipx` or `uv tool` installs them, including when a release URL returned unexpected content.
+Why noncritical now: The release action already verifies the wheel against the tag before attaching
+it, and the owner asked for a simple README command without checksum for now. A downloaded wheel's
+archive shape is checked before the documented install, but that is not an authenticity check.
+Potential approach: Publish a checksum as a distinct release asset or an explicitly supported
+release-metadata field, then document a fail-closed verify-before-install command for public and
+Enterprise releases. Decide how the expected digest is authenticated, not just where it is copied.
+Invariants touched: INV-098, INV-099; release artifact integrity and supply-chain provenance.
+Evidence/links: `README.md` installation section and `.github/actions/release/action.yml`.
+Promotion condition: Owner requests a verifiable download contract or a release acceptance test
+requires client-side digest comparison.
+
+## B-137 — `doctor` crashes when a source's local alias differs from its registry's own alias
+
+Status: OPEN
+Discovered in: CP-25 follow-up / running the released `aart doctor` against a real machine
+(2026-09-17)
+Why useful: `aart doctor` exits with an unhandled `ValueError: offline source readiness is
+inconsistent` and a Python traceback. The failing clause is
+`agent_artifacts/application/offline_readiness.py:56`,
+`any(item.coordinate.source != self.alias for item in self.artifacts)`. A configured source's alias
+is a *local* name for a remote origin, but the coordinates published inside that registry carry the
+registry's own alias. The invariant assumes the two are equal, which is false for any source added
+under a name the registry does not itself use. Reproduced on a real configuration: alias
+`ci-registry` (kind `registry-git`, ref `qa/publish-v1`) serving
+`aart-test-registry/skill/verification-before-completion@1.0.0`. Reproduced on the CP-25 branch as
+well as on the released 0.1.2, so it is not a regression introduced by this slice.
+Why noncritical when discovered: CP-25 was complete and its pull request already green; this is
+neither caused by nor required for any of its fourteen tasks, so recording it is correct rather than
+expanding the slice. It is, however, the most user-visible failure shape there is — the diagnostic
+command itself crashing — and the owner may reasonably want it fixed before 0.2.0 ships.
+Potential approach: Decide first which value is authoritative. Either the invariant is wrong and
+should compare against the coordinate's source alias rather than the local one (probably by dropping
+that clause and keeping the grouping key explicit), or the io layer is wrong to group a registry's
+foreign-aliased coordinates under the local alias, in which case
+`agent_artifacts/io/offline_readiness.py:93` should partition by `coordinate.source`. Whichever is
+chosen, `read_offline_readiness` must return an `Err` diagnostic rather than letting a domain
+`ValueError` escape to the CLI: INV-175 is that AART says when it cannot do something. A regression
+test should construct a source whose configured alias differs from its published coordinates.
+Promotion condition: Promote if the owner wants `doctor` dependable for 0.2.0, or as soon as any
+user configures a source under an alias of their own choosing — which the `source add` interface
+invites.

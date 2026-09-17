@@ -46,10 +46,15 @@ from agent_artifacts.application.consumer_ui import (
     SourceDraft,
 )
 from agent_artifacts.application.consumer_views import (
+    ConsumerPlanView,
     ConsumerSettings,
     HarnessTargetView,
+    InstallScopeChoiceView,
     LifecyclePlanView,
+    PythonInstallerChoiceView,
     RunningInstallationView,
+    offer_install_scopes,
+    offer_python_installers,
     project_lifecycle_plan,
     project_running_installation,
     target_choice_problems,
@@ -110,6 +115,7 @@ from agent_artifacts.domain.inputs import (
     SecretProviderReference,
 )
 from agent_artifacts.domain.policies import EffectivePolicy
+from agent_artifacts.domain.python_runtime import PythonInstaller
 from agent_artifacts.domain.receipts import ArtifactReceipt, InstallationReceipt, InstalledRecord
 from agent_artifacts.domain.reconciliation import DesiredState
 from agent_artifacts.domain.result import Err, Ok, Result
@@ -510,8 +516,8 @@ _Pending = (
     | PreparedConfiguredConfiguration
 )
 
-#: The host is passed rather than closed over: setup and usage reporting describe the installation
-#: that just happened, and it happened at whichever scope the review was prepared against.
+#: The host is passed rather than closed over: setup describes the installation that just happened,
+#: and it happened at whichever scope the review was prepared against.
 ConfiguredCompletionFactory = Callable[
     [
         CompletedConfiguredInstallation,
@@ -613,8 +619,13 @@ class LocalConsumerActions:
 
         return self._context.settings
 
-    def _host(self) -> InstallationHost:
-        """The machine as the operator's current preference addresses it.
+    def _host(self, chosen: str = "") -> InstallationHost:
+        """The machine as this operation addresses it: a chosen scope, else the preference.
+
+        `chosen` is what one installation decided for itself on the way past (issue #11a, D-295).
+        It is deliberately not written back to the preference: a one-off choice is an answer about
+        this operation, not a new default, and silently rewriting Settings from it would make the
+        preference mean whatever the last install happened to need.
 
         Screen 28 offers `Default scope: Project/User`, and until this read it was a preference the
         application drew and then ignored: composition fixed the host at project scope, so a User
@@ -630,8 +641,46 @@ class LocalConsumerActions:
         """
 
         host = self._context.host
-        scope = Scope.USER if self._context.settings.default_scope == "user" else Scope.PROJECT
+        if chosen not in ("", "project", "user"):
+            raise ValueError("an installation scope must be project or user")
+        named = chosen or self._context.settings.default_scope
+        scope = Scope.USER if named == "user" else Scope.PROJECT
         return host if host.scope is scope else replace(host, scope=scope)
+
+    def _installer_choice(
+        self, prepared: PreparedConfiguredInstallation, preferred: PythonInstaller
+    ) -> PythonInstallerChoiceView | None:
+        """Which Python backends this prepared installation could be resolved by.
+
+        The usable sets come back from the preparation that measured this machine, so the offer and
+        the plan are the same measurement rather than two that can drift. `None` means the question
+        does not arise: nothing in the selection declares Python dependencies (issue #11b).
+        """
+
+        offered = offer_python_installers(prepared.python_installers, preferred=preferred.value)
+        return offered.value if isinstance(offered, Ok) else None
+
+    def _scope_choice(self, plan: ConsumerPlanView, chosen: str) -> InstallScopeChoiceView | None:
+        """Which scopes this selection may install into, seeded by the preference.
+
+        The declared sets come from the Marketplace rows the composition is already holding, so
+        this reads no index and touches no disk. A selection whose members share no scope, or an
+        artifact this composition has no row for, yields `None`: the screen then offers nothing
+        rather than an offer it cannot stand behind (issue #11a).
+        """
+
+        declared = {
+            entry.row.key: entry.row.declared_scopes for entry in self._context.offers.artifacts
+        }
+        sets = tuple(declared[key] for key in plan.selection.resolved if key in declared)
+        if len(sets) != len(plan.selection.resolved):
+            return None
+        offered = offer_install_scopes(
+            sets,
+            project_available=bool(self._context.host.project_root),
+            preferred=chosen or self._context.settings.default_scope,
+        )
+        return offered.value if isinstance(offered, Ok) else None
 
     def _reviewed_host(self) -> InstallationHost:
         """The machine the held review was prepared against, not the one preferences name now.
@@ -1135,7 +1184,6 @@ class LocalConsumerActions:
         refused = registry_identity_refusal(
             registry_id=draft.registry_id,
             display_name=draft.display_name,
-            usage_reporting_repository=draft.usage_reporting or None,
         )
         if refused is not None:
             return self._declined(command, _refusal(refused.diagnostics))
@@ -1145,7 +1193,6 @@ class LocalConsumerActions:
                 "workspace": workspace,
                 "registry_id": draft.registry_id,
                 "display_name": draft.display_name,
-                "usage_reporting": draft.usage_reporting,
                 "commit": draft.commit,
             },
             sort_keys=True,
@@ -1161,7 +1208,6 @@ class LocalConsumerActions:
                     f"  project: {workspace}",
                     f"  registry ID: {draft.registry_id}",
                     f"  display name: {draft.display_name}",
-                    f"  usage reporting: {draft.usage_reporting or 'not enabled'}",
                     f"  local commit: {'yes' if draft.commit else 'no'}",
                     "  next: init writes the registry skeleton, lock pins what it references,",
                     "        build writes its index, then validate and audit check the result",
@@ -1459,7 +1505,8 @@ class LocalConsumerActions:
         previous_receipts: tuple[tuple[ArtifactCoordinate, ArtifactReceipt], ...] = (),
     ) -> ConsumerActionUpdate:
         context = self._context
-        host = self._host()
+        host = self._host(command.install_scope)
+        preferred = PythonInstaller(command.python_installer or context.settings.python_installer)
         sources: tuple[InputValueSource, ...] = tuple(
             PromptedConfigValue(InputId(identifier), value)
             for identifier, value in command.config_answers
@@ -1474,6 +1521,7 @@ class LocalConsumerActions:
             credential_providers=context.credential_providers,
             resolvers=context.credential_providers,
             previous=previous,
+            preferred_installer=preferred,
         )
         if isinstance(prepared, Err):
             return self._declined(command, _refusal(prepared.diagnostics))
@@ -1519,6 +1567,7 @@ class LocalConsumerActions:
                     credential_providers=context.credential_providers,
                     resolvers=context.credential_providers,
                     previous=previous,
+                    preferred_installer=preferred,
                 )
                 if isinstance(prepared, Err):
                     return self._declined(command, _refusal(prepared.diagnostics))
@@ -1581,7 +1630,12 @@ class LocalConsumerActions:
             )
         action = prepared.value.action
         assert action is not None
-        plan = replace(action.flow.plan, targets=targets)
+        plan = replace(
+            action.flow.plan,
+            targets=targets,
+            scope_choice=self._scope_choice(action.flow.plan, command.install_scope),
+            installer_choice=self._installer_choice(prepared.value, preferred),
+        )
         chosen: tuple[str, ...] = ()
         reviewed = prepared.value
         reviewed_host = host
@@ -1601,6 +1655,7 @@ class LocalConsumerActions:
                     credential_providers=context.credential_providers,
                     resolvers=context.credential_providers,
                     previous=previous,
+                    preferred_installer=preferred,
                 )
                 if isinstance(narrowed, Err):
                     return self._declined(command, _refusal(narrowed.diagnostics))

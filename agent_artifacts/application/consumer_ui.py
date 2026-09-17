@@ -27,9 +27,11 @@ from .consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     ConsumerSettings,
+    installer_from_row,
     is_screen_identifier,
     keeps_focus,
     navigation_targets,
+    scope_from_row,
     target_from_row,
 )
 from .maintainer_views import (
@@ -287,23 +289,21 @@ class RegistryInitDraft:
 
     registry_id: str = ""
     display_name: str = ""
-    usage_reporting: str = ""
     commit: bool = False
 
     def __post_init__(self) -> None:
         if any(
             not isinstance(value, str) or any(char in value for char in "\r\n")
-            for value in (self.registry_id, self.display_name, self.usage_reporting)
+            for value in (self.registry_id, self.display_name)
         ) or not isinstance(self.commit, bool):
             raise ValueError("registry init draft is invalid")
 
     def settled(self) -> "RegistryInitDraft":
-        """The same three answers with the spaces around them dropped (`QA-058`).
+        """The two text answers with the spaces around them dropped (`QA-058`).
 
         Screen 46a's status bar offers `[Space] Toggle`, and on a text row a printable key is
-        text, so the space it types lands in the answer.  None of the three can carry one at
-        either end -- an identifier is a slug, a display name is one line, a reporting repository
-        is `owner/name` -- so surrounding whitespace is not part of what the operator named and
+        text, so the space it types lands in the answer. Neither text answer can carry one at
+        either end, so surrounding whitespace is not part of what the operator named and
         the identity is judged without it.  Settling happens here, at the boundary that judges,
         rather than while typing, because `Manual Registry` has to stay typeable one key at a
         time.
@@ -313,7 +313,6 @@ class RegistryInitDraft:
             self,
             registry_id=self.registry_id.strip(),
             display_name=self.display_name.strip(),
-            usage_reporting=self.usage_reporting.strip(),
         )
 
 
@@ -415,10 +414,20 @@ class ConsumerUiCommand:
     repository_scan_draft: RepositoryScanDraft | None = None
     targets: tuple[str, ...] = ()
     config_answers: tuple[tuple[str, str], ...] = ()
+    #: The scope this one installation chose, or empty to follow the stored preference. It travels
+    #: on the command rather than being read from Settings at the boundary, so what was reviewed is
+    #: what is executed even if the preference changes in between (issue #11a).
+    install_scope: str = ""
+    #: Which backend resolves Python dependencies for this one operation, empty meaning "follow the
+    #: preference". Separate from `install_scope`: where files land and what resolves them are two
+    #: questions, and answering one is not answering the other (issue #11b).
+    python_installer: str = ""
 
     def __post_init__(self) -> None:
         if (
             not isinstance(self.kind, ConsumerUiCommandKind)
+            or self.install_scope not in ("", "project", "user")
+            or self.python_installer not in ("", "pip", "uv")
             or (
                 self.screen is not None
                 and not isinstance(self.screen, (ConsumerScreen, MaintainerScreen))
@@ -544,6 +553,13 @@ class ConsumerUiState:
     #: offering a key whose only possible answer is that nothing was prepared (`QA-033`).
     failed_action: ConsumerActionKind | None = None
     #: What the Candidate list is narrowed to. Screen 53 edits it; screen 35 obeys it.
+    #: The scope this installation chose for itself, or empty to follow `settings.default_scope`.
+    #: A one-off choice never rewrites the preference (issue #11a).
+    install_scope: str = ""
+    #: Which backend resolves Python dependencies for this one operation, empty meaning "follow the
+    #: preference". Separate from `install_scope`: where files land and what resolves them are two
+    #: questions, and answering one is not answering the other (issue #11b).
+    python_installer: str = ""
     candidate_filter: MaintainerCandidateFilter = MaintainerCandidateFilter()
     #: Which promotion the Maintainer is reviewing. Screen 42 chooses it; screens 41 and 43 obey
     #: it. Both modes are composed, so this selects a projection rather than causing one.
@@ -582,6 +598,8 @@ class ConsumerUiState:
         if (
             not isinstance(self.session, ConsumerSession)
             or not isinstance(self.settings, ConsumerSettings)
+            or self.install_scope not in ("", "project", "user")
+            or self.python_installer not in ("", "pip", "uv")
             or not _rows_valid(self.rows)
             or not isinstance(self.cursor, int)
             or isinstance(self.cursor, bool)
@@ -1021,6 +1039,46 @@ def _toggle_selection(
         )
         return replace(state, configuration_targets=targets, quit_pending=False), ()
     if state.session.screen is ConsumerScreen.REVIEW_SELECTION:
+        scope = scope_from_row(key)
+        if scope is not None:
+            # Changing the scope re-prepares: review, paths, effects and receipt all have to name
+            # the scope that was chosen, and a plan kept from the previous one would be a review of
+            # somewhere else (issue #11a).  The stored preference is untouched.
+            chosen_scope = replace(state, install_scope=scope, quit_pending=False)
+            if state.action is not ConsumerActionKind.INSTALL:
+                return chosen_scope, ()
+            return chosen_scope, (
+                ConsumerUiCommand(
+                    ConsumerUiCommandKind.PREPARE_ACTION,
+                    action=ConsumerActionKind.INSTALL,
+                    selection=state.selection,
+                    targets=state.targets,
+                    focus=state.focus,
+                    config_answers=state.config_draft.answers,
+                    install_scope=scope,
+                    python_installer=state.python_installer,
+                ),
+            )
+        installer = installer_from_row(key)
+        if installer is not None:
+            # The same reasoning as the scope: the plan records which backend will resolve the
+            # dependencies, so choosing another one is a different plan to review, not the same
+            # plan relabelled (issue #11b). Settings keep saying what they said.
+            chosen_installer = replace(state, python_installer=installer, quit_pending=False)
+            if state.action is not ConsumerActionKind.INSTALL:
+                return chosen_installer, ()
+            return chosen_installer, (
+                ConsumerUiCommand(
+                    ConsumerUiCommandKind.PREPARE_ACTION,
+                    action=ConsumerActionKind.INSTALL,
+                    selection=state.selection,
+                    targets=state.targets,
+                    focus=state.focus,
+                    config_answers=state.config_draft.answers,
+                    install_scope=state.install_scope,
+                    python_installer=installer,
+                ),
+            )
         harness = target_from_row(key)
         if harness is None:
             return state, ()
@@ -1042,6 +1100,8 @@ def _toggle_selection(
                 targets=targets,
                 focus=request_focus,
                 config_answers=state.config_draft.answers,
+                install_scope=state.install_scope,
+                python_installer=state.python_installer,
             ),
         )
     if key in state.selection:
@@ -1213,6 +1273,10 @@ def _request_action(
             targets=state.targets,
             focus=state.focus,
             config_answers=state.config_draft.answers,
+            install_scope=(state.install_scope if action is ConsumerActionKind.INSTALL else ""),
+            python_installer=(
+                state.python_installer if action is ConsumerActionKind.INSTALL else ""
+            ),
         )
         return prepared, (
             command,
@@ -1296,6 +1360,8 @@ def _request_action(
         repository_scan_draft=(
             state.repository_scan_draft if action is ConsumerActionKind.REPOSITORY_SCAN else None
         ),
+        install_scope=(state.install_scope if action is ConsumerActionKind.INSTALL else ""),
+        python_installer=(state.python_installer if action is ConsumerActionKind.INSTALL else ""),
         config_answers=(
             state.config_draft.answers
             if action is ConsumerActionKind.INSTALL
@@ -1726,8 +1792,6 @@ def reduce_consumer_ui(
             init_draft = replace(init_draft, registry_id=event.text)
         elif event.key == "name":
             init_draft = replace(init_draft, display_name=event.text)
-        elif event.key == "reporting":
-            init_draft = replace(init_draft, usage_reporting=event.text)
         elif event.key == "commit" and event.accepted is not None:
             init_draft = replace(init_draft, commit=event.accepted)
         else:
@@ -1944,7 +2008,7 @@ _FORM_TOGGLE_ROWS: dict[ApplicationScreen, str] = {
 _FORM_TEXT_ROWS: dict[ApplicationScreen, frozenset[str]] = {
     ConsumerScreen.REGISTRY_ADD: frozenset({"alias", "url", "ref"}),
     MaintainerScreen.SOURCE_ADD: frozenset({"alias", "location", "ref"}),
-    MaintainerScreen.REGISTRY_INIT: frozenset({"id", "name", "reporting"}),
+    MaintainerScreen.REGISTRY_INIT: frozenset({"id", "name"}),
     MaintainerScreen.REPOSITORY_SCAN: frozenset({"url", "ref"}),
 }
 #: The keys every screen offers, which a form gives up while the cursor is on a text field.
@@ -2286,7 +2350,6 @@ def key_event(
         values = {
             "id": state.registry_init_draft.registry_id,
             "name": state.registry_init_draft.display_name,
-            "reporting": state.registry_init_draft.usage_reporting,
         }
         if key == "escape":
             return ConsumerUiEvent(ConsumerUiEventKind.BACK)

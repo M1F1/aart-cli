@@ -286,8 +286,6 @@ def _services(
                     code, "service repository must be an owner/name coordinate", path=path
                 )
             repository = raw_repository.value
-        if kind.value == "github-issues" and repository is None:
-            return _error(code, "github-issues service requires repository", path=path)
         services.append(ServiceAdvertisement(name, kind.value, repository))
     return Ok(tuple(sorted(services, key=lambda service: service.name)))
 

@@ -45,7 +45,6 @@ def source_selection():
         (source,),
         None,
         baseline.sync,
-        baseline.reporting,
     )
     view = build_source_stage(configuration, OrganizationPolicy(1), {})
     assert isinstance(view, Ok)

@@ -8,7 +8,7 @@ audits, and commits every listed Git change. Only `push` touches a remote, and o
 
 | Command | Effect | Purpose |
 |---|---|---|
-| `init` | writes | Add protocol markers, `.aart-version`, a README, registry CI, and — with `--usage-reporting-repository` — the usage-reporting templates |
+| `init` | writes | Add protocol markers, `.aart-version`, a README, and registry CI |
 | `scaffold` | writes | Add one canonical native artifact manifest and starter payload |
 | `format` | writes, or reads with `--check` | Canonicalize every managed JSON document |
 | `validate` | reads | Validate protocol, compatibility, lock/index, native packages, and graph |
@@ -41,8 +41,7 @@ Start from an empty Git checkout:
 ```console
 git init company-registry
 aart registry init --source company-registry \
-  --source-id company-registry --display-name "Company Registry" \
-  --usage-reporting-repository acme/company-registry
+  --source-id company-registry --display-name "Company Registry"
 ```
 
 The generated quality workflow puts the AART version pinned in `.aart-version` on the runner — from
@@ -51,13 +50,6 @@ it got matches the pin. It then runs format, strict/frozen validation, lock, bui
 minimum/latest compatibility checks. The workflow has read-only repository permissions and contains
 no commit or push step. [Rolling out AART on GitHub Enterprise Server](../ci/github-enterprise-rollout.md)
 lists the variables.
-
-`--usage-reporting-repository OWNER/REPOSITORY` also adds the usage-report Issue Form, its
-validation workflow and the aggregation/Pages workflow, and advertises that repository to
-consumers. An effective AART configuration must still select this registry alias and choose
-`prompt` or `automatic`. Their untrusted-input and
-privacy contract is documented in
-[`optional usage reporting v1`](../reporting/usage-reporting-v1.md).
 
 Create a package with an explicit compatibility and installation contract:
 

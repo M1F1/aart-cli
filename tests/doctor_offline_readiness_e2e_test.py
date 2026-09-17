@@ -18,7 +18,6 @@ from agent_artifacts.application.promotion import (
     project_lifecycle_update,
 )
 from agent_artifacts.configuration.model import (
-    ReportingSettings,
     SourceKind,
     SyncSettings,
     UserConfiguration,
@@ -198,11 +197,7 @@ class DoctorOfflineReadinessE2ETest(unittest.TestCase):
                 location=str(env.root / "local-source"),
             )
             configuration = UserConfiguration(
-                1,
-                (disabled, cold, local, env.source),
-                env.source.alias,
-                SyncSettings(),
-                ReportingSettings(),
+                1, (disabled, cold, local, env.source), env.source.alias, SyncSettings()
             )
             env_config = env.paths.user_config_file
             with open(env_config, "wb") as stream:

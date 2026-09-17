@@ -268,7 +268,6 @@ def _curation_request(request: Request, action: CurationAction) -> Result[Curati
                 review_policy=request.review_policy or "manual-review-v1",
                 source_id=request.source_id,
                 display_name=request.display_name,
-                usage_reporting_repository=request.usage_reporting_repository,
                 # Only `init` declares a compatibility window, and only `init` reads one
                 # back, so every other action arrives here with both unset.  The substitute has to
                 # be the window of the AART that is running; a literal would bind a registry to the

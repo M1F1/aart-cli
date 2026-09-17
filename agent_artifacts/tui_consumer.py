@@ -60,10 +60,14 @@ from agent_artifacts.application.consumer_views import (
     RegistryView,
     RemediationView,
     RunningInstallationView,
+    installer_from_row,
+    installer_row,
     navigation_targets,
     project_collection,
     project_registries,
     remediation_needs_decision,
+    scope_from_row,
+    scope_row,
     target_choice_problems,
     target_from_row,
     target_row,
@@ -342,6 +346,11 @@ def render_user_inputs_area(
 
     lines: list[str] = []
     for coordinate in rows:
+        # One empty line between groups and nowhere else (issue #12). Three lines about one
+        # artifact touching three about the next left the reader counting indentation to tell
+        # whose Credentials line they were reading, which is what a grouped list is for.
+        if lines:
+            lines.append("")
         configurations = screens.configurations_for(coordinate)
         credentials = screens.credentials_for(coordinate)
         mark = ">" if coordinate == current_row else " "
@@ -387,8 +396,12 @@ def render_artifact_user_inputs(
     del coordinate, profile
     lines: list[str] = []
     identifiers = _configuration_identifiers(configurations)
+    # Layout only, and only between things (issue #16): a heading stands off its own rows, and a
+    # completed Configuration block stands off the Credentials heading. No blank opens or closes
+    # the view, and none of them is a row -- `rows` is built from the identifiers and references
+    # themselves, so a separator can never take a cursor or read as a harness with nothing in it.
     if identifiers:
-        lines.append("Configuration")
+        lines.extend(("Configuration", ""))
     for identifier in identifiers:
         row = _user_config_row(identifier)
         lines.append(f"{'>' if current_row == row else ' '} {identifier}")
@@ -397,7 +410,9 @@ def render_artifact_user_inputs(
             shown = "value unavailable" if value is None else value
             lines.append(f"    {file.harness}: {shown} — {_human(file.state)}")
     if credentials:
-        lines.append("Credentials")
+        if lines:
+            lines.append("")
+        lines.extend(("Credentials", ""))
     for credential in credentials:
         row = _user_credential_row(credential.reference)
         status = (
@@ -1140,6 +1155,21 @@ def render_installed_artifact(
         lines.append("Verified against its desired state.")
     if not view.actions:
         lines.append("No action is offered until it is observed.")
+    shown = view.installation if profile is PresentationProfile.VERBOSE else view.user_facing_paths
+    if shown:
+        # Where it is, which is the first thing somebody opens this view to find out (issue #17).
+        # Fast answers with the bytes and the places a harness reads them from; Verbose adds the
+        # rest of what this installation owns. Every line is a recorded path and a measured state,
+        # so a location that is absent or divergent is still named rather than quietly dropped.
+        lines.append(
+            "Installation" + (f" — {view.scope.title()} scope" if view.scope else "") + ":"
+        )
+        lines.extend(
+            f"  - {item.role}: {item.path}"
+            + (f" ({item.harness})" if item.harness else "")
+            + f" — {_human(item.state)}"
+            for item in shown
+        )
     if profile is PresentationProfile.VERBOSE:
         lines.append("Ownership:")
         lines.extend(f"  - {item.kind}: {item.owner}" for item in view.ownership)
@@ -1329,18 +1359,28 @@ def render_settings(view: ConsumerSettings, focus: str = "") -> tuple[str, ...]:
     values = {
         "detail-level": f"Detail level: {view.profile.value.title()}",
         "default-scope": f"Default scope: {view.default_scope.title()}",
+        "python-installer": f"Python installer: {view.python_installer}",
         "show-updates": f"Show available updates: {'on' if view.show_updates else 'off'}",
         "maintainer-mode": f"Maintainer Mode: {'on' if view.maintainer_mode else 'off'}",
     }
     headings = {
         "detail-level": "Experience",
         "default-scope": "Installation",
+        "python-installer": "Installation",
         "show-updates": "Updates",
         "maintainer-mode": "Advanced",
     }
     groups: list[tuple[str, ...]] = []
+    previous = ""
     for row in SETTING_ROWS:
-        groups.append((headings[row], f"{'> ' if row == focus else '  '}{values[row]}"))
+        drawn = f"{'> ' if row == focus else '  '}{values[row]}"
+        # Rows under the same heading are one group: two controls about installation are two
+        # controls, not two sections, and repeating the heading would read as the latter.
+        if headings[row] == previous and groups:
+            groups[-1] = (*groups[-1], drawn)
+        else:
+            groups.append((headings[row], drawn))
+        previous = headings[row]
     return separate(*groups)
 
 
@@ -1579,7 +1619,15 @@ def render_marketplace_artifact(
         if row.trust in {"registry-reviewed", "company-reviewed"}
         else _human(row.trust).title()
     )
-    lines = [row.key, approval, row.summary, "Eligible installation harnesses"]
+    # The description is disclosed in Verbose and on Artifact Details, not repeated here.  What a
+    # choice actually turns on is whether this is already installed and where it can go, so those
+    # lead instead (issue #10).  Search and filtering still read the summary either way.
+    state = (
+        "Installed: " + ", ".join(row.installed_statuses)
+        if row.installed_statuses
+        else "Not installed"
+    )
+    lines = [row.key, approval, state, "Eligible installation harnesses"]
     if row.eligible_harnesses:
         lines.extend(f"  - {harness}" for harness in row.eligible_harnesses)
     else:
@@ -2969,7 +3017,25 @@ class CanonicalScreenSource:
                 for harness in state.targets
                 if all(item.harness != harness for item in plan.targets)
             )
-            return (*eligible, *stale)
+            # Scope follows the harnesses rather than leading them. Row order is cursor order on
+            # this screen, and this screen's act is choosing what to install into; putting the
+            # scope first would move the first keypress of every existing install onto a different
+            # control. It is drawn only when there is something to decide -- a selection with one
+            # possible scope has a fact to state, not a control to offer (issue #11a).
+            scopes = (
+                tuple(scope_row(item) for item in plan.scope_choice.offered)
+                if plan.scope_choice is not None and plan.scope_choice.is_a_choice
+                else ()
+            )
+            # The backend rows sit after the scope rows for the same reason the scope rows sit
+            # after the harnesses: each is an amendment to a plan that already exists, and the
+            # cursor opens on the screen's own subject.
+            installers = (
+                tuple(installer_row(item) for item in plan.installer_choice.offered)
+                if plan.installer_choice is not None and plan.installer_choice.is_a_choice
+                else ()
+            )
+            return (*eligible, *stale, *scopes, *installers)
         if screen is ConsumerScreen.REMEDIATION:
             # CP-23 task 08: Continue is a row, so it is a control rather than a printed string.
             return () if self._screens.plan is None else (ConsumerScreen.READY.value,)
@@ -3112,7 +3178,7 @@ class CanonicalScreenSource:
         if screen is MaintainerScreen.SOURCE_ADD:
             return ("alias", "kind", "location", "ref", "connect")
         if screen is MaintainerScreen.REGISTRY_INIT:
-            return ("id", "name", "reporting", "commit", "initialize")
+            return ("id", "name", "commit", "initialize")
         if screen is MaintainerScreen.REGISTRY_REBUILD:
             # Derived from the sequence itself: a stage the run gains is a row the picker offers.
             return (REGISTRY_REBUILD_EVERYTHING, *REGISTRY_MAINTENANCE_STAGES)
@@ -3770,16 +3836,42 @@ class CanonicalScreenSource:
             return render_maintainer_dashboard(screens.maintainer.dashboard, state.session.profile)
         return ()
 
+    def _review_row(self, row: str, state: ConsumerUiState) -> str:
+        """One line of the review screen: a harness to install into, or where it all lands.
+
+        The two kinds of row are marked differently on purpose. Harnesses are a set -- several may
+        be ticked -- while the scope is one answer, so it is drawn as a radio rather than a box
+        that could read as a second harness (issue #11a).
+        """
+
+        cursor = ">" if row == state.current_row else " "
+        plan = self._screens.plan
+        scope = scope_from_row(row)
+        if scope is not None:
+            selected = (
+                plan.scope_choice.selected
+                if plan is not None and plan.scope_choice is not None
+                else state.install_scope
+            )
+            return f"{cursor} {'(*)' if scope == selected else '( )'} Install into: {scope.title()}"
+        installer = installer_from_row(row)
+        if installer is not None:
+            chosen = (
+                plan.installer_choice.selected
+                if plan is not None and plan.installer_choice is not None
+                else state.python_installer
+            )
+            return (
+                f"{cursor} {'(*)' if installer == chosen else '( )'} Dependencies with: {installer}"
+            )
+        harness = target_from_row(row)
+        return f"{cursor} {'[x]' if harness in state.targets else '[ ]'} {harness}"
+
     def _body(self, state: ConsumerUiState) -> tuple[str, ...]:
         screen, profile = state.session.screen, state.session.profile
         screens = self._screens
         if screen is ConsumerScreen.REVIEW_SELECTION and self.rows(state):
-            return tuple(
-                f"{'>' if row == state.current_row else ' '} "
-                f"{'[x]' if target_from_row(row) in state.targets else '[ ]'} "
-                f"{target_from_row(row)}"
-                for row in state.rows
-            )
+            return tuple(self._review_row(row, state) for row in state.rows)
         if screen is ConsumerScreen.CONFIGURATION_TARGETS:
             return tuple(
                 f"{'>' if row == state.current_row else ' '} "
@@ -4167,14 +4259,12 @@ class CanonicalScreenSource:
             values = {
                 "id": init.registry_id or "<type a name like acme-registry>",
                 "name": init.display_name or "<type what people should call it>",
-                "reporting": init.usage_reporting or "not enabled",
                 "commit": "yes, one local commit" if init.commit else "no, leave the files staged",
                 "initialize": "Review the five stages",
             }
             labels = {
                 "id": "Registry ID",
                 "name": "Display name",
-                "reporting": "Usage reporting",
                 "commit": "Local commit",
                 "initialize": "Continue",
             }

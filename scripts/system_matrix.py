@@ -107,16 +107,6 @@ SCENARIOS: tuple[tuple[str, int, tuple[str, ...]], ...] = (
             "test_timeout_crash_and_malformed_output_become_failed_attempts",
         ),
     ),
-    (
-        "reporting-absent",
-        30,
-        (
-            "tests.reporting_application_test.ReportingApplicationTest."
-            "test_disabled_without_destination_has_no_plan_or_provider_call",
-            "tests.reporting_runtime_test.ReportingRuntimeTest."
-            "test_missing_or_incoherent_registry_snapshot_fails_closed",
-        ),
-    ),
 )
 
 ProcessRunner = Callable[

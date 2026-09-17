@@ -231,7 +231,6 @@ class RegistryProtocolEdgesTest(unittest.TestCase):
             {"usage_reporting": {}},
             {"usage_reporting": {"kind": 1}},
             {"usage_reporting": {"kind": "Bad Kind"}},
-            {"usage_reporting": {"kind": "github-issues"}},
             {"usage_reporting": {"kind": "github-issues", "repository": 1}},
             {
                 "usage_reporting": {
@@ -246,6 +245,12 @@ class RegistryProtocolEdgesTest(unittest.TestCase):
                 value = _manifest()
                 value["services"] = replacement
                 self.assert_invalid(parse_registry_manifest, value)
+
+    def test_service_kinds_have_no_provider_specific_repository_rule(self) -> None:
+        value = _manifest()
+        value["services"] = {"legacy_service": {"kind": "github-issues"}}
+
+        self.assertIsInstance(parse_registry_manifest(_encoded(value)), Ok)
 
     def test_entry_shape_review_source_and_ref_edges_fail_closed(self) -> None:
         top_mutations: tuple[tuple[str, object], ...] = (

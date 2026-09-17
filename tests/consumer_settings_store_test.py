@@ -67,7 +67,14 @@ class ConsumerSettingsValueTest(unittest.TestCase):
         data = settings_to_data(ConsumerSettings().toggled("maintainer-mode"))
 
         self.assertEqual(
-            sorted(data), ["default_scope", "detail_level", "maintainer_mode", "show_updates"]
+            sorted(data),
+            [
+                "default_scope",
+                "detail_level",
+                "maintainer_mode",
+                "python_installer",
+                "show_updates",
+            ],
         )
 
     def test_a_value_this_cannot_mean_is_refused_not_repaired(self) -> None:

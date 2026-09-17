@@ -6,6 +6,7 @@ import contextlib
 import importlib.util
 import io
 import pathlib
+import re
 import subprocess
 import sys
 import tempfile
@@ -55,10 +56,14 @@ class QualitySurfaceTest(unittest.TestCase):
         # because the release run used to be the one place it was ever tried, and the release run
         # no longer runs gates.  Asserting the whole expression keeps both halves honest: a fork
         # that sets nothing gets exactly the run this repository gets.
+        #
+        # Since CP-25 the expression also carries the release-branch arm, and it is long enough to
+        # be written as a folded YAML scalar.  Folding the whitespace here asserts the value GitHub
+        # evaluates rather than where the line breaks were typed; the arm itself is
+        # `release_pr_gate_test.py`'s claim, not this one's.
         self.assertIn(
-            "python-version: ${{ fromJSON(vars.AART_PYTHON_VERSIONS"
-            ' || \'["3.10", "3.11", "3.14"]\') }}',
-            workflow,
+            '|| vars.AART_PYTHON_VERSIONS || \'["3.10", "3.11", "3.14"]\') }}',
+            re.sub(r"\s+", " ", workflow),
         )
         # The steps live in a composite action now: two jobs differ only in how their container
         # image is pulled, and what they run must not be a second copy that can drift.

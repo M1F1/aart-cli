@@ -145,9 +145,8 @@ def registry_identity_refusal(
     *,
     registry_id: str,
     display_name: str,
-    usage_reporting_repository: str | None = None,
 ) -> Err | None:
-    """Whether these three answers can name a registry at all, before any of them is acted on.
+    """Whether these two answers can name a registry at all, before either is acted on.
 
     The same options object `init` builds is the judge, so a form cannot accept an identity the
     canonical action would go on to refuse -- and the refusal is prose, because the screen that
@@ -161,16 +160,16 @@ def registry_identity_refusal(
     if isinstance(maximum, Err):
         return maximum
 
-    def usable(identifier: str, name: str, reporting: str | None) -> bool:
+    def usable(identifier: str, name: str) -> bool:
         try:
-            RegistryInitOptions(identifier, name, minimum.value, maximum.value, reporting)
+            RegistryInitOptions(identifier, name, minimum.value, maximum.value)
         except ValueError:
             return False
         return True
 
-    if usable(registry_id, display_name, usage_reporting_repository):
+    if usable(registry_id, display_name):
         return None
-    # Each answer is judged beside two known-good ones, so the refusal can say which of the three
+    # Each answer is judged beside one known-good answer, so the refusal can say which field
     # on the screen is the one to change (`QA-058`).
     faults = tuple(
         (field, advice)
@@ -178,17 +177,12 @@ def registry_identity_refusal(
             (
                 "Registry ID",
                 "lowercase words joined by dashes, like acme-registry",
-                usable(registry_id, _SPECIMEN_NAME, None),
+                usable(registry_id, _SPECIMEN_NAME),
             ),
             (
                 "Display name",
                 "one line of text, like ACME Registry",
-                usable(_SPECIMEN_ID, display_name, None),
-            ),
-            (
-                "Usage reporting",
-                "owner/repository, or empty to leave it off",
-                usable(_SPECIMEN_ID, _SPECIMEN_NAME, usage_reporting_repository),
+                usable(_SPECIMEN_ID, display_name),
             ),
         )
         if not answered
@@ -247,7 +241,6 @@ def _writing_stage(
     *,
     registry_id: str = "",
     display_name: str = "",
-    usage_reporting_repository: str | None = None,
 ) -> RegistryBootstrapStage:
     """One canonical mutation, prepared and finalized the way the CLI runs it.
 
@@ -263,7 +256,6 @@ def _writing_stage(
             root,
             source_id=registry_id if initializing else None,
             display_name=display_name if initializing else None,
-            usage_reporting_repository=(usage_reporting_repository if initializing else None),
         )
     except ValueError as error:
         return RegistryBootstrapStage(action.value, False, (str(error),))
@@ -321,7 +313,6 @@ def _run_stages(
     *,
     registry_id: str = "",
     display_name: str = "",
-    usage_reporting_repository: str | None = None,
 ) -> Result[tuple[RegistryBootstrapStage, ...]]:
     """Run these stages in the given order, stopping at the first one that does not pass.
 
@@ -349,7 +340,6 @@ def _run_stages(
                 action,
                 registry_id=registry_id,
                 display_name=display_name,
-                usage_reporting_repository=usage_reporting_repository,
             )
         stages.append(stage)
         if not stage.passed:
@@ -415,7 +405,6 @@ def bootstrap_registry_workspace(
     root: str,
     registry_id: str,
     display_name: str,
-    usage_reporting_repository: str | None = None,
     commit: bool = False,
 ) -> Result[RegistryBootstrapReport]:
     """Run init, lock, build, validate and audit over `root`, stopping at the first refusal.
@@ -438,7 +427,6 @@ def bootstrap_registry_workspace(
     identity = registry_identity_refusal(
         registry_id=registry_id,
         display_name=display_name,
-        usage_reporting_repository=usage_reporting_repository,
     )
     if identity is not None:
         return Ok(
@@ -455,7 +443,6 @@ def bootstrap_registry_workspace(
         REGISTRY_BOOTSTRAP_STAGES,
         registry_id=registry_id,
         display_name=display_name,
-        usage_reporting_repository=usage_reporting_repository,
     )
     if isinstance(ran, Err):
         return ran

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from urllib.parse import urlsplit
 
@@ -27,12 +27,6 @@ class SourceKind(str, Enum):
 class SyncMode(str, Enum):
     AUTO = "auto"
     MANUAL = "manual"
-
-
-class ReportingMode(str, Enum):
-    DISABLED = "disabled"
-    PROMPT = "prompt"
-    AUTOMATIC = "automatic"
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,26 +72,11 @@ class SyncSettings:
 
 
 @dataclass(frozen=True, slots=True)
-class ReportingSettings:
-    mode: ReportingMode = ReportingMode.PROMPT
-    destination: SourceAlias | None = None
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.mode, ReportingMode):
-            raise ValueError("reporting mode is invalid")
-        if self.mode is ReportingMode.AUTOMATIC and self.destination is None:
-            raise ValueError("automatic reporting requires an explicit destination")
-        if self.destination is not None and not self.destination.value:
-            raise ValueError("reporting destination must be non-empty")
-
-
-@dataclass(frozen=True, slots=True)
 class UserConfiguration:
     schema_version: int
     sources: tuple[ConfiguredSource, ...]
     default_registry: SourceAlias | None
     sync: SyncSettings
-    reporting: ReportingSettings
 
     def __post_init__(self) -> None:
         if self.schema_version != 1:
@@ -119,21 +98,6 @@ class UserConfiguration:
             # installation.
             raise ValueError("each configured Git source origin and ref pair must be unique")
         object.__setattr__(self, "sources", ordered)
-
-
-@dataclass(frozen=True, slots=True)
-class ReportingPolicy:
-    mode: ReportingMode | None = None
-    destination: SourceAlias | None = None
-    deny_public_destinations: bool = False
-
-    def __post_init__(self) -> None:
-        if self.mode is not None and not isinstance(self.mode, ReportingMode):
-            raise ValueError("reporting policy mode is invalid")
-        if self.destination is not None and not self.destination.value:
-            raise ValueError("reporting policy destination must be non-empty")
-        if not isinstance(self.deny_public_destinations, bool):
-            raise ValueError("reporting public-destination policy must be boolean")
 
 
 @dataclass(frozen=True, slots=True, order=True)
@@ -176,7 +140,6 @@ class OrganizationPolicy:
     minimum_trust_for_user_scope: str | None = None
     allowed_setup_capabilities: tuple[Capability, ...] | None = None
     allow_custom_setup_entrypoints: bool | None = None
-    reporting: ReportingPolicy = field(default_factory=ReportingPolicy)
     company_reviewed_sources: tuple[CompanyReviewedSource, ...] = ()
 
     def __post_init__(self) -> None:
@@ -190,8 +153,6 @@ class OrganizationPolicy:
             and self.minimum_trust_for_user_scope not in TRUST_CLASSES
         ):
             raise ValueError("organization policy minimum trust is invalid")
-        if not isinstance(self.reporting, ReportingPolicy):
-            raise ValueError("organization reporting policy is invalid")
         if not all(
             isinstance(source, CompanyReviewedSource) for source in self.company_reviewed_sources
         ):
@@ -231,7 +192,7 @@ class OrganizationPolicy:
 
 
 def default_user_configuration() -> UserConfiguration:
-    return UserConfiguration(1, (), None, SyncSettings(), ReportingSettings())
+    return UserConfiguration(1, (), None, SyncSettings())
 
 
 def default_organization_policy() -> OrganizationPolicy:

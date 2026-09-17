@@ -304,7 +304,6 @@ class SourceCliCommandTests(unittest.TestCase):
             (existing,),
             existing.alias,
             baseline.sync,
-            baseline.reporting,
         )
         runtime = _runtime(configuration)
         stdout = io.StringIO()
@@ -445,7 +444,6 @@ class SourceCliCommandTests(unittest.TestCase):
             (source,),
             source.alias if default else None,
             baseline.sync,
-            baseline.reporting,
         )
 
     def test_resubscribe_flags_map_to_a_distinct_request_contract(self) -> None:
@@ -783,7 +781,6 @@ class SourceCliCommandTests(unittest.TestCase):
             (source,),
             source.alias,
             configuration.sync,
-            configuration.reporting,
         )
         runtime = _runtime(configuration)
         stdout = io.StringIO()
@@ -843,7 +840,6 @@ class MarketplaceCliCommandTests(unittest.TestCase):
             (source,),
             source.alias,
             configuration.sync,
-            configuration.reporting,
         )
         runtime = _runtime(configuration)
         snapshot = {

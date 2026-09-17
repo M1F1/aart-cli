@@ -502,7 +502,6 @@ credential.** This is the failure that reports success at every layer.
 | `installation effect ownership must be unique across the manifest` | a stale install record under an old source alias still owns the merge key | `marketplace uninstall OLD-ALIAS/mcp/<NAME> --yes`, then install |
 | `JSON merge identity … already differs` on `marketplace update` | the merged entry's body changed between versions | `marketplace update --force --yes` |
 | `setup from unverified requires explicit source authorization` | trust class; a registry's own packages are never `registry-reviewed` | `marketplace setup --authorize-untrusted-source --approve-setup-effects --yes` |
-| `Usage report not offered` | reporting needs a `registry-git` source advertising a `usage_reporting` service | informational; ignore |
 
 Two structural facts behind that table, worth internalizing:
 

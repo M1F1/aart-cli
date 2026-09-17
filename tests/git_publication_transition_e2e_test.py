@@ -27,7 +27,6 @@ from agent_artifacts.application.promotion import (
     load_registry_versions,
 )
 from agent_artifacts.configuration.model import (
-    ReportingSettings,
     SourceKind,
     SyncSettings,
     UserConfiguration,
@@ -111,13 +110,7 @@ class _PublicationLab:
             xdg_cache_home=self.xdg["XDG_CACHE_HOME"],
         )
         self.source = configured_source("company", SourceKind.REGISTRY_GIT)
-        configuration = UserConfiguration(
-            1,
-            (self.source,),
-            self.source.alias,
-            SyncSettings(),
-            ReportingSettings(),
-        )
+        configuration = UserConfiguration(1, (self.source,), self.source.alias, SyncSettings())
         config_path = Path(self.paths.user_config_file)
         config_path.parent.mkdir(parents=True, exist_ok=True)
         config_path.write_bytes(user_configuration_bytes(configuration))

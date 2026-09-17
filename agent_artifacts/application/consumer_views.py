@@ -38,8 +38,15 @@ from agent_artifacts.domain.inputs import (
     validate_config_value,
 )
 from agent_artifacts.domain.plans import InstallPlan, install_plan_to_data
-from agent_artifacts.domain.receipts import RECEIPT_INVALID
+from agent_artifacts.domain.receipts import (
+    RECEIPT_INVALID,
+    ArtifactReceipt,
+    InstallationReceipt,
+    PlacedArtifactReceipt,
+)
 from agent_artifacts.domain.reconciliation import (
+    Component,
+    ComponentId,
     CurrentState,
     DesiredState,
     DriftKind,
@@ -258,6 +265,38 @@ class HarnessTargetView:
             or any(not isinstance(item, str) or not item for item in self.artifacts)
         ):
             raise ValueError("a harness target view is invalid")
+
+
+#: How screen 05 addresses one install-scope row, in the same shape as a harness row so the list
+#: has one kind of control rather than a control and a special case.
+SCOPE_ROW_PREFIX = "scope:"
+
+
+def scope_row(scope: str) -> str:
+    return f"{SCOPE_ROW_PREFIX}{scope}"
+
+
+def scope_from_row(row: str) -> str | None:
+    if not isinstance(row, str) or not row.startswith(SCOPE_ROW_PREFIX):
+        return None
+    scope = row[len(SCOPE_ROW_PREFIX) :]
+    return scope if scope in ("project", "user") else None
+
+
+#: How screen 05 addresses one Python-backend row. A separate prefix from `scope:` because the two
+#: questions are answered separately and a shared prefix would make one keystroke ambiguous.
+INSTALLER_ROW_PREFIX = "installer:"
+
+
+def installer_row(installer: str) -> str:
+    return f"{INSTALLER_ROW_PREFIX}{installer}"
+
+
+def installer_from_row(row: str) -> str | None:
+    if not isinstance(row, str) or not row.startswith(INSTALLER_ROW_PREFIX):
+        return None
+    installer = row[len(INSTALLER_ROW_PREFIX) :]
+    return installer if installer in ("pip", "uv") else None
 
 
 def target_row(harness: str) -> str:
@@ -604,6 +643,14 @@ class ConsumerPlanView:
     #: The harnesses this plan was prepared for, as somebody chose them. Empty while nothing is
     #: chosen: such a plan is eligibility to choose from, never a plan to confirm (D-260).
     chosen_targets: tuple[str, ...] = ()
+    #: Which install scopes this selection may go to and which one it is going to, or `None` for a
+    #: plan whose scope is not the operator's to choose (an update keeps where it already is).
+    #: Screen 05 draws it only when there is something to decide (issue #11a, D-295).
+    scope_choice: InstallScopeChoiceView | None = None
+    #: Which Python backend may resolve this selection's dependencies and which one is going to,
+    #: or `None` when nothing here declares Python dependencies -- then there is no question to
+    #: ask, rather than a question with one answer (issue #11b).
+    installer_choice: PythonInstallerChoiceView | None = None
 
     @property
     def semantic_identity(self) -> str:
@@ -979,6 +1026,38 @@ def project_credential_record(
 
 
 @dataclass(frozen=True, slots=True)
+class InstalledPathView:
+    """One path this artifact owns, the part it plays, and what was measured about it.
+
+    `state` is the observation's word for that component, or `unobserved` when nothing looked.
+    An unmeasured path is honestly unmeasured: calling it `matched` would report a verification
+    that never happened, and omitting it would hide a location somebody is looking for (issue #17).
+    """
+
+    role: str
+    path: str
+    harness: str = ""
+    state: str = "unobserved"
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.role, str)
+            or not self.role
+            or not isinstance(self.path, str)
+            or not self.path.startswith("/")
+            or not isinstance(self.harness, str)
+            or not isinstance(self.state, str)
+            or not self.state
+        ):
+            raise ValueError("an installed path view is invalid")
+
+
+#: Which roles answer "where is it" for somebody who did not ask for detail: the bytes AART placed
+#: and the places a harness reads them from. The rest are real and owned, and Verbose lists them.
+_USER_FACING_ROLES: frozenset[str] = frozenset({"payload", "delivery", "merge", "settings"})
+
+
+@dataclass(frozen=True, slots=True)
 class InstalledArtifactView:
     coordinate: str
     health: str
@@ -986,6 +1065,16 @@ class InstalledArtifactView:
     drift: tuple[LifecycleDriftView, ...]
     actions: tuple[str, ...]
     credentials: tuple[CredentialRecordView, ...] = ()
+    #: Every path this installation's receipt records, in the order the receipt records them.
+    #: Empty when no receipt answers for it, because a location nobody wrote down cannot be
+    #: recovered by guessing a harness's layout (issue #17).
+    installation: tuple[InstalledPathView, ...] = ()
+    #: `project`, `user`, or empty when the receipt records no scope or records more than one.
+    scope: str = ""
+
+    @property
+    def user_facing_paths(self) -> tuple[InstalledPathView, ...]:
+        return tuple(item for item in self.installation if item.role in _USER_FACING_ROLES)
 
 
 def _drift_view(desired: DesiredState, current: CurrentState) -> tuple[LifecycleDriftView, ...]:
@@ -1002,6 +1091,90 @@ def _ownership_view(values: tuple[OwnershipReason, ...]) -> tuple[OwnershipView,
     )
 
 
+def _observed_states(current: CurrentState) -> dict[ComponentId, str]:
+    return {item.id: item.state.value for item in current.components}
+
+
+def _recorded_scope(receipt: ArtifactReceipt | None) -> str:
+    """The scope the receipt wrote down, and nothing else.
+
+    Only an MCP registration records one. A delivery records a harness and a destination, so
+    reading a scope off that destination would mean deciding which directories belong to a project
+    and which to a home -- a guess about somebody else's disk, which is what issue #17 rules out.
+    Disagreeing registrations collapse to nothing rather than to whichever came first.
+    """
+
+    if not isinstance(receipt, InstallationReceipt):
+        return ""
+    scopes = {item.target.scope.value for item in receipt.registrations}
+    return scopes.pop() if len(scopes) == 1 else ""
+
+
+def _installed_paths(
+    receipt: ArtifactReceipt | None, current: CurrentState
+) -> tuple[InstalledPathView, ...]:
+    """Every path this receipt records, joined to the component that measured it.
+
+    The join is by component identity rather than by path, because that is how the reconciler
+    already addresses these things: the observation for a delivery is `delivery:<harness>`, and
+    matching on the path string instead would silently stop working the day a harness moves a file.
+    """
+
+    if receipt is None:
+        return ()
+    states = _observed_states(current)
+
+    def observed(component: Component, qualifier: str = "") -> str:
+        identifier = ComponentId(component, qualifier) if qualifier else ComponentId(component)
+        return states.get(identifier, "unobserved")
+
+    paths = [InstalledPathView("payload", receipt.root, state=observed(Component.PAYLOAD))]
+    if isinstance(receipt, PlacedArtifactReceipt):
+        paths.extend(
+            InstalledPathView(
+                "delivery",
+                item.destination,
+                item.harness,
+                observed(Component.DELIVERY, item.harness),
+            )
+            for item in receipt.deliveries
+        )
+        paths.extend(
+            InstalledPathView(
+                "merge", item.destination, item.harness, observed(Component.MERGE, item.harness)
+            )
+            for item in receipt.merges
+        )
+        paths.extend(
+            InstalledPathView(
+                "settings",
+                item.destination,
+                item.harness,
+                observed(Component.SETTINGS, item.harness),
+            )
+            for item in receipt.settings
+        )
+        return tuple(paths)
+    paths.append(
+        InstalledPathView("launcher", receipt.launcher, state=observed(Component.LAUNCHER))
+    )
+    paths.append(
+        InstalledPathView(
+            "interpreter", receipt.interpreter, state=observed(Component.RUNTIME_ENVIRONMENT)
+        )
+    )
+    paths.extend(
+        InstalledPathView(
+            "configuration",
+            item.path,
+            item.harness,
+            observed(Component.CONFIGURATION, item.harness),
+        )
+        for item in receipt.configuration_files
+    )
+    return tuple(paths)
+
+
 def project_installed_artifact(
     desired: DesiredState,
     current: CurrentState,
@@ -1009,6 +1182,7 @@ def project_installed_artifact(
     ownership: tuple[OwnershipReason, ...] = (),
     update_available: bool = False,
     credentials: tuple[CredentialRecordView, ...] = (),
+    receipt: ArtifactReceipt | None = None,
 ) -> InstalledArtifactView:
     """Project measured installed health; mutation success is never health evidence."""
 
@@ -1029,6 +1203,8 @@ def project_installed_artifact(
         _drift_view(desired, current),
         tuple(actions),
         credentials,
+        _installed_paths(receipt, current),
+        _recorded_scope(receipt),
     )
 
 
@@ -1976,6 +2152,167 @@ def navigation_targets(
 
 #: Refusal for a stored preference file this frontend cannot mean.
 CONSUMER_SETTINGS_INVALID = DiagnosticCode("consumer-settings-invalid")
+INSTALL_SCOPE_UNAVAILABLE = DiagnosticCode("install-scope-unavailable")
+
+#: The complete scope vocabulary, in the order the flow offers it.
+_INSTALL_SCOPES: tuple[str, ...] = ("project", "user")
+
+
+@dataclass(frozen=True, slots=True)
+class InstallScopeChoiceView:
+    """The scopes this operation may install into, and which one it is currently going to.
+
+    The view cannot describe an impossible offer: the selection is always one of the offered
+    scopes, and the offer is never empty. A screen that drew a scope the plan could not honour
+    would be the fault this task is fixing wearing different clothes (issue #11a).
+    """
+
+    offered: tuple[str, ...]
+    selected: str
+
+    def __post_init__(self) -> None:
+        if (
+            not self.offered
+            or tuple(sorted(set(self.offered))) != self.offered
+            or not set(self.offered) <= set(_INSTALL_SCOPES)
+            or self.selected not in self.offered
+        ):
+            raise ValueError("installation scope choice is invalid")
+
+    @property
+    def is_a_choice(self) -> bool:
+        """Whether there is anything to decide, or only something to disclose."""
+
+        return len(self.offered) > 1
+
+    def choose(self, scope: str) -> InstallScopeChoiceView:
+        if scope not in self.offered:
+            raise ValueError("installation scope was not offered")
+        return replace(self, selected=scope)
+
+
+def offer_install_scopes(
+    declared: tuple[tuple[str, ...], ...],
+    *,
+    project_available: bool,
+    preferred: str,
+) -> Result[InstallScopeChoiceView]:
+    """Which scopes every member of the selection supports and this machine can actually host.
+
+    The preference seeds the choice and never widens it: a selection that cannot honour the
+    preference falls to what it can, because a default that loses is still a default. A selection
+    whose members share no scope is refused rather than resolved -- installing them together has
+    no correct answer, and picking one would make the flow choose where the operator's files go.
+    """
+
+    if not declared:
+        return Err(
+            (
+                Diagnostic(
+                    INSTALL_SCOPE_UNAVAILABLE,
+                    Severity.ERROR,
+                    "an empty selection has no installation scope to choose",
+                ),
+            )
+        )
+    common = set(_INSTALL_SCOPES)
+    for item in declared:
+        common &= set(item)
+    if not project_available:
+        common -= {"project"}
+    if not common:
+        return Err(
+            (
+                Diagnostic(
+                    INSTALL_SCOPE_UNAVAILABLE,
+                    Severity.ERROR,
+                    "this selection has no installation scope every artifact supports here",
+                ),
+            )
+        )
+    offered = tuple(scope for scope in sorted(common))
+    return Ok(InstallScopeChoiceView(offered, preferred if preferred in common else offered[0]))
+
+
+#: A selection with no Python dependencies, or none the offered backends all satisfy.
+PYTHON_INSTALLER_UNAVAILABLE = DiagnosticCode("python-installer-unavailable")
+
+#: The complete backend vocabulary, in the order the flow offers it.
+_PYTHON_INSTALLERS: tuple[str, ...] = ("pip", "uv")
+
+
+@dataclass(frozen=True, slots=True)
+class PythonInstallerChoiceView:
+    """The backends that could resolve this operation's dependencies, and which one is going to.
+
+    The twin of `InstallScopeChoiceView` and deliberately a separate type: scope decides where an
+    artifact's files land, the backend decides what resolves its Python dependencies, and one
+    answer is not evidence about the other (issue #11b).
+    """
+
+    offered: tuple[str, ...]
+    selected: str
+
+    def __post_init__(self) -> None:
+        if (
+            not self.offered
+            or tuple(sorted(set(self.offered))) != self.offered
+            or not set(self.offered) <= set(_PYTHON_INSTALLERS)
+            or self.selected not in self.offered
+        ):
+            raise ValueError("Python installer choice is invalid")
+
+    @property
+    def is_a_choice(self) -> bool:
+        """Whether there is anything to decide, or only something to disclose."""
+
+        return len(self.offered) > 1
+
+    def choose(self, installer: str) -> PythonInstallerChoiceView:
+        if installer not in self.offered:
+            raise ValueError("Python installer was not offered")
+        return replace(self, selected=installer)
+
+
+def offer_python_installers(
+    usable: tuple[tuple[str, ...], ...],
+    *,
+    preferred: str,
+) -> Result[PythonInstallerChoiceView]:
+    """Which backends every dependency contract in this selection can be installed by.
+
+    `usable` is one entry per artifact that declares Python dependencies, already narrowed by the
+    planner to what this specification, this machine and this policy allow. An empty `usable` is
+    not a choice with no answer but a question that does not arise -- nothing here needs Python --
+    and an empty intersection is refused rather than resolved, because running two backends for one
+    reviewed install is the thing `chosen_installer` exists to prevent.
+    """
+
+    if not usable:
+        return Err(
+            (
+                Diagnostic(
+                    PYTHON_INSTALLER_UNAVAILABLE,
+                    Severity.ERROR,
+                    "nothing in this selection declares Python dependencies",
+                ),
+            )
+        )
+    common = set(_PYTHON_INSTALLERS)
+    for item in usable:
+        common &= set(item)
+    if not common:
+        return Err(
+            (
+                Diagnostic(
+                    PYTHON_INSTALLER_UNAVAILABLE,
+                    Severity.ERROR,
+                    "this selection has no Python installer every artifact can be installed by",
+                ),
+            )
+        )
+    offered = tuple(sorted(common))
+    return Ok(PythonInstallerChoiceView(offered, preferred if preferred in common else offered[0]))
 
 
 @dataclass(frozen=True, slots=True)
@@ -1984,6 +2321,10 @@ class ConsumerSettings:
     default_scope: str = "project"
     show_updates: bool = True
     maintainer_mode: bool = False
+    #: Which backend resolves Python dependencies when more than one could. `pip` is the default
+    #: because every Python that can build an environment already has it, so the preference starts
+    #: on the backend that is never the reason an install cannot run (issue #11b).
+    python_installer: str = "pip"
 
     def __post_init__(self) -> None:
         if (
@@ -1991,6 +2332,7 @@ class ConsumerSettings:
             or self.default_scope not in {"project", "user"}
             or not isinstance(self.show_updates, bool)
             or not isinstance(self.maintainer_mode, bool)
+            or self.python_installer not in set(_PYTHON_INSTALLERS)
         ):
             raise ValueError("consumer settings are invalid")
 
@@ -2017,6 +2359,8 @@ class ConsumerSettings:
             )
         if row == "show-updates":
             return replace(self, show_updates=not self.show_updates)
+        if row == "python-installer":
+            return replace(self, python_installer="uv" if self.python_installer == "pip" else "pip")
         if row == "maintainer-mode":
             return self.with_maintainer_mode(not self.maintainer_mode)
         raise ValueError(f"no consumer setting is named {row}")
@@ -2048,6 +2392,7 @@ SUCCESS_PURPOSE: dict[ConsumerScreen, str] = {
 SETTING_ROWS: tuple[str, ...] = (
     "detail-level",
     "default-scope",
+    "python-installer",
     "show-updates",
     "maintainer-mode",
 )
@@ -2057,6 +2402,8 @@ SETTING_PURPOSE: dict[str, str] = {
     "Verbose shows them.",
     "default-scope": "Where an install lands when nothing asks for somewhere else: "
     "Project writes into this checkout, User writes into your home.",
+    "python-installer": "Which backend resolves Python dependencies when an artifact's "
+    "contract and this machine allow either: pip is universally present, uv is faster.",
     "show-updates": "Whether the Dashboard counts the installed artifacts a registry "
     "offers a newer version of.",
     "maintainer-mode": "Whether this installation authors artifacts as well as installing "
@@ -2065,8 +2412,8 @@ SETTING_PURPOSE: dict[str, str] = {
 """What each setting changes, for the block `[v]` opens (`QA-097`).
 
 Every row a cursor can sit on describes itself, the way the rebuild stages have since `QA-089`.
-Four rows that change behaviour and no row that says what it changes left the reader toggling a
-setting to find out what it did.
+Every row that changes behaviour says what it changes; a row that did not left the reader toggling
+a setting to find out what it did.
 """
 
 
@@ -2078,6 +2425,7 @@ def settings_to_data(view: ConsumerSettings) -> dict[str, object]:
     return {
         "detail_level": view.profile.value,
         "default_scope": view.default_scope,
+        "python_installer": view.python_installer,
         "show_updates": view.show_updates,
         "maintainer_mode": view.maintainer_mode,
     }
@@ -2093,7 +2441,13 @@ def settings_from_data(data: object) -> Result[ConsumerSettings]:
 
     if not isinstance(data, dict):
         return Err((_settings_invalid("stored consumer settings must be a JSON object"),))
-    known = {"detail_level", "default_scope", "show_updates", "maintainer_mode"}
+    known = {
+        "detail_level",
+        "default_scope",
+        "python_installer",
+        "show_updates",
+        "maintainer_mode",
+    }
     unknown = sorted(set(data) - known)
     if unknown:
         return Err(
@@ -2105,6 +2459,9 @@ def settings_from_data(data: object) -> Result[ConsumerSettings]:
     scope = data.get("default_scope", "project")
     if scope not in {"project", "user"}:
         return Err((_settings_invalid("stored default scope must be project or user"),))
+    installer = data.get("python_installer", "pip")
+    if installer not in set(_PYTHON_INSTALLERS):
+        return Err((_settings_invalid("stored Python installer must be pip or uv"),))
     updates = data.get("show_updates", True)
     maintainer = data.get("maintainer_mode", False)
     if not isinstance(updates, bool) or not isinstance(maintainer, bool):
@@ -2121,6 +2478,7 @@ def settings_from_data(data: object) -> Result[ConsumerSettings]:
             cast(str, scope),
             updates,
             maintainer,
+            cast(str, installer),
         )
     )
 

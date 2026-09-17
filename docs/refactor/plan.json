@@ -635,7 +635,7 @@
     {
       "id": "CP-24",
       "title": "Field reports from the first released version",
-      "status": "in_progress",
+      "status": "done",
       "steps": [
         {
           "id": "1",
@@ -685,6 +685,93 @@
         {
           "id": "10",
           "title": "CI takes its interpreter from an image, and setup-python is gone",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "CP-25",
+      "title": "Release gating, usage-reporting withdrawal, and post-release field reports",
+      "status": "in_progress",
+      "steps": [
+        {
+          "id": "1",
+          "title": "INV-096 states the contract a release pull request must satisfy",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "The gate runner can run the release-bump gate alone",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "A release pull request runs that gate set and nothing else",
+          "status": "done"
+        },
+        {
+          "id": "4",
+          "title": "A consumer is no longer offered a usage report",
+          "status": "done"
+        },
+        {
+          "id": "5",
+          "title": "The `aart reporting` verb and its package are removed",
+          "status": "done"
+        },
+        {
+          "id": "6",
+          "title": "A scaffolded registry no longer carries the issue and dashboard workflows",
+          "status": "done"
+        },
+        {
+          "id": "7",
+          "title": "The documents stop promising it, and name the activity log as the seam",
+          "status": "done"
+        },
+        {
+          "id": "8",
+          "title": "The Maintainer Dashboard explains Candidate counts by lifecycle state",
+          "status": "done"
+        },
+        {
+          "id": "9",
+          "title": "Marketplace rows prioritize installation state and compatible harnesses",
+          "status": "done"
+        },
+        {
+          "id": "10",
+          "title": "Installation scope is an explicit per-install choice seeded by Settings",
+          "status": "done"
+        },
+        {
+          "id": "11",
+          "title": "The Python dependency backend is an explicit per-install choice seeded by Settings",
+          "status": "done"
+        },
+        {
+          "id": "12",
+          "title": "User Variables and Credentials separates artifact rows visually",
+          "status": "done"
+        },
+        {
+          "id": "13",
+          "title": "Artifact Variables and Credentials separates Configuration from Credentials",
+          "status": "done"
+        },
+        {
+          "id": "14",
+          "title": "Installed Artifact Details names the exact owned installation paths",
+          "status": "done"
+        },
+        {
+          "id": "15",
+          "title": "Validate the pull request title before expensive quality work",
+          "status": "done"
+        },
+        {
+          "id": "16",
+          "title": "Keep credential-shaped redaction fixtures out of tracked source",
           "status": "done"
         }
       ]

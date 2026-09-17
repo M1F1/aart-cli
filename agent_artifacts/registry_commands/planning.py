@@ -58,7 +58,6 @@ from agent_artifacts.protocol.registry_models import (
     RegistryLock,
     RegistryManifest,
     ReviewRecord,
-    ServiceAdvertisement,
 )
 from agent_artifacts.protocol.registry_schema import (
     parse_registry_entry,
@@ -124,7 +123,6 @@ from .model import (
 from .templates import (
     REGISTRY_CI_WORKFLOW,
     REGISTRY_GITIGNORE,
-    REPORTING_TEMPLATES,
     render_registry_readme,
 )
 
@@ -512,15 +510,9 @@ def plan_registry_init(
     # Every registry gets byte-identical files.  Where CI fetches AART from is a repository
     # variable, not something written in here at creation time, so these bytes never have to be
     # regenerated when a company moves the tool.
-    # Usage reporting is an optional service a registry may offer, and the manifest below already
-    # advertises it only when somebody named a destination.  The files were written either way,
-    # so a maintainer who declined the feature still got an Issue Form soliciting reports and two
-    # workflows to process them -- infrastructure for a service the registry does not offer, which
-    # invites contributions nothing will read (B-087).  One condition now governs both.
     templates = (
         (".gitignore", REGISTRY_GITIGNORE),
         (".github/workflows/aart-registry.yml", REGISTRY_CI_WORKFLOW),
-        *(REPORTING_TEMPLATES if options.usage_reporting_repository is not None else ()),
     )
     # The README is the one generated file a maintainer is meant to edit, so it is written when
     # absent and left alone otherwise -- never compared, never overwritten.  Managing it would
@@ -535,7 +527,6 @@ def plan_registry_init(
                 render_registry_readme(
                     options.registry_id,
                     options.display_name,
-                    usage_reporting=options.usage_reporting_repository is not None,
                 ),
             ),
             # The pin is the version of the tool creating the registry -- the same number `init`
@@ -571,17 +562,7 @@ def plan_registry_init(
             )
         ),
         "main",
-        (
-            (
-                ServiceAdvertisement(
-                    "usage_reporting",
-                    "github-issues",
-                    options.usage_reporting_repository,
-                ),
-            )
-            if options.usage_reporting_repository is not None
-            else ()
-        ),
+        (),
     )
     source = SourceManifest(
         1,

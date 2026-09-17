@@ -1,5 +1,66 @@
 # AART Refactor — Next Work
 
+## Post-review installation documentation (2026-09-17)
+
+README now shows one parameterized, publicly readable Release-wheel download and two alternative
+local-wheel installs (`pipx` or `uv tool`). After owner feedback, each installer example is now a
+complete shell block: no variable needs to survive from a previous block, and `pipx` explicitly
+uses the `python3` on PATH. Both were exercised in isolated tool directories against the public
+`v0.1.2` wheel. `curl -fL` is followed by a ZIP archive check before either installer runs, to
+catch an HTML sign-in page saved as `.whl`. It is not a checksum or an
+authentication mechanism: private Enterprise Releases still need an authenticated download or an
+internal index. B-136 holds the optional checksum follow-up; no release pipeline changed (D-303).
+PR #18 was green before the documentation-only commits; the final run must be checked after push.
+
+## CP-25.16 — credential-shaped test fixtures done (2026-09-17)
+
+The owner added task 16 to the current stream after the first full `make quality` reached its last
+gate and failed: two CP-25 redaction tests wrote token-shaped fake values directly into tracked
+source. Both now use `tests.credential_fixtures.access_token()` (D-301). Full `make quality` is
+green: 4,441 tests (1 skipped), 86.07% branch coverage, all non-redundant gates passed. The
+branch was rebased onto current `origin/main` to avoid a `v0.1.2` version regression. Draft PR
+[#18](https://github.com/M1F1/aart-cli/pull/18) is open; its `pr-check` matrix is pending. The
+owner chose `0.2.0` (D-302), so its squash title stays `feat:` without `!`.
+
+## CI feedback follow-up — CP-25.15 done (2026-09-17)
+
+The owner requested a fail-fast pull-request title check after an Enterprise fork smoke PR titled
+`test` reached `scripts/conventional_title.py` only after the quality gates, then promoted B-135 to
+CP-25.15. The existing check now runs first in `.github/actions/quality/action.yml`; a test holds
+the ordering (D-300). This does not change release semantics; the remaining external gate is
+draft PR #18's `pr-check`.
+
+## Current objective — CP-25 (2026-09-17)
+
+**CP-25 is the active slice.** Tasks 01–03 completed the release-pull-request gate (D-290).
+Tasks 04–07 withdraw the unused GitHub-issue usage-reporting and static-dashboard mechanism while
+preserving the local Activity log and adding only a neutral Activity telemetry port with a disabled
+adapter (D-292). At the owner's instruction, tasks 08–14 now carry every open
+product issue in `M1F1/aart-cli`: #9, #10, #11, #12, #16 and #17 (D-291).
+
+The written task scope is in
+[`slices/CP-25-release-pull-request-gate.md`](slices/CP-25-release-pull-request-gate.md), and
+`plan.json` is the executable status authority. Tasks 04–16 are done (D-292 to D-301). #11 was
+split into separate scope and backend choices because they
+affect different planning contracts; both halves are done.
+
+**PR #18's checks are green and nothing executable is left.** The matrix ran against exactly the
+published head `3668a70`: `gates (Python 3.10)`, `(3.11)` and `(3.14)` all pass, and `pr-check`
+passes in 3 s. The private-image job reports `skipping`, which is its designed behaviour where the
+registry credentials are not available, not a failure.
+
+**What remains is the owner's and only the owner's:** take PR #18 out of draft, approve it, and
+squash-merge it under its existing `feat:` title. Do not mark it ready, approve it or merge it on
+the owner's behalf, and do not add a breaking `!` — that would release `1.0.0` instead of the
+`0.2.0` the owner chose (D-302).
+
+**Version decision made by the owner:** `0.2.0` (D-302). PR #18 is titled `feat: complete CP-25
+consumer fixes and reporting withdrawal`; under squash merge that title is the release-semantic
+commit. Do not add a `!`, which would make this `1.0.0` under the current policy.
+
+The earlier planning baseline was intentionally stopped during coverage. It has now been superseded
+by the complete green `make quality` recorded above for CP-25.16.
+
 ## Releasing 0.1.0 (2026-09-15)
 
 - PR #1 is merged. Release Please opened release PR #2.
@@ -13,13 +74,32 @@
   `autorelease: pending`.
 - Earlier step: #2 was merged with **squash** once its `pr-check` was green. Then check that the release run built and
   attached `aart_cli-0.1.0-py3-none-any.whl` to the `v0.1.0` release.
-- `pr-check` stays on for release PRs (INV-096, owner confirmed). B-129, a race between the manual lab
-  and git's background repack that turned it red at random, is fixed.
+- `pr-check` stays on for release PRs, but since CP-25 it runs the narrow gate set rather than the
+  whole suite (INV-096 rewritten, D-290). B-129, a race between the manual lab and git's background
+  repack that turned it red at random, is fixed.
 
-## Current objective — CP-24 (2026-09-16)
+## Historical CP-25 mid-slice snapshot (2026-09-17)
 
-**CP-24 is the active slice.** It carries the owner's field reports against the released `v0.1.1`,
-as GitHub issues #7 and #8, and ends by releasing the fixes.
+**CP-25 is the active slice. CP-25.10 is part-done and is the next thing to finish**: the scope
+seam is complete and held (D-295), but no screen or key lets a person make the choice before
+Ready/Review, which is the half of issue #11a a user can see. Finishing it means a control on
+screen 05 driven by `offer_install_scopes`, setting `ConsumerUiState.install_scope`; everything
+downstream of that field already works and is under test. Tasks 01–03 gated the release pull
+request (D-290), 04–07 withdrew usage reporting and left an Activity telemetry port in its place
+(D-292), 08 fixed the Dashboard's Candidate arithmetic (D-293), and 09 made a Marketplace row lead
+with installation state and harnesses (D-294). Tasks 10–14 carry the owner's remaining open
+issues: #11 (two tasks), #12, #16 and #17.
+`docs/refactor/slices/CP-25-release-pull-request-gate.md` holds the ordered tasks and their
+acceptance criteria; `plan.json` holds them as CP-25.1 to CP-25.14.
+
+The then-open version question was resolved by the owner after this snapshot: `0.2.0` (D-302).
+The pull request title, not the individual commits, decides it under squash merge.
+
+## Closed — CP-24 (2026-09-16)
+
+**CP-24 is done.** It carried the owner's field reports against the released `v0.1.1`,
+as GitHub issues #7 and #8, and ended by releasing the fixes: pull request #14, Release Please's
+#15 at 10:48 UTC on 2026-09-17, and `v0.1.2` tagged on `origin`.
 `docs/refactor/slices/CP-24-post-release-field-reports.md` holds the ordered tasks;
 `plan.json` holds them as CP-24.1 to CP-24.10. Tasks 08-10 were added on 2026-09-17, after the
 owner ran the gates in a container on their Enterprise instance and three things broke that have
@@ -1847,6 +1927,19 @@ backed out — the receipt and the host then disagree and `configured_consumer_c
 Still open from step 13b: on three forms the key legend wraps to three lines with `[v] Fast /
 Verbose` orphaned on the middle one. Moving `v` into the universal row closes it up and changes
 every screen's footer, which is the operator's call rather than ours.
+
+## CP-25 release-gate checkpoint — tasks 01–03 done (2026-09-17)
+
+`docs/refactor/slices/CP-25-release-pull-request-gate.md`. A release pull request now runs
+`packaging-check validate docs-check release-bump` on one interpreter instead of ten gates on three,
+guarded by `scripts/release_pr_scope.py`, which reads the diff and refuses the narrow path for
+anything but release bookkeeping.
+
+It takes effect from the release *after* `v0.1.2`: #15 was already open when this landed and is
+gated the old way. On the next release pull request, check that `pr-check` shows one `gates
+(Python 3.11)` job, that its first step is the scope check, and that the whole thing finishes in
+well under a minute. If the scope check ever fails on a genuine release pull request, read what it
+names before widening `IN_SCOPE` -- a path it did not expect is the case the check exists for.
 
 ## Critical boundaries for this slice
 

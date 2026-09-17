@@ -264,7 +264,13 @@ class ConsumerApplicationSettingsTest(unittest.TestCase):
         with _environment() as env:
             _, _, _ = _drive(
                 env,
-                _at(ConsumerScreen.SETTINGS, rows=SETTING_ROWS, cursor=3),
+                # Named rather than numbered: the cursor is on Maintainer Mode, not on whatever
+                # row happens to be fourth after a setting is added above it.
+                _at(
+                    ConsumerScreen.SETTINGS,
+                    rows=SETTING_ROWS,
+                    cursor=SETTING_ROWS.index("maintainer-mode"),
+                ),
                 ENTER,
             )
 

@@ -3,7 +3,6 @@ from __future__ import annotations
 import unittest
 
 from agent_artifacts.configuration.model import (
-    ReportingMode,
     SourceKind,
     SyncMode,
 )
@@ -31,8 +30,6 @@ class ConfigurationSchemaTest(unittest.TestCase):
         self.assertIsNone(result.value.default_registry)
         self.assertIs(result.value.sync.mode, SyncMode.AUTO)
         self.assertEqual(result.value.sync.max_age_seconds, 900)
-        self.assertIs(result.value.reporting.mode, ReportingMode.PROMPT)
-        self.assertIsNone(result.value.reporting.destination)
         self.assertEqual(
             parse_user_configuration(user_configuration_bytes(result.value)),
             result,
@@ -112,7 +109,6 @@ class ConfigurationSchemaTest(unittest.TestCase):
             '{"schema_version":1,"reporting":{"destination":"Bad_Alias"}}',
             '{"schema_version":1,"default_registry":"Bad_Alias"}',
             '{"schema_version":1,"sources":[{"alias":"disabled","kind":"registry-git","url":"https://example.test/a","enabled":false}],"default_registry":"disabled"}',
-            '{"schema_version":1,"reporting":{"mode":"prompt","destination":"missing"}}',
         )
 
         for document in invalid:

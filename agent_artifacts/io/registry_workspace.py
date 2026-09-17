@@ -135,13 +135,10 @@ _ROOT_FILES = frozenset(
 _ROOT_DIRECTORIES = frozenset(
     {"entries", "artifacts", "collections", "security", "registry", "references"}
 )
-_GITHUB_DIRECTORIES = frozenset({".github", ".github/workflows", ".github/ISSUE_TEMPLATE"})
+_GITHUB_DIRECTORIES = frozenset({".github", ".github/workflows"})
 _GITHUB_FILES = frozenset(
     {
-        ".github/ISSUE_TEMPLATE/usage-report.yml",
         ".github/workflows/aart-registry.yml",
-        ".github/workflows/aart-usage-dashboard.yml",
-        ".github/workflows/aart-usage-validate.yml",
     }
 )
 _MAX_ENTRIES = 100_000

@@ -12,6 +12,7 @@ import unittest
 
 from agent_artifacts.application.consumer_ui import ConsumerUiState
 from agent_artifacts.application.consumer_views import (
+    SETTING_ROWS,
     ActivityRecord,
     ConsumerScreen,
     ConsumerSettings,
@@ -334,9 +335,7 @@ class ConsumerShellTest(unittest.TestCase):
         preferences = _Preferences()
 
         state, terminal = drive(
-            DOWN,
-            DOWN,
-            DOWN,
+            *(DOWN for _ in range(SETTING_ROWS.index("maintainer-mode"))),
             ENTER,
             state=_at(ConsumerScreen.SETTINGS),
             preferences=preferences,
@@ -346,7 +345,7 @@ class ConsumerShellTest(unittest.TestCase):
         self.assertTrue(state.settings.maintainer_mode)
         self.assertEqual([item.maintainer_mode for item in preferences.kept], [True])
         self.assertIn("> Maintainer Mode: on", terminal.last)
-        # The other three controls are untouched: one keystroke moves one preference.
+        # Every other control is untouched: one keystroke moves one preference.
         self.assertIs(state.settings.profile, PresentationProfile.FAST)
         self.assertEqual(state.settings.default_scope, "project")
         self.assertTrue(state.settings.show_updates)

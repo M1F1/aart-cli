@@ -19,7 +19,7 @@ request.** If direct pushes to `main` were allowed, nothing would prove the sour
 
 | File | Name | Trigger | What it runs |
 |---|---|---|---|
-| `pr-check.yml` | `pr-check` | `pull_request` | all ten quality gates on 3.10, 3.11 and 3.14, plus the title check |
+| `pr-check.yml` | `pr-check` | `pull_request` | all ten quality gates on 3.10, 3.11 and 3.14, plus the title check — narrowed on a release pull request, below |
 | `release-please.yml` | `release please` | push to `main` | maintains the release pull request; when one is merged, calls `release.yml` |
 | `release.yml` | `release` | tag push, release published, `workflow_call` | the release checks, build, attach, publish |
 | `deep-quality.yml` | `deep quality` | `workflow_dispatch` | scoped mutation testing of one module |
@@ -44,6 +44,39 @@ nothing reaches `main` except through a pull request that passed all ten gates.
 GitHub raises no workflow event for anything done with the repository `GITHUB_TOKEN`, so the tag and
 release Release Please creates start nothing on their own. `release-please.yml` therefore *calls*
 `release.yml`, which is `workflow_call`-able for exactly that reason.
+
+## What `pr-check` runs on a release pull request
+
+A release pull request rewrites four files — the version literals in `pyproject.toml`,
+`agent_artifacts/__init__.py` and `.release-please-manifest.json`, and the changelog — on a tree the
+full gate already passed when the last ordinary pull request merged. Running 4,338 tests on three
+interpreters against it proves that tree a second time, which is the thing INV-097 and INV-102 rule
+out. So `pr-check` narrows to what the release pull request can actually break (INV-096):
+
+| Gate | What it proves about the release pull request |
+|---|---|
+| `packaging-check` | the wheel the new version builds |
+| `validate` | the schemas and content the bump touches |
+| `docs-check` | the documents it rewrites |
+| `release-bump` | the release identity itself — version, policy, install commands |
+
+`release-bump` is selectable by name but is not part of `make quality`: every module it names is
+already discovered by `unit`, so including it in the full run would prove one thing twice.
+
+It also drops to one interpreter. Three catch behaviour that differs between interpreters, in code;
+a release pull request changes no code.
+
+**The branch name is not what makes this safe.** Anyone who can push can push a commit onto
+`release-please--branches--main`, and a gate that skips the suite on the strength of a branch name
+is a way into `main` rather than a gate. What makes it safe is
+[`scripts/release_pr_scope.py`](../../scripts/release_pr_scope.py), which runs first and reads the
+diff: one path outside release bookkeeping and the job fails, so the change has to be gated as the
+ordinary change it is. An empty diff fails too — nothing changed means the comparison did not work,
+and a gate that proves nothing must not pass. Its list of permitted paths is not maintained by hand
+either; `release_policy_test.py` derives the same set from `release-please-config.json` and requires
+the two to agree, so widening the engine cannot silently widen what may skip the suite.
+
+Measured on this repository: 15 seconds against roughly 17 minutes.
 
 ## Settings, not files
 
@@ -74,9 +107,10 @@ pull request early if you want a branch checked while you work on it.
 an image without Poetry fails there. Name it in `AART_POETRY` if it is off `PATH`; see
 [`wheel-reproducibility-v1.md`](../release/wheel-reproducibility-v1.md).
 
-**The release pull request gets no `pr-check`.** It is opened with the repository token, which starts
-no workflows. Its content is generated — the version bump and the changelog — and the release run
-still checks the result.
+**The release pull request gets no `pr-check` until somebody approves it.** It is opened with the
+repository token, which starts no workflows; on an instance that asks for workflow approval, a
+maintainer pressing the button is what starts the run. When it does run it takes the narrow path
+above. Either way the release run still checks the result, so a release is never unproven.
 
 Running these workflows on a company GitHub Enterprise Server instance is covered by
 [`github-enterprise-rollout.md`](github-enterprise-rollout.md).

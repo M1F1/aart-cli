@@ -28,6 +28,11 @@ QUALITY_GATES = (
     "secret-shape-check",
 )
 
+# Selectable by name, but not part of the full run: every module it names is discovered by `unit`,
+# so including it in `make quality` would prove one thing twice.  It exists for the release pull
+# request, which is gated on what it changes rather than on everything (INV-096, D-290).
+SELECTABLE_GATES = QUALITY_GATES + ("release-bump",)
+
 
 @dataclass(frozen=True)
 class Gate:
@@ -37,7 +42,7 @@ class Gate:
 
 def select_gates(requested: tuple[str, ...]) -> tuple[str, ...]:
     selected = QUALITY_GATES if not requested else requested
-    unknown = tuple(name for name in selected if name not in QUALITY_GATES)
+    unknown = tuple(name for name in selected if name not in SELECTABLE_GATES)
     if unknown:
         raise ValueError(f"unknown quality gate(s): {', '.join(unknown)}")
     if len(set(selected)) != len(selected):
@@ -135,6 +140,23 @@ def build_gates(temp_root: Path, python: str = sys.executable) -> tuple[Gate, ..
         Gate("packaging-check", ((python, "scripts/packaging_check.py"),)),
         Gate("docs-check", ((python, "scripts/docs_check.py"),)),
         Gate("secret-shape-check", ((python, "scripts/secret_shape_check.py"),)),
+        # The release pull request's own subject: the release identity written into the tree, the
+        # artifact that identity produces, and the documents the engine rewrites.  Named modules
+        # rather than a discovery pattern, because what this gate proves is a list somebody chose.
+        Gate(
+            "release-bump",
+            (
+                (
+                    python,
+                    "-m",
+                    "unittest",
+                    "tests.release_policy_test",
+                    "tests.release_test",
+                    "tests.packaging_test",
+                    "tests.install_commands_test",
+                ),
+            ),
+        ),
     )
 
 

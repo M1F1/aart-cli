@@ -56,6 +56,33 @@ def platform_installers(facts: EnvironmentFacts) -> frozenset[PythonInstaller]:
     )
 
 
+def _permitted_installers(
+    compatible: frozenset[PythonInstaller], policy: EffectivePolicy
+) -> frozenset[PythonInstaller]:
+    if policy.allowed_python_installers is None:
+        return compatible
+    return frozenset(
+        item for item in PythonInstaller if item.value in policy.allowed_python_installers
+    )
+
+
+def usable_python_installers(
+    spec: PythonDependencySpec,
+    facts: EnvironmentFacts,
+    policy: EffectivePolicy,
+) -> frozenset[PythonInstaller]:
+    """Every backend that could install this specification here, before one of them is picked.
+
+    `select_python_installer` takes exactly this set and narrows it to one. It is named separately
+    because a screen offering a per-install choice has to offer what could run rather than what
+    happened to win (issue #11b): an offer derived from anything else can disagree with the plan,
+    and then a chosen backend comes back as a refusal the operator reads as their own mistake.
+    """
+
+    compatible = compatible_installers(spec)
+    return compatible & platform_installers(facts) & _permitted_installers(compatible, policy)
+
+
 def select_python_installer(
     spec: PythonDependencySpec,
     facts: EnvironmentFacts,
@@ -67,14 +94,8 @@ def select_python_installer(
 
     compatible = compatible_installers(spec)
     available = platform_installers(facts)
-    permitted = (
-        compatible
-        if policy.allowed_python_installers is None
-        else frozenset(
-            item for item in PythonInstaller if item.value in policy.allowed_python_installers
-        )
-    )
-    candidates = compatible & available & permitted
+    permitted = _permitted_installers(compatible, policy)
+    candidates = usable_python_installers(spec, facts, policy)
     if not candidates:
         detail = (
             f"compatible: {_names(compatible)}; "

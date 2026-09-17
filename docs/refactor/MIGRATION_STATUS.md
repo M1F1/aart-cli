@@ -1,5 +1,142 @@
 # AART Refactor Migration Status
 
+**2026-09-17, post-review install guidance (D-303).** README gained parameterized, self-contained
+public Release-wheel download blocks for `pipx` and `uv tool`. A ZIP test catches a sign-in page
+before installation, and the private-Enterprise boundary is stated explicitly. After owner feedback,
+`pipx` pins the `python3` on PATH rather than its potentially broken cached default. Both installers
+and their entry points were exercised in isolated tool directories against the public `v0.1.2`
+wheel; `docs_check` passed. B-136 records optional checksum publication.
+No release workflow or runtime code changed. PR #18's matrix was green before this docs update and
+must be rechecked after it is pushed.
+
+**2026-09-17, CP-25.16 done; CP-25 code and gates verified (D-301).** The first full
+`make quality` after task 15 reached its last gate and failed `secret-shape-check`: two new
+redaction tests each contained a fake token-shaped literal. Both now assemble that fixture through
+`tests.credential_fixtures.access_token()`; 28 focused tests and the scanner pass. A targeted
+restore of one literal made the scanner red with exactly two findings. The rerun of full
+`make quality` passed: 4,441 tests (1 skipped), 86.07% branch coverage, and every non-redundant
+gate green. The branch was rebased onto current `origin/main` without changing release-version
+files and opened as draft PR #18 (D-302). Its matrix is pending; the owner chose `0.2.0`,
+expressed by the PR's `feat:` title.
+
+**2026-09-17, CP-25.15 done (D-300).** The owner promoted B-135 into CP-25 after a fork smoke PR
+titled `test` spent a full quality run before being refused. The unchanged title validator is now
+the composite quality action's first step. A red-first workflow-ordering test holds that it runs
+before setup and the gates; the title syntax and release semantics are unchanged. The full quality
+gate was later completed as recorded above; this earlier pending status is superseded.
+
+**2026-09-17, CP-25.13 done (D-298).** Screen 22a draws Configuration and Credentials as two
+sections: a blank after each heading and one between a completed Configuration block and the
+Credentials heading (issue #16). The spacing manufactures no row -- `rows` still comes from the
+identifiers and references -- and the credential boundary is unchanged.
+
+**2026-09-17, CP-25.12 done (D-297).** Screen 22 parts one artifact's group from the next with a
+single empty line (issue #12). The separator is drawn and never a row, so the cursor still lands on
+artifacts only and search, selection and Fast/Verbose are untouched.
+
+**2026-09-17, PR #18 is green on every required check.** The `pr-check` matrix ran against the
+published head `3668a70` — the same commit as the local branch — and passed on Python 3.10, 3.11
+and 3.14, with the narrowed `pr-check` job itself green in 3 s. The `private image` job reports
+`skipping`, which is what it does when the registry credentials are absent; it is not a failure and
+not a gate that was dodged. CP-25 therefore has no executable work left. Taking the pull request out
+of draft, approving it and squash-merging it under its existing `feat:` title are the owner's
+actions, deliberately not taken here (D-302).
+
+**2026-09-17, CP-25.14 done (D-299) — CP-25 complete.** Installed Artifact Details names where
+AART actually put things (issue #17). Every path is read off the receipt written when the effects
+ran and joined to its component observation by `ComponentId`, never reconstructed from an assumed
+harness layout; an installation with no receipt claims no location rather than guessing one. A path
+nothing measured reads `unobserved` rather than `matched` — `installed_state._reported` legitimately
+drops an undamaged payload nobody desired, so a reopened session really can carry a delivery and no
+payload, and saying `matched` there would report a verification that never happened. Absent and
+divergent components are named too, with what was measured. Scope is reported only where an MCP
+registration recorded one; disagreeing registrations collapse to nothing. Fast names the payload and
+the harness destinations, Verbose adds the launcher and the interpreter. 17 tests, two of them
+driving a real installation through the public TUI and reopening the screen in a fresh composition
+so the paths are proven durable and checked against the filesystem. `format-check lint typecheck
+validate unit` green. **The full `make quality` has not been run since; it is required before CP-25
+is called verified.**
+
+**2026-09-17, CP-25.11 done (D-296).** The Python dependency backend is a per-install choice
+seeded by Settings (issue #11b). `preferred_installer` was inert plumbing -- supplied by nothing,
+held by no test -- so every install took the name-ordered default. Settings now carry the
+preference, Review Selection offers the backends this contract, machine and policy all allow, and
+one operation may differ from the preference without rewriting it. The offer is reported from the
+preparation that measured the machine, so a screen cannot offer what the plan would refuse. Two
+findings: the composition's preference survived a mutation until a test authored an artifact that
+really declares Python dependencies, and four tests addressed settings rows by ordinal and broke
+when a control was inserted above them.
+
+**2026-09-17, CP-25.10 done (D-295).** An installation's scope travels with the operation instead
+of being re-read from Settings at the effect boundary, so one install can differ from the preference
+without rewriting it (issue #11a). `offer_install_scopes` computes the offer as the intersection of
+every resolved artifact's declared scopes, minus `project` where no project target exists, and
+refuses when that is empty; a Hypothesis property holds it. Review Selection now draws the offer as
+radio rows after the harness rows -- only when there is a choice to make -- and pressing one
+re-prepares the plan at that scope. Two findings came out of the work: a third `PREPARE_ACTION`
+construction site that dropped the scope, and the row ordering, which first put scope above the
+harnesses and silently moved the first keypress of every existing install onto another control.
+
+**2026-09-17, CP-25.09 done (D-294).** A Marketplace row leads with the coordinate, the approval
+standing, the installation state and the eligible harnesses; the description is disclosed in
+Verbose and on Artifact Details instead of being printed on the row and repeated (issue #10).
+State is read from the canonical lifecycle projection and harness eligibility from the approved
+artifact projection -- the renderer probes nothing. Search still reads the summary it no longer
+shows, and a test holds that, because it is the obvious thing to break here.
+
+**2026-09-17, CP-25.08 done (D-293).** The Maintainer Dashboard counts Candidates by whether a
+maintainer can still act on them. `CandidateState` is split into `ACTIVE_CANDIDATE_STATES` and
+`SETTLED_CANDIDATE_STATES` in the domain, the projection derives the arithmetic once, and the
+renderer reclassifies nothing. The durable records are kept and still totalled, so the audit
+contract is untouched; the screen simply stops reporting promoted history as pending work
+(issue #9). The targeted mutation survived on the first suite and became the finding — see D-293.
+
+**2026-09-17, CP-25 tasks 04–07 done, and the full suite is green.** The usage-reporting withdrawal
+is committed (`7af06be`). `make quality` passed complete — format-check, lint, typecheck, unit,
+validate, coverage, packaging-check, docs-check, secret-shape-check — which discharges the baseline
+the entry below was still waiting on. Old configurations carrying a `reporting` block still load:
+the field is accepted, read to nothing, and never written again. All four targeted mutations were
+killed; they ran in a copy of the working tree, because a gate run was in flight and
+`scripts/quality.py` fails any run whose tracked files change under it.
+
+**2026-09-17, CP-24 closed.** The slice held itself open on a release that was the owner's to
+merge, and that merge happened: pull request #14, Release Please's #15 at 10:48 UTC, `v0.1.2`
+tagged on `origin`. A finished slice left open stops the progress bar for every slice after it.
+
+**2026-09-17, CP-25 expanded through task 14 (D-291).** At the owner's instruction CP-25 is the
+active stream for every open product issue in `M1F1/aart-cli`: #9, #10, #11, #12, #16 and #17.
+They are written as tasks 08–14 after the usage-reporting withdrawal. Issue #11 is two tasks because
+installation scope changes ownership/paths while the Python backend changes remediation/execution;
+the two whitespace reports remain separate because they name different screens. At the time of
+writing no implementation of tasks 04–14 had started; tasks 04–08 have since been done, as the
+entries above record.
+
+After that review the owner clarified the task-07 boundary (D-292): GitHub Issues, Pages, the static
+dashboard and the old usage payload all go, while Activity gains a transport-neutral application
+port and disabled adapter for a future explicitly configured server integration. The port itself
+does not send anything and carries no GitHub or network policy.
+
+The clean baseline requested by the handoff reached green format, lint, typecheck and unit (4,356
+tests, 1 skipped). It was stopped during coverage when the owner asked for the task review, so a
+complete green `make quality` is still required before CP-25 verification.
+
+**2026-09-17, CP-25 release-gate part done (D-290).** A release pull request is gated on what it changes rather
+than on everything. INV-096 asked for "a required quality gate" without saying what it must cover,
+which put it in tension with INV-097 and INV-102 -- both of which forbid repeating the complete
+source suite for a tree that has already passed it. It now names the subject: the release identity,
+the artifact that identity produces, and the documents it rewrites. `pr-check` runs
+`packaging-check validate docs-check release-bump` on one interpreter for a release pull request
+(15 seconds against roughly 17 minutes) and everything on three for every other one.
+
+The narrowing is conditional, and the condition is checked rather than assumed. A branch named
+`release-please--...` is not evidence -- anyone who can push can push onto it -- so
+`scripts/release_pr_scope.py` reads the diff first and refuses the narrow path for any path outside
+release bookkeeping, and for an empty diff, which means the comparison did not work rather than that
+nothing was out of scope. Its permitted list is derived from `release-please-config.json` by a test,
+so widening the engine cannot silently widen what may skip the suite. The condition lives in the two
+existing gate jobs rather than a third, because `container.credentials` cannot be made conditional
+and a third job would have needed a fourth beside it.
+
 **2026-09-16, CP-24 opened.** The owner filed issues #7 and #8 against the released `v0.1.1`.
 A Source whose stored Candidate history does not bind its pinned revision makes the whole local
 state unloadable, with no repair short of deleting files; the installation review names an

@@ -76,7 +76,6 @@ def _configure_and_sync(source_root: Path, home: Path) -> str:
     from agent_artifacts.application.sources import SourceSyncPorts, SourceSyncRequest, sync_source
     from agent_artifacts.configuration.model import (
         ConfiguredSource,
-        ReportingSettings,
         SourceKind,
         SyncSettings,
         UserConfiguration,
@@ -109,7 +108,6 @@ def _configure_and_sync(source_root: Path, home: Path) -> str:
         (source,),
         None,
         SyncSettings(),
-        ReportingSettings(),
     )
     paths = _config_paths(home)
     _unwrap(

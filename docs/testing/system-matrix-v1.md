@@ -26,7 +26,6 @@ output or paths.
 | `corrupt-lock-object` | Stale/mismatched locks fail closed and corrupted CAS content is repaired safely |
 | `setup-partial` | Setup queue stop, retry, and rollback retain per-item terminal outcomes |
 | `security-provider-failure` | Optional analyzer timeout/crash/malformed output cannot become a core failure |
-| `reporting-absent` | Disabled or unavailable reporting performs no provider mutation and fails closed |
 
 Run one scenario while diagnosing a failure:
 

@@ -24,9 +24,6 @@ from .model import (
     CompanyReviewedSource,
     ConfiguredSource,
     OrganizationPolicy,
-    ReportingMode,
-    ReportingPolicy,
-    ReportingSettings,
     SourceKind,
     SyncMode,
     SyncSettings,
@@ -338,32 +335,52 @@ def _sync(value: JsonValue) -> Result[SyncSettings]:
         return _error(CONFIG_INVALID, str(error))
 
 
-def _reporting(value: JsonValue) -> Result[ReportingSettings]:
-    object_result = _object(value, CONFIG_INVALID, "reporting")
+def _ignored_reporting(
+    value: JsonValue, code: DiagnosticCode, *, policy: bool = False
+) -> Result[None]:
+    """Validate the retired field's last accepted shape, then deliberately discard it.
+
+    AART wrote this block into every configuration before CP-25.  Keeping it in the accepted field
+    set is a compatibility boundary; returning no value is what makes that compatibility incapable
+    of re-enabling the withdrawn behaviour.
+    """
+
+    label = "policy reporting" if policy else "reporting"
+    object_result = _object(value, code, label)
     if isinstance(object_result, Err):
         return object_result
     fields = _validated(
         object_result.value,
-        CONFIG_INVALID,
-        optional=frozenset({"mode", "destination"}),
+        code,
+        optional=frozenset(
+            {"mode", "destination", "deny_public_destinations"}
+            if policy
+            else {"mode", "destination"}
+        ),
     )
     if isinstance(fields, Err):
         return fields
-    mode = _enum(
-        fields.value.get("mode", "prompt"), ReportingMode, CONFIG_INVALID, "reporting mode"
-    )
-    if isinstance(mode, Err):
-        return mode
-    destination: SourceAlias | None = None
+    mode: str | None = None
+    if "mode" in fields.value or not policy:
+        parsed_mode = _string(fields.value.get("mode", "prompt"), code, f"{label} mode")
+        if isinstance(parsed_mode, Err):
+            return parsed_mode
+        if parsed_mode.value not in {"disabled", "prompt", "automatic"}:
+            return _error(code, f"{label} mode has an unsupported value")
+        mode = parsed_mode.value
     if "destination" in fields.value:
-        parsed = _alias(fields.value["destination"], CONFIG_INVALID, "reporting destination")
+        parsed = _alias(fields.value["destination"], code, f"{label} destination")
         if isinstance(parsed, Err):
             return parsed
-        destination = parsed.value
-    try:
-        return Ok(ReportingSettings(mode.value, destination))
-    except ValueError as error:
-        return _error(CONFIG_INVALID, str(error))
+    elif not policy and mode == "automatic":
+        return _error(code, "automatic reporting requires an explicit destination")
+    if policy and "deny_public_destinations" in fields.value:
+        denied = _boolean(
+            fields.value["deny_public_destinations"], code, "deny_public_destinations"
+        )
+        if isinstance(denied, Err):
+            return denied
+    return Ok(None)
 
 
 def parse_user_configuration(data: bytes | str) -> Result[UserConfiguration]:
@@ -385,7 +402,7 @@ def parse_user_configuration(data: bytes | str) -> Result[UserConfiguration]:
         return _error(CONFIG_INVALID, f"unsupported schema_version {version.value}")
     sources = _sources(fields.value.get("sources", JsonArray(())))
     sync = _sync(fields.value.get("sync", JsonObject(())))
-    reporting = _reporting(fields.value.get("reporting", JsonObject(())))
+    reporting = _ignored_reporting(fields.value.get("reporting", JsonObject(())), CONFIG_INVALID)
     if isinstance(sources, Err):
         return sources
     if isinstance(sync, Err):
@@ -405,11 +422,7 @@ def parse_user_configuration(data: bytes | str) -> Result[UserConfiguration]:
         default_source = by_alias.get(default_registry)
         if default_source is None or not default_source.enabled or not default_source.is_registry:
             return _error(CONFIG_INVALID, "default registry must name an enabled registry source")
-    if reporting.value.destination is not None:
-        target = by_alias.get(reporting.value.destination)
-        if target is None or not target.enabled or not target.is_registry:
-            return _error(CONFIG_INVALID, "reporting destination must name an enabled registry")
-    return Ok(UserConfiguration(1, sources.value, default_registry, sync.value, reporting.value))
+    return Ok(UserConfiguration(1, sources.value, default_registry, sync.value))
 
 
 def _source_json(source: ConfiguredSource) -> JsonObject:
@@ -427,11 +440,7 @@ def _source_json(source: ConfiguredSource) -> JsonObject:
 
 
 def user_configuration_bytes(configuration: UserConfiguration) -> bytes:
-    reporting_entries: list[tuple[str, JsonValue]] = [("mode", configuration.reporting.mode.value)]
-    if configuration.reporting.destination is not None:
-        reporting_entries.append(("destination", configuration.reporting.destination.value))
     entries: list[tuple[str, JsonValue]] = [
-        ("reporting", JsonObject(tuple(reporting_entries))),
         ("schema_version", 1),
         ("sources", JsonArray(tuple(_source_json(source) for source in configuration.sources))),
         (
@@ -469,46 +478,6 @@ def _optional_strings(
             return _error(POLICY_INVALID, f"{name} contains an unsafe value")
         values.append(normalized)
     return Ok(tuple(sorted(set(values))))
-
-
-def _policy_reporting(value: JsonValue) -> Result[ReportingPolicy]:
-    object_result = _object(value, POLICY_INVALID, "policy reporting")
-    if isinstance(object_result, Err):
-        return object_result
-    fields = _validated(
-        object_result.value,
-        POLICY_INVALID,
-        optional=frozenset({"mode", "destination", "deny_public_destinations"}),
-    )
-    if isinstance(fields, Err):
-        return fields
-    mode: ReportingMode | None = None
-    destination: SourceAlias | None = None
-    deny = False
-    if "mode" in fields.value:
-        parsed_mode = _enum(
-            fields.value["mode"], ReportingMode, POLICY_INVALID, "policy reporting mode"
-        )
-        if isinstance(parsed_mode, Err):
-            return parsed_mode
-        mode = parsed_mode.value
-    if "destination" in fields.value:
-        parsed_destination = _alias(
-            fields.value["destination"], POLICY_INVALID, "policy reporting destination"
-        )
-        if isinstance(parsed_destination, Err):
-            return parsed_destination
-        destination = parsed_destination.value
-    if "deny_public_destinations" in fields.value:
-        parsed_deny = _boolean(
-            fields.value["deny_public_destinations"],
-            POLICY_INVALID,
-            "deny_public_destinations",
-        )
-        if isinstance(parsed_deny, Err):
-            return parsed_deny
-        deny = parsed_deny.value
-    return Ok(ReportingPolicy(mode, destination, deny))
 
 
 def _company_reviewed_source(value: JsonValue) -> Result[CompanyReviewedSource]:
@@ -665,7 +634,9 @@ def parse_organization_policy(data: bytes | str) -> Result[OrganizationPolicy]:
                 return parsed_capability
             parsed_capabilities.append(parsed_capability.value)
         capabilities = tuple(sorted(set(parsed_capabilities)))
-    reporting = _policy_reporting(fields.value.get("reporting", JsonObject(())))
+    reporting = _ignored_reporting(
+        fields.value.get("reporting", JsonObject(())), POLICY_INVALID, policy=True
+    )
     if isinstance(reporting, Err):
         return reporting
     try:
@@ -680,7 +651,6 @@ def parse_organization_policy(data: bytes | str) -> Result[OrganizationPolicy]:
                 minimum_trust,
                 capabilities,
                 allow_custom,
-                reporting.value,
                 company_sources.value,
             )
         )
@@ -727,12 +697,4 @@ def organization_policy_bytes(policy: OrganizationPolicy) -> bytes:
     ):
         if value is not None:
             entries.append((name, value))
-    reporting_entries: list[tuple[str, JsonValue]] = [
-        ("deny_public_destinations", policy.reporting.deny_public_destinations)
-    ]
-    if policy.reporting.mode is not None:
-        reporting_entries.append(("mode", policy.reporting.mode.value))
-    if policy.reporting.destination is not None:
-        reporting_entries.append(("destination", policy.reporting.destination.value))
-    entries.append(("reporting", JsonObject(tuple(reporting_entries))))
     return canonical_json_bytes(JsonObject(tuple(entries)))

@@ -7149,3 +7149,351 @@ Recorded rather than fixed: the same trap sits in the registry template `registr
 where `actions/upload-pages-artifact@v3` is referenced from an always-running job, which defeats the
 documented `AART_PAGES=false` escape hatch. That is a separate contract with a migration attached —
 `BACKLOG.md` B-134.
+
+## D-290 — A release pull request is gated on what it changes, not on everything
+
+**Context.** The owner asked why a Release Please pull request runs the whole gate set when the same
+tree passed it hours earlier on the change pull request. The release pull request changes four
+files: `pyproject.toml`, `agent_artifacts/__init__.py`, `.release-please-manifest.json` and
+`CHANGELOG.md`. Running 4,338 tests on three interpreters to prove four version literals costs about
+51 runner-minutes per release and proves, for the most part, what was already proven.
+
+INV-096 required "the normal required quality contract", which is what the workflows did. But two
+neighbouring invariants already say the opposite for the same reason: INV-097 forbids repeating the
+complete source test suite for a tree that has already passed it, and INV-102 forbids conflating PR
+CI and release CI into redundant pipelines. INV-096 was therefore in tension with its own
+neighbours, and the resolution belongs in the Specification rather than in a workflow that quietly
+disagrees with it.
+
+**Decision.** INV-096 is rewritten: a release pull request MUST still pass a *required* gate, and
+that gate MUST prove every property the release pull request itself can break — the release identity
+written into the tree, the artifact that identity produces, and the documents it rewrites — while
+not repeating the full suite. The narrowing is **conditional**: it holds only while the release pull
+request changes nothing but release bookkeeping. A release branch carrying anything else is gated as
+an ordinary change.
+
+That condition is the load-bearing half. Without it, narrowing the gate on a branch name would let
+any commit pushed onto `release-please--branches--main` reach `main` through a gate that never ran
+the tests. The gate therefore checks the diff rather than trusting the branch it is running on.
+
+**Consequences.** The version the owner is releasing, 0.1.2, was gated the old way; this takes
+effect from the next release. The wording is narrower than before, not looser: it names what must be
+proven instead of deferring to "the normal contract", so a future reader can tell whether a given
+gate satisfies it.
+
+## D-291 — CP-25 is the active stream for the open post-release field reports
+
+**Context.** After tasks 01–03 landed, CP-25 already held the planned withdrawal of usage reporting
+as tasks 04–07. The owner then asked to make CP-25 the new active stream and add every open issue in
+`M1F1/aart-cli`. The open product reports are #9 (Candidate count), #10 (Marketplace information
+hierarchy), #11 (installation scope and Python backend choices), #12 and #16 (two distinct Variables
+and Credentials layouts), and #17 (installed paths).
+
+**Decision.** Append tasks 08–14 to CP-25 and keep 04 as the next executable task. Issue #11 becomes
+two tasks because scope selects ownership, destinations and receipt identity, while the Python
+backend selects a remediation/interpreter; combining them would make one TDD step change two
+independent contracts. Issues #12 and #16 also remain separate: one separates repeated artifact
+groups on screen 22, the other separates semantic sections inside screen 22a. Issue #17 is its own
+Installed Artifact projection task. The complete written scope is reviewed by the owner before
+production implementation starts.
+
+**Consequences.** `plan.json` now carries CP-25.01–.14 and the slice has red-first acceptance
+criteria for every new report. B-132 is scheduled as task 11 and B-134 as task 06. This planning
+change does not decide the release version for removing `aart reporting`; that remains the explicit
+owner decision already recorded in the slice.
+
+## D-292 — Future telemetry starts at an Activity port, not at the withdrawn GitHub reporter
+
+**Context.** The owner approved withdrawing GitHub-issue usage reports, the registry's static
+dashboard, GitHub Pages and their workflows, then clarified that a future server/telemetry
+integration should still have an adapter boundary to attach to. The existing reporting package is
+not that neutral boundary: its model, routing, consent and transport are shaped around one registry's
+`github-issues` advertisement and a prefilled issue payload.
+
+**Decision.** Remove that package and its GitHub adapter completely. Keep Activity/receipts as the
+durable source and introduce a transport-neutral application port plus a disabled/no-op adapter over
+Activity records. The port contains no network, URL, authentication or GitHub semantics, and the
+runtime does not transmit anything merely because the port exists. A future explicitly configured
+HTTP adapter may implement it without changing the Activity domain or receipt store.
+
+**Consequences.** No obsolete `UsageReport` schema is mistaken for the future telemetry contract,
+and removal of Pages/issues does not force a future implementation back through command or TUI
+code. Secret-safety INV-052 still applies to any future projection; defining an outbound payload,
+consent/configuration and retry semantics remains future product work rather than being guessed in
+CP-25.
+
+## D-293 — The Dashboard counts Candidates by whether a maintainer can still act on them
+
+**Context.** `Candidates: N` on the Maintainer Dashboard counted every durable Candidate record.
+Promoted, Superseded, Rejected and Source Removed are lifecycle states the audit contract requires
+to persist, so a source whose Candidates had all been promoted reported work that nobody could do:
+two promoted Candidates read as two Candidates pending (issue #9). Deleting the records, or
+excluding them from storage, would have traded a display fault for an audit fault.
+
+**Decision.** Split `CandidateState` into two frozensets in the domain --
+`ACTIVE_CANDIDATE_STATES` and `SETTLED_CANDIDATE_STATES` -- and derive the Dashboard's arithmetic
+from them. The projection owns the split once: `MaintainerSourceView` gains `active_count` and
+`settled_count`, `MaintainerDashboardView` gains `lifecycle_counts` plus `active_candidate_count`
+and `settled_candidate_count`, and the renderer reclassifies nothing. `candidate_count` keeps
+counting every record, so the durable history is still visible and still totalled.
+
+**Consequences.** The screen leads with what is waiting and names the settled records only when
+some exist, so a registry that has never promoted anything reads exactly as before. The view
+refuses a breakdown that does not sum to the total, which makes a renderer that invents or drops a
+state a construction error rather than a wrong number on screen. The two halves are asserted to
+partition the vocabulary: a state in neither would silently vanish from the counts.
+
+**What the mutation found.** Moving `APPROVAL_REQUIRED` into the settled half survived the first
+test suite. It is the most literally pending state there is -- the Candidate is stopped exactly
+because it wants a maintainer's decision -- so the classification would have hidden the very work
+issue #9 is about. Two tests now hold it.
+
+## D-294 — A Marketplace row leads with installation state and harnesses, not with the description
+
+**Context.** The Fast block on a focused Marketplace row rendered the complete artifact summary,
+and Verbose rendered it again through Artifact Details. The list was therefore hard to scan while
+omitting the two facts that decide anything on that screen: whether the artifact is already
+installed on this machine, and which harnesses it can be installed into (issue #10). The long
+summary was emitted unwrapped, which is what overflowed a narrow terminal.
+
+**Decision.** Fast leads with the coordinate, the approval standing, the installation state and the
+eligible harnesses. The description is progressively disclosed: Verbose carries it exactly once
+through `render_artifact_detail`, and Enter still opens Artifact Details for the complete record.
+Installation state is read from `MarketplaceArtifactRow.installed_statuses`, which the canonical
+lifecycle projection fills, and harness eligibility from the approved artifact projection. The
+renderer neither probes the machine nor infers state from the artifact kind.
+
+**Consequences.** Search and filtering are unchanged and still read the summary, so a word that
+appears only in the description still finds the artifact even though the row no longer shows it;
+a test holds that, because it is the obvious thing to break when prose stops being rendered. The
+state is named with its harness and its exact lifecycle status rather than as a flat "installed":
+`current` and `update-available` are different answers to whether there is anything to do, and a
+targeted mutation collapsing them was killed by three tests. `tests/consumer_views_test.py` held
+the old contract with `assertIn(row.summary, fast)`; that assertion is replaced by its opposite
+plus the Verbose claim, rather than deleted, so the reversal is recorded where the old promise was.
+
+## D-295 — An installation's scope travels with the operation, not with the preference
+
+**Context.** `Settings.default_scope` was read at the effect boundary when the plan was built, so
+it was the only thing that could decide where an installation landed (issue #11a). Two faults
+follow from that shape rather than from the value: nobody could install one artifact elsewhere
+without changing a global preference first, and a preference changed between review and execution
+would have moved files the operator had already reviewed as going somewhere else.
+
+**Decision.** The scope is chosen per operation and travels on `ConsumerUiCommand.install_scope`,
+empty meaning "follow the stored preference". `ConsumerActionsComposition._host` takes it as an
+argument and never writes it back: a one-off choice is an answer about this operation, not a new
+default. `offer_install_scopes` in the application layer computes what may be offered — the
+intersection of every resolved artifact's declared scopes, minus `project` when no project target
+exists — and refuses rather than guesses when that intersection is empty, because installing
+members with no common scope has no correct answer. `InstallScopeChoiceView` cannot represent an
+impossible offer: it is never empty and its selection is always one of its own options.
+
+**Consequences.** The preference keeps meaning what Settings says it means. A Hypothesis property
+holds the offer as exactly the intersection over every shape of declaration, so a future artifact
+kind declaring a new scope combination cannot quietly widen it.
+
+**What the work found.** The first targeted mutation — making `_host` ignore its argument and read
+the preference again — survived every unit-level test in the module, because none of them actually
+installed anything. The test that kills it drives the real TUI from a Project default to a User
+install and asserts the files landed in the home and not in the project. Writing it also exposed a
+third `PREPARE_ACTION` construction site, the re-prepare after harness selection on screen 05,
+which did not carry the scope; without the drive the choice would have silently reverted there.
+
+**The screen.** Review Selection draws the offer, and only when there is something to decide: a
+selection with one possible scope states a fact rather than presenting a control. The rows follow
+the harness rows rather than leading them, because row order is cursor order on that screen and the
+screen's act is choosing what to install into — leading with the scope would have moved the first
+keypress of every existing install onto a different control, which the fixture `_INSTALL` caught by
+suddenly installing into the project a test had just chosen to leave. Harnesses are drawn as boxes
+and the scope as a radio, so the one answer does not read as one more harness. The second targeted
+mutation — marking every scope row selected — was killed by the two tests that read the mark.
+
+## D-296 — The Python dependency backend is chosen per installation, not per machine
+
+**Context.** `preferred_installer` already ran from `prepare_configured_installation` down to
+`chosen_installer`, and nothing ever supplied it: every install took the name-ordered default
+(issue #11b). It was inert plumbing, and no test noticed, because no test passed it. Settings had
+no preference to supply either, so an operator who wanted uv had no way to say so.
+
+**Decision.** The backend is a per-operation choice travelling on `ConsumerUiCommand.python_installer`,
+empty meaning "follow the preference", alongside but separate from `install_scope` (D-295): where an
+artifact's files land and what resolves its dependencies are two questions, and answering one is not
+answering the other. `ConsumerSettings.python_installer` stores the preference and defaults to `pip`,
+the backend every Python that can build an environment already has, so the default is never itself
+the reason an install cannot run. A one-off choice does not rewrite it.
+
+**What may be offered.** `usable_python_installers` names the intersection `select_python_installer`
+was already taking — specification, platform, policy — so the offer and the plan are one rule rather
+than two that can drift. `prepare_configured_installation` reports it per artifact on
+`PreparedConfiguredInstallation.python_installers`, measured where the machine was measured;
+deriving it again in the frontend would let a screen offer a backend the plan then refuses, which
+the operator would read as a fault in their own choice. `offer_python_installers` intersects those
+sets: empty input is not a choice with no answer but a question that does not arise, and an empty
+intersection is refused rather than resolved, because running two backends for one reviewed install
+is what `chosen_installer` exists to prevent.
+
+**The screen.** Review Selection draws the backends after the scope rows, for the reason the scope
+rows follow the harnesses: each is an amendment to a plan that already exists, and the cursor opens
+on the screen's own subject. Backends are radios; only a real choice is drawn.
+
+**What the work found.** Two targeted mutations. Dropping the preference inside
+`plan_artifact_installation` was killed immediately. Pinning the composition's preference to `pip`
+**survived** the whole module, exactly as the `_host` mutation did in D-295 and for the same reason:
+every test that could see it worked on an artifact with no Python dependencies, so the composition
+was never asked the question. The test that kills it authors an artifact that really declares a
+`requirements` contract, puts a `uv` stub on `PATH` so the machine reports both backends without uv
+being installed, stores `uv` as the preference and reads the mark off the drawn screen.
+
+**A second finding.** Four tests reached settings rows by ordinal — `cursor=3`, `range(3)` —
+so inserting a control above Maintainer Mode silently toggled its neighbour instead. They now count
+from `SETTING_ROWS`. A test that addresses a row by its position is a test that passes for the wrong
+reason as soon as the screen grows.
+
+## D-297 — A grouped list separates its groups, and nothing else changes
+
+**Context.** Screen 22 draws each installed artifact as three lines — its coordinate, its
+Configuration summary, its Credentials summary — and adjacent groups touched (issue #12). Reading
+down the list, the only thing telling you whose Credentials line you were on was indentation, which
+is exactly the work a grouped list is supposed to do for the reader.
+
+**Decision.** One empty line between groups, drawn by the renderer when it already has lines, so
+there is no leading blank and no trailing one. The separator is drawn, never a row: `rows` is still
+one entry per artifact, so the cursor, search, selection and every keystroke mean what they meant.
+Fast and Verbose are untouched, and the empty state is still its own single line.
+
+**What the work found.** The targeted mutation — deleting the separator — fails only the
+multi-artifact assertions, which is the shape a layout claim should have: the zero- and one-artifact
+cases are about a list with nothing to separate and must stay green under it.
+
+## D-298 — Two sections are drawn as two, and the spacing is never a row
+
+**Context.** Screen 22a shows an artifact's ordinary configuration values and its credential
+references — values AART stores and references it deliberately never reads. Both headings sat
+against their own first row and against the other section's block, so the two read as labels on one
+list rather than as the boundary between two kinds of thing (issue #16).
+
+**Decision.** One empty line after each heading, and one between a completed Configuration block
+and the Credentials heading. Nothing opens or closes the view with a blank: the boundary line is
+appended only when there are already lines, so credentials alone still start on their own heading.
+
+**The spacing is layout, not content.** `rows` is built from the identifiers and references
+themselves, never from the drawn lines, so a separator cannot take a cursor, cannot be pressed and
+cannot read as a harness holding nothing. Two tests hold that from the real screen source rather
+than from the renderer alone, because a renderer's lines are not yet a screen. The credential
+boundary is unchanged and tested where it lives: a reference is drawn by name and health, and the
+view has no material in it to leak.
+
+**What the work found.** The targeted mutation — dropping the blank between a completed
+Configuration block and the Credentials heading — fails only the two-section assertions. The
+configuration-only and credentials-only cases stay green under it, which is correct: a view with
+one section has no boundary to draw.
+
+## D-299 — Installed Artifact Details names recorded paths, and says when nothing measured them
+
+**Context.** The view reported health, ownership and drift and never answered the first question
+anybody opens it with: where is it (issue #17). The paths were available all along — the receipt
+written when the effects ran records the artifact's root and every destination — but nothing
+projected them.
+
+**Decision.** Every path in the view is read off the receipt. None is reconstructed from a harness
+layout, because an assumed path is a claim about somebody else's disk: the day a harness moves a
+file, a reconstructed path is confidently wrong, while a recorded one is merely historical. An
+installation with no receipt therefore claims no location at all rather than guessing one.
+
+**The join is by component identity, not by path.** Each recorded path is paired with the
+observation for its `ComponentId` — `delivery:<harness>`, not a path string — because that is how
+the reconciler already addresses these things. Matching on the path would silently stop working the
+first time a destination changed, and the domain will not even let the qualifier be dropped: a
+`ComponentId(Component.DELIVERY)` with no harness raises, so the join cannot quietly degrade into
+one that matches everything.
+
+**Unmeasured is reported as unmeasured.** `installed_state._reported` deliberately drops an
+undamaged payload observation nobody desired, so a reopened session's current state can legitimately
+carry a delivery and no payload. The path is still the artifact's and is still named; its state
+reads `unobserved`. Calling it `matched` would report a verification that never happened, and
+omitting the row would hide the location the reader came for. An absent or divergent component is
+named too, with what was measured about it — a view that goes quiet exactly when something is wrong
+is the failure mode this replaces.
+
+**The scope is reported only where one was recorded.** Only an MCP registration writes a scope down.
+A delivery records a harness and a destination, so reading a scope off that destination would mean
+deciding which directories belong to a project and which to a home — the guessed layout this
+decision rules out. Registrations that disagree collapse to nothing rather than to whichever came
+first. Fast names the payload and the places a harness reads it from; Verbose adds the launcher and
+the interpreter, which are owned and real but are not what "where is it" means.
+
+**What the work found.** The targeted mutation — the join's default `unobserved` changed to
+`matched` — fails exactly the two honesty tests and nothing else, which is the shape the claim
+should have: every test about *which* paths appear stays green, because the mutation is about what
+is said when nobody looked. A real-TUI drive confirmed the case in the wild: after installing and
+reopening in a fresh composition, the delivery read `matched` and the payload `unobserved`, and
+reading `_reported` showed that was truthful rather than a broken join.
+
+## D-300 — Pull-request title validation precedes every expensive CI action step
+
+**Context.** An Enterprise fork smoke PR titled `test` correctly failed the Conventional Commit
+validator, but the validator was last in the shared quality action. The required matrix ran its
+full quality gates first, so a cheap, actionable refusal arrived only after expensive work.
+
+**Decision.** At the owner's explicit instruction, promote B-135 into CP-25.15. Move the existing
+validator step to the beginning of `.github/actions/quality/action.yml`, before workspace trust,
+release-scope checking, index setup, tool installation and the canonical gates. It reads only the
+checked-out release configuration and Python already present in the job image, so it needs none of
+those prior steps. Keep the event guard, `PR_TITLE` binding, accepted-type policy and `pr-check`
+aggregation unchanged; there is no second workflow or branch-protection setting to coordinate.
+
+**Boundary.** The `pull_request` trigger still does not include `edited`. Editing a PR title alone
+will not start a fresh run; solving that event-policy issue is separate from making the next run
+fail fast. The ordering test proved the intended position: temporarily moving the title step
+behind workspace trust made it red, and restoring the first-step order made it green again.
+
+## D-301 — Redaction tests assemble token-shaped values instead of committing them
+
+**Context.** The first full `make quality` after CP-25.15 passed its preceding gates and failed
+the final `secret-shape-check`. CP-25.13 and CP-25.14 had each added a quoted fake token assigned
+to `SECRET`. The gate found both the assignment and the token shape on each line. Enterprise push
+protection scans shapes, not intent, so a fake literal still threatens the branch push.
+
+**Decision.** At the owner's instruction, include this gate repair as CP-25.16. Build both
+redaction fixtures with the existing `tests.credential_fixtures.access_token()` helper. Keep the
+redaction assertions and scanner unchanged; do not suppress or weaken the gate. The first
+scanner run was red in exactly those two test files, the focused tests and scanner are green after
+the change, and deliberately restoring one literal turns the scanner red again.
+
+**Verification.** Full `make quality` passed after the fixture change: 4,441 unit tests (1
+skipped), 86.07% branch coverage, packaging and docs checks, and the final secret-shape check.
+The integration gate reported its 395 tests as already included in unit. No production Python
+module changed in this task, so no module-scoped mutmut run is applicable; the targeted
+literal-restoration mutation holds the gate's claim.
+
+## D-302 — Release CP-25 as 0.2.0 through a feat-titled pull request
+
+**Context.** With `bump-minor-pre-major: false`, a `feat!:` squash title would jump from the
+current `0.1.2` directly to `1.0.0`; `feat:` gives `0.2.0`. The reporting withdrawal removes an
+old public verb, so this was an owner decision rather than an agent inference.
+
+**Decision.** The owner explicitly chose `0.2.0`. Rebase CP-25 onto current `origin/main`,
+preserving its released version files, then open draft PR
+[#18](https://github.com/M1F1/aart-cli/pull/18) titled `feat: complete CP-25 consumer fixes and
+reporting withdrawal`. The title passes `scripts/conventional_title.py` and is the expected
+release-semantic squash title. Do not add a breaking `!` or merge before the required `pr-check`
+matrix is green and the owner approves the PR.
+
+## D-303 — Show wheel-first installation without promising anonymous private access
+
+**Context.** A private Enterprise fork's direct wheel URL gave `pipx` an invalid wheel, while
+`git+` required the pinned `poetry-core` build backend unavailable on the user's index. The owner
+asked for a small parameterized README example for `pipx` and `uv tool`, deferring checksum work.
+
+**Decision.** Document a public-readable Release URL with only repository address and version as
+inputs, download the already-built wheel once, check its ZIP archive shape, and choose one local
+installer. The check is before install so an HTML sign-in page is refused before any package runs.
+Do not claim that `curl` authenticates to private Enterprise, that ZIP validation is an
+authenticity check, or that `git+` needs no build backend. A per-release checksum is B-136, not a
+silent promise in this README example. No release or runtime code changes.
+
+**Follow-up.** Put the inputs and download in each installer block so each is runnable on its own.
+Use `pipx --python "$(command -v python3)"` because `pipx` may otherwise select a different cached
+interpreter; the cached 3.14 on the test machine failed, while the active 3.11 succeeded. Require
+an existing Release asset, not merely a planned version or tag.

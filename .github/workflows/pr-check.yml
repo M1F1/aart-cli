@@ -50,7 +50,15 @@ jobs:
       matrix:
         # 3.11 is here because the release run does not run the gates, so this matrix is the only
         # place 3.11 is exercised.
-        python-version: ${{ fromJSON(vars.AART_PYTHON_VERSIONS || '["3.10", "3.11", "3.14"]') }}
+        #
+        # A release pull request takes one interpreter instead of three.  Three catch behaviour that
+        # differs between interpreters, in code; a release pull request changes no code, only the
+        # version literals and the changelog, so the other two would prove the same bookkeeping twice
+        # more (INV-096).
+        python-version: >-
+          ${{ fromJSON(startsWith(github.head_ref, 'release-please--')
+          && format('["{0}"]', vars.AART_RELEASE_PYTHON_VERSION || '3.11')
+          || vars.AART_PYTHON_VERSIONS || '["3.10", "3.11", "3.14"]') }}
     env:
       # The tool's own gates need ruff, mypy and coverage.  That is the one place this repository
       # needs a package index; the registry gates need none.  The variable holds the bare host and
@@ -60,10 +68,28 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Full history only where it is needed: the scope check compares the pull request against
+          # its base, and a shallow clone has no merge base to compare with.  Quoted, because
+          # `x && 0 || 1` in an expression yields 1 either way -- 0 is falsy, so the `||` fires on
+          # the branch that was supposed to win.
+          fetch-depth: ${{ startsWith(github.head_ref, 'release-please--') && '0' || '1' }}
 
       - uses: ./.github/actions/quality
         with:
           python: ${{ vars.AART_PYTHON || 'python' }}
+          # Empty is the full canonical run.  A release pull request narrows it to the gates that
+          # can prove what it actually changes: the release identity it writes into the tree, the
+          # artifact that identity produces, and the documents it rewrites (INV-096).
+          gates: >-
+            ${{ startsWith(github.head_ref, 'release-please--')
+            && 'packaging-check validate docs-check release-bump' || '' }}
+          # Setting this turns the scope check on, and the scope check is what makes keying on a
+          # branch name safe: the narrow gate list stands only while the diff is release
+          # bookkeeping and nothing else (D-290).
+          scope-base: >-
+            ${{ startsWith(github.head_ref, 'release-please--')
+            && github.event.pull_request.base.sha || '' }}
 
   gates-private-image:
     if: vars.AART_IMAGE_USERNAME_SECRET != ''
@@ -77,17 +103,38 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ${{ fromJSON(vars.AART_PYTHON_VERSIONS || '["3.10", "3.11", "3.14"]') }}
+        python-version: >-
+          ${{ fromJSON(startsWith(github.head_ref, 'release-please--')
+          && format('["{0}"]', vars.AART_RELEASE_PYTHON_VERSION || '3.11')
+          || vars.AART_PYTHON_VERSIONS || '["3.10", "3.11", "3.14"]') }}
     env:
       AART_INDEX_URL: ${{ vars.AART_PIP_INDEX_URL || 'https://pypi.org/simple' }}
       AART_INDEX_CREDENTIALS: ${{ secrets[vars.AART_PIP_INDEX_CREDENTIALS_SECRET] }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Full history only where it is needed: the scope check compares the pull request against
+          # its base, and a shallow clone has no merge base to compare with.  Quoted, because
+          # `x && 0 || 1` in an expression yields 1 either way -- 0 is falsy, so the `||` fires on
+          # the branch that was supposed to win.
+          fetch-depth: ${{ startsWith(github.head_ref, 'release-please--') && '0' || '1' }}
 
       - uses: ./.github/actions/quality
         with:
           python: ${{ vars.AART_PYTHON || 'python' }}
+          # Empty is the full canonical run.  A release pull request narrows it to the gates that
+          # can prove what it actually changes: the release identity it writes into the tree, the
+          # artifact that identity produces, and the documents it rewrites (INV-096).
+          gates: >-
+            ${{ startsWith(github.head_ref, 'release-please--')
+            && 'packaging-check validate docs-check release-bump' || '' }}
+          # Setting this turns the scope check on, and the scope check is what makes keying on a
+          # branch name safe: the narrow gate list stands only while the diff is release
+          # bookkeeping and nothing else (D-290).
+          scope-base: >-
+            ${{ startsWith(github.head_ref, 'release-please--')
+            && github.event.pull_request.base.sha || '' }}
 
   # The one name branch protection can require.
   #

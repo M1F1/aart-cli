@@ -35,15 +35,6 @@ from agent_artifacts.registry_commands.templates import REGISTRY_CI_WORKFLOW
 from agent_artifacts.runtime_contract import EXECUTABLE_VERSION
 from tests.registry_maintenance_fixtures import replace_snapshot_file
 
-#: An init that opted into usage reporting, which is the only init that generates its assets.
-_REPORTING_OPTIONS = RegistryInitOptions(
-    "company-registry",
-    "Company Agent Artifacts",
-    SemVer(1, 0, 0),
-    SemVer(2, 0, 0),
-    usage_reporting_repository="company/registry",
-)
-
 
 def _semver(text: str) -> SemVer:
     parsed = parse_semver(text)
@@ -129,18 +120,11 @@ class RegistryInitScaffoldTest(unittest.TestCase):
         )
         self.assertIsInstance(missing, Err)
 
-    def test_usage_reporting_assets_require_an_explicit_destination(self) -> None:
-        """No destination, no reporting apparatus (B-087/QA-013).
-
-        The manifest already gated the usage-reporting *advertisement* on somebody naming a
-        repository; the files were written regardless, so a registry created by a maintainer who
-        declined the feature still shipped an Issue Form soliciting reports and two workflows to
-        process them.  Generated infrastructure for a service the registry does not offer is not
-        a neutral default: it invites contributions nothing will read.
-        """
+    def test_registry_init_contains_no_withdrawn_reporting_apparatus(self) -> None:
+        """CP-25.06: the GitHub Issue and Pages implementation is no longer scaffolded."""
 
         empty = SourceSnapshot(SnapshotOrigin.LOCAL, ())
-        declined = plan_registry_init(
+        planned = plan_registry_init(
             empty,
             RegistryInitOptions(
                 "company-registry",
@@ -149,15 +133,14 @@ class RegistryInitScaffoldTest(unittest.TestCase):
                 SemVer(2, 0, 0),
             ),
         )
-        assert isinstance(declined, Ok), declined
-        projected = project_registry_workspace_plan(empty, declined.value)
+        assert isinstance(planned, Ok), planned
+        projected = project_registry_workspace_plan(empty, planned.value)
         assert isinstance(projected, Ok), projected
         files = {str(item.path) for item in projected.value.entries}
 
         self.assertNotIn(".github/ISSUE_TEMPLATE/usage-report.yml", files)
         self.assertNotIn(".github/workflows/aart-usage-validate.yml", files)
         self.assertNotIn(".github/workflows/aart-usage-dashboard.yml", files)
-        # The registry itself is complete without them; only the optional service is absent.
         self.assertIn("aart-registry.json", files)
         self.assertIn(".github/workflows/aart-registry.yml", files)
         manifest = parse_registry_manifest(
@@ -170,51 +153,14 @@ class RegistryInitScaffoldTest(unittest.TestCase):
         assert isinstance(manifest, Ok), manifest
         self.assertEqual(manifest.value.services, ())
 
-    def test_the_generated_readme_describes_the_registry_that_was_created(self) -> None:
-        """A README telling a maintainer to delete files that were never written is wrong."""
-
-        empty = SourceSnapshot(SnapshotOrigin.LOCAL, ())
-        readings = {}
-        for label, options in (
-            (
-                "declined",
-                RegistryInitOptions(
-                    "company-registry",
-                    "Company Agent Artifacts",
-                    SemVer(1, 0, 0),
-                    SemVer(2, 0, 0),
-                ),
-            ),
-            ("accepted", _REPORTING_OPTIONS),
-        ):
-            planned = plan_registry_init(empty, options)
-            assert isinstance(planned, Ok), planned
-            projected = project_registry_workspace_plan(empty, planned.value)
-            assert isinstance(projected, Ok), projected
-            readings[label] = next(
-                item.content for item in projected.value.entries if str(item.path) == "README.md"
-            )
-
-        self.assertIn(b"does not collect usage reports", readings["declined"])
-        self.assertNotIn(b"Delete both workflows", readings["declined"])
-        self.assertIn(b"Delete both workflows", readings["accepted"])
-        self.assertNotIn(b"does not collect usage reports", readings["accepted"])
-
-    def test_naming_a_destination_opts_the_reporting_assets_in(self) -> None:
-        empty = SourceSnapshot(SnapshotOrigin.LOCAL, ())
-        accepted = plan_registry_init(empty, _REPORTING_OPTIONS)
-        assert isinstance(accepted, Ok), accepted
-        projected = project_registry_workspace_plan(empty, accepted.value)
-        assert isinstance(projected, Ok), projected
-        files = {str(item.path) for item in projected.value.entries}
-
-        self.assertIn(".github/ISSUE_TEMPLATE/usage-report.yml", files)
-        self.assertIn(".github/workflows/aart-usage-validate.yml", files)
-        self.assertIn(".github/workflows/aart-usage-dashboard.yml", files)
-
     def test_init_is_deterministic_and_includes_ci_ready_minimum_latest_template(self) -> None:
         empty = SourceSnapshot(SnapshotOrigin.LOCAL, ())
-        options = _REPORTING_OPTIONS
+        options = RegistryInitOptions(
+            "company-registry",
+            "Company Agent Artifacts",
+            SemVer(1, 0, 0),
+            SemVer(2, 0, 0),
+        )
         first = plan_registry_init(empty, options)
         second = plan_registry_init(empty, options)
         assert isinstance(first, Ok), first
@@ -225,7 +171,6 @@ class RegistryInitScaffoldTest(unittest.TestCase):
         self.assertIn("aart-registry.json", files)
         self.assertIn("aart-source.json", files)
         self.assertIn(".github/workflows/aart-registry.yml", files)
-        self.assertIn(".github/ISSUE_TEMPLATE/usage-report.yml", files)
         self.assertIn(".gitignore", files)
         ignored = files[".gitignore"].decode("utf-8").splitlines()
         self.assertIn(".agent-artifacts/", ignored)
@@ -235,8 +180,6 @@ class RegistryInitScaffoldTest(unittest.TestCase):
         self.assertIn(".opencode/", ignored)
         self.assertIn(".vibe/", ignored)
         self.assertIn(".mcp.json", ignored)
-        self.assertIn(".github/workflows/aart-usage-validate.yml", files)
-        self.assertIn(".github/workflows/aart-usage-dashboard.yml", files)
         workflow = files[".github/workflows/aart-registry.yml"]
         self.assertIn(b"registry test", workflow)
         self.assertIn(b"minimum", workflow)
@@ -258,21 +201,6 @@ class RegistryInitScaffoldTest(unittest.TestCase):
             workflow.count(b"persist-credentials: false"), workflow.count(b"uses: actions/checkout")
         )
         self.assertNotIn(b"git push", workflow)
-        issue_form = files[".github/ISSUE_TEMPLATE/usage-report.yml"]
-        self.assertIn(b"id: report", issue_form)
-        self.assertIn(b"voluntary", issue_form.lower())
-        self.assertIn(b"never add credentials", issue_form)
-        self.assertNotIn(b'labels: ["usage-report"]', issue_form)
-        validator = files[".github/workflows/aart-usage-validate.yml"]
-        self.assertIn(b"aart reporting validate-issue usage-issue.md", validator)
-        self.assertIn(b"ISSUE_NUMBER: ${{ github.event.issue.number }}", validator)
-        self.assertNotIn(b"${{ github.event.issue.body }}", validator)
-        self.assertNotIn(b"eval ", validator)
-        dashboard = files[".github/workflows/aart-usage-dashboard.yml"]
-        self.assertIn(b"--json body,createdAt", dashboard)
-        self.assertIn(b"aart reporting aggregate", dashboard)
-        self.assertNotIn(b"author", dashboard)
-        self.assertIn(b"actions/deploy-pages@v4", dashboard)
         manifest = parse_registry_manifest(files["aart-registry.json"])
         assert isinstance(manifest, Ok)
         self.assertEqual(
@@ -308,29 +236,6 @@ class RegistryInitScaffoldTest(unittest.TestCase):
             )
             with self.subTest(command=command):
                 self.assertEqual(cli.build_parser().parse_args(argv).command, "registry")
-
-    def test_init_can_advertise_the_scaffolded_usage_reporting_service(self) -> None:
-        empty = SourceSnapshot(SnapshotOrigin.LOCAL, ())
-        options = RegistryInitOptions(
-            "company-registry",
-            "Company Agent Artifacts",
-            SemVer(1, 0, 0),
-            SemVer(2, 0, 0),
-            "acme/agent-artifacts-registry",
-        )
-
-        planned = plan_registry_init(empty, options)
-        assert isinstance(planned, Ok), planned
-        projected = project_registry_workspace_plan(empty, planned.value)
-        assert isinstance(projected, Ok), projected
-        files = {str(item.path): item.content for item in projected.value.entries}
-        manifest = parse_registry_manifest(files["aart-registry.json"])
-        assert isinstance(manifest, Ok), manifest
-
-        self.assertEqual(len(manifest.value.services), 1)
-        self.assertEqual(manifest.value.services[0].name, "usage_reporting")
-        self.assertEqual(manifest.value.services[0].kind, "github-issues")
-        self.assertEqual(manifest.value.services[0].repository, "acme/agent-artifacts-registry")
 
     def test_scaffold_produces_a_valid_native_package_and_refuses_overwrite(self) -> None:
         empty = SourceSnapshot(SnapshotOrigin.LOCAL, ())
@@ -432,27 +337,8 @@ class RegistryInitScaffoldTest(unittest.TestCase):
 
         self.assertIsInstance(planned, Err)
 
-    def test_init_never_overwrites_an_existing_reporting_template(self) -> None:
-        """Opted in, a form already at that path is somebody else's file, and init stops."""
-
-        path = parse_relative_path(".github/ISSUE_TEMPLATE/usage-report.yml")
-        assert isinstance(path, Ok)
-        snapshot = SourceSnapshot(
-            SnapshotOrigin.LOCAL,
-            (SnapshotEntry(path.value, SnapshotEntryKind.FILE, b"user-owned form\n"),),
-        )
-
-        planned = plan_registry_init(snapshot, _REPORTING_OPTIONS)
-
-        self.assertIsInstance(planned, Err)
-
-    def test_a_declined_init_leaves_an_unrelated_issue_form_alone(self) -> None:
-        """Declining the service is not a reason to refuse an unrelated file at that path.
-
-        Before B-087 this refused: init claimed every reporting path whether or not the registry
-        offered the service, so a repository that already had its own `usage-report.yml` could not
-        be initialised at all.  Now the path is simply none of init's business.
-        """
+    def test_init_leaves_an_unrelated_issue_form_alone(self) -> None:
+        """The withdrawn feature no longer claims a repository's own Issue Form path."""
 
         path = parse_relative_path(".github/ISSUE_TEMPLATE/usage-report.yml")
         assert isinstance(path, Ok)

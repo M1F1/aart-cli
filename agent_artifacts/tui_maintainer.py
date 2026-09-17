@@ -105,6 +105,22 @@ def _noun(count: int, singular: str) -> str:
     return singular if count == 1 else f"{singular}s"
 
 
+def _candidate_summary(active: int, settled: int) -> str:
+    """Lead with what is waiting, and mention the audit trail only when there is one.
+
+    A registry that has never promoted anything reads exactly as it did before, so the distinction
+    costs nothing on the screens that never had the problem (issue #9).
+    """
+
+    if not settled:
+        return f"Candidates: {active}"
+    return f"Candidates: {active} awaiting action, {settled} settled"
+
+
+def _lifecycle(counts: tuple[tuple[CandidateState, int], ...]) -> str:
+    return ", ".join(f"{state.value}={count}" for state, count in counts)
+
+
 def render_maintainer_dashboard(
     view: MaintainerDashboardView,
     profile: PresentationProfile,
@@ -118,9 +134,12 @@ def render_maintainer_dashboard(
     # `QA-096`: each count is a separate statement, so each is separated -- the blank line is what
     # the status block reads to tell one list item from the next.
     activity = [f"  - {item}" for item in view.recent_activity] or ["  - none yet"]
+    candidates = [_candidate_summary(view.active_candidate_count, view.settled_candidate_count)]
+    if profile is PresentationProfile.VERBOSE and view.lifecycle_counts:
+        candidates.append(f"Candidate lifecycle: {_lifecycle(view.lifecycle_counts)}")
     return separate(
         (f"Sources: {view.source_count}",),
-        (f"Candidates: {view.candidate_count}",),
+        tuple(candidates),
         (f"Validation failures: {view.validation_failure_count}",),
         (f"Ready for promotion: {view.ready_count}",),
         ("Recent maintainer activity:", *activity),
@@ -172,8 +191,8 @@ def render_maintainer_source(
         f"branch: {source.branch or 'local'}",
         f"Last successful revision: {revision}",
         f"Manifests: {source.manifest_count}",
-        f"Candidates: {source.candidate_count} — {source.ready_count} ready, "
-        f"{source.invalid_count} invalid",
+        f"{_candidate_summary(source.active_count, source.settled_count)}"
+        f" — {source.ready_count} ready, {source.invalid_count} invalid",
     ]
     if profile is PresentationProfile.VERBOSE:
         lines.extend(

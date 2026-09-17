@@ -196,6 +196,12 @@ class ReadmeAdoptionTest(unittest.TestCase):
         by one gate -- harmless in itself, and exactly the drift that makes a reader stop trusting
         the rest of the table.  Reading the names off `build_gates` closes it: a gate added without
         a row fails here.
+
+        The heading counts `QUALITY_GATES` rather than everything built, because the two differ
+        since CP-25: `release-bump` is selectable by name and deliberately outside the full run
+        (INV-096).  It still needs a row -- the loop below is over every gate that exists -- but it
+        is not one of the ten `python scripts/quality.py` runs, and a heading that said eleven
+        would send a reader looking for an eleventh line of output.
         """
 
         import sys
@@ -203,11 +209,10 @@ class ReadmeAdoptionTest(unittest.TestCase):
         sys.path.insert(0, str(_ROOT / "scripts"))
         import quality
 
-        names = [gate.name for gate in quality.build_gates(_ROOT / "unused")]
-        for name in names:
-            with self.subTest(gate=name):
-                self.assertIn(f"| `{name}` |", _README)
-        self.assertIn(f"### The {_SPELLED[len(names)]} gates", _README)
+        for gate in quality.build_gates(_ROOT / "unused"):
+            with self.subTest(gate=gate.name):
+                self.assertIn(f"| `{gate.name}` |", _README)
+        self.assertIn(f"### The {_SPELLED[len(quality.QUALITY_GATES)]} gates", _README)
 
     def test_the_release_section_describes_the_release_that_actually_happens(self) -> None:
         """A release page that has drifted is worse than none: it is followed.

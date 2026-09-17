@@ -16,7 +16,6 @@ from agent_artifacts.consumer import (
 from agent_artifacts.domain.result import Ok
 from agent_artifacts.profiles.builtin import builtin
 from agent_artifacts.protocol.capabilities import Capability
-from agent_artifacts.reporting.projection import usage_report_from_consumer
 from tests.canonical_setup_application_test import Fixture as SetupFixture
 
 _INSTALL_STATE_FIXTURES = Path(__file__).resolve().parent / "fixtures" / "install-state"
@@ -190,7 +189,7 @@ class TuiConsumerTextTest(unittest.TestCase):
         self.assertIn("SETUP.md", rendered)
         self.assertIn("No setup effect has run.", rendered)
 
-    def test_canonical_setup_reporting_reuses_versioned_consumer_identity(self) -> None:
+    def test_canonical_setup_state_reuses_versioned_consumer_identity(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             fixture = SetupFixture(Path(raw))
             (fixture.project / ".agent-artifacts/manifest.json").unlink()
@@ -224,15 +223,8 @@ class TuiConsumerTextTest(unittest.TestCase):
                     write=lambda _line: None,
                 )
 
-            self.assertEqual(setup.reporting[0].key, reviewed.value.items[0].key)
-            report = usage_report_from_consumer(
-                reviewed.value,
-                payload.value,
-                setup.reporting,
-                aart_version="1.3.1",
-                interface="tui",
-            )
-            self.assertEqual(report.results[0].setup_outcome, "configured")
+            self.assertEqual(setup.states[0].key, reviewed.value.items[0].key)
+            self.assertEqual(setup.states[0].status, "configured")
 
 
 class QuietSetupQueueTest(unittest.TestCase):

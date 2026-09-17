@@ -92,7 +92,7 @@ the source that claims it.
 
 `docs/release/schema-freeze.json` pins the sha256 of every file that defines a format other people
 depend on — the manifest an author commits, the registry, configuration, installation state,
-setup recipes, usage reports, security assessments — listed as `SCHEMA_INPUTS` in
+setup recipes and security assessments — listed as `SCHEMA_INPUTS` in
 `scripts/release.py`. It is one file, overwritten in place,
 and it names no release.
 

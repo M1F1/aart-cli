@@ -1,8 +1,10 @@
 # CP-24 — Field reports from the first released version
 
-Status: IN PROGRESS — all ten tasks done in the repository (D-280 to D-289); the release itself
-is the owner's to merge. Tasks 08–10 were added on 2026-09-17, after the owner's first container run
-on an Enterprise instance, and none of them is about the product's behaviour.
+Status: DONE — all ten tasks done in the repository (D-280 to D-289), and the release the slice ends
+with is cut: the owner merged pull request #14 on 2026-09-17, Release Please's #15 followed at
+10:48 UTC, and `v0.1.2` is tagged on `origin`. Tasks 08–10 were added on 2026-09-17, after the
+owner's first container run on an Enterprise instance, and none of them is about the product's
+behaviour.
 
 Date: 2026-09-16. Authority: the product owner's GitHub issues #7 and #8 against the released
 `v0.1.1`, and the owner's instruction that the Source Sync failure is the priority because it takes

@@ -30,7 +30,6 @@ from agent_artifacts.application.promotion import (
 )
 from agent_artifacts.configuration.model import (
     ConfiguredSource,
-    ReportingSettings,
     SourceKind,
     SyncSettings,
     UserConfiguration,
@@ -218,11 +217,7 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
         with _environment() as env:
             authors = configured_source("authors", SourceKind.SOURCE_GIT)
             configuration = UserConfiguration(
-                1,
-                (env.source, authors),
-                env.source.alias,
-                SyncSettings(),
-                ReportingSettings(),
+                1, (env.source, authors), env.source.alias, SyncSettings()
             )
             pathlib.Path(env.paths.user_config_file).write_bytes(
                 user_configuration_bytes(configuration)
@@ -291,11 +286,7 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
                 True,
             )
             configuration = UserConfiguration(
-                1,
-                (env.source, authors),
-                env.source.alias,
-                SyncSettings(),
-                ReportingSettings(),
+                1, (env.source, authors), env.source.alias, SyncSettings()
             )
             pathlib.Path(env.paths.user_config_file).write_bytes(
                 user_configuration_bytes(configuration)
@@ -362,11 +353,7 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
                 True,
             )
             configuration = UserConfiguration(
-                1,
-                (env.source, authors),
-                env.source.alias,
-                SyncSettings(),
-                ReportingSettings(),
+                1, (env.source, authors), env.source.alias, SyncSettings()
             )
             pathlib.Path(env.paths.user_config_file).write_bytes(
                 user_configuration_bytes(configuration)
@@ -502,13 +489,7 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             authors = configured_source("authors", SourceKind.SOURCE_GIT)
             pathlib.Path(env.paths.user_config_file).write_bytes(
                 user_configuration_bytes(
-                    UserConfiguration(
-                        1,
-                        (env.source, authors),
-                        env.source.alias,
-                        SyncSettings(),
-                        ReportingSettings(),
-                    )
+                    UserConfiguration(1, (env.source, authors), env.source.alias, SyncSettings())
                 )
             )
             source_paths = source_store_paths(env.paths.data_root, source_instance_id(authors))
@@ -595,13 +576,7 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             authors = configured_source("authors", SourceKind.SOURCE_GIT)
             pathlib.Path(env.paths.user_config_file).write_bytes(
                 user_configuration_bytes(
-                    UserConfiguration(
-                        1,
-                        (env.source, authors),
-                        env.source.alias,
-                        SyncSettings(),
-                        ReportingSettings(),
-                    )
+                    UserConfiguration(1, (env.source, authors), env.source.alias, SyncSettings())
                 )
             )
             source_paths = source_store_paths(env.paths.data_root, source_instance_id(authors))
@@ -782,13 +757,7 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             authors = configured_source("authors", SourceKind.SOURCE_GIT)
             pathlib.Path(env.paths.user_config_file).write_bytes(
                 user_configuration_bytes(
-                    UserConfiguration(
-                        1,
-                        (env.source, authors),
-                        env.source.alias,
-                        SyncSettings(),
-                        ReportingSettings(),
-                    )
+                    UserConfiguration(1, (env.source, authors), env.source.alias, SyncSettings())
                 )
             )
             author_paths = source_store_paths(
@@ -972,13 +941,7 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             authors = configured_source("authors", SourceKind.SOURCE_GIT)
             pathlib.Path(env.paths.user_config_file).write_bytes(
                 user_configuration_bytes(
-                    UserConfiguration(
-                        1,
-                        (env.source, authors),
-                        env.source.alias,
-                        SyncSettings(),
-                        ReportingSettings(),
-                    )
+                    UserConfiguration(1, (env.source, authors), env.source.alias, SyncSettings())
                 )
             )
             author_paths = source_store_paths(
@@ -1084,13 +1047,7 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             authors = configured_source("authors", SourceKind.SOURCE_GIT)
             pathlib.Path(env.paths.user_config_file).write_bytes(
                 user_configuration_bytes(
-                    UserConfiguration(
-                        1,
-                        (env.source, authors),
-                        env.source.alias,
-                        SyncSettings(),
-                        ReportingSettings(),
-                    )
+                    UserConfiguration(1, (env.source, authors), env.source.alias, SyncSettings())
                 )
             )
             author_paths = source_store_paths(

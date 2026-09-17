@@ -6,9 +6,6 @@ from agent_artifacts.configuration.model import (
     CompanyReviewedSource,
     ConfiguredSource,
     OrganizationPolicy,
-    ReportingMode,
-    ReportingPolicy,
-    ReportingSettings,
     SourceKind,
     SyncMode,
     SyncSettings,
@@ -51,27 +48,12 @@ class ConfigurationModelTest(unittest.TestCase):
             lambda: SyncSettings("auto", 1),  # type: ignore[arg-type]
             lambda: SyncSettings(SyncMode.AUTO, -1),
             lambda: SyncSettings(SyncMode.AUTO, True),
-            lambda: ReportingSettings("disabled", None),  # type: ignore[arg-type]
-            lambda: ReportingSettings(ReportingMode.AUTOMATIC, None),
-            lambda: ReportingSettings(ReportingMode.DISABLED, SourceAlias("")),
-            lambda: UserConfiguration(2, (source,), None, SyncSettings(), ReportingSettings()),
-            lambda: UserConfiguration(
-                1, (source, source), None, SyncSettings(), ReportingSettings()
-            ),
-            lambda: UserConfiguration(
-                1,
-                (first_git, same_origin_same_ref),
-                None,
-                SyncSettings(),
-                ReportingSettings(),
-            ),
-            lambda: ReportingPolicy("prompt"),  # type: ignore[arg-type]
-            lambda: ReportingPolicy(destination=SourceAlias("")),
-            lambda: ReportingPolicy(deny_public_destinations="yes"),  # type: ignore[arg-type]
+            lambda: UserConfiguration(2, (source,), None, SyncSettings()),
+            lambda: UserConfiguration(1, (source, source), None, SyncSettings()),
+            lambda: UserConfiguration(1, (first_git, same_origin_same_ref), None, SyncSettings()),
             lambda: OrganizationPolicy(2),
             lambda: OrganizationPolicy(1, allow_direct_sources="yes"),  # type: ignore[arg-type]
             lambda: OrganizationPolicy(1, minimum_trust_for_user_scope="trusted-by-name"),
-            lambda: OrganizationPolicy(1, reporting="prompt"),  # type: ignore[arg-type]
             lambda: OrganizationPolicy(1, allowed_setup_capabilities=("keychain",)),  # type: ignore[arg-type]
             lambda: OrganizationPolicy(
                 1,
@@ -107,7 +89,6 @@ class ConfigurationModelTest(unittest.TestCase):
             ),
             None,
             SyncSettings(),
-            ReportingSettings(),
         )
         self.assertEqual(len(accepted.sources), 2)
 

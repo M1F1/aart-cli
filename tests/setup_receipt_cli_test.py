@@ -23,7 +23,6 @@ from unittest import mock
 
 from agent_artifacts import cli
 from agent_artifacts.configuration.model import (
-    ReportingSettings,
     SyncSettings,
     UserConfiguration,
 )
@@ -165,11 +164,7 @@ class ReceiptCommandTests(unittest.TestCase):
         )
         config = pathlib.Path(self.paths.user_config_file)
         config.parent.mkdir(parents=True, exist_ok=True)
-        config.write_bytes(
-            user_configuration_bytes(
-                UserConfiguration(1, (), None, SyncSettings(), ReportingSettings())
-            )
-        )
+        config.write_bytes(user_configuration_bytes(UserConfiguration(1, (), None, SyncSettings())))
 
         self.block = self.project / ".zshrc"
         self.block.write_text(MANAGED_BLOCK + "\n", encoding="utf-8")

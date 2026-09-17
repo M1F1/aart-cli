@@ -90,34 +90,6 @@ class CursesFallbackBoundaryTests(unittest.TestCase):
 
         self.assertEqual(records, [("compose", "load"), ("curses", "load"), ("text", "load")])
 
-    def test_failure_context_marks_reporting_after_the_known_setup_outcome(self):
-        context = tui.InternalFailureContext("review", "setup")
-
-        with (
-            mock.patch.object(
-                tui,
-                "_canonical_setup_run",
-                return_value=tui._CanonicalSetupRun(0, ()),
-            ),
-            mock.patch.object(
-                tui,
-                "usage_report_from_consumer",
-                side_effect=RuntimeError("reporting adapter failed"),
-            ),
-        ):
-            with self.assertRaises(RuntimeError):
-                tui._complete_canonical_consumer_action(
-                    mock.Mock(),
-                    mock.Mock(),
-                    mock.Mock(),
-                    None,
-                    read=lambda _prompt="": "",
-                    write=lambda _line: None,
-                    failure_context=context,
-                )
-
-        self.assertEqual((context.stage, context.operation), ("review", "reporting"))
-
     def test_internal_failure_record_includes_stage_and_operation_but_not_message(self):
         lines = tui.internal_failure_lines(
             ValueError("/Users/secret/path leaked"),

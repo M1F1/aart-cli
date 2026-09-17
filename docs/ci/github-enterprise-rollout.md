@@ -211,7 +211,6 @@ aart registry init --source . --source-id corp-registry --display-name "Corp Reg
 |---|---|
 | `--source-id` | the registry's stable identity. Consumers see it; do not change it later |
 | `--display-name` | the human-readable name |
-| `--usage-reporting-repository platform/agent-registry` | optional. Also writes the usage-report issue form and the `aart-usage-validate` and `aart-usage-dashboard` workflows |
 | `--minimum-version`, `--maximum-version` | the AART version window the registry declares; defaults are the running AART's version and the next major version (exclusive) |
 
 `.aart-version` holds the version of the `aart` you just ran. That is the version the registry's CI
@@ -283,8 +282,6 @@ Again on the **organisation** where you can, so every future registry is configu
 | `AART_REPOSITORY` | with the Git route, when the copy is not at `M1F1/aart-cli` on this instance |
 | `AART_RUNNER`, `AART_CI_IMAGE`, `AART_IMAGE_USERNAME_SECRET`, `AART_IMAGE_PASSWORD_SECRET` | same meaning as in Part 2 |
 | `AART_PYTHON` | the interpreter's name on the runner or in the image, if not `python3` |
-| `AART_PAGES` = `false` | the instance offers no GitHub Pages and you used `--usage-reporting-repository`. The dashboard is still built and validated, only not published |
-| `AART_GH_HOST` | the usage-report workflows run `gh`, which is pointed at the host in `GITHUB_SERVER_URL`. Set this only if the instance is served on a path or a non-default port |
 
 Unlike the tool's own jobs, the registry jobs do not install Python: the runner or image must
 already have it.
@@ -367,7 +364,7 @@ Read by `.github/workflows/pr-check.yml` and `.github/workflows/release.yml`.
 | `AART_CI_IMAGE` | `python:<version>` | container image for every job, and the only place an interpreter comes from. Unset, each `pr-check` matrix entry runs the official image for its own version and the release job runs `python:$AART_RELEASE_PYTHON_VERSION` |
 | `AART_PYTHON` | `python` | the interpreter's name inside the image |
 | `AART_PYTHON_VERSIONS` | `["3.10", "3.11", "3.14"]` | JSON array for the `pr-check` matrix. Pin to the image's one interpreter when `AART_CI_IMAGE` is set |
-| `AART_RELEASE_PYTHON_VERSION` | `3.11` | which official image the `release` and `deep-quality` jobs run, when `AART_CI_IMAGE` is unset |
+| `AART_RELEASE_PYTHON_VERSION` | `3.11` | which official image the `release` and `deep-quality` jobs run, and the single interpreter `pr-check` uses on a release pull request, when `AART_CI_IMAGE` is unset |
 | `AART_PIP_INDEX_URL` | `https://pypi.org/simple` | index for the development tools the gates install. Keep it a bare URL |
 | `AART_PIP_INDEX_CREDENTIALS_SECRET` | unset | **name** of a secret holding `user:token` for that index. Each half is masked before use |
 | `AART_IMAGE_USERNAME_SECRET` | unset | **name** of the secret holding the image registry's username. Setting it switches every job to the shape that logs in |
@@ -397,16 +394,13 @@ overwrite one that was edited by hand, so configure them with variables, not edi
 | `AART_PYTHON` | `python3` | the interpreter on the runner or in the image |
 | `AART_IMAGE_USERNAME_SECRET` | unset | **name** of the image registry username secret; switches jobs to the shape that logs in |
 | `AART_IMAGE_PASSWORD_SECRET` | unset | **name** of the image registry password secret |
-| `AART_PAGES` | unset | `false` skips publishing the usage dashboard to Pages |
-| `AART_GH_HOST` | derived from `GITHUB_SERVER_URL` | host for `gh` in the usage-report workflows |
 
 ### What a variable cannot change
 
 - **Where an action comes from.** `uses:` must be a literal, so the instance has to carry
   `actions/checkout@v4` (both repositories), `googleapis/release-please-action@v4` (only if
   `release please` stays enabled), and
-  `actions/upload-pages-artifact@v3` with `actions/deploy-pages@v4` (only a registry publishing its
-  usage dashboard).
+  the actions explicitly named in the generated workflow.
 - **A credential in a variable.** Variables are visible to anyone with read access. Every credential
   above is a secret, named by a variable.
 - **Many registries sharing one workflow.** Each registry carries its own copy of the managed
