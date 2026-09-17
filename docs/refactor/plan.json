@@ -671,6 +671,21 @@
           "id": "7",
           "title": "Gates, targeted mutations and the release",
           "status": "done"
+        },
+        {
+          "id": "8",
+          "title": "A test that relies on file permissions stands down under root",
+          "status": "done"
+        },
+        {
+          "id": "9",
+          "title": "An executable requirement may name the file it really is",
+          "status": "todo"
+        },
+        {
+          "id": "10",
+          "title": "CI takes its interpreter from an image, and setup-python is gone",
+          "status": "todo"
         }
       ]
     }

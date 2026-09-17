@@ -7075,3 +7075,25 @@ re-running. `sum(1 ...)` and `sum(2 ...)` are the same length, so the byte-compi
 mutated source was accepted for the restored source, and the restored code appeared to fail its own
 test. The tool's own runs are unaffected -- mutmut works in its own copy -- but a hand mutation in
 the working tree is not.
+
+## D-287 — A test whose subject is a permission stands down where permissions do not apply
+
+**Context.** The owner's first container run of the gates on an Enterprise instance failed
+`tests/manual_test_lab_test.py`'s sealed-lab test: it seals a directory read-only and asserts that a
+blunt `rm -rf` fails, which is the whole reason the refusal prints a longer command. The job runs as
+root, root ignores the mode bits, the delete succeeds, and the test fails for a reason that has
+nothing to do with the behaviour it guards. Two other files had already met this and each had grown
+its own inline `skipIf`, worded differently and testing the predicate differently.
+
+**Decision.** One shared guard, `tests/privileges.py`: `running_as_root()` and
+`skip_if_root(relied_on)`. The guard reads `os.geteuid` at call time rather than capturing it at
+import, so a test can say what it would do on a machine it is not running on, and it takes what the
+test relies on rather than a whole sentence, so every skip reason reads `root ignores <the thing>`
+and names something concrete. The alternative — weakening the assertion so it passes as root too —
+was rejected: it would delete the claim rather than place it. A test with no subject on this machine
+should say so, not pass vacuously.
+
+**Consequences.** `tests/scope_teardown_test.py` and `tests/fs_test.py` were moved onto the shared
+guard and their private copies are gone. The guard itself is now held by `tests/privileges_test.py`,
+because the failure it prevents is otherwise invisible: a guard that never skips looks exactly like
+a test that never needed one, right up to the container run where it does. No product code changed.

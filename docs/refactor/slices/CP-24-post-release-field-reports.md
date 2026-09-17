@@ -334,6 +334,74 @@ Remaining, and the owner's to do: merge #14 into `plan/cp-24`, merge #13 into `m
 workflows on the Release Please pull request and merge it, then confirm the release run attaches
 `aart_cli-0.1.2-py3-none-any.whl` to `v0.1.2`.
 
+### 08 — A test that relies on file permissions stands down under root
+
+Found by the owner's first container run on their Enterprise instance, 2026-09-17.
+
+- `tests/manual_test_lab_test.py` seals a lab directory read-only and then asserts a blunt
+  `rm -rf` **fails**, which is the whole reason the refusal prints a longer command. A container
+  job runs as root, root ignores the permission, the delete succeeds and the test fails.
+- After this task: a test whose subject is a permission stands down where permissions do not
+  apply, the way `tests/scope_teardown_test.py` already does, and says so in the skip reason.
+- The product is not the subject here: nothing about the refusal changes.
+
+**Done (D-287).** `tests/privileges.py` holds the one guard: `running_as_root()`, read through `os`
+at call time so a test can say what it would do on a machine it is not running on, and
+`skip_if_root(relied_on)`, which takes what the test needed rather than a whole sentence so every
+skip reason reads the same way and names something concrete. The sealed-lab test in
+`tests/manual_test_lab_test.py` now carries it, and the two files that already had their own copy —
+`tests/scope_teardown_test.py` and `tests/fs_test.py`, worded differently and testing the predicate
+differently — were moved onto it. No product code changed.
+
+Evidence:
+- `tests/privileges_test.py` — root is the effective user this process actually has; a machine with
+  no such notion is not root; a guarded test stands down under root and runs otherwise (over both
+  euids, driven through a real `TestResult`); the skip reason names what the test needed.
+- Characterization: under root, `test_the_refusal_hands_back_a_recovery_that_actually_clears_the_lab`
+  failed at `assertNotEqual(blunt.returncode, 0)` — the blunt `rm -rf` succeeded — which is the
+  owner's container run reproduced.
+- Targeted mutation: `os.geteuid() == 0` → `os.geteuid() >= 0`, so everyone reads as root. Two
+  `privileges_test` tests turn red and nothing else does. Verified, with `__pycache__` cleared first
+  (D-286).
+- Gates: `lint`, `format-check`, `typecheck`, `docs-check`; the three touched test files plus
+  `privileges_test` green.
+
+### 09 — An executable requirement may name the file it really is
+
+Same run: `ValueError: executable requirement is invalid` from
+`tests/environment_inspection_integration_test.py`, because the image's interpreter is
+`/opt/poetry/bin/python3.11` and `ExecutableRequirement` accepts only `^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`.
+
+- The pattern is an identifier's, and an executable is a **file name**. `python3.11`, `node20` and
+  `clang-15` are ordinary names an author cannot express today.
+- The Specification lists `ExecutableRequirement` among the requirement types and constrains its
+  name nowhere, so this is an implementation choice to correct, not a contract to break.
+- After this task: a requirement may name any plausible executable file — no path separator, no
+  whitespace, no control character, not empty — while `RequirementId` stays kebab-case. The
+  integration test stops assuming the interpreter it runs under is prettily named.
+
+### 10 — CI takes its interpreter from an image, and `setup-python` is gone
+
+The owner's decision, 2026-09-17, after `actions/setup-python@v5` failed to resolve on their
+instance even with `AART_CI_IMAGE` set.
+
+- A step-level `if:` decides whether a step **runs**, not whether its action is **fetched**: every
+  action a job references is resolved during "Set up job", before any condition is read. So an
+  instance that does not carry `setup-python` cannot escape it by configuration — the reference
+  itself has to go.
+- After this task: no workflow and no composite action in this repository names `actions/setup-python`.
+  Every job runs in a container that already carries an interpreter; the public run keeps its three
+  interpreters by running three official images, one per matrix entry, so what the defaults exercise
+  does not shrink.
+- `AART_CI_IMAGE` keeps its meaning — the image to use instead of the default — and
+  `AART_PYTHON_VERSIONS` keeps choosing the matrix.
+- The tests that hold the workflow shape are the ones to change first: they are where the old shape
+  is written down. The rollout document's two claims that an image "skips" the action are wrong for
+  the same reason and are corrected here.
+- Out of scope, recorded instead: the same trap in the registry's usage-dashboard template, where
+  `actions/upload-pages-artifact@v3` is referenced from a job that always runs even when
+  `AART_PAGES` is `false`.
+
 ## Evidence log
 
 Every task's targeted semantic mutation, collected here so task 07 can check them in one place.

@@ -14,6 +14,8 @@ import textwrap
 import unittest
 from unittest import mock
 
+from tests.privileges import skip_if_root
+
 
 def _first_sync_states(
     env: dict[str, str], project: pathlib.Path, alias: str
@@ -452,6 +454,7 @@ class ManualTestLabTest(unittest.TestCase):
         self.assertFalse(root.exists())
         self.assertEqual([{MARKER}], remaining)
 
+    @skip_if_root("the read-only mode bits an installed payload is delivered with")
     def test_the_refusal_hands_back_a_recovery_that_actually_clears_the_lab(self) -> None:
         """`QA-085`: the way out of an unmarked lab has to be a way out that works.
 

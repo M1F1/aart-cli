@@ -20,8 +20,11 @@
 
 **CP-24 is the active slice.** It carries the owner's field reports against the released `v0.1.1`,
 as GitHub issues #7 and #8, and ends by releasing the fixes.
-`docs/refactor/slices/CP-24-post-release-field-reports.md` holds the seven ordered tasks;
-`plan.json` holds them as CP-24.1 to CP-24.7.
+`docs/refactor/slices/CP-24-post-release-field-reports.md` holds the ordered tasks;
+`plan.json` holds them as CP-24.1 to CP-24.10. Tasks 08-10 were added on 2026-09-17, after the
+owner ran the gates in a container on their Enterprise instance and three things broke that have
+nothing to do with the product: a permission test run as root, an interpreter whose file name the
+requirement model rejects, and `actions/setup-python`, which that instance does not carry.
 
 **Task 01 is done (D-280).** A stored Candidate history that does not bind the pinned revision is
 no longer projected as Candidate data and no longer refuses the composition: that Source reads as
@@ -52,14 +55,24 @@ coverage) and a standalone `make integration` (395 tests) are both green — B-1
 The scoped mutation runs over `execution.py` and `consumer_views.py` left 34 survivors inside this
 slice's own claims; all of them are now tests, each verified by hand.
 
-**What is left is the owner's to merge**, in this order:
+**Task 08 is done (D-287).** A test whose subject is a permission stands down where permissions
+do not apply. `tests/privileges.py` is the one guard; the sealed-lab test now carries it and the two
+files that had their own copy were moved onto it.
 
-1. merge **#14** (`fix/cp-24-01-stale-scan`) into `plan/cp-24`;
-2. merge **#13** (`plan/cp-24`) into `main` — squash. Its title is a `fix:` and it carries a
+**Tasks 09 and 10 are open** and are described in the slice.
+
+**One pull request carries the whole stream.** On 2026-09-17 the two open pull requests were
+flattened, at the owner's instruction, into **#14** (`fix/cp-24-01-stale-scan` → `main`): it already
+held the plan commit, so it took the `fix:` title and the `BEGIN_COMMIT_OVERRIDE` block, and #13 was
+closed unmerged. `plan/cp-24` is not to be merged.
+
+**What is left is the owner's**, once tasks 09 and 10 land:
+
+1. merge **#14** into `main` — squash. Its title is a `fix:` and it carries a
    `BEGIN_COMMIT_OVERRIDE` block, so Release Please cuts **`0.1.2`**. The owner chose the patch over
    `feat:`/`0.2.0` on 2026-09-17: task 06 is the repair of a silence they reported.
-3. approve the workflows on the Release Please pull request and merge it;
-4. confirm the release run attaches `aart_cli-0.1.2-py3-none-any.whl` to `v0.1.2`.
+2. approve the workflows on the Release Please pull request and merge it;
+3. confirm the release run attaches `aart_cli-0.1.2-py3-none-any.whl` to `v0.1.2`.
 
 Still open, and not agent work: the owner's manual acceptance walk
 (`docs/testing/TUI_MANUAL_WALKTHROUGH.md`), which now carries the three CP-24 checks.

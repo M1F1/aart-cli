@@ -17,6 +17,7 @@ from agent_artifacts.io.fs import (
     remove_path,
     write_atomic,
 )
+from tests.privileges import skip_if_root
 
 
 class TestWriteAtomic(unittest.TestCase):
@@ -45,11 +46,7 @@ class TestWriteAtomic(unittest.TestCase):
             entries = os.listdir(td)
             self.assertEqual(entries, ["file.txt"])
 
-    @unittest.skipIf(
-        hasattr(os, "geteuid") and os.geteuid() == 0,
-        "root bypasses directory permission bits, so a read-only dir does not fail the write "
-        "(e.g. tests run as root inside a CI container)",
-    )
+    @skip_if_root("the directory permission bits that make a write to a read-only dir fail")
     def test_no_partial_temp_files_on_error(self):
         """If write_atomic fails, no temp files should be left behind."""
         with tempfile.TemporaryDirectory() as td:

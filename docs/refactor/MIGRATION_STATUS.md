@@ -31,6 +31,15 @@ drawn in the frame every other screen uses. **2026-09-17, CP-24.07 done in the r
 What is left is the owner's: merge #14, then #13 with its `fix:` title and commit override, then the
 Release Please pull request, which cuts `0.1.2`.
 
+**2026-09-17, CP-24 extended and flattened to one pull request.** The owner ran the gates in a
+container on their Enterprise instance; three failures there were about the machine rather than the
+product, and became tasks 08, 09 and 10. The two open pull requests were flattened into #14
+(`fix/cp-24-01-stale-scan` -> `main`), which carries the `fix:` title and the commit override;
+`plan/cp-24` is not to be merged. **2026-09-17, CP-24.08 done (D-287).** A test whose subject is a
+permission stands down where permissions do not apply: `tests/privileges.py` holds the one guard,
+the sealed-lab test in `tests/manual_test_lab_test.py` carries it, and the two files that had grown
+their own copy were moved onto it. No product code changed.
+
 **2026-09-15, 0.1.0 has no wheel (D-279).** The release run failed before building: its action
 installed no Poetry, which the wheel build needs. It now installs the locked tools the quality
 action installs, and a test holds the order. Every release step passes in a clean virtualenv.
