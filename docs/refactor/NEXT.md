@@ -10,10 +10,14 @@ product issue in `M1F1/aart-cli`: #9, #10, #11, #12, #16 and #17 (D-291).
 
 The written task scope is in
 [`slices/CP-25-release-pull-request-gate.md`](slices/CP-25-release-pull-request-gate.md), and
-`plan.json` is the executable status authority. Tasks 04–13 are done (D-292 to D-298). **The next
-and last executable task is CP-25.14 — issue #17, naming the exact owned installation paths on
-Installed Artifact Details.** #11 was split into separate scope and
-backend choices because they affect different planning contracts; both halves are now done.
+`plan.json` is the executable status authority. Tasks 04–14 are done (D-292 to D-299). **Every
+task in CP-25 is now done.** #11 was split into separate scope and backend choices because they
+affect different planning contracts; both halves are done.
+
+**The next executable step is not a task in the plan — it is the release.** Run the full
+`make quality` on a clean tree, then open the pull request. Nothing is left to implement, so a new
+increment should not be invented: read the decision below about the version first, because it is
+the owner's and it is made by the pull request's title.
 
 **Still the owner's to decide, and not to be decided for them:** the version this branch releases.
 The commits are written as `feat:`/`fix:`, which makes it `0.2.0`; a `feat!:` PR title makes it

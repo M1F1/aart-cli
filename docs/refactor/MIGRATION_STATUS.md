@@ -9,6 +9,21 @@ identifiers and references -- and the credential boundary is unchanged.
 single empty line (issue #12). The separator is drawn and never a row, so the cursor still lands on
 artifacts only and search, selection and Fast/Verbose are untouched.
 
+**2026-09-17, CP-25.14 done (D-299) — CP-25 complete.** Installed Artifact Details names where
+AART actually put things (issue #17). Every path is read off the receipt written when the effects
+ran and joined to its component observation by `ComponentId`, never reconstructed from an assumed
+harness layout; an installation with no receipt claims no location rather than guessing one. A path
+nothing measured reads `unobserved` rather than `matched` — `installed_state._reported` legitimately
+drops an undamaged payload nobody desired, so a reopened session really can carry a delivery and no
+payload, and saying `matched` there would report a verification that never happened. Absent and
+divergent components are named too, with what was measured. Scope is reported only where an MCP
+registration recorded one; disagreeing registrations collapse to nothing. Fast names the payload and
+the harness destinations, Verbose adds the launcher and the interpreter. 17 tests, two of them
+driving a real installation through the public TUI and reopening the screen in a fresh composition
+so the paths are proven durable and checked against the filesystem. `format-check lint typecheck
+validate unit` green. **The full `make quality` has not been run since; it is required before CP-25
+is called verified.**
+
 **2026-09-17, CP-25.11 done (D-296).** The Python dependency backend is a per-install choice
 seeded by Settings (issue #11b). `preferred_installer` was inert plumbing -- supplied by nothing,
 held by no test -- so every install took the name-ordered default. Settings now carry the

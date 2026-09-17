@@ -38,8 +38,15 @@ from agent_artifacts.domain.inputs import (
     validate_config_value,
 )
 from agent_artifacts.domain.plans import InstallPlan, install_plan_to_data
-from agent_artifacts.domain.receipts import RECEIPT_INVALID
+from agent_artifacts.domain.receipts import (
+    RECEIPT_INVALID,
+    ArtifactReceipt,
+    InstallationReceipt,
+    PlacedArtifactReceipt,
+)
 from agent_artifacts.domain.reconciliation import (
+    Component,
+    ComponentId,
     CurrentState,
     DesiredState,
     DriftKind,
@@ -1019,6 +1026,38 @@ def project_credential_record(
 
 
 @dataclass(frozen=True, slots=True)
+class InstalledPathView:
+    """One path this artifact owns, the part it plays, and what was measured about it.
+
+    `state` is the observation's word for that component, or `unobserved` when nothing looked.
+    An unmeasured path is honestly unmeasured: calling it `matched` would report a verification
+    that never happened, and omitting it would hide a location somebody is looking for (issue #17).
+    """
+
+    role: str
+    path: str
+    harness: str = ""
+    state: str = "unobserved"
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.role, str)
+            or not self.role
+            or not isinstance(self.path, str)
+            or not self.path.startswith("/")
+            or not isinstance(self.harness, str)
+            or not isinstance(self.state, str)
+            or not self.state
+        ):
+            raise ValueError("an installed path view is invalid")
+
+
+#: Which roles answer "where is it" for somebody who did not ask for detail: the bytes AART placed
+#: and the places a harness reads them from. The rest are real and owned, and Verbose lists them.
+_USER_FACING_ROLES: frozenset[str] = frozenset({"payload", "delivery", "merge", "settings"})
+
+
+@dataclass(frozen=True, slots=True)
 class InstalledArtifactView:
     coordinate: str
     health: str
@@ -1026,6 +1065,16 @@ class InstalledArtifactView:
     drift: tuple[LifecycleDriftView, ...]
     actions: tuple[str, ...]
     credentials: tuple[CredentialRecordView, ...] = ()
+    #: Every path this installation's receipt records, in the order the receipt records them.
+    #: Empty when no receipt answers for it, because a location nobody wrote down cannot be
+    #: recovered by guessing a harness's layout (issue #17).
+    installation: tuple[InstalledPathView, ...] = ()
+    #: `project`, `user`, or empty when the receipt records no scope or records more than one.
+    scope: str = ""
+
+    @property
+    def user_facing_paths(self) -> tuple[InstalledPathView, ...]:
+        return tuple(item for item in self.installation if item.role in _USER_FACING_ROLES)
 
 
 def _drift_view(desired: DesiredState, current: CurrentState) -> tuple[LifecycleDriftView, ...]:
@@ -1042,6 +1091,90 @@ def _ownership_view(values: tuple[OwnershipReason, ...]) -> tuple[OwnershipView,
     )
 
 
+def _observed_states(current: CurrentState) -> dict[ComponentId, str]:
+    return {item.id: item.state.value for item in current.components}
+
+
+def _recorded_scope(receipt: ArtifactReceipt | None) -> str:
+    """The scope the receipt wrote down, and nothing else.
+
+    Only an MCP registration records one. A delivery records a harness and a destination, so
+    reading a scope off that destination would mean deciding which directories belong to a project
+    and which to a home -- a guess about somebody else's disk, which is what issue #17 rules out.
+    Disagreeing registrations collapse to nothing rather than to whichever came first.
+    """
+
+    if not isinstance(receipt, InstallationReceipt):
+        return ""
+    scopes = {item.target.scope.value for item in receipt.registrations}
+    return scopes.pop() if len(scopes) == 1 else ""
+
+
+def _installed_paths(
+    receipt: ArtifactReceipt | None, current: CurrentState
+) -> tuple[InstalledPathView, ...]:
+    """Every path this receipt records, joined to the component that measured it.
+
+    The join is by component identity rather than by path, because that is how the reconciler
+    already addresses these things: the observation for a delivery is `delivery:<harness>`, and
+    matching on the path string instead would silently stop working the day a harness moves a file.
+    """
+
+    if receipt is None:
+        return ()
+    states = _observed_states(current)
+
+    def observed(component: Component, qualifier: str = "") -> str:
+        identifier = ComponentId(component, qualifier) if qualifier else ComponentId(component)
+        return states.get(identifier, "unobserved")
+
+    paths = [InstalledPathView("payload", receipt.root, state=observed(Component.PAYLOAD))]
+    if isinstance(receipt, PlacedArtifactReceipt):
+        paths.extend(
+            InstalledPathView(
+                "delivery",
+                item.destination,
+                item.harness,
+                observed(Component.DELIVERY, item.harness),
+            )
+            for item in receipt.deliveries
+        )
+        paths.extend(
+            InstalledPathView(
+                "merge", item.destination, item.harness, observed(Component.MERGE, item.harness)
+            )
+            for item in receipt.merges
+        )
+        paths.extend(
+            InstalledPathView(
+                "settings",
+                item.destination,
+                item.harness,
+                observed(Component.SETTINGS, item.harness),
+            )
+            for item in receipt.settings
+        )
+        return tuple(paths)
+    paths.append(
+        InstalledPathView("launcher", receipt.launcher, state=observed(Component.LAUNCHER))
+    )
+    paths.append(
+        InstalledPathView(
+            "interpreter", receipt.interpreter, state=observed(Component.RUNTIME_ENVIRONMENT)
+        )
+    )
+    paths.extend(
+        InstalledPathView(
+            "configuration",
+            item.path,
+            item.harness,
+            observed(Component.CONFIGURATION, item.harness),
+        )
+        for item in receipt.configuration_files
+    )
+    return tuple(paths)
+
+
 def project_installed_artifact(
     desired: DesiredState,
     current: CurrentState,
@@ -1049,6 +1182,7 @@ def project_installed_artifact(
     ownership: tuple[OwnershipReason, ...] = (),
     update_available: bool = False,
     credentials: tuple[CredentialRecordView, ...] = (),
+    receipt: ArtifactReceipt | None = None,
 ) -> InstalledArtifactView:
     """Project measured installed health; mutation success is never health evidence."""
 
@@ -1069,6 +1203,8 @@ def project_installed_artifact(
         _drift_view(desired, current),
         tuple(actions),
         credentials,
+        _installed_paths(receipt, current),
+        _recorded_scope(receipt),
     )
 
 

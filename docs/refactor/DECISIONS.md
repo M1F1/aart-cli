@@ -7388,3 +7388,44 @@ view has no material in it to leak.
 Configuration block and the Credentials heading — fails only the two-section assertions. The
 configuration-only and credentials-only cases stay green under it, which is correct: a view with
 one section has no boundary to draw.
+
+## D-299 — Installed Artifact Details names recorded paths, and says when nothing measured them
+
+**Context.** The view reported health, ownership and drift and never answered the first question
+anybody opens it with: where is it (issue #17). The paths were available all along — the receipt
+written when the effects ran records the artifact's root and every destination — but nothing
+projected them.
+
+**Decision.** Every path in the view is read off the receipt. None is reconstructed from a harness
+layout, because an assumed path is a claim about somebody else's disk: the day a harness moves a
+file, a reconstructed path is confidently wrong, while a recorded one is merely historical. An
+installation with no receipt therefore claims no location at all rather than guessing one.
+
+**The join is by component identity, not by path.** Each recorded path is paired with the
+observation for its `ComponentId` — `delivery:<harness>`, not a path string — because that is how
+the reconciler already addresses these things. Matching on the path would silently stop working the
+first time a destination changed, and the domain will not even let the qualifier be dropped: a
+`ComponentId(Component.DELIVERY)` with no harness raises, so the join cannot quietly degrade into
+one that matches everything.
+
+**Unmeasured is reported as unmeasured.** `installed_state._reported` deliberately drops an
+undamaged payload observation nobody desired, so a reopened session's current state can legitimately
+carry a delivery and no payload. The path is still the artifact's and is still named; its state
+reads `unobserved`. Calling it `matched` would report a verification that never happened, and
+omitting the row would hide the location the reader came for. An absent or divergent component is
+named too, with what was measured about it — a view that goes quiet exactly when something is wrong
+is the failure mode this replaces.
+
+**The scope is reported only where one was recorded.** Only an MCP registration writes a scope down.
+A delivery records a harness and a destination, so reading a scope off that destination would mean
+deciding which directories belong to a project and which to a home — the guessed layout this
+decision rules out. Registrations that disagree collapse to nothing rather than to whichever came
+first. Fast names the payload and the places a harness reads it from; Verbose adds the launcher and
+the interpreter, which are owned and real but are not what "where is it" means.
+
+**What the work found.** The targeted mutation — the join's default `unobserved` changed to
+`matched` — fails exactly the two honesty tests and nothing else, which is the shape the claim
+should have: every test about *which* paths appear stays green, because the mutation is about what
+is said when nobody looked. A real-TUI drive confirmed the case in the wild: after installing and
+reopening in a fresh composition, the delivery read `matched` and the payload `unobserved`, and
+reading `_reported` showed that was truthful rather than a broken join.

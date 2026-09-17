@@ -2,7 +2,7 @@
 
 Status: IN PROGRESS — tasks 01–03 done (D-290), 04–07 done and committed as `7af06be` (D-292),
 08 done (D-293), 09 done (D-294), 10 done (D-295), 11 done (D-296), 12 done (D-297),
-13 done (D-298); task 14 is planned and not started.
+13 done (D-298), 14 done (D-299). **All 14 tasks are done.**
 
 The slice carries two unrelated subjects because the owner added the second while the first was in
 flight. They share nothing but the release they will go out in, and they are ordered so that the
@@ -107,6 +107,7 @@ Acceptance: `packaging-check validate docs-check release-bump` in **15.26 s** ag
 | 11 | The composition's preference pinned to `pip` (`PythonInstaller(command.python_installer or settings.python_installer)` → `PythonInstaller("pip")`) | **Survived**, the same shape of finding as task 10's: every test that could have seen it used an artifact with no Python dependencies, so the composition was never asked. Killed now by a drive over an artifact that really declares a `requirements` contract, with a `uv` stub on `PATH` so both backends are reported without uv being installed (D-296) |
 | 12 | The group separator deleted (`if lines: lines.append("")` removed) | Exactly the three multi-artifact assertions red, and only those: the zero- and one-artifact cases are about a list with nothing to separate and stay green, which is the shape a layout claim should have (D-297) |
 | 13 | The blank between a completed Configuration block and the `Credentials` heading dropped | Only the two-section assertions red. The configuration-only and credentials-only cases stay green, which is correct: a view with one section has no boundary to draw (D-298) |
+| 14 | The path/observation join's default `"unobserved"` → `"matched"` | Exactly the two honesty tests red — `…_a_healthy_payload_the_comparison_dropped_is_named_and_left_unobserved` and `…_a_recorded_path_nothing_observed_says_so_rather_than_matched` — and nothing else, which is the right shape: every test about *which* paths appear is untouched, because the mutation is about what is said when nobody looked. A first attempt — dropping the harness qualifier from the delivery join — was discarded as blunt rather than semantic: `ComponentId` refuses a delivery with no harness, so the domain will not let that join quietly degrade (D-299) |
 
 **Where 04–07 ran.** In a copy of the working tree under the session scratchpad, not in the
 repository, because a full `make quality` was running at the time and `scripts/quality.py` fails any

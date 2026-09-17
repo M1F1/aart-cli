@@ -1155,6 +1155,21 @@ def render_installed_artifact(
         lines.append("Verified against its desired state.")
     if not view.actions:
         lines.append("No action is offered until it is observed.")
+    shown = view.installation if profile is PresentationProfile.VERBOSE else view.user_facing_paths
+    if shown:
+        # Where it is, which is the first thing somebody opens this view to find out (issue #17).
+        # Fast answers with the bytes and the places a harness reads them from; Verbose adds the
+        # rest of what this installation owns. Every line is a recorded path and a measured state,
+        # so a location that is absent or divergent is still named rather than quietly dropped.
+        lines.append(
+            "Installation" + (f" — {view.scope.title()} scope" if view.scope else "") + ":"
+        )
+        lines.extend(
+            f"  - {item.role}: {item.path}"
+            + (f" ({item.harness})" if item.harness else "")
+            + f" — {_human(item.state)}"
+            for item in shown
+        )
     if profile is PresentationProfile.VERBOSE:
         lines.append("Ownership:")
         lines.extend(f"  - {item.kind}: {item.owner}" for item in view.ownership)

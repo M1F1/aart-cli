@@ -234,6 +234,7 @@ def assemble_consumer_machine(
                 for reference in item.record.credential_references
                 if str(reference) in by_reference
             ),
+            receipt=item.record.receipt,
         )
         for item in inspections
     )
