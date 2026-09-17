@@ -59,7 +59,12 @@ slice's own claims; all of them are now tests, each verified by hand.
 do not apply. `tests/privileges.py` is the one guard; the sealed-lab test now carries it and the two
 files that had their own copy were moved onto it.
 
-**Tasks 09 and 10 are open** and are described in the slice.
+**Task 09 is done (D-288).** An executable requirement may name the file it really is:
+`executable_name` is the rule (no path separator, no whitespace, no control character, not `.` or
+`..`), `RequirementId` stays kebab-case, and `InstallExecutable` moved onto the same rule, because
+planning derives one from the requirement's own executable name.
+
+**Task 10 is open** and is described in the slice.
 
 **One pull request carries the whole stream.** On 2026-09-17 the two open pull requests were
 flattened, at the owner's instruction, into **#14** (`fix/cp-24-01-stale-scan` → `main`): it already

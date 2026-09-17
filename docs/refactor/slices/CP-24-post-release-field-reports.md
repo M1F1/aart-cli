@@ -380,6 +380,36 @@ Same run: `ValueError: executable requirement is invalid` from
   whitespace, no control character, not empty — while `RequirementId` stays kebab-case. The
   integration test stops assuming the interpreter it runs under is prettily named.
 
+**Done (D-288).** `executable_name(value, label)` in `agent_artifacts/domain/requirements.py` is the
+rule a file name really has: one non-empty line, no path separator, no whitespace, no control
+character, and not `.` or `..` — a name a shell could look up on `PATH` by itself. It replaced
+`_ID_RE` in `ExecutableRequirement`, and `RequirementId` was left exactly as it was.
+
+The remediation had to move with it, and that was the finding: `allowed_remediations` derives an
+`InstallExecutable` whenever the environment advertises an installer capability under the
+requirement's own executable name, and `InstallExecutable` was validating that name with the
+remediation module's `_token`. A machine that can install `python3.11` would have crashed the
+planner at the moment it offered to. Both ends now share `executable_name`; the remediation
+module's other slugs — credential providers, runtimes, harnesses — keep `_token`, because those are
+this project's vocabulary rather than the machine's.
+
+Evidence:
+- `tests/executable_requirement_test.py` — a real interpreter name is accepted and survives
+  `requirement_to_data`; a name that is not a name is refused (a path either way round, padding,
+  whitespace, a NUL, `.`, `..`, empty); the requirement id is still ours to shape, so
+  `RequirementId("python3.11")` still refuses. Properties (Hypothesis): any name a shell could look
+  up is expressible, and nothing carrying a path or padding gets through. Remediation: an
+  `InstallExecutable` may name the executable it installs, and planning offers the installer a
+  machine says it has.
+- `tests/environment_inspection_integration_test.py` — the run's own interpreter, whatever it is
+  called, is inspected rather than refused. It no longer assumes which answer comes back, because
+  whether `python3.11` is on `PATH` under that name is the machine's business.
+- Characterization: before the fix, `ValueError: executable requirement is invalid` from the
+  owner's container run, where `Path(sys.executable).name` is `python3.11`.
+- Targeted mutation: `"/" in value` → `"//" in value`, so a single path separator slips through.
+  Three tests turn red, including the property. Verified.
+- Gates: `lint`, `format-check`, `typecheck`, `docs-check`, and a full `make unit`.
+
 ### 10 — CI takes its interpreter from an image, and `setup-python` is gone
 
 The owner's decision, 2026-09-17, after `actions/setup-python@v5` failed to resolve on their

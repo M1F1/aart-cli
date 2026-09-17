@@ -7097,3 +7097,25 @@ should say so, not pass vacuously.
 guard and their private copies are gone. The guard itself is now held by `tests/privileges_test.py`,
 because the failure it prevents is otherwise invisible: a guard that never skips looks exactly like
 a test that never needed one, right up to the container run where it does. No product code changed.
+
+## D-288 — An executable requirement names a file, and a file name is not a slug
+
+**Context.** The owner's container run failed with `ValueError: executable requirement is invalid`
+because the image's interpreter is `python3.11` and `ExecutableRequirement` was validating its name
+with `_ID_RE`, the canonical-slug pattern `RequirementId` uses. `python3.11`, `node20` and `clang-15`
+are ordinary executable names that no author could express. The Product Specification lists
+`ExecutableRequirement` among the requirement types and constrains its name nowhere, so this was an
+implementation choice to correct rather than a contract to break.
+
+**Decision.** `executable_name(value, label)` holds the rule a file name really has: one non-empty
+line, no path separator, no whitespace, no control character, not `.` or `..` — a name a shell could
+look up on `PATH` by itself. A requirement says *which* executable, never *where*, so a path is
+still refused, and `RequirementId` stays kebab-case, because an identifier is this project's to
+shape while an executable's name belongs to whoever built the machine.
+
+**Consequences.** `InstallExecutable` had to move with it. `allowed_remediations` derives one
+whenever the environment advertises an installer capability under the requirement's own executable
+name, and that dataclass was validating with the remediation module's `_token`: a machine that can
+install `python3.11` would have crashed the planner at the moment it offered to. Both ends now share
+`executable_name`. The remediation module's other names — credential providers, runtimes, harnesses
+— keep `_token`, because those are this project's vocabulary rather than the machine's.

@@ -39,6 +39,12 @@ product, and became tasks 08, 09 and 10. The two open pull requests were flatten
 permission stands down where permissions do not apply: `tests/privileges.py` holds the one guard,
 the sealed-lab test in `tests/manual_test_lab_test.py` carries it, and the two files that had grown
 their own copy were moved onto it. No product code changed.
+ **2026-09-17, CP-24.09 done (D-288).** An executable requirement
+may name the file it really is -- `python3.11`, `node20`, `clang-15` -- because `executable_name`
+holds a file name's rule rather than an identifier's, while `RequirementId` stays kebab-case.
+`InstallExecutable` moved onto the same rule: planning derives one from the requirement's own
+executable name, so a machine that can install `python3.11` would have crashed the planner at the
+moment it offered to.
 
 **2026-09-15, 0.1.0 has no wheel (D-279).** The release run failed before building: its action
 installed no Poetry, which the wheel build needs. It now installs the locked tools the quality
