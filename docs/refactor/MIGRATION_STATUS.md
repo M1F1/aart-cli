@@ -34,6 +34,14 @@ identifiers and references -- and the credential boundary is unchanged.
 single empty line (issue #12). The separator is drawn and never a row, so the cursor still lands on
 artifacts only and search, selection and Fast/Verbose are untouched.
 
+**2026-09-17, PR #18 is green on every required check.** The `pr-check` matrix ran against the
+published head `3668a70` — the same commit as the local branch — and passed on Python 3.10, 3.11
+and 3.14, with the narrowed `pr-check` job itself green in 3 s. The `private image` job reports
+`skipping`, which is what it does when the registry credentials are absent; it is not a failure and
+not a gate that was dodged. CP-25 therefore has no executable work left. Taking the pull request out
+of draft, approving it and squash-merging it under its existing `feat:` title are the owner's
+actions, deliberately not taken here (D-302).
+
 **2026-09-17, CP-25.14 done (D-299) — CP-25 complete.** Installed Artifact Details names where
 AART actually put things (issue #17). Every path is read off the receipt written when the effects
 ran and joined to its component observation by `ComponentId`, never reconstructed from an assumed

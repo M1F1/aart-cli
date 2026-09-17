@@ -44,9 +44,15 @@ The written task scope is in
 split into separate scope and backend choices because they
 affect different planning contracts; both halves are done.
 
-**The next executable step is watching draft PR #18's `pr-check` to completion.** Full local
-`make quality` passed before the clean rebase; the PR matrix now verifies the rebased tree. Do not
-merge before it is green and the owner approves the review.
+**PR #18's checks are green and nothing executable is left.** The matrix ran against exactly the
+published head `3668a70`: `gates (Python 3.10)`, `(3.11)` and `(3.14)` all pass, and `pr-check`
+passes in 3 s. The private-image job reports `skipping`, which is its designed behaviour where the
+registry credentials are not available, not a failure.
+
+**What remains is the owner's and only the owner's:** take PR #18 out of draft, approve it, and
+squash-merge it under its existing `feat:` title. Do not mark it ready, approve it or merge it on
+the owner's behalf, and do not add a breaking `!` — that would release `1.0.0` instead of the
+`0.2.0` the owner chose (D-302).
 
 **Version decision made by the owner:** `0.2.0` (D-302). PR #18 is titled `feat: complete CP-25
 consumer fixes and reporting withdrawal`; under squash merge that title is the release-semantic
