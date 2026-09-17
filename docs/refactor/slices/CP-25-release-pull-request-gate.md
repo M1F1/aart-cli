@@ -473,3 +473,7 @@ Post-review documentation follow-up (D-303): the README now shows a parameterize
 Release-wheel download checked as an archive before choosing `pipx` or `uv tool`. It does not
 pretend that `curl` authenticates to a private Enterprise release or that ZIP integrity is a
 cryptographic checksum. B-136 holds that optional later contract; CP-25 is not reopened.
+The owner reported that the first command did not work. The examples were made self-contained,
+and `pipx` now selects the active `python3` explicitly after an isolated reproduction found its
+cached Python 3.14 broken on this workstation. Both wheel installs and `aart --help` then passed
+in isolated tool directories with public `v0.1.2`. The exact Enterprise error is still unknown.

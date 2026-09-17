@@ -7492,3 +7492,8 @@ installer. The check is before install so an HTML sign-in page is refused before
 Do not claim that `curl` authenticates to private Enterprise, that ZIP validation is an
 authenticity check, or that `git+` needs no build backend. A per-release checksum is B-136, not a
 silent promise in this README example. No release or runtime code changes.
+
+**Follow-up.** Put the inputs and download in each installer block so each is runnable on its own.
+Use `pipx --python "$(command -v python3)"` because `pipx` may otherwise select a different cached
+interpreter; the cached 3.14 on the test machine failed, while the active 3.11 succeeded. Require
+an existing Release asset, not merely a planned version or tag.

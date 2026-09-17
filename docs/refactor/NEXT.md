@@ -3,11 +3,14 @@
 ## Post-review installation documentation (2026-09-17)
 
 README now shows one parameterized, publicly readable Release-wheel download and two alternative
-local-wheel installs (`pipx` or `uv tool`). `curl -fL` is followed by a ZIP archive check before
-either installer runs, to catch an HTML sign-in page saved as `.whl`. It is not a checksum or an
+local-wheel installs (`pipx` or `uv tool`). After owner feedback, each installer example is now a
+complete shell block: no variable needs to survive from a previous block, and `pipx` explicitly
+uses the `python3` on PATH. Both were exercised in isolated tool directories against the public
+`v0.1.2` wheel. `curl -fL` is followed by a ZIP archive check before either installer runs, to
+catch an HTML sign-in page saved as `.whl`. It is not a checksum or an
 authentication mechanism: private Enterprise Releases still need an authenticated download or an
 internal index. B-136 holds the optional checksum follow-up; no release pipeline changed (D-303).
-PR #18 was green before this documentation-only commit; its new run must be checked after push.
+PR #18 was green before the documentation-only commits; the final run must be checked after push.
 
 ## CP-25.16 — credential-shaped test fixtures done (2026-09-17)
 

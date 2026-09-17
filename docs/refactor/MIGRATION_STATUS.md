@@ -1,9 +1,11 @@
 # AART Refactor Migration Status
 
-**2026-09-17, post-review install guidance (D-303).** README gained a parameterized public
-Release-wheel download and `pipx`/`uv tool` alternatives. A ZIP test catches a sign-in page before
-installation, and the private-Enterprise boundary is stated explicitly. The example was exercised
-against the public `v0.1.2` wheel; `docs_check` passed. B-136 records optional checksum publication.
+**2026-09-17, post-review install guidance (D-303).** README gained parameterized, self-contained
+public Release-wheel download blocks for `pipx` and `uv tool`. A ZIP test catches a sign-in page
+before installation, and the private-Enterprise boundary is stated explicitly. After owner feedback,
+`pipx` pins the `python3` on PATH rather than its potentially broken cached default. Both installers
+and their entry points were exercised in isolated tool directories against the public `v0.1.2`
+wheel; `docs_check` passed. B-136 records optional checksum publication.
 No release workflow or runtime code changed. PR #18's matrix was green before this docs update and
 must be rechecked after it is pushed.
 

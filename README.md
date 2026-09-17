@@ -49,32 +49,37 @@ both filled in.
 | Downloaded wheel | `python -m pip install --no-deps ./aart_cli-X.Y.Z-py3-none-any.whl` | `pipx install ./aart_cli-X.Y.Z-py3-none-any.whl` | `uv tool install ./aart_cli-X.Y.Z-py3-none-any.whl` |
 | Release wheel by URL | `python -m pip install --no-deps <the wheel's address on the release>` | `pipx install <the wheel's address on the release>` | `uv tool install <the wheel's address on the release>` |
 
-To install a wheel from a **publicly readable** release, set the repository address and released
-version, then download and check that the response is an archive. Replace the example host,
-organization and version with yours:
+To install a wheel from a **publicly readable** release, use one complete block below in the same
+shell. Replace the example host, organization and version with the address and version of an
+**existing release** on your fork. A tag or an open release PR is not enough: the named wheel must
+already be attached to that release.
+
+With `pipx`:
 
 ```sh
 AART_REPO="https://ghe.example.com/ORG/aart-cli"
 AART_VERSION="X.Y.Z"
 AART_WHEEL="aart_cli-${AART_VERSION}-py3-none-any.whl"
 curl -fL --output "$AART_WHEEL" "$AART_REPO/releases/download/v${AART_VERSION}/$AART_WHEEL" &&
-python3 -m zipfile -t "$AART_WHEEL" >/dev/null
+python3 -m zipfile -t "$AART_WHEEL" >/dev/null &&
+pipx install --python "$(command -v python3)" --force "./$AART_WHEEL"
 ```
 
-If the download and archive check succeed, install with `pipx`:
+Or, with `uv`:
 
 ```sh
-pipx install --force "./$AART_WHEEL"
-```
-
-Or use `uv` instead:
-
-```sh
+AART_REPO="https://ghe.example.com/ORG/aart-cli"
+AART_VERSION="X.Y.Z"
+AART_WHEEL="aart_cli-${AART_VERSION}-py3-none-any.whl"
+curl -fL --output "$AART_WHEEL" "$AART_REPO/releases/download/v${AART_VERSION}/$AART_WHEEL" &&
+python3 -m zipfile -t "$AART_WHEEL" >/dev/null &&
 uv tool install --force "./$AART_WHEEL"
 ```
 
 The archive check catches an HTML sign-in page saved with a `.whl` name; it is not a checksum or
 authenticity check. On a private release, an unauthenticated `curl` cannot fetch the wheel at all.
+The `pipx` command explicitly uses the `python3` on your PATH (which must be 3.10 or newer), since
+the Python cached as `pipx`'s default may be different or broken.
 
 The Git row needs no pre-downloaded wheel: `git+https://` uses your Git credentials. It does build
 from source, however, so its environment must be able to obtain the pinned `poetry-core` build
