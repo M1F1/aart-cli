@@ -8,4 +8,4 @@ from __future__ import annotations
 # The one place this package writes its own version down, and the release engine writes it
 # here: `release-please-config.json` lists this file, and the annotation is the line it
 # rewrites.  Nothing else in the tree declares a version -- `runtime_contract` reads this one.
-__version__ = "0.1.2"  # x-release-please-version
+__version__ = "0.2.0"  # x-release-please-version

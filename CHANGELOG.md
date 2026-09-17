@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.2.0](https://github.com/M1F1/aart-cli/compare/v0.1.2...v0.2.0) (2026-09-17)
+
+
+### Added
+
+* **details:** name the exact paths an installation owns ([04241e8](https://github.com/M1F1/aart-cli/commit/04241e8917d534aab6b3c2f2357edbadf56df908))
+* **install:** let one installation choose its scope without changing the preference ([04241e8](https://github.com/M1F1/aart-cli/commit/04241e8917d534aab6b3c2f2357edbadf56df908))
+* **install:** let one installation choose pip or uv without changing the preference ([04241e8](https://github.com/M1F1/aart-cli/commit/04241e8917d534aab6b3c2f2357edbadf56df908))
+* **install:** let the review screen choose where an installation lands ([04241e8](https://github.com/M1F1/aart-cli/commit/04241e8917d534aab6b3c2f2357edbadf56df908))
+* **reporting:** withdraw GitHub-issue usage reports and the registry dashboard ([04241e8](https://github.com/M1F1/aart-cli/commit/04241e8917d534aab6b3c2f2357edbadf56df908))
+
+
+### Fixed
+
+* **ci:** validate PR titles early and assemble fake tokens at runtime ([04241e8](https://github.com/M1F1/aart-cli/commit/04241e8917d534aab6b3c2f2357edbadf56df908))
+* **inputs:** draw screen 22a's two sections as two ([04241e8](https://github.com/M1F1/aart-cli/commit/04241e8917d534aab6b3c2f2357edbadf56df908))
+* **inputs:** part one artifact's inputs from the next on screen 22 ([04241e8](https://github.com/M1F1/aart-cli/commit/04241e8917d534aab6b3c2f2357edbadf56df908))
+* **maintainer:** count Candidates by whether anyone can still act on them ([04241e8](https://github.com/M1F1/aart-cli/commit/04241e8917d534aab6b3c2f2357edbadf56df908))
+* **marketplace:** lead a row with installation state and harnesses, not prose ([04241e8](https://github.com/M1F1/aart-cli/commit/04241e8917d534aab6b3c2f2357edbadf56df908))
+
+
+### Documentation
+
+* **install:** install a release wheel by copying its link ([04241e8](https://github.com/M1F1/aart-cli/commit/04241e8917d534aab6b3c2f2357edbadf56df908))
+
 ## [0.1.2](https://github.com/M1F1/aart-cli/compare/v0.1.1...v0.1.2) (2026-09-17)
 
 
