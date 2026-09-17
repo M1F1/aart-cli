@@ -7300,5 +7300,11 @@ install and asserts the files landed in the home and not in the project. Writing
 third `PREPARE_ACTION` construction site, the re-prepare after harness selection on screen 05,
 which did not carry the scope; without the drive the choice would have silently reverted there.
 
-**Not yet done.** No screen or key lets a person make the choice: the seam is complete and held,
-but the flow does not expose Project/User before Ready/Review. CP-25.10 stays in progress.
+**The screen.** Review Selection draws the offer, and only when there is something to decide: a
+selection with one possible scope states a fact rather than presenting a control. The rows follow
+the harness rows rather than leading them, because row order is cursor order on that screen and the
+screen's act is choosing what to install into — leading with the scope would have moved the first
+keypress of every existing install onto a different control, which the fixture `_INSTALL` caught by
+suddenly installing into the project a test had just chosen to leave. Harnesses are drawn as boxes
+and the scope as a radio, so the one answer does not read as one more harness. The second targeted
+mutation — marking every scope row selected — was killed by the two tests that read the mark.

@@ -10,10 +10,15 @@ product issue in `M1F1/aart-cli`: #9, #10, #11, #12, #16 and #17 (D-291).
 
 The written task scope is in
 [`slices/CP-25-release-pull-request-gate.md`](slices/CP-25-release-pull-request-gate.md), and
-`plan.json` is the executable status authority. **No task 04–14 implementation starts until the
-owner reviews that scope.** Once accepted, task 04 remains the next executable task; tasks 08–14
-follow the usage-reporting withdrawal in issue order, with #11 split into separate scope and Python
-backend choices because they affect different planning contracts.
+`plan.json` is the executable status authority. Tasks 04–10 are done (D-292 to D-295). **The next
+executable task is CP-25.11 — issue #11b, the Python backend choice**, followed by 12–14 (#12, #16,
+#17) in issue order. #11 was split into separate scope and backend choices because they affect
+different planning contracts.
+
+**Still the owner's to decide, and not to be decided for them:** the version this branch releases.
+The commits are written as `feat:`/`fix:`, which makes it `0.2.0`; a `feat!:` PR title makes it
+`1.0.0`, because `bump-minor-pre-major: false` sends a breaking change straight past `0.3.0`. Under
+squash merge the PR title decides, not the commits.
 
 The requested clean baseline was rerun before this planning update. Format, lint, typecheck and the
 unit gate (4,356 tests, 1 skipped) passed. The run was intentionally stopped during coverage when

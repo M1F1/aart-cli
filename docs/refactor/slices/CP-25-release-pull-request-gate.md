@@ -1,8 +1,7 @@
 # CP-25 — release gating, usage-reporting withdrawal, and post-release field reports
 
 Status: IN PROGRESS — tasks 01–03 done (D-290), 04–07 done and committed as `7af06be` (D-292),
-08 done (D-293), 09 done (D-294); 10 part-done (D-295) — the scope seam is complete and held, the
-screen that lets somebody use it is not written; tasks 11–14 are planned and not started.
+08 done (D-293), 09 done (D-294), 10 done (D-295); tasks 11–14 are planned and not started.
 
 The slice carries two unrelated subjects because the owner added the second while the first was in
 flight. They share nothing but the release they will go out in, and they are ordered so that the
@@ -101,6 +100,7 @@ Acceptance: `packaging-check validate docs-check release-bump` in **15.26 s** ag
 | 07 | `TelemetryDelivery("disabled", 0)` → `("delivered", 0)` in `DisabledActivityTelemetry.publish` | `test_the_default_adapter_is_explicitly_disabled_and_has_no_callback` red, alone. This is the load-bearing one of the four: it holds the promise that nothing leaves the machine unless a caller injects an adapter on purpose |
 | 08 | `CandidateState.APPROVAL_REQUIRED` moved from `ACTIVE_CANDIDATE_STATES` into `SETTLED_CANDIDATE_STATES` | **Survived**, and that was the finding. A Candidate stopped for manual approval is the most literally pending state there is, so classing it as settled would have hidden the very work issue #9 is about — while fixing issue #9. Two tests now hold it (`…_a_candidate_waiting_on_a_human_decision_is_awaiting_action` and `…_an_approval_required_candidate_is_counted_as_awaiting_action`), and the mutation is red in both (D-293) |
 | 10 | `_host` ignores its `chosen` argument and reads `settings.default_scope` again | **Survived** every unit-level test in the module, because none of them installed anything. The test that kills it drives the real TUI from a Project default to a User install and asserts the files reached the home and not the project. Writing it also found a third `PREPARE_ACTION` site — the re-prepare after harness selection — that did not carry the scope, where the choice would have silently reverted (D-295) |
+| 10 | Every scope row is drawn as the selected one (`'(*)' if scope == selected else '( )'` → `'(*)'`) | `…_the_offer_opens_on_the_stored_preference` and `…_choosing_the_other_scope_moves_the_mark_to_it` red. This is the screen half: a radio that always reads as chosen tells the operator their choice was taken when nothing was sent (D-295) |
 | 09 | `"Installed: " + ", ".join(row.installed_statuses)` → `"Installed"` on the Fast row | Three tests red, all of them about that one claim: `…_a_current_installation_is_named_with_its_harness`, `…_an_update_available_installation_is_not_flattened_into_installed` and `…_the_renderer_reports_exactly_what_the_projection_recorded`. Flattening the status loses the difference between `current` and `update-available`, which is the difference between nothing to do and something to do (D-294) |
 
 **Where 04–07 ran.** In a copy of the working tree under the session scratchpad, not in the

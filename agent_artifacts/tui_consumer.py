@@ -64,6 +64,8 @@ from agent_artifacts.application.consumer_views import (
     project_collection,
     project_registries,
     remediation_needs_decision,
+    scope_from_row,
+    scope_row,
     target_choice_problems,
     target_from_row,
     target_row,
@@ -2977,7 +2979,17 @@ class CanonicalScreenSource:
                 for harness in state.targets
                 if all(item.harness != harness for item in plan.targets)
             )
-            return (*eligible, *stale)
+            # Scope follows the harnesses rather than leading them. Row order is cursor order on
+            # this screen, and this screen's act is choosing what to install into; putting the
+            # scope first would move the first keypress of every existing install onto a different
+            # control. It is drawn only when there is something to decide -- a selection with one
+            # possible scope has a fact to state, not a control to offer (issue #11a).
+            scopes = (
+                tuple(scope_row(item) for item in plan.scope_choice.offered)
+                if plan.scope_choice is not None and plan.scope_choice.is_a_choice
+                else ()
+            )
+            return (*eligible, *stale, *scopes)
         if screen is ConsumerScreen.REMEDIATION:
             # CP-23 task 08: Continue is a row, so it is a control rather than a printed string.
             return () if self._screens.plan is None else (ConsumerScreen.READY.value,)
@@ -3778,16 +3790,32 @@ class CanonicalScreenSource:
             return render_maintainer_dashboard(screens.maintainer.dashboard, state.session.profile)
         return ()
 
+    def _review_row(self, row: str, state: ConsumerUiState) -> str:
+        """One line of the review screen: a harness to install into, or where it all lands.
+
+        The two kinds of row are marked differently on purpose. Harnesses are a set -- several may
+        be ticked -- while the scope is one answer, so it is drawn as a radio rather than a box
+        that could read as a second harness (issue #11a).
+        """
+
+        cursor = ">" if row == state.current_row else " "
+        scope = scope_from_row(row)
+        if scope is None:
+            harness = target_from_row(row)
+            return f"{cursor} {'[x]' if harness in state.targets else '[ ]'} {harness}"
+        plan = self._screens.plan
+        selected = (
+            plan.scope_choice.selected
+            if plan is not None and plan.scope_choice is not None
+            else state.install_scope
+        )
+        return f"{cursor} {'(*)' if scope == selected else '( )'} Install into: {scope.title()}"
+
     def _body(self, state: ConsumerUiState) -> tuple[str, ...]:
         screen, profile = state.session.screen, state.session.profile
         screens = self._screens
         if screen is ConsumerScreen.REVIEW_SELECTION and self.rows(state):
-            return tuple(
-                f"{'>' if row == state.current_row else ' '} "
-                f"{'[x]' if target_from_row(row) in state.targets else '[ ]'} "
-                f"{target_from_row(row)}"
-                for row in state.rows
-            )
+            return tuple(self._review_row(row, state) for row in state.rows)
         if screen is ConsumerScreen.CONFIGURATION_TARGETS:
             return tuple(
                 f"{'>' if row == state.current_row else ' '} "

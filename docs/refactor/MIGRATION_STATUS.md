@@ -1,12 +1,14 @@
 # AART Refactor Migration Status
 
-**2026-09-17, CP-25.10 in progress (D-295).** An installation's scope now travels with the
-operation instead of being re-read from Settings at the effect boundary, so one install can differ
-from the preference without rewriting it (issue #11a). `offer_install_scopes` computes the offer as
-the intersection of every resolved artifact's declared scopes, minus `project` where no project
-target exists, and refuses when that is empty; a Hypothesis property holds it. **Still missing: the
-screen.** Nothing in the flow yet lets a person make the choice before Ready/Review, so the task is
-not ticked off.
+**2026-09-17, CP-25.10 done (D-295).** An installation's scope travels with the operation instead
+of being re-read from Settings at the effect boundary, so one install can differ from the preference
+without rewriting it (issue #11a). `offer_install_scopes` computes the offer as the intersection of
+every resolved artifact's declared scopes, minus `project` where no project target exists, and
+refuses when that is empty; a Hypothesis property holds it. Review Selection now draws the offer as
+radio rows after the harness rows -- only when there is a choice to make -- and pressing one
+re-prepares the plan at that scope. Two findings came out of the work: a third `PREPARE_ACTION`
+construction site that dropped the scope, and the row ordering, which first put scope above the
+harnesses and silently moved the first keypress of every existing install onto another control.
 
 **2026-09-17, CP-25.09 done (D-294).** A Marketplace row leads with the coordinate, the approval
 standing, the installation state and the eligible harnesses; the description is disclosed in

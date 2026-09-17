@@ -30,6 +30,7 @@ from .consumer_views import (
     is_screen_identifier,
     keeps_focus,
     navigation_targets,
+    scope_from_row,
     target_from_row,
 )
 from .maintainer_views import (
@@ -1027,6 +1028,25 @@ def _toggle_selection(
         )
         return replace(state, configuration_targets=targets, quit_pending=False), ()
     if state.session.screen is ConsumerScreen.REVIEW_SELECTION:
+        scope = scope_from_row(key)
+        if scope is not None:
+            # Changing the scope re-prepares: review, paths, effects and receipt all have to name
+            # the scope that was chosen, and a plan kept from the previous one would be a review of
+            # somewhere else (issue #11a).  The stored preference is untouched.
+            chosen_scope = replace(state, install_scope=scope, quit_pending=False)
+            if state.action is not ConsumerActionKind.INSTALL:
+                return chosen_scope, ()
+            return chosen_scope, (
+                ConsumerUiCommand(
+                    ConsumerUiCommandKind.PREPARE_ACTION,
+                    action=ConsumerActionKind.INSTALL,
+                    selection=state.selection,
+                    targets=state.targets,
+                    focus=state.focus,
+                    config_answers=state.config_draft.answers,
+                    install_scope=scope,
+                ),
+            )
         harness = target_from_row(key)
         if harness is None:
             return state, ()

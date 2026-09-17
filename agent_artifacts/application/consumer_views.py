@@ -260,6 +260,22 @@ class HarnessTargetView:
             raise ValueError("a harness target view is invalid")
 
 
+#: How screen 05 addresses one install-scope row, in the same shape as a harness row so the list
+#: has one kind of control rather than a control and a special case.
+SCOPE_ROW_PREFIX = "scope:"
+
+
+def scope_row(scope: str) -> str:
+    return f"{SCOPE_ROW_PREFIX}{scope}"
+
+
+def scope_from_row(row: str) -> str | None:
+    if not isinstance(row, str) or not row.startswith(SCOPE_ROW_PREFIX):
+        return None
+    scope = row[len(SCOPE_ROW_PREFIX) :]
+    return scope if scope in ("project", "user") else None
+
+
 def target_row(harness: str) -> str:
     return f"{TARGET_ROW_PREFIX}{harness}"
 
@@ -604,6 +620,10 @@ class ConsumerPlanView:
     #: The harnesses this plan was prepared for, as somebody chose them. Empty while nothing is
     #: chosen: such a plan is eligibility to choose from, never a plan to confirm (D-260).
     chosen_targets: tuple[str, ...] = ()
+    #: Which install scopes this selection may go to and which one it is going to, or `None` for a
+    #: plan whose scope is not the operator's to choose (an update keeps where it already is).
+    #: Screen 05 draws it only when there is something to decide (issue #11a, D-295).
+    scope_choice: InstallScopeChoiceView | None = None
 
     @property
     def semantic_identity(self) -> str:

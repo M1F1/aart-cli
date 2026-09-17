@@ -46,10 +46,13 @@ from agent_artifacts.application.consumer_ui import (
     SourceDraft,
 )
 from agent_artifacts.application.consumer_views import (
+    ConsumerPlanView,
     ConsumerSettings,
     HarnessTargetView,
+    InstallScopeChoiceView,
     LifecyclePlanView,
     RunningInstallationView,
+    offer_install_scopes,
     project_lifecycle_plan,
     project_running_installation,
     target_choice_problems,
@@ -640,6 +643,28 @@ class LocalConsumerActions:
         named = chosen or self._context.settings.default_scope
         scope = Scope.USER if named == "user" else Scope.PROJECT
         return host if host.scope is scope else replace(host, scope=scope)
+
+    def _scope_choice(self, plan: ConsumerPlanView, chosen: str) -> InstallScopeChoiceView | None:
+        """Which scopes this selection may install into, seeded by the preference.
+
+        The declared sets come from the Marketplace rows the composition is already holding, so
+        this reads no index and touches no disk. A selection whose members share no scope, or an
+        artifact this composition has no row for, yields `None`: the screen then offers nothing
+        rather than an offer it cannot stand behind (issue #11a).
+        """
+
+        declared = {
+            entry.row.key: entry.row.declared_scopes for entry in self._context.offers.artifacts
+        }
+        sets = tuple(declared[key] for key in plan.selection.resolved if key in declared)
+        if len(sets) != len(plan.selection.resolved):
+            return None
+        offered = offer_install_scopes(
+            sets,
+            project_available=bool(self._context.host.project_root),
+            preferred=chosen or self._context.settings.default_scope,
+        )
+        return offered.value if isinstance(offered, Ok) else None
 
     def _reviewed_host(self) -> InstallationHost:
         """The machine the held review was prepared against, not the one preferences name now.
@@ -1586,7 +1611,11 @@ class LocalConsumerActions:
             )
         action = prepared.value.action
         assert action is not None
-        plan = replace(action.flow.plan, targets=targets)
+        plan = replace(
+            action.flow.plan,
+            targets=targets,
+            scope_choice=self._scope_choice(action.flow.plan, command.install_scope),
+        )
         chosen: tuple[str, ...] = ()
         reviewed = prepared.value
         reviewed_host = host

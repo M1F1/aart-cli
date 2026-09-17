@@ -148,6 +148,10 @@ class MarketplaceArtifactRow:
     actual_modes: tuple[str, ...]
     installed_statuses: tuple[str, ...]
     security: MarketplaceSecurity
+    #: The install scopes the artifact's manifest declares, sorted. A row carries them so the
+    #: install flow can offer the scopes the selection actually supports without re-reading the
+    #: index (issue #11a).
+    declared_scopes: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if (
@@ -162,6 +166,8 @@ class MarketplaceArtifactRow:
             or not self.compatibility
             or tuple(sorted(set(self.actual_modes))) != self.actual_modes
             or tuple(sorted(set(self.installed_statuses))) != self.installed_statuses
+            or tuple(sorted(set(self.declared_scopes))) != self.declared_scopes
+            or not set(self.declared_scopes) <= {"project", "user"}
         ):
             raise ValueError("TUI marketplace artifact row is invalid")
 
@@ -365,6 +371,7 @@ def project_marketplace_rows(
                 _actual_modes(item, target, compatible),
                 _installed_statuses(item, target, lifecycle),
                 _security(item, evidence),
+                tuple(sorted(set(artifact.install.scopes))),
             )
         )
     return tuple(rows)

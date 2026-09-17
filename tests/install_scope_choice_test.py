@@ -27,8 +27,8 @@ from agent_artifacts.application.consumer_views import (
 )
 from agent_artifacts.domain.result import Err, Ok
 from tests.configured_install_command_e2e_test import _environment
-from tests.consumer_application_e2e_test import _INSTALL, _actions, _drive
-from tests.consumer_shell_test import _at
+from tests.consumer_application_e2e_test import _INSTALL, ENTER, _actions, _drive
+from tests.consumer_shell_test import DOWN, SPACE, _at
 
 SCOPES = ("project", "user")
 
@@ -270,3 +270,70 @@ class ThePreferenceLosesToTheChoiceOnThisMachineTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TheReviewScreenShowsTheChoiceTest(unittest.TestCase):
+    """The half of issue #11a an operator can see.
+
+    The seam underneath could already carry a chosen scope, but nothing on screen said a choice
+    existed: the review screen drew the scope rows as `[ ] None`, so the only way to reach the
+    other scope was to change the stored preference first -- which is the thing this issue is
+    about not having to do.
+    """
+
+    def test_the_review_screen_names_both_scopes_the_selection_supports(self) -> None:
+        with _environment() as env:
+            _, terminal, _ = _drive(env, _at(ConsumerScreen.MARKETPLACE), SPACE, ord("i"))
+
+            self.assertIn("Install into: Project", terminal.last)
+            self.assertIn("Install into: User", terminal.last)
+            self.assertNotIn("[ ] None", terminal.last)
+
+    def test_the_offer_opens_on_the_stored_preference(self) -> None:
+        with _environment() as env:
+            _, terminal, _ = _drive(env, _at(ConsumerScreen.MARKETPLACE), SPACE, ord("i"))
+
+            self.assertIn("(*) Install into: Project", terminal.last)
+            self.assertIn("( ) Install into: User", terminal.last)
+
+    def test_choosing_the_other_scope_moves_the_mark_to_it(self) -> None:
+        with _environment() as env:
+            _, terminal, _ = _drive(
+                env, _at(ConsumerScreen.MARKETPLACE), SPACE, ord("i"), DOWN, DOWN, SPACE
+            )
+
+            self.assertIn("( ) Install into: Project", terminal.last)
+            self.assertIn("(*) Install into: User", terminal.last)
+
+    def test_a_scope_chosen_on_the_review_screen_is_where_the_files_land(self) -> None:
+        with _environment() as env:
+            _drive(
+                env,
+                _at(ConsumerScreen.MARKETPLACE),
+                SPACE,
+                ord("i"),
+                SPACE,
+                DOWN,
+                DOWN,
+                SPACE,
+                ENTER,
+                ENTER,
+                actions=_actions(env),
+            )
+
+            self.assertTrue(
+                (env.home / ".claude/skills/code-review/SKILL.md").exists(),
+                "the scope chosen on the review screen never reached the user home",
+            )
+            self.assertFalse(
+                (env.project / ".claude/skills/code-review/SKILL.md").exists(),
+                "the install went to the project the operator had just moved away from",
+            )
+
+    def test_a_selection_with_one_possible_scope_states_it_without_a_control(self) -> None:
+        """A fact is not a choice: nothing is drawn to press when only one scope is possible."""
+
+        offered = _offer(("user",))
+
+        assert isinstance(offered, Ok)
+        self.assertFalse(offered.value.is_a_choice)
