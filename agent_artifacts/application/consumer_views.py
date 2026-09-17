@@ -1976,6 +1976,86 @@ def navigation_targets(
 
 #: Refusal for a stored preference file this frontend cannot mean.
 CONSUMER_SETTINGS_INVALID = DiagnosticCode("consumer-settings-invalid")
+INSTALL_SCOPE_UNAVAILABLE = DiagnosticCode("install-scope-unavailable")
+
+#: The complete scope vocabulary, in the order the flow offers it.
+_INSTALL_SCOPES: tuple[str, ...] = ("project", "user")
+
+
+@dataclass(frozen=True, slots=True)
+class InstallScopeChoiceView:
+    """The scopes this operation may install into, and which one it is currently going to.
+
+    The view cannot describe an impossible offer: the selection is always one of the offered
+    scopes, and the offer is never empty. A screen that drew a scope the plan could not honour
+    would be the fault this task is fixing wearing different clothes (issue #11a).
+    """
+
+    offered: tuple[str, ...]
+    selected: str
+
+    def __post_init__(self) -> None:
+        if (
+            not self.offered
+            or tuple(sorted(set(self.offered))) != self.offered
+            or not set(self.offered) <= set(_INSTALL_SCOPES)
+            or self.selected not in self.offered
+        ):
+            raise ValueError("installation scope choice is invalid")
+
+    @property
+    def is_a_choice(self) -> bool:
+        """Whether there is anything to decide, or only something to disclose."""
+
+        return len(self.offered) > 1
+
+    def choose(self, scope: str) -> InstallScopeChoiceView:
+        if scope not in self.offered:
+            raise ValueError("installation scope was not offered")
+        return replace(self, selected=scope)
+
+
+def offer_install_scopes(
+    declared: tuple[tuple[str, ...], ...],
+    *,
+    project_available: bool,
+    preferred: str,
+) -> Result[InstallScopeChoiceView]:
+    """Which scopes every member of the selection supports and this machine can actually host.
+
+    The preference seeds the choice and never widens it: a selection that cannot honour the
+    preference falls to what it can, because a default that loses is still a default. A selection
+    whose members share no scope is refused rather than resolved -- installing them together has
+    no correct answer, and picking one would make the flow choose where the operator's files go.
+    """
+
+    if not declared:
+        return Err(
+            (
+                Diagnostic(
+                    INSTALL_SCOPE_UNAVAILABLE,
+                    Severity.ERROR,
+                    "an empty selection has no installation scope to choose",
+                ),
+            )
+        )
+    common = set(_INSTALL_SCOPES)
+    for item in declared:
+        common &= set(item)
+    if not project_available:
+        common -= {"project"}
+    if not common:
+        return Err(
+            (
+                Diagnostic(
+                    INSTALL_SCOPE_UNAVAILABLE,
+                    Severity.ERROR,
+                    "this selection has no installation scope every artifact supports here",
+                ),
+            )
+        )
+    offered = tuple(scope for scope in sorted(common))
+    return Ok(InstallScopeChoiceView(offered, preferred if preferred in common else offered[0]))
 
 
 @dataclass(frozen=True, slots=True)

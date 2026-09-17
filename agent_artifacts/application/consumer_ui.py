@@ -412,10 +412,15 @@ class ConsumerUiCommand:
     repository_scan_draft: RepositoryScanDraft | None = None
     targets: tuple[str, ...] = ()
     config_answers: tuple[tuple[str, str], ...] = ()
+    #: The scope this one installation chose, or empty to follow the stored preference. It travels
+    #: on the command rather than being read from Settings at the boundary, so what was reviewed is
+    #: what is executed even if the preference changes in between (issue #11a).
+    install_scope: str = ""
 
     def __post_init__(self) -> None:
         if (
             not isinstance(self.kind, ConsumerUiCommandKind)
+            or self.install_scope not in ("", "project", "user")
             or (
                 self.screen is not None
                 and not isinstance(self.screen, (ConsumerScreen, MaintainerScreen))
@@ -541,6 +546,9 @@ class ConsumerUiState:
     #: offering a key whose only possible answer is that nothing was prepared (`QA-033`).
     failed_action: ConsumerActionKind | None = None
     #: What the Candidate list is narrowed to. Screen 53 edits it; screen 35 obeys it.
+    #: The scope this installation chose for itself, or empty to follow `settings.default_scope`.
+    #: A one-off choice never rewrites the preference (issue #11a).
+    install_scope: str = ""
     candidate_filter: MaintainerCandidateFilter = MaintainerCandidateFilter()
     #: Which promotion the Maintainer is reviewing. Screen 42 chooses it; screens 41 and 43 obey
     #: it. Both modes are composed, so this selects a projection rather than causing one.
@@ -579,6 +587,7 @@ class ConsumerUiState:
         if (
             not isinstance(self.session, ConsumerSession)
             or not isinstance(self.settings, ConsumerSettings)
+            or self.install_scope not in ("", "project", "user")
             or not _rows_valid(self.rows)
             or not isinstance(self.cursor, int)
             or isinstance(self.cursor, bool)
@@ -1039,6 +1048,7 @@ def _toggle_selection(
                 targets=targets,
                 focus=request_focus,
                 config_answers=state.config_draft.answers,
+                install_scope=state.install_scope,
             ),
         )
     if key in state.selection:
@@ -1210,6 +1220,7 @@ def _request_action(
             targets=state.targets,
             focus=state.focus,
             config_answers=state.config_draft.answers,
+            install_scope=(state.install_scope if action is ConsumerActionKind.INSTALL else ""),
         )
         return prepared, (
             command,
@@ -1293,6 +1304,7 @@ def _request_action(
         repository_scan_draft=(
             state.repository_scan_draft if action is ConsumerActionKind.REPOSITORY_SCAN else None
         ),
+        install_scope=(state.install_scope if action is ConsumerActionKind.INSTALL else ""),
         config_answers=(
             state.config_draft.answers
             if action is ConsumerActionKind.INSTALL

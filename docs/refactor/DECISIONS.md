@@ -7271,3 +7271,34 @@ state is named with its harness and its exact lifecycle status rather than as a 
 targeted mutation collapsing them was killed by three tests. `tests/consumer_views_test.py` held
 the old contract with `assertIn(row.summary, fast)`; that assertion is replaced by its opposite
 plus the Verbose claim, rather than deleted, so the reversal is recorded where the old promise was.
+
+## D-295 — An installation's scope travels with the operation, not with the preference
+
+**Context.** `Settings.default_scope` was read at the effect boundary when the plan was built, so
+it was the only thing that could decide where an installation landed (issue #11a). Two faults
+follow from that shape rather than from the value: nobody could install one artifact elsewhere
+without changing a global preference first, and a preference changed between review and execution
+would have moved files the operator had already reviewed as going somewhere else.
+
+**Decision.** The scope is chosen per operation and travels on `ConsumerUiCommand.install_scope`,
+empty meaning "follow the stored preference". `ConsumerActionsComposition._host` takes it as an
+argument and never writes it back: a one-off choice is an answer about this operation, not a new
+default. `offer_install_scopes` in the application layer computes what may be offered — the
+intersection of every resolved artifact's declared scopes, minus `project` when no project target
+exists — and refuses rather than guesses when that intersection is empty, because installing
+members with no common scope has no correct answer. `InstallScopeChoiceView` cannot represent an
+impossible offer: it is never empty and its selection is always one of its own options.
+
+**Consequences.** The preference keeps meaning what Settings says it means. A Hypothesis property
+holds the offer as exactly the intersection over every shape of declaration, so a future artifact
+kind declaring a new scope combination cannot quietly widen it.
+
+**What the work found.** The first targeted mutation — making `_host` ignore its argument and read
+the preference again — survived every unit-level test in the module, because none of them actually
+installed anything. The test that kills it drives the real TUI from a Project default to a User
+install and asserts the files landed in the home and not in the project. Writing it also exposed a
+third `PREPARE_ACTION` construction site, the re-prepare after harness selection on screen 05,
+which did not carry the scope; without the drive the choice would have silently reverted there.
+
+**Not yet done.** No screen or key lets a person make the choice: the seam is complete and held,
+but the flow does not expose Project/User before Ready/Review. CP-25.10 stays in progress.

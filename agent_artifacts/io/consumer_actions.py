@@ -613,8 +613,13 @@ class LocalConsumerActions:
 
         return self._context.settings
 
-    def _host(self) -> InstallationHost:
-        """The machine as the operator's current preference addresses it.
+    def _host(self, chosen: str = "") -> InstallationHost:
+        """The machine as this operation addresses it: a chosen scope, else the preference.
+
+        `chosen` is what one installation decided for itself on the way past (issue #11a, D-295).
+        It is deliberately not written back to the preference: a one-off choice is an answer about
+        this operation, not a new default, and silently rewriting Settings from it would make the
+        preference mean whatever the last install happened to need.
 
         Screen 28 offers `Default scope: Project/User`, and until this read it was a preference the
         application drew and then ignored: composition fixed the host at project scope, so a User
@@ -630,7 +635,10 @@ class LocalConsumerActions:
         """
 
         host = self._context.host
-        scope = Scope.USER if self._context.settings.default_scope == "user" else Scope.PROJECT
+        if chosen not in ("", "project", "user"):
+            raise ValueError("an installation scope must be project or user")
+        named = chosen or self._context.settings.default_scope
+        scope = Scope.USER if named == "user" else Scope.PROJECT
         return host if host.scope is scope else replace(host, scope=scope)
 
     def _reviewed_host(self) -> InstallationHost:
@@ -1456,7 +1464,7 @@ class LocalConsumerActions:
         previous_receipts: tuple[tuple[ArtifactCoordinate, ArtifactReceipt], ...] = (),
     ) -> ConsumerActionUpdate:
         context = self._context
-        host = self._host()
+        host = self._host(command.install_scope)
         sources: tuple[InputValueSource, ...] = tuple(
             PromptedConfigValue(InputId(identifier), value)
             for identifier, value in command.config_answers

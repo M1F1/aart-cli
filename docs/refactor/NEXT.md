@@ -39,8 +39,11 @@ complete green `make quality` result and must be rerun before any slice is calle
 
 ## Current objective — CP-25 (2026-09-17)
 
-**CP-25 is the active slice; the next executable task is CP-25.10** (installation scope as an
-explicit per-install choice seeded by Settings, issue #11a). Tasks 01–03 gated the release pull
+**CP-25 is the active slice. CP-25.10 is part-done and is the next thing to finish**: the scope
+seam is complete and held (D-295), but no screen or key lets a person make the choice before
+Ready/Review, which is the half of issue #11a a user can see. Finishing it means a control on
+screen 05 driven by `offer_install_scopes`, setting `ConsumerUiState.install_scope`; everything
+downstream of that field already works and is under test. Tasks 01–03 gated the release pull
 request (D-290), 04–07 withdrew usage reporting and left an Activity telemetry port in its place
 (D-292), 08 fixed the Dashboard's Candidate arithmetic (D-293), and 09 made a Marketplace row lead
 with installation state and harnesses (D-294). Tasks 10–14 carry the owner's remaining open
