@@ -1,5 +1,12 @@
 # AART Refactor Migration Status
 
+**2026-09-17, CP-25.09 done (D-294).** A Marketplace row leads with the coordinate, the approval
+standing, the installation state and the eligible harnesses; the description is disclosed in
+Verbose and on Artifact Details instead of being printed on the row and repeated (issue #10).
+State is read from the canonical lifecycle projection and harness eligibility from the approved
+artifact projection -- the renderer probes nothing. Search still reads the summary it no longer
+shows, and a test holds that, because it is the obvious thing to break here.
+
 **2026-09-17, CP-25.08 done (D-293).** The Maintainer Dashboard counts Candidates by whether a
 maintainer can still act on them. `CandidateState` is split into `ACTIVE_CANDIDATE_STATES` and
 `SETTLED_CANDIDATE_STATES` in the domain, the projection derives the arithmetic once, and the

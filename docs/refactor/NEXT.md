@@ -39,11 +39,12 @@ complete green `make quality` result and must be rerun before any slice is calle
 
 ## Current objective — CP-25 (2026-09-17)
 
-**CP-25 is the active slice; the next executable task is CP-25.09** (Marketplace rows prioritize
-installation state and compatible harnesses, issue #10). Tasks 01–03 gated the release pull
+**CP-25 is the active slice; the next executable task is CP-25.10** (installation scope as an
+explicit per-install choice seeded by Settings, issue #11a). Tasks 01–03 gated the release pull
 request (D-290), 04–07 withdrew usage reporting and left an Activity telemetry port in its place
-(D-292), and 08 fixed the Dashboard's Candidate arithmetic (D-293). Tasks 09–14 carry the owner's
-remaining open issues: #10, #11 (two tasks), #12, #16 and #17.
+(D-292), 08 fixed the Dashboard's Candidate arithmetic (D-293), and 09 made a Marketplace row lead
+with installation state and harnesses (D-294). Tasks 10–14 carry the owner's remaining open
+issues: #11 (two tasks), #12, #16 and #17.
 `docs/refactor/slices/CP-25-release-pull-request-gate.md` holds the ordered tasks and their
 acceptance criteria; `plan.json` holds them as CP-25.1 to CP-25.14.
 

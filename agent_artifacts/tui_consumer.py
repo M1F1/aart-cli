@@ -1579,7 +1579,15 @@ def render_marketplace_artifact(
         if row.trust in {"registry-reviewed", "company-reviewed"}
         else _human(row.trust).title()
     )
-    lines = [row.key, approval, row.summary, "Eligible installation harnesses"]
+    # The description is disclosed in Verbose and on Artifact Details, not repeated here.  What a
+    # choice actually turns on is whether this is already installed and where it can go, so those
+    # lead instead (issue #10).  Search and filtering still read the summary either way.
+    state = (
+        "Installed: " + ", ".join(row.installed_statuses)
+        if row.installed_statuses
+        else "Not installed"
+    )
+    lines = [row.key, approval, state, "Eligible installation harnesses"]
     if row.eligible_harnesses:
         lines.extend(f"  - {harness}" for harness in row.eligible_harnesses)
     else:

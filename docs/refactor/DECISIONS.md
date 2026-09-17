@@ -7247,3 +7247,27 @@ partition the vocabulary: a state in neither would silently vanish from the coun
 test suite. It is the most literally pending state there is -- the Candidate is stopped exactly
 because it wants a maintainer's decision -- so the classification would have hidden the very work
 issue #9 is about. Two tests now hold it.
+
+## D-294 — A Marketplace row leads with installation state and harnesses, not with the description
+
+**Context.** The Fast block on a focused Marketplace row rendered the complete artifact summary,
+and Verbose rendered it again through Artifact Details. The list was therefore hard to scan while
+omitting the two facts that decide anything on that screen: whether the artifact is already
+installed on this machine, and which harnesses it can be installed into (issue #10). The long
+summary was emitted unwrapped, which is what overflowed a narrow terminal.
+
+**Decision.** Fast leads with the coordinate, the approval standing, the installation state and the
+eligible harnesses. The description is progressively disclosed: Verbose carries it exactly once
+through `render_artifact_detail`, and Enter still opens Artifact Details for the complete record.
+Installation state is read from `MarketplaceArtifactRow.installed_statuses`, which the canonical
+lifecycle projection fills, and harness eligibility from the approved artifact projection. The
+renderer neither probes the machine nor infers state from the artifact kind.
+
+**Consequences.** Search and filtering are unchanged and still read the summary, so a word that
+appears only in the description still finds the artifact even though the row no longer shows it;
+a test holds that, because it is the obvious thing to break when prose stops being rendered. The
+state is named with its harness and its exact lifecycle status rather than as a flat "installed":
+`current` and `update-available` are different answers to whether there is anything to do, and a
+targeted mutation collapsing them was killed by three tests. `tests/consumer_views_test.py` held
+the old contract with `assertIn(row.summary, fast)`; that assertion is replaced by its opposite
+plus the Verbose claim, rather than deleted, so the reversal is recorded where the old promise was.

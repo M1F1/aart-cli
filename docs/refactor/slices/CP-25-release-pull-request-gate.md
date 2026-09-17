@@ -1,6 +1,7 @@
 # CP-25 — release gating, usage-reporting withdrawal, and post-release field reports
 
-Status: IN PROGRESS — tasks 01–03 done (D-290); tasks 04–14 are planned and not started.
+Status: IN PROGRESS — tasks 01–03 done (D-290), 04–07 done and committed as `7af06be` (D-292),
+08 done (D-293), 09 done (D-294); tasks 10–14 are planned and not started.
 
 The slice carries two unrelated subjects because the owner added the second while the first was in
 flight. They share nothing but the release they will go out in, and they are ordered so that the
@@ -93,12 +94,12 @@ Acceptance: `packaging-check validate docs-check release-bump` in **15.26 s** ag
 | 02 | — covered by 03's whitelist mutation, which reaches the gate list through `release_policy_test` | |
 | 03 | `fetch-depth: … && '0' \|\| '1'` → `&& 0 \|\| 1` | `test_the_release_branch_is_checked_out_with_the_history_the_diff_needs` red, alone. This is a real bug, not a notational one: `0` is falsy, so `x && 0 \|\| 1` evaluates to `1` on **both** branches and the release job would have been checked out shallow — the scope check would then fail every release pull request |
 | 03 | `.release-please-manifest.json` removed from `IN_SCOPE` | `test_release_bookkeeping_alone_is_in_scope` and `test_the_narrow_release_gate_covers_exactly_what_the_engine_rewrites` red — the derived list catches the drift as well as the direct assertion |
-
 | 04 | `"reporting"` removed from the organization policy's `optional` set | `test_an_organization_policy_written_before_the_withdrawal_still_loads` red, alone |
 | 05 | `"reporting"` removed from the user configuration's `optional` set | `test_a_configuration_written_before_the_withdrawal_still_loads` red in both subtests, and `test_the_block_is_read_to_nothing_rather_than_to_a_setting` with them. Three reds for one field is not a blunt mutation: the field is either accepted or it is not, and the second test holds the other half of the claim — that accepting it is not the same as honouring it |
 | 06 | `--usage-reporting-repository` added back to the `registry init` parser | `test_init_rejects_the_withdrawn_usage_reporting_option` red, alone |
 | 07 | `TelemetryDelivery("disabled", 0)` → `("delivered", 0)` in `DisabledActivityTelemetry.publish` | `test_the_default_adapter_is_explicitly_disabled_and_has_no_callback` red, alone. This is the load-bearing one of the four: it holds the promise that nothing leaves the machine unless a caller injects an adapter on purpose |
 | 08 | `CandidateState.APPROVAL_REQUIRED` moved from `ACTIVE_CANDIDATE_STATES` into `SETTLED_CANDIDATE_STATES` | **Survived**, and that was the finding. A Candidate stopped for manual approval is the most literally pending state there is, so classing it as settled would have hidden the very work issue #9 is about — while fixing issue #9. Two tests now hold it (`…_a_candidate_waiting_on_a_human_decision_is_awaiting_action` and `…_an_approval_required_candidate_is_counted_as_awaiting_action`), and the mutation is red in both (D-293) |
+| 09 | `"Installed: " + ", ".join(row.installed_statuses)` → `"Installed"` on the Fast row | Three tests red, all of them about that one claim: `…_a_current_installation_is_named_with_its_harness`, `…_an_update_available_installation_is_not_flattened_into_installed` and `…_the_renderer_reports_exactly_what_the_projection_recorded`. Flattening the status loses the difference between `current` and `update-available`, which is the difference between nothing to do and something to do (D-294) |
 
 **Where 04–07 ran.** In a copy of the working tree under the session scratchpad, not in the
 repository, because a full `make quality` was running at the time and `scripts/quality.py` fails any

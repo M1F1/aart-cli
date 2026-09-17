@@ -469,7 +469,12 @@ class HarnessTargetChoiceTest(unittest.TestCase):
         fast = "\n".join(render_marketplace_artifact(row, PresentationProfile.FAST))
         verbose = "\n".join(render_marketplace_artifact(row, PresentationProfile.VERBOSE))
 
-        self.assertIn(row.summary, fast)
+        # CP-25.09 moved the description out of Fast and behind Verbose: the row leads with
+        # installation state and eligible harnesses, which is what a choice there turns on
+        # (issue #10, D-294).  `tests/marketplace_row_priority_test.py` holds that contract; this
+        # test keeps its own subject, which is outcome language versus disclosed evidence.
+        self.assertNotIn(row.summary, fast)
+        self.assertIn(row.summary, verbose)
         self.assertNotIn("manifest", fast.lower())
         self.assertNotIn(row.object_digest, fast)
         self.assertIn("digests", verbose)
