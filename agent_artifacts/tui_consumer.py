@@ -396,8 +396,12 @@ def render_artifact_user_inputs(
     del coordinate, profile
     lines: list[str] = []
     identifiers = _configuration_identifiers(configurations)
+    # Layout only, and only between things (issue #16): a heading stands off its own rows, and a
+    # completed Configuration block stands off the Credentials heading. No blank opens or closes
+    # the view, and none of them is a row -- `rows` is built from the identifiers and references
+    # themselves, so a separator can never take a cursor or read as a harness with nothing in it.
     if identifiers:
-        lines.append("Configuration")
+        lines.extend(("Configuration", ""))
     for identifier in identifiers:
         row = _user_config_row(identifier)
         lines.append(f"{'>' if current_row == row else ' '} {identifier}")
@@ -406,7 +410,9 @@ def render_artifact_user_inputs(
             shown = "value unavailable" if value is None else value
             lines.append(f"    {file.harness}: {shown} — {_human(file.state)}")
     if credentials:
-        lines.append("Credentials")
+        if lines:
+            lines.append("")
+        lines.extend(("Credentials", ""))
     for credential in credentials:
         row = _user_credential_row(credential.reference)
         status = (

@@ -757,7 +757,7 @@
         {
           "id": "13",
           "title": "Artifact Variables and Credentials separates Configuration from Credentials",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "14",

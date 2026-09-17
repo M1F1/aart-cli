@@ -7365,3 +7365,26 @@ Fast and Verbose are untouched, and the empty state is still its own single line
 **What the work found.** The targeted mutation — deleting the separator — fails only the
 multi-artifact assertions, which is the shape a layout claim should have: the zero- and one-artifact
 cases are about a list with nothing to separate and must stay green under it.
+
+## D-298 — Two sections are drawn as two, and the spacing is never a row
+
+**Context.** Screen 22a shows an artifact's ordinary configuration values and its credential
+references — values AART stores and references it deliberately never reads. Both headings sat
+against their own first row and against the other section's block, so the two read as labels on one
+list rather than as the boundary between two kinds of thing (issue #16).
+
+**Decision.** One empty line after each heading, and one between a completed Configuration block
+and the Credentials heading. Nothing opens or closes the view with a blank: the boundary line is
+appended only when there are already lines, so credentials alone still start on their own heading.
+
+**The spacing is layout, not content.** `rows` is built from the identifiers and references
+themselves, never from the drawn lines, so a separator cannot take a cursor, cannot be pressed and
+cannot read as a harness holding nothing. Two tests hold that from the real screen source rather
+than from the renderer alone, because a renderer's lines are not yet a screen. The credential
+boundary is unchanged and tested where it lives: a reference is drawn by name and health, and the
+view has no material in it to leak.
+
+**What the work found.** The targeted mutation — dropping the blank between a completed
+Configuration block and the Credentials heading — fails only the two-section assertions. The
+configuration-only and credentials-only cases stay green under it, which is correct: a view with
+one section has no boundary to draw.

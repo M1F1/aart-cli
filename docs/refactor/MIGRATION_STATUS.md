@@ -1,5 +1,10 @@
 # AART Refactor Migration Status
 
+**2026-09-17, CP-25.13 done (D-298).** Screen 22a draws Configuration and Credentials as two
+sections: a blank after each heading and one between a completed Configuration block and the
+Credentials heading (issue #16). The spacing manufactures no row -- `rows` still comes from the
+identifiers and references -- and the credential boundary is unchanged.
+
 **2026-09-17, CP-25.12 done (D-297).** Screen 22 parts one artifact's group from the next with a
 single empty line (issue #12). The separator is drawn and never a row, so the cursor still lands on
 artifacts only and search, selection and Fast/Verbose are untouched.
