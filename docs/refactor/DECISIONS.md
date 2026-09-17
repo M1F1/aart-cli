@@ -7149,3 +7149,34 @@ Recorded rather than fixed: the same trap sits in the registry template `registr
 where `actions/upload-pages-artifact@v3` is referenced from an always-running job, which defeats the
 documented `AART_PAGES=false` escape hatch. That is a separate contract with a migration attached —
 `BACKLOG.md` B-134.
+
+## D-290 — A release pull request is gated on what it changes, not on everything
+
+**Context.** The owner asked why a Release Please pull request runs the whole gate set when the same
+tree passed it hours earlier on the change pull request. The release pull request changes four
+files: `pyproject.toml`, `agent_artifacts/__init__.py`, `.release-please-manifest.json` and
+`CHANGELOG.md`. Running 4,338 tests on three interpreters to prove four version literals costs about
+51 runner-minutes per release and proves, for the most part, what was already proven.
+
+INV-096 required "the normal required quality contract", which is what the workflows did. But two
+neighbouring invariants already say the opposite for the same reason: INV-097 forbids repeating the
+complete source test suite for a tree that has already passed it, and INV-102 forbids conflating PR
+CI and release CI into redundant pipelines. INV-096 was therefore in tension with its own
+neighbours, and the resolution belongs in the Specification rather than in a workflow that quietly
+disagrees with it.
+
+**Decision.** INV-096 is rewritten: a release pull request MUST still pass a *required* gate, and
+that gate MUST prove every property the release pull request itself can break — the release identity
+written into the tree, the artifact that identity produces, and the documents it rewrites — while
+not repeating the full suite. The narrowing is **conditional**: it holds only while the release pull
+request changes nothing but release bookkeeping. A release branch carrying anything else is gated as
+an ordinary change.
+
+That condition is the load-bearing half. Without it, narrowing the gate on a branch name would let
+any commit pushed onto `release-please--branches--main` reach `main` through a gate that never ran
+the tests. The gate therefore checks the diff rather than trusting the branch it is running on.
+
+**Consequences.** The version the owner is releasing, 0.1.2, was gated the old way; this takes
+effect from the next release. The wording is narrower than before, not looser: it names what must be
+proven instead of deferring to "the normal contract", so a future reader can tell whether a given
+gate satisfies it.

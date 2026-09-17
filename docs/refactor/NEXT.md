@@ -13,8 +13,9 @@
   `autorelease: pending`.
 - Earlier step: #2 was merged with **squash** once its `pr-check` was green. Then check that the release run built and
   attached `aart_cli-0.1.0-py3-none-any.whl` to the `v0.1.0` release.
-- `pr-check` stays on for release PRs (INV-096, owner confirmed). B-129, a race between the manual lab
-  and git's background repack that turned it red at random, is fixed.
+- `pr-check` stays on for release PRs, but since CP-25 it runs the narrow gate set rather than the
+  whole suite (INV-096 rewritten, D-290). B-129, a race between the manual lab and git's background
+  repack that turned it red at random, is fixed.
 
 ## Current objective — CP-24 (2026-09-16)
 
@@ -1847,6 +1848,19 @@ backed out — the receipt and the host then disagree and `configured_consumer_c
 Still open from step 13b: on three forms the key legend wraps to three lines with `[v] Fast /
 Verbose` orphaned on the middle one. Moving `v` into the universal row closes it up and changes
 every screen's footer, which is the operator's call rather than ours.
+
+## CP-25 — done (2026-09-17)
+
+`docs/refactor/slices/CP-25-release-pull-request-gate.md`. A release pull request now runs
+`packaging-check validate docs-check release-bump` on one interpreter instead of ten gates on three,
+guarded by `scripts/release_pr_scope.py`, which reads the diff and refuses the narrow path for
+anything but release bookkeeping.
+
+It takes effect from the release *after* `v0.1.2`: #15 was already open when this landed and is
+gated the old way. On the next release pull request, check that `pr-check` shows one `gates
+(Python 3.11)` job, that its first step is the scope check, and that the whole thing finishes in
+well under a minute. If the scope check ever fails on a genuine release pull request, read what it
+names before widening `IN_SCOPE` -- a path it did not expect is the case the check exists for.
 
 ## Critical boundaries for this slice
 

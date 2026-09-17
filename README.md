@@ -469,6 +469,17 @@ and a real one did not. Run a single gate with `make <gate>`.
 Four of the ten — `unit`, `integration`, `validate`, `docs-check` — need nothing installed beyond
 Python itself.
 
+One more gate exists that the full run does not include:
+
+| Gate | Command | Depends on |
+|---|---|---|
+| `release-bump` | `unittest` over the release policy, release, packaging and install-command tests | stdlib |
+
+It is selectable by name and deliberately outside `make quality`, because every module it names is
+already discovered by `unit` and the full run would prove one thing twice. It exists for the release
+pull request, which is gated on what it changes rather than on everything (INV-096); see
+[`docs/ci/workflows-v1.md`](docs/ci/workflows-v1.md).
+
 ## Releasing
 
 **Merge a pull request whose title says what kind of change it is. Later, merge the release pull

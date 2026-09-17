@@ -1,5 +1,22 @@
 # AART Refactor Migration Status
 
+**2026-09-17, CP-25 done (D-290).** A release pull request is gated on what it changes rather
+than on everything. INV-096 asked for "a required quality gate" without saying what it must cover,
+which put it in tension with INV-097 and INV-102 -- both of which forbid repeating the complete
+source suite for a tree that has already passed it. It now names the subject: the release identity,
+the artifact that identity produces, and the documents it rewrites. `pr-check` runs
+`packaging-check validate docs-check release-bump` on one interpreter for a release pull request
+(15 seconds against roughly 17 minutes) and everything on three for every other one.
+
+The narrowing is conditional, and the condition is checked rather than assumed. A branch named
+`release-please--...` is not evidence -- anyone who can push can push onto it -- so
+`scripts/release_pr_scope.py` reads the diff first and refuses the narrow path for any path outside
+release bookkeeping, and for an empty diff, which means the comparison did not work rather than that
+nothing was out of scope. Its permitted list is derived from `release-please-config.json` by a test,
+so widening the engine cannot silently widen what may skip the suite. The condition lives in the two
+existing gate jobs rather than a third, because `container.credentials` cannot be made conditional
+and a third job would have needed a fourth beside it.
+
 **2026-09-16, CP-24 opened.** The owner filed issues #7 and #8 against the released `v0.1.1`.
 A Source whose stored Candidate history does not bind its pinned revision makes the whole local
 state unloadable, with no repair short of deleting files; the installation review names an

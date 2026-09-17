@@ -8,6 +8,20 @@ inputs:
   python:
     description: Name of the interpreter to invoke.
     required: true
+  gates:
+    description: >
+      Space-separated gate names to run, or empty for the canonical full run.  A release pull
+      request narrows this to the gates that can prove what it changes (INV-096); everything else
+      leaves it empty and gets every gate.
+    required: false
+    default: ""
+  scope-base:
+    description: >
+      The base the pull request is measured against.  Set only by a release pull request, and
+      setting it is what turns the scope check on: a narrowed gate list is safe only while the diff
+      is release bookkeeping and nothing else (D-290).
+    required: false
+    default: ""
 
 runs:
   using: composite
@@ -24,6 +38,18 @@ runs:
       # variable would expand to an empty path, which git accepts and which fixes
       # nothing -- a silent no-op is the worst outcome for a step like this.
       run: git config --global --add safe.directory "$PWD"
+
+    # A release pull request is gated on what it changes rather than on everything (INV-096), and
+    # this is the half that makes that safe.  The branch name the job keys on is not evidence --
+    # anyone who can push can push to `release-please--…` -- so the diff is read and anything
+    # outside release bookkeeping refuses the narrow path.  It runs before the tools are installed
+    # because a pull request that fails it has nothing to gain from a working interpreter.
+    - name: Refuse the narrow release gate to anything but release bookkeeping
+      if: inputs.scope-base != ''
+      shell: bash
+      env:
+        BASE: ${{ inputs.scope-base }}
+      run: ${{ inputs.python }} scripts/release_pr_scope.py --base "$BASE"
 
     - name: Point pip at the internal index
       uses: ./.github/actions/pip-index
@@ -43,9 +69,13 @@ runs:
     # wrapper around it, so calling it directly costs nothing and drops GNU Make from the list of
     # things a CI image has to carry.  The script propagates its own interpreter to every gate
     # (`python: str = sys.executable`).
+    #
+    # An empty `gates` is the full canonical run: the script takes gate names as positional
+    # arguments and runs everything when given none, so the ordinary pull request needs no
+    # condition here and cannot accidentally run a subset.
     - name: Run canonical quality gates
       shell: bash
-      run: ${{ inputs.python }} scripts/quality.py
+      run: ${{ inputs.python }} scripts/quality.py ${{ inputs.gates }}
 
     # The pull request's title, checked as what it actually is: the squash commit that will land
     # on `main`, and the input the release engine classifies (INV-090, INV-092).  A title it

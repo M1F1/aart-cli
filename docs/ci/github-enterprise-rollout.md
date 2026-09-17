@@ -367,7 +367,7 @@ Read by `.github/workflows/pr-check.yml` and `.github/workflows/release.yml`.
 | `AART_CI_IMAGE` | `python:<version>` | container image for every job, and the only place an interpreter comes from. Unset, each `pr-check` matrix entry runs the official image for its own version and the release job runs `python:$AART_RELEASE_PYTHON_VERSION` |
 | `AART_PYTHON` | `python` | the interpreter's name inside the image |
 | `AART_PYTHON_VERSIONS` | `["3.10", "3.11", "3.14"]` | JSON array for the `pr-check` matrix. Pin to the image's one interpreter when `AART_CI_IMAGE` is set |
-| `AART_RELEASE_PYTHON_VERSION` | `3.11` | which official image the `release` and `deep-quality` jobs run, when `AART_CI_IMAGE` is unset |
+| `AART_RELEASE_PYTHON_VERSION` | `3.11` | which official image the `release` and `deep-quality` jobs run, and the single interpreter `pr-check` uses on a release pull request, when `AART_CI_IMAGE` is unset |
 | `AART_PIP_INDEX_URL` | `https://pypi.org/simple` | index for the development tools the gates install. Keep it a bare URL |
 | `AART_PIP_INDEX_CREDENTIALS_SECRET` | unset | **name** of a secret holding `user:token` for that index. Each half is masked before use |
 | `AART_IMAGE_USERNAME_SECRET` | unset | **name** of the secret holding the image registry's username. Setting it switches every job to the shape that logs in |

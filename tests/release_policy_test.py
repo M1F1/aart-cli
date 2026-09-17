@@ -19,7 +19,7 @@ import pathlib
 import re
 import unittest
 
-from scripts import release_artifact
+from scripts import release_artifact, release_pr_scope
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 CONFIG = ROOT / "release-please-config.json"
@@ -291,6 +291,36 @@ class CommittedReleasePolicyTest(unittest.TestCase):
         self.assertNotIn("release-please", pyproject)
         self.assertNotIn("commitizen", pyproject)
         self.assertNotIn("semantic-release", pyproject)
+
+    def test_the_narrow_release_gate_covers_exactly_what_the_engine_rewrites(self) -> None:
+        """INV-096: the scope check's list is derived from this config, not maintained beside it.
+
+        A release pull request may skip the source suite only while it changes nothing but release
+        bookkeeping, and `scripts/release_pr_scope.py` decides that against a fixed list. A fixed
+        list beside a configuration file drifts: add a fifth `extra-files` entry to the engine and
+        the list would refuse every release pull request thereafter, or -- worse in the other
+        direction -- a path dropped from the engine would stay permitted to skip the suite. So
+        derive the same set from the config and require the two to be equal.
+        """
+
+        packages = _config().get("packages")
+        assert isinstance(packages, dict)
+        root_package = packages["."]
+        assert isinstance(root_package, dict)
+
+        derived = _written_by_the_engine() | {
+            # The manifest is the engine's own record of the released version: it writes that on
+            # every release whatever the package configuration says.
+            ".release-please-manifest.json",
+            str(root_package["changelog-path"]),
+        }
+
+        self.assertEqual(
+            derived,
+            set(release_pr_scope.IN_SCOPE),
+            "release-please-config.json and scripts/release_pr_scope.py no longer agree on what a"
+            " release pull request is allowed to change",
+        )
 
 
 if __name__ == "__main__":
