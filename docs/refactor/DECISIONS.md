@@ -7180,3 +7180,44 @@ the tests. The gate therefore checks the diff rather than trusting the branch it
 effect from the next release. The wording is narrower than before, not looser: it names what must be
 proven instead of deferring to "the normal contract", so a future reader can tell whether a given
 gate satisfies it.
+
+## D-291 — CP-25 is the active stream for the open post-release field reports
+
+**Context.** After tasks 01–03 landed, CP-25 already held the planned withdrawal of usage reporting
+as tasks 04–07. The owner then asked to make CP-25 the new active stream and add every open issue in
+`M1F1/aart-cli`. The open product reports are #9 (Candidate count), #10 (Marketplace information
+hierarchy), #11 (installation scope and Python backend choices), #12 and #16 (two distinct Variables
+and Credentials layouts), and #17 (installed paths).
+
+**Decision.** Append tasks 08–14 to CP-25 and keep 04 as the next executable task. Issue #11 becomes
+two tasks because scope selects ownership, destinations and receipt identity, while the Python
+backend selects a remediation/interpreter; combining them would make one TDD step change two
+independent contracts. Issues #12 and #16 also remain separate: one separates repeated artifact
+groups on screen 22, the other separates semantic sections inside screen 22a. Issue #17 is its own
+Installed Artifact projection task. The complete written scope is reviewed by the owner before
+production implementation starts.
+
+**Consequences.** `plan.json` now carries CP-25.01–.14 and the slice has red-first acceptance
+criteria for every new report. B-132 is scheduled as task 11 and B-134 as task 06. This planning
+change does not decide the release version for removing `aart reporting`; that remains the explicit
+owner decision already recorded in the slice.
+
+## D-292 — Future telemetry starts at an Activity port, not at the withdrawn GitHub reporter
+
+**Context.** The owner approved withdrawing GitHub-issue usage reports, the registry's static
+dashboard, GitHub Pages and their workflows, then clarified that a future server/telemetry
+integration should still have an adapter boundary to attach to. The existing reporting package is
+not that neutral boundary: its model, routing, consent and transport are shaped around one registry's
+`github-issues` advertisement and a prefilled issue payload.
+
+**Decision.** Remove that package and its GitHub adapter completely. Keep Activity/receipts as the
+durable source and introduce a transport-neutral application port plus a disabled/no-op adapter over
+Activity records. The port contains no network, URL, authentication or GitHub semantics, and the
+runtime does not transmit anything merely because the port exists. A future explicitly configured
+HTTP adapter may implement it without changing the Activity domain or receipt store.
+
+**Consequences.** No obsolete `UsageReport` schema is mistaken for the future telemetry contract,
+and removal of Pages/issues does not force a future implementation back through command or TUI
+code. Secret-safety INV-052 still applies to any future projection; defining an outbound payload,
+consent/configuration and retry semantics remains future product work rather than being guessed in
+CP-25.

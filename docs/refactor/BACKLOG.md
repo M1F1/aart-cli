@@ -3274,14 +3274,16 @@ registries. Not critical to CP-24; a test with one Candidate per registry would 
 Same run: replacing `published_at_epoch_seconds` with `None` survives. The field is rendered in the
 Source detail, so a rendering assertion over a known publication time would hold it.
 
-## B-132 — A review offers no way to choose the Python backend
+## B-132 — SCHEDULED AS CP-25.11: a review offers no way to choose the Python backend
 
 CP-24.04 (D-283) reduced a dependency contract to one offer, naming the backend that will run, which
 is what issue #7 asked for. A reader who wants the other usable backend still has only policy
 (`allowed_python_installers`) to say so, and policy is not where a one-off choice belongs. If that
 demand appears, it is one choice with one selected — never two changes to approve — and the selection
 rule (`chosen_installer`) already takes a preference, so the work is carrying the reader's answer to
-it. Not critical: the backend that runs is now the one the review names.
+it. The owner requested that choice in issue #11 and moved every open issue into CP-25 on
+2026-09-17. D-291 schedules it as CP-25.11; the backend that runs must remain the one the review
+names.
 
 ## B-133 — A Python dependency specification's serialized shape is unheld
 
@@ -3291,7 +3293,7 @@ mutants, which the scoped test set does not reach at all. Both functions are the
 plan and a receipt carry, so a key renamed or a value dropped is a compatibility change nothing
 notices. Not critical to CP-24; one round-trip assertion per function would hold them.
 
-## B-134 — The registry's Pages escape hatch does not escape anything
+## B-134 — SCHEDULED AS CP-25.06: the registry's Pages escape hatch does not escape anything
 
 Found while removing `actions/setup-python` (CP-24.10). The same trap the tool's own workflows had
 sits in the registry template `registry init` writes: `actions/upload-pages-artifact@v3` and

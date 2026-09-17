@@ -1,6 +1,22 @@
 # AART Refactor Migration Status
 
-**2026-09-17, CP-25 done (D-290).** A release pull request is gated on what it changes rather
+**2026-09-17, CP-25 expanded through task 14 (D-291).** At the owner's instruction CP-25 is the
+active stream for every open product issue in `M1F1/aart-cli`: #9, #10, #11, #12, #16 and #17.
+They are written as tasks 08–14 after the usage-reporting withdrawal. Issue #11 is two tasks because
+installation scope changes ownership/paths while the Python backend changes remediation/execution;
+the two whitespace reports remain separate because they name different screens. No implementation
+of tasks 04–14 has started; the owner will review their written acceptance criteria first.
+
+After that review the owner clarified the task-07 boundary (D-292): GitHub Issues, Pages, the static
+dashboard and the old usage payload all go, while Activity gains a transport-neutral application
+port and disabled adapter for a future explicitly configured server integration. The port itself
+does not send anything and carries no GitHub or network policy.
+
+The clean baseline requested by the handoff reached green format, lint, typecheck and unit (4,356
+tests, 1 skipped). It was stopped during coverage when the owner asked for the task review, so a
+complete green `make quality` is still required before CP-25 verification.
+
+**2026-09-17, CP-25 release-gate part done (D-290).** A release pull request is gated on what it changes rather
 than on everything. INV-096 asked for "a required quality gate" without saying what it must cover,
 which put it in tension with INV-097 and INV-102 -- both of which forbid repeating the complete
 source suite for a tree that has already passed it. It now names the subject: the release identity,

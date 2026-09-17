@@ -1,6 +1,6 @@
-# CP-25 — A release pull request is gated on what it changes; usage reporting is withdrawn
+# CP-25 — release gating, usage-reporting withdrawal, and post-release field reports
 
-Status: IN PROGRESS — tasks 01–03 done (D-290); tasks 04–07 added 2026-09-17 and not started.
+Status: IN PROGRESS — tasks 01–03 done (D-290); tasks 04–14 are planned and not started.
 
 The slice carries two unrelated subjects because the owner added the second while the first was in
 flight. They share nothing but the release they will go out in, and they are ordered so that the
@@ -234,6 +234,13 @@ Delete `docs/reporting/usage-reporting-v1.md`; purge the references listed above
 Add the decision record: what was withdrawn, why, and that the activity log is where telemetry will
 be picked up. Pin the distinction with a test asserting the activity log surfaces are intact.
 
+The owner clarified after reviewing the plan that the removed GitHub implementation must not erase
+the future integration seam. Add a transport-neutral application port over Activity records and a
+disabled/no-op adapter. It owns no URL, authentication, network client or GitHub vocabulary and is
+not an implicit telemetry opt-in; it is the injection boundary a future explicitly configured HTTP
+adapter can implement. The old `UsageReport` payload and GitHub-issue provider do not survive under
+a new name. D-292 records this distinction.
+
 ## Open decisions for the owner
 
 1. **The version this releases as.** Removing a public CLI verb is a breaking change. This
@@ -265,3 +272,132 @@ Nothing. `telemetry` appears in it four times, every one of them in the list of 
 value must never appear. There is no section, and no invariant, describing a usage-reporting flow.
 So the withdrawal is a scope reduction rather than a specification change — which is also the
 strongest argument for the `feat:` reading of decision 1.
+
+---
+
+# Part three — field reports from the released TUI (tasks 08–14)
+
+Date added: 2026-09-17. Authority: the product owner's instruction to make CP-25 the active stream
+and add every currently open product issue in `M1F1/aart-cli`. The source reports are issues
+[#9](https://github.com/M1F1/aart-cli/issues/9),
+[#10](https://github.com/M1F1/aart-cli/issues/10),
+[#11](https://github.com/M1F1/aart-cli/issues/11),
+[#12](https://github.com/M1F1/aart-cli/issues/12),
+[#16](https://github.com/M1F1/aart-cli/issues/16), and
+[#17](https://github.com/M1F1/aart-cli/issues/17). D-291 records why issue #11 is two tasks and why
+the whitespace reports remain separate.
+
+These tasks start only after the owner reviews this written scope. They do not silently alter the
+open release-version decision above.
+
+### 08 — The Maintainer Dashboard explains Candidate counts by lifecycle state (#9)
+
+The current dashboard says only `Candidates: N`. That number includes durable Candidate history,
+so two promoted Candidates still read as two unexplained Candidates even though neither is waiting
+for maintainer action. Deleting or ceasing to count the records everywhere would violate the audit
+contract: Promoted, Superseded, Rejected and Source Removed are durable lifecycle states.
+
+The dashboard will distinguish Candidates that still require or permit maintainer action from
+historical/disposition states. A source with two promoted Candidates must not look as though two
+Candidates are still pending. Fast mode gets a compact, state-aware summary; Verbose may carry the
+full lifecycle breakdown. `Validation failures` and `Ready for promotion` remain derived from the
+same Candidate set, so the displayed arithmetic cannot contradict itself.
+
+Red first: compose a real Maintainer Dashboard with two promoted Candidates and assert the active
+count is zero while the promoted count is two; mix Ready, Invalid and Promoted records and assert
+the summary totals. The projection owns the arithmetic once; the renderer does not reclassify
+Candidate records, and the durable records remain visible in the Candidate history.
+
+### 09 — Marketplace rows prioritize installation state and compatible harnesses (#10)
+
+The Marketplace list currently places the complete artifact description on every row and repeats
+it in the focused block. That makes the list hard to scan while omitting the two facts the owner
+needs there: whether the artifact is installed and which harnesses it can target.
+
+Fast rows will prioritize coordinate, installation state and compatible harnesses. The focused
+description is progressively disclosed only in Verbose mode; Enter continues to open Artifact
+Details for the complete record. Search and filtering still operate on the approved summary even
+when it is not rendered in Fast mode. Installed state comes from the canonical lifecycle view and
+harness compatibility from the approved artifact projection — the renderer neither probes the
+machine nor guesses from the artifact kind.
+
+Red first: render uninstalled, current, update-available and multi-harness artifacts; assert Fast
+contains their state and harnesses but not the long summary, while Verbose contains the focused
+summary exactly once. Hold narrow terminal widths so removing the duplicated prose actually fixes
+the reported layout rather than only the wide fixture.
+
+### 10 — Installation scope is an explicit per-install choice seeded by Settings (#11a)
+
+`Settings.default_scope` is currently a silent decision for the install flow. It becomes a default,
+not an irrevocable choice. Before Ready/Review, installation exposes Project/User scope when the
+resolved selection supports both. The Settings value is initially selected, the user may change it
+for this operation, and changing it re-prepares the plan so review, paths, effects and receipt all
+name the chosen scope. The preference itself is not rewritten by a one-off choice.
+
+The choice is bounded by the resolved artifacts' declared scopes and by whether a project target
+exists. A selection with only one valid scope discloses that scope without offering an impossible
+alternative; a multi-artifact selection offers only the intersection supported by every member.
+
+Red first: drive the real TUI from a Project default to a User install and from a User default to a
+Project install, then assert only that scope's files and receipt exist. Add one-scope and mixed-scope
+negative cases, and a property over declared scope sets proving the offered choices are exactly the
+non-empty intersection.
+
+### 11 — The Python dependency backend is an explicit per-install choice seeded by Settings (#11b)
+
+Issue #11 also asks for a default `pip`/`uv` choice in Settings and a one-operation override during
+installation. This is separate from scope: it changes dependency remediation and runtime effects,
+not installation ownership or paths. B-132 is therefore scheduled here rather than hidden inside
+task 10.
+
+Settings will carry a preferred Python installer. When the selected artifacts need Python
+dependencies and more than one policy-allowed, available backend can satisfy the same contract,
+the install flow offers those backends with the preference initially selected. The chosen value is
+fed into the existing `chosen_installer` rule and the plan is re-prepared. Review continues to show
+one backend and execution runs that same backend — never two dependency changes to approve. A
+one-off choice does not rewrite Settings, and an unavailable or policy-denied preference is not
+offered as though it could run.
+
+Red first: exercise pip-default/uv-choice and uv-default/pip-choice paths through review and a fake
+interpreter, plus single-backend, policy-denied, unavailable and no-Python-dependency cases. The
+targeted mutation changes the selected preference after review and must make the execution test red.
+
+### 12 — User Variables and Credentials separates artifact rows visually (#12)
+
+Screen 22 renders each installed artifact as a multi-line group, but adjacent groups touch. Insert
+exactly one empty line between artifact groups so the coordinate, Configuration summary and
+Credentials summary remain visually owned by one row. Do not add leading/trailing blank rows or
+change the empty state, cursor identity, search, selection or Fast/Verbose semantics.
+
+Red first: exact-line assertions for zero, one and two artifacts, including a focused second row and
+a narrow frame. A targeted mutation removing the separator must fail only the multi-artifact case.
+
+### 13 — Artifact Variables and Credentials separates Configuration from Credentials (#16)
+
+Screen 22a has two semantic sections but renders their headings against their first rows and against
+each other. Insert one empty line after `Configuration`, one between the completed Configuration
+block and `Credentials`, and one after `Credentials` before its first row, matching the owner's
+accepted example. Preserve the credential boundary: only reference/health text is shown, never a
+secret value.
+
+Red first: exact-line fixtures for configuration plus credentials, configuration only, credentials
+only and neither. Section spacing must not manufacture an empty value row, and narrow rendering
+must preserve the same block structure.
+
+### 14 — Installed Artifact Details names the exact owned installation paths (#17)
+
+The Installed Artifact view reports health and configuration but does not answer where AART placed
+the artifact. Add an Installation section derived from the canonical installed observation and
+receipt ownership data. Fast names the actual user-facing payload and harness locations together
+with Project/User scope; Verbose adds every owned component path and its role. Paths are observed or
+recorded facts — never reconstructed from a guessed harness layout.
+
+If an owned path is missing or divergent, the view still names that expected/recorded location and
+its measured state rather than claiming the artifact is installed there. Shared or unowned files
+are not attributed to the artifact. No file content, configuration value or credential material is
+read into the view.
+
+Red first: project- and user-scope installations, one payload with multiple harness projections,
+a missing owned component and a shared/unowned path. Drive at least one installation through the
+public TUI and reopen Installed Artifact Details in a new session so the paths are proven durable,
+not borrowed from the just-completed plan.

@@ -691,7 +691,7 @@
     },
     {
       "id": "CP-25",
-      "title": "A release pull request is gated on what it changes; usage reporting is withdrawn",
+      "title": "Release gating, usage-reporting withdrawal, and post-release field reports",
       "status": "in_progress",
       "steps": [
         {
@@ -727,6 +727,41 @@
         {
           "id": "7",
           "title": "The documents stop promising it, and name the activity log as the seam",
+          "status": "todo"
+        },
+        {
+          "id": "8",
+          "title": "The Maintainer Dashboard explains Candidate counts by lifecycle state",
+          "status": "todo"
+        },
+        {
+          "id": "9",
+          "title": "Marketplace rows prioritize installation state and compatible harnesses",
+          "status": "todo"
+        },
+        {
+          "id": "10",
+          "title": "Installation scope is an explicit per-install choice seeded by Settings",
+          "status": "todo"
+        },
+        {
+          "id": "11",
+          "title": "The Python dependency backend is an explicit per-install choice seeded by Settings",
+          "status": "todo"
+        },
+        {
+          "id": "12",
+          "title": "User Variables and Credentials separates artifact rows visually",
+          "status": "todo"
+        },
+        {
+          "id": "13",
+          "title": "Artifact Variables and Credentials separates Configuration from Credentials",
+          "status": "todo"
+        },
+        {
+          "id": "14",
+          "title": "Installed Artifact Details names the exact owned installation paths",
           "status": "todo"
         }
       ]

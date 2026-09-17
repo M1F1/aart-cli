@@ -1,5 +1,25 @@
 # AART Refactor — Next Work
 
+## Current objective — CP-25 (2026-09-17)
+
+**CP-25 is the active slice.** Tasks 01–03 completed the release-pull-request gate (D-290).
+Tasks 04–07 withdraw the unused GitHub-issue usage-reporting and static-dashboard mechanism while
+preserving the local Activity log and adding only a neutral Activity telemetry port with a disabled
+adapter (D-292). At the owner's instruction, tasks 08–14 now carry every open
+product issue in `M1F1/aart-cli`: #9, #10, #11, #12, #16 and #17 (D-291).
+
+The written task scope is in
+[`slices/CP-25-release-pull-request-gate.md`](slices/CP-25-release-pull-request-gate.md), and
+`plan.json` is the executable status authority. **No task 04–14 implementation starts until the
+owner reviews that scope.** Once accepted, task 04 remains the next executable task; tasks 08–14
+follow the usage-reporting withdrawal in issue order, with #11 split into separate scope and Python
+backend choices because they affect different planning contracts.
+
+The requested clean baseline was rerun before this planning update. Format, lint, typecheck and the
+unit gate (4,356 tests, 1 skipped) passed. The run was intentionally stopped during coverage when
+the owner asked to review the newly written tasks before implementation; therefore it is not a
+complete green `make quality` result and must be rerun before any slice is called verified.
+
 ## Releasing 0.1.0 (2026-09-15)
 
 - PR #1 is merged. Release Please opened release PR #2.
@@ -1849,7 +1869,7 @@ Still open from step 13b: on three forms the key legend wraps to three lines wit
 Verbose` orphaned on the middle one. Moving `v` into the universal row closes it up and changes
 every screen's footer, which is the operator's call rather than ours.
 
-## CP-25 — done (2026-09-17)
+## CP-25 release-gate checkpoint — tasks 01–03 done (2026-09-17)
 
 `docs/refactor/slices/CP-25-release-pull-request-gate.md`. A release pull request now runs
 `packaging-check validate docs-check release-bump` on one interpreter instead of ten gates on three,
