@@ -118,7 +118,15 @@ class RunningInstallationScreenTest(unittest.TestCase):
         drawn = ["\n".join(item) for item in terminal.frames]
         self.assertTrue(any("▸ launcher" in item for item in drawn))
         self.assertTrue(any("✓ launcher" in item and "▸ harness:tabnine" in item for item in drawn))
-        self.assertTrue(any("(2 of 2 done)" in item for item in drawn))
+        # The count is the steps that are over, so it moves through every number in turn: a frame
+        # reading the final count before the final step is counting something else.
+        counts = [
+            line.split("(")[-1]
+            for item in drawn
+            for line in item.splitlines()
+            if "Installing" in line and " done)" in line
+        ]
+        self.assertEqual(counts, ["0 of 2 done)", "1 of 2 done)", "1 of 2 done)", "2 of 2 done)"])
 
     def test_the_running_report_is_drawn_inside_the_shared_frame(self) -> None:
         terminal = _drive(ReportingHandler())
