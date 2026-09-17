@@ -1,6 +1,7 @@
 # CP-24 — Field reports from the first released version
 
-Status: IN PROGRESS — tasks 01–06 done (D-280 to D-285); task 07 next
+Status: IN PROGRESS — tasks 01–07 done in the repository (D-280 to D-286); the release itself
+is the owner's to merge
 
 Date: 2026-09-16. Authority: the product owner's GitHub issues #7 and #8 against the released
 `v0.1.1`, and the owner's instruction that the Source Sync failure is the priority because it takes
@@ -294,6 +295,45 @@ Evidence:
   `aart_cli-<version>-py3-none-any.whl` to the new tag. Tasks 01–03 are `fix:`, so the version is a
   patch unless a task lands a feature.
 
+**Done (D-286).** Gates and mutation adequacy for the whole batch.
+
+- Full `make quality`: `format-check`, `lint`, `typecheck`, `unit`, `validate`, `coverage`,
+  `packaging-check`, `docs-check`, `secret-shape-check` all green. 4,316 tests, 85.96% branch
+  coverage. (`integration` is reported as skipped there: all 395 of its tests are among the 4,316.)
+- Standalone `make integration`: 395 tests, OK. B-108, the temporary-Keychain failure that made the
+  CP-23 run red, did not reproduce.
+- Scoped `make mutants` over the two modules this slice gave new behaviour to, beyond the per-task
+  runs already recorded above:
+  - `agent_artifacts/application/execution.py` with `execution_test`, `installation_progress_test`,
+    `installation_execution_test` and `lifecycle_execution_test`: 539 mutants, 254 killed, 115
+    survived, 170 unreached. 18 survivors were inside task 06's claims -- `_member_observer` could
+    be replaced by a no-op, `execute_lifecycle` could drop its observer, and the index and effect on
+    a finished step could be anything -- so they became tests, not notes. After them: 327 killed and
+    only 57 unreached, and every remaining survivor is a diagnostic string or a guard belonging to
+    CP-12's transaction preflight, which this slice did not touch.
+  - `agent_artifacts/application/consumer_views.py` with `consumer_views_test`,
+    `install_review_counts_test`, `installation_progress_test` and `running_installation_screen_test`:
+    2,220 mutants, 510 killed, 375 survived, 1,335 unreached -- the module holds every Consumer
+    projection and the scoped test set exercises a few. The 16 survivors in
+    `project_running_installation` were the slice's own, and they are now held by
+    `RunningInstallationProjectionTest`; the rest are the older remainder B-122 already records.
+- What the survivors bought, in tests rather than numbers: a finished step is numbered and named as
+  its start was, including when the interpreter raised, was interrupted, or was missing; an applied
+  step reports what the interpreter said; every member of a transaction says which artifact it is
+  about; a lifecycle run announces its steps; the fold holds one line per step at the latest thing
+  said about it, counted, named and attributed; and the drawn count moves 0, 1, 1, 2 rather than
+  merely ending at the right number.
+
+The owner chose the patch. Task 06 adds behaviour `v0.1.1` did not have, so `feat:` and `0.2.0`
+were the alternative; they read it as the repair of a silence they reported, which is what the
+issue says. The pull request that lands on `main` therefore carries a `fix:` title and a
+`BEGIN_COMMIT_OVERRIDE` block whose entries are the six fixes and the slice's documentation, so the
+CHANGELOG still names each area.
+
+Remaining, and the owner's to do: merge #14 into `plan/cp-24`, merge #13 into `main`, approve the
+workflows on the Release Please pull request and merge it, then confirm the release run attaches
+`aart_cli-0.1.2-py3-none-any.whl` to `v0.1.2`.
+
 ## Evidence log
 
 Every task's targeted semantic mutation, collected here so task 07 can check them in one place.
@@ -307,6 +347,7 @@ Each was applied to the production code, watched turn the named tests red, and r
 | 04 | `_one_installer_per_contract` made a no-op, so both backends are offered again | 3 tests in `PythonInstallerOfferTest` (`environment_planning_test.py`) |
 | 05 | `_outcome` collapsed back to one phrase for every `write-file` | the counts in `install_review_counts_test.py` |
 | 06 | the shell binding disabled (`if False and reporting ...`), so no handler is ever lent a reporter | 3 tests plus 1 error in `running_installation_screen_test.py` |
+| 07 | `_member_observer` made a no-op; the not-attempted and raised steps misnumbered; the fold's artifact and detail dropped | the tests written for each, in `installation_progress_test.py` |
 
 Scoped `make mutants` runs and their classified survivors are recorded per task above; the
 out-of-scope survivors became `BACKLOG.md` B-130, B-131 and B-133. (B-132 is not a survivor: it

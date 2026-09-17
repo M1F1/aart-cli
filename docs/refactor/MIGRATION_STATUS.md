@@ -24,7 +24,12 @@ are named instead of counted as "other change". **2026-09-16, CP-24.06 done (D-2
 installation no longer runs silently: `execute_repair` announces each step -- the reviewed plan's
 own steps, in the order they run -- to an observer it is given, the shell lends a reporting handler
 a redraw for the duration of one execution and takes it back afterwards, and the running report is
-drawn in the frame every other screen uses. Task 07, the gates and the release, is next.
+drawn in the frame every other screen uses. **2026-09-17, CP-24.07 done in the repository
+(D-286).** Full `make quality` is green (4,325 tests, 85.96% branch coverage) and so is a standalone
+`make integration` (395 tests, B-108 did not reproduce); the scoped mutation runs over
+`execution.py` and `consumer_views.py` turned every survivor inside this slice's claims into a test.
+What is left is the owner's: merge #14, then #13 with its `fix:` title and commit override, then the
+Release Please pull request, which cuts `0.1.2`.
 
 **2026-09-15, 0.1.0 has no wheel (D-279).** The release run failed before building: its action
 installed no Poetry, which the wheel build needs. It now installs the locked tools the quality

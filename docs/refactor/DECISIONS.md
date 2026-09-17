@@ -7046,3 +7046,32 @@ IO and holds no state: the view is a fold over what the execution already said. 
 to the plan, the receipt or any digest, so an installation that reports and one that does not are
 the same installation. Targeted mutation: disabling the shell binding so the handler is never lent a
 reporter turns three shell tests red. Verified.
+
+## D-286 — A survivor inside the slice's own claims becomes a test, not a number
+
+**Context.** CP-24 task 07 ran the gates and the scoped advisory mutation work for the whole batch.
+`make quality` and a standalone `make integration` were green. The mutation runs over the two
+modules this slice gave new behaviour to were not: `agent_artifacts/application/execution.py` left
+18 survivors inside task 06's own claims, and `agent_artifacts/application/consumer_views.py` left
+16 in `project_running_installation`. `_member_observer` could be replaced by a no-op,
+`execute_lifecycle` could drop its observer entirely, a finished step could be numbered or named
+anything, and the fold could drop the artifact, the effect kind and the detail. The drawn count was
+passing by accident too: a test asserting only that `(2 of 2 done)` appears somewhere is satisfied
+by a count that is wrong at every step before the last.
+
+**Decision.** Every one of those became a test, in the files that already claim the behaviour, and
+each was verified by applying the mutation by hand and watching the named test turn red. The
+production code did not change: what was missing was the claim, not the behaviour. The survivors
+outside this slice's claims -- CP-12's transaction preflight guards, the diagnostic strings, and the
+older Consumer projections -- stay as findings; B-122 already records the last of those.
+
+**Consequences.** `make unit` went from 4,316 tests to 4,325, and the scoped `execution.py` run from
+254 killed with 170 unreached to 327 killed with 57 unreached. The slice's evidence log now records
+one targeted mutation per task and this run's classification, so the next agent can see which
+claims are held rather than infer it from a percentage.
+
+Also recorded, because it cost an hour: after mutating a file by hand, clear `__pycache__` before
+re-running. `sum(1 ...)` and `sum(2 ...)` are the same length, so the byte-compiled cache of the
+mutated source was accepted for the restored source, and the restored code appeared to fail its own
+test. The tool's own runs are unaffected -- mutmut works in its own copy -- but a hand mutation in
+the working tree is not.

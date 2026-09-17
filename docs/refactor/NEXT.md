@@ -47,8 +47,22 @@ placement's deliveries are named instead of being "other change".
 `execute_repair` announces each step to an observer it is given, the shell lends the handler a
 redraw for the duration of one execution, and the running report is drawn in the shared frame.
 
-Start at **task 07**: run the gates and the scoped targeted mutations, then cut the release the
-owner asked for (expected `0.1.2`, a patch — every CP-24 change is a fix).
+**Task 07 is done in the repository (D-286).** Full `make quality` (4,325 tests, 85.96% branch
+coverage) and a standalone `make integration` (395 tests) are both green — B-108 did not reproduce.
+The scoped mutation runs over `execution.py` and `consumer_views.py` left 34 survivors inside this
+slice's own claims; all of them are now tests, each verified by hand.
+
+**What is left is the owner's to merge**, in this order:
+
+1. merge **#14** (`fix/cp-24-01-stale-scan`) into `plan/cp-24`;
+2. merge **#13** (`plan/cp-24`) into `main` — squash. Its title is a `fix:` and it carries a
+   `BEGIN_COMMIT_OVERRIDE` block, so Release Please cuts **`0.1.2`**. The owner chose the patch over
+   `feat:`/`0.2.0` on 2026-09-17: task 06 is the repair of a silence they reported.
+3. approve the workflows on the Release Please pull request and merge it;
+4. confirm the release run attaches `aart_cli-0.1.2-py3-none-any.whl` to `v0.1.2`.
+
+Still open, and not agent work: the owner's manual acceptance walk
+(`docs/testing/TUI_MANUAL_WALKTHROUGH.md`), which now carries the three CP-24 checks.
 
 Reproduction for tasks 01–03, from the owner's own store: a pinned revision and a Candidate history
 recorded at a different one. `read_maintainer_views` then refuses everything with
