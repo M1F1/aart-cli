@@ -40,7 +40,7 @@ jobs:
   mutants:
     if: vars.AART_IMAGE_USERNAME_SECRET == ''
     runs-on: ${{ fromJSON(vars.AART_RUNNER || '["ubuntu-latest"]') }}
-    container: ${{ vars.AART_CI_IMAGE }}
+    container: ${{ vars.AART_CI_IMAGE || format('python:{0}', vars.AART_RELEASE_PYTHON_VERSION || '3.11') }}
     env:
       AART_INDEX_URL: ${{ vars.AART_PIP_INDEX_URL || 'https://pypi.org/simple' }}
       AART_INDEX_CREDENTIALS: ${{ secrets[vars.AART_PIP_INDEX_CREDENTIALS_SECRET] }}
@@ -50,8 +50,6 @@ jobs:
       - uses: ./.github/actions/mutants
         with:
           python: ${{ vars.AART_PYTHON || 'python' }}
-          python-version: ${{ vars.AART_RELEASE_PYTHON_VERSION || '3.11' }}
-          setup-python: ${{ vars.AART_CI_IMAGE == '' }}
           only: ${{ inputs.only }}
           tests: ${{ inputs.tests }}
 
@@ -72,7 +70,5 @@ jobs:
       - uses: ./.github/actions/mutants
         with:
           python: ${{ vars.AART_PYTHON || 'python' }}
-          python-version: ${{ vars.AART_RELEASE_PYTHON_VERSION || '3.11' }}
-          setup-python: ${{ vars.AART_CI_IMAGE == '' }}
           only: ${{ inputs.only }}
           tests: ${{ inputs.tests }}

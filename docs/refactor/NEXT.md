@@ -64,14 +64,18 @@ files that had their own copy were moved onto it.
 `..`), `RequirementId` stays kebab-case, and `InstallExecutable` moved onto the same rule, because
 planning derives one from the requirement's own executable name.
 
-**Task 10 is open** and is described in the slice.
+**Task 10 is done (D-289).** No workflow and no composite action names `actions/setup-python`,
+and every job takes its interpreter from a container image: unset, `AART_CI_IMAGE` falls back to the
+official `python:<version>` image, one per matrix entry, so the public run still exercises 3.10,
+3.11 and 3.14. The rollout page's two claims that an image "skips" the action are corrected; the
+same trap in the registry template is `BACKLOG.md` B-134.
 
 **One pull request carries the whole stream.** On 2026-09-17 the two open pull requests were
 flattened, at the owner's instruction, into **#14** (`fix/cp-24-01-stale-scan` → `main`): it already
 held the plan commit, so it took the `fix:` title and the `BEGIN_COMMIT_OVERRIDE` block, and #13 was
 closed unmerged. `plan/cp-24` is not to be merged.
 
-**What is left is the owner's**, once tasks 09 and 10 land:
+**What is left is the owner's:**
 
 1. merge **#14** into `main` — squash. Its title is a `fix:` and it carries a
    `BEGIN_COMMIT_OVERRIDE` block, so Release Please cuts **`0.1.2`**. The owner chose the patch over

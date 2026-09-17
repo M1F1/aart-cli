@@ -7119,3 +7119,33 @@ name, and that dataclass was validating with the remediation module's `_token`: 
 install `python3.11` would have crashed the planner at the moment it offered to. Both ends now share
 `executable_name`. The remediation module's other names — credential providers, runtimes, harnesses
 — keep `_token`, because those are this project's vocabulary rather than the machine's.
+
+## D-289 — CI takes its interpreter from an image, and `actions/setup-python` is gone
+
+**Context.** The owner's Enterprise instance does not carry `actions/setup-python@v5`, and their run
+failed at "Set up job" with `repository not found` even with `AART_CI_IMAGE` set and the step
+conditioned to skip. The reason is the resolution rule: a step-level `if:` decides whether a step
+**runs**, not whether its action is **fetched**. Every action a job references is resolved during
+"Set up job", before any condition is read. Only a job-level `if` — a skipped job — prevents
+resolution. So the escape hatch the workflows and the rollout page both offered could not work, and
+no amount of configuration could have made it work.
+
+**Decision.** Remove the reference. No workflow and no composite action in this repository names
+`actions/setup-python`, and the `python-version` and `setup-python` inputs went with it. Every job
+runs in a container and takes its interpreter from the image. `AART_CI_IMAGE` unset falls back to
+`python:${{ matrix.python-version }}` in `pr-check` and to `python:$AART_RELEASE_PYTHON_VERSION` in
+`release` and `deep-quality`, so the public run still exercises 3.10, 3.11 and 3.14 — one official
+image each, rather than one runner with three downloads. `AART_CI_IMAGE` still replaces all of them
+and `AART_PYTHON` still names the interpreter inside the image, so a fork's configuration is
+unchanged.
+
+**Consequences.** The prerequisite list changed shape: a runner that can run container jobs, and a
+registry it can pull from, in place of an action from github.com. The rollout page's two claims that
+an image "skips" the action were wrong for the resolution reason above and are corrected, with the
+rule written down where the next reader of that page will meet it. The tests that hold the workflow
+shape were rewritten first, because they are where the old shape was written down.
+
+Recorded rather than fixed: the same trap sits in the registry template `registry init` writes,
+where `actions/upload-pages-artifact@v3` is referenced from an always-running job, which defeats the
+documented `AART_PAGES=false` escape hatch. That is a separate contract with a migration attached —
+`BACKLOG.md` B-134.

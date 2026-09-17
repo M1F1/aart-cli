@@ -58,7 +58,7 @@ jobs:
   release:
     if: vars.AART_IMAGE_USERNAME_SECRET == ''
     runs-on: ${{ fromJSON(vars.AART_RUNNER || '["ubuntu-latest"]') }}
-    container: ${{ vars.AART_CI_IMAGE }}
+    container: ${{ vars.AART_CI_IMAGE || format('python:{0}', vars.AART_RELEASE_PYTHON_VERSION || '3.11') }}
     env:
       AART_INDEX_URL: ${{ vars.AART_PIP_INDEX_URL || 'https://pypi.org/simple' }}
       AART_INDEX_CREDENTIALS: ${{ secrets[vars.AART_PIP_INDEX_CREDENTIALS_SECRET] }}
@@ -92,8 +92,6 @@ jobs:
       - uses: ./.github/actions/release
         with:
           python: ${{ vars.AART_PYTHON || 'python' }}
-          python-version: ${{ vars.AART_RELEASE_PYTHON_VERSION || '3.11' }}
-          setup-python: ${{ vars.AART_CI_IMAGE == '' }}
           tag: ${{ inputs.tag || github.event.release.tag_name || github.ref_name }}
           # A tag push builds and keeps the wheel; a published release also attaches it, and so
           # does the release-please run that created the release the event never announced.
@@ -128,8 +126,6 @@ jobs:
       - uses: ./.github/actions/release
         with:
           python: ${{ vars.AART_PYTHON || 'python' }}
-          python-version: ${{ vars.AART_RELEASE_PYTHON_VERSION || '3.11' }}
-          setup-python: ${{ vars.AART_CI_IMAGE == '' }}
           tag: ${{ inputs.tag || github.event.release.tag_name || github.ref_name }}
           # A tag push builds and keeps the wheel; a published release also attaches it, and so
           # does the release-please run that created the release the event never announced.

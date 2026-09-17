@@ -45,6 +45,12 @@ holds a file name's rule rather than an identifier's, while `RequirementId` stay
 `InstallExecutable` moved onto the same rule: planning derives one from the requirement's own
 executable name, so a machine that can install `python3.11` would have crashed the planner at the
 moment it offered to.
+ **2026-09-17, CP-24.10 done (D-289).** `actions/setup-python` is gone
+from every workflow and every composite action: a step-level `if:` decides whether a step runs, not
+whether its action is fetched, so an instance that does not carry it could never have escaped it by
+configuration. Every job now takes its interpreter from a container image, and unset `AART_CI_IMAGE`
+falls back to the official `python:<version>` image per matrix entry, so the public run still
+exercises all three interpreters. The same trap in the registry template's Pages job is B-134.
 
 **2026-09-15, 0.1.0 has no wheel (D-279).** The release run failed before building: its action
 installed no Poetry, which the wheel build needs. It now installs the locked tools the quality

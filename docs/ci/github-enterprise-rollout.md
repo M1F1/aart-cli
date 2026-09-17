@@ -26,9 +26,9 @@ tooling, and `0.1.0` for the AART release you are rolling out. Substitute your o
 | You need | Why |
 |---|---|
 | An organisation on the instance you can create repositories in, and admin on those repositories | variables, workflow toggles and branch protection are repository or organisation settings |
-| A runner the repositories can use, with `git` and a Python 3.10+ interpreter — directly or inside a container image | every job runs Python; nothing else is assumed (no `make`, `curl` or `gh` for the tool's own workflows) |
+| A runner the repositories can use that can run **container jobs**, and an image with `git` and a Python 3.10+ interpreter | every job for the tool's own workflows runs in a container and takes its interpreter from the image; nothing else is assumed (no `make`, `curl` or `gh`) |
+| A container registry the runner can pull from | unset, `AART_CI_IMAGE` falls back to the official `python:<version>` images, which come from Docker Hub |
 | `actions/checkout@v4` available on the instance | both repositories check out with it |
-| `actions/setup-python@v5`, **unless** jobs run in a container image (`AART_CI_IMAGE`) | it downloads interpreters from github.com; an image skips it |
 | `googleapis/release-please-action@v4`, **only** if the copy will cut its own releases | see [Part 1, step 4](#step-4--turn-off-the-release-engine-on-the-copy) — a plain copy does not need it |
 | A package index the runner can reach for the tool's own gates (`ruff`, `mypy`, `coverage`) | the default is `pypi.org`; most instances point at an internal mirror |
 | Optionally, a hosted repository on that index you may publish to | the cleanest way for registries to fetch AART — [Part 2, step 4](#step-4--publish-the-release-to-the-internal-index-recommended) |
@@ -36,6 +36,12 @@ tooling, and `0.1.0` for the AART release you are rolling out. Substitute your o
 Actions from github.com reach a GHES instance through GitHub Connect or `actions-sync`. That is an
 instance administrator's setting, and `uses:` cannot be redirected by a variable, so check it before
 anything else.
+
+`actions/setup-python` is not on that list, and its absence is deliberate. A step-level `if:` decides
+whether a step **runs**, not whether its action is **fetched**: every action a job references is
+resolved during "Set up job", before any condition is read. So a job that referenced it failed on an
+instance that does not carry it even with `AART_CI_IMAGE` set and the step skipped. The reference is
+gone; every job takes its interpreter from its container image instead.
 
 ## Part 1 — Put `aart-cli` on the instance
 
@@ -358,10 +364,10 @@ Read by `.github/workflows/pr-check.yml` and `.github/workflows/release.yml`.
 | Variable | Default | What it does |
 |---|---|---|
 | `AART_RUNNER` | `["ubuntu-latest"]` | JSON array of runner labels |
-| `AART_CI_IMAGE` | unset | container image for every job. Unset runs on the runner itself and installs Python with `actions/setup-python` |
+| `AART_CI_IMAGE` | `python:<version>` | container image for every job, and the only place an interpreter comes from. Unset, each `pr-check` matrix entry runs the official image for its own version and the release job runs `python:$AART_RELEASE_PYTHON_VERSION` |
 | `AART_PYTHON` | `python` | the interpreter's name inside the image |
 | `AART_PYTHON_VERSIONS` | `["3.10", "3.11", "3.14"]` | JSON array for the `pr-check` matrix. Pin to the image's one interpreter when `AART_CI_IMAGE` is set |
-| `AART_RELEASE_PYTHON_VERSION` | `3.11` | interpreter for the `release` job when no image is used |
+| `AART_RELEASE_PYTHON_VERSION` | `3.11` | which official image the `release` and `deep-quality` jobs run, when `AART_CI_IMAGE` is unset |
 | `AART_PIP_INDEX_URL` | `https://pypi.org/simple` | index for the development tools the gates install. Keep it a bare URL |
 | `AART_PIP_INDEX_CREDENTIALS_SECRET` | unset | **name** of a secret holding `user:token` for that index. Each half is masked before use |
 | `AART_IMAGE_USERNAME_SECRET` | unset | **name** of the secret holding the image registry's username. Setting it switches every job to the shape that logs in |
@@ -397,8 +403,8 @@ overwrite one that was edited by hand, so configure them with variables, not edi
 ### What a variable cannot change
 
 - **Where an action comes from.** `uses:` must be a literal, so the instance has to carry
-  `actions/checkout@v4` (both repositories), `actions/setup-python@v5` (the tool's jobs without an
-  image), `googleapis/release-please-action@v4` (only if `release please` stays enabled), and
+  `actions/checkout@v4` (both repositories), `googleapis/release-please-action@v4` (only if
+  `release please` stays enabled), and
   `actions/upload-pages-artifact@v3` with `actions/deploy-pages@v4` (only a registry publishing its
   usage dashboard).
 - **A credential in a variable.** Variables are visible to anyone with read access. Every credential

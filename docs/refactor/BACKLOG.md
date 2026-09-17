@@ -3290,3 +3290,16 @@ mutant of `dependency_spec_to_data` survives (16 of them), as do the `artifact_e
 mutants, which the scoped test set does not reach at all. Both functions are the canonical shape a
 plan and a receipt carry, so a key renamed or a value dropped is a compatibility change nothing
 notices. Not critical to CP-24; one round-trip assertion per function would hold them.
+
+## B-134 — The registry's Pages escape hatch does not escape anything
+
+Found while removing `actions/setup-python` (CP-24.10). The same trap the tool's own workflows had
+sits in the registry template `registry init` writes: `actions/upload-pages-artifact@v3` and
+`actions/deploy-pages@v4` are referenced from a job that always runs, with `AART_PAGES` read at step
+level. An action is resolved during "Set up job", before any step condition is read, so an instance
+that does not carry those actions fails the usage-dashboard workflow even with `AART_PAGES=false` —
+the escape hatch the rollout page documents. The fix is the same shape as CP-24.10's: move the
+condition to job level, so the publishing job is skipped rather than its steps. Out of scope for
+CP-24, which is about the tool's own release; the registry template is a separate contract and
+`plan_registry_init` refuses a registry whose managed file has drifted, so changing it is a
+migration rather than an edit.

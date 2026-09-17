@@ -1,7 +1,8 @@
 # CP-24 — Field reports from the first released version
 
-Status: IN PROGRESS — tasks 01–07 done in the repository (D-280 to D-286); the release itself
-is the owner's to merge
+Status: IN PROGRESS — all ten tasks done in the repository (D-280 to D-289); the release itself
+is the owner's to merge. Tasks 08–10 were added on 2026-09-17, after the owner's first container run
+on an Enterprise instance, and none of them is about the product's behaviour.
 
 Date: 2026-09-16. Authority: the product owner's GitHub issues #7 and #8 against the released
 `v0.1.1`, and the owner's instruction that the Source Sync failure is the priority because it takes
@@ -432,9 +433,34 @@ instance even with `AART_CI_IMAGE` set.
   `actions/upload-pages-artifact@v3` is referenced from a job that always runs even when
   `AART_PAGES` is `false`.
 
+**Done (D-289).** No workflow and no composite action in this repository names
+`actions/setup-python` any more, and the `python-version` and `setup-python` inputs are gone from
+all three composite actions with them. Every job takes its interpreter from a container image.
+Unset, `AART_CI_IMAGE` falls back to `python:${{ matrix.python-version }}` in `pr-check` -- so the
+public run still exercises 3.10, 3.11 and 3.14, one official image each -- and to
+`python:$AART_RELEASE_PYTHON_VERSION` in `release` and `deep-quality`. A fork that sets
+`AART_CI_IMAGE` replaces all of them, exactly as before, and `AART_PYTHON` still names the
+interpreter inside the image.
+
+Evidence:
+- `tests/enterprise_ci_template_test.py` -- no workflow and no action names `setup-python` outside a
+  comment (over all three workflows and every `action.yml`); every job takes its interpreter from an
+  image, with the fallback written out for `pr-check` and for the two single-interpreter workflows;
+  the rollout page no longer asks for the action in any row a reader acts on.
+- `tests/release_workflow_test.py` -- the release run still installs its build tools after the pip
+  index and before anything that builds. The `setup-python` ordering claim went with the step.
+- Characterization: the owner's run failed at "Set up job" with `repository not found` for
+  `actions/setup-python@v5`, with `AART_CI_IMAGE` set and the step conditioned to skip.
+- Targeted mutation: the `pr-check` container reduced back to `${{ vars.AART_CI_IMAGE }}`, so an
+  unconfigured run has no interpreter. Two tests turn red. Verified.
+- Gates: `lint`, `format-check`, `typecheck`, `docs-check`, and a full `make unit`.
+- Recorded rather than fixed: `BACKLOG.md` B-134, the same trap in the registry template's Pages
+  job, which defeats the documented `AART_PAGES=false` escape hatch.
+
 ## Evidence log
 
 Every task's targeted semantic mutation, collected here so task 07 can check them in one place.
+Tasks 08-10 were added after task 07 closed and carry their own rows.
 Each was applied to the production code, watched turn the named tests red, and reverted.
 
 | Task | Mutation applied | What turned red |
@@ -446,12 +472,17 @@ Each was applied to the production code, watched turn the named tests red, and r
 | 05 | `_outcome` collapsed back to one phrase for every `write-file` | the counts in `install_review_counts_test.py` |
 | 06 | the shell binding disabled (`if False and reporting ...`), so no handler is ever lent a reporter | 3 tests plus 1 error in `running_installation_screen_test.py` |
 | 07 | `_member_observer` made a no-op; the not-attempted and raised steps misnumbered; the fold's artifact and detail dropped | the tests written for each, in `installation_progress_test.py` |
+| 08 | `os.geteuid() == 0` widened to `>= 0`, so everyone reads as root | 2 tests in `privileges_test.py` |
+| 09 | `"/" in value` narrowed to `"//"`, so a single path separator is a name | 3 tests in `executable_requirement_test.py`, including the property |
+| 10 | the `pr-check` container reduced to `${{ vars.AART_CI_IMAGE }}`, so an unconfigured run has no interpreter | 2 tests in `enterprise_ci_template_test.py` |
 
 Scoped `make mutants` runs and their classified survivors are recorded per task above; the
-out-of-scope survivors became `BACKLOG.md` B-130, B-131 and B-133. (B-132 is not a survivor: it
+out-of-scope survivors became `BACKLOG.md` B-130, B-131 and B-133; B-134 came out of task 10. (B-132 is not a survivor: it
 records what task 04 deliberately left undesigned, a way for a reader to choose the other backend.)
 
 ## Handoff
 
-`plan.json` holds CP-24 with these seven steps. Start at task 01: it is the one that takes the
-application down, and task 02 is the same defect from the writing end.
+`plan.json` holds CP-24 with these ten steps. Tasks 01-07 answer the field reports against
+`v0.1.1`; tasks 08-10 answer what the owner's first container run on an Enterprise instance found,
+and none of them is about the product's behaviour. All ten are done in the repository; what remains
+is the owner's, and `NEXT.md` lists it.

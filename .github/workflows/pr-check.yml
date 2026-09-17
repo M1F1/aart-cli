@@ -38,9 +38,13 @@ jobs:
     if: vars.AART_IMAGE_USERNAME_SECRET == ''
     name: gates (Python ${{ matrix.python-version }})
     runs-on: ${{ fromJSON(vars.AART_RUNNER || '["ubuntu-latest"]') }}
-    # A company image already carries an interpreter.  Leave AART_CI_IMAGE unset and this line
-    # is inert; set it and pin AART_PYTHON_VERSIONS to one entry, because one image is one Python.
-    container: ${{ vars.AART_CI_IMAGE }}
+    # Every job takes its interpreter from an image, never from a download: a step-level `if:`
+    # decides whether a step runs, not whether its action is fetched, so an instance that does not
+    # carry `actions/setup-python` could never have escaped it by configuration.  Unset, the
+    # matrix entry names the official image for that interpreter, so the public run still
+    # exercises all three.  Set AART_CI_IMAGE and it replaces all of them -- pin
+    # AART_PYTHON_VERSIONS to one entry then, because one image is one Python.
+    container: ${{ vars.AART_CI_IMAGE || format('python:{0}', matrix.python-version) }}
     strategy:
       fail-fast: false
       matrix:
@@ -60,8 +64,6 @@ jobs:
       - uses: ./.github/actions/quality
         with:
           python: ${{ vars.AART_PYTHON || 'python' }}
-          python-version: ${{ matrix.python-version }}
-          setup-python: ${{ vars.AART_CI_IMAGE == '' }}
 
   gates-private-image:
     if: vars.AART_IMAGE_USERNAME_SECRET != ''
@@ -86,8 +88,6 @@ jobs:
       - uses: ./.github/actions/quality
         with:
           python: ${{ vars.AART_PYTHON || 'python' }}
-          python-version: ${{ matrix.python-version }}
-          setup-python: ${{ vars.AART_CI_IMAGE == '' }}
 
   # The one name branch protection can require.
   #

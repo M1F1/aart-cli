@@ -8,12 +8,6 @@ inputs:
   python:
     description: Name of the interpreter to invoke.
     required: true
-  python-version:
-    description: Interpreter version to install when the job runs without a container image.
-    required: true
-  setup-python:
-    description: '"true" when the job has no container image and so needs an interpreter installed.'
-    required: true
   tag:
     description: The release tag under inspection.
     required: true
@@ -39,12 +33,6 @@ runs:
 
     - name: Point pip at the internal index
       uses: ./.github/actions/pip-index
-
-    - name: Set up Python
-      if: inputs.setup-python == 'true'
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ inputs.python-version }}
 
     # The wheel build runs the Poetry CLI, and a clean runner has none. The quality action
     # installs the same locked tools before its gates; without them here the first release run

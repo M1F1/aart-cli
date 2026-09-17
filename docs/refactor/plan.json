@@ -685,7 +685,7 @@
         {
           "id": "10",
           "title": "CI takes its interpreter from an image, and setup-python is gone",
-          "status": "todo"
+          "status": "done"
         }
       ]
     }

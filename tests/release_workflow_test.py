@@ -80,7 +80,6 @@ class ReleaseWorkflowTest(unittest.TestCase):
         install = steps.find("scripts/dev_tools.py install")
         self.assertNotEqual(install, -1, "the release run installs no build tools")
         self.assertLess(steps.index("uses: ./.github/actions/pip-index"), install)
-        self.assertLess(steps.index("uses: actions/setup-python"), install)
         for builder in (
             "scripts/release.py check",
             "scripts/packaging_check.py",
