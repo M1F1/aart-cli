@@ -49,37 +49,68 @@ both filled in.
 | Downloaded wheel | `python -m pip install --no-deps ./aart_cli-X.Y.Z-py3-none-any.whl` | `pipx install ./aart_cli-X.Y.Z-py3-none-any.whl` | `uv tool install ./aart_cli-X.Y.Z-py3-none-any.whl` |
 | Release wheel by URL | `python -m pip install --no-deps <the wheel's address on the release>` | `pipx install <the wheel's address on the release>` | `uv tool install <the wheel's address on the release>` |
 
-To install a wheel from a **publicly readable** release, use one complete block below in the same
-shell. Replace the example host, organization and version with the address and version of an
-**existing release** on your fork. A tag or an open release PR is not enough: the named wheel must
-already be attached to that release.
+### The short way: copy the wheel's link, paste one line
 
-With `pipx`:
-
-```sh
-AART_REPO="https://ghe.example.com/ORG/aart-cli"
-AART_VERSION="X.Y.Z"
-AART_WHEEL="aart_cli-${AART_VERSION}-py3-none-any.whl"
-curl -fL --output "$AART_WHEEL" "$AART_REPO/releases/download/v${AART_VERSION}/$AART_WHEEL" &&
-python3 -m zipfile -t "$AART_WHEEL" >/dev/null &&
-pipx install --python "$(command -v python3)" --force "./$AART_WHEEL"
-```
-
-Or, with `uv`:
+The full shape of a wheel install names the version three times, which is three chances to mistype
+it. With `uv`, where `<repository>` is the address you are reading this in and `X.Y.Z` is the
+release you want:
 
 ```sh
-AART_REPO="https://ghe.example.com/ORG/aart-cli"
-AART_VERSION="X.Y.Z"
-AART_WHEEL="aart_cli-${AART_VERSION}-py3-none-any.whl"
-curl -fL --output "$AART_WHEEL" "$AART_REPO/releases/download/v${AART_VERSION}/$AART_WHEEL" &&
-python3 -m zipfile -t "$AART_WHEEL" >/dev/null &&
-uv tool install --force "./$AART_WHEEL"
+uv tool install --force "<repository>/releases/download/vX.Y.Z/aart_cli-X.Y.Z-py3-none-any.whl"
 ```
 
-The archive check catches an HTML sign-in page saved with a `.whl` name; it is not a checksum or
-authenticity check. On a private release, an unauthenticated `curl` cannot fetch the wheel at all.
-The `pipx` command explicitly uses the `python3` on your PATH (which must be 3.10 or newer), since
-the Python cached as `pipx`'s default may be different or broken.
+Nobody should type that. **Copy the link instead, and let the shell read your clipboard.** On the
+release page, under **Assets**, right-click `aart_cli-X.Y.Z-py3-none-any.whl` and choose *Copy link
+address*. Then paste whichever of these you use -- each one is complete as written, with no
+placeholder left to fill in:
+
+```sh
+uv tool install --force "$(pbpaste)"
+```
+
+```sh
+pipx install --python "$(command -v python3)" --force "$(pbpaste)"
+```
+
+```sh
+python -m pip install --no-deps --force-reinstall "$(pbpaste)"
+```
+
+The version never appears, because the address you copied already carries it. `uv tool` and `pipx`
+build an isolated tool environment; the `pip` line installs into **whatever environment is active
+right now**, so use it deliberately.
+
+`pbpaste` is macOS. The same line works elsewhere by swapping it for your clipboard reader --
+`wl-paste` on Wayland, `xclip -o -selection clipboard` on X11, `powershell.exe Get-Clipboard` under
+WSL.
+
+Two things that make this fail, both worth recognising:
+
+- **The clipboard holds something else.** Copying a shell command from a page and then running one
+  of these makes the installer try to install that command as a package name. Check with
+  `pbpaste` alone before you paste.
+- **The release is private.** `pip`, `pipx` and `uv` send no token when fetching a URL, so a
+  private asset returns a sign-in page and the installer fails on a corrupt archive. Use the
+  download-first blocks below instead.
+
+### When the wheel has to be downloaded first
+
+A private release cannot be installed from its URL at all, for the reason above. Download the file
+with something that does authenticate -- the instance's own web UI, or a CLI you are already signed
+in to -- and install the path:
+
+```sh
+uv tool install --force ./aart_cli-X.Y.Z-py3-none-any.whl
+```
+
+```sh
+pipx install --python "$(command -v python3)" --force ./aart_cli-X.Y.Z-py3-none-any.whl
+```
+
+`pipx` is handed `python3` explicitly because the interpreter it cached as its own default may be a
+different or a broken one; whichever it is must be 3.10 or newer. If an install fails complaining
+about a corrupt archive, the downloaded file is probably a saved sign-in page rather than a wheel --
+`python3 -m zipfile -t aart_cli-X.Y.Z-py3-none-any.whl` says so in one line.
 
 The Git row needs no pre-downloaded wheel: `git+https://` uses your Git credentials. It does build
 from source, however, so its environment must be able to obtain the pinned `poetry-core` build
