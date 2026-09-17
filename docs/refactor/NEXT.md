@@ -37,10 +37,26 @@ complete green `make quality` result and must be rerun before any slice is calle
   whole suite (INV-096 rewritten, D-290). B-129, a race between the manual lab and git's background
   repack that turned it red at random, is fixed.
 
-## Current objective — CP-24 (2026-09-16)
+## Current objective — CP-25 (2026-09-17)
 
-**CP-24 is the active slice.** It carries the owner's field reports against the released `v0.1.1`,
-as GitHub issues #7 and #8, and ends by releasing the fixes.
+**CP-25 is the active slice; the next executable task is CP-25.09** (Marketplace rows prioritize
+installation state and compatible harnesses, issue #10). Tasks 01–03 gated the release pull
+request (D-290), 04–07 withdrew usage reporting and left an Activity telemetry port in its place
+(D-292), and 08 fixed the Dashboard's Candidate arithmetic (D-293). Tasks 09–14 carry the owner's
+remaining open issues: #10, #11 (two tasks), #12, #16 and #17.
+`docs/refactor/slices/CP-25-release-pull-request-gate.md` holds the ordered tasks and their
+acceptance criteria; `plan.json` holds them as CP-25.1 to CP-25.14.
+
+**One decision is still the owner's**, recorded and deliberately not taken by an agent: the version
+the withdrawal releases. The commit is written as `feat:`, which makes it `0.2.0`; `feat!:` would
+make it `1.0.0`, because `bump-minor-pre-major: false` sends a breaking change straight past
+`0.3.0`. The pull request title is what decides it under squash merge, not the commit.
+
+## Closed — CP-24 (2026-09-16)
+
+**CP-24 is done.** It carried the owner's field reports against the released `v0.1.1`,
+as GitHub issues #7 and #8, and ended by releasing the fixes: pull request #14, Release Please's
+#15 at 10:48 UTC on 2026-09-17, and `v0.1.2` tagged on `origin`.
 `docs/refactor/slices/CP-24-post-release-field-reports.md` holds the ordered tasks;
 `plan.json` holds them as CP-24.1 to CP-24.10. Tasks 08-10 were added on 2026-09-17, after the
 owner ran the gates in a container on their Enterprise instance and three things broke that have

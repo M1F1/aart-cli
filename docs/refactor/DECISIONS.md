@@ -7221,3 +7221,29 @@ and removal of Pages/issues does not force a future implementation back through 
 code. Secret-safety INV-052 still applies to any future projection; defining an outbound payload,
 consent/configuration and retry semantics remains future product work rather than being guessed in
 CP-25.
+
+## D-293 — The Dashboard counts Candidates by whether a maintainer can still act on them
+
+**Context.** `Candidates: N` on the Maintainer Dashboard counted every durable Candidate record.
+Promoted, Superseded, Rejected and Source Removed are lifecycle states the audit contract requires
+to persist, so a source whose Candidates had all been promoted reported work that nobody could do:
+two promoted Candidates read as two Candidates pending (issue #9). Deleting the records, or
+excluding them from storage, would have traded a display fault for an audit fault.
+
+**Decision.** Split `CandidateState` into two frozensets in the domain --
+`ACTIVE_CANDIDATE_STATES` and `SETTLED_CANDIDATE_STATES` -- and derive the Dashboard's arithmetic
+from them. The projection owns the split once: `MaintainerSourceView` gains `active_count` and
+`settled_count`, `MaintainerDashboardView` gains `lifecycle_counts` plus `active_candidate_count`
+and `settled_candidate_count`, and the renderer reclassifies nothing. `candidate_count` keeps
+counting every record, so the durable history is still visible and still totalled.
+
+**Consequences.** The screen leads with what is waiting and names the settled records only when
+some exist, so a registry that has never promoted anything reads exactly as before. The view
+refuses a breakdown that does not sum to the total, which makes a renderer that invents or drops a
+state a construction error rather than a wrong number on screen. The two halves are asserted to
+partition the vocabulary: a state in neither would silently vanish from the counts.
+
+**What the mutation found.** Moving `APPROVAL_REQUIRED` into the settled half survived the first
+test suite. It is the most literally pending state there is -- the Candidate is stopped exactly
+because it wants a maintainer's decision -- so the classification would have hidden the very work
+issue #9 is about. Two tests now hold it.

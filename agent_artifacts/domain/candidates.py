@@ -27,6 +27,31 @@ class CandidateState(str, Enum):
     SOURCE_REMOVED = "source-removed"
 
 
+# A Candidate either still wants a maintainer's attention or has already received its disposition.
+# The settled states are durable audit records, not finished work to be deleted, so a screen that
+# counts them together with the waiting ones reports work that nobody can act on (issue #9).  The
+# two halves are asserted to partition `CandidateState`: a state in neither would vanish from the
+# Dashboard's arithmetic, and a state in both would be counted twice.
+ACTIVE_CANDIDATE_STATES = frozenset(
+    {
+        CandidateState.NEW,
+        CandidateState.CHANGED,
+        CandidateState.READY,
+        CandidateState.WARNING,
+        CandidateState.INVALID,
+        CandidateState.APPROVAL_REQUIRED,
+    }
+)
+SETTLED_CANDIDATE_STATES = frozenset(
+    {
+        CandidateState.PROMOTED,
+        CandidateState.SUPERSEDED,
+        CandidateState.REJECTED,
+        CandidateState.SOURCE_REMOVED,
+    }
+)
+
+
 class FindingSeverity(str, Enum):
     WARNING = "warning"
     ERROR = "error"

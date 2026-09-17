@@ -1,11 +1,31 @@
 # AART Refactor Migration Status
 
+**2026-09-17, CP-25.08 done (D-293).** The Maintainer Dashboard counts Candidates by whether a
+maintainer can still act on them. `CandidateState` is split into `ACTIVE_CANDIDATE_STATES` and
+`SETTLED_CANDIDATE_STATES` in the domain, the projection derives the arithmetic once, and the
+renderer reclassifies nothing. The durable records are kept and still totalled, so the audit
+contract is untouched; the screen simply stops reporting promoted history as pending work
+(issue #9). The targeted mutation survived on the first suite and became the finding — see D-293.
+
+**2026-09-17, CP-25 tasks 04–07 done, and the full suite is green.** The usage-reporting withdrawal
+is committed (`7af06be`). `make quality` passed complete — format-check, lint, typecheck, unit,
+validate, coverage, packaging-check, docs-check, secret-shape-check — which discharges the baseline
+the entry below was still waiting on. Old configurations carrying a `reporting` block still load:
+the field is accepted, read to nothing, and never written again. All four targeted mutations were
+killed; they ran in a copy of the working tree, because a gate run was in flight and
+`scripts/quality.py` fails any run whose tracked files change under it.
+
+**2026-09-17, CP-24 closed.** The slice held itself open on a release that was the owner's to
+merge, and that merge happened: pull request #14, Release Please's #15 at 10:48 UTC, `v0.1.2`
+tagged on `origin`. A finished slice left open stops the progress bar for every slice after it.
+
 **2026-09-17, CP-25 expanded through task 14 (D-291).** At the owner's instruction CP-25 is the
 active stream for every open product issue in `M1F1/aart-cli`: #9, #10, #11, #12, #16 and #17.
 They are written as tasks 08–14 after the usage-reporting withdrawal. Issue #11 is two tasks because
 installation scope changes ownership/paths while the Python backend changes remediation/execution;
-the two whitespace reports remain separate because they name different screens. No implementation
-of tasks 04–14 has started; the owner will review their written acceptance criteria first.
+the two whitespace reports remain separate because they name different screens. At the time of
+writing no implementation of tasks 04–14 had started; tasks 04–08 have since been done, as the
+entries above record.
 
 After that review the owner clarified the task-07 boundary (D-292): GitHub Issues, Pages, the static
 dashboard and the old usage payload all go, while Activity gains a transport-neutral application

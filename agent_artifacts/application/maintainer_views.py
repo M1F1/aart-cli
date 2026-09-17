@@ -49,7 +49,13 @@ from agent_artifacts.application.promotion import (
 from agent_artifacts.configuration.model import ConfiguredSource, SourceKind
 from agent_artifacts.configuration.policy import redact_text
 from agent_artifacts.domain.artifacts import ArtifactKind
-from agent_artifacts.domain.candidates import CandidateId, CandidateState, semantic_candidate_diff
+from agent_artifacts.domain.candidates import (
+    ACTIVE_CANDIDATE_STATES,
+    SETTLED_CANDIDATE_STATES,
+    CandidateId,
+    CandidateState,
+    semantic_candidate_diff,
+)
 from agent_artifacts.domain.collection_candidates import CollectionCandidate
 from agent_artifacts.domain.identifiers import ArtifactCoordinate, SourceAlias
 from agent_artifacts.domain.inputs import ConfigInput, RuntimeInput, SecretInput
@@ -485,6 +491,22 @@ class MaintainerSourceView:
         return next((count for found, count in self.candidate_states if found is state), 0)
 
     @property
+    def active_count(self) -> int:
+        """Candidates a maintainer can still act on, which is what "pending" honestly means."""
+
+        return sum(
+            count for state, count in self.candidate_states if state in ACTIVE_CANDIDATE_STATES
+        )
+
+    @property
+    def settled_count(self) -> int:
+        """Durable dispositions: kept, counted, and not presented as waiting work."""
+
+        return sum(
+            count for state, count in self.candidate_states if state in SETTLED_CANDIDATE_STATES
+        )
+
+    @property
     def ready_count(self) -> int:
         return self.count(CandidateState.READY)
 
@@ -500,6 +522,9 @@ class MaintainerDashboardView:
     validation_failure_count: int
     ready_count: int
     recent_activity: tuple[str, ...] = ()
+    # Every Candidate state that actually occurs, in vocabulary order, so the screen can explain
+    # the total instead of asking the maintainer to trust it (issue #9).
+    lifecycle_counts: tuple[tuple[CandidateState, int], ...] = ()
 
     def __post_init__(self) -> None:
         counts = (
@@ -513,6 +538,20 @@ class MaintainerDashboardView:
                 not isinstance(count, int) or isinstance(count, bool) or count < 0
                 for count in counts
             )
+            or any(
+                not isinstance(state, CandidateState)
+                or not isinstance(count, int)
+                or isinstance(count, bool)
+                or count <= 0
+                for state, count in self.lifecycle_counts
+            )
+            or len({state for state, _ in self.lifecycle_counts}) != len(self.lifecycle_counts)
+            # The breakdown must explain the total exactly.  A screen whose parts do not add up to
+            # the number beside them is worse than one that never offered the parts.
+            or (
+                bool(self.lifecycle_counts)
+                and sum(count for _, count in self.lifecycle_counts) != self.candidate_count
+            )
             or self.validation_failure_count > self.candidate_count
             or self.ready_count > self.candidate_count
             or any(
@@ -523,6 +562,20 @@ class MaintainerDashboardView:
             )
         ):
             raise ValueError("maintainer Dashboard view is invalid")
+
+    @property
+    def active_candidate_count(self) -> int:
+        """What is actually waiting for the maintainer, which is what the screen leads with."""
+
+        return sum(
+            count for state, count in self.lifecycle_counts if state in ACTIVE_CANDIDATE_STATES
+        )
+
+    @property
+    def settled_candidate_count(self) -> int:
+        return sum(
+            count for state, count in self.lifecycle_counts if state in SETTLED_CANDIDATE_STATES
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -2662,12 +2715,17 @@ def project_maintainer_dashboard(
         {source.alias for source in sources}
     ) != len(sources):
         raise ValueError("maintainer Dashboard needs unique Source views")
+    totals: Counter[CandidateState] = Counter()
+    for source in sources:
+        for state, count in source.candidate_states:
+            totals[state] += count
     return MaintainerDashboardView(
         len(sources),
         sum(source.candidate_count for source in sources),
         sum(source.invalid_count for source in sources),
         sum(source.ready_count for source in sources),
         recent_activity,
+        tuple((state, totals[state]) for state in CandidateState if totals[state]),
     )
 
 
