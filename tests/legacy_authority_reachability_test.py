@@ -19,6 +19,9 @@ The exception list is a claim about each name in it, so each one states its reas
   that nothing calls it -- ``consumer/runtime.py`` passes ``builtin()`` straight into the consumer
   context, so a project's ``profiles.json`` is read by tests and ignored by the product.  That is a
   capability gap, not dead code; B-072 carries the wiring, D-155 the verdict.
+* ``application.activity_telemetry`` -- the deliberately dormant, transport-neutral injection
+  boundary for a future explicitly configured Activity telemetry adapter (D-292). The disabled
+  adapter is tested now; no runtime imports the module, so its presence cannot opt a user in.
 
 ``application.credential_lifecycle`` was on this list, retained for a credential lifecycle nothing
 could run yet. Screen 24's Verify/Replace/Delete rows plan through it now (CP-23 task 12, D-262).
@@ -45,6 +48,7 @@ RUNTIME_ROOTS = frozenset({"agent_artifacts.__main__", "agent_artifacts.cli"})
 DELIBERATE_NON_RUNTIME_MODULES = frozenset(
     {
         "agent_artifacts._commit",
+        "agent_artifacts.application.activity_telemetry",
         "agent_artifacts.profiles.loader",
     }
 )

@@ -206,7 +206,7 @@ class CompletedConfiguredInstallation:
     machine: ConsumerMachine
     #: Setup declarations read back off the objects this action recorded. Placing an artifact's
     #: files is not always the whole of installing it, so these travel to the separately reviewed
-    #: completion boundary that runs setup and offers the privacy-bounded usage report (D-128).
+    #: completion boundary that runs setup after installation (D-128).
     pending_setup: tuple[DeclaredArtifactSetup, ...] = ()
 
     def __post_init__(self) -> None:

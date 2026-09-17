@@ -17,7 +17,6 @@ __pycache__/
 build/
 dist/
 htmlcov/
-usage-dashboard/
 """
 
 # Every knob below is a repository variable, and every default reproduces the public github.com
@@ -26,7 +25,7 @@ usage-dashboard/
 # whose content differs, so a hand-edited workflow puts a registry permanently out of step with
 # the command that manages it.  `docs/ci/github-enterprise-rollout.md` lists the variables.
 #
-# The three workflows share one way of reaching the tool, kept here so they cannot drift apart.
+# The generated workflow can reach the tool without assuming a public package index.
 # AART has no runtime dependencies and ships `agent_artifacts/__main__.py`, so *any* directory
 # holding the package is a working installation: a clone, an unzipped wheel, a `pip --target`
 # directory, or a path baked into a CI image.  Every arm below therefore ends the same way, and
@@ -41,7 +40,6 @@ _PROVIDE_AART = b"""      - name: Provide AART
           INDEX_URL: ${{ vars.AART_PIP_INDEX_URL || 'https://pypi.org/simple' }}
           INDEX_CREDENTIALS: ${{ secrets[vars.AART_PIP_INDEX_CREDENTIALS_SECRET] }}
           PY: ${{ vars.AART_PYTHON || 'python3' }}
-          GH_HOST_OVERRIDE: ${{ vars.AART_GH_HOST }}
         run: |
           set -euo pipefail
           # An internal index usually wants credentials, and a variable cannot hold one.  So the
@@ -125,9 +123,6 @@ _PROVIDE_AART = b"""      - name: Provide AART
             echo "aart: .aart-version pins $PIN but $how provided $got" >&2
             exit 2
           fi
-          # `gh` defaults to github.com, which on an Enterprise instance is the wrong server and a
-          # silent one.  Derive the host from the instance the job is already running on.
-          echo "GH_HOST=${GH_HOST_OVERRIDE:-${GITHUB_SERVER_URL#https://}}" >> "$GITHUB_ENV"
           echo "AART: aart-cli $got  via $how${PIN:+  pinned by .aart-version}$override"
 """
 
@@ -282,122 +277,6 @@ jobs:
     )
     + _aggregate(b"registry-quality")
 )
-USAGE_REPORT_ISSUE_FORM = b"""name: AART redacted usage report
-description: Share one voluntary, bounded AART session result with this registry.
-title: "AART usage report: "
-body:
-  - type: markdown
-    attributes:
-      value: |
-        This report is voluntary. It must contain only AART's redacted allowlisted event; never add credentials, paths, logs, repository names, or personal identifiers.
-  - type: textarea
-    id: report
-    attributes:
-      label: Redacted usage event
-      description: AART prefilled this exact versioned JSON payload for your review.
-      render: json
-    validations:
-      required: true
-"""
-
-USAGE_REPORT_VALIDATE_WORKFLOW = b"""name: Validate AART usage report
-on:
-  issues:
-    types: [opened, edited, reopened]
-permissions:
-  contents: read
-  issues: write
-jobs:
-""" + _job(
-    b"validate",
-    when=b"startsWith(github.event.issue.title, 'AART usage report:')",
-    body=b"""    steps:
-"""
-    + _PROVIDE_AART
-    + b"""      - name: Read issue body as untrusted data
-        env:
-          GH_TOKEN: ${{ github.token }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-        run: gh issue view "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --json body --jq .body > usage-issue.md
-      - id: validate
-        name: Validate bounded report schema
-        continue-on-error: true
-        run: aart reporting validate-issue usage-issue.md
-      - name: Label valid report
-        if: steps.validate.outcome == 'success'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-        run: |
-          gh label create usage-report --repo "$GITHUB_REPOSITORY" --color 0E8A16 --force
-          gh issue edit "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --add-label usage-report
-      - name: Close invalid report without evaluating its content
-        if: steps.validate.outcome == 'failure'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-        run: |
-          gh label create invalid-usage-report --repo "$GITHUB_REPOSITORY" --color B60205 --force
-          gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body 'AART rejected this report because it did not match the bounded redacted schema.'
-          gh issue close "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --reason not-planned
-""",
-)
-# Pages is the one piece an Enterprise instance may simply not offer.  Deployment is therefore its
-# own job, gated by a variable: set `AART_PAGES` to `false` and the dashboard is still built and
-# still validated, it is just not published.  A job-level `if` is used rather than a step-level one
-# because the `github-pages` environment belongs to the job that deploys.  That job runs no Python
-# and never fetches AART, so it needs no container and stays a single job; it waits on both shapes
-# of `aggregate` and tolerates the one that stood down, which is what `!cancelled()` buys.
-USAGE_REPORT_DASHBOARD_WORKFLOW = (
-    b"""name: Build AART usage dashboard
-on:
-  schedule:
-    - cron: "17 3 * * *"
-  workflow_dispatch:
-permissions:
-  contents: read
-  issues: read
-  pages: write
-  id-token: write
-concurrency:
-  group: aart-usage-pages
-  cancel-in-progress: true
-jobs:
-"""
-    + _job(
-        b"aggregate",
-        body=b"""    steps:
-"""
-        + _PROVIDE_AART
-        + b"""      - name: Export only validated report bodies and server timestamps
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh issue list --repo "$GITHUB_REPOSITORY" --label usage-report --state all --limit 10000 --json body,createdAt > usage-issues.json
-      - run: aart reporting aggregate usage-issues.json --output usage-dashboard
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: usage-dashboard
-""",
-    )
-    + b"""  deploy:
-    needs: [aggregate, aggregate-private-image]
-    if: ${{ !cancelled() && !failure() && vars.AART_PAGES != 'false' }}
-    runs-on: ${{ fromJSON(vars.AART_RUNNER || '["ubuntu-latest"]') }}
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
-"""
-)
-REPORTING_TEMPLATES = (
-    (".github/ISSUE_TEMPLATE/usage-report.yml", USAGE_REPORT_ISSUE_FORM),
-    (".github/workflows/aart-usage-dashboard.yml", USAGE_REPORT_DASHBOARD_WORKFLOW),
-    (".github/workflows/aart-usage-validate.yml", USAGE_REPORT_VALIDATE_WORKFLOW),
-)
-
-
 # `registry init` writes this once and then leaves it alone.  Unlike the workflows, a README is a
 # file people are meant to edit, so it is deliberately *not* a managed template: it is written when
 # absent and never overwritten or compared.  Making it managed would mean the one file a maintainer
@@ -421,7 +300,7 @@ Its registry id is `__REGISTRY_ID__`. Consumers name it when they add this regis
 | `collections/` | Named groups of artifacts installed together |
 | `aart.lock.json` | Resolved, pinned contents. Generated - never edited by hand |
 | `aart.index.json` | The published index consumers read. Generated |
-| `.github/workflows/` | The quality gate, and the usage-reporting pair if this registry offers it |
+| `.github/workflows/` | The registry quality gate |
 
 The JSON files and the workflows are **managed**: AART regenerates them and refuses to run against
 a copy that was hand-edited. This README is not managed. Edit it freely.
@@ -528,8 +407,6 @@ AART: aart-cli 0.1.0  via index https://nexus.corp/pypi/simple (aart-cli==0.1.0)
 | `AART_RUNNER` | `["ubuntu-latest"]` | JSON array of runner labels. Must be JSON, not a bare word |
 | `AART_CI_IMAGE` | unset | Container image for the jobs. Unset means the runner's own environment |
 | `AART_PYTHON` | `python3` | The interpreter's name inside that image |
-| `AART_GH_HOST` | derived | Only needed if your instance is served on a path or a non-default port |
-| `AART_PAGES` | unset | Set to `false` where the instance offers no GitHub Pages. The dashboard is still built, only publication is skipped |
 
 ## Protecting `main`
 
@@ -552,43 +429,15 @@ That is a different statement from `.aart-version`. The window says which versio
 claims to work with; the pin says which single version CI actually runs. Keep the pin inside the
 window - a pin outside it is a registry contradicting itself.
 
-__REPORTING__"""
-
-
-#: What the README says about usage reporting when the registry offers it.
-_README_REPORTING = b"""## Usage reporting
-
-The two `aart-usage-*` workflows accept voluntary, redacted usage reports as GitHub Issues and
-build a dashboard from the ones that validate. Reports carry no credentials, paths or repository
-names. Delete both workflows and the issue template if you do not want them.
-"""
-
-#: And what it says when nobody asked for it: how to turn it on, not how to delete it.
-_README_NO_REPORTING = b"""## Usage reporting
-
-This registry does not collect usage reports, so no issue template or reporting workflow was
-generated. To offer the service, re-run `registry init` in a fresh workspace with
-`--usage-reporting-repository owner/name`; reports are voluntary and redacted, and carry no
-credentials, paths or repository names.
 """
 
 
 def render_registry_readme(
     registry_id: str,
     display_name: str,
-    *,
-    usage_reporting: bool = False,
 ) -> bytes:
-    """The one generated file a maintainer owns after it is written.
+    """Render the one generated file a maintainer owns after it is written."""
 
-    Its usage-reporting section describes the registry that was actually created (B-087).  A
-    README telling a maintainer to "delete both workflows" that were never written is a document
-    disagreeing with the tree beside it, which is how a generated file stops being read at all.
-    """
-
-    body = _REGISTRY_README.replace(
-        b"__REPORTING__", _README_REPORTING if usage_reporting else _README_NO_REPORTING
-    )
-    return body.replace(b"__DISPLAY_NAME__", display_name.encode("utf-8")).replace(
+    return _REGISTRY_README.replace(b"__DISPLAY_NAME__", display_name.encode("utf-8")).replace(
         b"__REGISTRY_ID__", registry_id.encode("utf-8")
     )

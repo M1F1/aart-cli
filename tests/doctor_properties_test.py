@@ -30,7 +30,6 @@ from agent_artifacts.commands.doctor import (
 from agent_artifacts.configuration.model import (
     ConfiguredSource,
     OrganizationPolicy,
-    ReportingSettings,
     SourceKind,
     SyncSettings,
     UserConfiguration,
@@ -75,7 +74,7 @@ def _effective(draw: st.DrawFn) -> EffectiveConfiguration:
     )
     locked = tuple(sorted(draw(st.sets(_LOCKABLE, max_size=3))))
     return EffectiveConfiguration(
-        UserConfiguration(1, sources, None, SyncSettings(), ReportingSettings()),
+        UserConfiguration(1, sources, None, SyncSettings()),
         OrganizationPolicy(1),
         locked,
     )

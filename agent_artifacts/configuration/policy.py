@@ -11,8 +11,6 @@ from agent_artifacts.domain.result import Err, Ok, Result
 from ..redaction import redact_text
 from .model import (
     OrganizationPolicy,
-    ReportingMode,
-    ReportingSettings,
     SourceKind,
     SyncMode,
     SyncSettings,
@@ -22,7 +20,6 @@ from .model import (
 
 SOURCE_POLICY_DENIED = DiagnosticCode("source-policy-denied")
 CONFIG_INVALID = DiagnosticCode("config-invalid")
-_PUBLIC_GIT_HOSTS = frozenset({"github.com", "gitlab.com", "bitbucket.org"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,8 +27,6 @@ class RuntimeOverrides:
     default_registry: SourceAlias | None = None
     sync_mode: SyncMode | None = None
     max_age_seconds: int | None = None
-    reporting_mode: ReportingMode | None = None
-    reporting_destination: SourceAlias | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,28 +42,6 @@ def _denied(message: str) -> Diagnostic:
 
 def _invalid(message: str) -> Err:
     return Err((Diagnostic(CONFIG_INVALID, Severity.ERROR, redact_text(message)),))
-
-
-def _locked_override_diagnostics(
-    overrides: RuntimeOverrides, policy: OrganizationPolicy
-) -> tuple[Diagnostic, ...]:
-    diagnostics: list[Diagnostic] = []
-    reporting = policy.reporting
-    if (
-        reporting.mode is not None
-        and overrides.reporting_mode is not None
-        and overrides.reporting_mode is not reporting.mode
-    ):
-        diagnostics.append(_denied("runtime override of policy-locked reporting.mode is denied"))
-    if (
-        reporting.destination is not None
-        and overrides.reporting_destination is not None
-        and overrides.reporting_destination != reporting.destination
-    ):
-        diagnostics.append(
-            _denied("runtime override of policy-locked reporting.destination is denied")
-        )
-    return tuple(diagnostics)
 
 
 def _policy_diagnostics(
@@ -103,15 +76,6 @@ def _policy_diagnostics(
             repository.startswith(prefix) for prefix in policy.allowed_repository_prefixes
         ):
             diagnostics.append(_denied(f"repository path for source {source.alias} is not allowed"))
-    destination = configuration.reporting.destination
-    if destination is not None:
-        target = enabled.get(destination)
-        if target is None or not target.is_registry:
-            diagnostics.append(_denied("reporting destination must be an enabled registry source"))
-        elif policy.reporting.deny_public_destinations:
-            location = git_location_parts(target.location)
-            if location is not None and location[0] in _PUBLIC_GIT_HOSTS:
-                diagnostics.append(_denied("public reporting destinations are denied by policy"))
     return tuple(diagnostics)
 
 
@@ -124,9 +88,6 @@ def _apply_configuration(
 ) -> Result[EffectiveConfiguration]:
     """Apply precedence and policy, with a narrowly scoped source-onboarding exception."""
 
-    locked_diagnostics = _locked_override_diagnostics(overrides, policy)
-    if locked_diagnostics:
-        return Err(locked_diagnostics)
     try:
         sync = SyncSettings(
             user.sync.mode if overrides.sync_mode is None else overrides.sync_mode,
@@ -134,22 +95,6 @@ def _apply_configuration(
                 user.sync.max_age_seconds
                 if overrides.max_age_seconds is None
                 else overrides.max_age_seconds
-            ),
-        )
-        runtime_reporting_mode = (
-            user.reporting.mode if overrides.reporting_mode is None else overrides.reporting_mode
-        )
-        runtime_reporting_destination = (
-            user.reporting.destination
-            if overrides.reporting_destination is None
-            else overrides.reporting_destination
-        )
-        reporting = ReportingSettings(
-            (runtime_reporting_mode if policy.reporting.mode is None else policy.reporting.mode),
-            (
-                runtime_reporting_destination
-                if policy.reporting.destination is None
-                else policy.reporting.destination
             ),
         )
         effective = replace(
@@ -160,7 +105,6 @@ def _apply_configuration(
                 else overrides.default_registry
             ),
             sync=sync,
-            reporting=reporting,
         )
     except ValueError as error:
         return _invalid(str(error))
@@ -176,17 +120,7 @@ def _apply_configuration(
     )
     if diagnostics:
         return Err(diagnostics)
-    locked_fields = tuple(
-        sorted(
-            name
-            for name, value in (
-                ("reporting.destination", policy.reporting.destination),
-                ("reporting.mode", policy.reporting.mode),
-            )
-            if value is not None
-        )
-    )
-    return Ok(EffectiveConfiguration(effective, policy, locked_fields))
+    return Ok(EffectiveConfiguration(effective, policy, ()))
 
 
 def apply_configuration(

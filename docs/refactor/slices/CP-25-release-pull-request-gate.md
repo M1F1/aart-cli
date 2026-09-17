@@ -94,6 +94,19 @@ Acceptance: `packaging-check validate docs-check release-bump` in **15.26 s** ag
 | 03 | `fetch-depth: … && '0' \|\| '1'` → `&& 0 \|\| 1` | `test_the_release_branch_is_checked_out_with_the_history_the_diff_needs` red, alone. This is a real bug, not a notational one: `0` is falsy, so `x && 0 \|\| 1` evaluates to `1` on **both** branches and the release job would have been checked out shallow — the scope check would then fail every release pull request |
 | 03 | `.release-please-manifest.json` removed from `IN_SCOPE` | `test_release_bookkeeping_alone_is_in_scope` and `test_the_narrow_release_gate_covers_exactly_what_the_engine_rewrites` red — the derived list catches the drift as well as the direct assertion |
 
+| 04 | `"reporting"` removed from the organization policy's `optional` set | `test_an_organization_policy_written_before_the_withdrawal_still_loads` red, alone |
+| 05 | `"reporting"` removed from the user configuration's `optional` set | `test_a_configuration_written_before_the_withdrawal_still_loads` red in both subtests, and `test_the_block_is_read_to_nothing_rather_than_to_a_setting` with them. Three reds for one field is not a blunt mutation: the field is either accepted or it is not, and the second test holds the other half of the claim — that accepting it is not the same as honouring it |
+| 06 | `--usage-reporting-repository` added back to the `registry init` parser | `test_init_rejects_the_withdrawn_usage_reporting_option` red, alone |
+| 07 | `TelemetryDelivery("disabled", 0)` → `("delivered", 0)` in `DisabledActivityTelemetry.publish` | `test_the_default_adapter_is_explicitly_disabled_and_has_no_callback` red, alone. This is the load-bearing one of the four: it holds the promise that nothing leaves the machine unless a caller injects an adapter on purpose |
+
+**Where 04–07 ran.** In a copy of the working tree under the session scratchpad, not in the
+repository, because a full `make quality` was running at the time and `scripts/quality.py` fails any
+run whose tracked files change under it. The copy also settles the restore problem recorded below:
+with no `.git` in it there is no `git checkout` to reach for, each file is copied aside and copied
+back, and the interpreter still comes from the real project because Poetry keys its virtualenvs by
+path. The baseline was confirmed green in the copy first — a mutation that "kills" an already-red
+test proves nothing.
+
 **A correction worth recording.** Restoring the first mutation with `git checkout
 .github/workflows/pr-check.yml` reverted the file to `HEAD`, discarding the whole task's work
 alongside the mutation, because none of it was committed yet; and the same command on the untracked

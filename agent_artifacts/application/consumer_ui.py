@@ -287,23 +287,21 @@ class RegistryInitDraft:
 
     registry_id: str = ""
     display_name: str = ""
-    usage_reporting: str = ""
     commit: bool = False
 
     def __post_init__(self) -> None:
         if any(
             not isinstance(value, str) or any(char in value for char in "\r\n")
-            for value in (self.registry_id, self.display_name, self.usage_reporting)
+            for value in (self.registry_id, self.display_name)
         ) or not isinstance(self.commit, bool):
             raise ValueError("registry init draft is invalid")
 
     def settled(self) -> "RegistryInitDraft":
-        """The same three answers with the spaces around them dropped (`QA-058`).
+        """The two text answers with the spaces around them dropped (`QA-058`).
 
         Screen 46a's status bar offers `[Space] Toggle`, and on a text row a printable key is
-        text, so the space it types lands in the answer.  None of the three can carry one at
-        either end -- an identifier is a slug, a display name is one line, a reporting repository
-        is `owner/name` -- so surrounding whitespace is not part of what the operator named and
+        text, so the space it types lands in the answer. Neither text answer can carry one at
+        either end, so surrounding whitespace is not part of what the operator named and
         the identity is judged without it.  Settling happens here, at the boundary that judges,
         rather than while typing, because `Manual Registry` has to stay typeable one key at a
         time.
@@ -313,7 +311,6 @@ class RegistryInitDraft:
             self,
             registry_id=self.registry_id.strip(),
             display_name=self.display_name.strip(),
-            usage_reporting=self.usage_reporting.strip(),
         )
 
 
@@ -1726,8 +1723,6 @@ def reduce_consumer_ui(
             init_draft = replace(init_draft, registry_id=event.text)
         elif event.key == "name":
             init_draft = replace(init_draft, display_name=event.text)
-        elif event.key == "reporting":
-            init_draft = replace(init_draft, usage_reporting=event.text)
         elif event.key == "commit" and event.accepted is not None:
             init_draft = replace(init_draft, commit=event.accepted)
         else:
@@ -1944,7 +1939,7 @@ _FORM_TOGGLE_ROWS: dict[ApplicationScreen, str] = {
 _FORM_TEXT_ROWS: dict[ApplicationScreen, frozenset[str]] = {
     ConsumerScreen.REGISTRY_ADD: frozenset({"alias", "url", "ref"}),
     MaintainerScreen.SOURCE_ADD: frozenset({"alias", "location", "ref"}),
-    MaintainerScreen.REGISTRY_INIT: frozenset({"id", "name", "reporting"}),
+    MaintainerScreen.REGISTRY_INIT: frozenset({"id", "name"}),
     MaintainerScreen.REPOSITORY_SCAN: frozenset({"url", "ref"}),
 }
 #: The keys every screen offers, which a form gives up while the cursor is on a text field.
@@ -2286,7 +2281,6 @@ def key_event(
         values = {
             "id": state.registry_init_draft.registry_id,
             "name": state.registry_init_draft.display_name,
-            "reporting": state.registry_init_draft.usage_reporting,
         }
         if key == "escape":
             return ConsumerUiEvent(ConsumerUiEventKind.BACK)

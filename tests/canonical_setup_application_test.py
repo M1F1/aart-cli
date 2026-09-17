@@ -11,7 +11,6 @@ from unittest.mock import patch
 
 from agent_artifacts.configuration.model import (
     OrganizationPolicy,
-    ReportingSettings,
     SourceKind,
     SyncSettings,
     UserConfiguration,
@@ -125,7 +124,7 @@ def _recipe(*, custom: bool = False, secret_failure: bool = False, version: int 
 
 def _effective(source, policy: OrganizationPolicy):
     result = apply_configuration(
-        UserConfiguration(1, (source,), None, SyncSettings(), ReportingSettings()),
+        UserConfiguration(1, (source,), None, SyncSettings()),
         RuntimeOverrides(),
         policy,
     )

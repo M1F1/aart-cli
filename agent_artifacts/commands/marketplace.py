@@ -20,7 +20,7 @@ from __future__ import annotations
 import json
 import os
 import sys
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -122,14 +122,6 @@ from agent_artifacts.receipt_service import (
     verify_view,
 )
 from agent_artifacts.redaction import redact_text
-from agent_artifacts.reporting.application import ReportingApplicationService
-from agent_artifacts.reporting.model import ReportingPlan
-from agent_artifacts.reporting.projection import (
-    SetupReportState,
-    usage_report_from_consumer,
-    usage_reports_by_registry_from_consumer,
-)
-from agent_artifacts.reporting.runtime import load_local_reporting_service
 from agent_artifacts.runtime_contract import EXECUTABLE_VERSION
 from agent_artifacts.setup import (
     _command_strings,
@@ -178,194 +170,6 @@ _MUTATING = frozenset({"install", "update", "uninstall", "setup"})
 # subscription that delivered it is still configured, so an operator who ran `source remove` can
 # still read and clean up their own project.
 _PROJECT_LOCAL = frozenset({"uninstall", "status"})
-
-
-@dataclass(frozen=True, slots=True)
-class _CliReporting:
-    service: ReportingApplicationService | None
-    plans: tuple[ReportingPlan, ...] = ()
-    notices: tuple[str, ...] = ()
-    warning: str | None = None
-
-
-def _setup_report_states(
-    payload: dict | None, review: ConsumerReview | None = None
-) -> tuple[SetupReportState, ...]:
-    """Recover the typed, privacy-bounded setup statuses from this command's own projection."""
-
-    if payload is None:
-        return ()
-    states = []
-    for item in payload.get("items", ()):  # populated only after a setup queue was attempted
-        key = item["key"]
-        if review is not None:
-            matches = tuple(
-                reviewed.key
-                for reviewed in review.items
-                if str(ArtifactCoordinate(reviewed.coordinate.source, reviewed.coordinate.artifact))
-                == item.get("coordinate")
-                and reviewed.profile == item.get("profile")
-                and reviewed.scope == item.get("scope")
-            )
-            if len(matches) == 1:
-                key = matches[0]
-        states.append(SetupReportState(key, item["status"]))
-    for failure in payload.get("planning_failures", ()):
-        states.append(
-            SetupReportState(
-                failure["key"],
-                "planning-failed",
-                failure_phase="queue",
-                failure_code="setup-planning-failed",
-            )
-        )
-    return tuple(states)
-
-
-def _prepare_cli_reporting(
-    request: Request,
-    service: ConsumerApplicationService | ConfiguredSetupService,
-    review: ConsumerReview,
-    outcome: ConsumerOutcome,
-    setup_payload: dict | None,
-) -> _CliReporting | None:
-    """Prepare optional reporting after the artifact outcome; every failure remains advisory."""
-
-    effective = getattr(service.context, "effective", None)
-    if effective is None:  # narrow test adapters need not implement the production runtime context
-        return None
-    loaded = load_local_reporting_service(
-        user_home=request.user_home,
-        configuration=effective.configuration,
-    )
-    if isinstance(loaded, Err):
-        return _CliReporting(
-            None,
-            warning="usage reporting is unavailable; the marketplace outcome is unchanged",
-        )
-    try:
-        states = _setup_report_states(setup_payload, review)
-        event = usage_report_from_consumer(
-            review,
-            outcome,
-            states,
-            aart_version=str(EXECUTABLE_VERSION),
-            interface="cli",
-        )
-        routed = usage_reports_by_registry_from_consumer(
-            review,
-            outcome,
-            states,
-            aart_version=str(EXECUTABLE_VERSION),
-            interface="cli",
-        )
-    except (KeyError, TypeError, ValueError):
-        return _CliReporting(
-            loaded.value,
-            warning="usage report projection failed; the marketplace outcome is unchanged",
-        )
-    aliases = {item.source_alias for item in routed}
-    notices = tuple(
-        f"Usage report not offered for registry {notice.source_alias}: {notice.reason}."
-        for notice in loaded.value.notices
-        if notice.source_alias in aliases
-    )
-    prepared = loaded.value.prepare_routed(event, routed)
-    if isinstance(prepared, Err):
-        return _CliReporting(
-            loaded.value,
-            notices=notices,
-            warning="usage reports could not be prepared; the marketplace outcome is unchanged",
-        )
-    return _CliReporting(loaded.value, prepared.value, notices)
-
-
-def _reporting_plan_data(plan: ReportingPlan) -> dict[str, object]:
-    return {
-        "destination": f"{plan.destination.host}/{plan.destination.repository}",
-        "mode": plan.destination.mode.value,
-        "payload": json.loads(plan.payload.decode("utf-8")),
-        "browser_url": plan.browser_url,
-    }
-
-
-def _json_reporting_data(reporting: _CliReporting | None) -> dict[str, object] | None:
-    if reporting is None:
-        return None
-    if reporting.warning is not None:
-        return {
-            "status": "unavailable",
-            "warning": reporting.warning,
-            "notices": reporting.notices,
-        }
-    if not reporting.plans and not reporting.notices:
-        return None
-    submissions = []
-    for plan in reporting.plans:
-        status = "offered"
-        if plan.destination.mode.value == "automatic" and reporting.service is not None:
-            submitted = reporting.service.submit(plan)
-            status = "failed" if isinstance(submitted, Err) else submitted.value.status
-        submissions.append({**_reporting_plan_data(plan), "status": status})
-    return {
-        "status": "offered" if submissions else "unavailable",
-        "notices": reporting.notices,
-        "plans": submissions,
-    }
-
-
-def _read_reporting_consent(prompt: str) -> bool:
-    try:
-        return input(prompt).strip().lower() in {"y", "yes"}
-    except EOFError:
-        return False
-
-
-def _render_cli_reporting(reporting: _CliReporting | None) -> None:
-    if reporting is None:
-        return
-    for notice in reporting.notices:
-        print(notice)
-    if reporting.warning is not None:
-        print(f"warning: {reporting.warning}", file=sys.stderr)
-        return
-    if not reporting.plans:
-        return
-    print("Optional redacted usage reports are available for these artifact registries:")
-    for plan in reporting.plans:
-        print(f"  - {plan.destination.host}/{plan.destination.repository}")
-    for plan in reporting.plans:
-        target = f"{plan.destination.host}/{plan.destination.repository}"
-        if plan.destination.mode.value == "prompt":
-            if not sys.stdin.isatty():
-                print(
-                    f"Usage report for {target} was not submitted because stdin is not interactive."
-                )
-                continue
-            if not _read_reporting_consent(
-                f"Share this redacted usage report with {target}? [y/N]: "
-            ):
-                print("Usage report was not submitted.")
-                continue
-        print("Exact redacted usage report payload:")
-        print(plan.payload.decode("utf-8").strip())
-        if plan.destination.mode.value == "prompt" and not _read_reporting_consent(
-            "Open the prefilled GitHub issue? [y/N]: "
-        ):
-            print("Usage report was not submitted.")
-            continue
-        if reporting.service is None:
-            print("warning: usage reporting is unavailable; the marketplace outcome is unchanged")
-            continue
-        submitted = reporting.service.submit(plan)
-        if isinstance(submitted, Err):
-            print("warning: usage report submission failed; the marketplace outcome is unchanged")
-        else:
-            print(
-                "Usage report opened in the browser."
-                if submitted.value.status == "browser-opened"
-                else "Usage report submitted."
-            )
 
 
 def _emit_error(request: Request, result: Err, operation: str = _LIST_OPERATION) -> int:
@@ -1226,7 +1030,6 @@ def _configured_lifecycle(
     }
     lines = render_transaction_success(receipt, PresentationProfile.FAST)
     setup_payload: dict | None = None
-    reporting: _CliReporting | None = None
     projected = configured_consumer_completion(
         completed.value,
         runtime.loaded.effective,
@@ -1239,20 +1042,8 @@ def _configured_lifecycle(
             setup_payload, _setup_ok = _run_setup_queue(request, setup_service, review, outcome)
             payload["setup"] = setup_payload
             lines += render_setup_payload(setup_payload)
-        reporting = _prepare_cli_reporting(
-            request,
-            setup_service,
-            review,
-            outcome,
-            setup_payload,
-        )
-        reporting_data = _json_reporting_data(reporting) if request.json else None
-        if reporting_data is not None:
-            payload["reporting"] = reporting_data
     else:
-        lines += (
-            "warning: setup/reporting completion is unavailable; the installed payload is unchanged",
-        )
+        lines += ("warning: setup completion is unavailable; the installed payload is unchanged",)
     # Additive, and absent when there is nothing to say. An install that always carried the key --
     # empty -- would make every artifact look like one that was checked and found to need nothing,
     # which is a stronger claim than this seam makes.
@@ -1272,8 +1063,6 @@ def _configured_lifecycle(
         payload,
         lines,
     )
-    if not request.json:
-        _render_cli_reporting(reporting)
     return _common.OK if successful else _common.ERROR
 
 
@@ -1715,13 +1504,7 @@ def _configured_setup(request: Request, selectors: tuple[ArtifactSelector, ...])
         "setup": setup_payload,
     }
     lines = render_setup_payload(setup_payload)
-    reporting = _prepare_cli_reporting(request, service, review, outcome, setup_payload)
-    reporting_data = _json_reporting_data(reporting) if request.json else None
-    if reporting_data is not None:
-        payload["reporting"] = reporting_data
     _emit(request, operation, payload, lines)
-    if not request.json:
-        _render_cli_reporting(reporting)
     return _common.OK if setup_ok else _common.ERROR
 
 
@@ -1894,19 +1677,7 @@ def _lifecycle(request: Request, action: str) -> int:
     # that second operation and therefore reports the queue's terminal verdict as its exit status.
     setup_controls_exit = action == "setup"
     payload["ok"] = outcome.session_status != "failed" and (setup_ok or not setup_controls_exit)
-    reporting = _prepare_cli_reporting(
-        request,
-        service.value,
-        review,
-        outcome,
-        setup_payload,
-    )
-    reporting_data = _json_reporting_data(reporting) if request.json else None
-    if reporting_data is not None:
-        payload["reporting"] = reporting_data
     _emit(request, operation, payload, lines)
-    if not request.json:
-        _render_cli_reporting(reporting)
     if outcome.session_status in {"failed", "partial"} or (setup_controls_exit and not setup_ok):
         return _common.ERROR
     return _common.OK

@@ -3112,7 +3112,7 @@ class CanonicalScreenSource:
         if screen is MaintainerScreen.SOURCE_ADD:
             return ("alias", "kind", "location", "ref", "connect")
         if screen is MaintainerScreen.REGISTRY_INIT:
-            return ("id", "name", "reporting", "commit", "initialize")
+            return ("id", "name", "commit", "initialize")
         if screen is MaintainerScreen.REGISTRY_REBUILD:
             # Derived from the sequence itself: a stage the run gains is a row the picker offers.
             return (REGISTRY_REBUILD_EVERYTHING, *REGISTRY_MAINTENANCE_STAGES)
@@ -4167,14 +4167,12 @@ class CanonicalScreenSource:
             values = {
                 "id": init.registry_id or "<type a name like acme-registry>",
                 "name": init.display_name or "<type what people should call it>",
-                "reporting": init.usage_reporting or "not enabled",
                 "commit": "yes, one local commit" if init.commit else "no, leave the files staged",
                 "initialize": "Review the five stages",
             }
             labels = {
                 "id": "Registry ID",
                 "name": "Display name",
-                "reporting": "Usage reporting",
                 "commit": "Local commit",
                 "initialize": "Continue",
             }

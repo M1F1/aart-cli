@@ -5,7 +5,6 @@ from agent_artifacts.configuration.model import (
     CompanyReviewedSource,
     ConfiguredSource,
     OrganizationPolicy,
-    ReportingSettings,
     SourceKind,
     SyncSettings,
     UserConfiguration,
@@ -209,7 +208,6 @@ def effective_configuration(
         sources,
         None if default_registry is None else SourceAlias(default_registry),
         SyncSettings(),
-        ReportingSettings(),
     )
     policy = OrganizationPolicy(1, company_reviewed_sources=company_sources)
     effective = apply_configuration(user, RuntimeOverrides(), policy)

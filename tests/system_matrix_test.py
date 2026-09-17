@@ -19,7 +19,6 @@ EXPECTED_SCENARIOS = (
     "corrupt-lock-object",
     "setup-partial",
     "security-provider-failure",
-    "reporting-absent",
 )
 
 
@@ -99,7 +98,7 @@ class SystemMatrixTest(unittest.TestCase):
             parent = Path(raw)
             failed = matrix.run_matrix(
                 REPO_ROOT,
-                selected=("reporting-absent",),
+                selected=("security-provider-failure",),
                 process_runner=fail,
                 temporary_parent=parent,
             )
@@ -116,7 +115,7 @@ class SystemMatrixTest(unittest.TestCase):
         self.assertEqual(timed_out["scenarios"][0]["diagnostic_code"], "scenario-timeout")
         self.assertEqual(
             failed["recovery_commands"],
-            ["python scripts/system_matrix.py --scenario reporting-absent --json"],
+            ["python scripts/system_matrix.py --scenario security-provider-failure --json"],
         )
         self.assertEqual(
             timed_out["recovery_commands"],

@@ -17,7 +17,6 @@ from pathlib import Path
 
 from agent_artifacts.configuration.model import (
     ConfiguredSource,
-    ReportingSettings,
     SourceKind,
     SyncMode,
     SyncSettings,
@@ -47,13 +46,7 @@ def _configure_cold_source(env) -> None:
     cold = ConfiguredSource(SourceAlias("mirror"), SourceKind.SOURCE_LOCAL, str(mirror), None, True)
     Path(env.paths.user_config_file).write_bytes(
         user_configuration_bytes(
-            UserConfiguration(
-                1,
-                (env.source, cold),
-                None,
-                SyncSettings(mode=SyncMode.MANUAL),
-                ReportingSettings(),
-            )
+            UserConfiguration(1, (env.source, cold), None, SyncSettings(mode=SyncMode.MANUAL))
         )
     )
 

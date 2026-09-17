@@ -13,11 +13,7 @@ import pathlib
 import re
 import unittest
 
-from agent_artifacts.registry_commands.templates import (
-    REGISTRY_CI_WORKFLOW,
-    USAGE_REPORT_DASHBOARD_WORKFLOW,
-    USAGE_REPORT_VALIDATE_WORKFLOW,
-)
+from agent_artifacts.registry_commands.templates import REGISTRY_CI_WORKFLOW
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 PAGE = ROOT / "docs" / "ci" / "github-enterprise-rollout.md"
@@ -37,13 +33,7 @@ ACTIONS = tuple(sorted((ROOT / ".github" / "actions").rglob("action.yml")))
 # The registry's workflow has one home: the bytes `registry init` writes.  A second copy under
 # docs/ would rot, and `plan_registry_init` refuses a template whose content has drifted.
 TEMPLATE_TEXT = REGISTRY_CI_WORKFLOW.decode("utf-8")
-# `registry init` writes three workflows.  Portability that stops at the quality gate leaves the
-# usage-reporting half reaching github.com from inside an Enterprise instance.
-_SHIPPED = {
-    "registry quality": REGISTRY_CI_WORKFLOW,
-    "usage validate": USAGE_REPORT_VALIDATE_WORKFLOW,
-    "usage dashboard": USAGE_REPORT_DASHBOARD_WORKFLOW,
-}
+_SHIPPED = {"registry quality": REGISTRY_CI_WORKFLOW}
 EMITTED = {label: body.decode("utf-8") for label, body in _SHIPPED.items()}
 _VARIABLE = re.compile(r"vars\.(AART_[A-Z0-9_]+)")
 _SECRET = re.compile(r"secrets(\.[A-Za-z_][A-Za-z0-9_]*|\[[^\]]+\])")
@@ -367,30 +357,6 @@ class EveryEmittedWorkflowIsPortableTest(unittest.TestCase):
             self.assertNotIn("runs-on: ubuntu-latest", body, label)
             self.assertIn("fromJSON(vars.AART_RUNNER", body, label)
 
-    def test_gh_is_pointed_at_the_instance_the_job_runs_on(self) -> None:
-        """`gh --repo owner/name` defaults to github.com, which on GHES is the wrong server."""
-
-        for label, body in EMITTED.items():
-            if "gh issue" not in body and "gh label" not in body:
-                continue
-            self.assertIn("GH_HOST=${GH_HOST_OVERRIDE:-${GITHUB_SERVER_URL#https://}}", body, label)
-
-    def test_pages_deployment_can_be_switched_off(self) -> None:
-        """An Enterprise instance may not offer Pages; the dashboard must still be built."""
-
-        dashboard = EMITTED["usage dashboard"]
-        self.assertIn("vars.AART_PAGES != 'false'", dashboard)
-        self.assertIn("aart reporting aggregate", dashboard)
-        # The build and the publication are separate jobs, so the gate can skip one and keep the
-        # other, and so the github-pages environment belongs only to the job that deploys.  It
-        # waits on both shapes of the build and tolerates the one that stood down, which is what
-        # `!cancelled()` buys: without it, a skipped dependency skips the dependent too.
-        self.assertIn("needs: [aggregate, aggregate-private-image]", dashboard)
-        self.assertIn("!cancelled() && !failure()", dashboard)
-        # Deployment runs no Python and never fetches AART, so it needs no image at all.
-        deploy = _job_bodies(dashboard)["deploy"]
-        self.assertNotIn("container", deploy)
-
 
 class RegistryGatesAreCompleteTest(unittest.TestCase):
     def test_the_template_runs_every_registry_gate(self) -> None:
@@ -654,11 +620,9 @@ class VariablesCannotWeakenTheGatesTest(unittest.TestCase):
     }
 
     #: `AART_IMAGE_USERNAME_SECRET` chooses which of two identical shapes of a job runs, and
-    #: `TheContainerSwitchTest` holds the two to the same steps. `AART_PAGES` decides whether a
-    #: dashboard is *published* on an instance that offers no Pages; the build above it still runs,
-    #: which `test_pages_deployment_can_be_switched_off` holds. Neither decides whether anything is
-    #: checked. A third name here is a new power over the quality contract and needs its own case.
-    INFRASTRUCTURE = frozenset({"AART_IMAGE_USERNAME_SECRET", "AART_PAGES"})
+    #: `TheContainerSwitchTest` holds the two to the same steps. A second name here is a new power
+    #: over the quality contract and needs its own case.
+    INFRASTRUCTURE = frozenset({"AART_IMAGE_USERNAME_SECRET"})
 
     def _conditions(self, text: str) -> list[str]:
         """Every condition, in both spellings.
@@ -683,9 +647,13 @@ class VariablesCannotWeakenTheGatesTest(unittest.TestCase):
         """The guard: an empty harvest would make every assertion below vacuous."""
 
         found = {label: self._conditions(text) for label, text in self.SOURCES.items()}
-        self.assertGreater(sum(len(items) for items in found.values()), 20)
+        self.assertGreater(sum(len(items) for items in found.values()), 5)
         self.assertEqual(["if: a", "if: b"], self._conditions("    - if: a\n      if: b\n"))
-        for label in ("pr-check.yml", "usage dashboard"):
+        # One committed workflow and one emitted template, because the harvest reads both and a
+        # guard that only proved the committed half would go quiet if the emitted half stopped
+        # being read at all.  `usage dashboard` stood here until CP-25 withdrew that workflow;
+        # `registry quality` is the emitted source that outlived it.
+        for label in ("pr-check.yml", "registry quality"):
             key = next(name for name in found if name.endswith(label))
             self.assertTrue(found[key], f"{label} yielded no conditions")
 
@@ -772,7 +740,7 @@ class NoPublicHostIsReachedThatAVariableCannotRetargetTest(unittest.TestCase):
 
     def test_the_sources_really_carry_urls_to_read(self) -> None:
         found = sum(len(_URL.findall(_uncommented(text))) for text in self.SOURCES.values())
-        self.assertGreater(found, 8)
+        self.assertGreater(found, 5)
 
     def test_every_absolute_url_is_a_variable_default(self) -> None:
         """Both spellings of "default": the expression form and the shell form."""

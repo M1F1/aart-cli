@@ -22,6 +22,7 @@ from agent_artifacts.protocol.native_models import ArtifactManifest
 __all__ = [
     "SETUP_MANUAL_FILENAME",
     "DeclaredArtifactSetup",
+    "SetupRunState",
     "declared_artifact_setup",
     "declared_setup_to_data",
 ]
@@ -29,6 +30,27 @@ __all__ = [
 #: The document a package carrying setup must also carry, at its root. `compile_native_package`
 #: refuses a setup declaration without one, so a promoted artifact that declares setup has it.
 SETUP_MANUAL_FILENAME = "SETUP.md"
+_SETUP_FAILURE_PHASES = frozenset({"verification", "rollback", "queue", "setup-installer"})
+
+
+@dataclass(frozen=True, slots=True)
+class SetupRunState:
+    """One setup queue item's terminal state, independent of any reporting transport."""
+
+    key: str
+    status: str
+    installer_digest: ObjectDigest | None = None
+    failure_phase: str | None = None
+    failure_code: str | None = None
+
+    def __post_init__(self) -> None:
+        if (
+            not self.key
+            or not self.status
+            or (self.failure_phase is None) != (self.failure_code is None)
+            or (self.failure_phase is not None and self.failure_phase not in _SETUP_FAILURE_PHASES)
+        ):
+            raise ValueError("setup run state is invalid")
 
 
 @dataclass(frozen=True, slots=True)

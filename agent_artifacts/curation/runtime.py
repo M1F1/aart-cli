@@ -427,16 +427,12 @@ class LocalCurationService:
                 request.display_name,
                 minimum.value,
                 maximum.value,
-                request.usage_reporting_repository,
             )
         except ValueError as error:
             return _error(str(error))
         planned = prepare_registry_init(options, output=self.workspace)
         if isinstance(planned, Err):
             return planned
-        # `QA-013`/`D-180`: init writes the usage-reporting templates only when a destination is
-        # named, so there is nothing inert to warn about. Warning that an unchosen optional
-        # feature was not chosen is a non-finding (`QA-015`), and the review is read in the TUI where a flag name is not an action.
         warnings: tuple[str, ...] = ()
         # Two questions, two homes, and `init` owes the reader both.  *Which* AART is the
         # registry's own decision and is now pinned in a file it can review and revert; *where

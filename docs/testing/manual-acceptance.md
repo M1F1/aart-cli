@@ -124,10 +124,9 @@ Each entry records:
       `config.toml`, project-local hooks are disabled until the operator trusts the project, and
       every new or changed hook is held for interactive review — a file AART wrote would not run.
 
-- [ ] **QA-013 — `registry init` generates unused usage-reporting automation by default.** The
-      usage-reporting Issue Form and its two workflows are now generated only when
-      `--usage-reporting-repository` names a destination, and the generated README describes the
-      registry that was actually created. B-087/D-180.
+- [ ] **QA-013 — `registry init` carries no withdrawn usage-reporting automation.** The obsolete
+      Issue Form, validation workflow and dashboard/Pages workflow are not generated, advertised,
+      or offered by the command. CP-25.06/D-292.
 
 - [ ] **QA-014 — Successful `registry init --yes` output is overwhelming and repetitive.** The
       outcome no longer repeats the warnings its review just stated, drops the `observed:` line
@@ -138,11 +137,10 @@ Each entry records:
 - [ ] **QA-015 — Audit of a valid empty Registry reports non-actionable warnings as problems.** The
       provenance-coverage and installation-risk findings are now `info` notes when the registry
       holds neither an external reference nor an owned package, and warnings again as soon as
-      either exists. `registry init` also stopped warning that the usage-reporting templates were
-      inert, because D-180 no longer writes them. B-089/D-181.
+      either exists. B-089/D-181.
 
 - [ ] **QA-016 — A new Registry cannot be initialized through Maintainer TUI.** Screen 46 now
-      offers `n` Initialize Registry with its own id/name/reporting/commit form (46a) and an exact
+      offers `n` Initialize Registry with its own id/name/commit form (46a) and an exact
       review (46b) that names all five stages. One confirmation runs init → lock → build → validate
       → audit, fail-fast, through the same curation service and planning gates the CLI drives, and
       draws stage by stage what each did. The local commit is opt-in and part of the review digest;

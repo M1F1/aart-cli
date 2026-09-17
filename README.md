@@ -277,8 +277,7 @@ passed, what is dropped, and what to configure instead — `https_proxy` is drop
 proxy that is the whole failure.
 
 `registry init` turns an empty checkout into a registry: the two JSON markers, a `.gitignore`,
-the quality workflow (plus the two usage-reporting workflows when `--usage-reporting-repository` is
-given), a `README.md` describing the registry it just made, and a `.aart-version` pinning the AART
+the quality workflow, a `README.md` describing the registry it just made, and a `.aart-version` pinning the AART
 that created it. Those last two are written only when absent — they are the files
 you own afterwards, and AART never compares or overwrites them. The workflows and the JSON are
 managed: hand-edit one and `init` refuses the registry.
@@ -289,10 +288,8 @@ set repository variables — no file in the registry changes. See
 
 ```sh
 # Create a registry
-aart registry init --source . --source-id company --display-name "Company Registry" \
-  --usage-reporting-repository acme/agent-registry
-aart registry init --source . --source-id company --display-name "Company Registry" \
-  --usage-reporting-repository acme/agent-registry --yes
+aart registry init --source . --source-id company --display-name "Company Registry"
+aart registry init --source . --source-id company --display-name "Company Registry" --yes
 
 # Author a package, or review a native package from another repository
 aart registry scaffold skill code-review --source . --summary "Review code." \
@@ -370,7 +367,6 @@ aart doctor
 aart reset
 aart registry init|scaffold|collection|scan|promote|adopt|check-upstream|discover|format|promote-native|vendor|vendor-batch|revendor|refresh-native|validate|lock|build|audit|publish|push|test|diff
 aart security scan|show|verify|analyzers|suites
-aart reporting validate-event|validate-issue|aggregate
 aart upgrade --wheel FILE | --source-checkout DIR
 ```
 

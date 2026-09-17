@@ -19,7 +19,6 @@ from unittest import mock
 
 from agent_artifacts import cli
 from agent_artifacts.configuration.model import (
-    ReportingSettings,
     SourceKind,
     SyncSettings,
     UserConfiguration,
@@ -75,13 +74,7 @@ class _Environment:
             xdg_cache_home=self.xdg["XDG_CACHE_HOME"],
         )
         self.source = configured_source("company", SourceKind.REGISTRY_GIT)
-        configuration = UserConfiguration(
-            1,
-            (self.source,),
-            self.source.alias,
-            SyncSettings(),
-            ReportingSettings(),
-        )
+        configuration = UserConfiguration(1, (self.source,), self.source.alias, SyncSettings())
         config_path = pathlib.Path(self.paths.user_config_file)
         config_path.parent.mkdir(parents=True, exist_ok=True)
         config_path.write_bytes(user_configuration_bytes(configuration))
@@ -115,7 +108,7 @@ class _Environment:
     def disable_source(self) -> None:
         """Remove the registry subscription, leaving what it delivered installed."""
 
-        configuration = UserConfiguration(1, (), None, SyncSettings(), ReportingSettings())
+        configuration = UserConfiguration(1, (), None, SyncSettings())
         pathlib.Path(self.paths.user_config_file).write_bytes(
             user_configuration_bytes(configuration)
         )

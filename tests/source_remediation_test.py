@@ -252,9 +252,7 @@ def _registry(alias: str, location: str) -> ConfiguredSource:
 
 def _view(*sources: ConfiguredSource):
     baseline = default_user_configuration()
-    configuration = UserConfiguration(
-        baseline.schema_version, sources, None, baseline.sync, baseline.reporting
-    )
+    configuration = UserConfiguration(baseline.schema_version, sources, None, baseline.sync)
     stage = build_source_stage(configuration, OrganizationPolicy(1), {}, first_run=False)
     assert not isinstance(stage, Err), stage
     return stage.value

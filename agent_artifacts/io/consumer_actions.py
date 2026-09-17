@@ -510,8 +510,8 @@ _Pending = (
     | PreparedConfiguredConfiguration
 )
 
-#: The host is passed rather than closed over: setup and usage reporting describe the installation
-#: that just happened, and it happened at whichever scope the review was prepared against.
+#: The host is passed rather than closed over: setup describes the installation that just happened,
+#: and it happened at whichever scope the review was prepared against.
 ConfiguredCompletionFactory = Callable[
     [
         CompletedConfiguredInstallation,
@@ -1135,7 +1135,6 @@ class LocalConsumerActions:
         refused = registry_identity_refusal(
             registry_id=draft.registry_id,
             display_name=draft.display_name,
-            usage_reporting_repository=draft.usage_reporting or None,
         )
         if refused is not None:
             return self._declined(command, _refusal(refused.diagnostics))
@@ -1145,7 +1144,6 @@ class LocalConsumerActions:
                 "workspace": workspace,
                 "registry_id": draft.registry_id,
                 "display_name": draft.display_name,
-                "usage_reporting": draft.usage_reporting,
                 "commit": draft.commit,
             },
             sort_keys=True,
@@ -1161,7 +1159,6 @@ class LocalConsumerActions:
                     f"  project: {workspace}",
                     f"  registry ID: {draft.registry_id}",
                     f"  display name: {draft.display_name}",
-                    f"  usage reporting: {draft.usage_reporting or 'not enabled'}",
                     f"  local commit: {'yes' if draft.commit else 'no'}",
                     "  next: init writes the registry skeleton, lock pins what it references,",
                     "        build writes its index, then validate and audit check the result",

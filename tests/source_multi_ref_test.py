@@ -12,7 +12,6 @@ import unittest
 
 from agent_artifacts.configuration.model import (
     ConfiguredSource,
-    ReportingSettings,
     SourceKind,
     SyncSettings,
     UserConfiguration,
@@ -39,7 +38,6 @@ class MultiRefSchemaTests(unittest.TestCase):
             (_git("main-track", ORIGIN, "main"), _git("release-track", ORIGIN, "release/1.0")),
             None,
             SyncSettings(),
-            ReportingSettings(),
         )
 
         parsed = parse_user_configuration(user_configuration_bytes(configuration))
@@ -103,7 +101,7 @@ class MultiRefStorageTests(unittest.TestCase):
 class MultiRefAdditionTests(unittest.TestCase):
     def _stage(self, *sources: ConfiguredSource):
         view = build_source_stage(
-            UserConfiguration(1, sources, None, SyncSettings(), ReportingSettings()),
+            UserConfiguration(1, sources, None, SyncSettings()),
             default_organization_policy(),
             {},
             first_run=False,

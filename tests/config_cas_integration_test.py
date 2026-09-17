@@ -18,7 +18,6 @@ from unittest import mock
 from agent_artifacts import cli
 from agent_artifacts.configuration.model import (
     ConfiguredSource,
-    ReportingSettings,
     SourceKind,
     SyncSettings,
     UserConfiguration,
@@ -58,9 +57,7 @@ class _Environment:
 
     def write_configuration(self, *sources: ConfiguredSource) -> None:
         self.config_path.write_bytes(
-            user_configuration_bytes(
-                UserConfiguration(1, sources, None, SyncSettings(), ReportingSettings())
-            )
+            user_configuration_bytes(UserConfiguration(1, sources, None, SyncSettings()))
         )
 
     def add_source(self, alias: str):

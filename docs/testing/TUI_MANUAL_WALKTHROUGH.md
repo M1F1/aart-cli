@@ -140,7 +140,6 @@ joins it as status, not as a description.
 |---|---|
 | Registry ID | `manual-registry` — a slug, this is the name coordinates are built from |
 | Display name | `Manual Registry` — what people see |
-| Usage reporting | leave at `not enabled` |
 | Local commit | `Space` to choose `yes, one local commit` |
 | Continue | `Enter` — *Review the five stages* |
 

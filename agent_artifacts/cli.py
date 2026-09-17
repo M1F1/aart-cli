@@ -39,12 +39,6 @@ def _run_security(request: Request) -> int:
     return security.run(request)
 
 
-def _run_reporting(request: Request) -> int:
-    from .commands import reporting
-
-    return reporting.run(request)
-
-
 def _run_source(request: Request) -> int:
     from .commands import source
 
@@ -74,7 +68,6 @@ DISPATCH: dict[str, Callable[[Request], int]] = {
     "upgrade": upgrade.run,
     "registry": _run_registry,
     "security": _run_security,
-    "reporting": _run_reporting,
     "source": _run_source,
     "marketplace": _run_marketplace,
     "doctor": _run_doctor,
@@ -699,14 +692,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_init.add_argument(
         "--display-name", required=True, metavar="TEXT", help="human-readable registry name"
-    )
-    p_init.add_argument(
-        "--usage-reporting-repository",
-        metavar="OWNER/REPOSITORY",
-        help=(
-            "advertise this registry's GitHub Issues repository for optional prompt-only usage "
-            "reports"
-        ),
     )
     p_init.add_argument(
         # A registry initialised today cannot honestly claim an older AART can read it: the
@@ -1457,27 +1442,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_security = security_sub.add_parser("suites", help="list built-in analyzer suites")
     _add_json(p_security)
 
-    # reporting -------------------------------------------------------------- #
-    p = sub.add_parser(
-        "reporting",
-        help="validate and aggregate registry-owned redacted usage reports",
-    )
-    reporting_sub = p.add_subparsers(dest="reporting_action", metavar="ACTION", required=True)
-    for action in ("validate-event", "validate-issue"):
-        target = reporting_sub.add_parser(
-            action, help=f"validate one {action.removeprefix('validate-')}"
-        )
-        target.add_argument("reporting_input", metavar="FILE", help="input path or - for stdin")
-    target = reporting_sub.add_parser("aggregate", help="build a static dashboard from gh JSON")
-    target.add_argument("reporting_input", metavar="FILE", help="issue export path or - for stdin")
-    target.add_argument(
-        "--output",
-        dest="reporting_output",
-        required=True,
-        metavar="DIR",
-        help="directory for index.html and usage.json",
-    )
-
     return parser
 
 
@@ -1539,7 +1503,6 @@ def _to_request(args: argparse.Namespace) -> Request:
         frozen=bool(getattr(args, "frozen", False)),
         source_id=getattr(args, "source_id", None),
         display_name=getattr(args, "display_name", None),
-        usage_reporting_repository=getattr(args, "usage_reporting_repository", None),
         summary=getattr(args, "summary", None),
         collection_members=tuple(getattr(args, "collection_members", ()) or ()),
         discovery_checkout=getattr(args, "discovery_checkout", None),
@@ -1578,9 +1541,6 @@ def _to_request(args: argparse.Namespace) -> Request:
         publisher_source_id=getattr(args, "publisher_source_id", None),
         security_registry_inputs_digest=getattr(args, "security_registry_inputs_digest", None),
         publisher_trust=getattr(args, "publisher_trust", None),
-        reporting_action=getattr(args, "reporting_action", None),
-        reporting_input=getattr(args, "reporting_input", None),
-        reporting_output=getattr(args, "reporting_output", None),
         source_action=getattr(args, "source_action", None),
         source_alias=getattr(args, "source_alias", None),
         source_kind=getattr(args, "source_kind", None),

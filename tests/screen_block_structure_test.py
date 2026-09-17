@@ -776,7 +776,7 @@ class ReviewScreenBlockTest(TestCase):
     def test_creating_a_registry_names_it_and_says_whether_a_commit_is_made(self) -> None:
         rendered = self._frame(
             MaintainerScreen.REGISTRY_INIT_REVIEW,
-            registry_init_draft=RegistryInitDraft("acme-registry", "Acme", "", True),
+            registry_init_draft=RegistryInitDraft("acme-registry", "Acme", True),
         )
 
         self.assertIn("Create acme-registry, called Acme, in this project.", rendered)

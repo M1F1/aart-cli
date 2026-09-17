@@ -433,12 +433,12 @@
         },
         {
           "id": "8",
-          "title": "Harness delivery is one honest answer across Artifact Details, review, Remediation and Success (QA-078/QA-079/QA-080) \u2014 diagnosed in D-231, lands with step 3's setup path",
+          "title": "Harness delivery is one honest answer across Artifact Details, review, Remediation and Success (QA-078/QA-079/QA-080) — diagnosed in D-231, lands with step 3's setup path",
           "status": "done"
         },
         {
           "id": "9",
-          "title": "Publish the reviewed registry commit from inside AART to a configured branch that is never the default (QA-082/QA-055, D-228) \u2014 rule, command and push adapter done; the Registry Commit screen action is next",
+          "title": "Publish the reviewed registry commit from inside AART to a configured branch that is never the default (QA-082/QA-055, D-228) — rule, command and push adapter done; the Registry Commit screen action is next",
           "status": "done"
         },
         {
@@ -712,22 +712,22 @@
         {
           "id": "4",
           "title": "A consumer is no longer offered a usage report",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "5",
           "title": "The `aart reporting` verb and its package are removed",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "6",
           "title": "A scaffolded registry no longer carries the issue and dashboard workflows",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "7",
           "title": "The documents stop promising it, and name the activity log as the seam",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "8",

@@ -13,7 +13,6 @@ from unittest import TestCase
 from agent_artifacts.configuration.model import (
     ConfiguredSource,
     OrganizationPolicy,
-    ReportingSettings,
     SourceKind,
     SyncSettings,
     UserConfiguration,
@@ -76,7 +75,7 @@ class SourceSyncWithoutADefaultRegistryTest(TestCase):
             SourceAlias("authors"), SourceKind.SOURCE_LOCAL, "/work/authors", None, True
         )
         effective = EffectiveConfiguration(
-            UserConfiguration(1, (source,), None, SyncSettings(), ReportingSettings()),
+            UserConfiguration(1, (source,), None, SyncSettings()),
             OrganizationPolicy(1),
             (),
         )

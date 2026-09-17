@@ -38,7 +38,6 @@ SCHEMA_INPUTS = (
     "agent_artifacts/protocol/native_schema.py",
     "agent_artifacts/protocol/registry_models.py",
     "agent_artifacts/protocol/registry_schema.py",
-    "agent_artifacts/reporting/schema.py",
     "agent_artifacts/security/analyzers.py",
     "agent_artifacts/security/attestation_schema.py",
     "agent_artifacts/security/schema.py",
@@ -76,7 +75,6 @@ PROTOCOL_VERSIONS = {
     "installation_state": 2,
     "native_source": 1,
     "registry": 1,
-    "reporting": 1,
     "security_assessment": 1,
     # Revision 1 is rejected at parse time rather than carried behind a compatibility branch, so
     # the single supported revision is the one recorded here.

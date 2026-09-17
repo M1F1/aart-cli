@@ -146,7 +146,6 @@ def _configuration_operations(
     if (
         before.schema_version != after.schema_version
         or before.sync != after.sync
-        or before.reporting != after.reporting
         or tuple(source.alias for source in before.sources)
         != tuple(source.alias for source in after.sources)
     ):
@@ -221,7 +220,6 @@ class SourceAdditionRequest:
         if (
             self.before.schema_version != self.after.schema_version
             or self.before.sync != self.after.sync
-            or self.before.reporting != self.after.reporting
         ):
             raise ValueError("source addition may not change unrelated configuration")
         before_by_alias = {item.alias: item for item in self.before.sources}

@@ -59,7 +59,7 @@ def _state(screen, **changes) -> ConsumerUiState:
     )
 
 
-_FORM_ROWS = ("id", "name", "reporting", "commit", "initialize")
+_FORM_ROWS = ("id", "name", "commit", "initialize")
 
 #: What screen 46a can put in a text row: one printable key at a time, never a line break.
 _TYPEABLE = " \t-abcMANUAL/.0"
@@ -112,13 +112,13 @@ class MaintainerRegistryInitInteractionTest(unittest.TestCase):
 
         self.assertIn("Registry ID", drawn)
         self.assertIn("Display name", drawn)
-        self.assertIn("Usage reporting", drawn)
+        self.assertNotIn("Usage reporting", drawn)
         self.assertIn("Local commit", drawn)
         self.assertNotIn("aart ", drawn)
         self.assertIn("pushed", drawn)
 
     def test_space_chooses_whether_a_local_commit_is_made(self) -> None:
-        state = _state(MaintainerScreen.REGISTRY_INIT, rows=_FORM_ROWS, cursor=3)
+        state = _state(MaintainerScreen.REGISTRY_INIT, rows=_FORM_ROWS, cursor=2)
 
         self.assertIs(state.registry_init_draft.commit, False)
         state, _ = reduce_consumer_ui(state, key_event(" ", state))  # type: ignore[arg-type]
@@ -136,12 +136,12 @@ class MaintainerRegistryInitInteractionTest(unittest.TestCase):
         self.assertEqual(state.cursor, 0)
 
     def test_confirming_the_form_carries_the_exact_draft_into_one_review(self) -> None:
-        draft = RegistryInitDraft("acme-registry", "ACME Registry", "", True)
+        draft = RegistryInitDraft("acme-registry", "ACME Registry", True)
         state = _state(
             MaintainerScreen.REGISTRY_INIT,
             rows=_FORM_ROWS,
             registry_init_draft=draft,
-            cursor=4,
+            cursor=3,
         )
 
         event = key_event("enter", state)
@@ -402,7 +402,7 @@ class MaintainerRegistryInitActionTest(unittest.TestCase):
         with _environment() as env, mock.patch.dict(os.environ, env.xdg, clear=False):
             actions = self._composed(env)
             prepared = self._prepare(
-                actions, RegistryInitDraft("acme-registry", "ACME Registry", "", False)
+                actions, RegistryInitDraft("acme-registry", "ACME Registry", False)
             )
 
         self.assertTrue(prepared.event.review_digest)
@@ -418,7 +418,7 @@ class MaintainerRegistryInitActionTest(unittest.TestCase):
 
         with _environment() as env, mock.patch.dict(os.environ, env.xdg, clear=False):
             actions = self._composed(env)
-            update = self._prepare(actions, RegistryInitDraft("", "ACME Registry", "", False))
+            update = self._prepare(actions, RegistryInitDraft("", "ACME Registry", False))
 
         self.assertEqual(update.event.review_digest, "")
         self.assertNotIn("aart ", "\n".join(update.source.screens.notice))
@@ -431,14 +431,14 @@ class MaintainerRegistryInitActionTest(unittest.TestCase):
         with _environment() as env, mock.patch.dict(os.environ, env.xdg, clear=False):
             actions = self._composed(env)
             prepared = self._prepare(
-                actions, RegistryInitDraft("acme-registry ", " ACME Registry", " ", False)
+                actions, RegistryInitDraft("acme-registry ", " ACME Registry", False)
             )
 
         self.assertTrue(prepared.event.review_digest, "a stray space refused a usable identity")
         notice = "\n".join(prepared.source.screens.notice)
         self.assertIn("  registry ID: acme-registry\n", notice + "\n")
         self.assertIn("  display name: ACME Registry\n", notice + "\n")
-        self.assertIn("usage reporting: not enabled", notice)
+        self.assertNotIn("usage reporting", notice.lower())
 
     def test_one_confirmation_really_creates_the_registry_in_this_project(self) -> None:
         """End to end through the action boundary: no stubbed port, real files afterwards."""
@@ -450,7 +450,7 @@ class MaintainerRegistryInitActionTest(unittest.TestCase):
             # maintainer could not review and revert what it wrote.
             _repository(str(env.project))
             actions = self._composed(env)
-            draft = RegistryInitDraft("acme-registry", "ACME Registry", "", False)
+            draft = RegistryInitDraft("acme-registry", "ACME Registry", False)
             prepared = self._prepare(actions, draft)
             self.assertTrue(prepared.event.review_digest)
             finished = actions.handle(
@@ -490,10 +490,10 @@ class MaintainerRegistryInitActionTest(unittest.TestCase):
         with _environment() as env, mock.patch.dict(os.environ, env.xdg, clear=False):
             actions = self._composed(env)
             quiet = self._prepare(
-                actions, RegistryInitDraft("acme-registry", "ACME Registry", "", False)
+                actions, RegistryInitDraft("acme-registry", "ACME Registry", False)
             )
             committing = self._prepare(
-                actions, RegistryInitDraft("acme-registry", "ACME Registry", "", True)
+                actions, RegistryInitDraft("acme-registry", "ACME Registry", True)
             )
 
         self.assertTrue(quiet.event.review_digest)
@@ -515,7 +515,7 @@ class MaintainerRegistryInitActionTest(unittest.TestCase):
             actions._registry_bootstrap = lambda draft: Ok(  # type: ignore[assignment]
                 RegistryBootstrapCompletion(failing)
             )
-            draft = RegistryInitDraft("acme-registry", "ACME Registry", "", False)
+            draft = RegistryInitDraft("acme-registry", "ACME Registry", False)
             prepared = self._prepare(actions, draft)
             finished = actions.handle(
                 ConsumerUiCommand(
@@ -539,52 +539,49 @@ class RegistryIdentityWhitespaceTest(unittest.TestCase):
     """`QA-058`: a space keystroke must not be able to make the form refuse itself.
 
     Screen 46a's status bar offers `[Space] Toggle`, and on a text row a printable key is text: the
-    space it types lands in the answer instead of toggling anything.  None of the three answers has
-    a space at either end -- an identifier is a slug, a display name is one line, a reporting
-    repository is `owner/name` -- so surrounding whitespace is not part of what the operator said
+    space it types lands in the answer instead of toggling anything. Neither text answer has a
+    space at either end, so surrounding whitespace is not part of what the operator said
     and the identity is judged without it.  It is settled at the boundary rather than while typing,
     because `Manual Registry` has to remain typeable one key at a time.
     """
 
     def test_a_stray_space_is_not_part_of_what_the_operator_named(self) -> None:
-        draft = RegistryInitDraft("manual-registry ", "  Manual Registry ", " ", True)
+        draft = RegistryInitDraft("manual-registry ", "  Manual Registry ", True)
 
         self.assertEqual(
             draft.settled(),
-            RegistryInitDraft("manual-registry", "Manual Registry", "", True),
+            RegistryInitDraft("manual-registry", "Manual Registry", True),
         )
 
     def test_settling_an_already_settled_draft_changes_nothing(self) -> None:
-        settled = RegistryInitDraft("manual-registry", "Manual Registry", "acme/usage", False)
+        settled = RegistryInitDraft("manual-registry", "Manual Registry", False)
 
         self.assertEqual(settled.settled(), settled)
 
     @given(
         st.text(alphabet=_TYPEABLE, max_size=24),
         st.text(alphabet=_TYPEABLE, max_size=24),
-        st.text(alphabet=_TYPEABLE, max_size=24),
         st.booleans(),
     )
     def test_settling_drops_the_edges_and_nothing_else(
-        self, identifier: str, name: str, reporting: str, commit: bool
+        self, identifier: str, name: str, commit: bool
     ) -> None:
         """Universal, so stated over generated input: whatever was typed, only the edges go."""
 
-        settled = RegistryInitDraft(identifier, name, reporting, commit).settled()
+        settled = RegistryInitDraft(identifier, name, commit).settled()
 
         self.assertEqual(settled.registry_id, identifier.strip())
         self.assertEqual(settled.display_name, name.strip())
-        self.assertEqual(settled.usage_reporting, reporting.strip())
         self.assertEqual(settled.commit, commit)
         self.assertEqual(settled.settled(), settled)
 
 
 class RegistryIdentityRefusalTest(unittest.TestCase):
-    """`QA-058`: three answers are on the screen, so a refusal has to say which one it means.
+    """`QA-058`: two answers are on the screen, so a refusal has to say which one it means.
 
     The form cannot answer with a command line (`QA-017`), which makes the refusal the operator's
     only instrument for finding the mistake.  One that says the identity is unusable without saying
-    which of the three is unusable leaves them re-reading all three.
+    which one is unusable leaves them re-reading both.
     """
 
     def test_the_refusal_names_the_identifier_when_the_identifier_is_the_fault(self) -> None:
@@ -607,32 +604,15 @@ class RegistryIdentityRefusalTest(unittest.TestCase):
         self.assertIn("Display name", lines)
         self.assertNotIn("Registry ID", lines)
 
-    def test_the_refusal_names_usage_reporting_when_reporting_is_the_fault(self) -> None:
-        refused = registry_identity_refusal(
-            registry_id="manual-registry",
-            display_name="Manual Registry",
-            usage_reporting_repository="not enabled",
-        )
-
-        self.assertIsNotNone(refused)
-        assert refused is not None
-        lines = "\n".join((refused.diagnostics[0].message, *refused.diagnostics[0].interactive))
-        self.assertIn("Usage reporting", lines)
-        self.assertNotIn("Registry ID", lines)
-
-    def test_three_faults_are_all_named_and_all_fit_a_screen(self) -> None:
+    def test_two_faults_are_all_named_and_all_fit_a_screen(self) -> None:
         """`QA-017`: a fault the headline drops, or truncates mid-word, is one nobody can act on."""
 
-        refused = registry_identity_refusal(
-            registry_id="", display_name="", usage_reporting_repository="x"
-        )
+        refused = registry_identity_refusal(registry_id="", display_name="")
 
         self.assertIsNotNone(refused)
         assert refused is not None
         message = refused.diagnostics[0].message
-        self.assertEqual(
-            message, "Registry ID, Display name and Usage reporting cannot be used as written"
-        )
+        self.assertEqual(message, "Registry ID and Display name cannot be used as written")
         for line in (message, *refused.diagnostics[0].interactive):
             self.assertLessEqual(len(line), CONTENT_MEASURE, line)
 

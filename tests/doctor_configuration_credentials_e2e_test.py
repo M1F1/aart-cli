@@ -49,7 +49,6 @@ from agent_artifacts.commands.doctor import (
 from agent_artifacts.configuration.model import (
     ConfiguredSource,
     OrganizationPolicy,
-    ReportingSettings,
     SourceKind,
     SyncSettings,
     UserConfiguration,
@@ -223,7 +222,7 @@ class PolicyLockedFieldProjectionTest(unittest.TestCase):
 
     def _effective(self, locked: tuple[str, ...]) -> EffectiveConfiguration:
         return EffectiveConfiguration(
-            UserConfiguration(1, (), None, SyncSettings(), ReportingSettings()),
+            UserConfiguration(1, (), None, SyncSettings()),
             OrganizationPolicy(1),
             locked,
         )

@@ -395,8 +395,8 @@ def configured_consumer_completion(
             )
             subject = subject_port(setup_request)
             if isinstance(subject, Err):
-                # A failed member has no standing receipt to resolve.  It must still be present in
-                # usage reporting, but it cannot truthfully become a setup candidate.
+                # A failed member has no standing receipt to resolve, so it cannot truthfully
+                # become a setup candidate.
                 if succeeded:
                     return subject
                 loaded = read_object(

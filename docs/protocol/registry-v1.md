@@ -55,11 +55,9 @@ something no consumer of that artifact runs. The per-type delivery table is in
 ## Authored inputs
 
 `aart-registry.json` declares protocol compatibility, required compiler capabilities, a default
-channel, and optional service advertisements. A `github-issues` usage advertisement makes that
-registry eligible for the default prompt-only, per-registry reporting flow; it can never enable
-automatic submission. Users and organization policy can disable prompts or select one explicit
-central destination. Authored registry, entry, artifact, and index documents cannot assign
-effective trust.
+channel, and optional service advertisements. Service kinds are opaque lowercase identifiers;
+provider-specific requirements belong to the consumer of a service, not to this base schema.
+Authored registry, entry, artifact, and index documents cannot assign effective trust.
 
 Each `entries/<type>/<name>.json` native reference records a credential-free Git URL, a reviewable
 requested ref, the canonical package path ending in `<type>/<name>`, and a review record. A
