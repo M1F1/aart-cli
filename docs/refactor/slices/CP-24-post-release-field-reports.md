@@ -296,7 +296,21 @@ Evidence:
 
 ## Evidence log
 
-Empty. Each task appends its characterization, targeted mutation, gates and before/after here.
+Every task's targeted semantic mutation, collected here so task 07 can check them in one place.
+Each was applied to the production code, watched turn the named tests red, and reverted.
+
+| Task | Mutation applied | What turned red |
+|---|---|---|
+| 01 | `scan_binds_current_pin` always true; and the predicate dropped from `read_maintainer_views` | the composition characterization tests in `maintainer_composition_test.py` and `maintainer_views_test.py` |
+| 02 | the publication moved back in front of the compile in `execute_source_sync` | all three ordering tests (`maintainer_source_sync_application_test.py`, `authoring_source_admission_e2e_test.py`) |
+| 03 | unbound history treated as bound in the Sync review; and the finding dropped from doctor's verdict | the review test, and the end-to-end doctor loop in `authoring_source_admission_e2e_test.py` |
+| 04 | `_one_installer_per_contract` made a no-op, so both backends are offered again | 3 tests in `PythonInstallerOfferTest` (`environment_planning_test.py`) |
+| 05 | `_outcome` collapsed back to one phrase for every `write-file` | the counts in `install_review_counts_test.py` |
+| 06 | the shell binding disabled (`if False and reporting ...`), so no handler is ever lent a reporter | 3 tests plus 1 error in `running_installation_screen_test.py` |
+
+Scoped `make mutants` runs and their classified survivors are recorded per task above; the
+out-of-scope survivors became `BACKLOG.md` B-130, B-131 and B-133. (B-132 is not a survivor: it
+records what task 04 deliberately left undesigned, a way for a reader to choose the other backend.)
 
 ## Handoff
 

@@ -446,6 +446,15 @@ Harness delivery must be one answer everywhere it is said (`QA-078`…`QA-080`, 
       unselected harness must not appear as a delivery.
       Where the plan stores a credential, Ready counts `credential(s) stored securely` once; where
       the credential already exists, it says nothing is stored (D-272).
+- [ ] On **Ready** for an MCP install, the counts must be reconcilable with what you asked for
+      (D-284): `1 launcher(s) written` and one `configuration file(s) written` per chosen harness --
+      never `2 launcher(s) written` for one server. For the Skill, the deliveries are named as
+      harness files, never as `other change`.
+- [ ] Where a Python dependency could be installed by either backend, **Remediation** offers it
+      once, naming the backend that will run (D-283), not `pip` and `uv` as two changes.
+- [ ] While the installation runs, the screen names the step running (`▸`) and the ones already
+      done (`✓`), counting `(n of m done)`, inside the same frame as every other screen (D-285).
+      A short install may pass quickly; `dummy-mcp` into two harnesses is the one to watch.
 - [ ] After the Skill install, inspect the project: both
       `.opencode/skills/manual-check/SKILL.md` and
       `.tabnine/agent/skills/manual-check/SKILL.md` exist; `.claude/skills/manual-check` does not.
