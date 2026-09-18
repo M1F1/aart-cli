@@ -7607,3 +7607,38 @@ tells a reader nothing, and keeps the tail.
 test can reproduce without a second user — a writable directory whose `.git` is not a repository —
 and asserts both that Git's words arrive and that the standing remedy is still there. Silencing
 `_git_said` turns that test red alone.
+
+## D-308 — A registry that has chosen one representation refuses the other's verbs
+
+**Context.** B-142. A real registry was left in a state no command could clear: one early
+`publish` on the still-empty checkout wrote `aart.lock.json` and `aart.index.json`, a later
+`promote` added the approved representation, and from then on `publish` skipped locking (by design,
+`test_publish_gates_the_approved_representation_without_locking_it`) while `validate` kept checking
+the files publish would not touch. The remediation it printed named two verbs that do nothing to
+that shape. Separately, `registry scaffold` succeeded on the same checkout, wrote the older
+representation's unversioned path beside the approved tree, and printed the next three verbs to
+run — leaving a registry whose `build` ignores the new package and whose `validate` refuses the
+snapshot it no longer binds. One command, no warning, three red gates.
+
+**Decision.** Both authoring verbs now refuse a checkout that publishes approved versions, and say
+what to do instead:
+
+- `scaffold` refuses whenever `registry/versions/` exists, and names the `scan` → `promote` route.
+- `publish` refuses only when the checkout carries *both* shapes, and names the legacy files to
+  remove. A clean approved registry still publishes, unchanged.
+
+**Why a refusal and not a repair.** Which representation a registry keeps is the maintainer's
+decision and it is not reversible by inspection: deleting the legacy pair is correct when nothing
+was authored in place, and silent content loss when something was — the authored package stays on
+disk but leaves `registry/index.json`, so consumers stop seeing it with no error anywhere. A tool
+that guesses here guesses wrong half the time.
+
+**Scope.** This does not close B-057. The older representation still exists, is still read by
+`consumer/runtime.py` and `sources/validation.py`, and is still the only shape `scaffold`,
+`lock` and `publish` know how to write. This makes mixing the two impossible; removing one of them
+is a separate, larger slice.
+
+**Evidence.** Two e2e tests over the real `init` → `scan` → `promote` chain. The guard's predicate
+is held in both directions: making it see nothing turns the new publish test red, making it see
+everything turns the existing "publish still works on an approved registry" test red, and each
+mutation kills exactly one test.
