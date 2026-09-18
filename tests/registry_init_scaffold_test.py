@@ -14,18 +14,15 @@ from agent_artifacts.protocol.native_tree import (
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
-    load_native_source,
 )
 from agent_artifacts.protocol.paths import parse_relative_path
 from agent_artifacts.protocol.registry_schema import parse_registry_manifest
 from agent_artifacts.protocol.semver import SemVer, parse_semver
 from agent_artifacts.registry_commands.model import (
-    ArtifactScaffoldOptions,
     CollectionAuthorOptions,
     RegistryInitOptions,
 )
 from agent_artifacts.registry_commands.planning import (
-    plan_artifact_scaffold,
     plan_registry_collection,
     plan_registry_init,
     project_registry_workspace_plan,
@@ -33,7 +30,7 @@ from agent_artifacts.registry_commands.planning import (
 )
 from agent_artifacts.registry_commands.templates import REGISTRY_CI_WORKFLOW
 from agent_artifacts.runtime_contract import EXECUTABLE_VERSION
-from tests.registry_maintenance_fixtures import replace_snapshot_file
+from tests.registry_maintenance_fixtures import native_snapshot, replace_snapshot_file
 
 
 def _semver(text: str) -> SemVer:
@@ -58,29 +55,19 @@ class RegistryInitScaffoldTest(unittest.TestCase):
             SourceSnapshot(SnapshotOrigin.LOCAL, ()), initialized.value
         )
         assert isinstance(registry, Ok)
-        scaffolded = plan_artifact_scaffold(
-            registry.value,
-            ArtifactScaffoldOptions(
-                "skill",
-                "review",
-                SemVer(1, 0, 0),
-                "Review changes.",
-                ("claude",),
-                ("darwin",),
-                ("project",),
-                ("copy",),
-            ),
+        owned = tuple(
+            entry
+            for entry in native_snapshot().entries
+            if str(entry.path).startswith("artifacts/skill/code-review/")
         )
-        assert isinstance(scaffolded, Ok)
-        with_artifact = project_registry_workspace_plan(registry.value, scaffolded.value)
-        assert isinstance(with_artifact, Ok)
+        with_artifact = SourceSnapshot(SnapshotOrigin.LOCAL, (*registry.value.entries, *owned))
 
         authored = plan_registry_collection(
-            with_artifact.value,
+            with_artifact,
             CollectionAuthorOptions(
                 "baseline",
                 "Company baseline.",
-                (ArtifactIdentity("skill", "review"),),
+                (ArtifactIdentity("skill", "code-review"),),
             ),
             executable_version=SemVer(1, 0, 0),
             available_capabilities=(
@@ -92,7 +79,7 @@ class RegistryInitScaffoldTest(unittest.TestCase):
 
         self.assertIsInstance(authored, Ok)
         assert isinstance(authored, Ok)
-        complete = project_registry_workspace_plan(with_artifact.value, authored.value)
+        complete = project_registry_workspace_plan(with_artifact, authored.value)
         assert isinstance(complete, Ok)
         collection = next(
             item for item in complete.value.entries if str(item.path) == "collections/baseline.json"
@@ -101,11 +88,11 @@ class RegistryInitScaffoldTest(unittest.TestCase):
         assert isinstance(parsed, Ok)
         self.assertEqual(
             tuple(selector.identity for selector in parsed.value.artifacts),
-            (ArtifactIdentity("skill", "review"),),
+            (ArtifactIdentity("skill", "code-review"),),
         )
 
         missing = plan_registry_collection(
-            with_artifact.value,
+            with_artifact,
             CollectionAuthorOptions(
                 "missing",
                 "Invalid member.",
@@ -172,6 +159,10 @@ class RegistryInitScaffoldTest(unittest.TestCase):
         self.assertIn("aart-source.json", files)
         self.assertIn(".github/workflows/aart-registry.yml", files)
         self.assertIn(".gitignore", files)
+        generated_readme = files["README.md"]
+        self.assertNotIn(b"registry scaffold", generated_readme)
+        self.assertIn(b"registry scan --help", generated_readme)
+        self.assertIn(b"registry promote --help", generated_readme)
         ignored = files[".gitignore"].decode("utf-8").splitlines()
         self.assertIn(".agent-artifacts/", ignored)
         self.assertIn(".agent-artifacts-bak/", ignored)
@@ -237,86 +228,6 @@ class RegistryInitScaffoldTest(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertEqual(cli.build_parser().parse_args(argv).command, "registry")
 
-    def test_scaffold_produces_a_valid_native_package_and_refuses_overwrite(self) -> None:
-        empty = SourceSnapshot(SnapshotOrigin.LOCAL, ())
-        initialized = plan_registry_init(
-            empty,
-            RegistryInitOptions(
-                "company-registry",
-                "Company Agent Artifacts",
-                SemVer(1, 0, 0),
-                SemVer(2, 0, 0),
-            ),
-        )
-        assert isinstance(initialized, Ok)
-        registry = project_registry_workspace_plan(empty, initialized.value)
-        assert isinstance(registry, Ok)
-        options = ArtifactScaffoldOptions(
-            "skill",
-            "review-python",
-            SemVer(1, 0, 0),
-            "Review Python changes against the company checklist.",
-            ("claude", "tabnine"),
-            ("darwin", "linux"),
-            ("project", "user"),
-            ("copy", "symlink"),
-        )
-        planned = plan_artifact_scaffold(registry.value, options)
-        assert isinstance(planned, Ok), planned
-        projected = project_registry_workspace_plan(registry.value, planned.value)
-        assert isinstance(projected, Ok), projected
-        loaded = load_native_source(
-            projected.value,
-            executable_version=SemVer(1, 0, 0),
-            available_capabilities=(Capability("artifact-manifest-v1"),),
-        )
-        assert isinstance(loaded, Ok), loaded
-        self.assertEqual(str(loaded.value.artifacts[0].manifest.identity), "skill/review-python")
-        self.assertIsInstance(plan_artifact_scaffold(projected.value, options), Err)
-
-    def test_scaffolded_hook_is_actionable_and_compiles_before_publication(self) -> None:
-        initialized = plan_registry_init(
-            SourceSnapshot(SnapshotOrigin.LOCAL, ()),
-            RegistryInitOptions(
-                "company-registry",
-                "Company Agent Artifacts",
-                SemVer(1, 0, 0),
-                SemVer(2, 0, 0),
-            ),
-        )
-        assert isinstance(initialized, Ok)
-        registry = project_registry_workspace_plan(
-            SourceSnapshot(SnapshotOrigin.LOCAL, ()), initialized.value
-        )
-        assert isinstance(registry, Ok)
-        planned = plan_artifact_scaffold(
-            registry.value,
-            ArtifactScaffoldOptions(
-                "hook",
-                "review-guard",
-                SemVer(1, 0, 0),
-                "Run a reviewed guard before changes are accepted.",
-                ("claude",),
-                ("darwin",),
-                ("project",),
-                ("copy",),
-            ),
-        )
-        assert isinstance(planned, Ok), planned
-        projected = project_registry_workspace_plan(registry.value, planned.value)
-        assert isinstance(projected, Ok), projected
-        files = {str(item.path): item for item in projected.value.entries}
-        descriptor = files["artifacts/hook/review-guard/payload/hook.json"]
-        self.assertIn(b'"command":"${SCRIPT_DIR}/review-guard.sh"', descriptor.content)
-        script = files["artifacts/hook/review-guard/payload/review-guard.sh"]
-        self.assertTrue(script.executable)
-        loaded = load_native_source(
-            projected.value,
-            executable_version=SemVer(1, 0, 0),
-            available_capabilities=(Capability("artifact-manifest-v1"),),
-        )
-        self.assertIsInstance(loaded, Ok)
-
     def test_init_never_overwrites_an_existing_registry_workflow(self) -> None:
         path = parse_relative_path(".github/workflows/aart-registry.yml")
         assert isinstance(path, Ok)
@@ -359,24 +270,13 @@ class RegistryInitScaffoldTest(unittest.TestCase):
         touched = {str(change.path) for change in planned.value.changes}
         self.assertNotIn(".github/ISSUE_TEMPLATE/usage-report.yml", touched)
 
-    def test_options_reject_control_characters_and_noncanonical_compatibility_names(self) -> None:
+    def test_init_options_reject_control_characters(self) -> None:
         with self.assertRaises(ValueError):
             RegistryInitOptions(
                 "company-registry",
                 "Company\tRegistry",
                 SemVer(1, 0, 0),
                 SemVer(2, 0, 0),
-            )
-        with self.assertRaises(ValueError):
-            ArtifactScaffoldOptions(
-                "skill",
-                "demo",
-                SemVer(1, 0, 0),
-                "A valid summary.",
-                ("not a slug",),
-                ("darwin",),
-                ("project",),
-                ("copy",),
             )
 
     def test_registry_commands_reject_custom_roots_the_workspace_adapter_cannot_manage(
@@ -400,18 +300,15 @@ class RegistryInitScaffoldTest(unittest.TestCase):
         ).replace(b'"artifact_roots":["artifacts"]', b'"artifact_roots":["packages"]')
         unsupported = replace_snapshot_file(registry.value, "aart-source.json", marker)
 
-        planned = plan_artifact_scaffold(
+        planned = plan_registry_collection(
             unsupported,
-            ArtifactScaffoldOptions(
-                "skill",
+            CollectionAuthorOptions(
                 "demo",
-                SemVer(1, 0, 0),
-                "A canonical demo skill.",
-                ("codex",),
-                ("darwin",),
-                ("project",),
-                ("copy",),
+                "A canonical demo collection.",
+                (ArtifactIdentity("skill", "demo"),),
             ),
+            executable_version=SemVer(1, 0, 0),
+            available_capabilities=(),
         )
 
         self.assertIsInstance(planned, Err)

@@ -96,10 +96,11 @@ def _error(code: DiagnosticCode, message: str, path: str | None = None) -> Err:
 
 
 _DEPENDENCY_SCOPE_REMEDIATION = (
-    "Publish the dependency in this registry — `aart registry scaffold --help` — or copy the "
-    "upstream content into an artifact this registry owns.",
-    "`aart registry promote-native --help` offers a foreign package to consumers; it does not "
-    "make that package a `requires` target.",
+    "Author the dependency in a source checkout, then bring it into this registry through "
+    "`aart registry scan --help` and `aart registry promote --help`, or copy the upstream content "
+    "into an artifact this registry owns.",
+    "`aart registry promote-native --help` offers a foreign package to consumers; it does not make "
+    "that package a `requires` target.",
 )
 
 

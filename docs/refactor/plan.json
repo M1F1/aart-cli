@@ -572,7 +572,7 @@
         },
         {
           "id": "5",
-          "title": "Remove TUI push capability and explain manual Registry publication",
+          "title": "Historical D-255 TUI Push removal, superseded by CP-26.18 restoring explicit Push on Registry Maintainer",
           "status": "done"
         },
         {
@@ -778,7 +778,7 @@
     },
     {
       "id": "CP-26",
-      "title": "Author-side manifests, and the end of the older registry representation",
+      "title": "Canonical Registry maintenance, authoring tools and local consumption",
       "status": "in_progress",
       "steps": [
         {
@@ -788,12 +788,12 @@
         },
         {
           "id": "2",
-          "title": "`registry scaffold` and `registry publish` are deleted",
-          "status": "todo"
+          "title": "`registry scaffold` is deleted while canonical `registry publish` remains",
+          "status": "done"
         },
         {
           "id": "3",
-          "title": "The dual-mode registry verbs lose their legacy branch",
+          "title": "Keep canonical lock/build/validate/audit/format and aggregate publish; remove only legacy branches while Push remains separate",
           "status": "todo"
         },
         {
@@ -843,27 +843,47 @@
         },
         {
           "id": "13",
-          "title": "Every install line in the README is executed by a gate, not described",
+          "title": "README opens with the fastest normal-user path from installing AART to installing and verifying an artifact",
           "status": "todo"
         },
         {
           "id": "14",
-          "title": "The README opens with the consumer's path and nothing else",
+          "title": "A short What AART is section and categorized documentation index follow the quick start",
           "status": "todo"
         },
         {
           "id": "15",
-          "title": "Its second half is authoring in a source checkout, then the registry that compiles it",
+          "title": "Detailed material moves to linked documents while the existing License and copyright footer remain last",
           "status": "todo"
         },
         {
           "id": "16",
-          "title": "Everything that serves neither reader moves out of the README",
+          "title": "A gate executes final install lines and verifies README order, bounded explanation, links, and final License",
           "status": "todo"
         },
         {
           "id": "17",
           "title": "Generated registry and release defaults contain no M1F1 repository or organization",
+          "status": "todo"
+        },
+        {
+          "id": "18",
+          "title": "Registry Maintainer exposes publication readiness and may push its validated local snapshot, never to main or the Registry default",
+          "status": "todo"
+        },
+        {
+          "id": "19",
+          "title": "Configuration and credential bindings are keyed by stable alias-qualified installation target",
+          "status": "todo"
+        },
+        {
+          "id": "20",
+          "title": "Add Registry synchronizes canonical Registries from local Git checkouts through the normal Marketplace path",
+          "status": "todo"
+        },
+        {
+          "id": "21",
+          "title": "Run full CP-26 quality, integration/E2E and release-facing verification only after all implementation tasks are complete",
           "status": "todo"
         }
       ]

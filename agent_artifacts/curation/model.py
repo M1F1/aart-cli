@@ -29,7 +29,6 @@ DEFAULT_MAXIMUM_AART = f"{EXECUTABLE_VERSION.major + 1}.0.0"
 
 class CurationAction(str, Enum):
     INIT = "init"
-    SCAFFOLD = "scaffold"
     COLLECTION = "collection"
     FORMAT = "format"
     PROMOTE_NATIVE = "promote-native"

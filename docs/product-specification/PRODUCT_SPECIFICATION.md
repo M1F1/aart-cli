@@ -1564,6 +1564,14 @@ This makes credential lifecycle a first-class application feature.
 
 A credential may be used by multiple artifacts.
 
+Sharing is explicit through selection of the same provider reference; it is never inferred from an
+equal input identifier, artifact name, canonical payload or target path. Each concrete installation
+target owns its own input binding. Consequently `company/mcp/github` and
+`company-local/mcp/github` start with distinct credential bindings even when their manifests
+declare the same `token` input, and two project installations of either one start distinct too. The
+user may later bind any of them to one credential reference, at which point the ordinary shared-
+credential impact and lifecycle rules apply.
+
 Therefore before replacement or deletion, AART should inspect references.
 
 Example:
@@ -1604,11 +1612,34 @@ Example:
 
 ```python
 CredentialReference(
-    id="github-token",
+    input_id="github-token",
     provider="macos-keychain",
-    service="aart.company.github",
+    service="aart.<installation-target-id>",
+    account="github-token",
 )
 ```
+
+The logical `installation-target-id` is derived deterministically and collision-resistently from:
+
+```text
+Registry alias
++ artifact kind and name
++ normalized project/user root
++ harness/profile
+```
+
+The complete credential-binding key is therefore:
+
+```text
+Registry alias + artifact + project/user root + harness/profile + input_id
+```
+
+For macOS Keychain, every distinct complete key creates or selects a distinct generic-password item
+(a distinct `service`/`account` pair). The provider-facing encoding should be opaque and must not
+expose a raw filesystem path, but it must preserve this uniqueness. The rule applies equally to a
+Registry synchronized from a remote URL and one synchronized from a local checkout. Equal package
+bytes, artifact names or input ids do not collapse entries. Reusing one existing Keychain item is a
+separate explicit binding action, not an automatic naming shortcut.
 
 The actual token is never part of this domain object.
 
@@ -4387,6 +4418,17 @@ The two categories should not share the same generic "variables" abstraction in 
 # 96. Persisting non-secret configuration
 
 Non-secret configuration may be persisted in local AART-owned state.
+
+Its ownership uses the same complete installation binding key as credentials:
+
+```text
+Registry alias + artifact + project/user root + harness/profile + input_id
+```
+
+Every distinct target has an independent value. Installing the same remote-Registry artifact into
+two projects, or into project and user scope, must not copy or reuse a value implicitly. Local and
+remote Registry transports follow exactly the same rule. Compatible values may survive an update
+only inside the same complete installation-target identity.
 
 For example:
 
@@ -8160,8 +8202,9 @@ Jira
 • Token (Create token → Jira profile settings)
 ```
 
-If multiple artifacts share the same semantic input, AART should avoid presenting the same guidance
-multiple times where safe to do so.
+If multiple artifacts have equivalent input guidance, AART may avoid repeating the explanatory
+copy where safe to do so. This presentation deduplication must not merge their values or credential
+bindings. Reuse across artifacts is a separate, explicit user decision.
 
 ---
 
@@ -8986,6 +9029,44 @@ Registries determine which artifacts are available in Marketplace.
 
 Registry Details summarize counts and last update. Verbose may expose protocol/source/snapshot/trust metadata.
 
+Add Registry accepts two transports for the same canonical Registry contract:
+
+- **Remote Git** — a credential-free Git URL plus a branch or tag;
+- **Local Git checkout** — a normalized absolute path whose containing worktree root is a canonical
+  Registry and whose current `HEAD` is the revision to synchronize.
+
+Transport does not change Registry authority. Before either connection is saved, AART snapshots the
+exact revision, runs the same Registry validation and records the same stable snapshot identity.
+Sync repeats that acquisition and validation; a local connection performs no network operation and
+reads the checkout's new `HEAD`. An invalid successor never replaces the last known valid snapshot.
+Both transports contribute equally to Marketplace, resolution and installation.
+
+Making a local Registry available to that explicitly configured Marketplace does not claim that its
+commit was merged into a remote consumer-visible branch. Versions retain their recorded lifecycle,
+including `Promoted locally`, while remaining fully selectable through the local Registry alias.
+Review evidence and policy determine trust; the local transport alone neither downgrades nor
+upgrades it.
+
+A local and remote connection to the same Registry may coexist only under distinct configured
+aliases, for example `company` and `company-local`. The alias remains part of every Marketplace
+coordinate, receipt and installation identity. If both connections expose the same unqualified
+artifact name/version, Marketplace reports ambiguity and requires the alias-qualified coordinate;
+neither connection silently shadows the other.
+
+That alias boundary applies to all consumer-owned state, not only Marketplace rows. Runtime input
+bindings are namespaced by a stable installation-target identity: Registry alias + artifact kind +
+artifact name + normalized destination context (scope and project/user root) + harness/profile,
+then by input identifier. Thus `company/mcp/foo` and `company-local/mcp/foo` may hold different
+ordinary configuration values and different secret provider references even when the canonical
+manifests and input identifiers are identical. The same artifact installed into project A, project
+B and a user-level harness likewise owns three independent sets of values and references. An update
+within one exact installation target may preserve compatible inputs, but changing the Registry
+alias, project/user destination or harness target creates a different owner and never imports them
+implicitly. Removing, updating or reconfiguring one owner cannot mutate another owner's values,
+references or files. Explicitly choosing the same credential provider reference for several owners
+is allowed and then makes the normal shared-credential warnings applicable; AART never infers that
+sharing from matching names or paths.
+
 **Registry sync is not artifact update.** Sync may discover `github-mcp 1.6`; installed `1.5` remains untouched until an explicit update plan is accepted.
 
 ## 161.8 22–24 Credentials — ACCEPTED
@@ -9377,7 +9458,7 @@ Warnings and errors are distinct. Policy determines whether warnings block promo
 Policy-required manual approval is an explicit candidate state and cannot be hidden as an ordinary
 warning.
 
-## 164.7 Screens 41–45 — Promotion and Registry Commit — ACCEPTED
+## 164.7 Screens 41–46 — Promotion, Registry Commit and explicit Push — ACCEPTED
 
 Promotion Review shows source revision, artifact coordinate/version, target registry, validation and
 policy status.
@@ -9406,13 +9487,50 @@ policy and snapshot reproducibility.
 
 Commit is explicit. AART creates the local registry commit.
 
-**Accepted revision, 2026-09-14: TUI promotion ends at the local commit.** The TUI offers no push
-action or push-configuration workflow. The maintainer pushes the Registry branch manually and
-completes any required pull request, CI, review and merge outside the TUI. This supersedes the
-earlier acceptance of an in-TUI push; CP-23 implements the revision.
+**Accepted revision, 2026-09-18: Registry Maintainer owns explicit Push.** Push is an action on the
+local Registry workspace row on screen 46, not the terminal step of initialization, rebuild or
+promotion. Returning to Registry Maintainer after any of those workflows — or reopening AART later
+— derives the same answer from the current checkout. A connected Registry snapshot row, Candidate
+or Source never offers Push.
 
-After local commit, AART explains the remaining steps: manually push, complete review/merge into
-the consumer-visible branch where required, update the local checkout, and synchronize the Registry
+Registry Maintainer presents three distinct facts rather than collapsing them into one status:
+
+- the accepted consumer-visible snapshot and revision read from the Registry's default branch;
+- the local workspace snapshot, branch and exact `HEAD` commit;
+- publication readiness for that exact local commit.
+
+A local snapshot differing from the accepted snapshot is expected unpublished work, not invalidity.
+Push readiness instead requires a clean worktree and index, a named exact `HEAD`, generated Registry
+outputs already matching their reproducible build, and every mandatory Registry publication gate
+passing over those committed bytes. The readiness check uses the same application contract as
+`registry publish`; it does not trust an in-memory wizard flag or a commit subject. It covers the
+mandatory format, strict/frozen validation, canonical lock check, reproducible build check, audit
+and required compatibility checks. A failed or not-yet-run gate makes Push unavailable and Registry
+Maintainer lists the failed check and its actionable diagnostic. Preparation and execution recheck
+the evidence so a change after drawing the screen is refused.
+
+Choosing Push opens a separate review step with an explicit branch target. When AART was launched
+in an existing named Registry branch that is neither `main` nor the Registry default, that current
+branch is the target; the action cannot redirect its commit to another existing branch. When the
+checkout is on `main`, another default branch or in detached HEAD, the form instead accepts a new
+branch name. It is prefilled from the action that most recently produced the local commit when that
+context is available, and otherwise with `aart/registry-update`. The configured Registry remote is
+shown; `origin` is the fallback when no other remote is configured.
+
+The push moves the exact recorded commit, never a later moving `HEAD`. A branch that does not exist
+is created. An existing branch may advance only through an ordinary non-force push; divergence is
+reported and never overwritten. The branch named `main` is always refused. The Registry's default,
+consumer-visible branch is also refused by name and checked again against the remote's advertised
+default. AART does not merge or open a pull request. Before offering or executing the action, AART
+resolves the one Git worktree containing the launch workspace and proves that its root is the
+Registry whose reviewed commit the result records.
+If that worktree is a Source or any other repository, AART refuses; it does not continue walking to
+a parent checkout in search of a Registry. Registry Maintainer keeps the local workspace row visible
+but marks Push unavailable with that reason. Escape or leaving the review without confirming Push
+keeps the operation local.
+
+After a successful push, AART explains the remaining steps: complete review/merge into the
+consumer-visible branch where required, update the local checkout, and synchronize the Registry
 subscription to observe the approved state. Pushing a review branch alone does not make its
 artifacts available to consumers subscribed to the default branch. Source Sync discovers upstream
 Candidates; Registry Sync reads approved Registry state. Neither operation implicitly pushes,
@@ -9424,8 +9542,9 @@ This TUI revision does not implicitly remove an independently supported CLI publ
 
 ## 164.8 Screen 46 — Registry Maintainer View — ACCEPTED
 
-Maintainer Registry view exposes registry validity, artifact counts by kind, current snapshot,
-working-tree state and recent promotions.
+Maintainer Registry view exposes registry validity, artifact counts by kind, accepted and local
+snapshot state, publication readiness with blocking diagnostics, current-branch publication and
+recent promotions.
 
 ## 164.9 Screen 47 — Bulk Promotion — ACCEPTED
 
@@ -10184,6 +10303,12 @@ remain the authority for human approval and publication.
 **INV-242 — Local promotion is not publication.** Published means present on the canonical
 consumer-visible registry branch/snapshot, not merely prepared or committed locally.
 
+**INV-243 — Runtime input state is Registry-, artifact- and target-qualified.** Configuration values
+and credential bindings belong to one stable installation-target identity that includes the
+configured Registry alias, artifact identity, project/user destination and harness/profile. Equal
+artifact names or input identifiers across aliases, projects, user scope or harness targets never
+cause implicit state sharing; sharing one credential reference requires an explicit choice.
+
 ---
 
 # 167. Accepted TUI refinements from the 2026-09-14 manual run
@@ -10207,8 +10332,9 @@ not a claim that the existing implementation already satisfies it.
   occupies its own block below the diff; navigation and review identity do not change on toggle.
 - **Validation:** remove the redundant `p` Policy shortcut. Enter continues the existing review
   path through validation details and policy without bypassing either check.
-- **Publication:** §164.7 now ends the TUI flow at local commit and explains manual push and any
-  required review/merge before Registry Sync can discover the newly approved version.
+- **Publication:** §164.7 gives Registry Maintainer an explicit Push for a clean, gate-valid local
+  Registry commit to a non-default review branch, and explains every reason it is unavailable plus
+  any required review/merge before Registry Sync can discover the newly approved version.
 - **Success:** View installed, View receipt, Done and any supported Undo are working controls,
   separate from outcome prose. View receipt targets this operation's exact record. Undo is a
   separately reviewed operation offered only when the actual effects support safe reversal.
@@ -10264,3 +10390,36 @@ not a claim that the existing implementation already satisfies it.
 
 These refine INV-062–068, INV-134–135, INV-149–168, INV-187–197, INV-202, INV-205 and INV-242;
 they do not create a second planner, permit rendering IO or weaken the approved Registry baseline.
+
+# 168. Accepted top-level README contract
+
+Status: **ACCEPTED — implementation tracked in CP-26 steps 13–16**.
+
+The repository README serves one primary audience: a normal user who wants to install an artifact
+as quickly as possible. It is an adoption page and documentation index, not the full product,
+authoring, Registry-maintenance, Enterprise, contributor, quality or release manual.
+
+Its content order is contractual:
+
+1. After the title and at most one outcome sentence, the fastest supported quick start installs
+   AART, connects and synchronizes a Registry, finds or selects an artifact in Marketplace,
+   installs it into a selected harness and verifies the result. The TUI is the primary human route;
+   a compact deterministic CLI equivalent may follow. Repository, Registry, artifact and harness
+   values that cannot be universal remain explicit placeholders and never become organization-
+   specific defaults.
+2. A short explanation of what AART is follows the working quick start. It may identify AART as an
+   agent-artifact package manager, Registry client, policy/review surface and installer, name the
+   supported artifact families, and summarize Source → Candidate → Registry → Marketplace only far
+   enough to orient a new user. Detailed architecture does not remain inline.
+3. A compact categorized documentation index follows. It links to focused documents for ordinary
+   lifecycle use, TUI/CLI, artifact authoring, Registry maintenance, Enterprise setup,
+   security/protocol contracts, development/testing and releases. Every linked target exists.
+   Author and maintainer workflows live in those documents rather than becoming a second README
+   tutorial. Internal refactor records are not public getting-started documentation.
+4. The existing MIT License section, legal wording and copyright/footer remain the final README
+   content unless the owner separately changes that legal text.
+
+Detailed material currently in README moves to focused documentation rather than being silently
+discarded. The final documentation gate executes the advertised installation forms and checks the
+section order, bounded product explanation, link targets and final License placement. A later task
+that changes README or its install lines reruns that gate.

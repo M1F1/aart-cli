@@ -71,8 +71,9 @@ maintainer who does not own it changes their own registry, and neither the lock 
 depending registry can pin what it does not contain. Consumption federates across every configured
 source; publication does not.
 
-To depend on foreign content, put it in this registry: author the artifact here
-(`aart registry scaffold --help`), or vendor the upstream content into a package this registry owns
+To depend on content this registry does not yet own, either author it in a separate Source checkout
+and bring its reviewed Candidate in through `aart registry scan --help` and
+`aart registry promote --help`, or vendor the upstream content into a package this registry owns
 (`aart registry vendor --help`), which copies the subtree and records where it came from. A promoted
 native reference is not a route to this: it is the `entries/` case below.
 

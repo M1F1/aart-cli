@@ -12,7 +12,6 @@ from agent_artifacts.curation import runtime as curation_runtime
 from agent_artifacts.curation.model import (
     CurationAction,
     CurationRequest,
-    render_curation_review,
 )
 from agent_artifacts.curation.runtime import LocalCurationService
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
@@ -189,17 +188,6 @@ class CurationRuntimeTest(unittest.TestCase):
                     minimum_version="2.0.0",
                     maximum_version="1.0.0",
                 ),
-                CurationRequest(CurationAction.SCAFFOLD, str(root)),
-                CurationRequest(
-                    CurationAction.SCAFFOLD,
-                    str(root),
-                    kind="skill",
-                    name="demo",
-                    summary="Demo.",
-                    artifact_version="not-semver",
-                    profiles=("codex",),
-                    platforms=("darwin",),
-                ),
                 CurationRequest(CurationAction.PROMOTE_NATIVE, str(root)),
                 CurationRequest(
                     CurationAction.PROMOTE_NATIVE,
@@ -233,7 +221,7 @@ class CurationRuntimeTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 LocalCurationService("relative")
 
-    def test_init_and_scaffold_are_previewed_then_exactly_finalized(self) -> None:
+    def test_init_is_previewed_then_exactly_finalized(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary) / "registry"
             _git_checkout(root)
@@ -300,85 +288,6 @@ class CurationRuntimeTest(unittest.TestCase):
                 )
             )
             self.assertIsInstance(duplicate_init, Err)
-
-            scaffold = service.prepare(
-                CurationRequest(
-                    CurationAction.SCAFFOLD,
-                    str(root),
-                    kind="skill",
-                    name="demo",
-                    summary="Explain the reviewed demo workflow.",
-                    profiles=("codex",),
-                    platforms=("darwin", "linux"),
-                )
-            )
-            assert isinstance(scaffold, Ok), scaffold
-            target = root / "artifacts" / "skill" / "demo" / "artifact.json"
-            self.assertFalse(target.exists())
-            result = service.finalize(scaffold.value, scaffold.value.review.review_digest)
-            assert isinstance(result, Ok), result
-            self.assertEqual(result.value.changed_paths, 2)
-            self.assertTrue(target.is_file())
-            # `QA-014`/`D-182`: the diff hint is the review's closing prose, not a follow-up
-            # command that re-lists every reviewed path. The claim it held — a mutating action
-            # tells the maintainer to inspect the working tree — is held there instead.
-            self.assertFalse(any("git -C" in item for item in result.value.follow_up_commands))
-            self.assertIn(
-                "review the working-tree diff afterward",
-                " ".join(render_curation_review(scaffold.value.review)),
-            )
-            self.assertTrue(
-                all(item.startswith("aart registry ") for item in result.value.follow_up_commands),
-                result.value.follow_up_commands,
-            )
-            duplicate_scaffold = service.prepare(
-                CurationRequest(
-                    CurationAction.SCAFFOLD,
-                    str(root),
-                    kind="skill",
-                    name="demo",
-                    summary="Explain the reviewed demo workflow.",
-                    profiles=("codex",),
-                    platforms=("darwin", "linux"),
-                )
-            )
-            self.assertIsInstance(duplicate_scaffold, Err)
-            invalid_options = service.prepare(
-                CurationRequest(
-                    CurationAction.SCAFFOLD,
-                    str(root),
-                    kind="skill",
-                    name="invalid-options",
-                    summary="Invalid empty install options.",
-                    profiles=("codex",),
-                    platforms=("darwin",),
-                    scopes=(),
-                    modes=(),
-                )
-            )
-            self.assertIsInstance(invalid_options, Err)
-
-            stale_plan = service.prepare(
-                CurationRequest(
-                    CurationAction.SCAFFOLD,
-                    str(root),
-                    kind="skill",
-                    name="stale-demo",
-                    summary="Demonstrate stale review rejection.",
-                    profiles=("codex",),
-                    platforms=("darwin",),
-                )
-            )
-            assert isinstance(stale_plan, Ok), stale_plan
-            stale_target = root / "artifacts" / "skill" / "stale-demo" / "artifact.json"
-            stale_target.parent.mkdir(parents=True)
-            stale_target.write_text("maintainer edit", encoding="utf-8")
-            stale = service.finalize(
-                stale_plan.value,
-                stale_plan.value.review.review_digest,
-            )
-            self.assertIsInstance(stale, Err)
-            self.assertEqual(stale_target.read_text(encoding="utf-8"), "maintainer edit")
 
     def test_read_only_validate_audit_and_diff_never_require_a_checkout(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

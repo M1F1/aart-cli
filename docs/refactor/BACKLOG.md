@@ -3543,3 +3543,177 @@ which the authored shape cannot read (`required file is missing: artifact.json`,
 which representation it is going to keep, and names the files to remove. Real fix: close B-057 so
 the two shapes cannot coexist. Either way `validate` and `publish` must agree on which files are
 live, because today one refuses to repair what the other insists on checking.
+
+## B-143 — PROMOTED TO CP-26.20: Add Registry cannot synchronize a canonical Registry from a local Git checkout
+
+Status: PROMOTED TO CRITICAL PATH (2026-09-18)
+
+**Reported.** GitHub issue #23, 2026-09-18. A maintainer has synchronized an external Source,
+promoted its Candidate into the local canonical Registry and committed it. The Candidate correctly
+reads `Promoted locally`, but Add Registry cannot connect that local Registry checkout so its
+canonical packages can be exercised through the normal Marketplace and installation path.
+
+**Current behaviour.** Add Registry in the TUI has `alias`, `url`, `ref` and `default`; no local
+path or location kind. The configuration model has `registry-git`, `source-git` and `source-local`,
+but no local Registry kind. Both an absolute path and `file://` are rejected for `registry-git` as
+not being a safe Git URL. `source-local` is an authoring Source and compiles author manifests; it
+does not read canonical Registry packages. The approved Marketplace aggregation also deliberately
+filters out `PublicationStage.PROMOTED_LOCAL`. `aart registry test` checks Registry/AART version
+compatibility; it does not install an artifact through Marketplace. Product Specification §165.23's
+Candidate `Test Install`/`aart dev install` surface is not implemented either.
+
+The only partial workaround is to push a review branch, add the same remote at that ref under a
+second alias, synchronize it, and select the qualified alias in Marketplace. Configuration permits
+one Git origin at different refs, and Marketplace already refuses ambiguous unqualified artifacts.
+That workaround is not local, requires publishing bytes before testing them, and the configured
+Registry reader treats content carried by the synchronized branch as published. It therefore does
+not honestly represent a pre-publication test.
+
+**Correct contract.** This is not a weaker preview trust class. Local checkout and remote Git are
+two acquisition adapters for the same configured canonical Registry abstraction:
+
+```
+remote: URL + ref       -> acquire exact commit -> validate -> save snapshot -> Marketplace
+local:  absolute path   -> read current HEAD     -> validate -> save snapshot -> Marketplace
+```
+
+Once admitted, both are equally valid Registry connections and use the same Marketplace,
+resolution, policy and installation paths. The local adapter performs no clone or fetch. Add reads
+and validates its exact `HEAD` before configuration is committed; Sync reads the current `HEAD`,
+validates the successor and atomically advances the cached snapshot. A failed local read or invalid
+successor leaves the last known valid snapshot active, exactly like a failed remote Sync.
+
+**Alias and collision rule.** A remote and local connection to the same Registry may coexist only
+under different configured aliases, for example `company` and `company-local`; alias uniqueness is
+already a configuration invariant. The alias remains part of the Marketplace coordinate, so the
+same canonical package is addressable as `company/skill/foo@1.0.0` and
+`company-local/skill/foo@1.0.0`. An unqualified request matching both remains explicitly ambiguous
+and requires choosing the alias. Local never silently shadows remote and neither is silently
+deduplicated out of provenance.
+
+The alias must also namespace every consumer-owned value beneath the selected artifact. The state
+key is one stable installation target (Registry alias + kind + name + normalized scope and
+project/user destination + harness/profile), followed by the declared input id. For example,
+`company/mcp/foo` and `company-local/mcp/foo` must be able to hold two different `endpoint` values
+and two different `token` provider references. So must `company/mcp/foo` installed into project A,
+project B and a user-level harness. Matching canonical bytes, artifact names, input ids or target
+types never merge them. A user may explicitly choose the same external credential reference for
+several targets, which is ordinary shared-credential use and must retain every dependant edge;
+there is no equivalent implicit sharing rule. Update may preserve compatible state only within the
+same exact target owner, and uninstall/reconfigure of one owner must leave every other target
+untouched.
+
+The general collision defect and its transport-independent repair are tracked by B-144. B-143
+depends on that contract but does not own it: a Registry synchronized from a remote URL must obey
+the identical state-key rule before `registry-local` exists.
+
+**Shape of the work.** Implement it as a vertical capability, not as a `file://` exception:
+
+- add a `registry-local` configuration kind and a Remote Git / Local checkout choice to Add
+  Registry; CLI accepts the same normalized absolute path;
+- require the path to resolve to the root of a Git worktree carrying a valid canonical Registry;
+  bind each synchronized snapshot to its exact commit, content digest and configured alias;
+- route both adapters into one Registry validation/admission service and one source-store snapshot
+  representation, so later Marketplace and installation code does not branch on transport;
+- include canonical versions carried by the local snapshot through the same Marketplace projection
+  and trust rules as the remote Registry; a recorded `Promoted locally` version stays named that
+  way but is fully selectable through the local alias, and transport alone neither downgrades nor
+  upgrades trust;
+- retain alias, snapshot digest, resolved commit and local/remote origin in receipts and status;
+- make local Sync read-only with respect to the checkout, network-free, and subject to the same
+  last-known-good rule and actionable diagnostics as remote Sync;
+- key persisted/reused configuration, credential bindings, setup state and lifecycle ownership by
+  alias-qualified installation-target identity, including normalized project/user destination and
+  harness/profile, by using B-144's general consumer-state contract; keep secret values inside their
+  provider and store only the target-specific provider reference;
+- test coexistence with the remote Registry, alias-qualified selection, unqualified ambiguity,
+  dependency closure, install/update/status and an invalid local successor; install the same MCP
+  from local and remote aliases with different config and secret references, and install one alias
+  into two project roots plus user scope with independent values. Then prove update, reconfigure,
+  credential rotation and uninstall of any target cannot affect another. Also prove that deliberate
+  selection of one shared provider reference records every dependant and warns before a destructive
+  credential action.
+
+This is distinct from §165.23 Candidate Test Install. Candidate Test Install exercises the compiled
+candidate before promotion; a configured local Registry exercises the exact canonical
+representation, dependency closure and collections after promotion using the normal consumer path.
+It is complementary to CP-26 step 18: Push readiness answers whether a Registry commit may leave
+the machine, while this capability makes that Registry a normal local Marketplace input before it
+does. The owner promoted it to CP-26.20 on 2026-09-18, after B-144 establishes safe target-qualified
+consumer state in step 19.
+
+## B-144 — PROMOTED TO CP-26.19: Configuration and credential bindings are not keyed by installation target
+
+Status: PROMOTED TO CRITICAL PATH (2026-09-18)
+
+Discovered in: issue #23 design review / `application/installation_inputs.py` /
+`io/consumer_actions.py`
+
+**Why useful.** Configuration and secret bindings are general consumer state, independent of how a
+Registry is acquired. Their complete logical owner is:
+
+```text
+Registry alias + artifact kind/name + normalized project/user root + harness/profile + input_id
+```
+
+Each distinct key must hold an independent ordinary value or credential provider reference. For
+macOS Keychain, it must resolve to a unique generic-password `service`/`account` pair. The encoding
+may hash or otherwise hide the raw target path, but two distinct logical keys may not alias. A user
+can explicitly bind several owners to the same pre-existing provider reference; only that action
+creates shared credential lifecycle.
+
+**Current defect.** Input composition groups declarations globally by `InputId` and one supplied
+source is returned to every owner declaring it. The TUI's automatic Keychain reference uses one
+service derived from user home and an account equal to `input_id`; it omits Registry alias,
+artifact, project/user target and harness/profile. Ordinary files are physically per artifact root
+and harness, but initial composition still projects one value into every matching target, while
+receipt credentials are not target-qualified. These collisions affect remote URL Registries today;
+local Registry support would only make them easier to encounter.
+
+**Why critical now.** The owner added B-143 and B-144 to CP-26 on 2026-09-18. This item is step 19
+and precedes local Registry acquisition in step 20 because the collision already affects remote
+Registries and local aliases would compound it. It does not block the current scaffold removal;
+step 2 remains the next executable task.
+
+**Potential approach.** Introduce one nominal `InstallationTargetId`/input-binding key at the domain
+boundary rather than concatenating strings in adapters. Carry it through input composition,
+persisted configuration lookup, provider-reference generation, receipts, setup and lifecycle
+dependency edges. Derive the macOS Keychain item identity from a canonical structured encoding;
+include an opaque digest of normalized roots instead of their plaintext. Keep version outside the
+stable owner so compatible updates at the same target can retain values.
+
+**Acceptance evidence.** Install the same artifact from one remote Registry into two projects and
+user scope, and from two aliases into the same target. Give every instance different configuration
+and Keychain references; reopen, update, reconfigure, rotate and uninstall each independently.
+Property-test that distinct valid complete keys never produce the same provider item identity.
+Separately bind several instances explicitly to one provider reference and prove all dependant
+edges and destructive-action warnings remain present. Run scoped mutation over the new identity
+module and the input-composition change.
+
+Invariants touched: INV-051–059, INV-179–180, INV-190, INV-196, INV-231–232, INV-243.
+
+Evidence/links: Product Specification §§38–39, §96, §161.7; D-313; B-143.
+
+Promotion condition: satisfied by the owner's 2026-09-18 instruction; implement as CP-26.19 before
+CP-26.20 local Registry consumption.
+
+## B-145 — Generated Registry workflow helpers have broad surviving string mutants
+
+Status: OPEN, NONCRITICAL
+
+Discovered in: CP-26.02 scoped mutation of `registry_commands/templates.py`, 2026-09-18
+
+The task-2 run used `tests/registry_init_scaffold_test.py` and generated 46 mutants: 16 killed and
+30 survived. The two survivors in `render_registry_readme` change the codec spelling from `utf-8`
+to `UTF-8` and are equivalent. The other 28 are in the pre-existing `_job` and `_aggregate`
+workflow generators. They are outside CP-26.02's claim, which is that generated maintainer guidance
+no longer advertises withdrawn `registry scaffold` and instead names `scan`/`promote`; the new
+README assertions kill mutations of that guidance.
+
+Read the `_job`/`_aggregate` survivors when generated workflow behavior is next changed. Classify
+equivalent formatting/string mutations separately from changes to shell selection, gate order,
+matrix shape, credentials, image selection and aggregate status. Add behavioral assertions for any
+survivor that changes one of those contracts; never weaken a test to move the count.
+
+Evidence/links: CP-26.02; `agent_artifacts/registry_commands/templates.py`;
+`tests/registry_init_scaffold_test.py`; D-134; D-317.

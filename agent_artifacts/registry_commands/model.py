@@ -18,9 +18,6 @@ from agent_artifacts.security.model import SecurityAssessment
 
 _SLUG_RE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 _DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
-_KINDS = frozenset({"skill", "guideline", "mcp", "hook", "memory"})
-_SCOPES = frozenset({"project", "user"})
-_MODES = frozenset({"copy", "symlink"})
 
 
 def _valid_digest(value: object) -> bool:
@@ -42,16 +39,15 @@ def _one_safe_line(value: object) -> bool:
 
 class RegistryOperation(str, Enum):
     INIT = "init"
-    SCAFFOLD = "scaffold"
     COLLECTION = "collection"
     FORMAT = "format"
     LOCK = "lock"
     BUILD = "build"
     MIGRATE = "migrate"
     # Vendoring writes payload bytes under `artifacts/`, which the registry-input mutation plan
-    # cannot carry — its allowed paths are the lock, the index, and `entries/`.  So a vendor is a
-    # workspace operation like `scaffold`, not a mutation like `promote-native`, even though the two
-    # commands read as siblings.
+    # cannot carry — its allowed paths are the lock, the index, and `entries/`. So a vendor is a
+    # workspace operation, not a mutation like `promote-native`, even though the two commands read
+    # as siblings.
     VENDOR = "vendor"
     VENDOR_BATCH = "vendor-batch"
     PUBLISH = "publish"
@@ -85,38 +81,6 @@ class RegistryInitOptions:
             or not self.minimum_aart < self.maximum_aart_exclusive
         ):
             raise ValueError("registry init options are invalid")
-
-
-@dataclass(frozen=True, slots=True)
-class ArtifactScaffoldOptions:
-    kind: str
-    name: str
-    version: SemVer
-    summary: str
-    profiles: tuple[str, ...]
-    platforms: tuple[str, ...]
-    scopes: tuple[str, ...]
-    modes: tuple[str, ...]
-
-    def __post_init__(self) -> None:
-        if (
-            self.kind not in _KINDS
-            or _SLUG_RE.fullmatch(self.name) is None
-            or not isinstance(self.version, SemVer)
-            or not _one_safe_line(self.summary)
-            or not self.profiles
-            or not self.platforms
-            or not self.scopes
-            or not self.modes
-            or any(_SLUG_RE.fullmatch(value) is None for value in self.profiles + self.platforms)
-            or not set(self.scopes) <= _SCOPES
-            or not set(self.modes) <= _MODES
-        ):
-            raise ValueError("artifact scaffold options are invalid")
-        object.__setattr__(self, "profiles", tuple(sorted(set(self.profiles))))
-        object.__setattr__(self, "platforms", tuple(sorted(set(self.platforms))))
-        object.__setattr__(self, "scopes", tuple(sorted(set(self.scopes))))
-        object.__setattr__(self, "modes", tuple(sorted(set(self.modes))))
 
 
 @dataclass(frozen=True, slots=True)

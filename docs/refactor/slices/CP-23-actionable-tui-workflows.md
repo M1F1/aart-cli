@@ -77,6 +77,11 @@ journey and the absence of a hidden active `p` binding.
 
 ### 05 — End TUI promotion at the local commit; publication is manual
 
+**Historical contract, superseded by Product Specification §164.7, D-312 and CP-26.18.** This
+records what CP-23 implemented and verified at the time. It is not the current product direction:
+explicit Push is restored on Registry Maintainer's local-workspace row, not on the promotion success
+screen.
+
 The owner explicitly reverses D-228. Remove TUI push configuration, publication actions and
 advertised/hidden key routes that can dispatch a push. Retain local validation, review and commit.
 After success explain: push the Registry branch manually; complete PR/review/merge into the
@@ -614,7 +619,9 @@ Evidence:
 
 ### Task 05 — TUI promotion ends at the local commit (2026-09-14)
 
-Done. D-255 records the choice; B-116 records the default-branch reader left without a caller.
+Done as CP-23 history. D-255 records the choice and B-116 records the default-branch reader left
+without a caller; Product Specification §164.7, D-312 and CP-26.18 later supersede the no-TUI-Push
+product direction by placing explicit Push on Registry Maintainer's local-workspace row.
 
 Characterized first: after the commit, screen 45 said `Git publication: not yet published; press p
 to choose a review branch`. `p` opened a remote/branch form, Enter prepared a

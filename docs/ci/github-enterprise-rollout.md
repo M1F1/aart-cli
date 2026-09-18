@@ -242,11 +242,17 @@ Cloning an empty repository leaves it unset.
 
 ```bash
 git switch -c add-code-review
-aart registry scaffold skill code-review --source . --summary "Review code." \
-  --profile claude --platform linux --yes
+# Author and commit aart.yaml plus its payload in a separate clean Source checkout.
+# Then inspect the exact scan/promotion inputs for that checkout:
+aart registry scan --help
+aart registry promote --help
 aart registry publish --source . --yes -m "feat: add the code-review skill"
 aart registry push --source . --branch add-code-review
 ```
+
+The artifact is authored in its Source repository, not inside the Registry. `scan` compiles its
+explicit manifest into a Candidate and `promote` brings the reviewed Candidate into this checkout.
+Use the Candidate and evidence digests printed by the review flow; neither command invents them.
 
 `aart registry push` refuses the default branch by name, and AART never merges. Open the pull request
 on the instance; its CI is what Part 4 makes pass. The generated `README.md` in the registry lists the

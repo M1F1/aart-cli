@@ -1,7 +1,6 @@
 """Maintainer registry command functional core."""
 
 from .model import (
-    ArtifactScaffoldOptions,
     CollectionAuthorOptions,
     RegistryApplyCommand,
     RegistryApplyReceipt,
@@ -15,7 +14,6 @@ from .model import (
 )
 from .planning import (
     audit_registry_workspace,
-    plan_artifact_scaffold,
     plan_registry_build,
     plan_registry_collection,
     plan_registry_format,
@@ -28,7 +26,6 @@ from .planning import (
 )
 
 __all__ = [
-    "ArtifactScaffoldOptions",
     "CollectionAuthorOptions",
     "RegistryApplyCommand",
     "RegistryApplyReceipt",
@@ -40,7 +37,6 @@ __all__ = [
     "RegistryWorkspacePlan",
     "WorkspaceChangeKind",
     "audit_registry_workspace",
-    "plan_artifact_scaffold",
     "plan_registry_collection",
     "plan_registry_build",
     "plan_registry_format",

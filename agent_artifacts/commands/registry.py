@@ -1423,8 +1423,6 @@ def run(request: Request) -> int:
     workspace = FilesystemRegistryWorkspace(_root(request))
     if action == "init":
         return _run_curation(request, CurationAction.INIT)
-    if action == "scaffold":
-        return _run_curation(request, CurationAction.SCAFFOLD)
     if action == "collection":
         return _run_curation(request, CurationAction.COLLECTION)
     if action == "scan":

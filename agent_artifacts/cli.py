@@ -714,54 +714,6 @@ def build_parser() -> argparse.ArgumentParser:
     _add_registry_finalize(p_init)
     _add_json(p_init)
 
-    p_scaffold = registry_sub.add_parser(
-        "scaffold", help="create one canonical native artifact package"
-    )
-    _add_registry_source(p_scaffold)
-    p_scaffold.add_argument("artifact_kind", choices=_ARTIFACT_TYPES, metavar="KIND")
-    p_scaffold.add_argument("names", nargs=1, metavar="NAME")
-    p_scaffold.add_argument(
-        "--summary", required=True, metavar="TEXT", help="one-line artifact description"
-    )
-    p_scaffold.add_argument(
-        "--artifact-version",
-        default="1.0.0",
-        metavar="VERSION",
-        help="initial artifact version (default: 1.0.0)",
-    )
-    p_scaffold.add_argument(
-        "--profile",
-        action="append",
-        required=True,
-        metavar="P[,P...]",
-        help="target harness profile(s); comma-separated or repeated",
-    )
-    p_scaffold.add_argument(
-        "--platform",
-        action="append",
-        required=True,
-        metavar="PLATFORM",
-        help="supported platform (repeatable)",
-    )
-    p_scaffold.add_argument(
-        "--install-scope",
-        action="append",
-        choices=_INSTALL_SCOPES,
-        dest="registry_scopes",
-        default=[],
-        help="supported install scope (repeatable; default: project)",
-    )
-    p_scaffold.add_argument(
-        "--install-mode",
-        action="append",
-        choices=("copy", "symlink"),
-        dest="registry_modes",
-        default=[],
-        help="supported install mode (repeatable; default: copy)",
-    )
-    _add_registry_finalize(p_scaffold)
-    _add_json(p_scaffold)
-
     p_collection = registry_sub.add_parser(
         "collection",
         help="author a collection from artifacts this registry already holds",
@@ -1518,14 +1470,8 @@ def _to_request(args: argparse.Namespace) -> Request:
         maximum_version=getattr(args, "maximum_version", None),
         latest_version=getattr(args, "latest_version", None),
         compatibility=getattr(args, "compatibility", None),
-        registry_scopes=tuple(
-            getattr(args, "registry_scopes", ())
-            or (("project",) if getattr(args, "registry_action", None) == "scaffold" else ())
-        ),
-        registry_modes=tuple(
-            getattr(args, "registry_modes", ())
-            or (("copy",) if getattr(args, "registry_action", None) == "scaffold" else ())
-        ),
+        registry_scopes=tuple(getattr(args, "registry_scopes", ()) or ()),
+        registry_modes=tuple(getattr(args, "registry_modes", ()) or ()),
         registry_platforms=tuple(getattr(args, "platform", ()) or ()),
         security_action=getattr(args, "security_action", None),
         security_input=getattr(args, "security_input", None),

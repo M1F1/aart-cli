@@ -355,9 +355,11 @@ set repository variables — no file in the registry changes. See
 aart registry init --source . --source-id company --display-name "Company Registry"
 aart registry init --source . --source-id company --display-name "Company Registry" --yes
 
-# Author a package, or review a native package from another repository
-aart registry scaffold skill code-review --source . --summary "Review code." \
-  --profile claude --platform darwin
+# Author in a separate Source checkout, then scan and promote its reviewed Candidate
+aart registry scan --help
+aart registry promote --help
+
+# Or review a native package from another repository
 aart registry promote-native skill code-review --source . \
   --url https://github.com/acme/skills.git --ref main \
   --path artifacts/skill/code-review

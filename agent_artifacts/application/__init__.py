@@ -7,7 +7,6 @@ from .configuration import (
 )
 from .registry_commands import (
     finalize_registry_workspace,
-    prepare_artifact_scaffold,
     prepare_registry_build,
     prepare_registry_format,
     prepare_registry_init,
@@ -53,7 +52,6 @@ __all__ = [
     "object_status",
     "load_configuration",
     "prepare_native_promotion",
-    "prepare_artifact_scaffold",
     "prepare_registry_build",
     "prepare_registry_format",
     "prepare_registry_init",

@@ -258,7 +258,7 @@ class VendorDeliveryReviewTest(unittest.TestCase):
 
 
 class OwnedMcpDeliveryTest(unittest.TestCase):
-    """The same descriptor, authored in place instead of vendored.
+    """The same descriptor in registry-owned content rather than a vendored copy.
 
     The check is not tied to the vendoring delivery finding, so an `mcp` package a maintainer wrote
     themselves is checked too. Nothing about the consequence depends on where the bytes
@@ -290,26 +290,46 @@ class OwnedMcpDeliveryTest(unittest.TestCase):
                 )[0],
                 0,
             )
-            # Scaffolded, not hand-written: the package under test is the one the tool itself tells
-            # a maintainer to author, so the finding cannot be an artefact of a bad fixture.
-            self.assertEqual(
-                _run(
+            descriptor = root / _PACKAGE / "payload/mcp.json"
+            descriptor.parent.mkdir(parents=True)
+            descriptor.write_bytes(_descriptor("npx", "-y", "@example/srv"))
+            service = LocalCurationService(
+                str(root),
+                native_acquirer=lambda _url, _ref: Ok(
+                    NativeReferenceAcquisition(_URL, "v1.4.0", _COMMIT, _foreign_repository())
+                ),
+            )
+            with patch(
+                "agent_artifacts.commands.registry.load_local_curation_service",
+                return_value=Ok(service),
+            ):
+                code, output = _run(
                     "registry",
-                    "scaffold",
+                    "vendor",
                     "--source",
                     str(root),
                     "mcp",
                     "atlassian",
+                    "--url",
+                    _URL,
+                    "--ref",
+                    "v1.4.0",
+                    "--path",
+                    "servers/atlassian",
+                    "--artifact-version",
+                    "1.0.0",
                     "--summary",
                     "Atlassian MCP server.",
                     "--profile",
                     "claude",
                     "--platform",
                     "darwin",
+                    "--license",
+                    "MIT",
                     "--yes",
-                )[0],
-                0,
-            )
+                )
+            self.assertEqual(code, 0, output)
+            (root / _PACKAGE / "provenance.json").unlink()
             if document is not None:
                 (root / _PACKAGE / "payload/mcp.json").write_bytes(document)
             for name, content in payload.items():
@@ -343,8 +363,8 @@ class OwnedMcpDeliveryTest(unittest.TestCase):
 
             self.assertNotIn("vendored mcp descriptor", output)
 
-    def test_rs01_the_scaffolded_descriptor_still_passes(self) -> None:
-        """The refusal must not fail the package the tool itself generates."""
+    def test_rs01_a_registry_owned_descriptor_that_starts_a_server_still_passes(self) -> None:
+        """The refusal must not fail a registry-owned package with an executable descriptor."""
 
         with self._owned() as root:
             code, output = _run("registry", "audit", "--source", str(root))

@@ -12,7 +12,6 @@ from typing import Protocol, cast
 from agent_artifacts.application.registry_commands import (
     finalize_registry_workspace,
     prepare_artifact_revendor,
-    prepare_artifact_scaffold,
     prepare_artifact_vendor,
     prepare_registry_build,
     prepare_registry_collection,
@@ -33,7 +32,6 @@ from agent_artifacts.protocol.registry_models import RegistryEntry, ReviewRecord
 from agent_artifacts.protocol.registry_schema import parse_registry_entry
 from agent_artifacts.protocol.semver import SemVer, parse_semver
 from agent_artifacts.registry_commands.model import (
-    ArtifactScaffoldOptions,
     CollectionAuthorOptions,
     RegistryInitOptions,
     RegistryOperation,
@@ -214,7 +212,6 @@ def _follow_up(
     quoted = shlex.quote(workspace)
     if action in {
         CurationAction.INIT,
-        CurationAction.SCAFFOLD,
         CurationAction.COLLECTION,
         # A vendored package is new owned content, so the lock and index are stale until they are
         # rebuilt: `validate --strict` alone would fail and send the maintainer looking for a fault
@@ -460,60 +457,6 @@ class LocalCurationService:
             "every registry at once",
         )
         return Ok(self._workspace_review(request, planned.value, warnings=warnings))
-
-    def _prepare_scaffold(self, request: CurationRequest) -> Result[PreparedCuration]:
-        # Authoring in place and publishing approved versions are two representations of a
-        # registry, and this one has already chosen.  Scaffolding here used to succeed and write
-        # the older representation's unversioned path beside the approved tree, which `build`
-        # never reaches and `validate` then refuses -- a registry broken by one command that
-        # reported success and printed the next three to run (B-142).
-        promoted = self._current()
-        if isinstance(promoted, Err):
-            return promoted
-        if is_promoted_registry(promoted.value):
-            return _error(
-                "this registry publishes approved versions, so it cannot also author in place",
-                remediation=(
-                    "author the artifact in a source checkout, then bring it in with "
-                    "`aart registry scan --help` and `aart registry promote --help`",
-                ),
-            )
-        if (
-            request.kind is None
-            or request.name is None
-            or request.summary is None
-            or not request.profiles
-            or not request.platforms
-        ):
-            return _error("scaffold requires kind, name, summary, profiles, and platforms")
-        if request.artifact_version is None:
-            return _error("scaffold requires an artifact version")
-        version = _semver(request.artifact_version, "artifact version")
-        if isinstance(version, Err):
-            return version
-        try:
-            options = ArtifactScaffoldOptions(
-                request.kind,
-                request.name,
-                version.value,
-                request.summary,
-                request.profiles,
-                request.platforms,
-                request.scopes,
-                request.modes,
-            )
-        except ValueError as error:
-            return _error(str(error))
-        planned = prepare_artifact_scaffold(options, output=self.workspace)
-        if isinstance(planned, Err):
-            return planned
-        return Ok(
-            self._workspace_review(
-                request,
-                planned.value,
-                warnings=("Review and complete the generated starter payload before publication.",),
-            )
-        )
 
     def _prepare_collection(self, request: CurationRequest) -> Result[PreparedCuration]:
         if request.name is None or request.summary is None or not request.members:
@@ -1355,7 +1298,7 @@ class LocalCurationService:
         locked_snapshot_value = current.value
         # Publish skips locking for the approved representation, so on a checkout that also still
         # holds the older files it would run a gate nothing it does can satisfy -- and print a
-        # remediation (`lock --yes`, `build --yes`) that does nothing to this shape.  Say what is
+        # remediation (`lock --yes`, `build --yes`) that does nothing to this shape. Say what is
         # actually wrong instead (B-142).
         legacy = (
             _legacy_workspace_files(current.value) if is_promoted_registry(current.value) else ()
@@ -1512,7 +1455,6 @@ class LocalCurationService:
             return _error("curation request targets a different workspace")
         mutating = request.action in {
             CurationAction.INIT,
-            CurationAction.SCAFFOLD,
             CurationAction.COLLECTION,
             CurationAction.FORMAT,
             CurationAction.PROMOTE_NATIVE,
@@ -1530,8 +1472,6 @@ class LocalCurationService:
                 return target
         if request.action is CurationAction.INIT:
             return self._prepare_init(request)
-        if request.action is CurationAction.SCAFFOLD:
-            return self._prepare_scaffold(request)
         if request.action is CurationAction.COLLECTION:
             return self._prepare_collection(request)
         if request.action is CurationAction.FORMAT:

@@ -9,7 +9,6 @@ audits, and commits every listed Git change. Only `push` touches a remote, and o
 | Command | Effect | Purpose |
 |---|---|---|
 | `init` | writes | Add protocol markers, `.aart-version`, a README, and registry CI |
-| `scaffold` | writes | Add one canonical native artifact manifest and starter payload |
 | `format` | writes, or reads with `--check` | Canonicalize every managed JSON document |
 | `validate` | reads | Validate protocol, compatibility, lock/index, native packages, and graph |
 | `lock` | writes, or reads with `--check` | Resolve every approved native reference to an exact commit and digests |
@@ -34,7 +33,7 @@ Read-only commands work on a plain snapshot with no `.git` and do not require wr
 and `1` when drift exists. They never apply their plan. Human output describes every changed path;
 `--json` emits a stable operation, changed-path count, review digest, and diagnostics.
 
-## Bootstrap and scaffold
+## Bootstrap and bring in authored content
 
 Start from an empty Git checkout:
 
@@ -51,18 +50,17 @@ minimum/latest compatibility checks. The workflow has read-only repository permi
 no commit or push step. [Rolling out AART on GitHub Enterprise Server](../ci/github-enterprise-rollout.md)
 lists the variables.
 
-Create a package with an explicit compatibility and installation contract:
+Artifacts are authored in a separate Source checkout with an explicit `aart.yaml` or `aart.json`
+and payload. Commit that clean checkout, then use the Registry's Candidate workflow:
 
 ```console
-aart registry scaffold --source company-registry skill review-python \
-  --summary "Review Python changes against the company checklist." \
-  --profile codex --profile tabnine --platform darwin --platform linux \
-  --install-scope project --install-mode copy
+aart registry scan --help
+aart registry promote --help
 ```
 
-The starter content is intentionally small. A maintainer must review the manifest and payload,
-declare setup only through the native setup recipe protocol, and add honest license/provenance
-metadata before relying on the audit result.
+`scan` compiles only explicit author manifests and never changes the Registry. `promote` rechecks
+the selected Candidate, validation evidence and policy result before writing the canonical package.
+The Registry stores that compiled package and provenance; it does not author the Source payload.
 
 ## Lock, build, and audit
 

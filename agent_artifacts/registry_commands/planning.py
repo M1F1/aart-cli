@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass, replace
-from typing import cast
 
 from agent_artifacts.application.promotion import (
     read_registry_version_records,
@@ -15,28 +14,14 @@ from agent_artifacts.domain.identifiers import ArtifactIdentity, ObjectDigest, S
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.protocol.capabilities import Capability
 from agent_artifacts.protocol.hashing import sha256_bytes
-from agent_artifacts.protocol.json import (
-    JsonArray,
-    JsonObject,
-    canonical_json_bytes,
-    parse_json,
-)
+from agent_artifacts.protocol.json import canonical_json_bytes, parse_json
 from agent_artifacts.protocol.native_models import (
-    INSTALL_EFFECTS_BY_TYPE,
-    PAYLOAD_FORMAT_BY_TYPE,
     ArtifactManifest,
     ArtifactSelector,
-    CanonicalArtifactType,
     CollectionManifest,
-    CompatibilitySpec,
-    InstallMode,
-    InstallScope,
-    InstallSpec,
-    PayloadSpec,
     SourceManifest,
 )
 from agent_artifacts.protocol.native_schema import (
-    artifact_manifest_to_json,
     collection_manifest_to_json,
     parse_artifact_manifest,
     parse_provenance,
@@ -107,7 +92,6 @@ from agent_artifacts.sources.model import source_snapshot_digest
 from agent_artifacts.sources.subtree import TakenSubtree, take_subtree
 
 from .model import (
-    ArtifactScaffoldOptions,
     CollectionAuthorOptions,
     RegistryInitOptions,
     RegistryOperation,
@@ -611,140 +595,6 @@ def _source_manifest(files: dict[str, SnapshotEntry]) -> Result[SourceManifest]:
             _CANONICAL_ROOTS,
         )
     return parsed
-
-
-def _payload(
-    options: ArtifactScaffoldOptions,
-    *,
-    base: str,
-) -> tuple[tuple[str, bytes, bool], ...]:
-    """Create a minimally runnable primary payload for a new canonical package.
-
-    A scaffold must itself satisfy the same compiler used by publication.  In particular, hook
-    descriptors cannot be empty placeholders: they need a registration and an executable target.
-    """
-
-    if options.kind == "skill":
-        return (
-            (
-                f"{base}/SKILL.md",
-                (
-                    f"---\nname: {options.name}\ndescription: {options.summary}\n---\n\n"
-                    f"# {options.name.replace('-', ' ').title()}\n"
-                ).encode(),
-                False,
-            ),
-        )
-    if options.kind in {"guideline", "memory"}:
-        return (
-            (
-                f"{base}/{options.name}.md",
-                f"# {options.name.replace('-', ' ').title()}\n\n{options.summary}\n".encode(),
-                False,
-            ),
-        )
-    if options.kind == "mcp":
-        return (
-            (
-                f"{base}/mcp.json",
-                canonical_json_bytes(
-                    JsonObject(
-                        (
-                            ("name", options.name),
-                            (
-                                "server",
-                                JsonObject(
-                                    (
-                                        ("command", "echo"),
-                                        (
-                                            "args",
-                                            JsonArray(
-                                                (
-                                                    f"{options.name} is a scaffold; review its "
-                                                    "MCP command before use.",
-                                                )
-                                            ),
-                                        ),
-                                    )
-                                ),
-                            ),
-                        )
-                    )
-                ),
-                False,
-            ),
-        )
-    return (
-        (
-            f"{base}/hook.json",
-            canonical_json_bytes(
-                JsonObject(
-                    (
-                        ("name", options.name),
-                        ("command", f"${{SCRIPT_DIR}}/{options.name}.sh"),
-                        # Complete enough to install, and deliberately the narrowest thing that is.
-                        # A scaffold an author has to finish before it works is better than one
-                        # that silently runs against every tool the harness has.
-                        ("event", "PreToolUse"),
-                        ("matcher", "Bash"),
-                    )
-                )
-            ),
-            False,
-        ),
-        (
-            f"{base}/{options.name}.sh",
-            (
-                f"#!/bin/sh\nprintf '%s\\n' '{options.name} hook scaffold requires author review'\n"
-            ).encode(),
-            True,
-        ),
-    )
-
-
-def plan_artifact_scaffold(
-    snapshot: SourceSnapshot,
-    options: ArtifactScaffoldOptions,
-) -> Result[RegistryWorkspacePlan]:
-    files = _files(snapshot)
-    if isinstance(files, Err):
-        return files
-    source = _source_manifest(files.value)
-    if isinstance(source, Err):
-        return source
-    root = source.value.artifact_roots[0]
-    base = f"{root}/{options.kind}/{options.name}"
-    if any(path == base or path.startswith(f"{base}/") for path in files.value):
-        return _error(
-            f"artifact package already exists: {options.kind}/{options.name}", _LIST_PACKAGES
-        )
-    kind = cast(CanonicalArtifactType, options.kind)
-    manifest = ArtifactManifest(
-        1,
-        ArtifactIdentity(kind, options.name),
-        options.version,
-        options.summary,
-        PayloadSpec(_path("payload"), PAYLOAD_FORMAT_BY_TYPE[kind]),
-        CompatibilitySpec(options.profiles, options.platforms),
-        InstallSpec(
-            cast(tuple[InstallScope, ...], options.scopes),
-            cast(tuple[InstallMode, ...], options.modes),
-            tuple(sorted(INSTALL_EFFECTS_BY_TYPE[kind])),
-        ),
-    )
-    payload = _payload(options, base=f"{base}/payload")
-    return _plan(
-        RegistryOperation.SCAFFOLD,
-        snapshot,
-        (
-            (
-                f"{base}/artifact.json",
-                canonical_json_bytes(artifact_manifest_to_json(manifest)),
-                False,
-            ),
-            *payload,
-        ),
-    )
 
 
 def plan_registry_collection(

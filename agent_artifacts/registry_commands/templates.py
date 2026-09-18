@@ -373,9 +373,9 @@ Every mutation prepares files and stops so you can read them. Re-run the same co
 to finalize. AART never pushes.
 
 ```sh
-# Author a new artifact in this registry
-aart registry scaffold skill code-review --source . --summary "Review code." \\
-  --profile claude --platform darwin
+# Discover author manifests in a clean source checkout, then review their exact Candidates
+aart registry scan --help
+aart registry promote --help
 
 # Reference an artifact that another repository already packages for AART
 aart registry promote-native skill code-review --source . \\

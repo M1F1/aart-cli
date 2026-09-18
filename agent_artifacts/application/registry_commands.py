@@ -10,7 +10,6 @@ from agent_artifacts.protocol.paths import SafeRelativePath
 from agent_artifacts.protocol.registry_models import ReviewRecord
 from agent_artifacts.protocol.semver import SemVer
 from agent_artifacts.registry_commands.model import (
-    ArtifactScaffoldOptions,
     CollectionAuthorOptions,
     RegistryApplyCommand,
     RegistryApplyReceipt,
@@ -22,7 +21,6 @@ from agent_artifacts.registry_commands.model import (
 from agent_artifacts.registry_commands.planning import (
     VendoredArtifactOrigin,
     plan_artifact_revendor,
-    plan_artifact_scaffold,
     plan_artifact_vendor,
     plan_registry_build,
     plan_registry_collection,
@@ -53,17 +51,6 @@ def prepare_registry_init(
     if isinstance(current, Err):
         return current
     return plan_registry_init(current.value, options)
-
-
-def prepare_artifact_scaffold(
-    options: ArtifactScaffoldOptions,
-    *,
-    output: RegistryWorkspacePort,
-) -> Result[RegistryWorkspacePlan]:
-    current = output.current()
-    if isinstance(current, Err):
-        return current
-    return plan_artifact_scaffold(current.value, options)
 
 
 def prepare_registry_collection(

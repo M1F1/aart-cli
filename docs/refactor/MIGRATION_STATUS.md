@@ -1,5 +1,74 @@
 # AART Refactor Migration Status
 
+**2026-09-18, CP-26.02 complete.** `registry scaffold` is removed end to end while canonical
+`registry publish` remains parseable and retains its approved-Registry aggregate. Active public and
+generated guidance now names Source `scan`/`promote`; historical refactor evidence is unchanged.
+A deliberate parser restoration made the withdrawal test red and restoration made it green. The
+focused damage-radius set is 118 tests; Ruff passed 23 changed Python files, Mypy passed 12 changed
+production files, and docs/secret-shape checks are green. Scoped template mutation killed 16/46;
+two survivors are equivalent UTF-8 spellings and 28 pre-existing workflow-helper survivors are
+B-145. No broad suite ran under D-317. CP-26.03 is next.
+
+**2026-09-18, CP-26 test cadence (D-317).** Tasks 2–20 use focused red/green tests, checks over
+changed files and measured damage radius, affected integration/E2E modules, Hypothesis for
+universal claims and scoped mutation over changed production modules. Broad repository runs are
+deferred to the new CP-26.21 closeout: full quality, full integration/E2E where separate, packaging,
+docs, secret-shape and cross-phase acceptance. CP-26 cannot be verified before task 21 is green.
+This records execution policy only; step 3 is now current after step 2 completed.
+
+**2026-09-18, consumer-first README contract (D-316 / Product Specification §168).** CP-26 steps
+13–16 now serve one primary reader: a normal user installing an artifact. README starts with the
+shortest complete install path, then briefly explains AART, then provides categorized links to the
+detailed consumer, authoring, Registry, Enterprise, protocol/security, contributor/testing and
+release documentation. Detailed current prose moves into those documents rather than disappearing.
+The existing MIT License wording and copyright/footer remain the final content. The documentation
+gate executes the install forms and checks section order, explanation size, links and License
+placement. This changes the planned documentation contract only; CP-26 step 3 is now current.
+
+**2026-09-18, CP-26 sequence and retained-command audit.** The implementation tasks form five
+product phases followed by one closeout phase:
+dependency phases: canonical Registry cleanup (1–5), author loop (6–12), final documentation and
+its executable install gate (13–17), Registry Maintainer Push (18), and target-safe local Registry
+consumption (19–20), then full-slice verification (21). CP-26 step 3 removes only older-representation branches. Canonical `lock`,
+`build`, `validate`, `audit`, `format` and `publish` remain; `publish` is the
+build/validate/audit/local-commit aggregate and never pushes. Push remains a separate explicit
+operation on Registry Maintainer's local-workspace row. CP-23 task 05/D-255 is historical evidence
+and is superseded by Product Specification §164.7/D-312. The install execution gate moved after the
+README rewrite, the remaining author kinds correctly point to step 12, and Registry-origin
+authoring is explicitly outside this slice. This is plan clarification, not implementation; step 2
+remains next.
+
+**2026-09-18, B-143/B-144 promoted into CP-26.** The owner added the two newest backlog findings
+to the active critical-path slice. B-144 is CP-26.19: establish Registry-alias- and
+installation-target-qualified configuration, credential bindings, setup state, receipts and
+lifecycle ownership, including collision-resistant Keychain identity and explicit-only sharing.
+B-143 is CP-26.20: admit canonical Registries from local Git checkouts through the same validated
+snapshot, Marketplace, resolution and installation path used by remote Git. Step 19 precedes step
+20 because the state collision already affects remote Registries and must not be amplified by a
+second transport. Both are planned, not implemented; CP-26 step 2 remains next.
+
+**2026-09-18, general installation input-state boundary (D-313 / INV-243 / B-144).** Registry
+transport is irrelevant to configuration and credential identity. For remote URL and local checkout
+Registries alike, the complete owner key is Registry alias + artifact + concrete project/user root +
+harness/profile + input id; macOS Keychain must use a unique item per key. The same MCP installed
+from two aliases, into two projects, or into project and user targets therefore owns independent
+values and bindings. Explicit selection of one provider reference may still share a credential and
+retains every dependant edge. Current `InputId`-global form composition, one-source-for-all-targets
+projection and default Keychain identity are recorded in B-144; B-143 depends on it. This is
+specified, not implemented; it is now CP-26.19 and does not change active step 2.
+
+**2026-09-18, CP-26 publication correction and TUI push scope (D-311/D-312).** `registry publish`
+is retained as the canonical build → validate → audit → local-commit aggregate; step 2 removes only
+`registry scaffold`, and step 3 removes `publish`'s older-representation branch. CP-26 gains step 18:
+Registry Maintainer's local workspace row distinguishes accepted snapshot, local snapshot/`HEAD`
+and publication readiness, then offers `[p] Push` only for a clean committed tree that passes the
+shared full Registry gate contract. Every blocker is visible. The existing named current branch is
+the only target when it is neither `main` nor the Registry default; otherwise the maintainer may
+create a new review branch. Literal `main` and the default branch are always refused. The worktree
+containing `working_at` must itself be the canonical Registry; Source, connected snapshots and
+unrelated repositories are never push targets. Product Specification §164.7 and the slice carry the
+full acceptance contract. This is planned, not yet implemented.
+
 **2026-09-18, CP-26 scope addition.** The owner added step 17 to remove `M1F1` and
 `M1F1/aart-cli` as generated Registry and operational defaults. The slice names the affected
 production files and confines the change to user-facing output and defaults. The CP-26 removal
@@ -321,8 +390,10 @@ list in Verbose, following the search, with no render-time IO. Six targeted muta
 Task 06 (D-256): Success's three actions are rows reaching Installed, this operation's exact
 receipt and Marketplace. Esc no longer re-enters the finished wizard, and Undo is explained, not
 offered (B-117). Six targeted mutations were killed.
-Task 05 (D-255): TUI push removed entirely; screen 45 ends at the local commit and lists the
-manual Git steps before Registry Sync. A recording transport proves no push; five mutations killed.
+Task 05 (D-255): TUI push was removed entirely at this CP-23 checkpoint; screen 45 ends at the local
+commit and lists the manual Git steps before Registry Sync. A recording transport proves no push;
+five mutations killed. This historical result is superseded for the current product by Product
+Specification §164.7/D-312/CP-26.18, which restores Push on Registry Maintainer.
 Task 04 (D-254): Validation reaches Policy only through Enter; `p` removed; two mutations killed.
 Task 03 (D-253): Candidate file diffs are screen 37's Verbose projection; `f` and its state are
 removed; five targeted mutations killed.

@@ -112,26 +112,6 @@ class RegistryCliIntegrationTest(unittest.TestCase):
             self.assertFalse((root / "aart.index.json").exists())
             self.assertEqual(_run("registry", "build", "--source", str(root), "--yes")[0], 0)
 
-            self.assertEqual(
-                _run(
-                    "registry",
-                    "scaffold",
-                    "--source",
-                    str(root),
-                    "skill",
-                    "review-python",
-                    "--summary",
-                    "Review Python changes against the company checklist.",
-                    "--profile",
-                    "codex",
-                    "--platform",
-                    "darwin",
-                    "--yes",
-                )[0],
-                0,
-            )
-            self.assertTrue((root / "artifacts/skill/review-python/payload/SKILL.md").is_file())
-
             marker = root / "aart-registry.json"
             marker.write_text("{ " + marker.read_text(encoding="utf-8")[1:], encoding="utf-8")
             noncanonical = marker.read_bytes()

@@ -159,8 +159,8 @@ remain in their slice records; closure does not assert a new full-suite run.
 ### CP-23 — Actionable TUI workflows after the fourth manual run
 
 Implement the 2026-09-14 screen reports as fourteen bounded product/audit tasks plus final acceptance:
-Source Sync guidance, Candidate table/detail, Verbose file diffs, Validation progression, manual
-Registry publication outside TUI, functional Success actions, Marketplace descriptions, clear
+Source Sync guidance, Candidate table/detail, Verbose file diffs, Validation progression, the
+historical D-255 manual-publication handoff, functional Success actions, Marketplace descriptions, clear
 Remediation effects, durable post-promotion Candidate state, explicit harness selection, Artifact
 Details controls, navigable credential actions, explicit credential guidance from Source through
 approved metadata to secure entry, and a complete screen/state audit of Frame and `v` semantics.
@@ -168,6 +168,10 @@ Cursor descriptions are Verbose-only throughout; essential input guidance stays 
 Product Specification §167 records the owner's
 revisions. The ordered tasks and completion criteria are in
 `docs/refactor/slices/CP-23-actionable-tui-workflows.md`; start at task 01.
+
+CP-23's manual-publication choice is historical: Product Specification §164.7, D-312 and CP-26.18
+supersede D-255 by restoring explicit Push on Registry Maintainer's local-workspace row. Promotion
+success screens still stop at the local commit.
 
 ### CP-24 — Field reports from the first released version
 
@@ -181,6 +185,26 @@ reports nothing while it runs. The slice ends by cutting the release that carrie
 ordered tasks and completion criteria are in
 `docs/refactor/slices/CP-24-post-release-field-reports.md`; start at task 01.
 
+### CP-26 — Canonical Registry removal, authoring tools and local consumption
+
+Remove the older unversioned Registry representation without a compatibility window, retain
+`registry publish` as the canonical approved-Registry aggregate, and add parser-derived author
+manifest generation/checking plus the focused README paths. Generated Registry content carries no
+maintainer-specific default, and Registry Maintainer exposes publication readiness and safe review-
+branch push from the exact canonical workspace. The canonical maintenance commands themselves
+remain: only their legacy-representation branches are removed. `publish` ends at the reviewed local
+commit; Push is a distinct explicit Registry Maintainer action.
+
+The owner added B-144 and B-143 as the final two ordered tasks. CP-26.19 makes configuration,
+credential bindings, setup state, receipts and lifecycle ownership belong to a stable
+Registry-alias-qualified installation target. CP-26.20 then adds local Git checkout acquisition as
+a second adapter for the same validated canonical Registry snapshot, Marketplace, resolver and
+installation path. Step 19 precedes step 20 so local aliases cannot amplify the existing consumer-
+state collision. Tasks 2–20 use focused tests and gates over changed files plus measured damage
+radius; CP-26.21 alone owns the full quality and integration/E2E closeout after implementation is
+complete. The complete 21-step order and acceptance criteria are in
+`docs/refactor/slices/cp-26-authoring-and-legacy-removal.md`; step 3 is the next executable task.
+
 ## Dependency order
 
 ```text
@@ -192,7 +216,7 @@ CP-08 → CP-09 → CP-10 → CP-11 → CP-12 → CP-13 → CP-14 → CP-15
                                                                      ↓
                                            CP-23 ← CP-22 ← CP-21 ← CP-20
      ↓
-   CP-24
+   CP-24 → CP-26
 ```
 
 Parallelism is allowed only when slices do not share unsettled domain contracts and neither depends

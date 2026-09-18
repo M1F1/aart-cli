@@ -10,10 +10,6 @@ from agent_artifacts.domain.result import Ok
 from agent_artifacts.model import Request
 from agent_artifacts.protocol.semver import VersionBounds, parse_semver
 
-_SCAFFOLD = (
-    "registry scaffold --source /tmp/registry skill demo --summary One. "
-    "--profile codex --platform darwin"
-)
 _VENDOR = (
     "registry vendor --source /tmp/registry mcp atlassian --url https://example.com/up.git "
     "--path artifacts/mcp/atlassian --artifact-version 1.2.0 --summary One. "
@@ -30,7 +26,6 @@ class RegistryCliTest(unittest.TestCase):
         parser = cli.build_parser()
         actions = {
             "init",
-            "scaffold",
             "collection",
             "scan",
             "adopt",
@@ -96,24 +91,25 @@ class RegistryCliTest(unittest.TestCase):
             )
         self.assertEqual(raised.exception.code, 2)
 
-    def test_the_two_authoring_verbs_are_withdrawn(self) -> None:
-        """CP-26 step 2. Both wrote the older registry representation and nothing else.
+    def test_registry_scaffold_is_withdrawn_but_publish_remains_the_canonical_aggregate(
+        self,
+    ) -> None:
+        """CP-26 step 2 removes in-registry authoring, not the canonical publication aggregate.
 
         `scaffold` wrote a compiled package by hand, which no canonical package may be: each one
         carries a `provenance.json` whose origin names the revision it was compiled from, and an
-        artifact authored in place has none. `publish` compiled that same older shape, and on a
-        registry publishing approved versions it skipped locking and then failed a gate nothing it
-        did could satisfy (B-142). Authoring belongs in a source checkout, reached by `scan` and
-        `promote`.
+        artifact authored in place has none. Authoring belongs in a source checkout, reached by
+        `scan` and `promote`. `publish` remains the reviewed build/validate/audit/commit aggregate
+        for that approved representation; CP-26 step 3 removes its legacy branch.
         """
 
-        for withdrawn in ("scaffold", "publish"):
-            with self.subTest(withdrawn):
-                with self.assertRaises(SystemExit) as raised:
-                    cli.build_parser().parse_args(["registry", withdrawn, "--source", "/tmp/r"])
-                self.assertEqual(raised.exception.code, 2)
+        with self.assertRaises(SystemExit) as raised:
+            cli.build_parser().parse_args(["registry", "scaffold", "--source", "/tmp/r"])
+        self.assertEqual(raised.exception.code, 2)
         self.assertFalse(hasattr(CurationAction, "SCAFFOLD"))
-        self.assertFalse(hasattr(CurationAction, "PUBLISH"))
+        self.assertTrue(hasattr(CurationAction, "PUBLISH"))
+        published = cli.build_parser().parse_args(["registry", "publish", "--source", "/tmp/r"])
+        self.assertEqual(published.registry_action, "publish")
 
     def test_the_compatibility_ceiling_defaults_to_the_running_aart(self) -> None:
         # The upper compatibility point is whichever AART is publishing, not a version frozen in
@@ -133,7 +129,7 @@ class RegistryCliTest(unittest.TestCase):
         running = parse_semver(__version__)
         assert isinstance(running, Ok)
 
-        for command in (_SCAFFOLD, _VENDOR, _PROMOTE):
+        for command in (_VENDOR, _PROMOTE):
             with self.subTest(command=command.split()[1]):
                 request = cli._to_request(cli.build_parser().parse_args(command.split()))
                 curation = registry_command._curation_request(
@@ -195,32 +191,6 @@ class RegistryCliTest(unittest.TestCase):
         self.assertEqual(request.native_path, "artifacts/skill/review-python")
         self.assertEqual(request.review_policy, "company-review-v2")
         self.assertTrue(request.yes)
-
-    def test_scaffold_install_scope_and_mode_do_not_silently_include_defaults(self) -> None:
-        request = cli._to_request(
-            cli.build_parser().parse_args(
-                [
-                    "registry",
-                    "scaffold",
-                    "--source",
-                    "/tmp/registry",
-                    "skill",
-                    "demo",
-                    "--summary",
-                    "Demonstrate one canonical skill.",
-                    "--profile",
-                    "codex",
-                    "--platform",
-                    "darwin",
-                    "--install-scope",
-                    "user",
-                    "--install-mode",
-                    "symlink",
-                ]
-            )
-        )
-        self.assertEqual(request.registry_scopes, ("user",))
-        self.assertEqual(request.registry_modes, ("symlink",))
 
     def test_laf90_init_pressed_through_names_a_window_the_running_aart_is_inside(self) -> None:
         # Every registry action that reaches the boundary with both versions unset gets the

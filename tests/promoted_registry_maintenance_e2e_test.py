@@ -144,7 +144,7 @@ class PromotedRegistryMaintenanceE2ETest(unittest.TestCase):
             self.assertEqual(catalog.read_bytes(), approved)
 
     def test_publish_gates_the_approved_representation_without_locking_it(self) -> None:
-        """Publish chains lock, build, validate and audit; the first of those has nothing to do."""
+        """Publish chains build, validate and audit; canonical packages need no legacy lock."""
 
         with self._promoted_registry() as checkout:
             code, text = _cli("registry", "publish", "--source", str(checkout), "--yes")
@@ -165,34 +165,8 @@ class PromotedRegistryMaintenanceE2ETest(unittest.TestCase):
                 [("lock", True), ("build", True), ("validate", True), ("audit", True)],
             )
 
-    def test_scaffold_refuses_a_registry_that_publishes_approved_versions(self) -> None:
-        """B-142: the authoring verb used to succeed here and quietly break the registry.
-
-        `scaffold` wrote `artifacts/<kind>/<name>/artifact.json` -- the unversioned path of the
-        older representation -- printed `next: lock, build, audit`, and left a checkout whose
-        `build` ignores the new package while `validate` refuses the snapshot it no longer binds.
-        One command, no warning, three red gates, and nothing for a consumer to see either way.
-        """
-
-        with self._promoted_registry() as checkout:
-            code, text = _cli(
-                "registry", "scaffold", "--source", str(checkout),
-                "skill", "my-skill", "--summary", "A locally authored skill",
-                "--profile", "claude-code", "--platform", "linux", "--yes",
-            )  # fmt: skip
-
-            self.assertNotEqual(code, 0, text)
-            self.assertIn("registry promote", text)
-            self.assertFalse((checkout / "artifacts" / "skill").exists(), text)
-
     def test_publish_refuses_a_checkout_carrying_both_representations(self) -> None:
-        """B-142: publish skips locking here, so the gate it then runs cannot be satisfied.
-
-        A real registry reached exactly this: one early `publish` on the still-empty checkout left
-        the legacy pair behind, a later `promote` added the approved representation, and from then
-        on publish failed with four errors it structurally could not fix -- while printing a
-        remediation (`lock --yes`, `build --yes`) that does nothing to this shape.
-        """
+        """B-142: publish refuses mixed representation before any gate can mislead."""
 
         with self._promoted_registry() as checkout:
             (checkout / "aart.lock.json").write_text("{}\n", encoding="utf-8")

@@ -327,27 +327,11 @@ class VendorCommandTest(unittest.TestCase):
     def test_rs04_an_owned_package_is_not_sent_to_revendor(self) -> None:
         """`revendor` re-resolves a recorded upstream. An authored package has none to re-resolve."""
 
-        # `wrapper=False`: the scaffold authors the whole package, including the descriptor the
-        # other tests write by hand for `vendor` to adopt.
-        with self._registry(wrapper=False) as root:
-            self.assertEqual(
-                _run(
-                    "registry",
-                    "scaffold",
-                    "--source",
-                    str(root),
-                    "mcp",
-                    "atlassian",
-                    "--summary",
-                    "Atlassian MCP server.",
-                    "--profile",
-                    "claude",
-                    "--platform",
-                    "darwin",
-                    "--yes",
-                )[0],
-                0,
-            )
+        with self._registry() as root:
+            self.assertEqual(_run(*_vendor_command(root, "--yes"))[0], 0)
+            # Origin metadata is what distinguishes a vendored copy from registry-owned content.
+            # The collision behavior under test must not depend on the withdrawn scaffold command.
+            (root / _PACKAGE / "provenance.json").unlink()
 
             code, output = _run(*_vendor_command(root, "--yes"))
 

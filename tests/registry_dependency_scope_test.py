@@ -155,7 +155,7 @@ class DependencyScopeRemediationTest(unittest.TestCase):
             self.assertIsNone(failure, f"`{command}` is not accepted: {failure}")
 
     def test_the_remediation_names_the_route_that_works_in_this_release(self) -> None:
-        """Publishing it here is the route; promoting it is named for what it actually does.
+        """The dependency is authored outside the Registry, then scanned and promoted.
 
         `registry promote-native` puts a foreign package in this registry for consumers to install,
         and a promoted identity is *not* a `requires` target — proved by
@@ -166,7 +166,8 @@ class DependencyScopeRemediationTest(unittest.TestCase):
         _message, remediation = _refusal(_compiled(_requiring("helper")))
         joined = " ".join(remediation)
 
-        self.assertIn("aart registry scaffold", joined)
+        self.assertIn("aart registry scan", joined)
+        self.assertIn("aart registry promote", joined)
         self.assertIn("does not", joined)
 
 

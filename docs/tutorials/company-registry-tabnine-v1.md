@@ -264,22 +264,19 @@ aart marketplace install company/collection/platform-baseline --profile tabnine 
 ```
 ## 4. Write an artifact of your own
 
-For material that has no upstream, scaffold a package and fill it in:
+Author new material in a separate Source checkout. Add an explicit `aart.yaml` or `aart.json` beside
+the payload, following the [native Source contract](../protocol/native-source-v1.md) and the
+[example MCP Source](../examples/author-source/example-mcp/aart.yaml), then commit the checkout.
+From the Registry checkout, scan that exact revision and promote the reviewed Candidate:
 
 ```sh
-aart registry scaffold skill onboarding --source . \
-  --summary "How we onboard a new engineer." \
-  --profile tabnine --platform darwin --yes
+aart registry scan --help
+aart registry promote --help
 ```
 
-```text
-  - added: artifacts/skill/onboarding/artifact.json
-  - added: artifacts/skill/onboarding/payload/SKILL.md
-  warning: Review and complete the generated starter payload before publication.
-```
-
-Edit `artifacts/skill/onboarding/payload/SKILL.md`. The starter is a placeholder, and the warning
-means it.
+`scan` never changes the Registry. `promote` re-observes the clean pinned Source checkout and writes
+only the exact Candidate and evidence reviewed by the maintainer. The Registry stores the compiled
+canonical package; it is not the artifact's authoring workspace.
 
 ## 5. Publish one reviewed cycle
 

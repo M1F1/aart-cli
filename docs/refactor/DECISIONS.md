@@ -5263,7 +5263,7 @@ quietly rewrote a published record; it carries the same guard.
 
 ## D-228 — AART pushes a reviewed registry commit, and never to the default branch
 
-Date: 2026-09-10 · Increment: QA-082 · Status: superseded for TUI by D-249 (2026-09-14)
+Date: 2026-09-10 · Increment: QA-082 · Status: reinstated and extended for TUI by D-312
 
 164.7 used to end "AART may create the local registry commit but does not push it", and `QA-082`
 was recorded as needing a Product Specification decision before anything could be built. The
@@ -5958,7 +5958,7 @@ The post-commit publication `p` is untouched here; task 05 removes TUI publicati
 
 ## D-255 — TUI promotion ends at the local commit; publication is manual Git
 
-Date: 2026-09-14 · Status: implemented · Scope: CP-23 task 05 · Supersedes: D-228 for the TUI
+Date: 2026-09-14 · Status: implemented, superseded by D-312 · Scope: CP-23 task 05
 
 Remove the whole D-228 terminal publication path rather than hiding its key: the
 `REGISTRY_PUBLICATION` action, the configure/edit events, `RegistryPublicationDraft`, the
@@ -7667,3 +7667,202 @@ scanner in the composite quality action immediately after Git trusts the checkou
 scope inspection, index setup, dependency installation, or full quality. Keep the scanner in the
 canonical full gate list as well, so local `make quality` retains its contract. An ordering test
 holds the early position and turned red when the step was deliberately moved after installation.
+
+## D-311 — `registry publish` remains the canonical aggregate
+
+Date: 2026-09-18 · Status: accepted · Scope: CP-26 steps 2–3 and 18
+
+**Context.** The first CP-26 handoff grouped `registry scaffold` and `registry publish` as two
+legacy authoring verbs to delete. Characterization disproved that grouping. `scaffold` can only
+write the older unversioned package shape. `publish`, however, already has approved-Registry
+behaviour: it builds the canonical catalogs, validates and audits the Registry, then creates the
+reviewed local commit without pushing it. Product Specification §164.7 also preserves the
+independent CLI publication contract.
+
+**Decision.** Delete `registry scaffold`. Keep `registry publish` as the convenient canonical
+aggregate. CP-26 step 3 removes its older lock/index branch along with the legacy branches of the
+individual maintenance commands; it does not remove the aggregate. Its current canonical path runs
+build → validate → audit → commit. Step 18 turns publication readiness into one shared contract for
+CLI `publish`, TUI Push and the generated Registry workflow, adding any mandatory format, strict/
+frozen, lock-check and compatibility gates that the narrower aggregate does not yet hold. `lock`
+remains available as a read-only check and reports that immutable version and promotion records
+already pin what the older lock file used to resolve. `push` remains a distinct explicit action.
+
+For avoidance of doubt, step 3 retains the canonical `lock`, `build`, `validate`, `audit`, `format`
+and `publish` command surfaces. It removes only their older-representation branches and legacy
+preparation beneath Push. `publish` never absorbs Push; D-312 places that separate action on
+Registry Maintainer.
+
+## D-312 — Registry Maintainer owns Push and derives readiness from committed Registry state
+
+Date: 2026-09-18 · Status: planned · Scope: CP-26 step 18 · Supersedes: D-255 for the TUI
+
+**Context.** D-255 removed TUI publication and required the maintainer to leave AART immediately
+after it had validated and committed Registry bytes. The owner restored the convenience requirement
+but located it on Registry Maintainer, where accepted state from the consumer-visible branch and a
+temporary local Registry snapshot are already visible together. Attaching Push to individual wizard
+success screens would duplicate the action, lose it after restart and make a transient UI flag look
+like quality evidence. The safety boundary is approval versus publication, not TUI versus shell.
+
+**Decision.** Screen 46's local Registry workspace row owns `[p] Push`. Initialization, rebuild and
+single/bulk promotion merely return there; connected Registry snapshots, Candidates and Sources do
+not own the action. The row separately presents the accepted snapshot, the local snapshot/`HEAD`
+and publication readiness. A local snapshot different from accepted is expected unpublished work,
+not an invalid Registry.
+
+Readiness is recomputed from durable state. The containing worktree and index must be clean; `HEAD`
+must identify the exact local snapshot; generated outputs must already be reproducible; and the
+mandatory Registry publication gates must pass over those committed bytes. One application
+contract is shared with CLI `publish` and the generated workflow, covering format check,
+strict/frozen validation, the canonical lock check, reproducible build check, audit and required
+compatibility checks. No wizard flag or commit subject is evidence. The row shows `Push: ready` or
+`Push unavailable` with every failed check and actionable diagnostic. The key is active only for a
+ready composition, and preparation plus execution recheck so changed state fails closed.
+
+The target is selected conservatively:
+
+- if AART was launched in an existing named Registry branch that is neither `main` nor the default,
+  that current branch is the only target; a missing remote branch is created by the ordinary push;
+- if the checkout is on `main`, another default branch or in detached HEAD, the maintainer enters a
+  new branch name, suggested from the most recent producing action when the session still knows it,
+  otherwise `aart/registry-update`;
+- literal `main` and the configured and remotely advertised default branch are refused, and no push
+  is forced;
+- the exact recorded commit is pushed, never whatever `HEAD` happens to mean later.
+
+The Git worktree containing `working_at` must prove that its root is the canonical Registry workspace
+represented by the row and owns the eligible commit. If it is a Source or any other repository,
+resolution stops there: AART does not walk onward to a parent Registry. The row remains visible with
+the refusal so the operator can see why Push is unavailable. Existing CLI publication application
+and I/O boundaries are reused; AART still does not merge or open a pull request.
+
+This explicitly supersedes CP-23 task 05/D-255's product direction that removed Push throughout the
+TUI. That task remains historical evidence for the earlier state; it is not an active acceptance
+criterion. Push is restored only on Registry Maintainer's local-workspace row, not on promotion or
+other wizard success screens.
+
+## D-313 — Registry alias and installation target qualify configuration and credential bindings
+
+Date: 2026-09-18 · Status: accepted · Scope: general consumer input state / B-144
+
+**Context.** Configuration and credentials belong to consumer installations regardless of whether
+the Registry was synchronized from a remote URL or a local checkout. Marketplace and installation
+coordinates already carry the alias, but the current input composer merges equivalent declarations
+globally by `InputId`. The TUI's default macOS Keychain reference likewise derives one service from
+user home and the account from input id, not from the owning artifact and target. Two remote-
+Registry installations into different projects, as well as copies from `company` and
+`company-local`, could therefore receive one value or credential binding merely because both
+declare `token`.
+
+**Decision.** Runtime input state belongs first to a stable alias- and target-qualified installation
+owner: Registry alias, artifact kind and name, normalized destination context (project/user scope
+and its concrete root), and harness/profile. The declared input id is unique only inside that owner.
+Versions do not create a fresh owner by themselves, so a compatible update within that exact target
+may preserve inputs under the existing migration rules; changing the Registry alias, project/user
+destination or harness/profile always creates a different owner and never copies state implicitly.
+The same MCP installed into two projects and one user-level harness therefore has three independent
+configuration and credential-binding namespaces.
+
+Ordinary configuration values, provider references, setup state, receipts and lifecycle dependency
+edges all preserve this owner. Secret material remains solely in the provider. A user may explicitly
+bind two owners to the same provider reference; only that deliberate equality creates a shared
+credential and its dependant warnings. Equal input ids, names or payload digests never do. Updating,
+reconfiguring, rotating or uninstalling one owner must leave the other's state untouched unless an
+explicitly shared provider reference is itself the reviewed target.
+
+For macOS Keychain, the complete logical key is exactly `Registry alias + artifact + project/user
+root + harness/profile + input_id`; each distinct key creates or selects a distinct Keychain item.
+The `service`/`account` encoding must be deterministic and collision-resistant. It should encode a
+digest or other opaque identity for filesystem roots instead of publishing raw paths into Keychain
+metadata. This rule is transport-neutral and applies to remote URL Registries today.
+
+**Consequence.** B-144 owns the general correction. Its tests must turn the current
+`InputId`-global composition, one-source-for-all-targets projection and Keychain-account derivation
+red, then prove independent remote/local and project/user/harness values plus explicit shared-
+reference behavior. B-143 consumes this capability; it is not where the identity rule originates.
+Guidance text may still be deduplicated visually, but value ownership may not be. Receipts retain
+enough non-secret target evidence to explain ownership.
+
+## D-314 — B-144 precedes B-143 inside CP-26
+
+Date: 2026-09-18 · Status: accepted · Scope: CP-26 steps 19–20
+
+**Context.** The owner promoted the two newest backlog findings into CP-26. B-143 adds a local Git
+checkout as a configured canonical Registry transport. Its issue review exposed B-144: consumer
+configuration and credential references are currently composed by `InputId` rather than by the
+complete installation target, a collision that already exists for remote Registries and would be
+more visible when local and remote aliases expose equal packages.
+
+**Decision.** CP-26.19 closes B-144 first by establishing the stable alias-qualified installation
+target as the owner of ordinary input values, provider references, setup state, receipts and
+lifecycle edges. CP-26.20 then closes B-143 by routing local Git acquisition through the same
+Registry admission, validated snapshot, Marketplace, resolution and installation contracts as
+remote Git. Transport never defines trust or input ownership.
+
+The promotion did not reorder the active work: step 2 remained next when this decision was made and
+is now complete. Step 19 is a prerequisite only for step 20. This makes the dependency explicit
+without widening the legacy-removal increments now in progress.
+
+## D-315 — CP-26 executes as ordered dependency phases and preserves command roles
+
+Date: 2026-09-18 · Status: accepted · Scope: CP-26 ordering and terminology
+
+**Context.** The owner requested a contradiction and sequence audit after the step-3 summary could
+be read as deleting `publish` or Push. The plan also placed the README install-command execution
+gate before the README rewrite, pointed the remaining author kinds at step 8 instead of step 12,
+and ended with an unresolved Registry-authoring question despite the slice already depending on a
+Source-owned authoring boundary. Historical CP-23 records still described D-255's now-superseded
+removal of Push from the TUI without always naming the supersession.
+
+**Decision.** Execute CP-26 in ordered phases: canonical Registry cleanup (1–5), author loop
+(6–12), final README and executable documentation contract (13–17), explicit Registry Maintainer
+Push (18), target-safe local Registry consumption (19–20), and one full-slice verification (21).
+The README execution gate follows the rewrite; subsequent install-line edits rerun it.
+Registry-origin authoring is outside CP-26.
+
+Canonical `lock`, `build`, `validate`, `audit`, `format` and aggregate `publish` survive the legacy
+removal. `publish` ends at the reviewed local commit and never pushes. Push is separately reviewed
+and belongs only to Registry Maintainer's local-workspace row. CP-23 task 05/D-255 remains
+historical evidence and is explicitly superseded by Product Specification §164.7/D-312/CP-26.18.
+
+## D-316 — README is a consumer quick start and documentation index
+
+Date: 2026-09-18 · Status: accepted · Scope: CP-26 steps 13–17 / Product Specification §168
+
+**Context.** The prior CP-26 plan treated README as a page for two competing audiences and reserved
+its second half for an authoring tutorial. The owner instead wants the ordinary user who needs to
+install artifacts quickly to be the primary audience. Detailed explanations remain valuable, but
+their presence inline currently buries adoption under authoring, Registry, Enterprise, quality and
+release material.
+
+**Decision.** README begins with the shortest complete route from installing AART to installing and
+verifying an artifact. The TUI is the primary human route and a compact deterministic CLI path may
+follow. Only after that working quick start does README briefly explain what AART is. A categorized
+documentation index then links to the detailed consumer, authoring, Registry, Enterprise,
+security/protocol, contributor/testing and release material moved into focused documents.
+
+The current MIT License wording and copyright/footer remain the final README content. Detailed
+material is moved, not discarded. The documentation gate executes the install forms and holds the
+section order, bounded explanation, valid links and final License placement. Step 17 reruns it when
+its removal of maintainer-specific defaults changes README.
+
+## D-317 — Broad CP-26 gates run once at the end; each task proves only its damage radius
+
+Date: 2026-09-18 · Status: accepted · Scope: CP-26 tasks 2–21
+
+**Context.** Running the entire quality and integration surface after every CP-26 task would repeat
+thousands of unrelated tests and slow the critical path without improving the evidence for the
+increment just changed. The owner requires broad, full-scope testing only at the end of CP-26 while
+retaining strong TDD and mutation evidence for each task.
+
+**Decision.** Tasks 2–20 run red/green tests for the changed behavior, format/lint/type checks for
+changed files and the measured damage radius, only the integration/E2E modules whose boundary is
+affected, Hypothesis for universal claims, and scoped `mutmut` for changed production modules.
+Specialized docs, schema, packaging or secret gates run when their inputs change. No task claims
+completion without its targeted mutation and focused evidence.
+
+CP-26.21 runs the broad repository closeout after all implementation tasks are done: full
+`make quality`, full standalone integration/E2E where not already included, packaging, docs,
+secret-shape and final cross-phase acceptance. Failures are narrowed and repaired with focused tests
+before the necessary closing gate is repeated. CP-26 cannot be marked verified before task 21 is
+green and recorded in the durable handoff.

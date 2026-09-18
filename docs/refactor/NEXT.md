@@ -5,22 +5,58 @@
 PR #21's public matrix passed on Python 3.10, 3.11 and 3.14. Release Please's PR #22 passed
 its narrow gate and merged; `v0.3.0` and its wheel are published. CI also exposed two literal
 credential-shaped test URLs, now assembled through the fixture helper. D-310 runs the secret-shape
-scanner before dependency installation. Resume CP-26 step 2 on this branch.
+scanner before dependency installation. CP-26 step 2 is complete; resume step 3 on this branch.
 
 ## CP-26 scope addition (2026-09-18)
 
 The owner added step 17: remove `M1F1` and `M1F1/aart-cli` from generated Registry content and
 operational defaults. The concrete locations and acceptance scope are in the CP-26 slice. This is
-independent of step 2 and follows the README work in the numbered plan. The `v0.3.0` release is complete; resume step 2 now.
+independent of the removal work and follows the README work in the numbered plan. The `v0.3.0`
+release is complete; step 3 is next.
 
-## Handoff: CP-26 step 2, on `refactor/cp-26-legacy-removal` (2026-09-18)
+The owner then added step 18 (D-312): `[p] Push` belongs to the local workspace row on Registry
+Maintainer, not to individual wizard success screens. That row distinguishes the accepted snapshot,
+the local snapshot/`HEAD` and publication readiness. Readiness is recomputed from a clean committed
+tree through the shared full Registry gate contract; every blocker is visible. The current named
+branch is the only target when it is neither `main` nor the Registry default; otherwise the
+maintainer enters a new review branch. The worktree containing `working_at` must itself be the
+canonical Registry — a Source, connected snapshot or unrelated repository is never a target. The
+full placement and acceptance contract is in the slice and Product Specification §164.7.
+
+For avoidance of doubt, CP-26 step 3 does not delete any canonical command. `lock`, `build`,
+`validate`, `audit`, `format` and `publish` remain; only their older-representation branches are
+removed. `publish` remains the canonical build/validate/audit/local-commit aggregate and does not
+push. Push remains separate and CP-26.18 restores it in Registry Maintainer. CP-23 task 05/D-255 is
+historical implementation evidence and is explicitly superseded by D-312.
+
+D-313 / INV-243 define a general consumer-state boundary, promoted by the owner from B-144 to
+CP-26.19. An installed artifact's configuration and credential binding are keyed by Registry alias, artifact
+identity, concrete project/user destination, harness/profile and input id, whether the Registry came
+from a remote URL or local checkout. On macOS each such key maps to a unique Keychain item.
+`company/mcp/foo` and `company-local/mcp/foo` do not share values merely because their manifests
+match; neither do installations into two projects and user scope. The current input composer,
+one-source-for-all-targets projection and automatic Keychain identity are known collision points.
+B-143 is promoted to CP-26.20 and depends on step 19. Step 20 adds `registry-local` as a second
+acquisition adapter for the same canonical Registry, snapshot, Marketplace and installation path;
+local Sync is network-free and last-known-good. These additions do not change active CP-26 step 2.
+
+D-316 / Product Specification §168 settle steps 13–16: README is for the normal user who wants an
+artifact installed quickly. It opens with the complete quick path (install AART → connect/sync a
+Registry → choose in Marketplace → install into a harness → verify), gives only then a short “What
+AART is”, and follows with categorized links to detailed documentation. Authoring, Registry,
+Enterprise, architecture, contributor/testing and release detail moves to those documents rather
+than becoming a second README tutorial. The existing MIT License wording and copyright/footer stay
+last. The gate executes install forms and checks order, explanation size, links and final License.
+
+## Completed record: CP-26 step 2, on `refactor/cp-26-legacy-removal` (2026-09-18)
 
 **Branch.** Work on `refactor/cp-26-legacy-removal`, rebased onto the released `v0.3.0` main.
 PR #21 and its release PR #22 are merged; the release workflow passed and attached the wheel.
 
-**The red test is already in the tree**, committed with this handoff:
-`tests/registry_cli_test.py::RegistryCliTest::test_the_two_authoring_verbs_are_withdrawn`. It
-fails on purpose. It is the step's only new test, and making it pass is the step. Run it with:
+**The original red test was based on one false grouping.** D-311 corrects it: only `scaffold` is
+withdrawn; canonical `publish` remains the aggregate. The replacement test is
+`tests/registry_cli_test.py::RegistryCliTest::test_registry_scaffold_is_withdrawn_but_publish_remains_the_canonical_aggregate`.
+Run it with:
 
 ```
 poetry run python -c "import agent_artifacts.application, unittest; \
@@ -33,18 +69,18 @@ the cycle. Use it for every test module under `tests/` that touches registry com
 
 ### What step 2 deletes
 
-Both verbs wrote the older registry representation and have no approved-representation behaviour at
-all. Line numbers are as of this commit and will drift as you cut — take them as a map, not as
-coordinates.
+`scaffold` wrote the older registry representation and has no approved-representation behaviour.
+`publish` does: build, validate, audit and create the reviewed local commit. It survives and loses
+only its legacy branch in step 3. Line numbers are a map, not coordinates.
 
 | File | What goes |
 |---|---|
-| `agent_artifacts/cli.py` | `p_scaffold` parser, 717–763; the `"publish"` parser at 1278–1291; the two `registry_action == "scaffold"` default-injections at 1523 and 1527 |
-| `agent_artifacts/curation/model.py` | `CurationAction.SCAFFOLD` (32), `CurationAction.PUBLISH` (39), and the `review.action is CurationAction.PUBLISH` branch at 289 — that branch's whole `if review.mutating:` block collapses to the else string |
-| `agent_artifacts/curation/runtime.py` | `_prepare_scaffold` 464–517, `_prepare_publish` 1345–1453, the import at 15, and the dispatch entries at 217, 1515, 1525, 1533–1534, 1551–1552 |
-| `agent_artifacts/commands/registry.py` | `_run_publish` 956–1099, and the two dispatch arms at 1426–1427 and 1458 |
+| `agent_artifacts/cli.py` | `p_scaffold` parser and the two `registry_action == "scaffold"` default-injections |
+| `agent_artifacts/curation/model.py` | `CurationAction.SCAFFOLD`; `CurationAction.PUBLISH` survives |
+| `agent_artifacts/curation/runtime.py` | `_prepare_scaffold`, its imports and dispatch entries; `_prepare_publish` survives |
+| `agent_artifacts/commands/registry.py` | scaffold dispatch only; `_run_publish` survives |
 | `agent_artifacts/registry_commands/planning.py` | `plan_artifact_scaffold` 705–748 and `_payload` 616–702 — verify `_payload` has no other caller before cutting it |
-| `agent_artifacts/registry_commands/model.py` | `RegistryOperation.SCAFFOLD` (45), `PUBLISH` (57), `ArtifactScaffoldOptions` and its validator (115); the comment at 53 names `scaffold` and needs rewording, not deleting |
+| `agent_artifacts/registry_commands/model.py` | `RegistryOperation.SCAFFOLD`, `ArtifactScaffoldOptions` and its validator; `PUBLISH` survives |
 | `agent_artifacts/registry_commands/__init__.py` | the `plan_artifact_scaffold` import (18) and `__all__` entry (43) |
 | `agent_artifacts/application/registry_commands.py` | `prepare_artifact_scaffold` 58–66 and its import at 25 |
 | `agent_artifacts/application/__init__.py` | the import (10) and `__all__` entry (56) |
@@ -52,33 +88,32 @@ coordinates.
 | `agent_artifacts/registry_commands/templates.py` | the generated tutorial line at 377 runs `registry scaffold` |
 | `agent_artifacts/wizard.py` | `"scaffold"` at 175 |
 
-**One trap.** `agent_artifacts/compiler/model.py:33` defines `PUBLISH = "publish"` as a *compiler
-phase*, alongside `ACQUIRE`, `PARSE`, `NORMALIZE` and the rest. It has nothing to do with the verb
-and must survive. Grep for `CurationAction.PUBLISH` and `RegistryOperation.PUBLISH`, never for the
-bare string.
+**One trap.** Every publish symbol survives. `agent_artifacts/compiler/model.py` defines
+`PUBLISH = "publish"` as a compiler phase, while `CurationAction.PUBLISH` and
+`RegistryOperation.PUBLISH` are the retained canonical aggregate. Delete none of them.
 
 **Tests to delete, not repair.** They characterize verbs that no longer exist:
 
-- `tests/registry_cli_test.py` — the `_SCAFFOLD` constant (13–16),
-  `test_scaffold_install_scope_and_mode_do_not_silently_include_defaults` (199), and `_SCAFFOLD`
-  from the `_rs02` loop at 136; `"scaffold"` and `"publish"` leave the action set at 29–63.
-- `tests/promoted_registry_maintenance_e2e_test.py` — all three of
-  `test_scaffold_refuses_a_registry_that_publishes_approved_versions`,
-  `test_publish_refuses_a_checkout_carrying_both_representations` and
-  `test_publish_gates_the_approved_representation_without_locking_it`. The first two are D-308's own
-  tests; D-308 guards verbs that step 2 removes, so the guard code inside `_prepare_scaffold` and
-  `_prepare_publish` dies with them. **`is_promoted_registry` itself stays** — step 3 needs it.
-- 35 test files mention one of the two verbs. Most only name them in a list or a docstring. Work
-  from `grep -rln "scaffold\|publish" tests/` and read before cutting.
+- `tests/registry_cli_test.py` — the `_SCAFFOLD` constant,
+  `test_scaffold_install_scope_and_mode_do_not_silently_include_defaults`, and `_SCAFFOLD` from the
+  `_rs02` loop. The action set loses only `"scaffold"`.
+- `tests/promoted_registry_maintenance_e2e_test.py` — only
+  `test_scaffold_refuses_a_registry_that_publishes_approved_versions`. Both publish tests survive;
+  they hold D-311's canonical aggregate and D-308's mixed-representation refusal until step 3
+  removes the legacy branch. **`is_promoted_registry` itself stays.**
+- Read every other scaffold mention before cutting it. A publish mention is not removal work.
 
-**Definition of done for step 2:** the new test passes, `grep -rn "CurationAction.SCAFFOLD\|CurationAction.PUBLISH\|plan_artifact_scaffold\|_run_publish" agent_artifacts/` is empty, one recorded
+**Definition of done for step 2:** the replacement test passes,
+`grep -rn "CurationAction.SCAFFOLD\|RegistryOperation.SCAFFOLD\|plan_artifact_scaffold" agent_artifacts/` is empty, one recorded
 targeted semantic mutation, `make lint format-check typecheck` plus the affected test modules green,
 then `handoff-plan done 2` and a commit.
 
 ### House rules that are easy to miss
 
-- **Never run the full `make quality` locally.** The owner has interrupted it twice. Run the
-  focused test modules plus `make lint format-check typecheck`; the full suite runs in CI on the PR.
+- **Do not run the full `make quality` before CP-26.21.** Tasks 2–20 run the named red/green tests,
+  checks for changed files and measured damage radius, and only affected integration/E2E modules.
+  Task 21 owns the full quality and integration/E2E closeout once implementation is complete
+  (D-317).
 - **One recorded targeted semantic mutation per task** — change the code deliberately, watch the
   named test go red, record it in the slice document. Coverage is not evidence.
 - **Nothing private in any commit, file or PR.** The owner's Enterprise host, org and secret names
@@ -91,22 +126,23 @@ then `handoff-plan done 2` and a commit.
 
 ## CP-26 — start here (2026-09-18)
 
-**Design and plan:** `docs/refactor/slices/cp-26-authoring-and-legacy-removal.md`. The seventeen steps
-are in `plan.json` as CP-26; step 1 is `done`, the rest `todo`. Take them in order — two internal
-constraints only: step 6 (collect the manifest field surface from the parser with `ast`) precedes
-steps 8–9, because the generator is written against the collected surface; and steps 14–16 (the
-README rewrite) follow the author commands, because a README written before those verbs exist
-documents a surface that is still moving. Step 13 is independent and can be taken at any point. The `ast`
-collector is already written and pasted into the design document; do not re-derive it. Step 17 is
-independent and removes organization-specific generated defaults.
+**Design and plan:** `docs/refactor/slices/cp-26-authoring-and-legacy-removal.md`. The twenty-one steps
+are in `plan.json` as CP-26; step 1 is `done`, the rest `todo`. Take them in numbered order. Steps
+1–5 canonicalize Registry maintenance while retaining every canonical command; steps 6–12 build the
+author loop; steps 13–17 deliver the consumer-first README, linked detailed documents and executable
+documentation contract; step 18 restores separately reviewed Push on Registry Maintainer; step 19
+(B-144) precedes step 20 (B-143), so local Registry aliases cannot inherit the existing
+configuration/credential collision; and step 21 runs the broad full-slice gates once. The `ast`
+collector for step 6 is already written and pasted into the design document; do not re-derive it.
+Step 17 reruns step 16's install-line gate if it changes one. Step 3 is next.
 
 **The owner has withdrawn backward compatibility, explicitly and more than once.** No compatibility
 window, no migration command, no deprecation period, no consideration for registries already
 published in the older shape. Delete directly. Do not reintroduce caution here.
 
-**Why removal comes before the new commands:** D-308 already refuses `scaffold` and `publish` on a
-registry that publishes approved versions, so deleting them takes away nothing anyone can currently
-use, and every later step is written against a smaller surface.
+**Why removal comes before the new commands:** D-308 already refuses `scaffold` on a Registry that
+publishes approved versions, so deleting it takes away no canonical workflow. `publish` remains as
+the canonical aggregate under D-311 and loses only its older representation branch in step 3.
 
 **What landed today, on `fix/registry-provide-aart-posix-sh`:**
 
@@ -387,8 +423,10 @@ Undo is explained rather than offered because no reviewed installation undo exis
 Task 02 (D-252) made the Candidates table the actions block and the focused Candidate its
 Verbose-only cursor description; task 03 (D-253) made Candidate file diffs the Verbose projection
 of screen 37 and removed `f`; task 04 (D-254) removed Validation's `p` so Enter is the only route
-to Policy; task 05 (D-255) removed TUI push entirely, so screen 45 ends at the local commit and
-lists push → review/merge → update checkout → Registry Sync. The CLI `registry push` is kept.
+to Policy; task 05 (D-255) removed TUI push entirely at that historical point, so screen 45 ends at
+the local commit and lists push → review/merge → update checkout → Registry Sync. The CLI
+`registry push` was kept. Product Specification §164.7/D-312/CP-26.18 later supersede the TUI-wide
+removal by restoring explicit Push specifically on Registry Maintainer's local-workspace row.
 Evidence is in the slice.
 The unfinished Source onboarding changes from the previous run are completed in the working tree.
 Add Source names the new Source and explains explicit Candidate discovery, retaining its row for
@@ -408,8 +446,9 @@ the scoped advisory mutation analysis, and the recorded manual walkthrough. CP-2
 verified until that work and the owner's manual acceptance are complete. No human acceptance is
 claimed by task 14's automated matrix.
 
-The accepted owner revisions remain Product Specification §167 and D-249–D-250: remove TUI push
-capability (done, D-255), offer explicit Skill harness choice in task 10, carry credential guidance
+The CP-23 owner revisions remain historical evidence under Product Specification §167 and
+D-249–D-250: its TUI-push removal was done under D-255 and later superseded by §164.7/D-312/CP-26.18;
+offer explicit Skill harness choice in task 10, carry credential guidance
 through approved metadata in task 13, and enforce the shared frame without in-TUI exceptions in
 task 14. All cursor descriptions are Verbose-only; essential input guidance stays in Fast.
 Preserve the exact Registry baseline and the distinction between local promotion and publication.
