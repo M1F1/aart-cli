@@ -1,5 +1,14 @@
 # AART Refactor Migration Status
 
+**2026-09-18, CP-26.03 complete.** An initialized Registry now takes the canonical maintenance
+route even before its first version. Canonical `lock`, `build`, `validate`, `audit`, `format` and
+aggregate `publish` remain; the separate CLI Push remains, while all seven surfaces reject retired
+entries/lock/index/unversioned-package state. `publish` builds the canonical catalogs, gates and
+commits locally without pushing. The focused 32-test set, changed-file Ruff and production Mypy are
+green. The targeted empty-Registry mutation was killed; scoped mutation killed every new shape
+detector mutant and left ten pre-existing extraction survivors as B-146. Step 4 is next; broad
+verification remains deferred to CP-26.21.
+
 **2026-09-18, CP-26.02 complete.** `registry scaffold` is removed end to end while canonical
 `registry publish` remains parseable and retains its approved-Registry aggregate. Active public and
 generated guidance now names Source `scan`/`promote`; historical refactor evidence is unchanged.
@@ -7,7 +16,7 @@ A deliberate parser restoration made the withdrawal test red and restoration mad
 focused damage-radius set is 118 tests; Ruff passed 23 changed Python files, Mypy passed 12 changed
 production files, and docs/secret-shape checks are green. Scoped template mutation killed 16/46;
 two survivors are equivalent UTF-8 spellings and 28 pre-existing workflow-helper survivors are
-B-145. No broad suite ran under D-317. CP-26.03 is next.
+B-145. No broad suite ran under D-317. CP-26.03 followed and is recorded above.
 
 **2026-09-18, CP-26 test cadence (D-317).** Tasks 2–20 use focused red/green tests, checks over
 changed files and measured damage radius, affected integration/E2E modules, Hypothesis for

@@ -3717,3 +3717,21 @@ survivor that changes one of those contracts; never weaken a test to move the co
 
 Evidence/links: CP-26.02; `agent_artifacts/registry_commands/templates.py`;
 `tests/registry_init_scaffold_test.py`; D-134; D-317.
+
+## B-146 — Canonical promoted-package extraction has ten surviving scoped mutants
+
+Status: OPEN, NONCRITICAL
+
+Discovered in: CP-26.03 scoped mutation of `registry_maintenance/promoted.py`, 2026-09-18
+
+The fresh scoped run generated 89 mutants and killed 79. Every mutant in the new retired-path
+classifier and empty/canonical/mixed shape decision was killed. The ten survivors are in the
+pre-existing `_package_entries` and `promoted_registry_artifacts` package extraction/projection,
+outside step 3's dispatch claim.
+
+When canonical promoted-package projection is next changed, inspect those ten survivors and add
+load-bearing assertions for path re-rooting, vendored-only selection, identity and object-digest
+projection. Do not broaden CP-26.03 merely to improve the count.
+
+Evidence/links: CP-26.03; `agent_artifacts/registry_maintenance/promoted.py`;
+`tests/promoted_registry_maintenance_e2e_test.py`; D-134; D-317.

@@ -7866,3 +7866,24 @@ CP-26.21 runs the broad repository closeout after all implementation tasks are d
 secret-shape and final cross-phase acceptance. Failures are narrowed and repaired with focused tests
 before the necessary closing gate is repeated. CP-26 cannot be marked verified before task 21 is
 green and recorded in the durable handoff.
+
+## D-318 — `registry init` chooses the canonical representation before the first version exists
+
+Date: 2026-09-18 · Status: accepted · Scope: CP-26 steps 3–5
+
+**Context.** The old dispatcher treated a Registry as canonical only after a path appeared under
+`registry/versions/`. A freshly initialized Registry therefore ran the retired lock/index compiler,
+so its first `lock`, `build` or `publish` created the representation CP-26 removes. Presence of a
+version cannot be the sole discriminator because an empty Registry is valid and useful.
+
+**Decision.** The root `aart-registry.json` and `aart-source.json` manifests identify an empty
+canonical Registry when no retired path is present. Any approved version record is still decisive,
+so mixed state is recognized as canonical-plus-retired and refused rather than sent through a
+legacy repair path. Retired paths are `entries/`, `aart.lock.json`, `aart.index.json`, and
+unversioned package manifests/provenance. All retained maintenance commands and CLI Push refuse
+those paths. Canonical `lock` is read-only, `build` writes the two `registry/` catalogs, and
+`publish` remains build/validate/audit/local-commit without Push.
+
+**Consequence.** Old `promote-native`/`vendor` tests that expect the retained gates to accept an
+unversioned package describe the removed representation. Step 5 deletes that planning surface and
+its fixtures rather than preserving a second definition of Registry validity.

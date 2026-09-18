@@ -5,14 +5,14 @@
 PR #21's public matrix passed on Python 3.10, 3.11 and 3.14. Release Please's PR #22 passed
 its narrow gate and merged; `v0.3.0` and its wheel are published. CI also exposed two literal
 credential-shaped test URLs, now assembled through the fixture helper. D-310 runs the secret-shape
-scanner before dependency installation. CP-26 step 2 is complete; resume step 3 on this branch.
+scanner before dependency installation. CP-26 steps 2–3 are complete; resume step 4 on this branch.
 
 ## CP-26 scope addition (2026-09-18)
 
 The owner added step 17: remove `M1F1` and `M1F1/aart-cli` from generated Registry content and
 operational defaults. The concrete locations and acceptance scope are in the CP-26 slice. This is
 independent of the removal work and follows the README work in the numbered plan. The `v0.3.0`
-release is complete; step 3 is next.
+release is complete; step 4 is next.
 
 The owner then added step 18 (D-312): `[p] Push` belongs to the local workspace row on Registry
 Maintainer, not to individual wizard success screens. That row distinguishes the accepted snapshot,

@@ -1,9 +1,9 @@
-"""Reading the registry a promotion writes, for the commands that maintain it.
+"""Reading the canonical Registry, for the commands that maintain it.
 
-Two registry representations exist and they are not interchangeable. The authoring workspace holds `entries/*.json` plus one unversioned package per artifact, and compiles
-into `aart.lock.json` and `aart.index.json`. A promotion writes the approved representation the
-Product Specification names: `registry/versions/<kind>/<name>/<version>.json`, its promotion record,
-the two derived catalogs, and one package per *version* under `artifacts/<kind>/<name>/<version>/`.
+An initialized Registry has already chosen the canonical representation, even before its first
+promotion. Approved versions add `registry/versions/<kind>/<name>/<version>.json`, a promotion
+record, the two derived catalogs, and one package per *version* under
+`artifacts/<kind>/<name>/<version>/`.
 
 Maintenance commands that read only the first would refuse a healthy promoted registry by naming a
 file at a path nothing writes (`QA-025`, `QA-032`, `B-057`). This module is the other half: it reads the approved
@@ -30,23 +30,48 @@ from agent_artifacts.protocol.registry_models import IndexArtifact, RegistryMani
 __all__ = [
     "APPROVED_VERSIONS_ROOT",
     "is_promoted_registry",
+    "legacy_registry_paths",
     "promoted_registry_artifacts",
     "promoted_registry_versions",
 ]
 
-#: Where the approved representation keeps its version records, and what identifies it as one.
+#: Where the approved representation keeps its version records.
 APPROVED_VERSIONS_ROOT = "registry/versions/"
 
 
-def is_promoted_registry(snapshot: SourceSnapshot) -> bool:
-    """Does this workspace hold approved version records rather than authored entries?
+def legacy_registry_paths(snapshot: SourceSnapshot) -> tuple[str, ...]:
+    """Return paths that can only belong to the retired authoring-workspace representation."""
 
-    Presence of the records is the test rather than absence of the older files, because a checkout
-    that carries both is the migration's real shape and its approvals are the part that decides
-    what the registry publishes.
+    retired: list[str] = []
+    for entry in snapshot.entries:
+        path = str(entry.path)
+        parts = entry.path.parts
+        if path in {"aart.lock.json", "aart.index.json"} or path.startswith("entries/"):
+            retired.append(path)
+        elif (
+            len(parts) == 4
+            and parts[0] == "artifacts"
+            and parts[-1] in {"artifact.json", "provenance.json"}
+        ):
+            retired.append(path)
+    return tuple(sorted(set(retired)))
+
+
+def is_promoted_registry(snapshot: SourceSnapshot) -> bool:
+    """Has this workspace chosen the canonical approved-Registry representation?
+
+    A freshly initialized Registry has no version records yet, so the two root manifests identify
+    that empty canonical state. Once a version record exists it remains decisive even if obsolete
+    lock/index files also survive; that mixed checkout must be refused rather than mistaken for an
+    old workspace and rebuilt through the retired branch.
     """
 
-    return any(str(entry.path).startswith(APPROVED_VERSIONS_ROOT) for entry in snapshot.entries)
+    paths = {str(entry.path) for entry in snapshot.entries}
+    if any(path.startswith(APPROVED_VERSIONS_ROOT) for path in paths):
+        return True
+    if legacy_registry_paths(snapshot):
+        return False
+    return {"aart-registry.json", "aart-source.json"}.issubset(paths)
 
 
 def promoted_registry_versions(

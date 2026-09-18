@@ -429,18 +429,19 @@ class CurationRuntimeTest(unittest.TestCase):
             assert isinstance(no_op, Ok), no_op
             self.assertEqual(no_op.value.status, "no-op")
 
-            for action in (CurationAction.LOCK, CurationAction.BUILD):
+            for action in (
+                CurationAction.LOCK,
+                CurationAction.BUILD,
+                CurationAction.VALIDATE,
+                CurationAction.AUDIT,
+                CurationAction.FORMAT,
+                CurationAction.PUBLISH,
+            ):
                 with self.subTest(action=action):
-                    generated = service.prepare(CurationRequest(action, str(root)))
-                    assert isinstance(generated, Ok), generated
-                    generated_outcome = service.finalize(
-                        generated.value,
-                        generated.value.review.review_digest,
-                    )
-                    assert isinstance(generated_outcome, Ok), generated_outcome
-            audit = service.prepare(CurationRequest(CurationAction.AUDIT, str(root)))
-            assert isinstance(audit, Ok), audit
-            self.assertIn("security evidence", " ".join(audit.value.review.warnings))
+                    refused = service.prepare(CurationRequest(action, str(root)))
+                    self.assertIsInstance(refused, Err)
+                    assert isinstance(refused, Err)
+                    self.assertIn("retired authoring-workspace", refused.diagnostics[0].message)
 
             marker = root / "aart-registry.json"
             marker.write_bytes(marker.read_bytes() + b" ")

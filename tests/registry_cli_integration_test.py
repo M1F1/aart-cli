@@ -14,7 +14,6 @@ from agent_artifacts import cli
 from agent_artifacts.curation.runtime import LocalCurationService
 from agent_artifacts.domain.result import Ok
 from agent_artifacts.protocol.native_tree import SnapshotEntryKind
-from agent_artifacts.protocol.registry_schema import parse_registry_index
 from agent_artifacts.registry_maintenance.model import NativeReferenceAcquisition
 from agent_artifacts.registry_maintenance.planning import (
     plan_registry_entry_add,
@@ -96,14 +95,11 @@ class RegistryCliIntegrationTest(unittest.TestCase):
                 ("diff",),
             ):
                 code, output = _run("registry", *arguments, "--source", str(root), "--json")
-                if arguments[0] == "validate":
-                    self.assertEqual(code, 1, output)
-                else:
-                    self.assertEqual(code, 0, output)
+                self.assertEqual(code, 0, output)
                 self.assertEqual(_tree_bytes(root), before_reads)
 
             code, output = _run("registry", "lock", "--source", str(root), "--check", "--json")
-            self.assertEqual(code, 1, output)
+            self.assertEqual(code, 0, output)
             self.assertFalse((root / "aart.lock.json").exists())
             self.assertEqual(_run("registry", "lock", "--source", str(root), "--yes")[0], 0)
 
@@ -111,6 +107,8 @@ class RegistryCliIntegrationTest(unittest.TestCase):
             self.assertEqual(code, 1, output)
             self.assertFalse((root / "aart.index.json").exists())
             self.assertEqual(_run("registry", "build", "--source", str(root), "--yes")[0], 0)
+            self.assertTrue((root / "registry/index.json").is_file())
+            self.assertTrue((root / "registry/snapshot.json").is_file())
 
             marker = root / "aart-registry.json"
             marker.write_text("{ " + marker.read_text(encoding="utf-8")[1:], encoding="utf-8")
@@ -157,21 +155,18 @@ class RegistryCliIntegrationTest(unittest.TestCase):
             self.assertIn("review the working-tree diff afterward", output)
             self.assertIn("init: Changed 6 managed paths.", output)
 
-    def test_quality_commands_accept_a_read_only_registry_snapshot_without_git(self) -> None:
+    def test_retired_read_only_registry_snapshot_is_refused_without_mutation(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary) / "snapshot"
             shutil.copytree(ROOT / "tests/fixtures/protocol/registry-v1", root)
             before = _tree_bytes(root)
-            for arguments in (
-                ("validate", "--strict", "--frozen"),
-                ("audit",),
-                ("test", "--compatibility", "all", "--latest-version", "1.9.9"),
-            ):
+            for arguments in (("validate", "--strict", "--frozen"), ("audit",)):
                 code, output = _run("registry", *arguments, "--source", str(root), "--json")
-                self.assertEqual(code, 0, output)
+                self.assertNotEqual(code, 0, output)
+                self.assertIn("retired authoring-workspace", output)
                 self.assertEqual(_tree_bytes(root), before)
 
-    def test_lock_and_build_commands_compile_an_acquired_native_reference(self) -> None:
+    def test_lock_and_build_refuse_the_retired_reference_workspace(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary) / "registry"
             root.mkdir()
@@ -195,22 +190,27 @@ class RegistryCliIntegrationTest(unittest.TestCase):
                 "agent_artifacts.commands.registry.load_local_curation_service",
                 return_value=Ok(service),
             ):
-                self.assertEqual(_run("registry", "lock", "--source", str(root), "--yes")[0], 0)
-                self.assertEqual(_run("registry", "build", "--source", str(root), "--yes")[0], 0)
-                before = _tree_bytes(root)
-                self.assertEqual(
-                    _run("registry", "lock", "--source", str(root), "--check")[0],
-                    0,
-                )
-                self.assertEqual(
-                    _run("registry", "build", "--source", str(root), "--check")[0],
-                    0,
-                )
-                self.assertEqual(_tree_bytes(root), before)
+                for verb in ("lock", "build", "validate", "audit", "format", "publish"):
+                    confirmation = (
+                        ("--yes",) if verb in {"lock", "build", "format", "publish"} else ()
+                    )
+                    code, output = _run("registry", verb, "--source", str(root), *confirmation)
+                    self.assertNotEqual(code, 0, output)
+                    self.assertIn("retired authoring-workspace", output)
 
-            parsed = parse_registry_index((root / "aart.index.json").read_bytes())
-            assert isinstance(parsed, Ok)
-            self.assertEqual(str(parsed.value.artifacts[0].source_id), "reference-native-source")
+            code, output = _run(
+                "registry",
+                "push",
+                "--source",
+                str(root),
+                "--branch",
+                "registry-update",
+            )
+            self.assertNotEqual(code, 0, output)
+            self.assertIn("retired authoring-workspace", output)
+
+            self.assertFalse((root / "aart.lock.json").exists())
+            self.assertFalse((root / "aart.index.json").exists())
 
     def test_native_promotion_reviews_before_finalizing_an_immutable_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

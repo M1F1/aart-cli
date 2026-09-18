@@ -38,13 +38,28 @@ def _registry() -> Iterator[tuple[pathlib.Path, pathlib.Path, str]]:
         _git(root, "init", "-b", "main")
         _git(root, "config", "user.name", "AART Test")
         _git(root, "config", "user.email", "aart@example.invalid")
-        (root / "registry.json").write_text("{}\n", encoding="utf-8")
-        _git(root, "add", "registry.json")
+        initialized = _run(
+            "registry",
+            "init",
+            "--source",
+            str(root),
+            "--source-id",
+            "company-registry",
+            "--display-name",
+            "Company Registry",
+            "--yes",
+        )
+        if initialized != 0:
+            raise RuntimeError("canonical Registry fixture did not initialize")
+        _git(root, "add", ".")
         _git(root, "commit", "-m", "Initial registry")
         _git(root, "remote", "add", "origin", str(remote))
         _git(root, "push", "origin", "main")
-        (root / "registry.json").write_text('{"promoted": true}\n', encoding="utf-8")
-        _git(root, "add", "registry.json")
+        readme = root / "README.md"
+        readme.write_text(
+            readme.read_text(encoding="utf-8") + "\nReviewed update.\n", encoding="utf-8"
+        )
+        _git(root, "add", "README.md")
         _git(root, "commit", "-m", "Promote example@1.0.0")
         yield root, remote, _git(root, "rev-parse", "HEAD")
 

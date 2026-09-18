@@ -203,7 +203,7 @@ installation path. Step 19 precedes step 20 so local aliases cannot amplify the 
 state collision. Tasks 2–20 use focused tests and gates over changed files plus measured damage
 radius; CP-26.21 alone owns the full quality and integration/E2E closeout after implementation is
 complete. The complete 21-step order and acceptance criteria are in
-`docs/refactor/slices/cp-26-authoring-and-legacy-removal.md`; step 3 is the next executable task.
+`docs/refactor/slices/cp-26-authoring-and-legacy-removal.md`; step 4 is the next executable task.
 
 ## Dependency order
 

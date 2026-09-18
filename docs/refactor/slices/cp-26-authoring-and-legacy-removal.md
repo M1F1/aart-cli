@@ -1,6 +1,6 @@
 # CP-26 — Canonical Registry maintenance, authoring tools and local consumption
 
-Status: **active**. Steps 1–2 are done (D-308/D-311); step 3 is next. The
+Status: **active**. Steps 1–3 are done (D-308/D-311/D-318); step 4 is next. The
 machine plan keeps an unfinished step as `todo` until its completion evidence is recorded.
 
 PR #21 follow-up (2026-09-18): D-308's authoring refusal now points to the runnable `--help`
@@ -268,7 +268,7 @@ no migration command, and no deprecation period.
 |---|---|---|
 | 1 | A registry that has chosen one representation refuses the other's verbs | **done**, D-308 |
 | 2 | `registry scaffold` is deleted | **done**; verb, planner, CLI surface and obsolete tests removed; `publish` remains |
-| 3 | Keep canonical `lock`, `build`, `validate`, `audit`, `format` and aggregate `publish`; remove only legacy branches | Push also remains separate; only its legacy preparation is removed, and step 18 places it in Registry Maintainer |
+| 3 | Keep canonical `lock`, `build`, `validate`, `audit`, `format` and aggregate `publish`; remove only legacy branches | **done**; empty and populated canonical Registries share one route; Push remains separate and rejects the retired shape |
 | 4 | The consumer and source validators lose theirs | one clear error naming the shape, no fallback |
 | 5 | The lock/index schema, tree constants, planning halves and fixtures are deleted | B-057 closes here |
 | 6 | The authoring-manifest field surface is collected from the parser, not transcribed | the `ast` oracle; lands before anything generates |
@@ -357,6 +357,27 @@ over the 12 changed production files; `docs-check` and `secret-shape-check` are 
 mutation run over `registry_commands/templates.py` generated 46 mutants, killed 16 and left 30: two
 equivalent UTF-8 codec-spelling changes and 28 pre-existing `_job`/`_aggregate` workflow-generator
 survivors recorded as B-145. No broad repository suite was run; D-317 assigns that to step 21.
+
+### Step 3 — canonical Registry commands have one route (2026-09-18)
+
+An initialized Registry is canonical before its first promotion: the two root manifests identify
+that empty state unless a retired path is present, while any `registry/versions/` record remains
+decisive so a mixed checkout is refused rather than sent through the old compiler. `lock` is always
+the read-only immutable-record check; `build` always regenerates `registry/index.json` and
+`registry/snapshot.json`; `publish` always runs canonical build/validate/audit and commits locally.
+`validate`, `audit`, `format` and the separate CLI `push` reject retired entries, lock/index files
+and unversioned packages before their old preparation can run. The default publish subject now
+reads the canonical catalog.
+
+The red test started from `registry init` with no versions: the old dispatch created
+`aart.lock.json`; the canonical dispatch leaves both old files absent and writes both canonical
+catalogs. A deliberate mutation that made an empty initialized Registry non-canonical caused that
+test alone to fail at `lock`; restoration is green. The focused command/curation/publish/push set
+is 32 tests and passes. Ruff format/lint passed the eight changed Python files and Mypy passed the
+three changed production modules. Scoped mutation over `registry_maintenance/promoted.py` killed
+all mutants in the new shape detector; ten survivors are in pre-existing package extraction and
+are recorded as B-146. The legacy vendor/audit tests now name behavior removed by this step and are
+deleted with their fixtures in step 5; no broad suite ran under D-317.
 
 ### Step 17 — no maintainer identity as a default
 

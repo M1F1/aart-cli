@@ -73,6 +73,10 @@ from agent_artifacts.registry_commands.planning import (
     validate_registry_workspace,
 )
 from agent_artifacts.registry_maintenance.discovery import discover_vendor_candidates
+from agent_artifacts.registry_maintenance.promoted import (
+    is_promoted_registry,
+    legacy_registry_paths,
+)
 from agent_artifacts.runtime_contract import EXECUTABLE_CAPABILITIES, EXECUTABLE_VERSION
 from agent_artifacts.sources.local import read_local_snapshot
 from agent_artifacts.sources.model import LocalSnapshotRequest, SnapshotLimits, source_instance_id
@@ -347,8 +351,31 @@ def _snapshot(workspace: FilesystemRegistryWorkspace) -> Result[SourceSnapshot]:
     return workspace.snapshot()
 
 
-def _run_validate(request: Request, workspace: FilesystemRegistryWorkspace) -> int:
+def _canonical_snapshot(workspace: FilesystemRegistryWorkspace) -> Result[SourceSnapshot]:
     current = _snapshot(workspace)
+    if isinstance(current, Err):
+        return current
+    retired = legacy_registry_paths(current.value)
+    if retired:
+        return _error(
+            "registry maintenance found the retired authoring-workspace representation: "
+            + ", ".join(retired),
+            (
+                "author artifacts in a Source checkout, then use registry scan and promote; "
+                "canonical Registry maintenance does not read entries, aart.lock.json, "
+                "aart.index.json, or unversioned artifact packages",
+            ),
+        )
+    if not is_promoted_registry(current.value):
+        return _error(
+            "registry maintenance requires the canonical approved-Registry representation",
+            _INITIALIZE,
+        )
+    return current
+
+
+def _run_validate(request: Request, workspace: FilesystemRegistryWorkspace) -> int:
+    current = _canonical_snapshot(workspace)
     if isinstance(current, Err):
         return _emit_error(request, "validate", current)
     checked = validate_registry_workspace(
@@ -364,7 +391,7 @@ def _run_validate(request: Request, workspace: FilesystemRegistryWorkspace) -> i
 
 
 def _run_audit(request: Request, workspace: FilesystemRegistryWorkspace) -> int:
-    current = _snapshot(workspace)
+    current = _canonical_snapshot(workspace)
     if isinstance(current, Err):
         return _emit_error(request, "audit", current)
     checked = audit_registry_workspace(
@@ -930,7 +957,7 @@ def _publish_subject(root: str, stated: str | None) -> Result[str]:
             return _error("publish commit message must be one non-empty line", _READ_THE_ACTIONS)
         return Ok(stated)
     try:
-        with open(os.path.join(root, "aart.index.json"), encoding="utf-8") as stream:
+        with open(os.path.join(root, "registry", "index.json"), encoding="utf-8") as stream:
             index = json.load(stream)
         artifacts = len(index.get("artifacts", [])) if isinstance(index, dict) else 0
         collections = len(index.get("collections", [])) if isinstance(index, dict) else 0
@@ -1338,6 +1365,9 @@ def _run_push(request: Request) -> int:
     """
 
     root = _root(request)
+    snapshot = _canonical_snapshot(FilesystemRegistryWorkspace(root))
+    if isinstance(snapshot, Err):
+        return _emit_error(request, "push", snapshot)
     resolved = run_git_process(
         GitProcessRequest(("git", "-C", root, "rev-parse", "--verify", "HEAD"), root, 30.0, 128)
     )

@@ -23,6 +23,17 @@ from pathlib import Path
 from agent_artifacts import cli
 from agent_artifacts.domain.result import Ok
 from agent_artifacts.io.registry_bootstrap import refresh_registry_workspace
+from agent_artifacts.protocol.native_tree import (
+    SnapshotEntry,
+    SnapshotEntryKind,
+    SnapshotOrigin,
+    SourceSnapshot,
+)
+from agent_artifacts.protocol.paths import parse_relative_path
+from agent_artifacts.registry_maintenance.promoted import (
+    is_promoted_registry,
+    legacy_registry_paths,
+)
 from tests.maintainer_scan_cli_test import _author_checkout, _git
 
 _EVIDENCE = ("--validation-report", "sha256:" + "7" * 64, "--policy-result", "sha256:" + "8" * 64)
@@ -48,7 +59,76 @@ def _cli(*argv: str) -> tuple[int, str]:
     return code, output.getvalue()
 
 
+def _shape(*paths: str) -> SourceSnapshot:
+    entries = []
+    for path in paths:
+        parsed = parse_relative_path(path)
+        assert isinstance(parsed, Ok)
+        entries.append(SnapshotEntry(parsed.value, SnapshotEntryKind.FILE, b"{}"))
+    return SourceSnapshot(SnapshotOrigin.LOCAL, tuple(entries))
+
+
+class RegistryShapeTest(unittest.TestCase):
+    def test_every_retired_path_kind_is_identified_without_matching_versioned_packages(
+        self,
+    ) -> None:
+        retired = (
+            "aart.lock.json",
+            "aart.index.json",
+            "entries/skill/example.json",
+            "artifacts/skill/example/artifact.json",
+            "artifacts/skill/example/provenance.json",
+        )
+        for path in retired:
+            with self.subTest(path=path):
+                self.assertEqual(legacy_registry_paths(_shape(path)), (path,))
+
+        canonical = _shape(
+            "artifacts/skill/example/1.0.0/artifact.json",
+            "artifacts/skill/example/1.0.0/provenance.json",
+        )
+        self.assertEqual(legacy_registry_paths(canonical), ())
+
+    def test_empty_canonical_old_and_mixed_registry_shapes_are_distinct(self) -> None:
+        roots = ("aart-registry.json", "aart-source.json")
+        self.assertTrue(is_promoted_registry(_shape(*roots)))
+        self.assertFalse(is_promoted_registry(_shape(*roots, "aart.lock.json")))
+        self.assertTrue(
+            is_promoted_registry(
+                _shape(
+                    *roots,
+                    "aart.lock.json",
+                    "registry/versions/skill/example/1.0.0.json",
+                )
+            )
+        )
+
+
 class PromotedRegistryMaintenanceE2ETest(unittest.TestCase):
+    @contextlib.contextmanager
+    def _empty_registry(self):
+        """An initialized canonical Registry before its first approved version."""
+
+        with tempfile.TemporaryDirectory() as raw:
+            checkout = Path(raw).resolve() / "registry"
+            checkout.mkdir()
+            _git(checkout, "init", "-q")
+            _git(checkout, "config", "user.name", "AART Test")
+            _git(checkout, "config", "user.email", "aart@example.invalid")
+            code, text = _cli(
+                "registry",
+                "init",
+                "--source",
+                str(checkout),
+                "--source-id",
+                "company-registry",
+                "--display-name",
+                "Company Registry",
+                "--yes",
+            )
+            self.assertEqual(code, 0, text)
+            yield checkout
+
     @contextlib.contextmanager
     def _promoted_registry(self):
         """An initialized registry checkout holding exactly one real local promotion."""
@@ -113,6 +193,26 @@ class PromotedRegistryMaintenanceE2ETest(unittest.TestCase):
                     failed.append(f"{verb}: {text.strip().splitlines()[:3]}")
 
             self.assertEqual(failed, [])
+
+    def test_empty_registry_maintenance_never_creates_the_older_representation(self) -> None:
+        """CP-26.03: init already chose the canonical shape, before the first promotion."""
+
+        with self._empty_registry() as checkout:
+            for verb in ("lock", "build", "format"):
+                code, text = _cli("registry", verb, "--source", str(checkout), "--yes")
+                self.assertEqual(code, 0, text)
+
+            for verb in ("validate", "audit"):
+                code, text = _cli("registry", verb, "--source", str(checkout))
+                self.assertEqual(code, 0, text)
+
+            code, text = _cli("registry", "publish", "--source", str(checkout), "--yes")
+            self.assertEqual(code, 0, text)
+
+            self.assertFalse((checkout / "aart.lock.json").exists())
+            self.assertFalse((checkout / "aart.index.json").exists())
+            self.assertTrue((checkout / "registry/index.json").is_file())
+            self.assertTrue((checkout / "registry/snapshot.json").is_file())
 
     def test_maintenance_does_not_write_the_older_workspace_representation(self) -> None:
         """`B-057` stays closed by one representation, not by producing both of them."""

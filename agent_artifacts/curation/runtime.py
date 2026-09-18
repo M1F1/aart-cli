@@ -13,10 +13,8 @@ from agent_artifacts.application.registry_commands import (
     finalize_registry_workspace,
     prepare_artifact_revendor,
     prepare_artifact_vendor,
-    prepare_registry_build,
     prepare_registry_collection,
     prepare_registry_init,
-    prepare_registry_lock,
     read_vendored_artifact_origin,
 )
 from agent_artifacts.application.registry_maintenance import finalize_registry_mutation
@@ -49,9 +47,8 @@ from agent_artifacts.registry_commands.planning import (
     VendoredArtifactOrigin,
     audit_registry_workspace,
     plan_artifact_vendor,
-    plan_registry_build,
+    plan_promoted_registry_build,
     plan_registry_format,
-    plan_registry_lock,
     plan_registry_workspace_files,
     project_registry_workspace_plan,
     validate_registry_workspace,
@@ -74,7 +71,10 @@ from agent_artifacts.registry_maintenance.planning import (
     plan_native_promotion,
     project_registry_mutation,
 )
-from agent_artifacts.registry_maintenance.promoted import is_promoted_registry
+from agent_artifacts.registry_maintenance.promoted import (
+    is_promoted_registry,
+    legacy_registry_paths,
+)
 from agent_artifacts.registry_maintenance.vendoring import (
     DeliveryFinding,
     LicenseFinding,
@@ -152,15 +152,8 @@ def _error(message: str, *, stale: bool = False, remediation: tuple[str, ...] = 
     )
 
 
-#: The older representation's two compiled files. A registry publishing approved versions under
-#: `registry/versions/` does not use them, but `validate` still checks them wherever they survive,
-#: so a checkout carrying both shapes is one no verb can satisfy (B-057, B-142).
-_LEGACY_WORKSPACE_FILES = ("aart.lock.json", "aart.index.json")
-
-
 def _legacy_workspace_files(snapshot: SourceSnapshot) -> tuple[str, ...]:
-    held = {str(entry.path) for entry in snapshot.entries}
-    return tuple(name for name in _LEGACY_WORKSPACE_FILES if name in held)
+    return legacy_registry_paths(snapshot)
 
 
 def _semver(raw: str, label: str) -> Result[SemVer]:
@@ -368,6 +361,30 @@ class LocalCurationService:
 
     def _current(self) -> Result[SourceSnapshot]:
         return self.workspace.current()
+
+    def _canonical_current(self) -> Result[SourceSnapshot]:
+        current = self._current()
+        if isinstance(current, Err):
+            return current
+        retired = _legacy_workspace_files(current.value)
+        if retired:
+            return _error(
+                "registry maintenance found the retired authoring-workspace representation: "
+                + ", ".join(retired),
+                remediation=(
+                    "author artifacts in a Source checkout, then use registry scan and promote; "
+                    "canonical Registry maintenance does not read entries, aart.lock.json, "
+                    "aart.index.json, or unversioned artifact packages",
+                ),
+            )
+        if not is_promoted_registry(current.value):
+            return _error(
+                "registry maintenance requires the canonical approved-Registry representation",
+                remediation=(
+                    "initialize a canonical Registry or point --source at its local checkout",
+                ),
+            )
+        return current
 
     def _mutation_target(self) -> Result[None]:
         return self.workspace.verify_mutation_target()
@@ -1102,7 +1119,7 @@ class LocalCurationService:
         )
 
     def _prepare_format(self, request: CurationRequest) -> Result[PreparedCuration]:
-        current = self._current()
+        current = self._canonical_current()
         if isinstance(current, Err):
             return current
         planned = plan_registry_format(current.value)
@@ -1202,22 +1219,6 @@ class LocalCurationService:
             return checked
         return self._mutation_review(request, checked.value.plan, current.value)
 
-    def _acquire_entries(
-        self, snapshot: SourceSnapshot
-    ) -> Result[tuple[NativeReferenceAcquisition, ...]]:
-        entries = self._entries(snapshot)
-        if isinstance(entries, Err):
-            return entries
-        acquired: list[NativeReferenceAcquisition] = []
-        for entry in entries.value:
-            if entry.review.status != "approved":
-                return _error(f"refusing to acquire unapproved reference {entry.identity}")
-            result = self.native_acquirer(entry.source.url, entry.source.ref)
-            if isinstance(result, Err):
-                return result
-            acquired.append(result.value)
-        return Ok(tuple(acquired))
-
     def _prepare_promoted_lock(
         self,
         request: CurationRequest,
@@ -1259,28 +1260,12 @@ class LocalCurationService:
         )
 
     def _prepare_generated(self, request: CurationRequest) -> Result[PreparedCuration]:
-        current = self._current()
+        current = self._canonical_current()
         if isinstance(current, Err):
             return current
-        if request.action is CurationAction.LOCK and is_promoted_registry(current.value):
-            return self._prepare_promoted_lock(request, current.value)
-        acquired = self._acquire_entries(current.value)
-        if isinstance(acquired, Err):
-            return acquired
         if request.action is CurationAction.LOCK:
-            planned = prepare_registry_lock(
-                acquired.value,
-                executable_version=_VERSION,
-                available_capabilities=_CAPABILITIES,
-                output=self.workspace,
-            )
-        else:
-            planned = prepare_registry_build(
-                acquired.value,
-                executable_version=_VERSION,
-                available_capabilities=_CAPABILITIES,
-                output=self.workspace,
-            )
+            return self._prepare_promoted_lock(request, current.value)
+        planned = plan_promoted_registry_build(current.value)
         if isinstance(planned, Err):
             return planned
         return Ok(self._workspace_review(request, planned.value))
@@ -1288,53 +1273,13 @@ class LocalCurationService:
     def _prepare_publish(self, request: CurationRequest) -> Result[PreparedCuration]:
         """Plan lock + build and run both publisher gates over the one projected result."""
 
-        current = self._current()
+        current = self._canonical_current()
         if isinstance(current, Err):
             return current
-        acquired = self._acquire_entries(current.value)
-        if isinstance(acquired, Err):
-            return acquired
-        lock_plans: tuple[RegistryWorkspacePlan, ...] = ()
-        locked_snapshot_value = current.value
-        # Publish skips locking for the approved representation, so on a checkout that also still
-        # holds the older files it would run a gate nothing it does can satisfy -- and print a
-        # remediation (`lock --yes`, `build --yes`) that does nothing to this shape. Say what is
-        # actually wrong instead (B-142).
-        legacy = (
-            _legacy_workspace_files(current.value) if is_promoted_registry(current.value) else ()
-        )
-        if legacy:
-            return _error(
-                "this checkout carries both registry representations: "
-                f"{' and '.join(legacy)} belong to the older one, which this registry does not use",
-                remediation=(
-                    f"remove {' and '.join(legacy)}; the approved versions under "
-                    "registry/versions/ are what consumers read",
-                ),
-            )
-        if not is_promoted_registry(current.value):
-            locked = plan_registry_lock(
-                current.value,
-                acquired.value,
-                executable_version=_VERSION,
-                available_capabilities=_CAPABILITIES,
-            )
-            if isinstance(locked, Err):
-                return locked
-            locked_snapshot = project_registry_workspace_plan(current.value, locked.value)
-            if isinstance(locked_snapshot, Err):
-                return locked_snapshot
-            lock_plans = (locked.value,)
-            locked_snapshot_value = locked_snapshot.value
-        built = plan_registry_build(
-            locked_snapshot_value,
-            acquired.value,
-            executable_version=_VERSION,
-            available_capabilities=_CAPABILITIES,
-        )
+        built = plan_promoted_registry_build(current.value)
         if isinstance(built, Err):
             return built
-        published_snapshot = project_registry_workspace_plan(locked_snapshot_value, built.value)
+        published_snapshot = project_registry_workspace_plan(current.value, built.value)
         if isinstance(published_snapshot, Err):
             return published_snapshot
         validated = validate_registry_workspace(
@@ -1361,9 +1306,7 @@ class LocalCurationService:
         )
         if failed:
             return _error("registry publish gate failed: " + "; ".join(failed))
-        touched = {
-            str(change.path) for plan in (*lock_plans, built.value) for change in plan.changes
-        }
+        touched = {str(change.path) for change in built.value.changes}
         files = {
             str(entry.path): entry
             for entry in published_snapshot.value.entries
@@ -1386,16 +1329,18 @@ class LocalCurationService:
                 aggregate.value,
                 checks=(*_checks(validated.value), *_checks(audited.value)),
                 warnings=(
-                    "Publish runs lock, build, validate, and audit in that order over one reviewed snapshot."
-                    if lock_plans
-                    else "Publish builds, validates, and audits one reviewed snapshot; the approved records need no lock.",
+                    "Publish builds, validates, and audits one reviewed snapshot; the approved records need no lock.",
                     "Finalizing commits every listed Git change in the registry checkout and never pushes.",
                 ),
             )
         )
 
     def _prepare_read_only(self, request: CurationRequest) -> Result[PreparedCuration]:
-        current = self._current()
+        current = (
+            self._canonical_current()
+            if request.action in {CurationAction.VALIDATE, CurationAction.AUDIT}
+            else self._current()
+        )
         if isinstance(current, Err):
             return current
         digest = _snapshot_digest(current.value)

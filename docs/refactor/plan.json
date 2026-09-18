@@ -794,7 +794,7 @@
         {
           "id": "3",
           "title": "Keep canonical lock/build/validate/audit/format and aggregate publish; remove only legacy branches while Push remains separate",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "4",
