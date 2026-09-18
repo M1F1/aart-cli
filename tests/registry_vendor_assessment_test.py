@@ -219,7 +219,7 @@ class VendorAssessmentTest(unittest.TestCase):
             self.assertIn(f"findings: {len(attestation.assessment.findings)}", rendered)
 
     def test_the_committed_evidence_leaves_the_registry_inputs_alone(self) -> None:
-        """`security/` is not a registry input, so evidence cannot make the lock read as stale."""
+        """`security/` cannot change the approved catalog snapshot."""
 
         with self._registry() as root:
             self.assertEqual(_run(*_vendor_command(root, "--yes"))[0], 0)
@@ -227,12 +227,12 @@ class VendorAssessmentTest(unittest.TestCase):
                 code, output = _run("registry", *arguments, "--source", str(root))
                 self.assertEqual(code, 0, output)
 
-            before = (root / "aart.lock.json").read_bytes()
+            before = (root / "registry/snapshot.json").read_bytes()
             (root / "security/attestations/deadbeef.json").write_bytes(b"{}\n")
             code, output = _run("registry", "lock", "--source", str(root), "--yes")
 
             self.assertEqual(code, 0, output)
-            self.assertEqual((root / "aart.lock.json").read_bytes(), before)
+            self.assertEqual((root / "registry/snapshot.json").read_bytes(), before)
 
 
 if __name__ == "__main__":

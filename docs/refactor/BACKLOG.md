@@ -3783,7 +3783,7 @@ D-134; D-317.
 
 ## B-149 — `aart registry vendor` writes the retired unversioned package layout
 
-Status: OPEN, **CRITICAL** — reclassified from noncritical on evidence, 2026-09-18
+Status: CLOSED, **CRITICAL when found** — repaired before CP-26.6 under D-326, 2026-09-18
 
 Discovered in: CP-26.05, while resolving the inherited red set D-318 assigned to this step
 
@@ -3815,6 +3815,13 @@ that behaviour and hide this defect. D-323 records the correction.
 Evidence/links: CP-26.05; D-318; D-323; `agent_artifacts/registry_commands/planning.py::plan_artifact_vendor`;
 `agent_artifacts/registry_maintenance/promoted.py::legacy_registry_paths`;
 `agent_artifacts/curation/runtime.py::_canonical_current`; `tests/registry_vendor_license_test.py`.
+
+**Resolution.** Vendoring now stages authored wrapper bytes in the version directory, projects one
+immutable approved package through `plan_bulk_promotion`, and writes its version record, promotion
+record and catalogs atomically. Re-vendoring writes another version while retaining the previous
+copy. `validate_registry_graph` accepts distinct approved versions and checks collection selectors
+per version. The retained vendoring tests and canonical CLI gates pass; CP-26.21 still owns broad
+verification.
 
 ## B-150 — An installation's identity is the harness *and* the scope it was installed into
 

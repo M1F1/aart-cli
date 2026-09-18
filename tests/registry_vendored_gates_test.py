@@ -6,10 +6,11 @@ provenance. A catalog derived from the bytes that are there agrees with any subs
 why this is asserted over the package rather than over anything generated beside it.
 
 `CP-26.5` took the compiled lock and index away, so these gates now run over the checkout directly.
-They are red while `B-149` is open: `project_vendored_package` still writes the retired unversioned
-`artifacts/<kind>/<name>/` layout, which `registry_native_content` refuses by name. The refusal is
-correct and the writer is what has to move; the claims below are kept whole so the repair has
-something to turn green (`D-323`).
+They were red for the length of `B-149`, because `project_vendored_package` still wrote the retired
+unversioned `artifacts/<kind>/<name>/` layout that `registry_native_content` refuses by name. The
+refusal was correct and the writer is what moved: `vendor` now projects into the approved
+representation's versioned package and promotes it (`D-326`). The claims below were kept whole
+through that, rather than deleted to reach green (`D-323`).
 """
 
 from __future__ import annotations
@@ -29,17 +30,18 @@ from agent_artifacts.protocol.native_tree import (
     SourceSnapshot,
 )
 from agent_artifacts.protocol.paths import parse_relative_path
+from agent_artifacts.protocol.registry_models import ReviewRecord
 from agent_artifacts.protocol.semver import SemVer
 from agent_artifacts.registry_commands.planning import (
     audit_registry_workspace,
+    plan_artifact_vendor,
+    project_registry_workspace_plan,
     validate_registry_workspace,
 )
+from agent_artifacts.registry_maintenance.model import NativeReferenceAcquisition
 from agent_artifacts.registry_maintenance.vendoring import (
     VendorOptions,
-    VendorOrigin,
-    project_vendored_package,
 )
-from agent_artifacts.sources.subtree import take_subtree
 from tests.registry_maintenance_fixtures import (
     empty_registry_snapshot,
     replace_snapshot_file,
@@ -54,7 +56,7 @@ _MCP_JSON = (
     json.dumps({"name": "atlassian", "server": {"command": "npx", "args": ["-y", "srv"]}}).encode()
     + b"\n"
 )
-_BASE = "artifacts/mcp/atlassian"
+_BASE = "artifacts/mcp/atlassian/1.0.0"
 
 
 def _path(raw: str):
@@ -87,11 +89,12 @@ def _upstream() -> SourceSnapshot:
 def _vendored_registry() -> SourceSnapshot:
     """An otherwise empty registry that owns one vendored package."""
 
-    taken = take_subtree(_upstream(), _path("servers/atlassian"))
-    assert isinstance(taken, Ok), taken
-    projected = project_vendored_package(
-        taken.value,
-        VendorOrigin(_URL, "v1.4.0", _COMMIT),
+    snapshot = empty_registry_snapshot()
+    staging = _file(f"{_BASE}/payload/mcp.json", _MCP_JSON)
+    snapshot = SourceSnapshot(snapshot.origin, (*snapshot.entries, staging))
+    planned = plan_artifact_vendor(
+        snapshot,
+        NativeReferenceAcquisition(_URL, "v1.4.0", _COMMIT, _upstream()),
         VendorOptions(
             ArtifactIdentity("mcp", "atlassian"),
             SemVer(1, 0, 0),
@@ -100,24 +103,16 @@ def _vendored_registry() -> SourceSnapshot:
             ("darwin",),
             ("project",),
             ("copy",),
-            authored=(("payload/mcp.json", _MCP_JSON, False),),
             license="MIT",
         ),
-        artifact_root=_path("artifacts"),
+        path=_path("servers/atlassian"),
+        review=ReviewRecord("approved", "manual-review-v1"),
         importer_version=_VERSION,
     )
+    assert isinstance(planned, Ok), planned
+    projected = project_registry_workspace_plan(snapshot, planned.value.plan)
     assert isinstance(projected, Ok), projected
-    snapshot = empty_registry_snapshot()
-    return SourceSnapshot(
-        snapshot.origin,
-        (
-            *snapshot.entries,
-            *(
-                _file(relative, content, executable=executable)
-                for relative, content, executable in projected.value.files
-            ),
-        ),
-    )
+    return projected.value
 
 
 def _validate(snapshot: SourceSnapshot):
@@ -194,8 +189,8 @@ class VendoredCopyGateTest(unittest.TestCase):
         self.assertFalse(_audit(edited).passed)
         self.assertFalse(_validate(edited).passed)
 
-    def test_an_owned_package_without_provenance_is_unaffected(self) -> None:
-        """Only a package carrying `registry-vendor-v1` provenance ships bytes to check."""
+    def test_an_approved_package_without_provenance_is_refused(self) -> None:
+        """The approved package digest binds provenance as well as payload."""
 
         registry = _vendored_registry()
         without = SourceSnapshot(
@@ -204,7 +199,7 @@ class VendoredCopyGateTest(unittest.TestCase):
                 entry for entry in registry.entries if str(entry.path) != f"{_BASE}/provenance.json"
             ),
         )
-        self.assertTrue(_validate(without).passed, _messages(_validate(without)))
+        self.assertFalse(_validate(without).passed)
         self.assertNotIn("no longer matches", _messages(_audit(without)))
 
     def test_a_provenance_written_by_another_importer_is_not_verified(self) -> None:

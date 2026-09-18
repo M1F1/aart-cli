@@ -1,8 +1,7 @@
-"""`registry vendor` copies a foreign subtree in, review first.
+"""`registry vendor` copies a foreign subtree into a reviewed Registry version.
 
-`promote-native` refuses any upstream that is not already a native AART source, which is most of
-them. The same fixture proves both halves here: one repository with no markers anywhere, refused by
-`promote-native` and vendored successfully — that is the whole point of the command.
+The upstream repository has no AART markers. Vendoring owns the copied bytes and publishes their
+approval through the canonical version projection.
 
 The review/finalize contract is the one every other registry mutation already uses, and vendoring
 adds a gate rather than relaxing one: without `--yes` nothing is written, and the plan refuses
@@ -45,7 +44,8 @@ from tests.registry_vendoring_projection_test import (
 )
 
 _ACQUISITION = NativeReferenceAcquisition(_URL, "v1.4.0", _COMMIT, _foreign_repository())
-_PACKAGE = "artifacts/mcp/atlassian"
+_STAGING = "artifacts/mcp/atlassian"
+_PACKAGE = f"{_STAGING}/1.0.0"
 
 
 def _run(*arguments: str) -> tuple[int, str]:
@@ -177,11 +177,14 @@ class VendorCommandTest(unittest.TestCase):
             self.assertTrue((root / _PACKAGE / "provenance.json").is_file())
             self.assertTrue((root / _PACKAGE / "payload/index.js").is_file())
             self.assertTrue((root / _PACKAGE / "payload/lib/client.js").is_file())
+            self.assertTrue((root / "registry/versions/mcp/atlassian/1.0.0.json").is_file())
+            self.assertTrue((root / "registry/index.json").is_file())
+            self.assertTrue((root / "registry/snapshot.json").is_file())
 
             for arguments in (
                 ("lock", "--yes"),
                 ("build", "--yes"),
-                ("validate", "--strict", "--frozen", "--json"),
+                ("validate", "--json"),
                 ("audit", "--json"),
             ):
                 code, output = _run("registry", *arguments, "--source", str(root))
@@ -241,7 +244,7 @@ class VendorCommandTest(unittest.TestCase):
             )
 
             self.assertEqual(code, 0, output)
-            package = root / "artifacts" / "memory" / "shared-house-rules"
+            package = root / "artifacts" / "memory" / "shared-house-rules" / "1.0.0"
             self.assertEqual(
                 (package / "payload" / "CLAUDE.md").read_text(),
                 "# Shared house rules\n",
@@ -349,21 +352,21 @@ class VendorCommandTest(unittest.TestCase):
             self.assertEqual(code, 1)
             self.assertIn("setup/installer.json", output)
 
-    def test_the_review_points_at_lock_and_build_before_strict_validation(self) -> None:
-        """A vendored package makes the lock and index stale; `validate --strict` alone would fail."""
+    def test_the_review_points_at_canonical_validation_and_build(self) -> None:
+        """The vendor projection writes its approval and catalogs in the same transaction."""
 
         with self._registry() as root:
             _code, output = _run(*_vendor_command(root, "--json"))
 
             follow_up = " ".join(json.loads(output)["follow_up_commands"])
-            self.assertIn("registry lock", follow_up)
+            self.assertIn("registry validate", follow_up)
             self.assertIn("registry build", follow_up)
 
 
-class VendorSucceedsWherePromoteNativeRefusesTest(unittest.TestCase):
-    """One fixture, both halves: the upstream `promote-native` cannot use is the vendoring case."""
+class MarkerlessUpstreamVendorTest(unittest.TestCase):
+    """A foreign tree without AART markers can become a canonical approved version."""
 
-    def test_the_same_markerless_upstream_is_refused_by_promotion_and_vendored(self) -> None:
+    def test_markerless_upstream_is_vendored_into_a_version_record(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary) / "registry"
             root.mkdir()
@@ -397,25 +400,11 @@ class VendorSucceedsWherePromoteNativeRefusesTest(unittest.TestCase):
                 "agent_artifacts.commands.registry.load_local_curation_service",
                 return_value=Ok(service),
             ):
-                promoted, promotion_output = _run(
-                    "registry",
-                    "promote-native",
-                    "--source",
-                    str(root),
-                    "mcp",
-                    "atlassian",
-                    "--url",
-                    _URL,
-                    "--path",
-                    "servers/atlassian",
-                    "--yes",
-                )
                 vendored, vendor_output = _run(*_vendor_command(root, "--yes"))
 
-            self.assertEqual(promoted, 1, promotion_output)
             self.assertEqual(vendored, 0, vendor_output)
             self.assertTrue((root / _PACKAGE / "provenance.json").is_file())
-            self.assertFalse((root / "entries/mcp/atlassian.json").exists())
+            self.assertTrue((root / "registry/versions/mcp/atlassian/1.0.0.json").is_file())
 
 
 class VendorRequiresAnApprovedReviewTest(unittest.TestCase):

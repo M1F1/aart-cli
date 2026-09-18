@@ -5,16 +5,38 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass, replace
 
+from agent_artifacts.application.maintainer import CandidateBundle
 from agent_artifacts.application.promotion import (
+    PromotionEvidence,
+    load_registry_versions,
+    plan_bulk_promotion,
     read_registry_version_records,
     registry_catalog_entries,
     registry_state_digest,
 )
+from agent_artifacts.domain.artifacts import (
+    ArtifactFormat,
+    ArtifactKind,
+    ArtifactPackage,
+    Compatibility,
+)
+from agent_artifacts.domain.artifacts import (
+    Provenance as ArtifactProvenance,
+)
+from agent_artifacts.domain.candidates import assess_candidate, make_candidate
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.identifiers import ArtifactIdentity, ObjectDigest, SourceId
+from agent_artifacts.domain.identifiers import (
+    ArtifactCoordinate,
+    ArtifactIdentity,
+    ObjectDigest,
+    SourceAlias,
+    SourceId,
+)
+from agent_artifacts.domain.registry import PromotionMode
 from agent_artifacts.domain.result import Err, Ok, Result
+from agent_artifacts.protocol.authoring import CompiledAuthorArtifact, ComplianceLevel
 from agent_artifacts.protocol.capabilities import Capability
-from agent_artifacts.protocol.hashing import sha256_bytes
+from agent_artifacts.protocol.hashing import file_entry, sha256_bytes, tree_digest
 from agent_artifacts.protocol.json import canonical_json_bytes, parse_json
 from agent_artifacts.protocol.native_models import (
     ArtifactManifest,
@@ -33,6 +55,7 @@ from agent_artifacts.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SourceSnapshot,
+    compile_native_package,
 )
 from agent_artifacts.protocol.paths import SafeRelativePath, parse_relative_path
 from agent_artifacts.protocol.registry_models import (
@@ -43,7 +66,7 @@ from agent_artifacts.protocol.registry_schema import (
     parse_registry_manifest,
     registry_manifest_to_json,
 )
-from agent_artifacts.protocol.semver import SemVer, VersionBounds
+from agent_artifacts.protocol.semver import SemVer, VersionBounds, parse_semver
 from agent_artifacts.registry_maintenance.model import (
     NativeAcquirer,
     NativeReferenceAcquisition,
@@ -56,6 +79,7 @@ from agent_artifacts.registry_maintenance.vendoring import (
     VENDOR_IMPORTER_ID,
     CopyIntegrity,
     DeliveryFinding,
+    VendorAssessment,
     VendoredPackage,
     VendorOptions,
     VendorOrigin,
@@ -71,6 +95,7 @@ from agent_artifacts.registry_maintenance.vendoring import (
 from agent_artifacts.runtime_contract import EXECUTABLE_VERSION
 from agent_artifacts.security.application import verify_security_index
 from agent_artifacts.security.attestation_schema import parse_security_index
+from agent_artifacts.security.baseline import BASELINE_RULES_DIGEST
 from agent_artifacts.security.model import InstallationRisk
 from agent_artifacts.sources.model import source_snapshot_digest
 from agent_artifacts.sources.subtree import TakenSubtree, take_subtree
@@ -163,9 +188,14 @@ def _existing_package_remediation(
     command that would refuse it.
     """
 
-    if _is_vendored_package(files, base):
+    version_bases = tuple(
+        raw.removesuffix("/artifact.json")
+        for raw in files
+        if raw.startswith(f"{base}/") and raw.endswith("/artifact.json")
+    )
+    if any(_is_vendored_package(files, version_base) for version_base in version_bases):
         return (
-            f"to take a newer upstream into this copy, run `aart registry revendor "
+            f"to publish newer upstream bytes as another version, run `aart registry revendor "
             f"{identity.kind} {identity.name} --artifact-version <version>`, which re-resolves the "
             f"ref this package records; `vendor` creates a package and never replaces one",
         )
@@ -659,7 +689,7 @@ def plan_artifact_vendor(
     base = f"{root}/{identity.kind}/{identity.name}"
     # An existing manifest is an existing package: adopting the maintainer's authored wrapper is the
     # point, so their `payload/` and `setup/` files must not read as one.
-    if f"{base}/artifact.json" in files.value:
+    if any(raw.startswith(f"{base}/") and raw.endswith("/artifact.json") for raw in files.value):
         return _error(
             f"artifact package already exists: {identity.kind}/{identity.name}",
             _existing_package_remediation(files.value, base, identity),
@@ -670,7 +700,7 @@ def plan_artifact_vendor(
     projected = project_vendored_package(
         taken.value,
         VendorOrigin(acquisition.url, acquisition.requested_ref, acquisition.resolved_commit),
-        replace(options, authored=_adopted_authored(files.value, base)),
+        replace(options, authored=_adopted_authored(files.value, f"{base}/{options.version}")),
         artifact_root=root,
         importer_version=importer_version,
     )
@@ -678,7 +708,10 @@ def plan_artifact_vendor(
         return projected
     written = {relative for relative, _content, _executable in projected.value.files}
     if options.setup_recipe is not None:
-        for required in (f"{base}/{options.setup_recipe}", f"{base}/SETUP.md"):
+        for required in (
+            f"{projected.value.base}/{options.setup_recipe}",
+            f"{projected.value.base}/SETUP.md",
+        ):
             if required not in written:
                 return _error(
                     f"the declared setup recipe requires {required}, which is not present",
@@ -690,10 +723,23 @@ def plan_artifact_vendor(
     assessed = assess_vendored_package(projected.value, source_id=source.value.source_id)
     if isinstance(assessed, Err):
         return assessed
+    # The authored wrapper in the destination version is only staging input. Promotion sees the canonical
+    # pre-vendor Registry, then owns the immutable version and both derived catalogs.
+    before = SourceSnapshot(
+        snapshot.origin,
+        tuple(entry for entry in snapshot.entries if not str(entry.path).startswith(f"{base}/")),
+    )
+    promoted = _promote_vendor(before, projected.value, assessed.value, acquisition.resolved_commit)
+    if isinstance(promoted, Err):
+        return promoted
     planned = _plan(
         RegistryOperation.VENDOR,
         snapshot,
-        (*projected.value.files, (assessed.value.document_path, assessed.value.document, False)),
+        (
+            *promoted.value,
+            (assessed.value.document_path, assessed.value.document, False),
+        ),
+        prune_under=base,
     )
     if isinstance(planned, Err):
         return planned
@@ -703,6 +749,94 @@ def plan_artifact_vendor(
             assessed.value.assessment,
             projected.value.license,
             _package_delivery(projected.value),
+        )
+    )
+
+
+def _promote_vendor(
+    snapshot: SourceSnapshot,
+    package: VendoredPackage,
+    assessment: VendorAssessment,
+    revision: str,
+) -> Result[tuple[tuple[str, bytes, bool], ...]]:
+    """Use the approved promotion projection for a reviewed foreign package."""
+
+    files = _files(snapshot)
+    if isinstance(files, Err):
+        return files
+    marker = files.value.get("aart-registry.json")
+    if marker is None or marker.kind is not SnapshotEntryKind.FILE:
+        return _error("registry marker is missing", _INITIALIZE)
+    registry = parse_registry_manifest(marker.content)
+    if isinstance(registry, Err):
+        return registry
+    prefix = f"{package.base}/"
+    entries = tuple(
+        SnapshotEntry(_path(raw.removeprefix(prefix)), SnapshotEntryKind.FILE, content, executable)
+        for raw, content, executable in package.files
+    )
+    native = compile_native_package(entries, expected_identity=package.manifest.identity)
+    if isinstance(native, Err):
+        return native
+    canonical = tree_digest(
+        file_entry(entry.path, entry.content, executable=entry.executable)
+        for entry in entries
+        if str(entry.path) != "provenance.json"
+    )
+    if isinstance(canonical, Err):
+        return canonical
+    identity = package.manifest.identity
+    source_alias = SourceAlias("vendor")
+    artifact = ArtifactPackage(
+        ArtifactCoordinate(source_alias, identity, str(package.manifest.version)),
+        ArtifactKind(identity.kind),
+        ArtifactFormat(package.manifest.payload.format),
+        native.value.payload_digest,
+        ArtifactProvenance(
+            package.provenance.origin.url,
+            revision,
+            str(package.provenance.origin.path),
+            canonical.value,
+            VENDOR_IMPORTER_ID,
+        ),
+        Compatibility(
+            package.manifest.compatibility.platforms,
+            package.manifest.compatibility.profiles,
+        ),
+    )
+    bundle = CandidateBundle(
+        assess_candidate(
+            make_candidate(artifact, canonical.value, SourceAlias(registry.value.registry_id.value))
+        ),
+        CompiledAuthorArtifact(
+            _path("artifact.json"),
+            canonical.value,
+            artifact,
+            native.value,
+            entries,
+            ComplianceLevel.AART_COMPATIBLE,
+        ),
+    )
+    approved = load_registry_versions(snapshot)
+    if isinstance(approved, Err):
+        return approved
+    plan = plan_bulk_promotion(
+        snapshot,
+        (bundle,),
+        evidence=(
+            (
+                bundle.candidate.id,
+                PromotionEvidence(sha256_bytes(assessment.document), BASELINE_RULES_DIGEST),
+            ),
+        ),
+        approved=approved.value,
+        mode=PromotionMode.VENDORED,
+    )
+    if isinstance(plan, Err):
+        return plan
+    return Ok(
+        tuple(
+            (str(change.path), change.content, change.executable) for change in plan.value.changes
         )
     )
 
@@ -751,11 +885,33 @@ def read_vendored_artifact(
     source = _source_manifest(files.value)
     if isinstance(source, Err):
         return source
-    base = f"{source.value.artifact_roots[0]}/{identity.kind}/{identity.name}"
+    # Read the approval identities before validating payload digests. The copy-integrity check
+    # immediately after this read gives a specific refusal for a changed vendored byte, before
+    # re-vendoring contacts the upstream.
+    versions = read_registry_version_records(snapshot)
+    if isinstance(versions, Err):
+        return versions
+    matching = tuple(
+        item
+        for item in versions.value
+        if item.coordinate.artifact == identity and item.mode is PromotionMode.VENDORED
+    )
+    if not matching:
+        return _error(
+            f"registry has no artifact package {identity.kind}/{identity.name}", _LIST_PACKAGES
+        )
+    ordered_versions: list[tuple[SemVer, str]] = []
+    for item in matching:
+        parsed_version = parse_semver(item.coordinate.version or "")
+        if isinstance(parsed_version, Err):
+            return parsed_version
+        ordered_versions.append((parsed_version.value, item.coordinate.version or ""))
+    latest_version = max(ordered_versions, key=lambda item: item[0])[1]
+    base = f"{source.value.artifact_roots[0]}/{identity.kind}/{identity.name}/{latest_version}"
     manifest_entry = files.value.get(f"{base}/artifact.json")
     if manifest_entry is None:
         return _error(
-            f"registry has no artifact package {identity.kind}/{identity.name}", _LIST_PACKAGES
+            f"registry version has no artifact package: {identity}@{latest_version}", _LIST_PACKAGES
         )
     manifest = parse_artifact_manifest(manifest_entry.content, path=f"{base}/artifact.json")
     if isinstance(manifest, Err):
@@ -950,13 +1106,15 @@ def plan_artifact_revendor(
     assessed = assess_vendored_package(projected.value, source_id=source.value.source_id)
     if isinstance(assessed, Err):
         return assessed
+    promoted = _promote_vendor(
+        snapshot, projected.value, assessed.value, acquisition.resolved_commit
+    )
+    if isinstance(promoted, Err):
+        return promoted
     planned = _plan(
         RegistryOperation.REVENDOR,
         snapshot,
-        (*projected.value.files, (assessed.value.document_path, assessed.value.document, False)),
-        # Upstream deletions have to reach the copy.  Confined to this package's own directory, so
-        # a re-vendor can never remove another artifact's content.
-        prune_under=vendored.base,
+        (*promoted.value, (assessed.value.document_path, assessed.value.document, False)),
     )
     if isinstance(planned, Err):
         return planned

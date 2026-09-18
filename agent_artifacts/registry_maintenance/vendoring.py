@@ -615,7 +615,7 @@ def project_vendored_package(
         for entry in subtree.snapshot.entries
         if entry.kind is SnapshotEntryKind.FILE
     }
-    package_root = f"{artifact_root}/{kind}/{options.identity.name}"
+    package_root = f"{artifact_root}/{kind}/{options.identity.name}/{options.version}"
     authored = _authored_files(
         options,
         frozenset(taken_files),

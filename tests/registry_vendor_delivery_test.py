@@ -32,7 +32,8 @@ from agent_artifacts.registry_maintenance.vendoring import (
 )
 from tests.registry_vendoring_projection_test import _COMMIT, _URL, _foreign_repository
 
-_PACKAGE = "artifacts/mcp/atlassian"
+_STAGING = "artifacts/mcp/atlassian"
+_PACKAGE = f"{_STAGING}/1.0.0"
 
 
 def _descriptor(command: str, *arguments: str) -> bytes:
@@ -363,13 +364,16 @@ class OwnedMcpDeliveryTest(unittest.TestCase):
 
             self.assertNotIn("vendored mcp descriptor", output)
 
-    def test_rs01_a_registry_owned_descriptor_that_starts_a_server_still_passes(self) -> None:
-        """The refusal must not fail a registry-owned package with an executable descriptor."""
+    def test_an_approved_package_cannot_lose_its_provenance_even_with_a_working_descriptor(
+        self,
+    ) -> None:
+        """An approval binds every package byte, including provenance."""
 
         with self._owned() as root:
             code, output = _run("registry", "audit", "--source", str(root))
 
-            self.assertEqual(code, 0, output)
+            self.assertEqual(code, 1, output)
+            self.assertIn("approved content snapshot", output)
 
 
 if __name__ == "__main__":

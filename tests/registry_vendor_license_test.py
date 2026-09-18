@@ -15,7 +15,6 @@ from __future__ import annotations
 import contextlib
 import io
 import json
-import shutil
 import subprocess
 import tempfile
 import unittest
@@ -28,6 +27,7 @@ from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Sever
 from agent_artifacts.domain.result import Err, Ok
 from agent_artifacts.protocol.native_tree import SourceSnapshot
 from agent_artifacts.registry_maintenance.model import NativeReferenceAcquisition
+from tests.registry_maintenance_fixtures import empty_registry_snapshot, write_snapshot
 from tests.registry_revendor_test import _MOVED_COMMIT, _moved_repository
 from tests.registry_vendoring_projection_test import (
     _COMMIT,
@@ -37,8 +37,8 @@ from tests.registry_vendoring_projection_test import (
     _foreign_repository,
 )
 
-_PACKAGE = "artifacts/mcp/atlassian"
-_REGISTRY_FIXTURE = Path(__file__).parent / "fixtures" / "protocol" / "registry-v1"
+_STAGING = "artifacts/mcp/atlassian"
+_PACKAGE = f"{_STAGING}/1.0.0"
 _MIT = (
     b"MIT License\n\nCopyright (c) 2024 Example\n\nPermission is hereby granted, free of charge, "
     b"to any person obtaining a copy of this software and associated documentation files.\n"
@@ -101,8 +101,8 @@ def _checks(payload: dict) -> dict[str, dict]:
     return {item["name"]: item for item in review["checks"]}
 
 
-def _manifest(root: Path) -> dict:
-    return json.loads((root / _PACKAGE / "artifact.json").read_text())
+def _manifest(root: Path, *, version: str = "1.0.0") -> dict:
+    return json.loads((root / _STAGING / version / "artifact.json").read_text())
 
 
 def _audit_messages(output: str) -> tuple[str, ...]:
@@ -251,8 +251,8 @@ class LicenseCaptureTest(_RegistryFixture):
                 )
 
             self.assertEqual(code, 0, output)
-            self.assertEqual(_manifest(root)["version"], "2.0.0")
-            self.assertEqual(_manifest(root)["license"], "MIT")
+            self.assertEqual(_manifest(root, version="2.0.0")["version"], "2.0.0")
+            self.assertEqual(_manifest(root, version="2.0.0")["license"], "MIT")
 
 
 class VendoredAuditTest(_RegistryFixture):
@@ -441,7 +441,8 @@ class UnvendoredAuditTest(unittest.TestCase):
     def test_laf45_a_registry_with_nothing_vendored_still_says_the_check_ran(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary) / "registry"
-            shutil.copytree(_REGISTRY_FIXTURE, root)
+            root.mkdir()
+            write_snapshot(root, empty_registry_snapshot())
 
             code, output = _run(
                 "registry", "audit", "--source", str(root), "--check-upstream", "--json"

@@ -82,10 +82,10 @@ def index_artifact_from_package(
 def _collection_members(
     collection_name: str,
     collections: dict[str, CollectionManifest],
-    artifacts: dict[ArtifactIdentity, IndexArtifact],
-    memo: dict[str, frozenset[ArtifactIdentity]],
+    artifacts: dict[ArtifactIdentity, tuple[IndexArtifact, ...]],
+    memo: dict[str, frozenset[tuple[ArtifactIdentity, str]]],
     visiting: tuple[str, ...],
-) -> Result[frozenset[ArtifactIdentity]]:
+) -> Result[frozenset[tuple[ArtifactIdentity, str]]]:
     if collection_name in memo:
         return Ok(memo[collection_name])
     if collection_name in visiting:
@@ -97,20 +97,25 @@ def _collection_members(
             REGISTRY_GRAPH_INVALID,
             f"dangling collection reference: {collection_name}",
         )
-    members: set[ArtifactIdentity] = set()
+    members: set[tuple[ArtifactIdentity, str]] = set()
     for selector in collection.artifacts:
-        artifact = artifacts.get(selector.identity)
-        if artifact is None:
+        available = artifacts.get(selector.identity)
+        if available is None:
             return _error(
                 REGISTRY_GRAPH_INVALID,
                 f"collection {collection_name} references missing {selector.identity}",
             )
-        if selector.version is not None and not selector.version.allows(artifact.version):
+        selected = tuple(
+            artifact
+            for artifact in available
+            if selector.version is None or selector.version.allows(artifact.version)
+        )
+        if not selected:
             return _error(
                 REGISTRY_GRAPH_INVALID,
                 f"collection {collection_name} excludes available version of {selector.identity}",
             )
-        members.add(selector.identity)
+        members.update((artifact.identity, str(artifact.version)) for artifact in selected)
     next_visiting = (*visiting, collection_name)
     for nested_name in collection.collections:
         nested = _collection_members(
@@ -134,23 +139,26 @@ def validate_registry_graph(
 ) -> Result[tuple[IndexArtifact, ...]]:
     """Validate the collection graph and derive complete deterministic memberships."""
 
-    artifact_map: dict[ArtifactIdentity, IndexArtifact] = {}
-    qualified: set[tuple[SourceId, ArtifactIdentity]] = set()
+    grouped: dict[ArtifactIdentity, list[IndexArtifact]] = {}
+    qualified: set[tuple[SourceId, ArtifactIdentity, str]] = set()
     for artifact in artifacts:
-        key = (artifact.source_id, artifact.identity)
-        if key in qualified or artifact.identity in artifact_map:
+        key = (artifact.source_id, artifact.identity, str(artifact.version))
+        versions = grouped.setdefault(artifact.identity, [])
+        if key in qualified or any(item.source_id != artifact.source_id for item in versions):
             return _error(
                 REGISTRY_INDEX_INVALID,
                 f"duplicate or ambiguous index identity: {artifact.source_id}/{artifact.identity}",
             )
         qualified.add(key)
-        artifact_map[artifact.identity] = artifact
-    dependency_edges: dict[ArtifactIdentity, tuple[ArtifactIdentity, ...]] = {}
+        versions.append(artifact)
+    artifact_map = {identity: tuple(versions) for identity, versions in grouped.items()}
+    dependency_edges: dict[ArtifactIdentity, set[ArtifactIdentity]] = {
+        identity: set() for identity in artifact_map
+    }
     for artifact in artifacts:
-        dependencies: list[ArtifactIdentity] = []
         for selector in artifact.requires:
-            dependency = artifact_map.get(selector.identity)
-            if dependency is None:
+            available = artifact_map.get(selector.identity)
+            if available is None:
                 # Every artifact this index holds is in this registry, owned or referenced, so an
                 # identity absent from the map is absent from the registry — there is no second
                 # shape to distinguish here.
@@ -159,13 +167,14 @@ def validate_registry_graph(
                     artifact.identity,
                     selector.identity,
                 )
-            if selector.version is not None and not selector.version.allows(dependency.version):
+            if selector.version is not None and not any(
+                selector.version.allows(item.version) for item in available
+            ):
                 return _error(
                     REGISTRY_GRAPH_INVALID,
                     f"artifact {artifact.identity} excludes available dependency {selector.identity}",
                 )
-            dependencies.append(selector.identity)
-        dependency_edges[artifact.identity] = tuple(sorted(dependencies, key=str))
+            dependency_edges[artifact.identity].add(selector.identity)
     visited_dependencies: set[ArtifactIdentity] = set()
 
     def visit_dependency(
@@ -178,7 +187,7 @@ def validate_registry_graph(
         if identity in visited_dependencies:
             return Ok(None)
         next_trail = (*trail, identity)
-        for dependency in dependency_edges[identity]:
+        for dependency in sorted(dependency_edges[identity], key=str):
             checked = visit_dependency(dependency, next_trail)
             if isinstance(checked, Err):
                 return checked
@@ -197,22 +206,29 @@ def validate_registry_graph(
                 f"duplicate collection identity: {collection.name}",
             )
         collection_map[collection.name] = collection
-    memo: dict[str, frozenset[ArtifactIdentity]] = {}
-    memberships: dict[ArtifactIdentity, set[str]] = {identity: set() for identity in artifact_map}
+    memo: dict[str, frozenset[tuple[ArtifactIdentity, str]]] = {}
+    memberships: dict[tuple[ArtifactIdentity, str], set[str]] = {
+        (artifact.identity, str(artifact.version)): set() for artifact in artifacts
+    }
     for name in sorted(collection_map):
         members = _collection_members(name, collection_map, artifact_map, memo, ())
         if isinstance(members, Err):
             return members
-        for identity in members.value:
-            memberships[identity].add(name)
+        for coordinate in members.value:
+            memberships[coordinate].add(name)
     return Ok(
         tuple(
             sorted(
                 (
-                    replace(artifact, collections=tuple(sorted(memberships[artifact.identity])))
+                    replace(
+                        artifact,
+                        collections=tuple(
+                            sorted(memberships[(artifact.identity, str(artifact.version))])
+                        ),
+                    )
                     for artifact in artifacts
                 ),
-                key=lambda item: (str(item.source_id), str(item.identity)),
+                key=lambda item: (str(item.source_id), str(item.identity), str(item.version)),
             )
         )
     )

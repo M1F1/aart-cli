@@ -472,6 +472,46 @@ canonical maintenance refuses by name. D-323 records why they are kept rather th
 hold vendoring's license, drift and copy-integrity behaviour, none of which is the retired
 representation. B-149 is critical and is the next slice's subject.
 
+### B-149 — `registry vendor` writes an approved version, not the retired layout (2026-09-19)
+
+Step 5 left a shipped command producing a Registry its own maintenance refuses: `vendor` wrote
+`artifacts/<kind>/<name>/` with no version segment, which is the retired representation by name.
+That outranked the numbered plan's next step, because a command that bricks a canonical Registry
+cannot wait behind a refactor of the authoring field surface (D-326).
+
+**What moved.** `project_vendored_package` writes `artifacts/<kind>/<name>/<version>/`. Both `vendor`
+and `revendor` now project the package, assess its exact bytes, and hand the result to
+`plan_bulk_promotion`, so the immutable version directory, the version record and the derived
+catalogs are written by one reviewed workspace plan rather than by the vendoring path's own writer.
+The maintainer stages an authored wrapper inside the destination version directory; `vendor` reads
+it as staging input and prunes it, so it never survives as a second copy beside the promoted one.
+`read_vendored_artifact` selects the latest approved `VENDORED` version rather than an unversioned
+directory, which is what lets `revendor` report drift against the copy actually published.
+
+**Two versions of one identity.** Re-vendoring into a second immutable version made the Registry
+graph hold two packages under one identity, which `validate_registry_graph` had refused as a
+duplicate. Duplicate detection is now keyed by identity **and** version; a dependency resolves when
+any approved version satisfies its bounds, and collection membership is assigned per version rather
+than per identity. Two versions from two different registries under one identity remain a refusal —
+that is the ambiguity the check was for.
+
+**Targeted semantic mutations (two), and what the first one revealed.** Reverting
+`project_vendored_package`'s package root to the unversioned `artifacts/<kind>/<name>` failed only
+`registry_vendoring_projection_test`, twice — the canonical gates stayed green. That is worth
+recording rather than filing away: after this repair the approved layout is owned by
+`plan_bulk_promotion`, which derives `artifacts/<kind>/<name>/<version>` itself, so the vendoring
+writer's own root now only names the staging directory it reads the authored wrapper from. The
+mutation that does carry B-149's claim is the second: writing `projected.value.files` instead of
+`promoted.value` — bypassing promotion while changing nothing else — failed
+`registry_vendored_gates_test`, `registry_vendoring_projection_test`, `registry_vendor_command_test`
+and `registry_vendor_delivery_test`, which is exactly the set of claims that say a vendored package
+reaches the Registry as an approved version. Both restored green.
+
+**Evidence.** The seven vendoring modules D-323 kept red are green, as is `registry_index_test`.
+Every `tests/*_test.py` module was then run one process at a time: no module outside the repair
+changed state. Ruff lint and format pass tree-wide; Mypy passes over the package. No broad
+`make quality` ran, under D-317.
+
 ### Step 17 — no maintainer identity as a default
 
 The owner explicitly requires generated registries and operational examples to carry no default

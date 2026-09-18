@@ -5,10 +5,13 @@ import unittest
 from dataclasses import replace
 from types import MappingProxyType
 
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
+
 from agent_artifacts.domain.identifiers import ObjectDigest, SourceId
-from agent_artifacts.domain.result import Ok
+from agent_artifacts.domain.result import Err, Ok
 from agent_artifacts.model import SetupCapability, SetupInstaller, SetupStep
-from agent_artifacts.protocol.native_models import CollectionManifest
+from agent_artifacts.protocol.native_models import ArtifactSelector, CollectionManifest
 from agent_artifacts.protocol.native_schema import (
     parse_artifact_manifest,
     parse_collection_manifest,
@@ -17,11 +20,13 @@ from agent_artifacts.protocol.native_schema import (
 from agent_artifacts.protocol.native_tree import NativeArtifactPackage
 from agent_artifacts.protocol.registry_index import (
     index_artifact_from_package,
+    validate_registry_graph,
 )
 from agent_artifacts.protocol.registry_models import ReviewRecord
 from agent_artifacts.protocol.registry_schema import (
     parse_registry_manifest,
 )
+from agent_artifacts.protocol.semver import SemVer, VersionBounds
 
 
 def _digest(character: str) -> ObjectDigest:
@@ -147,6 +152,74 @@ def _collection(name: str, artifacts: list[str], collections: list[str]) -> Coll
 
 
 class RegistryIndexTest(unittest.TestCase):
+    @given(st.integers(min_value=0, max_value=1000), st.integers(min_value=0, max_value=1000))
+    @settings(suppress_health_check=(HealthCheck.differing_executors,))
+    def test_distinct_versions_share_identity_and_exact_duplicates_are_refused(
+        self, lower: int, gap: int
+    ) -> None:
+        first = index_artifact_from_package(
+            _package("code-review"),
+            source_id=SourceId("company-registry"),
+            object_digest=_digest("3"),
+        )
+        first = replace(first, version=SemVer(lower, 0, 0))
+        second = replace(first, version=SemVer(lower + gap + 1, 0, 0))
+
+        self.assertIsInstance(validate_registry_graph((first, second), ()), Ok)
+        self.assertIsInstance(validate_registry_graph((first, first), ()), Err)
+
+    def test_collection_version_selector_marks_only_matching_approved_version(self) -> None:
+        first = index_artifact_from_package(
+            _package("code-review"),
+            source_id=SourceId("company-registry"),
+            object_digest=_digest("3"),
+        )
+        first = replace(first, version=SemVer(1, 0, 0))
+        second = replace(first, version=SemVer(2, 0, 0))
+        collection = CollectionManifest(
+            1,
+            "current",
+            "The current review skill.",
+            (ArtifactSelector(first.identity, VersionBounds(SemVer(2, 0, 0), SemVer(3, 0, 0))),),
+        )
+
+        validated = validate_registry_graph((first, second), (collection,))
+
+        assert isinstance(validated, Ok), validated
+        self.assertEqual(
+            {str(item.version): item.collections for item in validated.value},
+            {"1.0.0": (), "2.0.0": ("current",)},
+        )
+
+    def test_dependency_range_may_match_one_of_several_approved_versions(self) -> None:
+        first = index_artifact_from_package(
+            _package("code-review"),
+            source_id=SourceId("company-registry"),
+            object_digest=_digest("3"),
+        )
+        first = replace(first, version=SemVer(1, 0, 0))
+        second = replace(first, version=SemVer(2, 0, 0))
+        dependent = index_artifact_from_package(
+            _package("review-workflow"),
+            source_id=SourceId("company-registry"),
+            object_digest=_digest("4"),
+        )
+        dependent = replace(
+            dependent,
+            requires=(
+                ArtifactSelector(first.identity, VersionBounds(SemVer(2, 0, 0), SemVer(3, 0, 0))),
+            ),
+        )
+
+        self.assertIsInstance(validate_registry_graph((first, second, dependent), ()), Ok)
+        excluded = replace(
+            dependent,
+            requires=(
+                ArtifactSelector(first.identity, VersionBounds(SemVer(3, 0, 0), SemVer(4, 0, 0))),
+            ),
+        )
+        self.assertIsInstance(validate_registry_graph((first, second, excluded), ()), Err)
+
     def test_registry_owned_package_becomes_index_record_without_duplicate_entry(self) -> None:
         record = index_artifact_from_package(
             _package("code-review"),

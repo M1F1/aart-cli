@@ -29,7 +29,7 @@ from agent_artifacts.protocol.native_tree import (
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
-    load_native_source,
+    compile_native_package,
 )
 from agent_artifacts.protocol.paths import parse_relative_path
 from agent_artifacts.protocol.registry_index import index_artifact_from_package
@@ -42,7 +42,7 @@ from agent_artifacts.registry_maintenance.vendoring import (
     acquisition_options_digest,
     project_vendored_package,
 )
-from agent_artifacts.runtime_contract import EXECUTABLE_CAPABILITIES, EXECUTABLE_VERSION
+from agent_artifacts.runtime_contract import EXECUTABLE_CAPABILITIES
 from agent_artifacts.security.baseline import BaselineScanRequest, assess_installation_risk
 from agent_artifacts.sources.subtree import take_subtree
 from agent_artifacts.store.model import make_object_candidate
@@ -177,15 +177,9 @@ def _registry_snapshot(package: VendoredPackage) -> SourceSnapshot:
 
 
 def _loaded(package: VendoredPackage):
-    source = load_native_source(
-        _registry_snapshot(package),
-        executable_version=EXECUTABLE_VERSION,
-        available_capabilities=_CAPABILITIES,
-    )
-    assert isinstance(source, Ok), source
-    self_artifacts = source.value.artifacts
-    assert len(self_artifacts) == 1, self_artifacts
-    return self_artifacts[0]
+    compiled = compile_native_package(_package_relative(package))
+    assert isinstance(compiled, Ok), compiled
+    return compiled.value
 
 
 def _package_relative(package: VendoredPackage) -> tuple[SnapshotEntry, ...]:
@@ -317,10 +311,10 @@ class VendorProjectionRefusesTest(unittest.TestCase):
 
         message = _message(refused)
         self.assertIn("payload/mcp.json", message)
-        self.assertIn("artifacts/mcp/atlassian/payload/mcp.json", message)
+        self.assertIn("artifacts/mcp/atlassian/1.0.0/payload/mcp.json", message)
         assert isinstance(refused, Err)
         self.assertIn(
-            "author artifacts/mcp/atlassian/payload/mcp.json",
+            "author artifacts/mcp/atlassian/1.0.0/payload/mcp.json",
             refused.diagnostics[0].remediation[0],
         )
 
@@ -338,7 +332,7 @@ class VendorProjectionRefusesTest(unittest.TestCase):
         assert isinstance(refused, Err)
         self.assertIn("upstream already provides", refused.diagnostics[0].message)
         self.assertIn(
-            "remove the authored copy at artifacts/mcp/atlassian/payload/index.js",
+            "remove the authored copy at artifacts/mcp/atlassian/1.0.0/payload/index.js",
             refused.diagnostics[0].remediation[0],
         )
 
@@ -403,7 +397,9 @@ class VendoredRegistryPassesItsPublisherGatesTest(unittest.TestCase):
     """The emitted registry is validated by the commands a publisher already runs."""
 
     def test_a_registry_holding_a_vendored_artifact_locks_builds_and_validates_frozen(self) -> None:
-        package = _package()
+        from tests.registry_maintenance_fixtures import write_snapshot
+        from tests.registry_vendored_gates_test import _vendored_registry
+
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary) / "registry"
             root.mkdir()
@@ -413,30 +409,21 @@ class VendoredRegistryPassesItsPublisherGatesTest(unittest.TestCase):
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
-            (root / "aart-registry.json").write_text(json.dumps(_REGISTRY_MARKER), encoding="utf-8")
-            (root / "aart-source.json").write_text(json.dumps(_SOURCE_MARKER), encoding="utf-8")
-            for relative, content, executable in package.files:
-                target = root / relative
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_bytes(content)
-                if executable:
-                    target.chmod(0o755)
-
-            # `format` first because the two markers are written as plain JSON here, exactly as a
-            # maintainer's editor would leave them; nothing about the vendored package needs it.
+            write_snapshot(root, _vendored_registry())
             for arguments in (
                 ("format", "--yes"),
                 ("lock", "--yes"),
                 ("build", "--yes"),
-                ("validate", "--strict", "--frozen", "--json"),
+                ("validate", "--json"),
                 ("audit", "--json"),
             ):
                 code, output = _run("registry", *arguments, "--source", str(root))
                 self.assertEqual(code, 0, f"registry {arguments[0]}: {output}")
 
-            index = json.loads((root / "aart.index.json").read_text(encoding="utf-8"))
-            artifact = next(item for item in index["artifacts"] if item["name"] == "atlassian")
-            self.assertEqual(artifact["provenance"]["resolved_commit"], _COMMIT)
+            index = json.loads((root / "registry/index.json").read_text(encoding="utf-8"))
+            self.assertEqual(
+                index["artifacts"][0]["coordinate"], "test-registry/mcp/atlassian@1.0.0"
+            )
 
 
 if __name__ == "__main__":

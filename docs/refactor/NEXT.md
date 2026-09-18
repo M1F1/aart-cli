@@ -1,22 +1,18 @@
 # AART Refactor — Next Work
 
-## Where CP-26 is (2026-09-18)
+## Where CP-26 is (2026-09-19)
 
-Steps 1–5 are done on `refactor/cp-26-legacy-removal`. **B-057 is closed**: the retired
-authoring-workspace representation has no schema, no fixtures, no planning half and no command left.
-`docs/refactor/slices/cp-26-authoring-and-legacy-removal.md` §"Step 5" records what went and what
-was decided instead (D-321 to D-325).
+Steps 1–5 are done on `refactor/cp-26-legacy-removal`, and **B-057 and B-149 are both closed**. The
+retired authoring-workspace representation has no schema, no fixtures, no planning half and no
+command left, and `aart registry vendor` now writes the approved representation's versioned package
+through `plan_bulk_promotion` instead of the retired unversioned layout.
+`docs/refactor/slices/cp-26-authoring-and-legacy-removal.md` records both under §"Step 5" and
+§"B-149" (D-321 to D-326).
 
 **Step 6 is next on the numbered plan** — collect the authoring-manifest field surface from the
-parser rather than transcribing it — but read B-149 first and decide the order. B-149 is CRITICAL
-and open: `project_vendored_package` still writes the retired unversioned
-`artifacts/<kind>/<name>/` layout, so `aart registry vendor` produces a Registry that canonical
-maintenance refuses by name. Twenty-six tests across seven vendoring modules are red on exactly
-that, and they are kept red on purpose (D-323): they hold vendoring's license discovery, upstream
-drift and copy-integrity behaviour, none of which is the retired representation. Deleting them to
-reach green would delete the evidence.
+parser rather than transcribing it — and nothing outranks it now that B-149 is closed.
 
-Two other open findings from step 5:
+Two open findings from step 5:
 
 - **B-151** — seven shipped documents still describe `aart.lock.json` and `aart.index.json` as files
   AART writes. Not gated by `make docs-check`, which validates fences and links. Noncritical for
@@ -30,7 +26,7 @@ Two other open findings from step 5:
 The owner added step 17: remove `M1F1` and `M1F1/aart-cli` from generated Registry content and
 operational defaults. The concrete locations and acceptance scope are in the CP-26 slice. This is
 independent of the removal work and follows the README work in the numbered plan. The `v0.3.0`
-release is complete; step 5 is next.
+release is complete; step 6 is next.
 
 The owner then added step 18 (D-312): `[p] Push` belongs to the local workspace row on Registry
 Maintainer, not to individual wizard success screens. That row distinguishes the accepted snapshot,

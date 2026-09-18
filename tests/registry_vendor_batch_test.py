@@ -173,8 +173,12 @@ class RegistryVendorBatchTest(unittest.TestCase):
             result = json.loads(output)
             self.assertEqual(result["review"]["operation"], "registry.vendor-batch")
             self.assertIn("plans 2 owned copies", " ".join(result["review"]["warnings"]))
-            self.assertEqual((root / "artifacts/memory/one/payload/one.md").read_text(), "# One\n")
-            self.assertEqual((root / "artifacts/memory/two/payload/two.md").read_text(), "# Two\n")
+            self.assertEqual(
+                (root / "artifacts/memory/one/1.0.0/payload/one.md").read_text(), "# One\n"
+            )
+            self.assertEqual(
+                (root / "artifacts/memory/two/1.0.0/payload/two.md").read_text(), "# Two\n"
+            )
             self.assertFalse((root / "artifacts/memory/ignored").exists())
 
     def test_a_manifest_with_no_accepted_candidates_refuses_without_acquiring(self) -> None:

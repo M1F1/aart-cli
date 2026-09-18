@@ -8069,3 +8069,26 @@ so nothing can tell the two apart any more. The parameter is removed from `load_
 `_validate_declared_dependencies` and the refusal states the one thing that is true. If the
 REFERENCED promotion mode should re-introduce the distinction, that is a task-19-or-later question,
 not a compatibility shim.
+
+## D-326 — close B-149 before CP-26.6 by promoting every vendored version
+
+Date: 2026-09-18 · Status: accepted · Scope: B-149, before CP-26 step 6
+
+**Context.** Step 5 left `registry vendor` writing an unversioned package that canonical maintenance
+refuses. Its retained tests cover license discovery, copy integrity, drift and delivery. A further
+red test showed that re-vendoring into a second immutable version also needed the Registry graph to
+accept two versions of one identity.
+
+**Decision.** Repair B-149 before starting step 6: a shipped command that makes its own Registry
+unreadable blocks the CP-26.21 acceptance gate. The maintainer stages authored wrapper files inside
+the destination version directory. `vendor` projects the package, assesses its exact bytes, then
+uses `plan_bulk_promotion` to write the immutable version, promotion record and derived catalogs in
+one reviewed workspace plan. `revendor` reads the latest approved version, reports drift against
+that copy, and writes a new version without altering the prior package. The Registry graph keys
+duplicate detection by identity **and version**; dependencies pass when an approved version matches
+their bounds, while collection membership is assigned only to matching versions.
+
+**Consequence.** B-149 closes when the retained vendoring modules and canonical Registry gates are
+green. The old unversioned authored wrapper and `promote-native` expectations in those tests are
+replaced with versioned staging and current commands. CP-26.6 follows this repair; the numbered
+plan's remaining steps stay in order. No compatibility route is added.

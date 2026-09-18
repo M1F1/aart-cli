@@ -1,5 +1,20 @@
 # AART Refactor Migration Status
 
+**2026-09-19, B-149 closed.** `aart registry vendor` no longer writes the retired unversioned
+package layout. `project_vendored_package` writes `artifacts/<kind>/<name>/<version>/`, and both
+`vendor` and `revendor` hand the projected package to `plan_bulk_promotion`, so the immutable
+version, its promotion record and the derived catalogs come from one reviewed workspace plan
+(D-326). `read_vendored_artifact` reads the latest approved `VENDORED` version, so drift is reported
+against the copy actually published. `validate_registry_graph` keys duplicate detection by identity
+**and** version, resolves a dependency against any approved version in bounds, and assigns
+collection membership per version; two registries claiming one identity is still a refusal. The
+seven vendoring modules D-323 kept red are green, as is `registry_index_test`. Every test module was
+then run one process at a time and no module outside the repair changed state. Two targeted
+mutations: reverting the package root to the unversioned path failed only the projection claims,
+which showed that the approved layout is now owned by `plan_bulk_promotion` rather than by the
+vendoring writer; writing the staged package instead of the promoted one failed the canonical gates
+and the vendor command, delivery and projection claims together. Ruff and Mypy are green tree-wide. No broad `make quality` ran, under D-317.
+
 **2026-09-18, CP-26.05 complete.** The retired authoring-workspace representation has no schema, no
 fixtures and no planning half left: `protocol/registry_tree.py`, every entry/lock/index parser and
 serializer, `build_registry_index`, the mutation port and its application service, the `registry-v1`
