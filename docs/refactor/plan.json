@@ -692,7 +692,7 @@
     {
       "id": "CP-25",
       "title": "Release gating, usage-reporting withdrawal, and post-release field reports",
-      "status": "in_progress",
+      "status": "done",
       "steps": [
         {
           "id": "1",
@@ -839,6 +839,26 @@
         {
           "id": "12",
           "title": "`aart author init` covers `guideline`, `hook` and `memory`",
+          "status": "todo"
+        },
+        {
+          "id": "13",
+          "title": "Every install line in the README is executed by a gate, not described",
+          "status": "todo"
+        },
+        {
+          "id": "14",
+          "title": "The README opens with the consumer's path and nothing else",
+          "status": "todo"
+        },
+        {
+          "id": "15",
+          "title": "Its second half is authoring in a source checkout, then the registry that compiles it",
+          "status": "todo"
+        },
+        {
+          "id": "16",
+          "title": "Everything that serves neither reader moves out of the README",
           "status": "todo"
         }
       ]
