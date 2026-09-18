@@ -3456,3 +3456,36 @@ writing generated files would make it a mutation of content it did not author.
 
 **Not a blocker for D-304.** Verified on `M1F1/aart-registry-smoke`, created for that decision's
 end-to-end check.
+
+## B-141 — Three of the four fetch arms cannot authenticate, so a private instance has one route
+
+**Evidence.** With D-304 in place the step runs to completion under `sh` on a real Enterprise
+runner and then fails in the git arm:
+
+```
+fatal: could not read Username for 'https://<instance>': No such device or address
+Error: Process completed with exit code 128
+```
+
+The clone carries no credential. Neither does the wheel arm, whose `urllib` fetch of a release
+asset on a private instance returns a sign-in page rather than a wheel. `AART_TOOL_PATH` needs
+control of the CI image. So on an instance where the AART copy is private — the normal case inside
+a company — exactly one of the four arms can authenticate: `AART_PACKAGE`, through
+`AART_PIP_INDEX_CREDENTIALS_SECRET`.
+
+**Why the shipped default makes this worse.** Git is the arm reached when nothing is set, and it is
+the only arm carrying a default. An organisation that configures nothing lands on the one arm that
+cannot work for it, with an error naming a username prompt rather than the missing capability.
+
+**Shape of the work.** Give the git arm the credential story the index arm already has: an
+`AART_GIT_CREDENTIALS_SECRET` naming a secret that holds `user:token`, assembled into the clone URL
+in the step and re-masked in halves exactly as `INDEX_CREDENTIALS` is, never written to `how` or any
+log line. The wheel arm wants the same treatment as an `Authorization` header on the `urllib`
+request. Both are the same shape as the code already in this step, which is why they belong
+together.
+
+**Workaround until then.** Publish the wheel to the internal index (`scripts/publish_to_index.py`
+is wired into the release action) and set `AART_PACKAGE=aart-cli=={version}` with
+`AART_PIP_INDEX_URL`. The instance that raised this already has
+`AART_PIP_INDEX_CREDENTIALS_SECRET` set and `AART_PIP_INDEX_URL` unset, so it is one variable and
+one publish away from the supported route.
