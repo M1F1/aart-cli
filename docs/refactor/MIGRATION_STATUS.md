@@ -1,10 +1,15 @@
 # AART Refactor Migration Status
 
+**2026-09-18, CP-26 scope addition.** The owner added step 17 to remove `M1F1` and
+`M1F1/aart-cli` as generated Registry and operational defaults. The slice names the affected
+production files and confines the change to user-facing output and defaults. The CP-26 removal
+sequence is unchanged; The released `v0.3.0` precedes implementation.
+
 **2026-09-18, PR #21 CI repair.** The D-308 refusal now offers parseable `registry scan --help`
 and `registry promote --help` commands. `source_remediation_test` reproduced the CI failure before
 the fix, passed afterward, and failed on a deliberate removal of `--help` from `promote` before
 restoration. Both affected test modules (28 tests) and `make lint format-check typecheck` pass.
-PR #21 still needs a green CI run and release; CP-26 step 2 has not been edited.
+PR #21 and release PR #22 later passed and produced `v0.3.0`; CP-26 step 2 remains next.
 
 **2026-09-18, PR #21 second CI repair (D-310).** Two tests' literal credential URLs are now
 assembled by `credential_fixtures.credential_url`. The scanner was red with two findings before

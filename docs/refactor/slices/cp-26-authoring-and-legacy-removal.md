@@ -262,11 +262,26 @@ compatibility window, no migration command, and no deprecation period.
 | 14 | The README opens with the consumer's path and nothing else | install AART → subscribe a registry → install an artifact |
 | 15 | Its second half is authoring in a source checkout, then the registry that compiles it | `author init` → `author check` → `scan` → `promote`; states the store-not-author rule |
 | 16 | Everything that serves neither reader moves out of the README | gates, release model, development setup → `docs/` |
+| 17 | Remove `M1F1` as a generated or operational default | Registry workflow/README, CLI guidance, release defaults and public configuration docs; no organization or repository baked into a generated registry |
 
 Two ordering constraints, both internal: step 6 precedes steps 8–9, because the generator is written
-against the collected surface rather than against a transcription of it; and steps 14–16 come last,
-because a README rewritten before the verbs exist documents a surface that is still moving. Step 13
-is independent of both and can be taken at any point.
+against the collected surface rather than against a transcription of it; and steps 14–16 follow the
+commands, because a README rewritten before the verbs exist documents a surface that is still moving. Step 13
+is independent of both and can be taken at any point. Step 17 is also independent and may follow the
+README work.
+
+### Step 17 — no maintainer identity as a default
+
+The owner explicitly requires generated registries and operational examples to carry no default
+`M1F1` organization or `M1F1/aart-cli` repository. Current production occurrences include the
+generated workflow and Registry README in `registry_commands/templates.py`, the registry-init
+remediation in `curation/runtime.py`, and the reference registry origin in `scripts/release.py`.
+The Enterprise rollout guide describes the same default; `pyproject.toml` still points at the
+older repository. Inspect each consumer-facing occurrence and replace it with a value supplied by
+configuration, a neutral example, or a clear missing-configuration refusal as appropriate. Update
+tests so generated output and runtime defaults are checked for this rule. Historical records and
+the Product Specification's identification of the target repository remain factual records, not
+defaults. Record any necessary choice about an unset tool repository before implementation.
 
 ## Still unestablished
 

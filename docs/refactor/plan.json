@@ -860,6 +860,11 @@
           "id": "16",
           "title": "Everything that serves neither reader moves out of the README",
           "status": "todo"
+        },
+        {
+          "id": "17",
+          "title": "Generated registry and release defaults contain no M1F1 repository or organization",
+          "status": "todo"
         }
       ]
     }
