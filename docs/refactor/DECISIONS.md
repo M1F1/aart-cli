@@ -7525,3 +7525,36 @@ the runner rather than in that image; changing them is B-138, not this.
 **Follow-up.** A registry already initialised carries the old workflow in its own history, so the
 fix reaches it only when the file is regenerated — the version pin in `.aart-version` does not
 govern the workflow that fetches the tool.
+
+## D-305 — The git arm takes a credential the way the index arm already does
+
+**Context.** With D-304 in place the provisioning step ran to completion under `sh` on a company
+runner and then failed in the git arm: `could not read Username`, exit 128. A company's copy of
+AART is private, and that clone carried nothing to log in with — the step's `env` held no token and
+the registry's own checkout persists none. Git is the arm reached when nothing is configured, so an
+organisation that sets no variable lands on the one arm that cannot work for it. Of the four arms,
+only `AART_PACKAGE` could authenticate (B-141).
+
+**Decision.** `AART_GIT_CREDENTIALS_SECRET` names a secret, exactly as
+`AART_PIP_INDEX_CREDENTIALS_SECRET` does. A *variable* never holds the credential: variables are
+not masked and are readable by anyone who can open the settings page. The step assembles the clone
+URL at run time, masks each half that came out of the secret, keeps the credential out of `how` so
+no log line carries it, and resets the checkout's `origin` afterwards — `git clone` records the URL
+it was handed in `.git/config`, where every later step in the job could read it.
+
+**A secret holding only a token is taken as one.** A service account's token is usually already a
+secret; requiring `user:token` would mean copying it into a second secret just to prefix a name,
+which is one more place to rotate and one more to leak. A value with no colon is the token, used
+with the user name `x-access-token`, which GitHub ignores when the password is a token. Only the
+half that came from the secret is masked: `***` over a public constant hides nothing and reads as
+though it had.
+
+**Scope.** The git arm only. The wheel arm stays anonymous: a release asset redirects to storage,
+and `urllib` carries an `Authorization` header across redirects, so the naive fix would hand a
+company token to a host that is not the instance. It is also unnecessary — git yields the tagged
+source, and AART needs no build step, so the wheel's only advantage is size. Left in B-141.
+
+**Evidence.** `TheGitArmCanAuthenticate` runs the step under a real `dash` against a `git` that
+refuses an anonymous clone the way the instance did, and asserts four things: the refusal without a
+secret (so the rest is not vacuous), the clone with one, that no line outside `::add-mask::` carries
+either half, and that the checkout is left holding the bare URL.

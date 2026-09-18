@@ -104,6 +104,7 @@ The short list for a private runner with an internal index:
 | `AART_RUNNER` | your runner labels, as JSON: `["self-hosted","linux","x64"]` |
 | `AART_PIP_INDEX_URL` | the internal mirror's simple index, as a bare URL with no credentials: `https://nexus.corp/repository/pypi-group/simple` |
 | `AART_PIP_INDEX_CREDENTIALS_SECRET` | if the index needs a login: the **name** of a secret holding `user:token` |
+| `AART_GIT_CREDENTIALS_SECRET` | if the AART copy is private: the **name** of a secret holding a token, or `user:token`. Without it the clone is anonymous and a private copy answers `could not read Username` |
 | `AART_CI_IMAGE` | if jobs run in a container: the image, e.g. `registry.corp/python:3.11` |
 | `AART_PYTHON_VERSIONS` | with `AART_CI_IMAGE`: one entry, the image's interpreter, e.g. `["3.11"]` |
 | `AART_PYTHON` | with `AART_CI_IMAGE`: the interpreter's name inside it, if not `python` |
@@ -367,6 +368,7 @@ Read by `.github/workflows/pr-check.yml` and `.github/workflows/release.yml`.
 | `AART_RELEASE_PYTHON_VERSION` | `3.11` | which official image the `release` and `deep-quality` jobs run, and the single interpreter `pr-check` uses on a release pull request, when `AART_CI_IMAGE` is unset |
 | `AART_PIP_INDEX_URL` | `https://pypi.org/simple` | index for the development tools the gates install. Keep it a bare URL |
 | `AART_PIP_INDEX_CREDENTIALS_SECRET` | unset | **name** of a secret holding `user:token` for that index. Each half is masked before use |
+| `AART_GIT_CREDENTIALS_SECRET` | unset | **name** of a secret holding a bare token, or `user:token`, for the `git clone` arm. A bare token is used with the user name `x-access-token`. Each half that came from the secret is masked before use |
 | `AART_IMAGE_USERNAME_SECRET` | unset | **name** of the secret holding the image registry's username. Setting it switches every job to the shape that logs in |
 | `AART_IMAGE_PASSWORD_SECRET` | unset | **name** of the secret holding the image registry's password |
 | `AART_POETRY` | `poetry` | how to invoke Poetry, which builds the wheel |
@@ -384,6 +386,7 @@ overwrite one that was edited by hand, so configure them with variables, not edi
 | `AART_PACKAGE` | unset | fetch route 1: a requirement such as `aart-cli=={version}`, installed with `pip --no-deps --target` |
 | `AART_PIP_INDEX_URL` | `https://pypi.org/simple` | the index `AART_PACKAGE` installs from |
 | `AART_PIP_INDEX_CREDENTIALS_SECRET` | unset | **name** of a secret holding `user:token` for that index |
+| `AART_GIT_CREDENTIALS_SECRET` | unset | **name** of a secret holding a bare token, or `user:token`, used only by the `git clone` arm |
 | `AART_WHEEL_URL` | unset | fetch route 2: a wheel URL, downloaded without credentials and unzipped |
 | `AART_TOOL_PATH` | unset | fetch route 3: an AART tree already on the runner |
 | `AART_TOOL_URL` | instance URL + `AART_REPOSITORY` | fetch route 4: a Git URL, cloned at `v` + the pin |

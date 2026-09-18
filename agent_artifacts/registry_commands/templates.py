@@ -39,6 +39,7 @@ _PROVIDE_AART = b"""      - name: Provide AART
           TOOL_REF: ${{ vars.AART_REF }}
           INDEX_URL: ${{ vars.AART_PIP_INDEX_URL || 'https://pypi.org/simple' }}
           INDEX_CREDENTIALS: ${{ secrets[vars.AART_PIP_INDEX_CREDENTIALS_SECRET] }}
+          GIT_CREDENTIALS: ${{ secrets[vars.AART_GIT_CREDENTIALS_SECRET] }}
           PY: ${{ vars.AART_PYTHON || 'python3' }}
         run: |
           # `sh`, not `bash`.  This step names no shell, and Actions serves `bash -e {0}` only if
@@ -114,11 +115,51 @@ _PROVIDE_AART = b"""      - name: Provide AART
             how="path $TOOL_PATH"
             tool="$TOOL_PATH"
           else
+            # `how` keeps the address without the credential, so no log line carries one -- the
+            # same split the index arm makes between `announce` and `INDEX_URL`.
             how="git $TOOL_URL@$ref"
-            git clone --quiet --depth 1 --branch "$ref" "$TOOL_URL" "$tool" 2>/dev/null \\
+            # A company's copy of AART is private, and this clone used to carry nothing to log in
+            # with: the step's env held no token, and the registry's own checkout persists none
+            # for anything else to reuse.  A real instance answered `could not read Username`,
+            # exit 128, on the arm that is reached when nothing is configured.  So the credential
+            # arrives the way the index arm's already does -- a variable naming a secret, never a
+            # variable holding one, because variables are not masked and are readable by anyone
+            # who can open the settings page.
+            clone_url="$TOOL_URL"
+            if [ -n "${GIT_CREDENTIALS:-}" ]; then
+              # A service account's token is usually already a secret of its own.  Requiring
+              # `user:token` here would mean copying that secret into a second one just to prefix
+              # a name -- one more place to rotate and one more to leak -- so a value with no
+              # colon is taken as the token itself.  GitHub ignores the user name when the
+              # password is a token, and `x-access-token` is the name it documents for that.
+              # Only the half that came out of the secret is masked: masking a public constant
+              # would print `***` over a word that was never secret.
+              case "$GIT_CREDENTIALS" in
+                *:*)
+                  git_user="${GIT_CREDENTIALS%%:*}"
+                  git_held="${GIT_CREDENTIALS#*:}"
+                  echo "::add-mask::$git_user"
+                  ;;
+                *)
+                  git_user="x-access-token"
+                  git_held="$GIT_CREDENTIALS"
+                  ;;
+              esac
+              echo "::add-mask::$git_held"
+              git_scheme="https"
+              case "$TOOL_URL" in http://*) git_scheme="http" ;; esac
+              git_host="${TOOL_URL#http://}"
+              git_host="${git_host#https://}"
+              at="@"
+              clone_url="$git_scheme://$git_user:$git_held$at$git_host"
+            fi
+            git clone --quiet --depth 1 --branch "$ref" "$clone_url" "$tool" 2>/dev/null \\
               || { rm -rf "$tool"
-                   git clone --quiet "$TOOL_URL" "$tool"
+                   git clone --quiet "$clone_url" "$tool"
                    git -C "$tool" -c advice.detachedHead=false checkout --quiet "$ref"; }
+            # `git clone` writes the URL it was handed into the checkout's own config, so the
+            # credential would outlive this step in a directory every later step can read.
+            git -C "$tool" remote set-url origin "$TOOL_URL"
           fi
           test -f "$tool/agent_artifacts/__main__.py" \\
             || { echo "aart: no agent_artifacts package under '$tool' (via $how)" >&2; exit 2; }
@@ -384,7 +425,7 @@ wins**, and they are never combined:
 | 1 | `AART_PACKAGE` | `aart-cli=={version}` | `pip` from `AART_PIP_INDEX_URL` |
 | 2 | `AART_WHEEL_URL` | `https://host/.../v{version}/aart_cli-{version}-py3-none-any.whl` | fetch, then unzip |
 | 3 | `AART_TOOL_PATH` | `/opt/aart` | Already on the runner |
-| 4 | `AART_TOOL_URL` | `https://ghe.corp/platform/aart-cli.git` | `git clone` at `v` + the pin |
+| 4 | `AART_TOOL_URL` | `https://ghe.corp/platform/aart-cli.git` | `git clone` at `v` + the pin. Private copy: name a secret in `AART_GIT_CREDENTIALS_SECRET` |
 
 `{version}` is replaced with whatever `.aart-version` says, so the version appears **once**, in
 Git, and never in a settings page. Set `AART_REF` to override the pin for one registry - the run
@@ -415,6 +456,7 @@ AART: aart-cli 0.1.0  via index https://nexus.corp/pypi/simple (aart-cli==0.1.0)
 |---|---|---|
 | `AART_PIP_INDEX_URL` | `https://pypi.org/simple` | Index used by `AART_PACKAGE` |
 | `AART_REPOSITORY` | `M1F1/aart-cli` | `owner/name` of the AART repository, combined with this instance's own URL |
+| `AART_GIT_CREDENTIALS_SECRET` | unset | **Name** of a secret holding a token, or `user:token`, for the `git clone` arm. A bare token is used as `x-access-token`. Without it the clone is anonymous, and a private copy answers `could not read Username` |
 | `AART_REF` | `v` + the pin | Escape hatch: a branch or tag instead of `.aart-version`. Switches the version check off |
 | `AART_RUNNER` | `["ubuntu-latest"]` | JSON array of runner labels. Must be JSON, not a bare word |
 | `AART_CI_IMAGE` | unset | Container image for the jobs. Unset means the runner's own environment |
