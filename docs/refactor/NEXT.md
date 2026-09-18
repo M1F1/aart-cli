@@ -1,5 +1,15 @@
 # AART Refactor — Next Work
 
+## PR #21 CI repair (2026-09-18)
+
+The public `pr-check` matrix failed in `source_remediation_test` because the D-308 refusal named
+`aart registry scan` and `aart registry promote` without their required arguments. The remediation
+now names their `--help` forms. The focused test was red before the fix, green after it, and red
+again when `--help` was deliberately removed from `promote`; the correct text was restored. The
+28 tests in `source_remediation_test` and `promoted_registry_maintenance_e2e_test`, plus
+`make lint format-check typecheck`, pass locally. Next: push this fix, confirm the PR #21 checks,
+then complete its release before resuming CP-26 step 2.
+
 ## CP-26 — start here (2026-09-18)
 
 **Design and plan:** `docs/refactor/slices/cp-26-authoring-and-legacy-removal.md`. The twelve steps

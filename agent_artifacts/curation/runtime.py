@@ -475,7 +475,7 @@ class LocalCurationService:
                 "this registry publishes approved versions, so it cannot also author in place",
                 remediation=(
                     "author the artifact in a source checkout, then bring it in with "
-                    "`aart registry scan` and `aart registry promote`",
+                    "`aart registry scan --help` and `aart registry promote --help`",
                 ),
             )
         if (

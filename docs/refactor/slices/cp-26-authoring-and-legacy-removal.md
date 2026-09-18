@@ -2,6 +2,11 @@
 
 Status: **design**. Step 1 is already done (D-308); nothing else has started.
 
+PR #21 follow-up (2026-09-18): D-308's authoring refusal now points to the runnable `--help`
+forms of `scan` and `promote`. The visible-command test was red first, green after correction,
+red under a deliberate one-command regression, then green when restored. This release repair
+precedes step 2 and does not alter its scope.
+
 This supersedes the earlier draft of this file, which planned a compatibility window. The
 maintainer has withdrawn that requirement: AART is early, its users are few, and back-compatibility
 is explicitly not to be paid for. The removal is therefore direct.

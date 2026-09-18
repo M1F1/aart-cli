@@ -1,5 +1,11 @@
 # AART Refactor Migration Status
 
+**2026-09-18, PR #21 CI repair.** The D-308 refusal now offers parseable `registry scan --help`
+and `registry promote --help` commands. `source_remediation_test` reproduced the CI failure before
+the fix, passed afterward, and failed on a deliberate removal of `--help` from `promote` before
+restoration. Both affected test modules (28 tests) and `make lint format-check typecheck` pass.
+PR #21 still needs a green CI run and release; CP-26 step 2 has not been edited.
+
 **2026-09-17, post-review install guidance (D-303).** README gained parameterized, self-contained
 public Release-wheel download blocks for `pipx` and `uv tool`. A ZIP test catches a sign-in page
 before installation, and the private-Enterprise boundary is stated explicitly. After owner feedback,
