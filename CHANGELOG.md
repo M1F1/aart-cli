@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.0](https://github.com/M1F1/aart-cli/compare/v0.2.0...v0.3.0) (2026-09-18)
+
+
+### Added
+
+* **registry:** let the git arm authenticate to a private AART copy ([3fa5ebb](https://github.com/M1F1/aart-cli/commit/3fa5ebbd903b818440cb1243082618bb461fe32e))
+
+
+### Fixed
+
+* **registry:** refuse to mix the two registry representations ([3fa5ebb](https://github.com/M1F1/aart-cli/commit/3fa5ebbd903b818440cb1243082618bb461fe32e))
+* **registry:** run the registry's AART step under a POSIX shell ([3fa5ebb](https://github.com/M1F1/aart-cli/commit/3fa5ebbd903b818440cb1243082618bb461fe32e))
+* **registry:** trust the workspace before the gates read it ([3fa5ebb](https://github.com/M1F1/aart-cli/commit/3fa5ebbd903b818440cb1243082618bb461fe32e))
+
 ## [0.2.0](https://github.com/M1F1/aart-cli/compare/v0.1.2...v0.2.0) (2026-09-17)
 
 
