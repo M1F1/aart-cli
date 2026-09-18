@@ -1,5 +1,12 @@
 # AART Refactor — Next Work
 
+## CP-26 scope addition (2026-09-18)
+
+The owner added step 17: remove `M1F1` and `M1F1/aart-cli` from generated Registry content and
+operational defaults. The concrete locations and acceptance scope are in the CP-26 slice. This is
+independent of step 2 and follows the README work in the numbered plan. PR #21's CI repair and
+release remain first; resume step 2 afterward.
+
 ## Handoff: CP-26 step 2, on `refactor/cp-26-legacy-removal` (2026-09-18)
 
 **Branch.** Work on `refactor/cp-26-legacy-removal`. It is cut from
@@ -80,13 +87,14 @@ then `handoff-plan done 2` and a commit.
 
 ## CP-26 — start here (2026-09-18)
 
-**Design and plan:** `docs/refactor/slices/cp-26-authoring-and-legacy-removal.md`. The sixteen steps
+**Design and plan:** `docs/refactor/slices/cp-26-authoring-and-legacy-removal.md`. The seventeen steps
 are in `plan.json` as CP-26; step 1 is `done`, the rest `todo`. Take them in order — two internal
 constraints only: step 6 (collect the manifest field surface from the parser with `ast`) precedes
 steps 8–9, because the generator is written against the collected surface; and steps 14–16 (the
-README rewrite) come last, because a README written before the author verbs exist documents a
-surface that is still moving. Step 13 is independent and can be taken at any point. The `ast`
-collector is already written and pasted into the design document; do not re-derive it.
+README rewrite) follow the author commands, because a README written before those verbs exist
+documents a surface that is still moving. Step 13 is independent and can be taken at any point. The `ast`
+collector is already written and pasted into the design document; do not re-derive it. Step 17 is
+independent and removes organization-specific generated defaults.
 
 **The owner has withdrawn backward compatibility, explicitly and more than once.** No compatibility
 window, no migration command, no deprecation period, no consideration for registries already

@@ -1,5 +1,10 @@
 # AART Refactor Migration Status
 
+**2026-09-18, CP-26 scope addition.** The owner added step 17 to remove `M1F1` and
+`M1F1/aart-cli` as generated Registry and operational defaults. The slice names the affected
+production files and confines the change to user-facing output and defaults. The CP-26 removal
+sequence is unchanged; PR #21's release precedes implementation.
+
 **2026-09-17, post-review install guidance (D-303).** README gained parameterized, self-contained
 public Release-wheel download blocks for `pipx` and `uv tool`. A ZIP test catches a sign-in page
 before installation, and the private-Enterprise boundary is stated explicitly. After owner feedback,

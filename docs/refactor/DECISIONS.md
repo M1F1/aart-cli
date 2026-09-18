@@ -7642,3 +7642,15 @@ is a separate, larger slice.
 is held in both directions: making it see nothing turns the new publish test red, making it see
 everything turns the existing "publish still works on an approved registry" test red, and each
 mutation kills exactly one test.
+
+## D-309 — Generated Registry content has no maintainer-specific default
+
+**Context.** The owner found `M1F1/aart-cli` in the generated Registry README and workflow and
+asked that neither this repository nor the `M1F1` organization be an operational default. The
+same identity appears in other generated guidance, release tooling, and configuration docs.
+
+**Decision.** CP-26 gains step 17. Generated output, operational defaults, and public setup
+examples must derive the repository from explicit configuration, use a neutral example, or refuse
+missing configuration clearly. The implementation will select the smallest valid choice at each
+boundary and test the emitted result. Historical records and the canonical specification may still
+identify the actual target repository; those facts are not defaults.
