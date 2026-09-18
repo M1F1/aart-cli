@@ -6,6 +6,13 @@ the fix, passed afterward, and failed on a deliberate removal of `--help` from `
 restoration. Both affected test modules (28 tests) and `make lint format-check typecheck` pass.
 PR #21 still needs a green CI run and release; CP-26 step 2 has not been edited.
 
+**2026-09-18, PR #21 second CI repair (D-310).** Two tests' literal credential URLs are now
+assembled by `credential_fixtures.credential_url`. The scanner was red with two findings before
+the fix, green after it, and red with one finding under a deliberate restoration of one literal.
+The scanner now runs in the quality action before dependency installation; moving it back afterward
+made the new ordering test red. The affected 100 tests and
+`make lint format-check typecheck secret-shape-check` pass locally.
+
 **2026-09-17, post-review install guidance (D-303).** README gained parameterized, self-contained
 public Release-wheel download blocks for `pipx` and `uv tool`. A ZIP test catches a sign-in page
 before installation, and the private-Enterprise boundary is stated explicitly. After owner feedback,

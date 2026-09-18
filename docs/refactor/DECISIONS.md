@@ -7642,3 +7642,16 @@ is a separate, larger slice.
 is held in both directions: making it see nothing turns the new publish test red, making it see
 everything turns the existing "publish still works on an approved registry" test red, and each
 mutation kills exactly one test.
+
+## D-310 — Reject credential-shaped source before installing quality tools
+
+**Context.** PR #21's matrix passed its tests after the first repair, then failed at the late
+`secret-shape-check` gate because two tracked test assertions contained credential-shaped URLs.
+That gate needs only Git and Python's standard library, while the full matrix spends many minutes
+installing tools and running tests before reaching it.
+
+**Decision.** Assemble those test URLs through `credential_fixtures.credential_url`, and run the
+scanner in the composite quality action immediately after Git trusts the checkout, before release
+scope inspection, index setup, dependency installation, or full quality. Keep the scanner in the
+canonical full gate list as well, so local `make quality` retains its contract. An ordering test
+holds the early position and turned red when the step was deliberately moved after installation.

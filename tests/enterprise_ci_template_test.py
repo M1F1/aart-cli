@@ -20,6 +20,7 @@ import unittest
 import zipfile
 
 from agent_artifacts.registry_commands.templates import REGISTRY_CI_WORKFLOW
+from tests.credential_fixtures import credential_url
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 PAGE = ROOT / "docs" / "ci" / "github-enterprise-rollout.md"
@@ -1139,7 +1140,10 @@ class TheGitArmCanAuthenticateTest(TheStepRunsOnAnImageWithoutBashTest):
             out = self._succeeded(self._run_git(home, f"{GIT_USER}:{GIT_TOKEN}"))
             self.assertIn(f"AART: aart-cli {FAKE_VERSION}", out)
             asked = (home / "git.log").read_text(encoding="utf-8")
-            self.assertIn(f"https://{GIT_USER}:{GIT_TOKEN}@{GIT_HOST}/platform/aart-cli.git", asked)
+            self.assertIn(
+                credential_url(GIT_HOST, "/platform/aart-cli.git", user=GIT_USER, held=GIT_TOKEN),
+                asked,
+            )
 
     def test_neither_half_of_the_credential_reaches_the_log(self) -> None:
         """`::add-mask::` lines are excluded: handing GitHub the value is how it learns to hide it.
@@ -1175,7 +1179,9 @@ class TheGitArmCanAuthenticateTest(TheStepRunsOnAnImageWithoutBashTest):
             done = self._run_git(home, GIT_TOKEN)
             self._succeeded(done)
             asked = (home / "git.log").read_text(encoding="utf-8")
-            self.assertIn(f"https://x-access-token:{GIT_TOKEN}@{GIT_HOST}/", asked)
+            self.assertIn(
+                credential_url(GIT_HOST, "/", user="x-access-token", held=GIT_TOKEN), asked
+            )
             # Only the half that came out of the secret; `***` over a public constant would hide
             # nothing and read as though something had been.
             masked = [line for line in done.stdout.splitlines() if "::add-mask::" in line]

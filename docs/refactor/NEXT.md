@@ -7,8 +7,13 @@ The public `pr-check` matrix failed in `source_remediation_test` because the D-3
 now names their `--help` forms. The focused test was red before the fix, green after it, and red
 again when `--help` was deliberately removed from `promote`; the correct text was restored. The
 28 tests in `source_remediation_test` and `promoted_registry_maintenance_e2e_test`, plus
-`make lint format-check typecheck`, pass locally. Next: push this fix, confirm the PR #21 checks,
-then complete its release before resuming CP-26 step 2.
+`make lint format-check typecheck`, pass locally. The next CI run exposed two credential-shaped
+URL literals in `enterprise_ci_template_test`: they now use `credential_fixtures.credential_url`.
+At the owner's direction, `secret-shape-check` also runs in the quality action immediately after
+the PR-title and Git ownership checks, before dependency installation (D-310). Its ordering test
+went red when the step was deliberately moved after installation. The focused 100 tests and
+`make lint format-check typecheck secret-shape-check` pass. Next: push this follow-up, confirm
+PR #21's checks, then complete its release before resuming CP-26 step 2.
 
 ## CP-26 — start here (2026-09-18)
 

@@ -7,6 +7,11 @@ forms of `scan` and `promote`. The visible-command test was red first, green aft
 red under a deliberate one-command regression, then green when restored. This release repair
 precedes step 2 and does not alter its scope.
 
+PR #21 second CI follow-up (D-310): two credential-shaped URL assertions now use the runtime
+fixture builder, and the secret-shape gate runs before dependency installation. A deliberate
+literal restoration made the scanner red; moving the gate back after installation made the
+ordering test red. This release repair likewise precedes step 2.
+
 This supersedes the earlier draft of this file, which planned a compatibility window. The
 maintainer has withdrawn that requirement: AART is early, its users are few, and back-compatibility
 is explicitly not to be paid for. The removal is therefore direct.
