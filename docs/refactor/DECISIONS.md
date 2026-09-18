@@ -7558,3 +7558,52 @@ source, and AART needs no build step, so the wheel's only advantage is size. Lef
 refuses an anonymous clone the way the instance did, and asserts four things: the refusal without a
 secret (so the rest is not vacuous), the clone with one, that no line outside `::add-mask::` carries
 either half, and that the checkout is left holding the bare URL.
+
+## D-306 — The registry workflow tells Git to trust the workspace before the gates run
+
+**Context.** With D-304 and D-305 in place the provisioning step completed on a company runner and
+the very first gate failed: `registry format --check` answered `registry mutation requires a
+writable local Git checkout`, pointing at `/__w/<repo>/<repo>`. Nothing was wrong with the
+directory. A container job mounts the workspace owned by root and then runs the job as another
+user, and Git refuses a repository it does not own — `detected dubious ownership`. Every AART
+command that touches a registry meets it, the read-only ones included, because AART proves its
+target is a real checkout before it acts.
+
+**Decision.** The generated workflow marks the workspace safe immediately after checkout:
+
+```yaml
+- name: Trust the workspace
+  run: |
+    git config --global --add safe.directory "$GITHUB_WORKSPACE"
+```
+
+`--global` is load-bearing rather than habit: Git deliberately ignores `safe.directory` read from a
+repository's own config, since a repository could otherwise vouch for itself. The grant covers one
+directory — the one the job checked out a moment earlier — and lasts as long as the container.
+
+**Why not fix it in AART.** The ownership rule is Git's, and working around it inside the tool
+would mean AART deciding on a user's behalf which foreign-owned checkouts are safe to write. The
+job knows the answer and Git provides the switch; the tool should not second-guess either.
+
+**Evidence.** `TheWorkspaceIsTrustedBeforeTheGates` runs the emitted line under a real POSIX shell
+against real Git and then asks Git what it now trusts, so a misspelled key or a variable the runner
+never sets fails rather than passing on the text alone. Dropping `--global` turns the test red and
+nothing else in the file.
+
+## D-307 — A refusal only Git can explain repeats what Git said
+
+**Context.** The failure above reached a maintainer as `make /__w/<repo>/<repo> writable and repair
+its Git checkout, then run git status` — true, and unactionable. `verify_mutation_target` guesses
+at a cause from what it can see (no `.git`, a registry nested inside a larger checkout) and falls
+back to that sentence when every guess misses. But it had already run Git and thrown Git's answer
+away, and Git's answer named both the cause and the remedy.
+
+**Decision.** When no structural guess applies, the refusal carries Git's own sentence ahead of the
+standing advice. `run_git_process` already reports a failure as `<label> for Git command <argv>:
+<what git wrote>`; `_git_said` drops the argv half, which is this repository's own plumbing and
+tells a reader nothing, and keeps the tail.
+
+**Evidence.** `test_a_refusal_git_alone_can_explain_repeats_what_git_said` drives the one shape a
+test can reproduce without a second user — a writable directory whose `.git` is not a repository —
+and asserts both that Git's words arrive and that the standing remedy is still there. Silencing
+`_git_said` turns that test red alone.

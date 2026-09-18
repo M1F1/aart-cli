@@ -885,16 +885,22 @@ class TheIndexCredentialIsAssembledNotStoredTest(unittest.TestCase):
             self.assertNotIn('how="index $INDEX_URL', body, label)
 
 
-def _provide_aart_script(body: str) -> str:
-    """The `Provide AART` step's shell script, dedented the way the runner writes it to a file."""
+def _step_script(body: str, name: str) -> str:
+    """One named step's shell script, dedented the way the runner writes it to a file."""
 
-    after = body.split("- name: Provide AART", 1)[1].split("        run: |\n", 1)[1]
+    after = body.split(f"- name: {name}", 1)[1].split("        run: |\n", 1)[1]
     kept = []
     for line in after.splitlines():
         if line.strip() and not line.startswith(" " * 10):
             break
         kept.append(line[10:])
     return "\n".join(kept) + "\n"
+
+
+def _provide_aart_script(body: str) -> str:
+    """The `Provide AART` step's shell script, dedented the way the runner writes it to a file."""
+
+    return _step_script(body, "Provide AART")
 
 
 def _strict_posix_shell() -> str | None:
@@ -1187,6 +1193,70 @@ class TheGitArmCanAuthenticateTest(TheStepRunsOnAnImageWithoutBashTest):
             )
             self.assertNotIn(GIT_TOKEN, recorded)
             self.assertIn(GIT_URL, recorded)
+
+
+_TRUST_STEP = "Trust the workspace"
+
+
+class TheWorkspaceIsTrustedBeforeTheGatesTest(unittest.TestCase):
+    """Git refuses a checkout it does not own, and a container runner hands it exactly that.
+
+    The workspace is mounted owned by root and the job then runs as another user, so git answers
+    `detected dubious ownership` and every AART command that reads the checkout fails -- the
+    read-only ones too, because AART proves the target is a real Git checkout before it acts.  A
+    customer's Enterprise run died this way on `registry format --check`, the first gate after the
+    tool was in place.  Naming this one directory safe is git's own documented remedy, and it
+    grants nothing beyond the directory the job just checked out.
+    """
+
+    def test_the_step_comes_before_anything_that_reads_the_checkout(self) -> None:
+        for label, body in EMITTED.items():
+            self.assertIn(_TRUST_STEP, body, label)
+            self.assertLess(
+                body.index(_TRUST_STEP),
+                body.index("- run: aart registry"),
+                f"{label}: a gate would read the checkout before git had been told to trust it",
+            )
+
+    @unittest.skipIf(POSIX_SHELL is None, "no POSIX shell here; /bin/sh is bash")
+    def test_it_records_the_workspace_and_nothing_else_as_safe(self) -> None:
+        """Run the emitted line for real against real git.
+
+        Asserting the text would pass on a misspelled config key or a variable the runner never
+        sets; only git's own answer afterwards says the step did what its name claims.
+        """
+
+        for label, body in EMITTED.items():
+            with tempfile.TemporaryDirectory() as raw:
+                home = pathlib.Path(raw)
+                workspace = home / "__w" / "registry" / "registry"
+                workspace.mkdir(parents=True)
+                script = home / "trust.sh"
+                script.write_text(_step_script(body, _TRUST_STEP), encoding="utf-8")
+                env = {
+                    "PATH": os.environ.get("PATH", ""),
+                    "HOME": str(home),
+                    "GITHUB_WORKSPACE": str(workspace),
+                }
+                assert POSIX_SHELL is not None
+                done = subprocess.run(
+                    [POSIX_SHELL, "-e", str(script)],
+                    cwd=workspace,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(done.returncode, 0, f"{label}: {done.stderr}")
+                recorded = subprocess.run(
+                    ["git", "config", "--global", "--get-all", "safe.directory"],
+                    cwd=workspace,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(recorded.stdout.split(), [str(workspace)], label)
 
 
 if __name__ == "__main__":

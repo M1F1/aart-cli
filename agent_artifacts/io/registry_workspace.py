@@ -150,6 +150,20 @@ def _error(code: DiagnosticCode, message: str, remediation: tuple[str, ...] = ()
     return Err((Diagnostic(code, Severity.ERROR, message, remediation=remediation),))
 
 
+def _git_said(outcome: Result[object], argv: tuple[str, ...]) -> str:
+    """Git's own sentence, lifted out of the diagnostic that quotes our command back at us.
+
+    `run_git_process` reports a failure as `<label> for Git command <argv>: <what git wrote>`.
+    The argv half is this module's, and telling a maintainer which plumbing we ran explains
+    nothing; the tail is the only part that came from git and it is the part worth repeating.
+    """
+
+    if not isinstance(outcome, Err) or not outcome.diagnostics:
+        return ""
+    detail = outcome.diagnostics[0].message.split(" ".join(argv), 1)[-1].lstrip(":").strip()
+    return f"Git refused this checkout: {detail}" if detail else ""
+
+
 def _real_directory(path: Path) -> bool:
     try:
         return stat.S_ISDIR(os.stat(path, follow_symlinks=False).st_mode) and not path.is_symlink()
@@ -329,23 +343,18 @@ class FilesystemRegistryWorkspace:
         """Prove that reviewed writes would target an explicit writable local Git checkout."""
 
         if not self._writable_checkout():
-            nested = run_git_process(
-                GitProcessRequest(
-                    (
-                        "git",
-                        "-c",
-                        "core.hooksPath=/dev/null",
-                        "-C",
-                        str(self.root),
-                        "rev-parse",
-                        "--show-toplevel",
-                    ),
-                    str(self.root),
-                    10,
-                    max_output_bytes=4096,
-                )
+            argv = (
+                "git",
+                "-c",
+                "core.hooksPath=/dev/null",
+                "-C",
+                str(self.root),
+                "rev-parse",
+                "--show-toplevel",
             )
+            nested = run_git_process(GitProcessRequest(argv, str(self.root), 10, 4096))
             top = os.fsdecode(nested.value.stdout).strip() if isinstance(nested, Ok) else ""
+            remediation: tuple[str, ...]
             if top and os.path.abspath(top) != str(self.root):
                 remediation = (
                     f"the registry must be the repository root, not {self.root} inside {top}; "
@@ -354,9 +363,18 @@ class FilesystemRegistryWorkspace:
             elif not os.path.lexists(self.root / ".git"):
                 remediation = (f"initialize this registry checkout with: git -C {self.root} init",)
             else:
+                # Nothing structural is wrong -- the directory is writable and `.git` is there --
+                # so the only party that knows why this was refused is Git, and it says so
+                # precisely: `detected dubious ownership` on a container runner whose workspace
+                # belongs to root, a broken object store, a repository format from the future.
+                # Dropping that left a real Enterprise run holding a sentence that named no cause
+                # and no fix.  It goes first, ahead of the standing advice it usually replaces.
                 remediation = (
                     f"make {self.root} writable and repair its Git checkout, then run git status",
                 )
+                spoken = _git_said(nested, argv)
+                if spoken:
+                    remediation = (spoken, *remediation)
             return _error(
                 REGISTRY_WORKSPACE_INVALID,
                 "registry mutation requires a writable local Git checkout",

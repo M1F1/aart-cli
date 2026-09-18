@@ -318,6 +318,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: Trust the workspace
+        run: |
+          # A container runner mounts the workspace owned by root and then runs the job as
+          # somebody else, so git answers `detected dubious ownership` and refuses the checkout
+          # it was just handed.  Every gate below dies on that, the read-only ones included,
+          # because AART proves its target is a real Git checkout before it does anything at
+          # all.  This is git's own documented remedy and it trusts exactly one directory: the
+          # one this job checked out a moment ago.
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
 """
         + _PROVIDE_AART
         + b"""      - run: aart registry format --source . --check

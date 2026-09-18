@@ -43,6 +43,31 @@ class RegistryWorkspaceAdapterTest(unittest.TestCase):
             self.assertIn(str(registry), remediation)
             self.assertIn(str(monorepo), remediation)
 
+    def test_a_refusal_git_alone_can_explain_repeats_what_git_said(self) -> None:
+        """Git knows why it refused; we were throwing that away and guessing instead.
+
+        A container runner mounts the workspace owned by root and runs the job as somebody else,
+        so git answers `detected dubious ownership` -- which names the cause and the remedy.  The
+        checkout is writable and `.git` is there, so every structural guess above is wrong, and a
+        real Enterprise run was left with `make ... writable and repair its Git checkout`: true,
+        and unactionable.  Whatever git says, the refusal has to carry it.
+        """
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "registry"
+            (root / ".git").mkdir(parents=True)
+            refused = FilesystemRegistryWorkspace(str(root)).verify_mutation_target()
+            assert isinstance(refused, Err), refused
+            remediation = refused.diagnostics[0].remediation
+            self.assertTrue(
+                any("not a git repository" in line for line in remediation),
+                f"git's own words are missing from {remediation}",
+            )
+            self.assertTrue(
+                any("then run git status" in line for line in remediation),
+                f"the standing remedy was dropped from {remediation}",
+            )
+
     def test_apply_requires_real_writable_git_checkout_and_exact_preconditions(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp) / "registry"
