@@ -3422,8 +3422,18 @@ editing it by hand puts the registry out of step with the command that manages i
 
 **Shape of the work.** A `registry upgrade` (or `init --refresh`) that rewrites only the managed
 paths, reviewed like any other mutation, reporting the diff and refusing when an unmanaged edit
-would be lost. Until it exists the migration note is: copy the workflow from a registry initialised
-with the new version, or re-init in an empty directory and move the file across.
+would be lost.
+
+**Verified workaround, until it exists.** `init` refuses on two separate conditions, so both have
+to be cleared: the four identity files it checks for (`planning.py:501`), and *any* template path
+that already exists (`registry init refuses to overwrite an existing template`). Deleting all eight
+managed paths and re-running `init` with the same `--source-id` and `--display-name` regenerates
+them, leaves `artifacts/` untouched, and `publish --yes` then commits only what actually changed --
+one file, in the case that motivated this. The registry keeps its repository, and so keeps the
+variables and secrets already configured on it, which is the whole reason the workaround matters.
+Two values are re-derived rather than preserved: `requires_aart.min_inclusive` comes from the
+version of AART running `init` (pass `--minimum-version` to hold the old one), and `README.md` and
+`.gitignore` come back as templates, losing any local edit.
 
 ## B-140 — A registry pushed straight after `init` fails its own generated CI
 
