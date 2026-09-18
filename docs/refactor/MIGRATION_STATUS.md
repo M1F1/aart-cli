@@ -1,5 +1,17 @@
 # AART Refactor Migration Status
 
+**2026-09-19, CP-26.06 complete.** The authoring-manifest field surface is collected from
+`protocol/authoring.py` by reading it, not transcribed. `tests/authoring_field_surface.py`
+discovers field-accepting helpers from their signatures, reads a wrapper's own fixed fields from its
+body, and reports seventeen sites — including the two `_nested_type(value, "transport", path=path)`
+calls the first draft dropped, which pass no field keyword yet accept `type`. A field set that
+cannot be resolved statically is reported as unresolved rather than as empty, so the generator in
+steps 7 to 12 can never be told a site accepts no field when it accepts a computed one; three sites
+are unresolved today, all in the dynamically dispatched input and descriptor parsing (D-327). Two
+targeted mutations — dropping keyword-less call sites, and reading a computed field set as empty —
+each failed exactly one named test. Eleven tests including a Hypothesis property over new field
+names are green; Ruff and Mypy are green. No broad `make quality` ran, under D-317.
+
 **2026-09-19, B-149 closed.** `aart registry vendor` no longer writes the retired unversioned
 package layout. `project_vendored_package` writes `artifacts/<kind>/<name>/<version>/`, and both
 `vendor` and `revendor` hand the projected package to `plan_bulk_promotion`, so the immutable

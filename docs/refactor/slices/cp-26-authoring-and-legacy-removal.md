@@ -512,6 +512,31 @@ Every `tests/*_test.py` module was then run one process at a time: no module out
 changed state. Ruff lint and format pass tree-wide; Mypy passes over the package. No broad
 `make quality` ran, under D-317.
 
+### Step 6 — the authoring field surface is collected from the parser (2026-09-19)
+
+`tests/authoring_field_surface.py` reads `protocol/authoring.py` and reports every site where the
+parser accepts a fixed set of field names. Steps 7 to 12 generate `aart.yaml` from it, so a
+generator that transcribed those names would go one field stale on the next parser change with
+nothing failing.
+
+Two rules make the reading trustworthy, and both are derived rather than listed. Which functions
+accept fields is read from their signatures — a keyword-only `required` or `optional` parameter — so
+a new helper is discovered rather than missed. And a wrapper's own fixed fields are read from its
+body, so `_nested_type(value, "transport", path=path)` is reported as accepting `type` even though
+it passes no field keyword at all. The first draft of this collector dropped exactly those two
+`transport` sites, silently, which is the failure mode the step exists to prevent.
+
+A field set the reader cannot resolve statically — `required=required`, a set built with `|`, an
+f-string label — is reported as **unresolved**, never as empty. An empty set would claim the site
+accepts no field, which is the one wrong answer a generator must not be given. Three of the parser's
+seventeen sites are unresolved today, all in the dynamically dispatched input and descriptor
+parsing; the generator will have to be told about them explicitly rather than quietly emit nothing.
+
+**Targeted semantic mutations (two, one per rule).** Skipping call sites that pass no field keyword
+failed `test_every_field_helper_call_in_the_parser_reaches_the_surface` and nothing else. Making a
+computed field set read as the empty tuple failed `test_a_computed_field_set_is_marked_unresolved`
+and nothing else. Both restored green.
+
 ### Step 17 — no maintainer identity as a default
 
 The owner explicitly requires generated registries and operational examples to carry no default

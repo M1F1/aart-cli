@@ -809,7 +809,7 @@
         {
           "id": "6",
           "title": "The authoring-manifest field surface is collected from the parser, not transcribed",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "7",

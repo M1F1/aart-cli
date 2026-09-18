@@ -8092,3 +8092,25 @@ their bounds, while collection membership is assigned only to matching versions.
 green. The old unversioned authored wrapper and `promote-native` expectations in those tests are
 replaced with versioned staging and current commands. CP-26.6 follows this repair; the numbered
 plan's remaining steps stay in order. No compatibility route is added.
+
+## D-327 — the authoring field surface is discovered, and what cannot be read is named
+
+Date: 2026-09-19 · Status: accepted · Scope: CP-26 steps 6 to 12
+
+**Context.** Steps 7 to 12 generate `aart.yaml` from the fields `protocol/authoring.py` accepts. A
+generator holding its own copy of those names goes one field stale the next time the parser changes,
+and no test fails. The first draft of the collector keyed on call sites that pass a `required=` or
+`optional=` keyword, which silently dropped the two `_nested_type(value, "transport", path=path)`
+sites — a call that accepts a field set by passing none.
+
+**Decision.** The collector discovers field-accepting helpers from their signatures (a keyword-only
+`required` or `optional` parameter) rather than from a list, and reads a wrapper's own fixed fields
+out of its body, so every call to a helper is a site and carries what the helper itself demands. A
+field set that cannot be resolved statically — a name, a set built with an operator, an f-string
+label — is reported as `unresolved` rather than as empty, because an empty set would tell the
+generator the site accepts no field, which is the one answer that produces a silently incomplete
+manifest. It lives in `tests/`: runtime code never reads its own Python source.
+
+**Consequence.** Seventeen sites are reported, three of them unresolved, all in the dynamically
+dispatched input and descriptor parsing. Steps 8 onward must handle those three explicitly rather
+than emit nothing for them. A new parser field, helper or call site turns the surface tests red.

@@ -2,15 +2,18 @@
 
 ## Where CP-26 is (2026-09-19)
 
-Steps 1–5 are done on `refactor/cp-26-legacy-removal`, and **B-057 and B-149 are both closed**. The
+Steps 1–6 are done on `refactor/cp-26-legacy-removal`, and **B-057 and B-149 are both closed**. The
 retired authoring-workspace representation has no schema, no fixtures, no planning half and no
-command left, and `aart registry vendor` now writes the approved representation's versioned package
-through `plan_bulk_promotion` instead of the retired unversioned layout.
-`docs/refactor/slices/cp-26-authoring-and-legacy-removal.md` records both under §"Step 5" and
-§"B-149" (D-321 to D-326).
+command left; `aart registry vendor` writes the approved representation's versioned package through
+`plan_bulk_promotion`; and the authoring field surface is now read out of the parser rather than
+transcribed. `docs/refactor/slices/cp-26-authoring-and-legacy-removal.md` records all three under
+§"Step 5", §"B-149" and §"Step 6" (D-321 to D-327).
 
-**Step 6 is next on the numbered plan** — collect the authoring-manifest field surface from the
-parser rather than transcribing it — and nothing outranks it now that B-149 is closed.
+**Step 7 is next** — a deterministic YAML emitter for the generated subset: block maps, sequences,
+plain scalars and comments. It is written against `tests/authoring_field_surface.py`, which is the
+oracle step 6 exists to provide. Read D-327 first: three of the parser's seventeen field sites are
+`unresolved`, all in the dynamically dispatched input and descriptor parsing, and step 8's `aart
+author init` has to handle those explicitly rather than emit nothing for them.
 
 Two open findings from step 5:
 
@@ -26,7 +29,7 @@ Two open findings from step 5:
 The owner added step 17: remove `M1F1` and `M1F1/aart-cli` from generated Registry content and
 operational defaults. The concrete locations and acceptance scope are in the CP-26 slice. This is
 independent of the removal work and follows the README work in the numbered plan. The `v0.3.0`
-release is complete; step 6 is next.
+release is complete; step 7 is next.
 
 The owner then added step 18 (D-312): `[p] Push` belongs to the local workspace row on Registry
 Maintainer, not to individual wizard success screens. That row distinguishes the accepted snapshot,
