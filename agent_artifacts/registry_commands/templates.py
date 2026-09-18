@@ -41,7 +41,12 @@ _PROVIDE_AART = b"""      - name: Provide AART
           INDEX_CREDENTIALS: ${{ secrets[vars.AART_PIP_INDEX_CREDENTIALS_SECRET] }}
           PY: ${{ vars.AART_PYTHON || 'python3' }}
         run: |
-          set -euo pipefail
+          # `sh`, not `bash`.  This step names no shell, and Actions serves `bash -e {0}` only if
+          # the image has bash -- otherwise it falls back to `sh -e {0}`.  An Enterprise image
+          # carrying git and Python and no bash met exactly that, and the step died on its own
+          # first line, `set: Illegal option -o pipefail`, before it had chosen an arm.  So this
+          # script is POSIX: no `pipefail`, no `${v//a/b}`, and a shim that asks for `/bin/sh`.
+          set -eu
           # An internal index usually wants credentials, and a variable cannot hold one.  So the
           # variable holds the bare host and names the secret holding `user:pass`; the URL is
           # assembled here and never written down anywhere.  Splitting a secret defeats GitHub's
@@ -82,15 +87,22 @@ _PROVIDE_AART = b"""      - name: Provide AART
           # sets one variable and it takes over -- no stale variable has to be unset first.  Git
           # is last because it is the only arm carrying a shipped default, and anything below an
           # arm that is always set would be unreachable.
+          # POSIX `sh` has no global substitution, and a wheel URL usually names the version
+          # twice -- once in the path and once in the filename -- so the first-match forms do not
+          # serve either.  The interpreter every arm already requires does it, which is the one
+          # tool that cannot be missing from an image that could run AART at all.
+          expand() {
+            "$PY" -c 'import sys;print(sys.argv[1].replace("{version}", sys.argv[2]))' "$1" "$PIN"
+          }
           tool="$RUNNER_TEMP/aart-tool"
           rm -rf "$tool"
           if [ -n "$PACKAGE" ]; then
-            requirement="${PACKAGE//\\{version\\}/$PIN}"
+            requirement=$(expand "$PACKAGE")
             how="index $announce ($requirement)"
             "$PY" -m pip install --quiet --no-deps --target "$tool" \\
               --index-url "$INDEX_URL" "$requirement"
           elif [ -n "$WHEEL_URL" ]; then
-            url="${WHEEL_URL//\\{version\\}/$PIN}"
+            url=$(expand "$WHEEL_URL")
             how="wheel $url"
             # `urllib`, not `curl`: this arm has to run on whatever image the organisation
             # uses, and a real Enterprise image carried git and Python and neither `curl` nor
@@ -112,7 +124,7 @@ _PROVIDE_AART = b"""      - name: Provide AART
             || { echo "aart: no agent_artifacts package under '$tool' (via $how)" >&2; exit 2; }
           bin="$RUNNER_TEMP/aart-bin"
           mkdir -p "$bin"
-          printf '#!/usr/bin/env bash\\nexec env PYTHONPATH=%s %s -m agent_artifacts "$@"\\n' \\
+          printf '#!/bin/sh\\nexec env PYTHONPATH=%s %s -m agent_artifacts "$@"\\n' \\
             "$tool" "$PY" > "$bin/aart"
           chmod +x "$bin/aart"
           echo "$bin" >> "$GITHUB_PATH"

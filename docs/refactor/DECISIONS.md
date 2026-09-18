@@ -7497,3 +7497,31 @@ silent promise in this README example. No release or runtime code changes.
 Use `pipx --python "$(command -v python3)"` because `pipx` may otherwise select a different cached
 interpreter; the cached 3.14 on the test machine failed, while the active 3.11 succeeded. Require
 an existing Release asset, not merely a planned version or tag.
+
+## D-304 — The generated registry's AART step is POSIX sh, not bash
+
+**Context.** A registry created by `aart registry init` was pushed to a real Enterprise instance
+and every gate job failed on the first line of `Provide AART`:
+`set: Illegal option -o pipefail`. The step declares no `shell:`, and Actions serves `bash -e {0}`
+only when the image has bash; otherwise it falls back to `sh -e {0}`. The organisation's container
+image carries git and Python and no bash — the same image that, earlier, carried neither `curl`
+nor `gh` and motivated the `urllib` fetch in the wheel arm. The step died before it had chosen an
+arm, so no repository variable could have helped, and the two bash-only constructs after it
+(`${PACKAGE//\{version\}/$PIN}`, and a shim asking for `/usr/bin/env bash`) would have failed the
+same image in turn.
+
+**Decision.** The `Provide AART` script is POSIX sh. `set -eu` replaces `set -euo pipefail`; one
+`expand` helper replaces both `${v//a/b}` substitutions and runs them through `$PY`, the
+interpreter every arm already requires; the shim it writes asks for `/bin/sh`. Do not fix this by
+declaring `shell: bash` — the image that raised it has no bash, so that turns a wrong answer into
+a refusal. `tests.enterprise_ci_template_test.TheStepRunsOnAnImageWithoutBashTest` runs the script
+under a real `dash` per arm, because macOS `/bin/sh` is bash and accepts every construct above, so
+no developer machine can see this class of defect by running the script.
+
+**Scope.** Only the step that declares no shell and runs inside the organisation's image. The
+aggregate gate step and `.github/actions/aart/action.yml` both declare `shell: bash` and run on
+the runner rather than in that image; changing them is B-138, not this.
+
+**Follow-up.** A registry already initialised carries the old workflow in its own history, so the
+fix reaches it only when the file is regenerated — the version pin in `.aart-version` does not
+govern the workflow that fetches the tool.

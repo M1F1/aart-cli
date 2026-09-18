@@ -3382,3 +3382,67 @@ test should construct a source whose configured alias differs from its published
 Promotion condition: Promote if the owner wants `doctor` dependable for 0.2.0, or as soon as any
 user configures a source under an alias of their own choosing — which the `source add` interface
 invites.
+
+## B-138 — The remaining bash-only CI scripts are untested against a shell that is not bash
+
+**Evidence.** D-304 fixed the one step that declares no `shell:` and runs inside the
+organisation's container image. Five scripts still open with `set -euo pipefail` and declare
+`shell: bash`: `.github/actions/aart/action.yml` (which also writes a `/usr/bin/env bash` shim),
+`.github/actions/mutants/action.yml`, `.github/actions/pip-index/action.yml`,
+`.github/actions/release/action.yml` (twice), `.github/workflows/pr-check.yml`, and the aggregate
+gate step in `agent_artifacts/registry_commands/templates.py`.
+
+**Why it is not critical.** Each declares `shell: bash` explicitly, so on an image without bash it
+fails at step setup with a clear refusal rather than the misleading `Illegal option` the registry
+step gave. All of them run on the runner rather than in `AART_CI_IMAGE`, and this repository's own
+Enterprise fork has released through them.
+
+**What would make it critical.** An operator pointing `AART_RUNNER` at a self-hosted runner whose
+image lacks bash. Then `pr-check` and `release` stop working on that instance and the refusal is
+not actionable without reading this entry.
+
+**Shape of the work.** Reuse `TheStepRunsOnAnImageWithoutBashTest`'s harness: extract each `run:`
+block and execute it under `dash`. `.github/actions/aart` is the one worth converting first — it
+is the tool-provisioning step's sibling and carries the same shim.
+
+## B-139 — A fix to the generated registry workflow cannot reach a registry that already exists
+
+**Evidence.** D-304 corrects `.github/workflows/aart-registry.yml` as `registry init` writes it. A
+registry initialised before that carries the broken copy in its own history, and there is no
+command that refreshes it: `registry init` answers
+`error: registry init refuses an existing registry workspace`, and the top-level `upgrade` replaces
+the AART executable, not a registry's managed files. Verified against a scratch registry whose
+workflow was rolled back to the pre-fix shape.
+
+**Why this bites more than it looks.** `.aart-version` pins which AART the gates run, so a registry
+does track tool versions — but the workflow that *fetches* that AART is outside the pin, which is
+the one file the pin cannot govern. Every defect in the provisioning step is therefore permanent
+for every registry already created, and `plan_registry_init` refuses a hand-edited template, so
+editing it by hand puts the registry out of step with the command that manages it.
+
+**Shape of the work.** A `registry upgrade` (or `init --refresh`) that rewrites only the managed
+paths, reviewed like any other mutation, reporting the diff and refusing when an unmanaged edit
+would be lost. Until it exists the migration note is: copy the workflow from a registry initialised
+with the new version, or re-init in an empty directory and move the file across.
+
+## B-140 — A registry pushed straight after `init` fails its own generated CI
+
+**Evidence.** `registry init` writes six paths and ends with
+`next: validate`, `next: lock`, `next: build`, `next: audit`. Following them in that order fails at
+the first one: `validate --strict --frozen` answers
+`error: compiled registry requires lock and index`, and so do `lock --check`, `build --check` and
+both `registry test` runs. The generated workflow runs the gates in that same order, so a registry
+committed as `init` leaves it is red on its first push — with five failures whose remediation text
+names a command the maintainer was never told to run before pushing.
+
+**What does work.** `registry publish --yes` prepares the lock and index, validates and audits that
+exact snapshot, and commits all eight paths in one reviewed mutation. That is the correct first
+move after `init`, and it is the one command the `next:` hints do not mention.
+
+**Shape of the work.** Make `init`'s closing hint `next: aart registry publish --yes`, or have
+`init` write the lock and index itself so the six paths it emits are internally consistent. Either
+removes the state in which a registry exists but cannot pass its own gates. Prefer the hint: `init`
+writing generated files would make it a mutation of content it did not author.
+
+**Not a blocker for D-304.** Verified on `M1F1/aart-registry-smoke`, created for that decision's
+end-to-end check.

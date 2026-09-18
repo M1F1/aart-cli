@@ -9,9 +9,15 @@ added to a workflow and not to the page fails here, the same way
 
 from __future__ import annotations
 
+import contextlib
+import os
 import pathlib
 import re
+import shutil
+import subprocess
+import tempfile
 import unittest
+import zipfile
 
 from agent_artifacts.registry_commands.templates import REGISTRY_CI_WORKFLOW
 
@@ -439,11 +445,17 @@ class ThePinIsReadFromTheRepositoryTest(unittest.TestCase):
             self.assertLess(body.index(".aart-version"), body.index('if [ -n "$PACKAGE" ]'), label)
 
     def test_the_index_and_wheel_arms_substitute_the_pin(self) -> None:
-        """Otherwise a version would have to be written into a variable as well as the file."""
+        """Otherwise a version would have to be written into a variable as well as the file.
+
+        Both arms go through one `expand`, which reads `$PIN` itself -- so an arm cannot be given
+        a substitution that quietly comes from somewhere else.  `TheStepRunsOnAnImageWithoutBash`
+        holds the substitution's behaviour; this holds that both arms are subject to it.
+        """
 
         for label, body in EMITTED.items():
-            self.assertIn(r'requirement="${PACKAGE//\{version\}/$PIN}"', body, label)
-            self.assertIn(r'url="${WHEEL_URL//\{version\}/$PIN}"', body, label)
+            self.assertIn('requirement=$(expand "$PACKAGE")', body, label)
+            self.assertIn('url=$(expand "$WHEEL_URL")', body, label)
+            self.assertIn('replace("{version}", sys.argv[2]))\' "$1" "$PIN"', body, label)
 
     def test_the_git_arm_derives_its_ref_from_the_pin(self) -> None:
         for label, body in EMITTED.items():
@@ -863,6 +875,170 @@ class TheIndexCredentialIsAssembledNotStoredTest(unittest.TestCase):
         for label, body in EMITTED.items():
             self.assertIn('how="index $announce', body, label)
             self.assertNotIn('how="index $INDEX_URL', body, label)
+
+
+def _provide_aart_script(body: str) -> str:
+    """The `Provide AART` step's shell script, dedented the way the runner writes it to a file."""
+
+    after = body.split("- name: Provide AART", 1)[1].split("        run: |\n", 1)[1]
+    kept = []
+    for line in after.splitlines():
+        if line.strip() and not line.startswith(" " * 10):
+            break
+        kept.append(line[10:])
+    return "\n".join(kept) + "\n"
+
+
+def _strict_posix_shell() -> str | None:
+    """A POSIX shell that is not bash answering to the name `sh`.
+
+    macOS `/bin/sh` *is* bash, and bash in `sh` mode still accepts `set -o pipefail` and `${v//a/b}`,
+    so a developer machine cannot see this class of bug at all.  `dash` is `/bin/sh` on the Linux
+    images that CI and a customer's Enterprise runner both use, and it is the oracle here.
+    """
+
+    found = shutil.which("dash") or ("/bin/dash" if os.path.exists("/bin/dash") else None)
+    if found:
+        return found
+    probe = subprocess.run(
+        ["/bin/sh", "-c", "echo ${BASH_VERSION-}"], capture_output=True, text=True, check=False
+    )
+    return None if probe.stdout.strip() else "/bin/sh"
+
+
+POSIX_SHELL = _strict_posix_shell()
+
+# What the fake interpreter answers to `--version`, and what `.aart-version` therefore pins.  A
+# number no real build carries, so a passing run cannot be one that reached the real package.
+FAKE_VERSION = "4.5.6"
+_FAKE_PY = """#!/usr/bin/env python3
+import os, pathlib, sys
+
+args = sys.argv[1:]
+with pathlib.Path(os.environ["FAKE_PY_LOG"]).open("a", encoding="utf-8") as handle:
+    handle.write(" ".join(args) + "\\n")
+if args[0] == "-c":
+    # `-c` is served for real: the wheel arm's one-liner is the code under test, not a stub.
+    sys.argv = ["-c", *args[2:]]
+    exec(compile(args[1], "<fake>", "exec"), {"__name__": "__main__"})
+elif args[:2] == ["-m", "pip"]:
+    target = pathlib.Path(args[args.index("--target") + 1]) / "agent_artifacts"
+    target.mkdir(parents=True, exist_ok=True)
+    (target / "__main__.py").write_text("", encoding="utf-8")
+elif args[:2] == ["-m", "agent_artifacts"]:
+    print("aart-cli __VERSION__")
+"""
+
+
+@unittest.skipIf(POSIX_SHELL is None, "no POSIX shell here; /bin/sh is bash")
+class TheStepRunsOnAnImageWithoutBashTest(unittest.TestCase):
+    """The step names no `shell:`, so a runner without bash serves it `sh -e {0}`.
+
+    That is not hypothetical.  A container image with git and Python and no bash sent Actions to
+    its documented fallback, and the step died on its own first line with
+    `set: Illegal option -o pipefail` -- before it had chosen an arm, so no variable could have
+    helped.  The same image would then have met `${PACKAGE//.../...}` and a shim asking for
+    `/usr/bin/env bash`.  Every arm below is therefore run under a real POSIX shell.
+    """
+
+    def _stage(self, stack: contextlib.ExitStack) -> pathlib.Path:
+        home = pathlib.Path(stack.enter_context(tempfile.TemporaryDirectory()))
+        (home / "work").mkdir()
+        (home / "work" / ".aart-version").write_text(FAKE_VERSION + "\n", encoding="utf-8")
+        (home / "runner").mkdir()
+        (home / "script.sh").write_text(_provide_aart_script(TEMPLATE_TEXT), encoding="utf-8")
+        interpreter = home / "fake-python"
+        interpreter.write_text(_FAKE_PY.replace("__VERSION__", FAKE_VERSION), encoding="utf-8")
+        interpreter.chmod(0o755)
+        return home
+
+    def _run(self, home: pathlib.Path, **arms: str) -> subprocess.CompletedProcess[str]:
+        env = {
+            "PATH": os.environ.get("PATH", ""),
+            "RUNNER_TEMP": str(home / "runner"),
+            "GITHUB_PATH": str(home / "github_path"),
+            "FAKE_PY_LOG": str(home / "py.log"),
+            "PACKAGE": "",
+            "WHEEL_URL": "",
+            "TOOL_PATH": "",
+            "TOOL_URL": "",
+            "TOOL_REF": "",
+            "INDEX_URL": "https://example.invalid/simple",
+            "INDEX_CREDENTIALS": "",
+            "PY": str(home / "fake-python"),
+        }
+        env.update(arms)
+        assert POSIX_SHELL is not None
+        return subprocess.run(
+            [POSIX_SHELL, "-e", str(home / "script.sh")],
+            cwd=home / "work",
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    def _succeeded(self, done: subprocess.CompletedProcess[str]) -> str:
+        self.assertEqual(done.returncode, 0, f"stderr: {done.stderr}\nstdout: {done.stdout}")
+        return done.stdout
+
+    def test_the_baked_path_arm_runs_under_a_posix_shell(self) -> None:
+        """The arm that touches nothing outside the image, so only the shell can fail it."""
+
+        with contextlib.ExitStack() as stack:
+            home = self._stage(stack)
+            baked = home / "baked"
+            (baked / "agent_artifacts").mkdir(parents=True)
+            (baked / "agent_artifacts" / "__main__.py").write_text("", encoding="utf-8")
+            out = self._succeeded(self._run(home, TOOL_PATH=str(baked)))
+            self.assertIn(f"AART: aart-cli {FAKE_VERSION}", out)
+            self.assertIn("pinned by .aart-version", out)
+
+    def test_the_index_arm_expands_the_pin_without_bash(self) -> None:
+        """`{version}` is substituted by a bash-only expansion that dash answers `Bad substitution`."""
+
+        with contextlib.ExitStack() as stack:
+            home = self._stage(stack)
+            self._succeeded(self._run(home, PACKAGE="aart-cli=={version}"))
+            # The expansion's own source text names `{version}`, so the claim is about what pip
+            # was finally asked for, not about the log as a whole.
+            asked = [
+                line
+                for line in (home / "py.log").read_text(encoding="utf-8").splitlines()
+                if line.startswith("-m pip ")
+            ]
+            self.assertEqual(len(asked), 1, asked)
+            self.assertTrue(asked[0].endswith(f"aart-cli=={FAKE_VERSION}"), asked[0])
+
+    def test_the_wheel_arm_expands_the_pin_without_bash(self) -> None:
+        """A wheel URL names the version twice -- in the path and in the filename -- so whatever
+        replaces the bash expansion has to replace every occurrence, not the first."""
+
+        with contextlib.ExitStack() as stack:
+            home = self._stage(stack)
+            served = home / "served" / f"v{FAKE_VERSION}"
+            served.mkdir(parents=True)
+            wheel = served / f"aart_cli-{FAKE_VERSION}-py3-none-any.whl"
+            with zipfile.ZipFile(wheel, "w") as archive:
+                archive.writestr("agent_artifacts/__main__.py", "")
+            template = (
+                f"file://{home / 'served'}/v{{version}}/aart_cli-{{version}}-py3-none-any.whl"
+            )
+            out = self._succeeded(self._run(home, WHEEL_URL=template))
+            self.assertIn(f"AART: aart-cli {FAKE_VERSION}", out)
+            self.assertNotIn("{version}", out)
+
+    def test_the_shim_it_writes_needs_no_bash_either(self) -> None:
+        """The step can survive the fallback and still hand the job a launcher the image cannot run."""
+
+        with contextlib.ExitStack() as stack:
+            home = self._stage(stack)
+            baked = home / "baked"
+            (baked / "agent_artifacts").mkdir(parents=True)
+            (baked / "agent_artifacts" / "__main__.py").write_text("", encoding="utf-8")
+            self._succeeded(self._run(home, TOOL_PATH=str(baked)))
+            shebang = (home / "runner" / "aart-bin" / "aart").read_text(encoding="utf-8")
+            self.assertNotIn("bash", shebang.splitlines()[0])
 
 
 if __name__ == "__main__":
