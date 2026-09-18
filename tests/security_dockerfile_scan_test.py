@@ -20,8 +20,8 @@ _PAYLOAD = ("payload/SKILL.md", b"# Review\n", False)
 
 
 def _rule_ids(*files: tuple[str, bytes, bool]) -> set[str]:
-    candidate, artifact, lock = _fixture((_PAYLOAD, *files))
-    assessment = assess_installation_risk(BaselineScanRequest(candidate, artifact, lock))
+    candidate, artifact = _fixture((_PAYLOAD, *files))
+    assessment = assess_installation_risk(BaselineScanRequest(candidate, artifact))
     return {finding.rule_id for finding in assessment.findings}
 
 

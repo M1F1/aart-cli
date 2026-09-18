@@ -20,8 +20,8 @@ audits, and commits every listed Git change. Only `push` touches a remote, and o
 | `diff` | reads | Show deterministic canonical-format drift without changing the checkout |
 
 The authoring commands that bring content in — `scan`, `promote`, `adopt`, `check-upstream`,
-`discover`, `promote-native`, `refresh-native`, `vendor`, `vendor-batch`, `revendor` and
-`collection` — follow the same review-then-`--yes` boundary; `aart registry ACTION --help` states
+`discover`, `vendor`, `vendor-batch`, `revendor` and `collection` — follow the same
+review-then-`--yes` boundary; `aart registry ACTION --help` states
 each one's inputs.
 
 Mutation requires a writable real directory containing `.git` (a directory or worktree gitfile).
@@ -82,5 +82,5 @@ unknown risk remains an explicit review warning. The stdlib-only baseline is doc
 ## Other catalog formats
 
 Registry commands accept only the native package contract; other catalog layouts are not
-translated. Re-author the other repository as a native source and use `promote-native`, or copy
-its content in with `vendor`, which records provenance.
+translated. Re-author the other repository as a native source and bring its reviewed Candidate in
+with `scan` and `promote`, or copy its content in with `vendor`, which records provenance.

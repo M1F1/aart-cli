@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import shutil
 import subprocess
 import tempfile
@@ -17,13 +16,9 @@ from agent_artifacts.curation.runtime import LocalCurationService
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.identifiers import ObjectDigest, SourceAlias
 from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.registry_maintenance.model import NativeReferenceAcquisition
 from agent_artifacts.sources.model import SourceInstanceId, make_source_candidate
 from tests.registry_maintenance_fixtures import (
-    append_snapshot_file,
     native_snapshot,
-    replace_snapshot_file,
-    snapshot_file,
 )
 
 
@@ -34,24 +29,6 @@ def _git_checkout(root: Path) -> None:
 
 def _failure(message: str = "injected failure") -> Err:
     return Err((Diagnostic(DiagnosticCode("test-failure"), Severity.ERROR, message),))
-
-
-def _setup_v1_native_snapshot():
-    """A retired recipe must fail at promotion, before a registry entry can exist."""
-
-    manifest_path = "artifacts/skill/code-review/artifact.json"
-    manifest = json.loads(snapshot_file(native_snapshot(), manifest_path))
-    manifest["setup"] = {"recipe": "setup/installer.json", "platforms": ["darwin"]}
-    with_recipe = replace_snapshot_file(
-        native_snapshot(),
-        manifest_path,
-        json.dumps(manifest, sort_keys=True).encode("utf-8"),
-    )
-    return append_snapshot_file(
-        with_recipe,
-        "artifacts/skill/code-review/setup/installer.json",
-        json.dumps({"schema_version": 1, "protocol_version": 1}, sort_keys=True).encode("utf-8"),
-    )
 
 
 class CurationRuntimeTest(unittest.TestCase):
@@ -188,29 +165,14 @@ class CurationRuntimeTest(unittest.TestCase):
                     minimum_version="2.0.0",
                     maximum_version="1.0.0",
                 ),
-                CurationRequest(CurationAction.PROMOTE_NATIVE, str(root)),
+                CurationRequest(CurationAction.VENDOR, str(root)),
                 CurationRequest(
-                    CurationAction.PROMOTE_NATIVE,
-                    str(root),
-                    kind="skill",
-                    name="demo",
-                    url="https://github.com/example/repo.git",
-                    path="artifacts/skill/demo",
-                ),
-                CurationRequest(
-                    CurationAction.PROMOTE_NATIVE,
+                    CurationAction.VENDOR,
                     str(root),
                     kind="skill",
                     name="demo",
                     url="http://insecure.example/repo.git",
-                    path="artifacts/skill/demo",
-                ),
-                CurationRequest(CurationAction.REFRESH_NATIVE, str(root)),
-                CurationRequest(
-                    CurationAction.REFRESH_NATIVE,
-                    str(root),
-                    kind="skill",
-                    name="missing",
+                    path="prompts/demo",
                 ),
                 CurationRequest(CurationAction.VALIDATE, str(other)),
             )
@@ -252,12 +214,6 @@ class CurationRuntimeTest(unittest.TestCase):
             self.assertFalse(
                 any(
                     "validate" in command and "--strict" in command
-                    for command in initialized.value.review.follow_up_commands
-                )
-            )
-            self.assertTrue(
-                any(
-                    "registry lock" in command
                     for command in initialized.value.review.follow_up_commands
                 )
             )
@@ -350,187 +306,6 @@ class CurationRuntimeTest(unittest.TestCase):
             shutil.rmtree(root)
             missing = service.finalize(second.value, second.value.review.review_digest)
             self.assertIsInstance(missing, Err)
-
-    def test_promote_and_refresh_use_pinned_native_acquisition(self) -> None:
-        acquisitions: list[tuple[str, str]] = []
-
-        def acquire(url: str, ref: str):
-            acquisitions.append((url, ref))
-            return Ok(NativeReferenceAcquisition(url, ref, "a" * 40, native_snapshot()))
-
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary) / "registry"
-            _git_checkout(root)
-            service = LocalCurationService(str(root), native_acquirer=acquire)
-            initialized = service.prepare(
-                CurationRequest(
-                    CurationAction.INIT,
-                    str(root),
-                    source_id="test-registry",
-                    display_name="Test Registry",
-                )
-            )
-            assert isinstance(initialized, Ok)
-            assert isinstance(
-                service.finalize(initialized.value, initialized.value.review.review_digest), Ok
-            )
-
-            promote = service.prepare(
-                CurationRequest(
-                    CurationAction.PROMOTE_NATIVE,
-                    str(root),
-                    kind="skill",
-                    name="code-review",
-                    url="https://github.com/example/reference-skills.git",
-                    ref="main",
-                    path="artifacts/skill/code-review",
-                    review_policy="company-review-v1",
-                )
-            )
-            assert isinstance(promote, Ok), promote
-            self.assertTrue(
-                any(
-                    "validate" in command and "--strict" in command
-                    for command in promote.value.review.follow_up_commands
-                )
-            )
-            self.assertEqual(
-                acquisitions, [("https://github.com/example/reference-skills.git", "main")]
-            )
-            promoted = service.finalize(promote.value, promote.value.review.review_digest)
-            assert isinstance(promoted, Ok), promoted
-            self.assertEqual(promoted.value.changed_paths, 3)
-
-            failing_update_service = LocalCurationService(
-                str(root),
-                native_acquirer=lambda _url, _ref: _failure(),
-            )
-            failed_update = failing_update_service.prepare(
-                CurationRequest(
-                    CurationAction.REFRESH_NATIVE,
-                    str(root),
-                    kind="skill",
-                    name="code-review",
-                )
-            )
-            self.assertIsInstance(failed_update, Err)
-
-            checked = service.prepare(
-                CurationRequest(
-                    CurationAction.REFRESH_NATIVE,
-                    str(root),
-                    kind="skill",
-                    name="code-review",
-                )
-            )
-            assert isinstance(checked, Ok), checked
-            self.assertEqual(checked.value.review.changes[0].status, "unchanged")
-            no_op = service.finalize(checked.value, checked.value.review.review_digest)
-            assert isinstance(no_op, Ok), no_op
-            self.assertEqual(no_op.value.status, "no-op")
-
-            for action in (
-                CurationAction.LOCK,
-                CurationAction.BUILD,
-                CurationAction.VALIDATE,
-                CurationAction.AUDIT,
-                CurationAction.FORMAT,
-                CurationAction.PUBLISH,
-            ):
-                with self.subTest(action=action):
-                    refused = service.prepare(CurationRequest(action, str(root)))
-                    self.assertIsInstance(refused, Err)
-                    assert isinstance(refused, Err)
-                    self.assertIn("retired authoring-workspace", refused.diagnostics[0].message)
-
-            marker = root / "aart-registry.json"
-            marker.write_bytes(marker.read_bytes() + b" ")
-            diff = service.prepare(CurationRequest(CurationAction.DIFF, str(root)))
-            assert isinstance(diff, Ok), diff
-            self.assertTrue(any(item.status == "changed" for item in diff.value.review.changes))
-            observed = service.finalize(diff.value, diff.value.review.review_digest)
-            assert isinstance(observed, Ok), observed
-            self.assertEqual(observed.value.changed_paths, 0)
-            self.assertGreater(observed.value.observed_paths, 0)
-            self.assertTrue(marker.read_bytes().endswith(b" "))
-
-            reviewed_update = service.prepare(
-                CurationRequest(
-                    CurationAction.REFRESH_NATIVE,
-                    str(root),
-                    kind="skill",
-                    name="code-review",
-                )
-            )
-            assert isinstance(reviewed_update, Ok), reviewed_update
-            workflow = root / ".github/workflows/aart-registry.yml"
-            workflow_before = workflow.read_bytes()
-            workflow.write_bytes(workflow_before + b"\n")
-            stale_whole_snapshot = service.finalize(
-                reviewed_update.value,
-                reviewed_update.value.review.review_digest,
-            )
-            self.assertIsInstance(stale_whole_snapshot, Err)
-            workflow.write_bytes(workflow_before)
-
-            reviewed_update = service.prepare(
-                CurationRequest(
-                    CurationAction.REFRESH_NATIVE,
-                    str(root),
-                    kind="skill",
-                    name="code-review",
-                )
-            )
-            assert isinstance(reviewed_update, Ok), reviewed_update
-            entry = root / "entries/skill/code-review.json"
-            entry.write_bytes(entry.read_bytes() + b" ")
-            stale_update = service.finalize(
-                reviewed_update.value,
-                reviewed_update.value.review.review_digest,
-            )
-            self.assertIsInstance(stale_update, Err)
-
-            mismatched = root / "entries/skill/wrong.json"
-            mismatched.write_bytes(entry.read_bytes())
-            invalid_identity = service.prepare(CurationRequest(CurationAction.LOCK, str(root)))
-            self.assertIsInstance(invalid_identity, Err)
-
-    def test_promote_rejects_retired_setup_v1_before_registry_mutation(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary) / "registry"
-            _git_checkout(root)
-            service = LocalCurationService(
-                str(root),
-                native_acquirer=lambda url, ref: Ok(
-                    NativeReferenceAcquisition(url, ref, "a" * 40, _setup_v1_native_snapshot())
-                ),
-            )
-            initialized = service.prepare(
-                CurationRequest(
-                    CurationAction.INIT,
-                    str(root),
-                    source_id="test-registry",
-                    display_name="Test Registry",
-                )
-            )
-            assert isinstance(initialized, Ok), initialized
-            assert isinstance(
-                service.finalize(initialized.value, initialized.value.review.review_digest), Ok
-            )
-
-            promoted = service.prepare(
-                CurationRequest(
-                    CurationAction.PROMOTE_NATIVE,
-                    str(root),
-                    kind="skill",
-                    name="code-review",
-                    url="https://github.com/example/reference-skills.git",
-                    path="artifacts/skill/code-review",
-                )
-            )
-
-            self.assertIsInstance(promoted, Err)
-            self.assertFalse((root / "entries" / "skill" / "code-review.json").exists())
 
 
 if __name__ == "__main__":

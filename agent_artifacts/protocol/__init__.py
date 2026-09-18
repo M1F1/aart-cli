@@ -25,34 +25,14 @@ from .native_tree import (
     load_native_source,
 )
 from .paths import SafeRelativePath, parse_relative_path
-from .registry_index import (
-    build_registry_index,
-    index_artifact_from_package,
-    validate_registry_graph,
-)
+from .registry_index import index_artifact_from_package, validate_registry_graph
 from .registry_models import (
-    GitArtifactReference,
     IndexArtifact,
-    LockedArtifact,
-    RegistryEntry,
-    RegistryIndex,
-    RegistryLock,
     RegistryManifest,
-    ResolvedRegistryReference,
     ReviewRecord,
     ServiceAdvertisement,
 )
-from .registry_schema import (
-    parse_registry_entry,
-    parse_registry_index,
-    parse_registry_lock,
-    parse_registry_manifest,
-    registry_entry_to_json,
-    registry_index_to_json,
-    registry_lock_to_json,
-    registry_manifest_to_json,
-)
-from .registry_tree import registry_inputs_digest, resolve_locked_references
+from .registry_schema import parse_registry_manifest, registry_manifest_to_json
 from .semver import SemVer, VersionBounds, parse_semver, version_bounds
 
 __all__ = [
@@ -60,20 +40,14 @@ __all__ = [
     "Capability",
     "CapabilityDecision",
     "CollectionManifest",
-    "GitArtifactReference",
     "IndexArtifact",
     "JsonArray",
     "JsonObject",
     "JsonValue",
-    "LockedArtifact",
     "NativeArtifactPackage",
     "NativeSource",
     "Provenance",
-    "RegistryEntry",
-    "RegistryIndex",
-    "RegistryLock",
     "RegistryManifest",
-    "ResolvedRegistryReference",
     "ReviewRecord",
     "SafeRelativePath",
     "SemVer",
@@ -85,7 +59,6 @@ __all__ = [
     "SourceSnapshot",
     "TreeEntry",
     "VersionBounds",
-    "build_registry_index",
     "canonical_json_bytes",
     "index_artifact_from_package",
     "json_digest",
@@ -97,19 +70,11 @@ __all__ = [
     "parse_json",
     "parse_provenance",
     "parse_relative_path",
-    "parse_registry_entry",
-    "parse_registry_index",
-    "parse_registry_lock",
     "parse_registry_manifest",
     "parse_semver",
     "parse_sha256",
     "parse_source_manifest",
-    "registry_entry_to_json",
-    "registry_index_to_json",
-    "registry_inputs_digest",
-    "registry_lock_to_json",
     "registry_manifest_to_json",
-    "resolve_locked_references",
     "sha256_bytes",
     "tree_digest",
     "validate_registry_graph",

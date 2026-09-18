@@ -202,7 +202,7 @@ class RegistryRefreshTest(unittest.TestCase):
     def test_one_run_locks_builds_validates_and_audits_without_initializing_again(self) -> None:
         root = self._registry()
         identity = open(os.path.join(root, "aart-registry.json"), "rb").read()
-        os.remove(os.path.join(root, "aart.index.json"))
+        os.remove(os.path.join(root, "registry", "index.json"))
 
         report = refresh_registry_workspace(root=root)
 
@@ -212,20 +212,20 @@ class RegistryRefreshTest(unittest.TestCase):
             tuple(stage.name for stage in report.value.stages), REGISTRY_MAINTENANCE_STAGES
         )
         self.assertTrue(report.value.passed, report.value.stages)
-        self.assertTrue(os.path.isfile(os.path.join(root, "aart.index.json")))
+        self.assertTrue(os.path.isfile(os.path.join(root, "registry", "index.json")))
         # `init` is not part of this run: the registry's identity is left exactly as it was.
         self.assertEqual(open(os.path.join(root, "aart-registry.json"), "rb").read(), identity)
 
     def test_one_named_stage_runs_alone(self) -> None:
         root = self._registry()
-        os.remove(os.path.join(root, "aart.index.json"))
+        os.remove(os.path.join(root, "registry", "index.json"))
 
         report = refresh_registry_workspace(root=root, stages=("validate",))
 
         assert isinstance(report, Ok), report
         self.assertEqual(tuple(stage.name for stage in report.value.stages), ("validate",))
         # `build` was not asked for, so nothing rebuilt the index behind the operator's back.
-        self.assertFalse(os.path.isfile(os.path.join(root, "aart.index.json")))
+        self.assertFalse(os.path.isfile(os.path.join(root, "registry", "index.json")))
 
     def test_the_named_stages_run_in_the_canonical_order_whatever_order_they_arrive_in(
         self,
@@ -248,7 +248,7 @@ class RegistryRefreshTest(unittest.TestCase):
 
         self.assertIsInstance(refused, Err)
         assert isinstance(refused, Err)
-        self.assertFalse(os.path.exists(os.path.join(root, "aart.lock.json")))
+        self.assertFalse(os.path.exists(os.path.join(root, "registry")))
         self.assertNotIn("aart ", "\n".join(refused.diagnostics[0].interactive))
 
     def test_a_stage_nobody_named_is_refused_rather_than_quietly_ignored(self) -> None:
@@ -373,7 +373,7 @@ class MaintainerRegistryRebuildActionTest(unittest.TestCase):
                 root=str(env.project), registry_id="acme-registry", display_name="ACME Registry"
             )
             assert isinstance(created, Ok) and created.value.passed, created
-            index = os.path.join(str(env.project), "aart.index.json")
+            index = os.path.join(str(env.project), "registry", "index.json")
             os.remove(index)
             actions = self._composed(env)
             prepared = self._prepare(actions, "all")
@@ -418,7 +418,7 @@ class MaintainerRegistryRebuildShellTest(unittest.TestCase):
                 root=str(env.project), registry_id="acme-registry", display_name="ACME Registry"
             )
             assert isinstance(created, Ok) and created.value.passed, created
-            index = _os.path.join(str(env.project), "aart.index.json")
+            index = _os.path.join(str(env.project), "registry", "index.json")
             _os.remove(index)
             composed = tui._canonical_consumer_actions(
                 project=str(env.project), user_home=str(env.home), today=tui.date.today()

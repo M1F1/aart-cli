@@ -113,10 +113,10 @@ def _registry_name(marker: str) -> str | None:
 REGISTRY_WORKSPACE_STALE = DiagnosticCode("registry-workspace-stale")
 REGISTRY_WORKSPACE_APPLY_FAILED = DiagnosticCode("registry-workspace-apply-failed")
 # `README.md` and `.aart-version` are here so the reader can *see* them, which is what lets
-# `registry init` tell an empty checkout from one that already carries them and leave the
-# second alone.  Like `.gitignore` it is
-# visible but not a registry input -- `registry_inputs_digest` covers only the two markers and the
-# artifact roots -- so editing it never makes the lock stale.
+# `registry init` tell an empty checkout from one that already carries them and leave the second
+# alone.  `aart.lock.json` and `aart.index.json` are here for the opposite reason: nothing writes
+# them any more, and `legacy_registry_paths` can only name a retired checkout by the paths it was
+# handed, so a reader that skipped them would turn the refusal into silence (CP-26.5).
 _ROOT_FILES = frozenset(
     {
         "aart-registry.json",

@@ -229,8 +229,6 @@ def _emit_curation_finalization(
 
 def _curation_request(request: Request, action: CurationAction) -> Result[CurationRequest]:
     if action in {
-        CurationAction.PROMOTE_NATIVE,
-        CurationAction.REFRESH_NATIVE,
         CurationAction.VENDOR,
         CurationAction.REVENDOR,
     } and (request.artifact_kind is None or len(request.names) != 1):
@@ -382,7 +380,6 @@ def _run_validate(request: Request, workspace: FilesystemRegistryWorkspace) -> i
         current.value,
         executable_version=_VERSION,
         available_capabilities=_CAPABILITIES,
-        require_compiled=request.strict or request.frozen,
     )
     if isinstance(checked, Err):
         return _emit_error(request, "validate", checked)
@@ -1467,10 +1464,6 @@ def run(request: Request) -> int:
         return _run_discover(request)
     if action == "format":
         return _run_curation(request, CurationAction.FORMAT)
-    if action == "promote-native":
-        return _run_curation(request, CurationAction.PROMOTE_NATIVE)
-    if action == "refresh-native":
-        return _run_curation(request, CurationAction.REFRESH_NATIVE)
     if action == "vendor":
         return _run_curation(request, CurationAction.VENDOR)
     if action == "vendor-batch":

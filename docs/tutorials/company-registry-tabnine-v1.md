@@ -190,10 +190,9 @@ aart registry vendor guideline branch-conventions --source . \
 ### When *not* to vendor
 
 If the upstream repository already is an AART native source — it has `aart-source.json` and its
-packages sit at `<root>/<kind>/<name>` — use `registry promote-native` instead. That records a
-reference and pins the commit without copying bytes, so upstream keeps ownership and your registry
-stays small. `promote-native` refuses any repository that does not meet that precondition, which is
-why almost everything in a normal company gets vendored.
+packages sit at `<root>/<kind>/<name>` — take its reviewed Candidate in with `registry scan` and
+`registry promote` instead of copying bytes by hand. Almost everything in a normal company is not
+a native source, which is why almost everything gets vendored.
 
 ## 3a. Vendoring a whole repository's worth of artifacts
 

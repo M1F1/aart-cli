@@ -429,6 +429,49 @@ Registry's catalog binding and the returned candidate. Scoped mutation over `con
 592 mutants, 464 killed, 3 survivors in `_project_graph_source` (one pre-existing, two spelling);
 the rest are recorded as B-148. No broad suite ran under D-317.
 
+### Step 5 — the retired representation's schema, fixtures and planning halves are deleted (2026-09-18)
+
+B-057 closes here. Deleted, because step 4 left nothing reaching them:
+`protocol/registry_tree.py` whole; in `protocol/registry_schema.py` every entry/lock/index parser
+and serializer; `protocol/registry_index.py::build_registry_index`; the lock, entry and index models;
+`application/registry_maintenance.py`, `registry_maintenance/ports.py` and the mutation types that
+only that port consumed; `tests/fixtures/protocol/registry-v1/` and the six test modules that only
+described the retired shape.
+
+**Two commands were decided rather than deleted.** `aart security scan` took `--index`/`--lock` as
+operator-supplied files nothing produced; it now reads the approved Registry through `--registry DIR`
+and projects the catalog from version records (D-322, closing B-147). `promote-native` and
+`refresh-native` are withdrawn with the reference mechanism they wrote (D-321), and with them
+`--strict`/`--frozen` on `validate`, which asked for a second compiled catalog to be strict about.
+
+**One rule was rebound rather than lost.** `validate_registry_graph` — `requires` resolves inside one
+registry, membership is derived — had `build_registry_index` as its only caller. It is now called
+from `registry_native_content`'s promoted branch, so the approved representation is held to both
+rules (D-325). The `referenced_from` half of `dependency_scope_error` and the `referenced_origins`
+parameter went with `entries/`, their only producer.
+
+**Targeted semantic mutations (two, one per claim).** Replacing `_native_registry_content`'s
+retired-path refusal with `retired = ()` failed
+`registry_quality_planning_test::test_a_registry_carrying_the_retired_representation_is_refused_by_name`
+and nothing else — the CLI integration test stayed green, because the CLI refuses at the source
+validator as well, which is the point of step 4. Deleting the new `validate_registry_graph` call
+failed exactly the two `ApprovedRegistryGraphTest` claims. Both restored green.
+
+**Focused evidence.** Every `tests/*_test.py` module was run one process at a time before the slice
+and again after. The repairs that were behaviour, not bookkeeping: the generated CI workflow and its
+E2E gate now run five gates rather than six; `registry init` writes `registry/index.json` and
+`registry/snapshot.json` and neither retired marker; `_follow_up` no longer names `lock`; the audit's
+"this registry also holds external references" coverage note is gone with the references; the
+`corrupt-lock-object` system-matrix scenario becomes `corrupt-object` and `native-reference` is
+removed. Ruff lint and format pass tree-wide; Mypy passes over the package; the schema freeze was
+regenerated with `make release-freeze`. No broad `make quality` ran, under D-317.
+
+**Still red, and deliberately so.** Twenty-six tests across seven vendoring modules fail on B-149:
+`project_vendored_package` writes the retired unversioned `artifacts/<kind>/<name>/` layout, which
+canonical maintenance refuses by name. D-323 records why they are kept rather than deleted — they
+hold vendoring's license, drift and copy-integrity behaviour, none of which is the retired
+representation. B-149 is critical and is the next slice's subject.
+
 ### Step 17 — no maintainer identity as a default
 
 The owner explicitly requires generated registries and operational examples to carry no default

@@ -152,13 +152,10 @@ class EmptyRegistryAuditTest(unittest.TestCase):
             any("installation-risk evidence" in message for message in warnings), warnings
         )
 
-    def test_a_registry_holding_a_package_still_records_the_coverage_limit(self) -> None:
-        report = _audit(registry_with_owned_package())
-
-        warnings = tuple(
-            item.message for item in _diagnostics(report) if item.severity is Severity.WARNING
-        )
-        self.assertTrue(any("no external references" in message for message in warnings), warnings)
+    # `CP-26.5`: the audit used to add "this registry also holds external references, which this
+    # gate cannot assess" beside the risk warning. External references were the retired workspace's
+    # `entries/` records; nothing writes them, so the coverage limit no longer exists and the note
+    # that announced it went with it (`D-321`).
 
 
 if __name__ == "__main__":

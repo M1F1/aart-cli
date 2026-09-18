@@ -6,10 +6,8 @@ registry and from nowhere else. This is the case `aart registry vendor` exists f
 subtree of any Git repository into your registry as a package you own, pinned to a resolved commit,
 with a `provenance.json` recording where the bytes came from.
 
-If the upstream *is* a canonical AART package and you are content for consumers to reach its
-repository directly, use `aart registry promote-native` instead — it pins a reference and copies
-nothing, and upstream keeps ownership of the version. The three delivery modes and what each one
-means for who the consumer reaches are tabulated in
+Vendoring is the path for a repository that is not itself a canonical AART package. The delivery
+modes and what each one means for who the consumer reaches are tabulated in
 [the registry protocol](../protocol/registry-v1.md).
 
 Vendoring moves the trust boundary. After it, your registry is the distributor: your consumers

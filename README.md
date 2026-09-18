@@ -359,11 +359,6 @@ aart registry init --source . --source-id company --display-name "Company Regist
 aart registry scan --help
 aart registry promote --help
 
-# Or review a native package from another repository
-aart registry promote-native skill code-review --source . \
-  --url https://github.com/acme/skills.git --ref main \
-  --path artifacts/skill/code-review
-
 # Or copy foreign content the upstream has not packaged for AART
 aart registry vendor skill code-review --source . \
   --url https://github.com/acme/prompts.git --ref main --path prompts/code-review \
@@ -378,8 +373,6 @@ aart registry publish --source . --yes
 aart registry push --source . --branch add-code-review
 ```
 
-`promote-native` records a reference to an external repository, pins its resolved commit in the
-lock, and leaves ownership upstream. It requires the upstream to already be a native AART source.
 `vendor` is the foreign-repository path: it copies a file or subtree into this registry, records the
 origin and pinned commit in `provenance.json`, and makes this registry the copy's owner. `revendor`
 compares that copy with upstream and plans an explicit versioned refresh; validation and audit reject
@@ -431,7 +424,7 @@ aart source add|list|sync|remove|resubscribe|health
 aart marketplace list|search|health|install|update|uninstall|status|setup|receipt
 aart doctor
 aart reset
-aart registry init|scaffold|collection|scan|promote|adopt|check-upstream|discover|format|promote-native|vendor|vendor-batch|revendor|refresh-native|validate|lock|build|audit|publish|push|test|diff
+aart registry init|collection|scan|promote|adopt|check-upstream|discover|format|vendor|vendor-batch|revendor|validate|lock|build|audit|publish|push|test|diff
 aart security scan|show|verify|analyzers|suites
 aart upgrade --wheel FILE | --source-checkout DIR
 ```

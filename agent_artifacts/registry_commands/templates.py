@@ -330,8 +330,7 @@ jobs:
 """
         + _PROVIDE_AART
         + b"""      - run: aart registry format --source . --check
-      - run: aart registry validate --source . --strict --frozen
-      - run: aart registry lock --source . --check
+      - run: aart registry validate --source .
       - run: aart registry build --source . --check
       - run: aart registry audit --source .
       - run: aart registry test --source . --compatibility ${{ matrix.compatibility }}
@@ -360,8 +359,7 @@ Its registry id is `__REGISTRY_ID__`. Consumers name it when they add this regis
 | `aart-source.json` | Where artifacts and collections live in this tree |
 | `artifacts/` | One directory per packaged artifact |
 | `collections/` | Named groups of artifacts installed together |
-| `aart.lock.json` | Resolved, pinned contents. Generated - never edited by hand |
-| `aart.index.json` | The published index consumers read. Generated |
+| `registry/` | Approved version records and the catalogs derived from them. Generated |
 | `.github/workflows/` | The registry quality gate |
 
 The JSON files and the workflows are **managed**: AART regenerates them and refuses to run against
@@ -377,10 +375,6 @@ to finalize. AART never pushes.
 aart registry scan --help
 aart registry promote --help
 
-# Reference an artifact that another repository already packages for AART
-aart registry promote-native skill code-review --source . \\
-  --url https://github.com/acme/skills.git --ref main --path artifacts/skill/code-review
-
 # Copy content an upstream never packaged, recording where it came from
 aart registry vendor skill code-review --source . \\
   --url https://github.com/acme/prompts.git --ref main --path prompts/code-review \\
@@ -389,7 +383,7 @@ aart registry vendor skill code-review --source . \\
 # See what moved upstream since a vendored copy was taken
 aart registry revendor skill code-review --source .
 
-# Lock, build, validate, audit, and commit - review first, then finalize
+# Build, validate, audit, and commit - review first, then finalize
 aart registry publish --source .
 aart registry publish --source . --yes
 ```
@@ -398,8 +392,7 @@ Run the gates yourself at any time:
 
 ```sh
 aart registry format --source . --check
-aart registry validate --source . --strict --frozen
-aart registry lock --source . --check
+aart registry validate --source .
 aart registry build --source . --check
 aart registry audit --source .
 aart registry test --source . --compatibility latest

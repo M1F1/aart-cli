@@ -1,5 +1,20 @@
 # AART Refactor Migration Status
 
+**2026-09-18, CP-26.05 complete.** The retired authoring-workspace representation has no schema, no
+fixtures and no planning half left: `protocol/registry_tree.py`, every entry/lock/index parser and
+serializer, `build_registry_index`, the mutation port and its application service, the `registry-v1`
+fixture tree and six test modules are deleted. B-057 closes. Two commands were decided rather than
+dropped: `aart security scan` reads the approved Registry through `--registry DIR` (D-322, closing
+B-147), and `promote-native`/`refresh-native` are withdrawn with the reference mechanism, taking
+`validate --strict --frozen` with them (D-321). One rule was rebound rather than lost:
+`validate_registry_graph` lost its only caller with `build_registry_index`, so
+`registry_native_content` calls it directly and the approved representation is still held to
+`requires`-resolves-inside-one-registry and to derived collection membership (D-325). Two targeted
+mutations — blanking the retired-path refusal, and deleting the new graph call — went red on exactly
+their own tests. Every test module was run one process at a time before and after; Ruff, Mypy and the
+regenerated schema freeze are green. Twenty-six tests across seven vendoring modules remain red on
+B-149, which is critical and is what step 6 has to answer. No broad `make quality` ran, under D-317.
+
 **2026-09-18, CP-26.04 complete.** The consumer projection and the Registry source validator have
 one representation each. Both ask the shared authority whether a snapshot carries a retired path
 and whether it is a canonical approved Registry, and both refuse by name instead of falling through

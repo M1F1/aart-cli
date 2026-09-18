@@ -31,8 +31,6 @@ class CurationAction(str, Enum):
     INIT = "init"
     COLLECTION = "collection"
     FORMAT = "format"
-    PROMOTE_NATIVE = "promote-native"
-    REFRESH_NATIVE = "refresh-native"
     VENDOR = "vendor"
     VENDOR_BATCH = "vendor-batch"
     PUBLISH = "publish"

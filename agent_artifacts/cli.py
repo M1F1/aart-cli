@@ -1003,42 +1003,6 @@ def build_parser() -> argparse.ArgumentParser:
     _add_registry_finalize(p_format)
     _add_json(p_format)
 
-    p_promote = registry_sub.add_parser(
-        "promote-native",
-        help="reference a native package upstream keeps: consumers reach it, upstream owns it",
-        description=(
-            "Add a reviewed reference to a canonical AART package in another repository, pinned to "
-            "a resolved commit. The bytes stay upstream and this registry ships none of them: a "
-            "consumer installing it reaches that origin, and upstream owns the version. Use "
-            "`vendor` instead when the upstream is not an AART package, or when consumers must "
-            "reach this registry only."
-        ),
-    )
-    _add_registry_source(p_promote)
-    p_promote.add_argument("artifact_kind", choices=_ARTIFACT_TYPES, metavar="KIND")
-    p_promote.add_argument("names", nargs=1, metavar="NAME")
-    p_promote.add_argument(
-        "--url", dest="native_url", required=True, metavar="URL", help="credential-free Git URL"
-    )
-    p_promote.add_argument(
-        "--ref", default="main", metavar="REF", help="Git ref to resolve (default: main)"
-    )
-    p_promote.add_argument(
-        "--path",
-        dest="native_path",
-        required=True,
-        metavar="DIR",
-        help="package path inside the Git snapshot",
-    )
-    p_promote.add_argument(
-        "--review-policy",
-        default="manual-review-v1",
-        metavar="POLICY",
-        help="approved review policy identifier (default: manual-review-v1)",
-    )
-    _add_registry_finalize(p_promote)
-    _add_json(p_promote)
-
     p_vendor = registry_sub.add_parser(
         "vendor",
         help="copy a foreign subtree in: this registry ships the bytes and owns the version",
@@ -1047,8 +1011,7 @@ def build_parser() -> argparse.ArgumentParser:
             "to a resolved commit, with provenance recording where the bytes came from. The "
             "upstream needs no AART markers. This registry then owns the copy: it declares the "
             "version, and upstream fixes reach consumers only when it is vendored again. A "
-            "successful vendor reports what was copied; it is not a safety claim. Use "
-            "`promote-native` instead to reference a native AART package without copying it. A "
+            "successful vendor reports what was copied; it is not a safety claim. A "
             "repository containing a symlink anywhere cannot be acquired, and a symlink inside "
             "the subtree is refused."
         ),
@@ -1154,9 +1117,7 @@ def build_parser() -> argparse.ArgumentParser:
             "Re-resolve the ref this artifact was vendored at and compare the subtree with the "
             "copy this registry ships. Reports up-to-date, changed, or unreachable; an upstream "
             "that cannot be read is never reported as up-to-date. Upstream declares no version "
-            "AART can trust, so applying a change requires the version you state for it. "
-            "`refresh-native` is the equivalent for a reference, where re-pinning is the whole "
-            "change; here the bytes this registry ships are replaced."
+            "AART can trust, so applying a change requires the version you state for it."
         ),
     )
     _add_registry_source(p_revendor)
@@ -1177,29 +1138,8 @@ def build_parser() -> argparse.ArgumentParser:
     _add_registry_finalize(p_revendor)
     _add_json(p_revendor)
 
-    p_refresh = registry_sub.add_parser(
-        "refresh-native",
-        help="re-pin one referenced package to upstream's current commit",
-        description=(
-            "Re-resolve one `entries/` native reference and review the new immutable snapshot. It "
-            "moves a pin; the delivered bytes are upstream's either way. `revendor` is the "
-            "equivalent for a copy this registry owns, and it requires the version to publish."
-        ),
-    )
-    _add_registry_source(p_refresh)
-    p_refresh.add_argument("artifact_kind", choices=_ARTIFACT_TYPES, metavar="KIND")
-    p_refresh.add_argument("names", nargs=1, metavar="NAME")
-    _add_registry_finalize(p_refresh)
-    _add_json(p_refresh)
-
     p_validate = registry_sub.add_parser("validate", help="validate registry protocol content")
     _add_registry_source(p_validate)
-    p_validate.add_argument(
-        "--strict", action="store_true", help="require committed generated outputs"
-    )
-    p_validate.add_argument(
-        "--frozen", action="store_true", help="reject a missing or stale lock/index pair"
-    )
     _add_json(p_validate)
 
     for action in ("lock", "build"):
@@ -1307,24 +1247,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_security.add_argument("security_input", metavar="OBJECT")
     p_security.add_argument(
-        "--index",
-        dest="registry_index",
+        "--registry",
+        dest="security_registry",
         required=True,
-        metavar="FILE",
-        help="canonical registry index that binds the selected artifact object",
+        metavar="DIR",
+        help="local checkout of the approved Registry that publishes the selected artifact",
     )
     p_security.add_argument(
         "--artifact",
         dest="security_artifact",
         required=True,
         metavar="KIND/NAME",
-        help="exact artifact identity from the registry index",
-    )
-    p_security.add_argument(
-        "--lock",
-        dest="registry_lock",
-        metavar="FILE",
-        help="optional canonical registry lock for external provenance evidence",
+        help="exact artifact identity published by that Registry",
     )
     p_security.add_argument(
         "--cache", dest="security_cache", metavar="DIR", help="publish canonical local attestation"
@@ -1451,8 +1385,6 @@ def _to_request(args: argparse.Namespace) -> Request:
         promotion_mode=getattr(args, "promotion_mode", "vendored"),
         check=bool(getattr(args, "check", False)),
         check_upstream=bool(getattr(args, "check_upstream", False)),
-        strict=bool(getattr(args, "strict", False)),
-        frozen=bool(getattr(args, "frozen", False)),
         source_id=getattr(args, "source_id", None),
         display_name=getattr(args, "display_name", None),
         summary=getattr(args, "summary", None),
@@ -1476,8 +1408,7 @@ def _to_request(args: argparse.Namespace) -> Request:
         security_action=getattr(args, "security_action", None),
         security_input=getattr(args, "security_input", None),
         security_artifact=getattr(args, "security_artifact", None),
-        registry_index=getattr(args, "registry_index", None),
-        registry_lock=getattr(args, "registry_lock", None),
+        security_registry=getattr(args, "security_registry", None),
         security_cache=getattr(args, "security_cache", None),
         security_object_digest=getattr(args, "security_object_digest", None),
         security_rules_digest=getattr(args, "security_rules_digest", None),

@@ -3780,3 +3780,105 @@ catch a spelling mutant.
 
 Evidence/links: CP-26.04; `agent_artifacts/consumer/runtime.py`; `tests/consumer_runtime_test.py`;
 D-134; D-317.
+
+## B-149 — `aart registry vendor` writes the retired unversioned package layout
+
+Status: OPEN, **CRITICAL** — reclassified from noncritical on evidence, 2026-09-18
+
+Discovered in: CP-26.05, while resolving the inherited red set D-318 assigned to this step
+
+`plan_artifact_vendor` writes its package at `<artifact_root>/<kind>/<name>/`, with no version
+segment. `registry_maintenance/promoted.py::legacy_registry_paths` classifies exactly that shape as
+the retired authoring workspace, so from CP-26.01 onward `_canonical_current` and
+`_canonical_snapshot` refuse a checkout that has been vendored into. The sequence
+`aart registry init` → `aart registry vendor` → `aart registry validate` therefore ends in a refusal
+naming the file the previous command just wrote.
+
+**Why this is critical rather than a cleanup.** Vendoring is a Product Specification capability, and
+the reclassification rule in `CLAUDE.md` is met exactly: without this, a mandatory capability cannot
+be exercised at all on a canonical Registry, so CP-26 cannot be declared complete at task 21.
+
+**Why CP-26.05 did not fix it.** Step 5's scope is the lock/index schema, the tree constants, the
+planning halves and the fixtures. The vendor layout is orthogonal — it is about `artifacts/` shape,
+not about `aart.lock.json` — and the correct fix is not a path change: a versioned package needs a
+`registry/versions/<kind>/<name>/<version>.json` approval and the two catalogs recomputed, which
+means routing `vendor` through the promotion projection the way `scan` + `promote` already are
+(`application/promotion.py::project_promotion`). That is a slice, not an edit.
+
+**Consequence held open deliberately.** `tests/registry_vendor_license_test.py` keeps its 20 tests
+and 12 of them stay red. D-318 said the inherited red set describes the removed representation and
+should be deleted with its fixtures; that premise holds for the lock/index tests and is wrong for
+these, which characterize `--license` discovery, copy integrity, upstream drift and QA-015/LAF-45
+reporting — all behaviour nothing in CP-26 removed. Deleting them would delete the only coverage of
+that behaviour and hide this defect. D-323 records the correction.
+
+Evidence/links: CP-26.05; D-318; D-323; `agent_artifacts/registry_commands/planning.py::plan_artifact_vendor`;
+`agent_artifacts/registry_maintenance/promoted.py::legacy_registry_paths`;
+`agent_artifacts/curation/runtime.py::_canonical_current`; `tests/registry_vendor_license_test.py`.
+
+## B-150 — An installation's identity is the harness *and* the scope it was installed into
+
+Status: OPEN, NONCRITICAL for CP-26.05 — input to CP-26 task 19
+
+Raised by the owner, 2026-09-18, while CP-26.05 was in flight.
+
+The principle: **no artifact shares global state with any other artifact.** The entity that AART
+records as "installed" is not the artifact — it is the artifact *placed into one target*, and the
+target is what the installation path already encodes:
+
+1. Which harness it was installed for (Claude Code, another agent runtime, …), and
+2. which scope of that harness — user-level versus project-level — because the same harness at two
+   scopes is two installations, with two configurations and two credential bindings, not one
+   installation seen twice.
+
+Consequences to work through when task 19 is opened:
+
+- `aart list` / "installed" is keyed by (artifact, harness, scope), so the same artifact legitimately
+  appears more than once and each row is independently verifiable, upgradable and removable.
+- Keychain entries and configuration bindings are keyed by that same alias-qualified target, which
+  is what CP-26 task 19 already names; this states *why* the key has that shape and adds the
+  user/project scope to it.
+- Uninstalling one row must not disturb another row of the same artifact, and nothing may be
+  reference-counted across targets, because that would be shared global state by another name.
+- Whatever AART writes into a harness has to be attributable to exactly one installation entity, or
+  the no-shared-state rule cannot be checked.
+
+This is a Product Specification-level statement about what an installation *is*. Before task 19
+implements it, confirm it against `docs/product-specification/PRODUCT_SPECIFICATION.md` and, if the
+specification does not already say it, that is the document the statement belongs in first.
+
+Evidence/links: CP-26 task 19; B-150 raised by the owner; `docs/product-specification/PRODUCT_SPECIFICATION.md`.
+
+## B-151 — Seven shipped documents still describe `aart.lock.json` and `aart.index.json` as files AART writes
+
+Status: OPEN, NONCRITICAL for CP-26.05 — becomes critical for CP-26.21
+
+Found while executing CP-26.05, 2026-09-18.
+
+CP-26 steps 1–5 removed the retired authoring-workspace representation from the product: nothing
+parses, compiles or writes `aart.lock.json`, `aart.index.json` or `entries/`, and a checkout
+carrying them is refused by name. The reader-facing documentation has not moved with it. Still
+describing the removed files as part of normal maintenance:
+
+- `docs/protocol/registry-v1.md`
+- `docs/registry/maintainer-commands-v1.md`
+- `docs/registry/maintenance-planning-v1.md`
+- `docs/security/attestations-v1.md`
+- `docs/ci/github-enterprise-rollout.md`
+- `docs/testing/manual-acceptance.md`
+- `docs/tutorials/company-registry-tabnine-v1.md`
+- `README.md` (the "Registry layout" prose, not the command tree, which CP-26.05 corrected under
+  D-324 because `tests/adoption_first_contact_test.py` gates it)
+
+Why it is not step 5's: step 5's contract is the schema, the tree constants, the planning halves and
+the fixtures. `make docs-check` validates fences and links, not whether prose matches the product, so
+no gate fails today and repairing eight documents inside the deletion slice would hide what the
+deletion changed. Steps 13–16 rewrite the README against the consumer-first contract (D-316) and are
+the natural place for the registry documents to be reconciled with them.
+
+Why it becomes critical for CP-26.21: task 21 is the slice's verification, and CP-26 cannot be
+declared verified while shipped documentation instructs a maintainer to produce files that make
+their Registry refuse every gate. Treat this as a precondition of task 21, not as optional polish.
+
+Evidence/links: D-318, D-321, D-322, D-324; CP-26 tasks 13–16 and 21;
+`agent_artifacts/registry_maintenance/promoted.py::legacy_registry_paths`.

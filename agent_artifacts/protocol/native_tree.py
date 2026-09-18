@@ -99,8 +99,6 @@ _DEPENDENCY_SCOPE_REMEDIATION = (
     "Author the dependency in a source checkout, then bring it into this registry through "
     "`aart registry scan --help` and `aart registry promote --help`, or copy the upstream content "
     "into an artifact this registry owns.",
-    "`aart registry promote-native --help` offers a foreign package to consumers; it does not make "
-    "that package a `requires` target.",
 )
 
 
@@ -108,30 +106,24 @@ def dependency_scope_error(
     code: DiagnosticCode,
     requiring: ArtifactIdentity,
     dependency: ArtifactIdentity,
-    *,
-    referenced_from: str | None = None,
 ) -> Err:
     """Refuse a dependency the registry does not own, saying why rather than "missing".
 
     ``requires`` resolves inside one registry and against artifacts that registry *owns*.  The old
     wording — ``skill/x requires missing skill/y`` — reads as "not published yet", so a maintainer
     depending on another registry's artifact waits for a publication that will never make the build
-    pass.  Two shapes are distinguished, because they have different fixes: an identity
-    this registry has nothing to say about, and one it *references* from another origin, which looks
-    published from the index and is still not a dependency this registry can resolve.
+    pass.
+
+    A second wording once distinguished an identity the registry *referenced* from another origin,
+    which looked published and still could not resolve.  That shape was the retired authoring
+    workspace's `entries/` records; nothing produces it, so nothing can tell the two apart and the
+    refusal states the one thing that is true (`D-325`, CP-26.5).
     """
 
-    if referenced_from is None:
-        message = (
-            f"{requiring} requires {dependency}, which this registry does not publish; "
-            "requires resolves inside one registry"
-        )
-    else:
-        message = (
-            f"{requiring} requires {dependency}, which this registry references from "
-            f"{referenced_from} rather than owning; requires resolves against artifacts this "
-            "registry owns"
-        )
+    message = (
+        f"{requiring} requires {dependency}, which this registry does not publish; "
+        "requires resolves inside one registry"
+    )
     return Err(
         (Diagnostic(code, Severity.ERROR, message, remediation=_DEPENDENCY_SCOPE_REMEDIATION),)
     )
@@ -647,16 +639,9 @@ def _compatibility_diagnostics(
 
 def _validate_declared_dependencies(
     packages: tuple[NativeArtifactPackage, ...],
-    referenced_origins: Mapping[ArtifactIdentity, str] | None = None,
 ) -> Result[None]:
-    """Require a complete, acyclic local package graph before a source is consumable.
+    """Require a complete, acyclic local package graph before a source is consumable."""
 
-    ``referenced_origins`` is what the caller knows about identities this tree does not contain but
-    the surrounding registry references from elsewhere.  It never makes a dependency resolve — it
-    only lets the refusal say which of the two problems the maintainer has.
-    """
-
-    elsewhere = {} if referenced_origins is None else referenced_origins
     by_identity = {item.manifest.identity: item for item in packages}
     dependencies: dict[ArtifactIdentity, tuple[ArtifactIdentity, ...]] = {}
     for package in packages:
@@ -668,7 +653,6 @@ def _validate_declared_dependencies(
                     ARTIFACT_INVALID,
                     package.manifest.identity,
                     selector.identity,
-                    referenced_from=elsewhere.get(selector.identity),
                 )
             if selector.version is not None and not selector.version.allows(
                 dependency.manifest.version
@@ -708,14 +692,8 @@ def load_native_source(
     *,
     executable_version: SemVer,
     available_capabilities: Iterable[Capability],
-    referenced_origins: Mapping[ArtifactIdentity, str] | None = None,
 ) -> Result[NativeSource]:
-    """Validate and load a native source from an effect-free acquired snapshot.
-
-    ``referenced_origins`` sharpens one refusal and changes no outcome: a registry knows which
-    identities it references from another origin, and a plain native source knows nothing, so the
-    argument is optional and defaults to knowing nothing.
-    """
+    """Validate and load a native source from an effect-free acquired snapshot."""
 
     validated = _validated_entries(snapshot)
     if isinstance(validated, Err):
@@ -757,7 +735,7 @@ def load_native_source(
             )
         identities.add(package.value.manifest.identity)
         packages.append(package.value)
-    dependency_graph = _validate_declared_dependencies(tuple(packages), referenced_origins)
+    dependency_graph = _validate_declared_dependencies(tuple(packages))
     if isinstance(dependency_graph, Err):
         return dependency_graph
     collections = _load_collections(entries, manifest)

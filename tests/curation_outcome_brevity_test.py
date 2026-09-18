@@ -131,13 +131,19 @@ class FollowUpCommandTest(unittest.TestCase):
             commands,
             (
                 "aart registry validate --source /tmp/registry",
-                "aart registry lock --source /tmp/registry",
                 "aart registry build --source /tmp/registry",
                 "aart registry audit --source /tmp/registry",
             ),
         )
 
-    def test_an_action_with_generated_evidence_still_asks_for_strict_validation(self) -> None:
+    def test_an_action_that_adds_no_owned_content_does_not_ask_for_a_rebuild(self) -> None:
+        """`CP-26.5`: `build` is named only when the approvals the catalog derives from moved.
+
+        `format` rewrites committed JSON into its canonical spelling and adds no approval, so the
+        catalog it would recompute is the catalog already there. `--strict` is gone with the
+        representation that needed a second compiled copy to be strict about (`D-318`).
+        """
+
         commands = _follow_up(
             "/tmp/registry",
             (CurationChange("aart-registry.json", "changed"),),
@@ -147,7 +153,7 @@ class FollowUpCommandTest(unittest.TestCase):
         self.assertEqual(
             commands,
             (
-                "aart registry validate --source /tmp/registry --strict",
+                "aart registry validate --source /tmp/registry",
                 "aart registry audit --source /tmp/registry",
             ),
         )

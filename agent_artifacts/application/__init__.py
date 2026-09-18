@@ -7,12 +7,9 @@ from .configuration import (
 )
 from .registry_commands import (
     finalize_registry_workspace,
-    prepare_registry_build,
     prepare_registry_format,
     prepare_registry_init,
-    prepare_registry_lock,
 )
-from .registry_maintenance import finalize_registry_mutation, prepare_native_promotion
 from .source_management import (
     SourceManagementReceipt,
     finalize_source_addition,
@@ -45,17 +42,13 @@ __all__ = [
     "ReferenceUpdateRequest",
     "StoreGcPorts",
     "collect_garbage",
-    "finalize_registry_mutation",
     "finalize_registry_workspace",
     "finalize_source_addition",
     "finalize_source_management",
     "object_status",
     "load_configuration",
-    "prepare_native_promotion",
-    "prepare_registry_build",
     "prepare_registry_format",
     "prepare_registry_init",
-    "prepare_registry_lock",
     "source_status",
     "replace_references",
     "sync_source",

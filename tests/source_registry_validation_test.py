@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import unittest
-from pathlib import Path
 
 from agent_artifacts.configuration.model import ConfiguredSource, SourceKind
 from agent_artifacts.domain.identifiers import SourceAlias, SourceId
@@ -15,10 +14,7 @@ from agent_artifacts.protocol.native_tree import (
 )
 from agent_artifacts.protocol.paths import parse_relative_path
 from agent_artifacts.runtime_contract import EXECUTABLE_CAPABILITIES, EXECUTABLE_VERSION
-from agent_artifacts.sources.local import read_local_snapshot
 from agent_artifacts.sources.model import (
-    LocalSnapshotRequest,
-    SnapshotLimits,
     SourceValidationRequest,
     make_source_candidate,
     source_instance_id,
@@ -30,8 +26,6 @@ from tests.registry_maintenance_fixtures import (
     empty_registry_snapshot,
     replace_snapshot_file,
 )
-
-_RETIRED_FIXTURE = Path(__file__).parent / "fixtures" / "protocol" / "registry-v1"
 
 
 def _unwrap(result):
@@ -60,19 +54,6 @@ def _candidate(source: ConfiguredSource, snapshot: SourceSnapshot):
     )
 
 
-def _tree_candidate(source: ConfiguredSource, root: Path):
-    return _unwrap(
-        read_local_snapshot(
-            LocalSnapshotRequest(
-                source_instance_id(source),
-                source.alias,
-                str(root.resolve()),
-                SnapshotLimits(),
-            )
-        )
-    )
-
-
 def _validate(source: ConfiguredSource, candidate):
     return validate_configured_source_candidate(
         source,
@@ -96,7 +77,19 @@ class RegistrySourceValidationTest(unittest.TestCase):
 
         source = _registry_source()
 
-        result = _validate(source, _tree_candidate(source, _RETIRED_FIXTURE))
+        retired = approved_registry_snapshot()
+        for name in ("aart.lock.json", "aart.index.json"):
+            retired = SourceSnapshot(
+                retired.origin,
+                (
+                    *retired.entries,
+                    SnapshotEntry(
+                        _unwrap(parse_relative_path(name)), SnapshotEntryKind.FILE, b"{}"
+                    ),
+                ),
+            )
+
+        result = _validate(source, _candidate(source, retired))
 
         self.assertIsInstance(result, Err)
         assert isinstance(result, Err)

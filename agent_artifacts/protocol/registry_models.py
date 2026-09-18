@@ -9,7 +9,7 @@ from agent_artifacts.domain.identifiers import ArtifactIdentity, ObjectDigest, S
 
 from .capabilities import Capability
 from .json import JsonValue
-from .native_models import ArtifactSelector, CollectionManifest, CompatibilitySpec, InstallSpec
+from .native_models import ArtifactSelector, CompatibilitySpec, InstallSpec
 from .paths import SafeRelativePath
 from .semver import SemVer, VersionBounds
 
@@ -37,62 +37,9 @@ class RegistryManifest:
 
 
 @dataclass(frozen=True, slots=True)
-class GitArtifactReference:
-    kind: Literal["git"]
-    url: str
-    ref: str
-    path: SafeRelativePath
-
-
-@dataclass(frozen=True, slots=True)
 class ReviewRecord:
     status: ReviewStatus
     policy: str
-
-
-@dataclass(frozen=True, slots=True)
-class RegistryEntry:
-    schema_version: int
-    identity: ArtifactIdentity
-    source: GitArtifactReference
-    review: ReviewRecord
-    extensions: tuple[tuple[str, JsonValue], ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
-class LockedArtifact:
-    origin_url: str
-    requested_ref: str
-    resolved_commit: str
-    path: SafeRelativePath
-    manifest_digest: ObjectDigest
-    payload_digest: ObjectDigest
-    object_digest: ObjectDigest
-    artifact_version: SemVer
-    review: ReviewRecord
-    provenance_digest: ObjectDigest | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class RegistryLock:
-    schema_version: int
-    registry_inputs_digest: ObjectDigest
-    entries: tuple[tuple[ArtifactIdentity, LockedArtifact], ...]
-
-
-@dataclass(frozen=True, slots=True)
-class ResolvedRegistryReference:
-    identity: ArtifactIdentity
-    origin_url: str
-    requested_ref: str
-    resolved_commit: str
-    path: SafeRelativePath
-    manifest_digest: ObjectDigest
-    payload_digest: ObjectDigest
-    object_digest: ObjectDigest
-    artifact_version: SemVer
-    review: ReviewRecord
-    provenance_digest: ObjectDigest | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,14 +73,3 @@ class IndexArtifact:
     collections: tuple[str, ...] = ()
     requires_aart: VersionBounds = VersionBounds()
     requires: tuple[ArtifactSelector, ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
-class RegistryIndex:
-    schema_version: int
-    protocol_version: int
-    registry_id: SourceId
-    registry_inputs_digest: ObjectDigest
-    artifacts: tuple[IndexArtifact, ...]
-    collections: tuple[CollectionManifest, ...]
-    services: tuple[ServiceAdvertisement, ...] = ()

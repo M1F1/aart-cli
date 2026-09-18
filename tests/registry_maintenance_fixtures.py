@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from agent_artifacts.domain.result import Ok
+from agent_artifacts.protocol.json import canonical_json_bytes, parse_json
 from agent_artifacts.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
@@ -12,8 +13,6 @@ from agent_artifacts.protocol.native_tree import (
     SourceSnapshot,
 )
 from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.protocol.registry_models import RegistryEntry
-from agent_artifacts.protocol.registry_schema import parse_registry_entry
 
 NATIVE_FIXTURE = Path("tests/fixtures/protocol/native-source-v1")
 
@@ -44,6 +43,12 @@ def tree_snapshot(root: Path, origin: SnapshotOrigin) -> SourceSnapshot:
     return SourceSnapshot(origin, tuple(entries))
 
 
+def _canonical(document: dict) -> bytes:
+    parsed = parse_json(json.dumps(document).encode())
+    assert isinstance(parsed, Ok), parsed
+    return canonical_json_bytes(parsed.value)
+
+
 def empty_registry_snapshot() -> SourceSnapshot:
     registry = {
         "schema_version": 1,
@@ -65,45 +70,20 @@ def empty_registry_snapshot() -> SourceSnapshot:
         "artifact_roots": ["artifacts"],
         "collection_roots": [],
     }
+    # Canonical bytes, because every fixture built on top of this one is a Registry that `format`
+    # must find nothing to do in; a fixture spelled differently from what AART writes would make
+    # `changed_paths == 0` unreachable for an approved Registry (CP-26.5).
     return SourceSnapshot(
         SnapshotOrigin.LOCAL,
         (
-            _file("aart-registry.json", json.dumps(registry).encode()),
-            _file("aart-source.json", json.dumps(source).encode()),
+            _file("aart-registry.json", _canonical(registry)),
+            _file("aart-source.json", _canonical(source)),
         ),
     )
 
 
 def native_snapshot() -> SourceSnapshot:
     return tree_snapshot(NATIVE_FIXTURE, SnapshotOrigin.IMMUTABLE_GIT)
-
-
-def registry_entry(
-    *,
-    name: str = "code-review",
-    review_status: str = "approved",
-) -> RegistryEntry:
-    result = parse_registry_entry(
-        json.dumps(
-            {
-                "schema_version": 1,
-                "type": "skill",
-                "name": name,
-                "source": {
-                    "kind": "git",
-                    "url": "https://github.com/example/reference-skills.git",
-                    "ref": "main",
-                    "path": f"artifacts/skill/{name}",
-                },
-                "review": {
-                    "status": review_status,
-                    "policy": "company-review-v1",
-                },
-            }
-        )
-    )
-    assert isinstance(result, Ok), result
-    return result.value
 
 
 def renamed_native_snapshot(name: str) -> SourceSnapshot:

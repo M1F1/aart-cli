@@ -41,8 +41,7 @@ _EVIDENCE = ("--validation-report", "sha256:" + "7" * 64, "--policy-result", "sh
 #: What `.github/workflows/aart-registry.yml` runs on every pull request, in its order.
 GENERATED_GATE: tuple[tuple[str, ...], ...] = (
     ("format", "--check"),
-    ("validate", "--strict", "--frozen"),
-    ("lock", "--check"),
+    ("validate",),
     ("build", "--check"),
     ("audit",),
     ("test", "--compatibility", "latest"),

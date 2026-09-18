@@ -1,8 +1,8 @@
 """Take one subtree of an acquired snapshot, for vendoring.
 
-`registry promote-native` requires the upstream repository to already speak AART. Vendoring exists
-for the ones that do not, so what it acquires is a *part* of a repository that has no
-markers, no `artifact_roots`, and no manifest — `--path servers/foo` rather than a whole source.
+Promotion requires the upstream repository to already speak AART. Vendoring exists for the ones
+that do not, so what it acquires is a *part* of a repository that has no markers, no
+`artifact_roots`, and no manifest — `--path servers/foo` rather than a whole source.
 
 This module is that step and only that step: it re-roots one subtree of an already acquired
 snapshot, applies `SnapshotLimits` to what was taken rather than to the repository it came from, and

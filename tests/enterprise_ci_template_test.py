@@ -370,8 +370,7 @@ class RegistryGatesAreCompleteTest(unittest.TestCase):
         template = TEMPLATE_TEXT
         for gate in (
             "aart registry format --source . --check",
-            "aart registry validate --source . --strict --frozen",
-            "aart registry lock --source . --check",
+            "aart registry validate --source .",
             "aart registry build --source . --check",
             "aart registry audit --source .",
             "aart registry test --source . --compatibility",

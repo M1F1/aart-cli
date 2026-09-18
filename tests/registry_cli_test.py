@@ -15,10 +15,7 @@ _VENDOR = (
     "--path artifacts/mcp/atlassian --artifact-version 1.2.0 --summary One. "
     "--profile claude --platform darwin"
 )
-_PROMOTE = (
-    "registry promote-native --source /tmp/registry skill demo "
-    "--url https://example.com/up.git --path artifacts/skill/demo"
-)
+_FORMAT = "registry format --source /tmp/registry"
 
 
 class RegistryCliTest(unittest.TestCase):
@@ -33,10 +30,8 @@ class RegistryCliTest(unittest.TestCase):
             "promote",
             "discover",
             "format",
-            "promote-native",
             "publish",
             "push",
-            "refresh-native",
             "vendor",
             "vendor-batch",
             "revendor",
@@ -129,7 +124,7 @@ class RegistryCliTest(unittest.TestCase):
         running = parse_semver(__version__)
         assert isinstance(running, Ok)
 
-        for command in (_VENDOR, _PROMOTE):
+        for command in (_VENDOR, _FORMAT):
             with self.subTest(command=command.split()[1]):
                 request = cli._to_request(cli.build_parser().parse_args(command.split()))
                 curation = registry_command._curation_request(
@@ -160,37 +155,6 @@ class RegistryCliTest(unittest.TestCase):
         assert isinstance(curation, Ok)
         self.assertEqual(curation.value.minimum_version, "2.0.0")
         self.assertEqual(curation.value.maximum_version, "4.0.0")
-
-    def test_native_promotion_maps_an_explicit_reference_and_finalize_consent(self) -> None:
-        request = cli._to_request(
-            cli.build_parser().parse_args(
-                [
-                    "registry",
-                    "promote-native",
-                    "--source",
-                    "/tmp/registry",
-                    "skill",
-                    "review-python",
-                    "--url",
-                    "https://github.com/example/review-python.git",
-                    "--ref",
-                    "release",
-                    "--path",
-                    "artifacts/skill/review-python",
-                    "--review-policy",
-                    "company-review-v2",
-                    "--yes",
-                ]
-            )
-        )
-        self.assertEqual(request.registry_action, "promote-native")
-        self.assertEqual(request.artifact_kind, "skill")
-        self.assertEqual(request.names, ("review-python",))
-        self.assertEqual(request.native_url, "https://github.com/example/review-python.git")
-        self.assertEqual(request.ref, "release")
-        self.assertEqual(request.native_path, "artifacts/skill/review-python")
-        self.assertEqual(request.review_policy, "company-review-v2")
-        self.assertTrue(request.yes)
 
     def test_laf90_init_pressed_through_names_a_window_the_running_aart_is_inside(self) -> None:
         # Every registry action that reaches the boundary with both versions unset gets the

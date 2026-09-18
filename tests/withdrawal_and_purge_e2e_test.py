@@ -165,7 +165,7 @@ class ErasureClaimTest(unittest.TestCase):
 
     def _remediation(self) -> str:
         payload = secret_object("api_token", access_token(), trailing="}")
-        candidate, indexed, _ = _fixture(
+        candidate, indexed = _fixture(
             kind="mcp",
             files=(("payload/mcp.json", payload, False),),
             effects=("merge-json",),

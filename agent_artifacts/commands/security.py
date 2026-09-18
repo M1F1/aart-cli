@@ -7,15 +7,25 @@ import stat
 import sys
 
 from agent_artifacts import command_outcome as _common
+from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.identifiers import ObjectDigest, SourceId
-from agent_artifacts.domain.result import Err, Ok
+from agent_artifacts.domain.result import Err, Ok, Result
+from agent_artifacts.io.registry_workspace import FilesystemRegistryWorkspace
 from agent_artifacts.io.security_analyzers import resolve_executable
 from agent_artifacts.io.security_cache import write_cached_attestation
 from agent_artifacts.marketplace.model import TrustClass
 from agent_artifacts.model import Request
 from agent_artifacts.protocol.hashing import parse_sha256
 from agent_artifacts.protocol.json import JsonArray, JsonObject, canonical_json_bytes
-from agent_artifacts.protocol.registry_schema import parse_registry_index, parse_registry_lock
+from agent_artifacts.protocol.native_tree import SnapshotEntryKind
+from agent_artifacts.protocol.registry_models import IndexArtifact
+from agent_artifacts.protocol.registry_schema import parse_registry_manifest
+from agent_artifacts.registry_maintenance.promoted import (
+    is_promoted_registry,
+    legacy_registry_paths,
+    promoted_registry_artifacts,
+    promoted_registry_versions,
+)
 from agent_artifacts.security.attestation_schema import parse_attestation
 from agent_artifacts.security.attestations import (
     EMPTY_CACHE_INPUT_DIGEST,
@@ -47,6 +57,13 @@ from agent_artifacts.store.model import parse_object_candidate
 _MAX_OBJECT_BYTES = 150 * 1024 * 1024
 _MAX_EVIDENCE_BYTES = 16 * 1024 * 1024
 _EMPTY_DIGEST = EMPTY_CACHE_INPUT_DIGEST
+
+
+SECURITY_SCAN_INVALID = DiagnosticCode("security-scan-invalid")
+
+
+def _error(message: str) -> Err:
+    return Err((Diagnostic(SECURITY_SCAN_INVALID, Severity.ERROR, message),))
 
 
 def _failure(message: str) -> int:
@@ -163,37 +180,64 @@ def _suites(request: Request) -> int:
     return _common.OK
 
 
+def _registry_catalog(root: str) -> Result[tuple[IndexArtifact, ...]]:
+    """Project an approved Registry checkout into the catalog the baseline scans against.
+
+    `--index FILE` used to ask an operator for `aart.index.json`, a file the retired authoring
+    workspace compiled and nothing has produced since CP-26. The same `IndexArtifact` values are
+    derived from approved version records, so the command reads the Registry itself (D-322).
+    """
+
+    workspace = FilesystemRegistryWorkspace(os.path.abspath(root))
+    snapshot = workspace.snapshot()
+    if isinstance(snapshot, Err):
+        return snapshot
+    retired = legacy_registry_paths(snapshot.value)
+    if retired:
+        return _error(
+            "registry carries the retired authoring-workspace representation: " + ", ".join(retired)
+        )
+    if not is_promoted_registry(snapshot.value):
+        return _error("registry is not a canonical approved Registry")
+    marker = next(
+        (
+            entry
+            for entry in snapshot.value.entries
+            if str(entry.path) == "aart-registry.json" and entry.kind is SnapshotEntryKind.FILE
+        ),
+        None,
+    )
+    if marker is None:
+        return _error("registry root declares no aart-registry.json")
+    manifest = parse_registry_manifest(marker.content)
+    versions = promoted_registry_versions(snapshot.value)
+    if isinstance(manifest, Err):
+        return manifest
+    if isinstance(versions, Err):
+        return versions
+    return promoted_registry_artifacts(snapshot.value, manifest.value, versions.value)
+
+
 def _scan(request: Request) -> int:
     assert request.security_input is not None
-    assert request.registry_index is not None
+    assert request.security_registry is not None
     assert request.security_artifact is not None
     object_data = _read_bounded(request.security_input, _MAX_OBJECT_BYTES)
-    index_data = _read_bounded(request.registry_index, _MAX_EVIDENCE_BYTES)
-    if object_data is None or index_data is None:
-        return _failure("cannot read bounded real object and registry index files")
+    if object_data is None:
+        return _failure("cannot read the bounded real object file")
     candidate = parse_object_candidate(object_data)
-    index = parse_registry_index(index_data)
-    if isinstance(candidate, Err) or isinstance(index, Err):
-        return _failure("object envelope or registry index is invalid")
+    catalog = _registry_catalog(request.security_registry)
+    if isinstance(candidate, Err):
+        return _failure("object envelope is invalid")
+    if isinstance(catalog, Err):
+        return _failure(catalog.diagnostics[0].message)
     artifact = next(
-        (item for item in index.value.artifacts if str(item.identity) == request.security_artifact),
+        (item for item in catalog.value if str(item.identity) == request.security_artifact),
         None,
     )
     if artifact is None:
-        return _failure("selected artifact is absent from the registry index")
-    lock = None
-    if request.registry_lock is not None:
-        lock_data = _read_bounded(request.registry_lock, _MAX_EVIDENCE_BYTES)
-        parsed_lock = parse_registry_lock(lock_data) if lock_data is not None else None
-        if parsed_lock is None or isinstance(parsed_lock, Err):
-            return _failure("registry lock is invalid")
-        lock = next(
-            (item for identity, item in parsed_lock.value.entries if identity == artifact.identity),
-            None,
-        )
-        if lock is None:
-            return _failure("selected artifact is absent from the registry lock")
-    assessment = assess_installation_risk(BaselineScanRequest(candidate.value, artifact, lock))
+        return _failure("selected artifact is absent from the approved registry")
+    assessment = assess_installation_risk(BaselineScanRequest(candidate.value, artifact))
     cache_key = AssessmentCacheKey(
         1,
         candidate.value.digest,

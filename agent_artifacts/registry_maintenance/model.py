@@ -99,15 +99,19 @@ class RegistryFileChange:
 
 
 def _allowed_mutation_path(path: SafeRelativePath) -> bool:
-    raw = str(path)
-    if raw in {"aart.lock.json", "aart.index.json"}:
-        return True
+    """Which paths a reviewed JSON mutation may write.
+
+    The retired workspace's three -- `aart.lock.json`, `aart.index.json` and `entries/*` -- are
+    gone with their producer (D-321). What remains is the approved representation's own metadata
+    under `registry/`, which promotion writes through this same reviewed-mutation port.
+    """
+
     parts = path.parts
     return (
-        len(parts) == 3
-        and parts[0] == "entries"
-        and parts[1] in {"skill", "guideline", "mcp", "hook", "memory"}
-        and re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*\.json", parts[2]) is not None
+        len(parts) >= 2
+        and parts[0] == "registry"
+        and parts[-1].endswith(".json")
+        and all(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", part) is not None for part in parts[1:])
     )
 
 

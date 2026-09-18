@@ -22,11 +22,9 @@ from agent_artifacts.registry_commands.planning import (
     VendoredArtifactOrigin,
     plan_artifact_revendor,
     plan_artifact_vendor,
-    plan_registry_build,
     plan_registry_collection,
     plan_registry_format,
     plan_registry_init,
-    plan_registry_lock,
     project_registry_workspace_plan,
     read_vendored_artifact,
 )
@@ -131,42 +129,6 @@ def prepare_registry_format(*, output: RegistryWorkspacePort) -> Result[Registry
     if isinstance(current, Err):
         return current
     return plan_registry_format(current.value)
-
-
-def prepare_registry_lock(
-    acquisitions: tuple[NativeReferenceAcquisition, ...],
-    *,
-    executable_version: SemVer,
-    available_capabilities: tuple[Capability, ...],
-    output: RegistryWorkspacePort,
-) -> Result[RegistryWorkspacePlan]:
-    current = output.current()
-    if isinstance(current, Err):
-        return current
-    return plan_registry_lock(
-        current.value,
-        acquisitions,
-        executable_version=executable_version,
-        available_capabilities=available_capabilities,
-    )
-
-
-def prepare_registry_build(
-    acquisitions: tuple[NativeReferenceAcquisition, ...],
-    *,
-    executable_version: SemVer,
-    available_capabilities: tuple[Capability, ...],
-    output: RegistryWorkspacePort,
-) -> Result[RegistryWorkspacePlan]:
-    current = output.current()
-    if isinstance(current, Err):
-        return current
-    return plan_registry_build(
-        current.value,
-        acquisitions,
-        executable_version=executable_version,
-        available_capabilities=available_capabilities,
-    )
 
 
 def finalize_registry_workspace(

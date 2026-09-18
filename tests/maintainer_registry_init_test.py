@@ -206,8 +206,16 @@ class RegistryBootstrapTest(unittest.TestCase):
             tuple(stage.name for stage in report.value.stages), REGISTRY_BOOTSTRAP_STAGES
         )
         self.assertTrue(report.value.passed, report.value.stages)
-        for name in ("aart-registry.json", "aart-source.json", "aart.lock.json", "aart.index.json"):
+        for name in (
+            "aart-registry.json",
+            "aart-source.json",
+            "registry/index.json",
+            "registry/snapshot.json",
+        ):
             self.assertTrue(os.path.isfile(os.path.join(root, name)), name)
+        # `CP-26.5`: the bootstrap writes the approved representation and only it.
+        for retired in ("aart.lock.json", "aart.index.json"):
+            self.assertFalse(os.path.exists(os.path.join(root, retired)), retired)
 
     def test_nothing_is_committed_unless_the_operator_asked_for_it(self) -> None:
         root = self._workspace()
@@ -461,18 +469,22 @@ class MaintainerRegistryInitActionTest(unittest.TestCase):
                 )
             )
             project = str(env.project)
-            written = sorted(
+            markers = (
+                "aart-registry.json",
+                "aart-source.json",
+                "aart.lock.json",
+                "aart.index.json",
+            )
+            written = sorted(name for name in os.listdir(project) if name in markers)
+            catalogs = sorted(
                 name
-                for name in os.listdir(project)
-                if name
-                in ("aart-registry.json", "aart-source.json", "aart.lock.json", "aart.index.json")
+                for name in os.listdir(os.path.join(project, "registry"))
+                if name in ("index.json", "snapshot.json")
             )
 
         self.assertTrue(finished.event.text, "the run recorded nothing")
-        self.assertEqual(
-            written,
-            ["aart-registry.json", "aart-source.json", "aart.index.json", "aart.lock.json"],
-        )
+        self.assertEqual(written, ["aart-registry.json", "aart-source.json"])
+        self.assertEqual(catalogs, ["index.json", "snapshot.json"])
         notice = "\n".join(finished.source.screens.notice)
         for stage in REGISTRY_BOOTSTRAP_STAGES:
             self.assertIn(f"  {stage}: done", notice)

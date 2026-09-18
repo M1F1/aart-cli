@@ -44,10 +44,9 @@ class RegistryOperation(str, Enum):
     LOCK = "lock"
     BUILD = "build"
     MIGRATE = "migrate"
-    # Vendoring writes payload bytes under `artifacts/`, which the registry-input mutation plan
-    # cannot carry — its allowed paths are the lock, the index, and `entries/`. So a vendor is a
-    # workspace operation, not a mutation like `promote-native`, even though the two commands read
-    # as siblings.
+    # Vendoring writes payload bytes under `artifacts/`; a mutation plan carries JSON records.
+    # So a vendor is a workspace operation rather than a mutation, even though the two read as
+    # siblings at the command line.
     VENDOR = "vendor"
     VENDOR_BATCH = "vendor-batch"
     PUBLISH = "publish"
@@ -145,8 +144,6 @@ def _managed_path(path: SafeRelativePath) -> bool:
     if raw in {
         "aart-registry.json",
         "aart-source.json",
-        "aart.lock.json",
-        "aart.index.json",
         ".gitignore",
         # A plan may *write* these two; that is not the same as AART owning them.  `init` writes
         # each only when it is absent and never compares it afterwards, so these entries permit

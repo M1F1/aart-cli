@@ -262,7 +262,11 @@ class FailedActionShellTest(unittest.TestCase):
             stopped = next("\n".join(item) for item in terminal.frames if "did not run" in item[0])
 
             self.assertIn("This run stopped", stopped)
-            self.assertIn("lock: refused", stopped)
+            # `lock` over the approved representation resolves nothing and reports that, so the
+            # broken marker is first read by `validate` (`CP-26.5`). What the screen has to show
+            # is which stage refused and that the rest did not run, not which stage that is.
+            self.assertIn("validate: refused", stopped)
+            self.assertIn("the run stopped there; the stages after it did not run", stopped)
             self.assertIn("[Enter] Back to list", stopped)
             self.assertNotIn("Enter Confirm", stopped)
             self.assertNotIn("press Enter to start it", stopped)

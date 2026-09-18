@@ -12,7 +12,6 @@ from agent_artifacts.protocol.hashing import json_digest
 from agent_artifacts.protocol.json import JsonArray, JsonObject, JsonValue, parse_json
 from agent_artifacts.protocol.native_schema import (
     parse_provenance,
-    provenance_to_json,
 )
 from agent_artifacts.protocol.native_tree import (
     SnapshotEntry,
@@ -20,7 +19,7 @@ from agent_artifacts.protocol.native_tree import (
     compile_native_package,
 )
 from agent_artifacts.protocol.paths import SafeRelativePath
-from agent_artifacts.protocol.registry_models import IndexArtifact, LockedArtifact
+from agent_artifacts.protocol.registry_models import IndexArtifact
 from agent_artifacts.store.model import ObjectCandidate
 
 from .model import (
@@ -41,14 +40,14 @@ BASELINE_PROVIDER_ID = "aart-baseline"
 BASELINE_PROVIDER_VERSION = "1"
 # Bumped when the rules or their reach change: a recorded assessment made under the old revision
 # has a different rules digest and is reported stale rather than silently reused.
-_RULESET_REVISION = "baseline-v1.1"
+_RULESET_REVISION = "baseline-v1.2"
 _MAX_SCANNED_FILE_BYTES = 1024 * 1024
 _MAX_AST_NODES = 50_000
 _MAX_SHELL_LINES = 20_000
 _RAW_FINDING_LIMIT = MAX_FINDINGS + 1
 _EXPECTED_CATEGORIES = (
     "metadata",
-    "provenance-lock",
+    "provenance",
     "declared-effects",
     "credentials",
     "python-ast",
@@ -144,24 +143,6 @@ _RULES = (
         FindingSeverity.HIGH,
         "Registry review rejected this artifact.",
         "Do not install until the rejection is resolved and a new object is reviewed.",
-    ),
-    _Rule(
-        "lock-missing",
-        FindingSeverity.HIGH,
-        "Reviewed external provenance has no matching committed lock evidence.",
-        "Generate and commit a lock that binds origin, commit, manifest, payload, and object digests.",
-    ),
-    _Rule(
-        "lock-evidence-mismatch",
-        FindingSeverity.CRITICAL,
-        "Committed lock evidence differs from the indexed object or provenance.",
-        "Regenerate the lock from the reviewed immutable source and investigate unexpected drift.",
-    ),
-    _Rule(
-        "source-moving-ref",
-        FindingSeverity.LOW,
-        "The authored source selector is moving, while this object is pinned by a resolved commit.",
-        "Review lock updates before accepting newly resolved content.",
     ),
     _Rule(
         "importer-warning",
@@ -451,13 +432,10 @@ BASELINE_RULES_DIGEST = json_digest(
 class BaselineScanRequest:
     object_candidate: ObjectCandidate
     artifact: IndexArtifact
-    lock: LockedArtifact | None = None
 
     def __post_init__(self) -> None:
-        if (
-            not isinstance(self.object_candidate, ObjectCandidate)
-            or not isinstance(self.artifact, IndexArtifact)
-            or (self.lock is not None and not isinstance(self.lock, LockedArtifact))
+        if not isinstance(self.object_candidate, ObjectCandidate) or not isinstance(
+            self.artifact, IndexArtifact
         ):
             raise ValueError("baseline scan request is invalid")
 
@@ -527,32 +505,14 @@ def _metadata_findings(
     return tuple(findings), manifest, failed
 
 
-def _lock_matches(lock: LockedArtifact, artifact: IndexArtifact, provenance_digest) -> bool:
-    provenance = artifact.provenance
-    return (
-        provenance is not None
-        and lock.origin_url == provenance.origin_url
-        and lock.resolved_commit == provenance.resolved_commit
-        and lock.path == provenance.path
-        and lock.manifest_digest == artifact.manifest_digest
-        and lock.payload_digest == artifact.payload_digest
-        and lock.object_digest == artifact.object_digest
-        and lock.artifact_version == artifact.version
-        and lock.review == artifact.review
-        and lock.provenance_digest == provenance_digest
-    )
-
-
 def _provenance_findings(
     request: BaselineScanRequest,
     files: dict[str, SnapshotEntry],
-) -> tuple[tuple[SecurityFinding, ...], bool, bool]:
+) -> tuple[tuple[SecurityFinding, ...], bool]:
     findings: list[SecurityFinding] = []
-    incomplete = False
     failed = False
     entry = files.get("provenance.json")
     provenance = None
-    provenance_digest = None
     if entry is not None:
         if entry.kind is not SnapshotEntryKind.FILE:
             findings.append(_finding("provenance-invalid", path=entry.path))
@@ -564,7 +524,6 @@ def _provenance_findings(
                 failed = True
             else:
                 provenance = parsed.value
-                provenance_digest = json_digest(provenance_to_json(provenance))
     indexed = request.artifact.provenance
     if indexed is not None and provenance is None:
         findings.append(_finding("provenance-missing"))
@@ -590,17 +549,12 @@ def _provenance_findings(
         findings.append(_finding("review-pending"))
     elif review.status == "rejected":
         findings.append(_finding("review-rejected"))
-    lock_required = review is not None and indexed is not None
-    if lock_required and request.lock is None:
-        findings.append(_finding("lock-missing"))
-        incomplete = True
-    elif request.lock is not None:
-        if not _lock_matches(request.lock, request.artifact, provenance_digest):
-            findings.append(_finding("lock-evidence-mismatch"))
-            failed = True
-        elif re.fullmatch(r"[0-9a-f]{40}", request.lock.requested_ref) is None:
-            findings.append(_finding("source-moving-ref"))
-    return tuple(findings), incomplete, failed
+    # An approved version record pins its origin by resolved commit and carries the manifest,
+    # payload and object digests the review was made against; `indexed` above is projected straight
+    # out of it.  The retired workspace asserted the same facts a second time in `aart.lock.json`,
+    # and the three lock rules existed to catch the two copies disagreeing.  With one copy there is
+    # nothing left to disagree, and no shipped command writes the second one (D-322, CP-26.5).
+    return tuple(findings), failed
 
 
 _CAPABILITY_RULE = {
@@ -1087,11 +1041,11 @@ def assess_installation_risk(request: BaselineScanRequest) -> SecurityAssessment
     if metadata_failed:
         skipped.append("metadata:integrity")
 
-    provenance, provenance_incomplete, provenance_failed = _provenance_findings(request, files)
+    provenance, provenance_failed = _provenance_findings(request, files)
     findings.extend(provenance)
     failed |= provenance_failed
-    if provenance_incomplete or provenance_failed:
-        skipped.append("provenance-lock:evidence")
+    if provenance_failed:
+        skipped.append("provenance:evidence")
 
     declared, declared_incomplete = _declared_findings(request.artifact, files)
     findings.extend(declared)

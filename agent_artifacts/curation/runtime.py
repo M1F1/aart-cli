@@ -17,7 +17,6 @@ from agent_artifacts.application.registry_commands import (
     prepare_registry_init,
     read_vendored_artifact_origin,
 )
-from agent_artifacts.application.registry_maintenance import finalize_registry_mutation
 from agent_artifacts.configuration.model import ConfiguredSource, SourceKind
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.identifiers import ArtifactIdentity, ObjectDigest, SourceAlias
@@ -26,22 +25,15 @@ from agent_artifacts.io.registry_workspace import FilesystemRegistryWorkspace
 from agent_artifacts.protocol.native_models import CanonicalArtifactType
 from agent_artifacts.protocol.native_tree import SnapshotEntryKind, SourceSnapshot
 from agent_artifacts.protocol.paths import SafeRelativePath, parse_relative_path
-from agent_artifacts.protocol.registry_models import RegistryEntry, ReviewRecord
-from agent_artifacts.protocol.registry_schema import parse_registry_entry
+from agent_artifacts.protocol.registry_models import ReviewRecord
 from agent_artifacts.protocol.semver import SemVer, parse_semver
 from agent_artifacts.registry_commands.model import (
     CollectionAuthorOptions,
     RegistryInitOptions,
     RegistryOperation,
     RegistryQualityReport,
-    RegistryWorkspaceChange,
     RegistryWorkspacePlan,
     VendoredArtifactCheck,
-    WorkspaceChangeKind,
-    registry_workspace_review_digest,
-)
-from agent_artifacts.registry_commands.model import (
-    RegistryApplyCommand as WorkspaceApplyCommand,
 )
 from agent_artifacts.registry_commands.planning import (
     VendoredArtifactOrigin,
@@ -58,18 +50,6 @@ from agent_artifacts.registry_maintenance.model import (
     NativeAcquirer,
     NativeReferenceAcquisition,
     NativeReferenceDisposition,
-    RegistryMutationPlan,
-)
-from agent_artifacts.registry_maintenance.model import (
-    RegistryApplyCommand as MutationApplyCommand,
-)
-from agent_artifacts.registry_maintenance.model import (
-    RegistryApplyReceipt as MutationApplyReceipt,
-)
-from agent_artifacts.registry_maintenance.planning import (
-    check_native_reference,
-    plan_native_promotion,
-    project_registry_mutation,
 )
 from agent_artifacts.registry_maintenance.promoted import (
     is_promoted_registry,
@@ -119,7 +99,7 @@ class _ReadOnlyPrepared:
 @dataclass(frozen=True, slots=True)
 class PreparedCuration:
     review: CurationReview
-    payload: RegistryWorkspacePlan | RegistryMutationPlan | _ReadOnlyPrepared | SourceSnapshot
+    payload: RegistryWorkspacePlan | _ReadOnlyPrepared | SourceSnapshot
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,10 +154,6 @@ def _workspace_changes(plan: RegistryWorkspacePlan) -> tuple[CurationChange, ...
     return tuple(CurationChange(str(item.path), item.kind.value) for item in plan.changes)
 
 
-def _mutation_changes(plan: RegistryMutationPlan) -> tuple[CurationChange, ...]:
-    return tuple(CurationChange(str(item.path), item.kind.value) for item in plan.changes)
-
-
 def _checks(report: RegistryQualityReport) -> tuple[CurationCheck, ...]:
     return tuple(
         CurationCheck(
@@ -206,21 +182,19 @@ def _follow_up(
     if action in {
         CurationAction.INIT,
         CurationAction.COLLECTION,
-        # A vendored package is new owned content, so the lock and index are stale until they are
-        # rebuilt: `validate --strict` alone would fail and send the maintainer looking for a fault
-        # in the copy.
+        # A vendored package is new owned content, so the catalogs derived from the approvals are
+        # stale until `build` recomputes them.
         CurationAction.VENDOR,
         CurationAction.VENDOR_BATCH,
         CurationAction.REVENDOR,
     }:
         return (
             f"aart registry validate --source {quoted}",
-            f"aart registry lock --source {quoted}",
             f"aart registry build --source {quoted}",
             f"aart registry audit --source {quoted}",
         )
     return (
-        f"aart registry validate --source {quoted} --strict",
+        f"aart registry validate --source {quoted}",
         f"aart registry audit --source {quoted}",
     )
 
@@ -270,78 +244,6 @@ def default_native_acquirer(url: str, ref: str) -> Result[NativeReferenceAcquisi
         )
     except ValueError as error:
         return _error(str(error))
-
-
-class _MutationWorkspace:
-    """Adapt exact registry-input plans to the checkout's exact snapshot applier."""
-
-    def __init__(
-        self,
-        workspace: FilesystemRegistryWorkspace,
-        expected_snapshot_digest: ObjectDigest,
-    ):
-        self.workspace = workspace
-        self.expected_snapshot_digest = expected_snapshot_digest
-
-    def _verified_current(self) -> Result[SourceSnapshot]:
-        current = self.workspace.current()
-        if isinstance(current, Err):
-            return current
-        digest = _snapshot_digest(current.value)
-        if isinstance(digest, Err):
-            return digest
-        if digest.value != self.expected_snapshot_digest:
-            return _error("registry workspace changed after curation review", stale=True)
-        return current
-
-    def current(self) -> Result[SourceSnapshot]:
-        return self._verified_current()
-
-    def apply(self, command: MutationApplyCommand) -> Result[MutationApplyReceipt]:
-        current = self._verified_current()
-        if isinstance(current, Err):
-            return current
-        projected = project_registry_mutation(current.value, command.plan)
-        if isinstance(projected, Err):
-            return projected
-        before = _snapshot_digest(current.value)
-        after = _snapshot_digest(projected.value)
-        if isinstance(before, Err):
-            return before
-        if isinstance(after, Err):
-            return after
-        changes = tuple(
-            RegistryWorkspaceChange(
-                item.path,
-                WorkspaceChangeKind(item.kind.value),
-                item.content,
-                item.before_digest,
-                item.after_digest,
-            )
-            for item in command.plan.changes
-        )
-        workspace_plan = RegistryWorkspacePlan(
-            RegistryOperation.BUILD,
-            before.value,
-            after.value,
-            changes,
-            registry_workspace_review_digest(
-                RegistryOperation.BUILD,
-                before.value,
-                after.value,
-                changes,
-            ),
-        )
-        applied = self.workspace.apply(WorkspaceApplyCommand(workspace_plan))
-        if isinstance(applied, Err):
-            return applied
-        return Ok(
-            MutationApplyReceipt(
-                command.plan.review_digest,
-                command.plan.next_inputs_digest,
-                command.plan.changed_paths,
-            )
-        )
 
 
 class LocalCurationService:
@@ -411,31 +313,6 @@ class LocalCurationService:
                 follow_up_commands=_follow_up(self.root, changes, request.action),
             ),
             plan,
-        )
-
-    def _mutation_review(
-        self,
-        request: CurationRequest,
-        plan: RegistryMutationPlan,
-        snapshot: SourceSnapshot,
-    ) -> Result[PreparedCuration]:
-        digest = _snapshot_digest(snapshot)
-        if isinstance(digest, Err):
-            return digest
-        changes = _mutation_changes(plan)
-        return Ok(
-            PreparedCuration(
-                CurationReview(
-                    request.action,
-                    self.root,
-                    True,
-                    plan.review_digest,
-                    digest.value,
-                    changes,
-                    follow_up_commands=_follow_up(self.root, changes, request.action),
-                ),
-                plan,
-            )
         )
 
     def _prepare_init(self, request: CurationRequest) -> Result[PreparedCuration]:
@@ -884,7 +761,7 @@ class LocalCurationService:
             options,
             path=path.value,
             # The record the maintainer is being asked to approve.  It gates the plan and is not
-            # persisted: an owned package has no `entries/` document to carry a review.
+            # persisted: an owned package carries its review in the approval that published it.
             review=ReviewRecord("approved", request.review_policy),
             importer_version=_VERSION,
             output=self.workspace,
@@ -1127,98 +1004,6 @@ class LocalCurationService:
             return planned
         return Ok(self._workspace_review(request, planned.value))
 
-    def _entry(self, request: CurationRequest) -> Result[RegistryEntry]:
-        if None in (request.kind, request.name, request.url, request.path):
-            return _error("native promotion requires kind, name, URL, ref, and package path")
-        parsed = parse_registry_entry(
-            json.dumps(
-                {
-                    "schema_version": 1,
-                    "type": request.kind,
-                    "name": request.name,
-                    "source": {
-                        "kind": "git",
-                        "url": request.url,
-                        "ref": request.ref,
-                        "path": request.path,
-                    },
-                    "review": {"status": "approved", "policy": request.review_policy},
-                }
-            )
-        )
-        if isinstance(parsed, Err):
-            return parsed
-        return parsed
-
-    def _prepare_promote(self, request: CurationRequest) -> Result[PreparedCuration]:
-        current = self._current()
-        entry = self._entry(request)
-        if isinstance(current, Err):
-            return current
-        if isinstance(entry, Err):
-            return entry
-        acquired = self.native_acquirer(entry.value.source.url, entry.value.source.ref)
-        if isinstance(acquired, Err):
-            return acquired
-        planned = plan_native_promotion(
-            current.value,
-            entry.value,
-            acquired.value,
-            executable_version=_VERSION,
-            available_capabilities=_CAPABILITIES,
-        )
-        if isinstance(planned, Err):
-            return planned
-        return self._mutation_review(request, planned.value, current.value)
-
-    def _entries(self, snapshot: SourceSnapshot) -> Result[tuple[RegistryEntry, ...]]:
-        entries: list[RegistryEntry] = []
-        for item in snapshot.entries:
-            raw = str(item.path)
-            if not raw.startswith("entries/") or item.kind is not SnapshotEntryKind.FILE:
-                continue
-            parsed = parse_registry_entry(item.content, path=raw)
-            if isinstance(parsed, Err):
-                return parsed
-            expected = f"entries/{parsed.value.identity.kind}/{parsed.value.identity.name}.json"
-            if raw != expected:
-                return _error(f"registry entry identity does not match its path: {raw}")
-            entries.append(parsed.value)
-        return Ok(tuple(sorted(entries, key=lambda item: str(item.identity))))
-
-    def _prepare_update(self, request: CurationRequest) -> Result[PreparedCuration]:
-        if request.kind is None or request.name is None:
-            return _error("native reference refresh requires an exact artifact kind and name")
-        current = self._current()
-        if isinstance(current, Err):
-            return current
-        entries = self._entries(current.value)
-        if isinstance(entries, Err):
-            return entries
-        entry = next(
-            (
-                item
-                for item in entries.value
-                if item.identity.kind == request.kind and item.identity.name == request.name
-            ),
-            None,
-        )
-        if entry is None:
-            return _error(f"registry has no native reference {request.kind}/{request.name}")
-        acquired = self.native_acquirer(entry.source.url, entry.source.ref)
-        if isinstance(acquired, Err):
-            return acquired
-        checked = check_native_reference(
-            current.value,
-            entry,
-            acquired.value,
-            executable_version=_VERSION,
-            available_capabilities=_CAPABILITIES,
-        )
-        if isinstance(checked, Err):
-            return checked
-        return self._mutation_review(request, checked.value.plan, current.value)
-
     def _prepare_promoted_lock(
         self,
         request: CurationRequest,
@@ -1286,7 +1071,6 @@ class LocalCurationService:
             published_snapshot.value,
             executable_version=_VERSION,
             available_capabilities=_CAPABILITIES,
-            require_compiled=True,
         )
         if isinstance(validated, Err):
             return validated
@@ -1354,7 +1138,6 @@ class LocalCurationService:
                 current.value,
                 executable_version=_VERSION,
                 available_capabilities=_CAPABILITIES,
-                require_compiled=False,
             )
             if isinstance(report, Err):
                 return report
@@ -1402,8 +1185,6 @@ class LocalCurationService:
             CurationAction.INIT,
             CurationAction.COLLECTION,
             CurationAction.FORMAT,
-            CurationAction.PROMOTE_NATIVE,
-            CurationAction.REFRESH_NATIVE,
             CurationAction.VENDOR,
             CurationAction.VENDOR_BATCH,
             CurationAction.REVENDOR,
@@ -1427,10 +1208,6 @@ class LocalCurationService:
             return self._prepare_vendor_batch(request)
         if request.action is CurationAction.REVENDOR:
             return self._prepare_revendor(request)
-        if request.action is CurationAction.PROMOTE_NATIVE:
-            return self._prepare_promote(request)
-        if request.action is CurationAction.REFRESH_NATIVE:
-            return self._prepare_update(request)
         if request.action in {CurationAction.LOCK, CurationAction.BUILD}:
             return self._prepare_generated(request)
         if request.action is CurationAction.PUBLISH:
@@ -1452,18 +1229,6 @@ class LocalCurationService:
             if isinstance(workspace_applied, Err):
                 return workspace_applied
             changed = workspace_applied.value.changed_paths
-        elif isinstance(payload, RegistryMutationPlan):
-            mutation_applied = finalize_registry_mutation(
-                payload,
-                reviewed_digest,
-                output=_MutationWorkspace(
-                    self.workspace,
-                    prepared.review.snapshot_digest,
-                ),
-            )
-            if isinstance(mutation_applied, Err):
-                return mutation_applied
-            changed = mutation_applied.value.changed_paths
         elif isinstance(payload, _ReadOnlyPrepared):
             current = self._current()
             if isinstance(current, Err):

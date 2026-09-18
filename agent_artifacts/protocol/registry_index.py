@@ -17,8 +17,6 @@ from .registry_models import (
     IndexArtifact,
     IndexProvenance,
     IndexSetup,
-    RegistryIndex,
-    RegistryManifest,
     ReviewRecord,
 )
 
@@ -216,29 +214,5 @@ def validate_registry_graph(
                 ),
                 key=lambda item: (str(item.source_id), str(item.identity)),
             )
-        )
-    )
-
-
-def build_registry_index(
-    manifest: RegistryManifest,
-    inputs_digest: ObjectDigest,
-    artifacts: tuple[IndexArtifact, ...],
-    collections: tuple[CollectionManifest, ...],
-) -> Result[RegistryIndex]:
-    """Build a sorted index only after the complete local collection graph validates."""
-
-    indexed_artifacts = validate_registry_graph(artifacts, collections)
-    if isinstance(indexed_artifacts, Err):
-        return indexed_artifacts
-    return Ok(
-        RegistryIndex(
-            1,
-            manifest.protocol_version,
-            manifest.registry_id,
-            inputs_digest,
-            indexed_artifacts.value,
-            tuple(sorted(collections, key=lambda item: item.name)),
-            manifest.services,
         )
     )

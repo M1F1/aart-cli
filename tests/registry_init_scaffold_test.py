@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import shlex
 import unittest
 
@@ -30,7 +31,11 @@ from agent_artifacts.registry_commands.planning import (
 )
 from agent_artifacts.registry_commands.templates import REGISTRY_CI_WORKFLOW
 from agent_artifacts.runtime_contract import EXECUTABLE_VERSION
-from tests.registry_maintenance_fixtures import native_snapshot, replace_snapshot_file
+from tests.registry_maintenance_fixtures import (
+    approved_registry_snapshot,
+    replace_snapshot_file,
+    snapshot_file,
+)
 
 
 def _semver(text: str) -> SemVer:
@@ -41,33 +46,22 @@ def _semver(text: str) -> SemVer:
 
 class RegistryInitScaffoldTest(unittest.TestCase):
     def test_collection_authoring_uses_only_artifacts_the_registry_holds(self) -> None:
-        initialized = plan_registry_init(
-            SourceSnapshot(SnapshotOrigin.LOCAL, ()),
-            RegistryInitOptions(
-                "company-registry",
-                "Company Agent Artifacts",
-                SemVer(1, 0, 0),
-                SemVer(2, 0, 0),
-            ),
+        # `CP-26.5`: an owned package is a *version* under `artifacts/<kind>/<name>/<version>/`,
+        # written by the promotion the maintainer runs. The unversioned package this test used to
+        # assemble by hand is the retired authoring workspace, which maintenance now refuses by name.
+        registry = approved_registry_snapshot()
+        source = json.loads(snapshot_file(registry, "aart-source.json"))
+        source["collection_roots"] = ["collections"]
+        with_artifact = replace_snapshot_file(
+            registry, "aart-source.json", json.dumps(source).encode()
         )
-        assert isinstance(initialized, Ok)
-        registry = project_registry_workspace_plan(
-            SourceSnapshot(SnapshotOrigin.LOCAL, ()), initialized.value
-        )
-        assert isinstance(registry, Ok)
-        owned = tuple(
-            entry
-            for entry in native_snapshot().entries
-            if str(entry.path).startswith("artifacts/skill/code-review/")
-        )
-        with_artifact = SourceSnapshot(SnapshotOrigin.LOCAL, (*registry.value.entries, *owned))
 
         authored = plan_registry_collection(
             with_artifact,
             CollectionAuthorOptions(
                 "baseline",
                 "Company baseline.",
-                (ArtifactIdentity("skill", "code-review"),),
+                (ArtifactIdentity("mcp", "github-mcp"),),
             ),
             executable_version=SemVer(1, 0, 0),
             available_capabilities=(
@@ -88,7 +82,7 @@ class RegistryInitScaffoldTest(unittest.TestCase):
         assert isinstance(parsed, Ok)
         self.assertEqual(
             tuple(selector.identity for selector in parsed.value.artifacts),
-            (ArtifactIdentity("skill", "code-review"),),
+            (ArtifactIdentity("mcp", "github-mcp"),),
         )
 
         missing = plan_registry_collection(
@@ -175,7 +169,7 @@ class RegistryInitScaffoldTest(unittest.TestCase):
         self.assertIn(b"registry test", workflow)
         self.assertIn(b"minimum", workflow)
         self.assertIn(b"latest", workflow)
-        self.assertIn(b"validate --source . --strict --frozen", workflow)
+        self.assertIn(b"validate --source .", workflow)
         # Unconfigured, the tool is resolved from a source tree rather than installed: AART has
         # no runtime dependencies and ships __main__.py, so the gates run on a private runner
         # that can reach no package index at all.  `pip` appears once, inside the arm that only
@@ -218,9 +212,11 @@ class RegistryInitScaffoldTest(unittest.TestCase):
             for line in workflow.decode().splitlines()
             if line.strip().startswith("- run: aart ")
         ]
-        # Six gates, emitted once per container shape, and both shapes must run the same six.
-        self.assertEqual(len(commands), 12)
-        self.assertEqual(commands[:6], commands[6:])
+        # Five gates, emitted once per container shape, and both shapes must run the same five.
+        # `lock` left the workflow with `CP-26.5`: over the approved representation it resolves
+        # nothing, so a gate that always reports "nothing to resolve" proves nothing.
+        self.assertEqual(len(commands), 10)
+        self.assertEqual(commands[:5], commands[5:])
         for command in commands:
             argv = shlex.split(
                 command.removeprefix("aart ").replace("${{ matrix.compatibility }}", "minimum")

@@ -7929,3 +7929,143 @@ so nothing is fetched behind the operator's back.
 **Consequence.** `tests/consumer_runtime_test.py::test_registry_reference_is_fetched_by_locked_commit_only_for_selected_content`
 characterized the removed mechanism and is deleted, not repaired. Offline behavior for approved
 content is owned by the installation path and is covered there.
+
+## D-321 — The native-reference verbs are withdrawn with the representation they wrote
+
+Date: 2026-09-18 · Status: accepted · Scope: CP-26 step 5
+
+**Context.** `aart registry promote-native` and `refresh-native` are the only callers of
+`plan_native_promotion` / `check_native_reference`. Both write exactly three files: an
+`entries/<kind>/<name>.json` reference record, `aart.lock.json` and `aart.index.json`. That is the
+retired authoring-workspace representation in full. (`aart registry check-upstream` is a different
+command on the canonical side — it re-resolves a *repository-adopted* package through
+`io/registry_adoption.py` — and it stays.)
+
+Step 4 removed the last reader of it. The approved consumer projection declines a version it cannot
+verify content for, the Registry source validator refuses a checkout carrying those paths by name,
+and canonical maintenance refuses the same shape in `_canonical_current`. So these two verbs
+produce a shape that no AART consumer will install and no AART maintenance command will read.
+
+The canonical representation has its own external-reference mechanism and has had one throughout:
+`PromotionMode.REFERENCED` records a pinned source revision under `references/<digest>.json`, and
+`registry_state_digest` digests `references/` alongside `artifacts/`. Nothing is lost by removing
+the retired one; the capability exists on the canonical side of the strangler.
+
+**Decision.** `promote-native` and `refresh-native` are removed from the CLI, from
+`commands/registry.py`, from `CurationAction`, and from the curation runtime, together with
+`plan_native_promotion`, `check_native_reference`, `plan_registry_entry_add`,
+`resolve_native_acquisition` and the `NativeAcquirer` wiring that existed only to serve them. The
+route an operator takes instead is the one `_canonical_current`'s remediation already names: author
+in a Source checkout, then `aart registry scan` and `aart registry promote`.
+
+**Consequence.** `RegistryEntry` and its parser go with them — nothing else constructs one. This is
+a product-surface removal, not a refactor, and it is recorded as such. Backward compatibility is withdrawn for this repository (owner, twice),
+so there is no deprecation period and no shim. Two documented commands stop existing in this
+step.
+
+## D-322 — `aart security scan` reads the approved Registry, not an operator-supplied index
+
+Date: 2026-09-18 · Status: accepted · Scope: CP-26 step 5
+
+**Context.** B-147 recorded that `security scan` requires `--index FILE` and accepts `--lock FILE`,
+both parsed with the retired lock/index schema, and that no shipped command produces either file
+for a canonical Registry. The command therefore asks an operator for artefacts AART no longer makes.
+
+`assess_installation_risk` needs an `IndexArtifact`, which is canonical and is exactly what
+`registry_maintenance/promoted.py::promoted_registry_artifacts` projects out of an approved
+Registry checkout.
+
+**Decision.** `--index` is replaced by `--registry DIR`, an approved Registry checkout, and the
+artifact is selected out of its projected catalog by the same `KIND/NAME` identity as before.
+`--lock` is withdrawn: an approved version record already carries origin, revision, path and the
+three digests, and `IndexArtifact.provenance` is built from it, so a second file asserting the same
+facts is not evidence — it is a second thing to keep in sync. `BaselineScanRequest.lock` and the
+`lock-missing` / `lock-evidence-mismatch` findings are deleted with it.
+
+**Alternative rejected.** Withdrawing `security scan` entirely. It is the only way to obtain a
+baseline attestation for one object without running a whole registry audit, `aart security show`
+and `verify` consume what it writes, and the canonical source for its one missing input exists. A
+command whose input can be supplied honestly is fixed, not deleted.
+
+**Consequence.** The `provenance-lock` finding keeps its meaning — it fires when an indexed artifact
+and its provenance record disagree — and no longer has a lock to disagree with. `security/baseline.py`
+loses its last import from the retired schema, which is what makes B-147 closable here.
+
+## D-323 — D-318's "delete the inherited red set" holds for the lock/index tests and not for the vendoring ones
+
+Date: 2026-09-18 · Status: accepted · Scope: CP-26 step 5, correcting D-318
+
+**Context.** D-318 recorded that the thirteen tests inherited red from step 3 "describe the removed
+representation" and are deleted with their fixtures in step 5 rather than repaired. Executing that
+verbatim in step 5 showed the claim is true of one group and false of the other.
+
+True of `tests/registry_quality_planning_test.py`'s lock/index tests: they assert that `validate`
+requires a committed lock and index, that a compiled index must agree with a lock, and that
+`lock` then `build` produces both files. Nothing produces those files any more, so the tests
+describe a representation that is gone. Deleted here.
+
+False of `tests/registry_vendor_license_test.py`: its twenty tests assert license discovery from a
+taken subtree, the stated-over-discovered rule, copy-integrity failure on a hand-edited provenance
+record, upstream drift reporting, and the QA-015 / LAF-45 note vocabulary. None of that is the
+retired representation. They are red for a different reason — `aart registry vendor` writes an
+unversioned package that canonical maintenance refuses — which is a defect in a shipped command,
+recorded as B-149 and promoted to critical.
+
+**Decision.** Delete the lock/index tests. Keep the vendoring tests red, with B-149 naming the
+defect they are failing on and why step 5 is not the slice that fixes it.
+
+**Alternative rejected.** Deleting them to reach a green suite. That would remove the only coverage
+of vendoring's license and drift behaviour and would erase the evidence that a documented command
+bricks a canonical Registry. A red test that names a real defect is worth more than a green suite
+that does not.
+
+## D-324 — the README and the maintainer docs lose the withdrawn native-reference verbs
+
+Date: 2026-09-18 · Status: accepted · Scope: CP-26 step 5
+
+**Context.** D-321 withdrew `aart registry promote-native` and `refresh-native` with the reference
+mechanism they wrote. `tests/adoption_first_contact_test.py::test_the_readme_invents_no_command`
+caught the README still naming `promote-native` in a worked example, in the prose that contrasts it
+with `vendor`, and in the `## Interface` command tree; `docs/registry/maintainer-commands-v1.md`
+and two tutorials named both verbs as the thing to use instead of vendoring.
+
+**Decision.** Delete the verbs from every reader-facing document rather than describe them as
+removed. Where a document told a maintainer to reach for `promote-native` because the upstream is
+already a native source, the replacement instruction is `registry scan` + `registry promote`, which
+is the shipped route for a reviewed Candidate from a native source.
+
+**Alternative rejected.** A "removed in this version" note beside each mention. Backward
+compatibility is withdrawn for this repository; a reader learns the command surface from these
+documents and a withdrawn verb is not part of it.
+
+**Consequence.** The README's command tree now matches `cli.build_parser()` exactly, which is what
+the adoption guard compares against, and `docs/tutorials/vendoring-v1.md` no longer offers a
+"when not to vendor" route through a command that does not exist.
+
+## D-325 — the dependency and collection graph is checked in the approved representation's own path
+
+Date: 2026-09-18 · Status: accepted · Scope: CP-26 step 5
+
+**Context.** `validate_registry_graph` enforces two rules: `requires` resolves inside one registry,
+and collection membership is derived from the collections rather than declared by the artifacts. Its
+only caller was `build_registry_index`, which compiled the retired workspace's `aart.index.json`.
+Deleting that function in step 5 left the validator with no caller at all, so an approved Registry
+reached `validate`, `audit` and `publish` with neither rule checked.
+
+**Decision.** Bind the validator into `registry_maintenance/planning.py::_native_registry_content`,
+in the promoted branch, over the artifacts `promoted_registry_artifacts` compiled and the
+collections `_collections_without_index` read. It is representation-independent — it takes
+`IndexArtifact` values — so it moves to the path every maintainer command already arrives on, and
+the derived memberships flow out with the artifacts instead of into a second catalog.
+
+**Alternative rejected.** Leaving the validator uncalled and recording the loss as backlog. A
+deletion slice may not quietly drop a rule the Product Specification states; the smallest choice
+that preserves the invariant is to rebind it, and it costs nine lines.
+
+**Consequence, and one refusal that is now single-shaped.** `dependency_scope_error` had a second
+wording for a dependency the registry *references* from another origin. That shape was the retired
+workspace's `entries/` records: the only producer of `referenced_origins` was the workspace compiler,
+so nothing can tell the two apart any more. The parameter is removed from `load_native_source` and
+`_validate_declared_dependencies` and the refusal states the one thing that is true. If the
+REFERENCED promotion mode should re-introduce the distinction, that is a task-19-or-later question,
+not a compatibility shim.

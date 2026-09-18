@@ -1,10 +1,15 @@
 """A copy that contradicts its own record fails validate and audit.
 
-Replace a vendored package's payload, re-run `registry lock --yes` and `registry build --yes`, and
-the lock and index gates stay green by construction — the lock
-and the index are derived from the bytes that are there, so they agree with any substitution — which
-is why the reproduction here re-locks and re-builds before asserting, rather than tampering and
-checking validate alone.
+The check that matters is the one no compiled catalog could make: a vendored package records the
+origin digest it was copied from, so substituting a payload byte contradicts the package's own
+provenance. A catalog derived from the bytes that are there agrees with any substitution, which is
+why this is asserted over the package rather than over anything generated beside it.
+
+`CP-26.5` took the compiled lock and index away, so these gates now run over the checkout directly.
+They are red while `B-149` is open: `project_vendored_package` still writes the retired unversioned
+`artifacts/<kind>/<name>/` layout, which `registry_native_content` refuses by name. The refusal is
+correct and the writer is what has to move; the claims below are kept whole so the repair has
+something to turn green (`D-323`).
 """
 
 from __future__ import annotations
@@ -27,9 +32,6 @@ from agent_artifacts.protocol.paths import parse_relative_path
 from agent_artifacts.protocol.semver import SemVer
 from agent_artifacts.registry_commands.planning import (
     audit_registry_workspace,
-    plan_registry_build,
-    plan_registry_lock,
-    project_registry_workspace_plan,
     validate_registry_workspace,
 )
 from agent_artifacts.registry_maintenance.vendoring import (
@@ -118,30 +120,11 @@ def _vendored_registry() -> SourceSnapshot:
     )
 
 
-def _compiled(snapshot: SourceSnapshot) -> SourceSnapshot:
-    """Lock and build the registry, exactly as the reproduction did after tampering."""
-
-    locked = plan_registry_lock(
-        snapshot, (), executable_version=_VERSION, available_capabilities=_CAPABILITIES
-    )
-    assert isinstance(locked, Ok), locked
-    with_lock = project_registry_workspace_plan(snapshot, locked.value)
-    assert isinstance(with_lock, Ok), with_lock
-    built = plan_registry_build(
-        with_lock.value, (), executable_version=_VERSION, available_capabilities=_CAPABILITIES
-    )
-    assert isinstance(built, Ok), built
-    complete = project_registry_workspace_plan(with_lock.value, built.value)
-    assert isinstance(complete, Ok), complete
-    return complete.value
-
-
-def _validate(snapshot: SourceSnapshot, *, require_compiled: bool = False):
+def _validate(snapshot: SourceSnapshot):
     report = validate_registry_workspace(
         snapshot,
         executable_version=_VERSION,
         available_capabilities=_CAPABILITIES,
-        require_compiled=require_compiled,
     )
     assert isinstance(report, Ok), report
     return report.value
@@ -169,17 +152,15 @@ def _tampered(snapshot: SourceSnapshot) -> SourceSnapshot:
 
 class VendoredCopyGateTest(unittest.TestCase):
     def test_an_untouched_vendored_registry_passes_both_gates(self) -> None:
-        registry = _compiled(_vendored_registry())
-        self.assertTrue(
-            _validate(registry, require_compiled=True).passed, _messages(_validate(registry))
-        )
+        registry = _vendored_registry()
+        self.assertTrue(_validate(registry).passed, _messages(_validate(registry)))
         self.assertTrue(_audit(registry).passed, _messages(_audit(registry)))
 
     def test_a_substituted_payload_fails_validate_and_audit_after_relocking(self) -> None:
         """A substituted payload, end to end and offline."""
 
-        registry = _compiled(_tampered(_vendored_registry()))
-        validated = _validate(registry, require_compiled=True)
+        registry = _tampered(_vendored_registry())
+        validated = _validate(registry)
         audited = _audit(registry)
         self.assertFalse(validated.passed)
         self.assertFalse(audited.passed)

@@ -2,28 +2,28 @@
 
 ## Where CP-26 is (2026-09-18)
 
-Steps 1–4 are done on `refactor/cp-26-legacy-removal`. **Step 5 is next**: delete the lock/index
-schema, the tree constants, the legacy halves of both `planning.py` modules and the fixtures that
-only describe the retired representation. B-057 closes there.
+Steps 1–5 are done on `refactor/cp-26-legacy-removal`. **B-057 is closed**: the retired
+authoring-workspace representation has no schema, no fixtures, no planning half and no command left.
+`docs/refactor/slices/cp-26-authoring-and-legacy-removal.md` §"Step 5" records what went and what
+was decided instead (D-321 to D-325).
 
-Step 5 inherits a known, recorded red set — thirteen tests that step 3 and step 4 left naming
-behavior the retained gates no longer have:
+**Step 6 is next on the numbered plan** — collect the authoring-manifest field surface from the
+parser rather than transcribing it — but read B-149 first and decide the order. B-149 is CRITICAL
+and open: `project_vendored_package` still writes the retired unversioned
+`artifacts/<kind>/<name>/` layout, so `aart registry vendor` produces a Registry that canonical
+maintenance refuses by name. Twenty-six tests across seven vendoring modules are red on exactly
+that, and they are kept red on purpose (D-323): they hold vendoring's license discovery, upstream
+drift and copy-integrity behaviour, none of which is the retired representation. Deleting them to
+reach green would delete the evidence.
 
-- `tests/registry_vendor_license_test.py` and `tests/registry_quality_planning_test.py`: twelve
-  failures, all expecting `validate`/`audit`/vendoring to accept an unversioned package. D-318 says
-  these describe the removed representation and are deleted with their fixtures, not repaired.
-- `tests/fixtures/protocol/registry-v1/` is the retired fixture tree. Nothing outside those two
-  modules reads it any more; `tests/registry_maintenance_fixtures.py::approved_registry_snapshot`
-  and `write_snapshot` are what replaced it, and they build a Registry through the real promotion
-  rather than transcribing a tree.
+Two other open findings from step 5:
 
-Production still importing the retired schema when step 5 starts:
-`agent_artifacts/commands/security.py` (`parse_registry_index`, `parse_registry_lock` behind
-`aart security scan`), `registry_commands/planning.py`, `registry_maintenance/planning.py`,
-`protocol/registry_tree.py::_GENERATED_PATHS`, `protocol/registry_schema.py` itself and the
-`protocol/__init__.py` exports. `aart security scan` takes its index as an operator-supplied file
-and has no producer (B-147) — decide there whether it reads the canonical catalog or is withdrawn,
-and record it.
+- **B-151** — seven shipped documents still describe `aart.lock.json` and `aart.index.json` as files
+  AART writes. Not gated by `make docs-check`, which validates fences and links. Noncritical for
+  step 5; a precondition of CP-26.21.
+- **B-150** — the owner's installation-identity principle: an installation is
+  (artifact, harness, user-or-project scope), and no artifact shares global state with any other.
+  Input to CP-26 task 19, and to the Product Specification before it.
 
 ## CP-26 scope addition (2026-09-18)
 

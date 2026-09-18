@@ -425,8 +425,6 @@ class Request:
     # Resolve vendored origins during an audit.  Off by default: an audit that reached the network
     # unasked would fail offline and depend on somebody else's uptime in CI.
     check_upstream: bool = False
-    strict: bool = False
-    frozen: bool = False
     source_id: Optional[str] = None
     display_name: Optional[str] = None
     # Optional registry-owned GitHub Issues destination advertised by ``registry init``.
@@ -462,8 +460,7 @@ class Request:
     receipt_action: Optional[str] = None
     security_input: Optional[str] = None
     security_artifact: Optional[str] = None
-    registry_index: Optional[str] = None
-    registry_lock: Optional[str] = None
+    security_registry: Optional[str] = None
     security_cache: Optional[str] = None
     security_object_digest: Optional[str] = None
     security_rules_digest: Optional[str] = None

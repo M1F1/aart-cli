@@ -14,11 +14,9 @@ from .model import (
 )
 from .planning import (
     audit_registry_workspace,
-    plan_registry_build,
     plan_registry_collection,
     plan_registry_format,
     plan_registry_init,
-    plan_registry_lock,
     plan_registry_workspace_files,
     project_registry_workspace_plan,
     test_registry_compatibility,
@@ -38,10 +36,8 @@ __all__ = [
     "WorkspaceChangeKind",
     "audit_registry_workspace",
     "plan_registry_collection",
-    "plan_registry_build",
     "plan_registry_format",
     "plan_registry_init",
-    "plan_registry_lock",
     "plan_registry_workspace_files",
     "project_registry_workspace_plan",
     "test_registry_compatibility",

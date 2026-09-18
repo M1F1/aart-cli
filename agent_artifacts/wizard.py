@@ -170,14 +170,7 @@ def stages_for(session: WizardSession) -> Tuple[WizardStage, ...]:
         return maintainer
     if action in ("health", "validate", "audit", "diff", "lock", "build"):
         return maintainer + ("review",)
-    if action in (
-        "init",
-        "collection",
-        "promote-native",
-        "refresh-native",
-        "vendor",
-        "revendor",
-    ):
+    if action in ("init", "collection", "vendor", "revendor"):
         return maintainer + ("native_details", "review")
     if action == "user":
         return _user_stages(session, prefix=maintainer)

@@ -38,14 +38,6 @@ SCENARIOS: tuple[tuple[str, int, tuple[str, ...]], ...] = (
         ),
     ),
     (
-        "native-reference",
-        30,
-        (
-            "tests.native_promotion_test.NativePromotionTest."
-            "test_native_promotion_writes_only_entry_lock_and_index",
-        ),
-    ),
-    (
         "collision",
         30,
         (
@@ -82,13 +74,11 @@ SCENARIOS: tuple[tuple[str, int, tuple[str, ...]], ...] = (
         ),
     ),
     (
-        "corrupt-lock-object",
+        "corrupt-object",
         30,
         (
             "tests.object_store_adapter_test.ObjectStoreAdapterTest."
             "test_concurrent_identical_publication_converges_and_corruption_repairs",
-            "tests.registry_lock_test.RegistryLockTest."
-            "test_stale_mismatched_or_self_referential_lock_never_resolves",
         ),
     ),
     (

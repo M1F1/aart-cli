@@ -6,10 +6,8 @@ from dataclasses import replace
 from types import MappingProxyType
 
 from agent_artifacts.domain.identifiers import ObjectDigest, SourceId
-from agent_artifacts.domain.result import Err, Ok
+from agent_artifacts.domain.result import Ok
 from agent_artifacts.model import SetupCapability, SetupInstaller, SetupStep
-from agent_artifacts.protocol.capabilities import Capability
-from agent_artifacts.protocol.json import canonical_json_bytes
 from agent_artifacts.protocol.native_models import CollectionManifest
 from agent_artifacts.protocol.native_schema import (
     parse_artifact_manifest,
@@ -18,14 +16,11 @@ from agent_artifacts.protocol.native_schema import (
 )
 from agent_artifacts.protocol.native_tree import NativeArtifactPackage
 from agent_artifacts.protocol.registry_index import (
-    build_registry_index,
     index_artifact_from_package,
 )
 from agent_artifacts.protocol.registry_models import ReviewRecord
 from agent_artifacts.protocol.registry_schema import (
-    parse_registry_index,
     parse_registry_manifest,
-    registry_index_to_json,
 )
 
 
@@ -236,178 +231,6 @@ class RegistryIndexTest(unittest.TestCase):
 
         assert record.setup is not None
         self.assertEqual(record.setup.capabilities, ())
-
-    def test_index_output_is_byte_identical_across_input_order(self) -> None:
-        first = index_artifact_from_package(
-            _package("code-review"),
-            source_id=SourceId("company-registry"),
-            object_digest=_digest("3"),
-        )
-        second = index_artifact_from_package(
-            _package("python-style"),
-            source_id=SourceId("company-registry"),
-            object_digest=_digest("4"),
-        )
-        essentials = _collection("essentials", ["code-review"], [])
-        all_tools = _collection("all-tools", ["python-style"], ["essentials"])
-
-        left = build_registry_index(
-            _registry(), _digest("0"), (second, first), (all_tools, essentials)
-        )
-        right = build_registry_index(
-            _registry(), _digest("0"), (first, second), (essentials, all_tools)
-        )
-
-        self.assertIsInstance(left, Ok)
-        self.assertEqual(left, right)
-        assert isinstance(left, Ok)
-        encoded = canonical_json_bytes(registry_index_to_json(left.value))
-        reparsed = parse_registry_index(encoded)
-        self.assertEqual(reparsed, left)
-        self.assertIn(b'"requires_aart":{"max_exclusive":"2.0.0","min_inclusive":"1.1.0"}', encoded)
-        self.assertNotIn(b"trust", encoded)
-        self.assertNotIn(b"payload_bytes", encoded)
-
-    def test_membership_is_derived_for_direct_and_nested_collections(self) -> None:
-        artifact = index_artifact_from_package(
-            _package("code-review"),
-            source_id=SourceId("company-registry"),
-            object_digest=_digest("3"),
-        )
-        child = _collection("child", ["code-review"], [])
-        parent = _collection("parent", [], ["child"])
-
-        result = build_registry_index(_registry(), _digest("0"), (artifact,), (parent, child))
-
-        self.assertIsInstance(result, Ok)
-        assert isinstance(result, Ok)
-        self.assertEqual(result.value.artifacts[0].collections, ("child", "parent"))
-
-    def test_dangling_artifact_or_collection_and_cycles_fail_closed(self) -> None:
-        artifact = index_artifact_from_package(
-            _package("code-review"),
-            source_id=SourceId("company-registry"),
-            object_digest=_digest("3"),
-        )
-        cases = (
-            (_collection("dangling-artifact", ["missing"], []),),
-            (_collection("dangling-collection", [], ["missing"]),),
-            (
-                _collection("cycle-a", [], ["cycle-b"]),
-                _collection("cycle-b", [], ["cycle-a"]),
-            ),
-        )
-
-        for collections in cases:
-            with self.subTest(collections=collections):
-                result = build_registry_index(_registry(), _digest("0"), (artifact,), collections)
-                self.assertIsInstance(result, Err)
-
-    def test_duplicate_qualified_identity_and_incompatible_registry_fail(self) -> None:
-        artifact = index_artifact_from_package(
-            _package("code-review"),
-            source_id=SourceId("company-registry"),
-            object_digest=_digest("3"),
-        )
-        duplicate = index_artifact_from_package(
-            _package("code-review"),
-            source_id=SourceId("company-registry"),
-            object_digest=_digest("4"),
-        )
-
-        self.assertIsInstance(
-            build_registry_index(_registry(), _digest("0"), (artifact, duplicate), ()), Err
-        )
-        self.assertNotIn(Capability("not-used"), _registry().required_capabilities)
-
-    def test_duplicate_collection_and_version_exclusion_fail_closed(self) -> None:
-        artifact = index_artifact_from_package(
-            _package("code-review"),
-            source_id=SourceId("company-registry"),
-            object_digest=_digest("3"),
-        )
-        collection = _collection("tools", ["code-review"], [])
-        excluded = parse_collection_manifest(
-            """{
-              "schema_version": 1,
-              "name": "old-only",
-              "summary": "Only old releases.",
-              "artifacts": [{
-                "type": "skill",
-                "name": "code-review",
-                "version": {"max_exclusive": "1.0.0"}
-              }]
-            }"""
-        )
-        assert isinstance(excluded, Ok)
-
-        self.assertIsInstance(
-            build_registry_index(_registry(), _digest("0"), (artifact,), (collection, collection)),
-            Err,
-        )
-        self.assertIsInstance(
-            build_registry_index(_registry(), _digest("0"), (artifact,), (excluded.value,)),
-            Err,
-        )
-
-    def test_declared_dependencies_must_resolve_match_version_and_remain_acyclic(self) -> None:
-        kernel = index_artifact_from_package(
-            _package("using-residues"),
-            source_id=SourceId("company-registry"),
-            object_digest=_digest("3"),
-        )
-        stage = index_artifact_from_package(
-            _package(
-                "residual-stage",
-                requires=[
-                    {
-                        "type": "skill",
-                        "name": "using-residues",
-                        "version": {"min_inclusive": "1.2.0", "max_exclusive": "2.0.0"},
-                    }
-                ],
-            ),
-            source_id=SourceId("company-registry"),
-            object_digest=_digest("4"),
-        )
-        indexed = build_registry_index(_registry(), _digest("0"), (kernel, stage), ())
-        self.assertIsInstance(indexed, Ok)
-        assert isinstance(indexed, Ok)
-        indexed_stage = next(
-            item for item in indexed.value.artifacts if item.identity.name == "residual-stage"
-        )
-        self.assertEqual(str(indexed_stage.requires[0].identity), "skill/using-residues")
-        self.assertEqual(
-            parse_registry_index(canonical_json_bytes(registry_index_to_json(indexed.value))),
-            indexed,
-        )
-
-        self.assertIsInstance(build_registry_index(_registry(), _digest("0"), (stage,), ()), Err)
-        incompatible = index_artifact_from_package(
-            _package(
-                "residual-stage",
-                requires=[
-                    {
-                        "type": "skill",
-                        "name": "using-residues",
-                        "version": {"max_exclusive": "1.0.0"},
-                    }
-                ],
-            ),
-            source_id=SourceId("company-registry"),
-            object_digest=_digest("5"),
-        )
-        self.assertIsInstance(
-            build_registry_index(_registry(), _digest("0"), (kernel, incompatible), ()), Err
-        )
-        cyclic_kernel = index_artifact_from_package(
-            _package("using-residues", requires=[{"type": "skill", "name": "residual-stage"}]),
-            source_id=SourceId("company-registry"),
-            object_digest=_digest("6"),
-        )
-        self.assertIsInstance(
-            build_registry_index(_registry(), _digest("0"), (cyclic_kernel, stage), ()), Err
-        )
 
 
 if __name__ == "__main__":

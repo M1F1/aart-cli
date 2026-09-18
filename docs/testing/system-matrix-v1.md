@@ -18,12 +18,11 @@ output or paths.
 |---|---|
 | `direct-only` | Local native source sync and canonical Copy installation without a registry |
 | `public-company-team` | Optional public/company registries plus a direct team source coexist |
-| `native-reference` | A native upstream is promoted by entry/lock/index reference only |
 | `collision` | Ambiguous unqualified identity fails while a qualified company item resolves |
 | `trust-downgrade` | Trust change after Review is terminal and non-mutating |
 | `offline` | Cached install/lifecycle succeeds; missing cache returns a typed failure without Git |
 | `concurrent-sync-install` | Concurrent source publication and installation converge without lost state |
-| `corrupt-lock-object` | Stale/mismatched locks fail closed and corrupted CAS content is repaired safely |
+| `corrupt-object` | Corrupted CAS content is detected and repaired safely under concurrency |
 | `setup-partial` | Setup queue stop, retry, and rollback retain per-item terminal outcomes |
 | `security-provider-failure` | Optional analyzer timeout/crash/malformed output cannot become a core failure |
 
