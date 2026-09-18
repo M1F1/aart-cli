@@ -9,11 +9,18 @@ added to a workflow and not to the page fails here, the same way
 
 from __future__ import annotations
 
+import contextlib
+import os
 import pathlib
 import re
+import shutil
+import subprocess
+import tempfile
 import unittest
+import zipfile
 
 from agent_artifacts.registry_commands.templates import REGISTRY_CI_WORKFLOW
+from tests.credential_fixtures import credential_url
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 PAGE = ROOT / "docs" / "ci" / "github-enterprise-rollout.md"
@@ -439,11 +446,17 @@ class ThePinIsReadFromTheRepositoryTest(unittest.TestCase):
             self.assertLess(body.index(".aart-version"), body.index('if [ -n "$PACKAGE" ]'), label)
 
     def test_the_index_and_wheel_arms_substitute_the_pin(self) -> None:
-        """Otherwise a version would have to be written into a variable as well as the file."""
+        """Otherwise a version would have to be written into a variable as well as the file.
+
+        Both arms go through one `expand`, which reads `$PIN` itself -- so an arm cannot be given
+        a substitution that quietly comes from somewhere else.  `TheStepRunsOnAnImageWithoutBash`
+        holds the substitution's behaviour; this holds that both arms are subject to it.
+        """
 
         for label, body in EMITTED.items():
-            self.assertIn(r'requirement="${PACKAGE//\{version\}/$PIN}"', body, label)
-            self.assertIn(r'url="${WHEEL_URL//\{version\}/$PIN}"', body, label)
+            self.assertIn('requirement=$(expand "$PACKAGE")', body, label)
+            self.assertIn('url=$(expand "$WHEEL_URL")', body, label)
+            self.assertIn('replace("{version}", sys.argv[2]))\' "$1" "$PIN"', body, label)
 
     def test_the_git_arm_derives_its_ref_from_the_pin(self) -> None:
         for label, body in EMITTED.items():
@@ -847,7 +860,11 @@ class TheIndexCredentialIsAssembledNotStoredTest(unittest.TestCase):
     """A variable cannot hold a credential, so it holds the host and names the secret."""
 
     def test_both_halves_are_remasked_before_use(self) -> None:
-        """GitHub masks the value it was given -- `user:pass` -- and neither half after a split."""
+        """GitHub masks the value it was given -- `user:pass` -- and neither half after a split.
+
+        Counted per credential rather than as one total, so a step that later reads a second
+        secret has to mask that one too, instead of passing under a number somebody raised once.
+        """
 
         # One action assembles the URL for every caller, so this is the only place to look.
         action = _read(ROOT / ".github" / "actions" / "pip-index" / "action.yml")
@@ -855,14 +872,397 @@ class TheIndexCredentialIsAssembledNotStoredTest(unittest.TestCase):
         # A workflow emits its job once per container shape, so the count is taken per job.
         for label, body in EMITTED.items():
             for name, job in _fetching_jobs(body).items():
+                held = re.findall(r"^\s+(\w*CREDENTIALS): \$\{\{ secrets\[", job, re.M)
+                self.assertTrue(held, f"{label}: {name}: no credential read; this test is vacuous")
                 self.assertEqual(
-                    job.count("::add-mask::"), 2, f"{label}: {name}: one half left unmasked"
+                    job.count("::add-mask::"),
+                    2 * len(held),
+                    f"{label}: {name}: reads {held}, but not two masks each",
                 )
 
     def test_no_log_line_carries_the_assembled_url(self) -> None:
         for label, body in EMITTED.items():
             self.assertIn('how="index $announce', body, label)
             self.assertNotIn('how="index $INDEX_URL', body, label)
+
+
+def _step_script(body: str, name: str) -> str:
+    """One named step's shell script, dedented the way the runner writes it to a file."""
+
+    after = body.split(f"- name: {name}", 1)[1].split("        run: |\n", 1)[1]
+    kept = []
+    for line in after.splitlines():
+        if line.strip() and not line.startswith(" " * 10):
+            break
+        kept.append(line[10:])
+    return "\n".join(kept) + "\n"
+
+
+def _provide_aart_script(body: str) -> str:
+    """The `Provide AART` step's shell script, dedented the way the runner writes it to a file."""
+
+    return _step_script(body, "Provide AART")
+
+
+def _strict_posix_shell() -> str | None:
+    """A POSIX shell that is not bash answering to the name `sh`.
+
+    macOS `/bin/sh` *is* bash, and bash in `sh` mode still accepts `set -o pipefail` and `${v//a/b}`,
+    so a developer machine cannot see this class of bug at all.  `dash` is `/bin/sh` on the Linux
+    images that CI and a customer's Enterprise runner both use, and it is the oracle here.
+    """
+
+    found = shutil.which("dash") or ("/bin/dash" if os.path.exists("/bin/dash") else None)
+    if found:
+        return found
+    probe = subprocess.run(
+        ["/bin/sh", "-c", "echo ${BASH_VERSION-}"], capture_output=True, text=True, check=False
+    )
+    return None if probe.stdout.strip() else "/bin/sh"
+
+
+POSIX_SHELL = _strict_posix_shell()
+
+# What the fake interpreter answers to `--version`, and what `.aart-version` therefore pins.  A
+# number no real build carries, so a passing run cannot be one that reached the real package.
+FAKE_VERSION = "4.5.6"
+_FAKE_PY = """#!/usr/bin/env python3
+import os, pathlib, sys
+
+args = sys.argv[1:]
+with pathlib.Path(os.environ["FAKE_PY_LOG"]).open("a", encoding="utf-8") as handle:
+    handle.write(" ".join(args) + "\\n")
+if args[0] == "-c":
+    # `-c` is served for real: the wheel arm's one-liner is the code under test, not a stub.
+    sys.argv = ["-c", *args[2:]]
+    exec(compile(args[1], "<fake>", "exec"), {"__name__": "__main__"})
+elif args[:2] == ["-m", "pip"]:
+    target = pathlib.Path(args[args.index("--target") + 1]) / "agent_artifacts"
+    target.mkdir(parents=True, exist_ok=True)
+    (target / "__main__.py").write_text("", encoding="utf-8")
+elif args[:2] == ["-m", "agent_artifacts"]:
+    print("aart-cli __VERSION__")
+"""
+
+
+@unittest.skipIf(POSIX_SHELL is None, "no POSIX shell here; /bin/sh is bash")
+class TheStepRunsOnAnImageWithoutBashTest(unittest.TestCase):
+    """The step names no `shell:`, so a runner without bash serves it `sh -e {0}`.
+
+    That is not hypothetical.  A container image with git and Python and no bash sent Actions to
+    its documented fallback, and the step died on its own first line with
+    `set: Illegal option -o pipefail` -- before it had chosen an arm, so no variable could have
+    helped.  The same image would then have met `${PACKAGE//.../...}` and a shim asking for
+    `/usr/bin/env bash`.  Every arm below is therefore run under a real POSIX shell.
+    """
+
+    def _stage(self, stack: contextlib.ExitStack) -> pathlib.Path:
+        home = pathlib.Path(stack.enter_context(tempfile.TemporaryDirectory()))
+        (home / "work").mkdir()
+        (home / "work" / ".aart-version").write_text(FAKE_VERSION + "\n", encoding="utf-8")
+        (home / "runner").mkdir()
+        (home / "script.sh").write_text(_provide_aart_script(TEMPLATE_TEXT), encoding="utf-8")
+        interpreter = home / "fake-python"
+        interpreter.write_text(_FAKE_PY.replace("__VERSION__", FAKE_VERSION), encoding="utf-8")
+        interpreter.chmod(0o755)
+        return home
+
+    def _run(self, home: pathlib.Path, **arms: str) -> subprocess.CompletedProcess[str]:
+        env = {
+            "PATH": os.environ.get("PATH", ""),
+            "RUNNER_TEMP": str(home / "runner"),
+            "GITHUB_PATH": str(home / "github_path"),
+            "FAKE_PY_LOG": str(home / "py.log"),
+            "PACKAGE": "",
+            "WHEEL_URL": "",
+            "TOOL_PATH": "",
+            "TOOL_URL": "",
+            "TOOL_REF": "",
+            "INDEX_URL": "https://example.invalid/simple",
+            "INDEX_CREDENTIALS": "",
+            "GIT_CREDENTIALS": "",
+            "PY": str(home / "fake-python"),
+        }
+        env.update(arms)
+        assert POSIX_SHELL is not None
+        return subprocess.run(
+            [POSIX_SHELL, "-e", str(home / "script.sh")],
+            cwd=home / "work",
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    def _succeeded(self, done: subprocess.CompletedProcess[str]) -> str:
+        self.assertEqual(done.returncode, 0, f"stderr: {done.stderr}\nstdout: {done.stdout}")
+        return done.stdout
+
+    def test_the_baked_path_arm_runs_under_a_posix_shell(self) -> None:
+        """The arm that touches nothing outside the image, so only the shell can fail it."""
+
+        with contextlib.ExitStack() as stack:
+            home = self._stage(stack)
+            baked = home / "baked"
+            (baked / "agent_artifacts").mkdir(parents=True)
+            (baked / "agent_artifacts" / "__main__.py").write_text("", encoding="utf-8")
+            out = self._succeeded(self._run(home, TOOL_PATH=str(baked)))
+            self.assertIn(f"AART: aart-cli {FAKE_VERSION}", out)
+            self.assertIn("pinned by .aart-version", out)
+
+    def test_the_index_arm_expands_the_pin_without_bash(self) -> None:
+        """`{version}` is substituted by a bash-only expansion that dash answers `Bad substitution`."""
+
+        with contextlib.ExitStack() as stack:
+            home = self._stage(stack)
+            self._succeeded(self._run(home, PACKAGE="aart-cli=={version}"))
+            # The expansion's own source text names `{version}`, so the claim is about what pip
+            # was finally asked for, not about the log as a whole.
+            asked = [
+                line
+                for line in (home / "py.log").read_text(encoding="utf-8").splitlines()
+                if line.startswith("-m pip ")
+            ]
+            self.assertEqual(len(asked), 1, asked)
+            self.assertTrue(asked[0].endswith(f"aart-cli=={FAKE_VERSION}"), asked[0])
+
+    def test_the_wheel_arm_expands_the_pin_without_bash(self) -> None:
+        """A wheel URL names the version twice -- in the path and in the filename -- so whatever
+        replaces the bash expansion has to replace every occurrence, not the first."""
+
+        with contextlib.ExitStack() as stack:
+            home = self._stage(stack)
+            served = home / "served" / f"v{FAKE_VERSION}"
+            served.mkdir(parents=True)
+            wheel = served / f"aart_cli-{FAKE_VERSION}-py3-none-any.whl"
+            with zipfile.ZipFile(wheel, "w") as archive:
+                archive.writestr("agent_artifacts/__main__.py", "")
+            template = (
+                f"file://{home / 'served'}/v{{version}}/aart_cli-{{version}}-py3-none-any.whl"
+            )
+            out = self._succeeded(self._run(home, WHEEL_URL=template))
+            self.assertIn(f"AART: aart-cli {FAKE_VERSION}", out)
+            self.assertNotIn("{version}", out)
+
+    def test_the_shim_it_writes_needs_no_bash_either(self) -> None:
+        """The step can survive the fallback and still hand the job a launcher the image cannot run."""
+
+        with contextlib.ExitStack() as stack:
+            home = self._stage(stack)
+            baked = home / "baked"
+            (baked / "agent_artifacts").mkdir(parents=True)
+            (baked / "agent_artifacts" / "__main__.py").write_text("", encoding="utf-8")
+            self._succeeded(self._run(home, TOOL_PATH=str(baked)))
+            shebang = (home / "runner" / "aart-bin" / "aart").read_text(encoding="utf-8")
+            self.assertNotIn("bash", shebang.splitlines()[0])
+
+
+# A git that models the one fact the real failure turned on: an anonymous clone of a private
+# repository is refused, with the message a real Enterprise runner produced.
+_FAKE_GIT = """#!/usr/bin/env python3
+import os, pathlib, sys
+
+args = sys.argv[1:]
+with pathlib.Path(os.environ["FAKE_GIT_LOG"]).open("a", encoding="utf-8") as handle:
+    handle.write(" ".join(args) + "\\n")
+
+def config(tree):
+    return pathlib.Path(tree) / ".git" / "config"
+
+if args[0] == "clone":
+    url = next(a for a in args if a.startswith("http"))
+    dest = pathlib.Path(args[-1])
+    if "@" not in url.split("//", 1)[1].split("/", 1)[0]:
+        sys.stderr.write(
+            "fatal: could not read Username for '%s': No such device or address\\n" % url
+        )
+        raise SystemExit(128)
+    (dest / "agent_artifacts").mkdir(parents=True, exist_ok=True)
+    (dest / "agent_artifacts" / "__main__.py").write_text("", encoding="utf-8")
+    config(dest).parent.mkdir(parents=True, exist_ok=True)
+    config(dest).write_text("url = %s\\n" % url, encoding="utf-8")
+elif args[0] == "-C" and "remote" in args:
+    config(args[1]).write_text("url = %s\\n" % args[-1], encoding="utf-8")
+"""
+
+# The two halves of the credential the tests hand the step, and the host it is for.
+GIT_USER = "deploy-bot"
+GIT_TOKEN = "s3cr3t-token-value"
+GIT_HOST = "ghe.example.org"
+GIT_URL = f"https://{GIT_HOST}/platform/aart-cli.git"
+
+
+@unittest.skipIf(POSIX_SHELL is None, "no POSIX shell here; /bin/sh is bash")
+class TheGitArmCanAuthenticateTest(TheStepRunsOnAnImageWithoutBashTest):
+    """The arm reached when nothing is set is the arm that could not log in.
+
+    On a company instance the AART copy is private, and the clone carried no credential: the step's
+    `env` held none and the registry's own checkout runs with `persist-credentials: false`. A real
+    runner answered `could not read Username`, exit 128. The index arm beside it has solved this
+    since it was written, so the credential travels the same way here: a *variable* naming a
+    *secret*, assembled into the URL at run time, both halves re-masked, and the bare URL -- never
+    the assembled one -- is what the log and `how` carry.
+    """
+
+    def _stage_git(self, stack: contextlib.ExitStack) -> pathlib.Path:
+        home = self._stage(stack)
+        binaries = home / "bin"
+        binaries.mkdir()
+        fake = binaries / "git"
+        fake.write_text(_FAKE_GIT, encoding="utf-8")
+        fake.chmod(0o755)
+        return home
+
+    def _run_git(
+        self, home: pathlib.Path, credential: str = ""
+    ) -> subprocess.CompletedProcess[str]:
+        done = self._run(
+            home,
+            TOOL_URL=GIT_URL,
+            GIT_CREDENTIALS=credential,
+            PATH=f"{home / 'bin'}:{os.environ.get('PATH', '')}",
+            FAKE_GIT_LOG=str(home / "git.log"),
+        )
+        return done
+
+    def test_an_anonymous_clone_of_a_private_copy_is_refused(self) -> None:
+        """The guard: without it every assertion below could pass against a public repository."""
+
+        with contextlib.ExitStack() as stack:
+            home = self._stage_git(stack)
+            done = self._run_git(home)
+            self.assertEqual(done.returncode, 128, done.stdout)
+            self.assertIn("could not read Username", done.stderr)
+
+    def test_a_named_secret_lets_the_same_clone_through(self) -> None:
+        with contextlib.ExitStack() as stack:
+            home = self._stage_git(stack)
+            out = self._succeeded(self._run_git(home, f"{GIT_USER}:{GIT_TOKEN}"))
+            self.assertIn(f"AART: aart-cli {FAKE_VERSION}", out)
+            asked = (home / "git.log").read_text(encoding="utf-8")
+            self.assertIn(
+                credential_url(GIT_HOST, "/platform/aart-cli.git", user=GIT_USER, held=GIT_TOKEN),
+                asked,
+            )
+
+    def test_neither_half_of_the_credential_reaches_the_log(self) -> None:
+        """`::add-mask::` lines are excluded: handing GitHub the value is how it learns to hide it.
+
+        Every other line is what a person reads, and what a failure would print -- including the
+        announce line, whose `how` must name the repository without naming who fetched it.
+        """
+
+        with contextlib.ExitStack() as stack:
+            home = self._stage_git(stack)
+            done = self._run_git(home, f"{GIT_USER}:{GIT_TOKEN}")
+            self._succeeded(done)
+            masked = [line for line in done.stdout.splitlines() if "::add-mask::" in line]
+            self.assertEqual(
+                sorted(masked), sorted([f"::add-mask::{GIT_USER}", f"::add-mask::{GIT_TOKEN}"])
+            )
+            rest = [
+                line
+                for line in (done.stdout + done.stderr).splitlines()
+                if "::add-mask::" not in line
+            ]
+            for line in rest:
+                self.assertNotIn(GIT_TOKEN, line)
+                self.assertNotIn(f"{GIT_USER}:", line)
+            self.assertIn(f"via git {GIT_URL}@v{FAKE_VERSION}", "\n".join(rest))
+
+    def test_a_secret_holding_only_a_token_is_taken_as_one(self) -> None:
+        """A service account's token is already a secret; asking for `user:token` would mean
+        copying it into a second one just to prefix a name."""
+
+        with contextlib.ExitStack() as stack:
+            home = self._stage_git(stack)
+            done = self._run_git(home, GIT_TOKEN)
+            self._succeeded(done)
+            asked = (home / "git.log").read_text(encoding="utf-8")
+            self.assertIn(
+                credential_url(GIT_HOST, "/", user="x-access-token", held=GIT_TOKEN), asked
+            )
+            # Only the half that came out of the secret; `***` over a public constant would hide
+            # nothing and read as though something had been.
+            masked = [line for line in done.stdout.splitlines() if "::add-mask::" in line]
+            self.assertEqual(masked, [f"::add-mask::{GIT_TOKEN}"])
+
+    def test_the_credential_is_not_left_behind_in_the_clone(self) -> None:
+        """`git clone` writes the URL it was given into the checkout's own config, so a credential
+        passed this way outlives the step that used it -- in a directory later steps can read."""
+
+        with contextlib.ExitStack() as stack:
+            home = self._stage_git(stack)
+            self._succeeded(self._run_git(home, f"{GIT_USER}:{GIT_TOKEN}"))
+            recorded = (home / "runner" / "aart-tool" / ".git" / "config").read_text(
+                encoding="utf-8"
+            )
+            self.assertNotIn(GIT_TOKEN, recorded)
+            self.assertIn(GIT_URL, recorded)
+
+
+_TRUST_STEP = "Trust the workspace"
+
+
+class TheWorkspaceIsTrustedBeforeTheGatesTest(unittest.TestCase):
+    """Git refuses a checkout it does not own, and a container runner hands it exactly that.
+
+    The workspace is mounted owned by root and the job then runs as another user, so git answers
+    `detected dubious ownership` and every AART command that reads the checkout fails -- the
+    read-only ones too, because AART proves the target is a real Git checkout before it acts.  A
+    customer's Enterprise run died this way on `registry format --check`, the first gate after the
+    tool was in place.  Naming this one directory safe is git's own documented remedy, and it
+    grants nothing beyond the directory the job just checked out.
+    """
+
+    def test_the_step_comes_before_anything_that_reads_the_checkout(self) -> None:
+        for label, body in EMITTED.items():
+            self.assertIn(_TRUST_STEP, body, label)
+            self.assertLess(
+                body.index(_TRUST_STEP),
+                body.index("- run: aart registry"),
+                f"{label}: a gate would read the checkout before git had been told to trust it",
+            )
+
+    @unittest.skipIf(POSIX_SHELL is None, "no POSIX shell here; /bin/sh is bash")
+    def test_it_records_the_workspace_and_nothing_else_as_safe(self) -> None:
+        """Run the emitted line for real against real git.
+
+        Asserting the text would pass on a misspelled config key or a variable the runner never
+        sets; only git's own answer afterwards says the step did what its name claims.
+        """
+
+        for label, body in EMITTED.items():
+            with tempfile.TemporaryDirectory() as raw:
+                home = pathlib.Path(raw)
+                workspace = home / "__w" / "registry" / "registry"
+                workspace.mkdir(parents=True)
+                script = home / "trust.sh"
+                script.write_text(_step_script(body, _TRUST_STEP), encoding="utf-8")
+                env = {
+                    "PATH": os.environ.get("PATH", ""),
+                    "HOME": str(home),
+                    "GITHUB_WORKSPACE": str(workspace),
+                }
+                assert POSIX_SHELL is not None
+                done = subprocess.run(
+                    [POSIX_SHELL, "-e", str(script)],
+                    cwd=workspace,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(done.returncode, 0, f"{label}: {done.stderr}")
+                recorded = subprocess.run(
+                    ["git", "config", "--global", "--get-all", "safe.directory"],
+                    cwd=workspace,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(recorded.stdout.split(), [str(workspace)], label)
 
 
 if __name__ == "__main__":

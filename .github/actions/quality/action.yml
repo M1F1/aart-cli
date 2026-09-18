@@ -49,6 +49,12 @@ runs:
       # nothing -- a silent no-op is the worst outcome for a step like this.
       run: git config --global --add safe.directory "$PWD"
 
+    # The scanner uses only the checked-out tree, Git and Python's standard library.  Catch a
+    # credential-shaped fixture before downloading developer tools or running the full matrix.
+    - name: Refuse credential-shaped literals
+      shell: bash
+      run: ${{ inputs.python }} scripts/secret_shape_check.py
+
     # A release pull request is gated on what it changes rather than on everything (INV-096), and
     # this is the half that makes that safe.  The branch name the job keys on is not evidence --
     # anyone who can push can push to `release-please--…` -- so the diff is read and anything

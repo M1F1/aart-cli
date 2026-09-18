@@ -3382,3 +3382,164 @@ test should construct a source whose configured alias differs from its published
 Promotion condition: Promote if the owner wants `doctor` dependable for 0.2.0, or as soon as any
 user configures a source under an alias of their own choosing — which the `source add` interface
 invites.
+
+## B-138 — The remaining bash-only CI scripts are untested against a shell that is not bash
+
+**Evidence.** D-304 fixed the one step that declares no `shell:` and runs inside the
+organisation's container image. Five scripts still open with `set -euo pipefail` and declare
+`shell: bash`: `.github/actions/aart/action.yml` (which also writes a `/usr/bin/env bash` shim),
+`.github/actions/mutants/action.yml`, `.github/actions/pip-index/action.yml`,
+`.github/actions/release/action.yml` (twice), `.github/workflows/pr-check.yml`, and the aggregate
+gate step in `agent_artifacts/registry_commands/templates.py`.
+
+**Why it is not critical.** Each declares `shell: bash` explicitly, so on an image without bash it
+fails at step setup with a clear refusal rather than the misleading `Illegal option` the registry
+step gave. All of them run on the runner rather than in `AART_CI_IMAGE`, and this repository's own
+Enterprise fork has released through them.
+
+**What would make it critical.** An operator pointing `AART_RUNNER` at a self-hosted runner whose
+image lacks bash. Then `pr-check` and `release` stop working on that instance and the refusal is
+not actionable without reading this entry.
+
+**Shape of the work.** Reuse `TheStepRunsOnAnImageWithoutBashTest`'s harness: extract each `run:`
+block and execute it under `dash`. `.github/actions/aart` is the one worth converting first — it
+is the tool-provisioning step's sibling and carries the same shim.
+
+## B-139 — A fix to the generated registry workflow cannot reach a registry that already exists
+
+**Evidence.** D-304 corrects `.github/workflows/aart-registry.yml` as `registry init` writes it. A
+registry initialised before that carries the broken copy in its own history, and there is no
+command that refreshes it: `registry init` answers
+`error: registry init refuses an existing registry workspace`, and the top-level `upgrade` replaces
+the AART executable, not a registry's managed files. Verified against a scratch registry whose
+workflow was rolled back to the pre-fix shape.
+
+**Why this bites more than it looks.** `.aart-version` pins which AART the gates run, so a registry
+does track tool versions — but the workflow that *fetches* that AART is outside the pin, which is
+the one file the pin cannot govern. Every defect in the provisioning step is therefore permanent
+for every registry already created, and `plan_registry_init` refuses a hand-edited template, so
+editing it by hand puts the registry out of step with the command that manages it.
+
+**Shape of the work.** A `registry upgrade` (or `init --refresh`) that rewrites only the managed
+paths, reviewed like any other mutation, reporting the diff and refusing when an unmanaged edit
+would be lost.
+
+**Verified workaround, until it exists.** `init` refuses on two separate conditions, so both have
+to be cleared: the four identity files it checks for (`planning.py:501`), and *any* template path
+that already exists (`registry init refuses to overwrite an existing template`). Deleting all eight
+managed paths and re-running `init` with the same `--source-id` and `--display-name` regenerates
+them, leaves `artifacts/` untouched, and `publish --yes` then commits only what actually changed --
+one file, in the case that motivated this. The registry keeps its repository, and so keeps the
+variables and secrets already configured on it, which is the whole reason the workaround matters.
+Two values are re-derived rather than preserved: `requires_aart.min_inclusive` comes from the
+version of AART running `init` (pass `--minimum-version` to hold the old one), and `README.md` and
+`.gitignore` come back as templates, losing any local edit.
+
+**Not on a promoted registry.** On a registry carrying `registry/versions/`, `publish` writes
+the legacy `aart.lock.json` / `aart.index.json` pair that B-142 then cannot clear; recompile with
+`build --yes` instead. On an authored registry the `publish --yes` below is required.
+
+**The `publish --yes` is not optional, and on a registry holding artifacts it is not one file.**
+`init` rewrites `aart-registry.json` and `aart-source.json`, and both feed the deterministic inputs
+digest the lock records, so the reset invalidates the lock on its own — no artifact has to change.
+A registry pushed after the reset but before the recompile fails its own `validate --strict
+--frozen` with `registry lock does not match deterministic registry inputs`, plus one
+`compiled index disagrees with owned package <kind>/<name>` for every artifact it holds. Confirmed
+against a scratch registry: `publish --yes` clears all of it, after which `lock --check` and
+`build --check` both report `unchanged`. A real Enterprise registry hit exactly this.
+
+## B-140 — A registry pushed straight after `init` fails its own generated CI
+
+**Evidence.** `registry init` writes six paths and ends with
+`next: validate`, `next: lock`, `next: build`, `next: audit`. Following them in that order fails at
+the first one: `validate --strict --frozen` answers
+`error: compiled registry requires lock and index`, and so do `lock --check`, `build --check` and
+both `registry test` runs. The generated workflow runs the gates in that same order, so a registry
+committed as `init` leaves it is red on its first push — with five failures whose remediation text
+names a command the maintainer was never told to run before pushing.
+
+**What does work.** `registry publish --yes` prepares the lock and index, validates and audits that
+exact snapshot, and commits all eight paths in one reviewed mutation. That is the correct first
+move after `init`, and it is the one command the `next:` hints do not mention.
+
+**Shape of the work.** Make `init`'s closing hint `next: aart registry publish --yes`, or have
+`init` write the lock and index itself so the six paths it emits are internally consistent. Either
+removes the state in which a registry exists but cannot pass its own gates. Prefer the hint: `init`
+writing generated files would make it a mutation of content it did not author.
+
+**Not a blocker for D-304.** Verified on `M1F1/aart-registry-smoke`, created for that decision's
+end-to-end check.
+
+## B-141 — Three of the four fetch arms cannot authenticate, so a private instance has one route
+
+**Evidence.** With D-304 in place the step runs to completion under `sh` on a real Enterprise
+runner and then fails in the git arm:
+
+```
+fatal: could not read Username for 'https://<instance>': No such device or address
+Error: Process completed with exit code 128
+```
+
+The clone carries no credential. Neither does the wheel arm, whose `urllib` fetch of a release
+asset on a private instance returns a sign-in page rather than a wheel. `AART_TOOL_PATH` needs
+control of the CI image. So on an instance where the AART copy is private — the normal case inside
+a company — exactly one of the four arms can authenticate: `AART_PACKAGE`, through
+`AART_PIP_INDEX_CREDENTIALS_SECRET`.
+
+**Why the shipped default makes this worse.** Git is the arm reached when nothing is set, and it is
+the only arm carrying a default. An organisation that configures nothing lands on the one arm that
+cannot work for it, with an error naming a username prompt rather than the missing capability.
+
+**Shape of the work.** Give the git arm the credential story the index arm already has: an
+`AART_GIT_CREDENTIALS_SECRET` naming a secret that holds `user:token`, assembled into the clone URL
+in the step and re-masked in halves exactly as `INDEX_CREDENTIALS` is, never written to `how` or any
+log line. The wheel arm wants the same treatment as an `Authorization` header on the `urllib`
+request. Both are the same shape as the code already in this step, which is why they belong
+together.
+
+**Workaround until then.** Publish the wheel to the internal index (`scripts/publish_to_index.py`
+is wired into the release action) and set `AART_PACKAGE=aart-cli=={version}` with
+`AART_PIP_INDEX_URL`. The instance that raised this already has
+`AART_PIP_INDEX_CREDENTIALS_SECRET` set and `AART_PIP_INDEX_URL` unset, so it is one variable and
+one publish away from the supported route.
+
+## B-142 — `publish` on a registry carrying both representations enters a gate it cannot pass
+
+**Critical.** A real registry met this and could not be unblocked by any command the tool offered.
+It is the operator-facing half of B-057, which was reclassified critical on 2026-09-09 and is still
+open.
+
+**What happens.** `_prepare_publish` (`curation/runtime.py:1327`) branches on
+`is_promoted_registry`, which is true when *any* path under `registry/versions/` exists, and skips
+the lock step entirely — `test_publish_gates_the_approved_representation_without_locking_it` states
+that as intended. But `validate_registry_workspace` still checks `aart.lock.json` and
+`aart.index.json` when they are present. A checkout carrying both — which
+`is_promoted_registry`'s own docstring calls "the migration's real shape" — therefore fails publish
+with a set of errors publish structurally cannot fix:
+
+```
+error: registry publish gate failed: compiled index artifact identities are incomplete;
+compiled index disagrees with owned package <kind>/<name>; compiled index does not match
+registry inputs; registry lock does not match deterministic registry inputs
+```
+
+The printed remediation, `aart registry lock --yes, then aart registry build --yes`, is wrong for
+this shape: `lock` dispatches to `_prepare_promoted_lock` and leaves the legacy pair untouched.
+Nothing the operator can run clears it, and nothing says why.
+
+**How a registry gets there.** `init` writes no lock or index; one `publish --yes` on the
+still-empty registry writes both; a later `promote` adds the approved representation beside them.
+Reproduced end to end that way, matching the reported failure line for line.
+
+**Verified remedy, until the migration closes.** Delete `aart.lock.json` and `aart.index.json`.
+All six generated gates then pass and `registry/index.json` is unchanged, so no consumer sees a
+difference — *provided* the registry owns no authored artifacts. Confirmed both ways: with an
+authored artifact present, deleting the pair drops it out of the consumer index while leaving it on
+disk, which is a silent content loss rather than a fix. Going the other way is not available at
+all: deleting `registry/` leaves promotion's versioned `artifacts/<kind>/<name>/<version>/` tree,
+which the authored shape cannot read (`required file is missing: artifact.json`, B-057).
+
+**Shape of the work.** Smallest honest fix: publish refuses a both-shapes checkout by name, says
+which representation it is going to keep, and names the files to remove. Real fix: close B-057 so
+the two shapes cannot coexist. Either way `validate` and `publish` must agree on which files are
+live, because today one refuses to repair what the other insists on checking.

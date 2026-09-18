@@ -692,7 +692,7 @@
     {
       "id": "CP-25",
       "title": "Release gating, usage-reporting withdrawal, and post-release field reports",
-      "status": "in_progress",
+      "status": "done",
       "steps": [
         {
           "id": "1",
@@ -773,6 +773,93 @@
           "id": "16",
           "title": "Keep credential-shaped redaction fixtures out of tracked source",
           "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "CP-26",
+      "title": "Author-side manifests, and the end of the older registry representation",
+      "status": "in_progress",
+      "steps": [
+        {
+          "id": "1",
+          "title": "A registry that has chosen one representation refuses the other's verbs",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "`registry scaffold` and `registry publish` are deleted",
+          "status": "todo"
+        },
+        {
+          "id": "3",
+          "title": "The dual-mode registry verbs lose their legacy branch",
+          "status": "todo"
+        },
+        {
+          "id": "4",
+          "title": "The consumer and source validators lose their legacy branch",
+          "status": "todo"
+        },
+        {
+          "id": "5",
+          "title": "The lock/index schema, tree constants, planning halves and fixtures are deleted",
+          "status": "todo"
+        },
+        {
+          "id": "6",
+          "title": "The authoring-manifest field surface is collected from the parser, not transcribed",
+          "status": "todo"
+        },
+        {
+          "id": "7",
+          "title": "A deterministic YAML emitter for the generated subset",
+          "status": "todo"
+        },
+        {
+          "id": "8",
+          "title": "`aart author init` emits a full-surface `aart.yaml` for `mcp`",
+          "status": "todo"
+        },
+        {
+          "id": "9",
+          "title": "`aart author init` emits the same for `skill`",
+          "status": "todo"
+        },
+        {
+          "id": "10",
+          "title": "`aart author check` proves every discovered manifest parses",
+          "status": "todo"
+        },
+        {
+          "id": "11",
+          "title": "`aart author check` proves each manifest would be accepted by `scan`",
+          "status": "todo"
+        },
+        {
+          "id": "12",
+          "title": "`aart author init` covers `guideline`, `hook` and `memory`",
+          "status": "todo"
+        },
+        {
+          "id": "13",
+          "title": "Every install line in the README is executed by a gate, not described",
+          "status": "todo"
+        },
+        {
+          "id": "14",
+          "title": "The README opens with the consumer's path and nothing else",
+          "status": "todo"
+        },
+        {
+          "id": "15",
+          "title": "Its second half is authoring in a source checkout, then the registry that compiles it",
+          "status": "todo"
+        },
+        {
+          "id": "16",
+          "title": "Everything that serves neither reader moves out of the README",
+          "status": "todo"
         }
       ]
     }

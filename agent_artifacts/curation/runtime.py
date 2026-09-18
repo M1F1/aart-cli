@@ -141,16 +141,28 @@ class CurationService(Protocol):
     ) -> Result[CurationOutcome]: ...
 
 
-def _error(message: str, *, stale: bool = False) -> Err:
+def _error(message: str, *, stale: bool = False, remediation: tuple[str, ...] = ()) -> Err:
     return Err(
         (
             Diagnostic(
                 CURATION_STALE if stale else CURATION_INVALID,
                 Severity.ERROR,
                 message,
+                remediation=remediation,
             ),
         )
     )
+
+
+#: The older representation's two compiled files. A registry publishing approved versions under
+#: `registry/versions/` does not use them, but `validate` still checks them wherever they survive,
+#: so a checkout carrying both shapes is one no verb can satisfy (B-057, B-142).
+_LEGACY_WORKSPACE_FILES = ("aart.lock.json", "aart.index.json")
+
+
+def _legacy_workspace_files(snapshot: SourceSnapshot) -> tuple[str, ...]:
+    held = {str(entry.path) for entry in snapshot.entries}
+    return tuple(name for name in _LEGACY_WORKSPACE_FILES if name in held)
 
 
 def _semver(raw: str, label: str) -> Result[SemVer]:
@@ -450,6 +462,22 @@ class LocalCurationService:
         return Ok(self._workspace_review(request, planned.value, warnings=warnings))
 
     def _prepare_scaffold(self, request: CurationRequest) -> Result[PreparedCuration]:
+        # Authoring in place and publishing approved versions are two representations of a
+        # registry, and this one has already chosen.  Scaffolding here used to succeed and write
+        # the older representation's unversioned path beside the approved tree, which `build`
+        # never reaches and `validate` then refuses -- a registry broken by one command that
+        # reported success and printed the next three to run (B-142).
+        promoted = self._current()
+        if isinstance(promoted, Err):
+            return promoted
+        if is_promoted_registry(promoted.value):
+            return _error(
+                "this registry publishes approved versions, so it cannot also author in place",
+                remediation=(
+                    "author the artifact in a source checkout, then bring it in with "
+                    "`aart registry scan --help` and `aart registry promote --help`",
+                ),
+            )
         if (
             request.kind is None
             or request.name is None
@@ -1325,6 +1353,22 @@ class LocalCurationService:
             return acquired
         lock_plans: tuple[RegistryWorkspacePlan, ...] = ()
         locked_snapshot_value = current.value
+        # Publish skips locking for the approved representation, so on a checkout that also still
+        # holds the older files it would run a gate nothing it does can satisfy -- and print a
+        # remediation (`lock --yes`, `build --yes`) that does nothing to this shape.  Say what is
+        # actually wrong instead (B-142).
+        legacy = (
+            _legacy_workspace_files(current.value) if is_promoted_registry(current.value) else ()
+        )
+        if legacy:
+            return _error(
+                "this checkout carries both registry representations: "
+                f"{' and '.join(legacy)} belong to the older one, which this registry does not use",
+                remediation=(
+                    f"remove {' and '.join(legacy)}; the approved versions under "
+                    "registry/versions/ are what consumers read",
+                ),
+            )
         if not is_promoted_registry(current.value):
             locked = plan_registry_lock(
                 current.value,

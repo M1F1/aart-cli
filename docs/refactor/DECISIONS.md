@@ -7497,3 +7497,161 @@ silent promise in this README example. No release or runtime code changes.
 Use `pipx --python "$(command -v python3)"` because `pipx` may otherwise select a different cached
 interpreter; the cached 3.14 on the test machine failed, while the active 3.11 succeeded. Require
 an existing Release asset, not merely a planned version or tag.
+
+## D-304 — The generated registry's AART step is POSIX sh, not bash
+
+**Context.** A registry created by `aart registry init` was pushed to a real Enterprise instance
+and every gate job failed on the first line of `Provide AART`:
+`set: Illegal option -o pipefail`. The step declares no `shell:`, and Actions serves `bash -e {0}`
+only when the image has bash; otherwise it falls back to `sh -e {0}`. The organisation's container
+image carries git and Python and no bash — the same image that, earlier, carried neither `curl`
+nor `gh` and motivated the `urllib` fetch in the wheel arm. The step died before it had chosen an
+arm, so no repository variable could have helped, and the two bash-only constructs after it
+(`${PACKAGE//\{version\}/$PIN}`, and a shim asking for `/usr/bin/env bash`) would have failed the
+same image in turn.
+
+**Decision.** The `Provide AART` script is POSIX sh. `set -eu` replaces `set -euo pipefail`; one
+`expand` helper replaces both `${v//a/b}` substitutions and runs them through `$PY`, the
+interpreter every arm already requires; the shim it writes asks for `/bin/sh`. Do not fix this by
+declaring `shell: bash` — the image that raised it has no bash, so that turns a wrong answer into
+a refusal. `tests.enterprise_ci_template_test.TheStepRunsOnAnImageWithoutBashTest` runs the script
+under a real `dash` per arm, because macOS `/bin/sh` is bash and accepts every construct above, so
+no developer machine can see this class of defect by running the script.
+
+**Scope.** Only the step that declares no shell and runs inside the organisation's image. The
+aggregate gate step and `.github/actions/aart/action.yml` both declare `shell: bash` and run on
+the runner rather than in that image; changing them is B-138, not this.
+
+**Follow-up.** A registry already initialised carries the old workflow in its own history, so the
+fix reaches it only when the file is regenerated — the version pin in `.aart-version` does not
+govern the workflow that fetches the tool.
+
+## D-305 — The git arm takes a credential the way the index arm already does
+
+**Context.** With D-304 in place the provisioning step ran to completion under `sh` on a company
+runner and then failed in the git arm: `could not read Username`, exit 128. A company's copy of
+AART is private, and that clone carried nothing to log in with — the step's `env` held no token and
+the registry's own checkout persists none. Git is the arm reached when nothing is configured, so an
+organisation that sets no variable lands on the one arm that cannot work for it. Of the four arms,
+only `AART_PACKAGE` could authenticate (B-141).
+
+**Decision.** `AART_GIT_CREDENTIALS_SECRET` names a secret, exactly as
+`AART_PIP_INDEX_CREDENTIALS_SECRET` does. A *variable* never holds the credential: variables are
+not masked and are readable by anyone who can open the settings page. The step assembles the clone
+URL at run time, masks each half that came out of the secret, keeps the credential out of `how` so
+no log line carries it, and resets the checkout's `origin` afterwards — `git clone` records the URL
+it was handed in `.git/config`, where every later step in the job could read it.
+
+**A secret holding only a token is taken as one.** A service account's token is usually already a
+secret; requiring `user:token` would mean copying it into a second secret just to prefix a name,
+which is one more place to rotate and one more to leak. A value with no colon is the token, used
+with the user name `x-access-token`, which GitHub ignores when the password is a token. Only the
+half that came from the secret is masked: `***` over a public constant hides nothing and reads as
+though it had.
+
+**Scope.** The git arm only. The wheel arm stays anonymous: a release asset redirects to storage,
+and `urllib` carries an `Authorization` header across redirects, so the naive fix would hand a
+company token to a host that is not the instance. It is also unnecessary — git yields the tagged
+source, and AART needs no build step, so the wheel's only advantage is size. Left in B-141.
+
+**Evidence.** `TheGitArmCanAuthenticate` runs the step under a real `dash` against a `git` that
+refuses an anonymous clone the way the instance did, and asserts four things: the refusal without a
+secret (so the rest is not vacuous), the clone with one, that no line outside `::add-mask::` carries
+either half, and that the checkout is left holding the bare URL.
+
+## D-306 — The registry workflow tells Git to trust the workspace before the gates run
+
+**Context.** With D-304 and D-305 in place the provisioning step completed on a company runner and
+the very first gate failed: `registry format --check` answered `registry mutation requires a
+writable local Git checkout`, pointing at `/__w/<repo>/<repo>`. Nothing was wrong with the
+directory. A container job mounts the workspace owned by root and then runs the job as another
+user, and Git refuses a repository it does not own — `detected dubious ownership`. Every AART
+command that touches a registry meets it, the read-only ones included, because AART proves its
+target is a real checkout before it acts.
+
+**Decision.** The generated workflow marks the workspace safe immediately after checkout:
+
+```yaml
+- name: Trust the workspace
+  run: |
+    git config --global --add safe.directory "$GITHUB_WORKSPACE"
+```
+
+`--global` is load-bearing rather than habit: Git deliberately ignores `safe.directory` read from a
+repository's own config, since a repository could otherwise vouch for itself. The grant covers one
+directory — the one the job checked out a moment earlier — and lasts as long as the container.
+
+**Why not fix it in AART.** The ownership rule is Git's, and working around it inside the tool
+would mean AART deciding on a user's behalf which foreign-owned checkouts are safe to write. The
+job knows the answer and Git provides the switch; the tool should not second-guess either.
+
+**Evidence.** `TheWorkspaceIsTrustedBeforeTheGates` runs the emitted line under a real POSIX shell
+against real Git and then asks Git what it now trusts, so a misspelled key or a variable the runner
+never sets fails rather than passing on the text alone. Dropping `--global` turns the test red and
+nothing else in the file.
+
+## D-307 — A refusal only Git can explain repeats what Git said
+
+**Context.** The failure above reached a maintainer as `make /__w/<repo>/<repo> writable and repair
+its Git checkout, then run git status` — true, and unactionable. `verify_mutation_target` guesses
+at a cause from what it can see (no `.git`, a registry nested inside a larger checkout) and falls
+back to that sentence when every guess misses. But it had already run Git and thrown Git's answer
+away, and Git's answer named both the cause and the remedy.
+
+**Decision.** When no structural guess applies, the refusal carries Git's own sentence ahead of the
+standing advice. `run_git_process` already reports a failure as `<label> for Git command <argv>:
+<what git wrote>`; `_git_said` drops the argv half, which is this repository's own plumbing and
+tells a reader nothing, and keeps the tail.
+
+**Evidence.** `test_a_refusal_git_alone_can_explain_repeats_what_git_said` drives the one shape a
+test can reproduce without a second user — a writable directory whose `.git` is not a repository —
+and asserts both that Git's words arrive and that the standing remedy is still there. Silencing
+`_git_said` turns that test red alone.
+
+## D-308 — A registry that has chosen one representation refuses the other's verbs
+
+**Context.** B-142. A real registry was left in a state no command could clear: one early
+`publish` on the still-empty checkout wrote `aart.lock.json` and `aart.index.json`, a later
+`promote` added the approved representation, and from then on `publish` skipped locking (by design,
+`test_publish_gates_the_approved_representation_without_locking_it`) while `validate` kept checking
+the files publish would not touch. The remediation it printed named two verbs that do nothing to
+that shape. Separately, `registry scaffold` succeeded on the same checkout, wrote the older
+representation's unversioned path beside the approved tree, and printed the next three verbs to
+run — leaving a registry whose `build` ignores the new package and whose `validate` refuses the
+snapshot it no longer binds. One command, no warning, three red gates.
+
+**Decision.** Both authoring verbs now refuse a checkout that publishes approved versions, and say
+what to do instead:
+
+- `scaffold` refuses whenever `registry/versions/` exists, and names the `scan` → `promote` route.
+- `publish` refuses only when the checkout carries *both* shapes, and names the legacy files to
+  remove. A clean approved registry still publishes, unchanged.
+
+**Why a refusal and not a repair.** Which representation a registry keeps is the maintainer's
+decision and it is not reversible by inspection: deleting the legacy pair is correct when nothing
+was authored in place, and silent content loss when something was — the authored package stays on
+disk but leaves `registry/index.json`, so consumers stop seeing it with no error anywhere. A tool
+that guesses here guesses wrong half the time.
+
+**Scope.** This does not close B-057. The older representation still exists, is still read by
+`consumer/runtime.py` and `sources/validation.py`, and is still the only shape `scaffold`,
+`lock` and `publish` know how to write. This makes mixing the two impossible; removing one of them
+is a separate, larger slice.
+
+**Evidence.** Two e2e tests over the real `init` → `scan` → `promote` chain. The guard's predicate
+is held in both directions: making it see nothing turns the new publish test red, making it see
+everything turns the existing "publish still works on an approved registry" test red, and each
+mutation kills exactly one test.
+
+## D-310 — Reject credential-shaped source before installing quality tools
+
+**Context.** PR #21's matrix passed its tests after the first repair, then failed at the late
+`secret-shape-check` gate because two tracked test assertions contained credential-shaped URLs.
+That gate needs only Git and Python's standard library, while the full matrix spends many minutes
+installing tools and running tests before reaching it.
+
+**Decision.** Assemble those test URLs through `credential_fixtures.credential_url`, and run the
+scanner in the composite quality action immediately after Git trusts the checkout, before release
+scope inspection, index setup, dependency installation, or full quality. Keep the scanner in the
+canonical full gate list as well, so local `make quality` retains its contract. An ordering test
+holds the early position and turned red when the step was deliberately moved after installation.

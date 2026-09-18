@@ -129,6 +129,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
         title = quality.index("- name: Validate the pull request title")
         for later_step in (
             "- name: Trust the checked-out workspace",
+            "- name: Refuse credential-shaped literals",
             "- name: Refuse the narrow release gate to anything but release bookkeeping",
             "- name: Point pip at the internal index",
             "- name: Install developer quality tools",
@@ -136,6 +137,27 @@ class ReleaseWorkflowTest(unittest.TestCase):
         ):
             with self.subTest(step=later_step):
                 self.assertLess(title, quality.index(later_step))
+
+    def test_secret_shapes_fail_before_dependency_installation(self) -> None:
+        """Tracked credential-shaped text needs only Git and the container's Python."""
+
+        quality = (ROOT / ".github/actions/quality/action.yml").read_text(encoding="utf-8")
+        title = quality.index("- name: Validate the pull request title")
+        trusted = quality.index("- name: Trust the checked-out workspace")
+        secrets = quality.index("- name: Refuse credential-shaped literals")
+        scope = quality.index(
+            "- name: Refuse the narrow release gate to anything but release bookkeeping"
+        )
+        index = quality.index("- name: Point pip at the internal index")
+        installed = quality.index("- name: Install developer quality tools")
+        full = quality.index("- name: Run canonical quality gates")
+        self.assertLess(title, trusted)
+        self.assertLess(trusted, secrets)
+        self.assertLess(secrets, scope)
+        self.assertLess(secrets, index)
+        self.assertLess(secrets, installed)
+        self.assertLess(secrets, full)
+        self.assertIn("scripts/secret_shape_check.py", quality)
 
     def test_workflow_follows_the_tag_instead_of_pinning_one_release(self) -> None:
         """A pinned trigger silently builds nothing for the next release.

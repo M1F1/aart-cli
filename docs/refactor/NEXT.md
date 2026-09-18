@@ -1,5 +1,63 @@
 # AART Refactor — Next Work
 
+## PR #21 CI repair (2026-09-18)
+
+The public `pr-check` matrix failed in `source_remediation_test` because the D-308 refusal named
+`aart registry scan` and `aart registry promote` without their required arguments. The remediation
+now names their `--help` forms. The focused test was red before the fix, green after it, and red
+again when `--help` was deliberately removed from `promote`; the correct text was restored. The
+28 tests in `source_remediation_test` and `promoted_registry_maintenance_e2e_test`, plus
+`make lint format-check typecheck`, pass locally. The next CI run exposed two credential-shaped
+URL literals in `enterprise_ci_template_test`: they now use `credential_fixtures.credential_url`.
+At the owner's direction, `secret-shape-check` also runs in the quality action immediately after
+the PR-title and Git ownership checks, before dependency installation (D-310). Its ordering test
+went red when the step was deliberately moved after installation. The focused 100 tests and
+`make lint format-check typecheck secret-shape-check` pass. Next: push this follow-up, confirm
+PR #21's checks, then complete its release before resuming CP-26 step 2.
+
+## CP-26 — start here (2026-09-18)
+
+**Design and plan:** `docs/refactor/slices/cp-26-authoring-and-legacy-removal.md`. The twelve steps
+are in `plan.json` as CP-26; step 1 is `done`, the rest `todo`. Take them in order — the only
+internal constraint is that step 6 (collect the manifest field surface from the parser with `ast`)
+precedes steps 8–9, because the generator is written against the collected surface. The collector
+is already written and pasted into the design document; do not re-derive it.
+
+**The owner has withdrawn backward compatibility, explicitly and more than once.** No compatibility
+window, no migration command, no deprecation period, no consideration for registries already
+published in the older shape. Delete directly. Do not reintroduce caution here.
+
+**Why removal comes before the new commands:** D-308 already refuses `scaffold` and `publish` on a
+registry that publishes approved versions, so deleting them takes away nothing anyone can currently
+use, and every later step is written against a smaller surface.
+
+**What landed today, on `fix/registry-provide-aart-posix-sh`:**
+
+- D-304, D-305, D-306 — the generated registry workflow now survives an Enterprise runner: POSIX
+  `sh` (no bash on the image), an authenticated git arm for a private AART copy, and
+  `safe.directory` for a container whose workspace is root-owned. All three were confirmed against
+  the real instance.
+- D-307 — a refusal only Git can explain now repeats what Git said, instead of a sentence naming
+  neither cause nor fix.
+- D-308 — `scaffold` and `publish` refuse a checkout carrying both registry representations. This
+  is step 1 of CP-26 and the fix for B-142.
+- B-142 records the trap in full, with the verified remedy and the content loss its obvious variant
+  causes.
+
+**Outstanding, on the owner's side, not the code's:** their Enterprise registry needed
+`git rm aart.lock.json aart.index.json` to go green. Confirmed on a reproduction that all six
+generated gates then pass and `registry/index.json` is unchanged. If they report the run, check it
+before opening a pull request from this branch.
+
+**Two things learned the hard way today, worth keeping:**
+
+- The generated workflow's steps run under `sh`, not `bash`, whenever the image lacks bash. No
+  macOS developer machine can observe this: `/bin/sh` there *is* bash. `dash` is the oracle, and
+  `tests/enterprise_ci_template_test.py` now runs the real emitted script under it.
+- Do not infer a consumer-side break from reading one `if`. `consumer/runtime.py` looked as though
+  it hard-required `aart.index.json`; it dispatches on `registry/` about thirty lines earlier, and
+  the e2e proves a promoted registry with no legacy files installs fine. Check by executing.
+
 ## Post-review installation documentation (2026-09-17)
 
 README now shows one parameterized, publicly readable Release-wheel download and two alternative
