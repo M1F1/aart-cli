@@ -18,7 +18,10 @@ from agent_artifacts.protocol.native_tree import (
     load_native_source,
 )
 from agent_artifacts.protocol.registry_schema import parse_registry_manifest
-from agent_artifacts.registry_commands.planning import validate_registry_workspace
+from agent_artifacts.registry_maintenance.promoted import (
+    is_promoted_registry,
+    legacy_registry_paths,
+)
 
 from .model import (
     SOURCE_INVALID,
@@ -265,31 +268,28 @@ def validate_registry_source_candidate(
 
     snapshot = request.candidate.snapshot
     # Promotion produces the approved, versioned registry representation named by the Product
-    # Specification (`registry/versions/*` plus exact catalogs).  The older maintainer workspace
-    # compiler produces `aart.lock.json` and `aart.index.json`.  During the strangler migration both
-    # remain readable, but they must be validated by the authority that writes their own shape.
-    if any(str(entry.path).startswith("registry/") for entry in snapshot.entries):
-        versions = load_registry_versions(snapshot)
-        if isinstance(versions, Err):
-            return versions
-        checked_promotion = validate_promoted_registry(snapshot, versions.value)
-        if isinstance(checked_promotion, Err):
-            return checked_promotion
-    else:
-        checked = validate_registry_workspace(
-            snapshot,
-            executable_version=request.executable_version,
-            available_capabilities=request.available_capabilities,
-            require_compiled=True,
+    # Specification (`registry/versions/*` plus exact catalogs), and it is the only representation
+    # a Registry source is admitted through.  The retired maintainer workspace compiler wrote
+    # `aart.lock.json`, `aart.index.json` and `entries/`; there is no second authority to fall back
+    # to, so a checkout still carrying that shape -- or carrying both -- is refused by name rather
+    # than compiled by whichever branch matched first (CP-26.4, D-308).
+    retired = legacy_registry_paths(snapshot)
+    if retired:
+        return _error(
+            "registry source carries the retired authoring-workspace representation: "
+            + ", ".join(retired)
         )
-        if isinstance(checked, Err):
-            return checked
-        if not checked.value.passed:
-            diagnostics = tuple(
-                diagnostic for check in checked.value.checks for diagnostic in check.diagnostics
-            )
-            assert diagnostics
-            return Err(diagnostics)
+    if not is_promoted_registry(snapshot):
+        return _error(
+            "registry source is not a canonical approved Registry: its root must declare "
+            f"{_REGISTRY_MARKER} and {_SOURCE_MARKER}"
+        )
+    versions = load_registry_versions(snapshot)
+    if isinstance(versions, Err):
+        return versions
+    checked_promotion = validate_promoted_registry(snapshot, versions.value)
+    if isinstance(checked_promotion, Err):
+        return checked_promotion
     identity = _registry_identity(request)
     if isinstance(identity, Err):
         return identity

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import json
 from pathlib import Path
 
@@ -181,3 +182,94 @@ def without_snapshot_paths(snapshot: SourceSnapshot, *paths: str) -> SourceSnaps
         snapshot.origin,
         tuple(entry for entry in snapshot.entries if str(entry.path) not in removed),
     )
+
+
+def approved_registry_snapshot(
+    *,
+    names: tuple[str, ...] = ("github-mcp",),
+    version: str = "1.0.0",
+    registry_alias: str = "company",
+) -> SourceSnapshot:
+    """An initialized Registry holding one approved, vendored version per name.
+
+    Built through the same promotion the maintainer runs, so the fixture cannot claim a shape the
+    product does not write: `registry/versions/`, `registry/promotions/`, both derived catalogs and
+    one package per version under `artifacts/<kind>/<name>/<version>/`.
+    """
+
+    from agent_artifacts.application.maintainer import reconcile_source_scan
+    from agent_artifacts.application.promotion import (
+        PromotionEvidence,
+        plan_bulk_promotion,
+        project_promotion,
+    )
+    from agent_artifacts.domain.candidates import assess_candidate
+    from agent_artifacts.domain.identifiers import ObjectDigest, SourceAlias
+    from agent_artifacts.protocol.authoring import compile_author_snapshot
+
+    entries = []
+    for name in names:
+        manifest = {
+            "schema": "aart.dev/mcp/v1",
+            "artifact": {"name": name, "kind": "mcp", "version": version},
+            "payload": {"include": ["server.py"]},
+            "transport": {"type": "stdio"},
+            "runtime": {"type": "python", "version": ">=3.11"},
+            "launch": {"type": "python", "entrypoint": "server.py"},
+        }
+        entries.append(_file(f"{name}/aart.json", json.dumps(manifest).encode()))
+        entries.append(_file(f"{name}/server.py", f"print('{name}')\n".encode()))
+    revision = "a" * 40
+    compiled = compile_author_snapshot(
+        SourceSnapshot(SnapshotOrigin.IMMUTABLE_GIT, tuple(entries)),
+        source_alias=SourceAlias("authors"),
+        source="https://git.example/servers.git",
+        revision=revision,
+    )
+    assert isinstance(compiled, Ok), compiled
+    scanned = reconcile_source_scan(
+        SourceAlias("authors"),
+        revision,
+        compiled.value,
+        previous=(),
+        approved=(),
+        target_registry=SourceAlias(registry_alias),
+    )
+    assert isinstance(scanned, Ok), scanned
+    bundles = tuple(
+        dataclasses.replace(bundle, candidate=assess_candidate(bundle.candidate))
+        for bundle in scanned.value.active
+    )
+    assert len(bundles) == len(names), bundles
+    base = empty_registry_snapshot()
+    evidence = tuple(
+        (
+            bundle.candidate.id,
+            PromotionEvidence(
+                ObjectDigest("sha256", "7" * 64),
+                ObjectDigest("sha256", "8" * 64),
+                (),
+            ),
+        )
+        for bundle in bundles
+    )
+    planned = plan_bulk_promotion(base, bundles, evidence=evidence, approved=())
+    assert isinstance(planned, Ok), planned
+    projected = project_promotion(base, planned.value)
+    assert isinstance(projected, Ok), projected
+    return SourceSnapshot(SnapshotOrigin.IMMUTABLE_GIT, projected.value.entries)
+
+
+def write_snapshot(root: Path, snapshot: SourceSnapshot) -> Path:
+    """Materialize a snapshot as a real checkout, so a CLI gate can read what a fixture built."""
+
+    for entry in snapshot.entries:
+        path = root / str(entry.path)
+        if entry.kind is SnapshotEntryKind.DIRECTORY:
+            path.mkdir(parents=True, exist_ok=True)
+            continue
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(entry.content)
+        if entry.executable:
+            path.chmod(path.stat().st_mode | 0o111)
+    return root

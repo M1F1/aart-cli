@@ -1,5 +1,19 @@
 # AART Refactor Migration Status
 
+**2026-09-18, CP-26.04 complete.** The consumer projection and the Registry source validator have
+one representation each. Both ask the shared authority whether a snapshot carries a retired path
+and whether it is a canonical approved Registry, and both refuse by name instead of falling through
+to the workspace compiler. The retired external-reference mechanism went with the branch that fed
+it (D-320), and committed registry attestations now bind the recomputed canonical registry state
+rather than `aart.index.json` (D-319). Two targeted mutations — reopening the mixed-checkout hole in
+the validator, and deleting the consumer's retired-path refusal — went red on exactly their own
+tests. 117 focused tests plus 63 consumer install/marketplace E2E tests are green; tree-wide Ruff,
+Mypy over both changed production modules and secret-shape are green. Scoped mutation left three
+survivors inside each changed function, all spelling variants or pre-existing (B-148). A step-3
+leftover was repaired in passing: the rs09 audit test now builds a canonical Registry on disk. The
+twelve remaining step-3 leftovers in the legacy vendor/quality-planning modules are step 5's, as
+D-318 records. Step 5 is next; broad verification remains deferred to CP-26.21.
+
 **2026-09-18, CP-26.03 complete.** An initialized Registry now takes the canonical maintenance
 route even before its first version. Canonical `lock`, `build`, `validate`, `audit`, `format` and
 aggregate `publish` remain; the separate CLI Push remains, while all seven surfaces reject retired

@@ -3735,3 +3735,48 @@ projection. Do not broaden CP-26.03 merely to improve the count.
 
 Evidence/links: CP-26.03; `agent_artifacts/registry_maintenance/promoted.py`;
 `tests/promoted_registry_maintenance_e2e_test.py`; D-134; D-317.
+
+## B-147 — Committed registry attestations have no producer and a misleading field name
+
+Status: OPEN, NONCRITICAL
+
+Discovered in: CP-26.04, while removing the consumer's retired-representation branch, 2026-09-18
+
+Two findings, both pre-existing and neither blocking step 4.
+
+First, no shipped command writes a `security/index.json` for a canonical Registry. `aart security
+scan` takes an operator-supplied `--registry-index` file and emits one attestation; assembling the
+index and committing it is undocumented and unautomated. The consumer reads the file honestly when
+it is there, which is why this never surfaced as a failure.
+
+Second, `SecurityIndex.registry_inputs_digest` and `AttestationTrustContext.registry_inputs_digest`
+now carry the canonical registry *state* digest (D-319), because the inputs digest they were named
+for lived in the retired `aart.index.json`. The name should follow the value.
+
+Do both together: name the field for what it binds, and give the Registry CI generator a step that
+produces and commits the attestation set, so registry-reviewed trust is something a Registry can
+actually earn rather than something a hand-built fixture demonstrates.
+
+Evidence/links: CP-26.04; D-319; `agent_artifacts/consumer/runtime.py::_registry_security_evidence`;
+`agent_artifacts/commands/security.py::_scan`; `agent_artifacts/security/attestations.py`;
+`tests/consumer_runtime_test.py::test_verified_registry_security_index_is_bound_to_exact_marketplace_coordinates`.
+
+## B-148 — Native-source projection keeps four surviving scoped mutants
+
+Status: OPEN, NONCRITICAL
+
+Discovered in: CP-26.04 scoped mutation of `agent_artifacts/consumer/runtime.py`, 2026-09-18
+
+The scoped run generated 592 mutants and killed 464. Inside step 4's claim, `_project_graph_source`
+keeps three survivors: one pre-existing mutant that drops `native.value.collections` from the
+authoring-source branch, and two string-spelling mutants whose wrapped text still contains the
+substring the refusal tests assert. The remaining survivors are in `load_local_consumer_service`
+composition, `_merged_security_evidence` and `load_read_only_marketplace`, which step 4 did not
+change.
+
+When the native-source projection is next touched, assert the collections a native source
+contributes. Do not broaden CP-26.04 to improve the count, and do not loosen a refusal assertion to
+catch a spelling mutant.
+
+Evidence/links: CP-26.04; `agent_artifacts/consumer/runtime.py`; `tests/consumer_runtime_test.py`;
+D-134; D-317.

@@ -9,11 +9,11 @@ from dataclasses import replace
 from pathlib import Path
 from unittest import mock
 
+from agent_artifacts.application.promotion import registry_state_digest
 from agent_artifacts.compiler.graph import compile_marketplace_graph
 from agent_artifacts.configuration.model import SourceKind
 from agent_artifacts.configuration.paths import Platform, resolve_config_paths
 from agent_artifacts.configuration.schema import user_configuration_bytes
-from agent_artifacts.consumer import ConsumerActionRequest
 from agent_artifacts.consumer.runtime import (
     _CAPABILITIES,
     _graph_source,
@@ -21,25 +21,16 @@ from agent_artifacts.consumer.runtime import (
     load_local_consumer_service,
     load_read_only_marketplace,
 )
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.identifiers import SourceId
 from agent_artifacts.domain.result import Err, Ok
 from agent_artifacts.io.config_store import read_configuration
 from agent_artifacts.io.source_store import publish_source_snapshot
 from agent_artifacts.marketplace.catalog import build_marketplace
 from agent_artifacts.marketplace.model import MarketplaceSourceState
-from agent_artifacts.protocol.capabilities import Capability
 from agent_artifacts.protocol.hashing import json_digest
 from agent_artifacts.protocol.json import JsonObject
-from agent_artifacts.protocol.native_tree import SnapshotOrigin, SourceSnapshot
+from agent_artifacts.protocol.native_tree import SourceSnapshot
 from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.protocol.registry_schema import parse_registry_index
-from agent_artifacts.registry_maintenance.model import NativeReferenceAcquisition
-from agent_artifacts.registry_maintenance.planning import (
-    plan_native_promotion,
-    project_registry_mutation,
-)
-from agent_artifacts.runtime_contract import EXECUTABLE_VERSION
 from agent_artifacts.security.attestation_schema import attestation_bytes, security_index_bytes
 from agent_artifacts.security.attestations import (
     AssessmentCacheKey,
@@ -61,19 +52,15 @@ from agent_artifacts.sources.model import (
     source_instance_id,
     source_store_paths,
 )
-from agent_artifacts.store.model import make_object_candidate, object_store_paths
+from agent_artifacts.store.model import object_store_paths
 from agent_artifacts.tui_marketplace import MarketplaceTarget
 from tests.marketplace_fixtures import configured_source, effective_configuration
-from tests.registry_fixture_test import _snapshot as registry_snapshot
 from tests.registry_maintenance_fixtures import (
     append_snapshot_file,
-    empty_registry_snapshot,
+    approved_registry_snapshot,
     native_snapshot,
-    registry_entry,
-    renamed_native_snapshot,
     replace_snapshot_file,
     snapshot_file,
-    without_snapshot_paths,
 )
 
 
@@ -86,43 +73,6 @@ def _current(source, source_id: str, snapshot) -> CurrentSource:
     )
     assert isinstance(candidate, Ok), candidate
     return CurrentSource(candidate.value, SourceId(source_id), 90, "/managed/source")
-
-
-def _promoted_registry_snapshot(*, include_owned: bool = True):
-    base = empty_registry_snapshot()
-    initial = (
-        SourceSnapshot(
-            base.origin,
-            (
-                *base.entries,
-                *(
-                    item
-                    for item in renamed_native_snapshot("owned").entries
-                    if str(item.path).startswith("artifacts/")
-                ),
-            ),
-        )
-        if include_owned
-        else base
-    )
-    planned = plan_native_promotion(
-        initial,
-        registry_entry(),
-        NativeReferenceAcquisition(
-            "https://github.com/example/reference-skills.git",
-            "main",
-            "a" * 40,
-            native_snapshot(),
-        ),
-        executable_version=EXECUTABLE_VERSION,
-        available_capabilities=(Capability("artifact-manifest-v1"),),
-    )
-    assert isinstance(planned, Ok), planned
-    projected = project_registry_mutation(initial, planned.value)
-    assert isinstance(projected, Ok), projected
-    normalized = make_object_candidate(projected.value.entries)
-    assert isinstance(normalized, Ok), normalized
-    return SourceSnapshot(SnapshotOrigin.IMMUTABLE_GIT, normalized.value.entries)
 
 
 class ConsumerRuntimeTest(unittest.TestCase):
@@ -219,7 +169,7 @@ class ConsumerRuntimeTest(unittest.TestCase):
                 source_instance_id(source),
                 source.alias,
                 "a" * 40,
-                _promoted_registry_snapshot(),
+                approved_registry_snapshot(names=("github-mcp", "jira-mcp", "slack-mcp")),
             )
             assert isinstance(candidate, Ok), candidate
             published = publish_source_snapshot(
@@ -244,156 +194,92 @@ class ConsumerRuntimeTest(unittest.TestCase):
                 digest = item.artifact.artifact.object_digest.value
                 self.assertFalse((store / digest[:2] / digest[2:]).exists())
 
-    def test_reference_only_registry_is_a_valid_marketplace_source(self) -> None:
+    def test_a_registry_carrying_the_retired_representation_is_refused_by_name(self) -> None:
+        """CP-26.4: the workspace compiler is not a second projection to fall back on.
+
+        The consumer used to read `aart.lock.json`/`aart.index.json`/`entries/` whenever a
+        checkout had no `registry/` tree, so a registry that had never been promoted still
+        produced Marketplace rows. Nothing compiles that shape now, and a mixed checkout must be
+        named rather than silently projected through whichever branch matched first.
+        """
+
+        with tempfile.TemporaryDirectory() as raw:
+            paths = object_store_paths(str(Path(raw) / "data"))
+            source = configured_source("company", SourceKind.REGISTRY_GIT)
+            approved = approved_registry_snapshot()
+            mixed = append_snapshot_file(approved, "aart.lock.json", b"{}\n")
+            retired = append_snapshot_file(
+                append_snapshot_file(
+                    SourceSnapshot(
+                        approved.origin,
+                        tuple(
+                            entry
+                            for entry in approved.entries
+                            if not str(entry.path).startswith("registry/")
+                        ),
+                    ),
+                    "aart.lock.json",
+                    b"{}\n",
+                ),
+                "aart.index.json",
+                b"{}\n",
+            )
+
+            for snapshot, named in ((mixed, "aart.lock.json"), (retired, "aart.index.json")):
+                refused = _graph_source(
+                    source,
+                    _current(source, "test-registry", snapshot),
+                    paths,
+                )
+
+                self.assertNotIsInstance(refused, Ok)
+                assert isinstance(refused, Err), refused
+                message = refused.diagnostics[0].message
+                self.assertIn("retired authoring-workspace representation", message)
+                self.assertIn(named, message)
+
+    def test_a_registry_that_declares_no_registry_is_refused_as_not_canonical(self) -> None:
+        """A refusal names the shape that was expected, so the operator knows what to produce."""
+
+        with tempfile.TemporaryDirectory() as raw:
+            source = configured_source("company", SourceKind.REGISTRY_GIT)
+            anonymous = append_snapshot_file(
+                SourceSnapshot(native_snapshot().origin, ()),
+                "README.md",
+                b"# not a registry\n",
+            )
+
+            refused = _graph_source(
+                source,
+                _current(source, "test-registry", anonymous),
+                object_store_paths(str(Path(raw) / "data")),
+            )
+
+            self.assertNotIsInstance(refused, Ok)
+            assert isinstance(refused, Err), refused
+            message = refused.diagnostics[0].message
+            self.assertIn("is not a canonical approved Registry", message)
+            self.assertIn("aart-registry.json", message)
+            self.assertIn("aart-source.json", message)
+
+    def test_an_approved_registry_projects_every_published_version(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             source = configured_source("company", SourceKind.REGISTRY_GIT)
             projected = _graph_source(
                 source,
-                _current(source, "test-registry", _promoted_registry_snapshot(include_owned=False)),
+                _current(
+                    source,
+                    "test-registry",
+                    approved_registry_snapshot(names=("github-mcp", "jira-mcp")),
+                ),
                 object_store_paths(str(Path(raw) / "data")),
             )
 
             assert isinstance(projected, Ok), projected
             self.assertEqual(
                 tuple(str(item.identity) for item in projected.value.artifacts),
-                ("skill/code-review",),
+                ("mcp/github-mcp", "mcp/jira-mcp"),
             )
-
-    def test_registry_reference_is_fetched_by_locked_commit_only_for_selected_content(
-        self,
-    ) -> None:
-        with tempfile.TemporaryDirectory() as raw:
-            root = Path(raw).resolve()
-            home = root / "home"
-            project = root / "project"
-            home.mkdir()
-            project.mkdir()
-            xdg = {
-                "XDG_CONFIG_HOME": str(home / ".config"),
-                "XDG_DATA_HOME": str(home / ".local/share"),
-                "XDG_CACHE_HOME": str(home / ".cache"),
-            }
-            platform = Platform.DARWIN if sys.platform == "darwin" else Platform.LINUX
-            config_paths = resolve_config_paths(
-                platform,
-                home=str(home),
-                xdg_config_home=xdg["XDG_CONFIG_HOME"],
-                xdg_data_home=xdg["XDG_DATA_HOME"],
-                xdg_cache_home=xdg["XDG_CACHE_HOME"],
-            )
-            source = configured_source("company", SourceKind.REGISTRY_GIT)
-            configuration = effective_configuration(
-                (source,), default_registry="company"
-            ).configuration
-            config_file = Path(config_paths.user_config_file)
-            config_file.parent.mkdir(parents=True)
-            config_file.write_bytes(user_configuration_bytes(configuration))
-            candidate = make_source_candidate(
-                source_instance_id(source),
-                source.alias,
-                "b" * 40,
-                _promoted_registry_snapshot(),
-            )
-            assert isinstance(candidate, Ok), candidate
-            published = publish_source_snapshot(
-                SourcePublishCommand(
-                    source_store_paths(config_paths.data_root, source_instance_id(source)),
-                    ValidatedSourceCandidate(candidate.value, SourceId("test-registry")),
-                    90,
-                )
-            )
-            assert isinstance(published, Ok), published
-
-            acquired_requests = []
-
-            def acquire(request):
-                acquired_requests.append(request)
-                if len(acquired_requests) == 1:
-                    return Err(
-                        (
-                            Diagnostic(
-                                DiagnosticCode("source-unavailable"),
-                                Severity.ERROR,
-                                "synthetic acquisition failure",
-                            ),
-                        )
-                    )
-                return make_source_candidate(
-                    request.instance_id,
-                    request.alias,
-                    "a" * 40,
-                    native_snapshot(),
-                )
-
-            with (
-                mock.patch.dict(os.environ, xdg, clear=False),
-                mock.patch(
-                    "agent_artifacts.consumer.runtime.acquire_git_snapshot",
-                    side_effect=acquire,
-                ),
-            ):
-                loaded = load_local_consumer_service(
-                    project=str(project),
-                    user_home=str(home),
-                )
-                assert isinstance(loaded, Ok), loaded
-                self.assertEqual(acquired_requests, [])
-                self.assertEqual(
-                    len(loaded.value.context.catalog.items),
-                    3,
-                    loaded.value.context.catalog,
-                )
-                coordinate = next(
-                    item.coordinate
-                    for item in loaded.value.context.catalog.items
-                    if item.coordinate.artifact.name == "code-review"
-                )
-                offline = loaded.value.prepare(
-                    ConsumerActionRequest(
-                        "install",
-                        (coordinate,),
-                        ("claude",),
-                        offline=True,
-                    )
-                )
-                self.assertNotIsInstance(offline, Ok)
-                assert isinstance(offline, Err), offline
-                self.assertEqual(offline.diagnostics[0].code.value, "offline-object-missing")
-                self.assertEqual(acquired_requests, [])
-
-                unavailable = loaded.value.prepare(
-                    ConsumerActionRequest("install", (coordinate,), ("claude",))
-                )
-                assert isinstance(unavailable, Err), unavailable
-                self.assertEqual(unavailable.diagnostics[0].code.value, "source-unavailable")
-                self.assertEqual(len(acquired_requests), 1)
-
-                reviewed = loaded.value.prepare(
-                    ConsumerActionRequest("install", (coordinate,), ("claude",))
-                )
-                assert isinstance(reviewed, Ok), reviewed
-                self.assertEqual(len(acquired_requests), 2)
-                self.assertEqual(acquired_requests[1].ref, "a" * 40)
-                self.assertEqual(
-                    acquired_requests[1].location,
-                    "https://github.com/example/reference-skills.git",
-                )
-                cached = loaded.value.prepare(
-                    ConsumerActionRequest("install", (coordinate,), ("claude",))
-                )
-                self.assertIsInstance(cached, Ok)
-                self.assertEqual(len(acquired_requests), 2)
-                self.assertIsInstance(
-                    loaded.value.ensure_content(ConsumerActionRequest("status", (), ("claude",))),
-                    Ok,
-                )
-                self.assertIsInstance(
-                    loaded.value.ensure_content(
-                        ConsumerActionRequest("update", (coordinate,), ("claude",))
-                    ),
-                    Ok,
-                )
-                self.assertEqual(len(acquired_requests), 2)
 
     def test_invalid_native_or_registry_snapshots_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -418,25 +304,37 @@ class ConsumerRuntimeTest(unittest.TestCase):
                 paths,
             )
             registry = configured_source("company", SourceKind.REGISTRY_GIT)
-            missing_index = _graph_source(
+            # A native package source is not a Registry: it declares no `aart-registry.json`, so
+            # it is refused for what it is rather than compiled as an empty catalog.
+            not_a_registry = _graph_source(
                 registry,
                 _current(registry, "reference-native-source", native_snapshot()),
                 paths,
             )
-            malformed_snapshot = append_snapshot_file(
-                native_snapshot(),
-                "aart.index.json",
-                b"{}\n",
-            )
-            malformed_index = _graph_source(
+            malformed_catalog = _graph_source(
                 registry,
-                _current(registry, "reference-native-source", malformed_snapshot),
+                _current(
+                    registry,
+                    "test-registry",
+                    replace_snapshot_file(
+                        approved_registry_snapshot(),
+                        "registry/index.json",
+                        b"{}\n",
+                    ),
+                ),
                 paths,
             )
 
             self.assertNotIsInstance(invalid_native, Ok)
-            self.assertNotIsInstance(missing_index, Ok)
-            self.assertNotIsInstance(malformed_index, Ok)
+            self.assertNotIsInstance(not_a_registry, Ok)
+            assert isinstance(not_a_registry, Err), not_a_registry
+            # Its packages sit at `artifacts/<kind>/<name>/`, which is the retired unversioned
+            # shape: the same tree is a valid authoring Source and is not a Registry.
+            self.assertIn(
+                "retired authoring-workspace representation",
+                not_a_registry.diagnostics[0].message,
+            )
+            self.assertNotIsInstance(malformed_catalog, Ok)
 
     def test_an_authoring_source_contributes_nothing_and_takes_nothing_away(self) -> None:
         """INV-199 at the consumer projection: a Source of Candidates is not Marketplace content.
@@ -470,51 +368,71 @@ class ConsumerRuntimeTest(unittest.TestCase):
             self.assertEqual(projected.value.collections, ())
             self.assertEqual(projected.value.alias, authoring.alias)
 
-    def test_registry_runtime_rejects_missing_or_stale_lock_index_evidence(self) -> None:
+    def test_registry_runtime_rejects_missing_or_stale_approved_evidence(self) -> None:
+        """Every approved row has to be evidenced by this snapshot, not asserted by a catalog."""
+
         with tempfile.TemporaryDirectory() as raw:
             paths = object_store_paths(str(Path(raw) / "data"))
             source = configured_source("company", SourceKind.REGISTRY_GIT)
-            snapshot = _promoted_registry_snapshot(include_owned=False)
-            missing_lock = _graph_source(
+            snapshot = approved_registry_snapshot()
+            version_path = "registry/versions/mcp/github-mcp/1.0.0.json"
+
+            stale_version_document = json.loads(snapshot_file(snapshot, version_path))
+            stale_version_document["object_digest"] = f"sha256:{'0' * 64}"
+            stale_version = _graph_source(
                 source,
                 _current(
                     source,
                     "test-registry",
-                    without_snapshot_paths(snapshot, "aart.lock.json"),
+                    replace_snapshot_file(
+                        snapshot,
+                        version_path,
+                        json.dumps(stale_version_document).encode(),
+                    ),
                 ),
                 paths,
             )
-            stale_index_document = json.loads(snapshot_file(snapshot, "aart.index.json"))
-            stale_index_document["registry_inputs_digest"] = f"sha256:{'0' * 64}"
-            stale_index = replace_snapshot_file(
-                snapshot,
-                "aart.index.json",
-                json.dumps(stale_index_document).encode(),
-            )
-            stale = _graph_source(
+            stale_catalog = _graph_source(
                 source,
-                _current(source, "test-registry", stale_index),
+                _current(
+                    source,
+                    "test-registry",
+                    replace_snapshot_file(snapshot, "registry/index.json", b"{}\n"),
+                ),
                 paths,
             )
-            mismatched_identity = _graph_source(
+            # The promotion record is what says the version was reviewed; a row without it claims
+            # an approval nothing in the snapshot evidences.
+            promotion_path = next(
+                str(entry.path)
+                for entry in snapshot.entries
+                if str(entry.path).startswith("registry/promotions/")
+                and str(entry.path).endswith(".json")
+            )
+            unevidenced = _graph_source(
                 source,
-                _current(source, "other-registry", snapshot),
+                _current(
+                    source,
+                    "test-registry",
+                    replace_snapshot_file(snapshot, promotion_path, b"{}\n"),
+                ),
                 paths,
             )
-            disagreeing_document = json.loads(snapshot_file(snapshot, "aart.index.json"))
-            disagreeing_document["artifacts"][0]["object_digest"] = f"sha256:{'f' * 64}"
-            disagreeing_index = replace_snapshot_file(
-                snapshot,
-                "aart.index.json",
-                json.dumps(disagreeing_document).encode(),
-            )
-            disagreement = _graph_source(
+            tampered_payload = _graph_source(
                 source,
-                _current(source, "test-registry", disagreeing_index),
+                _current(
+                    source,
+                    "test-registry",
+                    replace_snapshot_file(
+                        snapshot,
+                        "artifacts/mcp/github-mcp/1.0.0/payload/server.py",
+                        b"print('tampered')\n",
+                    ),
+                ),
                 paths,
             )
 
-            for result in (missing_lock, stale, mismatched_identity, disagreement):
+            for result in (stale_version, stale_catalog, unevidenced, tampered_payload):
                 self.assertNotIsInstance(result, Ok)
 
     def test_local_composition_loads_persisted_and_reviewed_prospective_configuration(
@@ -602,12 +520,22 @@ class ConsumerRuntimeTest(unittest.TestCase):
     ) -> None:
         with tempfile.TemporaryDirectory() as raw:
             source = configured_source("company", SourceKind.REGISTRY_GIT)
-            snapshot = registry_snapshot()
-            compiled = parse_registry_index(snapshot_file(snapshot, "aart.index.json"))
-            assert isinstance(compiled, Ok), compiled
+            approved = approved_registry_snapshot(names=("github-mcp", "jira-mcp"))
+            snapshot = approved
+            registry_id = SourceId("test-registry")
+            # What an attestation set binds is the registry's published content, recomputed here
+            # exactly as the consumer recomputes it.
+            state = registry_state_digest(approved)
+            assert isinstance(state, Ok), state
+            projected_artifacts = _graph_source(
+                source,
+                _current(source, str(registry_id), approved),
+                object_store_paths(str(Path(raw) / "data")),
+            )
+            assert isinstance(projected_artifacts, Ok), projected_artifacts
             empty_digest = json_digest(JsonObject(()))
             entries = []
-            for artifact in compiled.value.artifacts:
+            for artifact in projected_artifacts.value.artifacts:
                 attestation = SecurityAttestation(
                     1,
                     AssessmentCacheKey(
@@ -621,9 +549,9 @@ class ConsumerRuntimeTest(unittest.TestCase):
                     ),
                     AttestationOrigin(
                         AttestationOriginKind.REGISTRY_CI,
-                        compiled.value.registry_id,
+                        registry_id,
                         "a" * 40,
-                        compiled.value.registry_inputs_digest,
+                        state.value,
                     ),
                     not_scanned_assessment(
                         artifact.object_digest,
@@ -639,18 +567,13 @@ class ConsumerRuntimeTest(unittest.TestCase):
                     str(path.value),
                     attestation_bytes(attestation),
                 )
-            index = SecurityIndex(
-                1,
-                compiled.value.registry_id,
-                compiled.value.registry_inputs_digest,
-                tuple(entries),
-            )
+            index = SecurityIndex(1, registry_id, state.value, tuple(entries))
             snapshot = append_snapshot_file(
                 snapshot,
                 "security/index.json",
                 security_index_bytes(index),
             )
-            current = _current(source, "reference-registry", snapshot)
+            current = _current(source, str(registry_id), snapshot)
             paths = object_store_paths(str(Path(raw) / "data"))
             projected = _graph_source(source, current, paths)
             assert isinstance(projected, Ok), projected
@@ -682,18 +605,25 @@ class ConsumerRuntimeTest(unittest.TestCase):
             self.assertEqual(len(evidence), 2)
             self.assertEqual({item.evidence_age_seconds for item in evidence}, {10})
             trust = {item.coordinate.artifact.name: item.attestation_trust for item in evidence}
-            self.assertEqual(trust["atlassian"], AttestationTrust.REGISTRY_REVIEWED)
-            self.assertEqual(trust["code-review"], AttestationTrust.UNVERIFIED)
+            # Every approved version carries the promotion that reviewed it, so registry CI
+            # evidence bound to this registry's state is registry-reviewed for all of them.
+            self.assertEqual(
+                trust,
+                {
+                    "github-mcp": AttestationTrust.REGISTRY_REVIEWED,
+                    "jira-mcp": AttestationTrust.REGISTRY_REVIEWED,
+                },
+            )
             self.assertTrue(
                 all(item.assessment.providers[0].id == "aart-baseline" for item in evidence)
             )
 
             missing_documents = append_snapshot_file(
-                registry_snapshot(),
+                approved,
                 "security/index.json",
                 security_index_bytes(index),
             )
-            missing_current = _current(source, "reference-registry", missing_documents)
+            missing_current = _current(source, str(registry_id), missing_documents)
             self.assertEqual(
                 _registry_security_evidence(
                     catalog.value,
@@ -702,7 +632,7 @@ class ConsumerRuntimeTest(unittest.TestCase):
                 ),
                 (),
             )
-            tampered = registry_snapshot()
+            tampered = approved
             for entry in entries:
                 tampered = append_snapshot_file(tampered, str(entry.path), b"{}\n")
             tampered = append_snapshot_file(
@@ -710,7 +640,7 @@ class ConsumerRuntimeTest(unittest.TestCase):
                 "security/index.json",
                 security_index_bytes(index),
             )
-            tampered_current = _current(source, "reference-registry", tampered)
+            tampered_current = _current(source, str(registry_id), tampered)
             self.assertEqual(
                 _registry_security_evidence(
                     catalog.value,
@@ -720,23 +650,18 @@ class ConsumerRuntimeTest(unittest.TestCase):
                 (),
             )
             malformed = append_snapshot_file(
-                registry_snapshot(),
+                approved,
                 "security/index.json",
                 b"{}\n",
             )
-            malformed_current = _current(source, "reference-registry", malformed)
-            mismatched_index = SecurityIndex(
-                1,
-                SourceId("other-registry"),
-                compiled.value.registry_inputs_digest,
-                (),
-            )
+            malformed_current = _current(source, str(registry_id), malformed)
+            mismatched_index = SecurityIndex(1, SourceId("other-registry"), state.value, ())
             mismatched = append_snapshot_file(
-                registry_snapshot(),
+                approved,
                 "security/index.json",
                 security_index_bytes(mismatched_index),
             )
-            mismatched_current = _current(source, "reference-registry", mismatched)
+            mismatched_current = _current(source, str(registry_id), mismatched)
             for degraded in (malformed_current, mismatched_current):
                 self.assertEqual(
                     _registry_security_evidence(
@@ -769,12 +694,23 @@ class ConsumerRuntimeTest(unittest.TestCase):
                 )
             )
 
-    def test_registry_index_rebinds_runtime_source_identity_and_preserves_review_trust(
+    def test_registry_catalog_rebinds_runtime_source_identity_and_carries_review_trust(
         self,
     ) -> None:
+        """A registry row is the registry's, and it is reviewed because promotion approved it.
+
+        Upstream identity stays in the version record's provenance. Letting it reach the graph
+        would make one subscription look like several runtime sources and would route the row
+        around the registry's trust overlay.
+        """
+
         with tempfile.TemporaryDirectory() as raw:
             source = configured_source("company", SourceKind.REGISTRY_GIT)
-            current = _current(source, "reference-registry", registry_snapshot())
+            current = _current(
+                source,
+                "test-registry",
+                approved_registry_snapshot(names=("github-mcp", "jira-mcp")),
+            )
             paths = object_store_paths(str(Path(raw) / "data"))
             projected = _graph_source(source, current, paths)
             assert isinstance(projected, Ok), projected
@@ -800,14 +736,15 @@ class ConsumerRuntimeTest(unittest.TestCase):
             self.assertEqual(len(catalog.value.items), 2)
             self.assertTrue(
                 all(
-                    item.artifact.source_id == SourceId("reference-registry")
+                    item.artifact.source_id == SourceId("test-registry")
                     for item in catalog.value.items
                 )
             )
-            trust = {
-                item.coordinate.artifact.name: item.trust.kind.value for item in catalog.value.items
-            }
-            self.assertEqual(trust, {"atlassian": "registry-reviewed", "code-review": "unverified"})
+            self.assertEqual(
+                {item.trust.kind.value for item in catalog.value.items},
+                {"registry-reviewed"},
+            )
+            # No committed attestation set, so there is no security evidence to report.
             self.assertEqual(
                 _registry_security_evidence(
                     catalog.value,

@@ -7887,3 +7887,45 @@ those paths. Canonical `lock` is read-only, `build` writes the two `registry/` c
 **Consequence.** Old `promote-native`/`vendor` tests that expect the retained gates to accept an
 unversioned package describe the removed representation. Step 5 deletes that planning surface and
 its fixtures rather than preserving a second definition of Registry validity.
+
+## D-319 — Committed registry attestations bind the canonical registry state, not a compiled index
+
+Date: 2026-09-18 · Status: accepted · Scope: CP-26 step 4
+
+**Context.** `consumer/runtime.py::_registry_security_evidence` decided whether a committed
+`security/index.json` described the registry in front of it by reading `aart.index.json` and
+comparing `registry_id` and `registry_inputs_digest`. That file belongs to the retired
+authoring-workspace representation. Step 4 removes the branch that produced it, so on every
+canonical Registry the reader returned no evidence at all — silently, because absent attestations
+are a legitimate state.
+
+**Decision.** The reader recomputes `registry_state_digest(snapshot)` and compares the attestation
+set's `registry_inputs_digest` against it, and compares the set's `registry_id` against the
+already-validated `current.declared_source_id`. No catalog is consulted. Recomputation is the
+stronger form: a commit that rewrote a catalog cannot assert the state its evidence was made for.
+
+**Consequence.** `SecurityIndex.registry_inputs_digest` now carries the canonical registry state
+digest. The field name is left alone in this step — renaming it touches the security schema, its
+parser/serializer and the generated Registry CI, none of which step 4 owns. B-147 records the
+rename and the fact that no shipped command writes a `security/index.json` for a canonical
+Registry.
+
+## D-320 — The consumer content port goes with the reference mechanism it served
+
+Date: 2026-09-18 · Status: accepted · Scope: CP-26 step 4
+
+**Context.** `load_local_consumer_service` built a content port that fetched an artifact from a
+third repository by the commit pinned in `aart.lock.json` before an install could proceed. That is
+the retired representation's external-reference mechanism: the approved representation records a
+`REFERENCED` version as *declined* (`io/configured_offers.py::_declined`) precisely because the
+snapshot holds no verified content for it.
+
+**Decision.** The reference bindings, the acquisition helper and the port that consumed them are
+deleted with the branch that produced them. The service takes the default
+`_content_already_available` port. Approved content is vendored in the registry snapshot, and
+`io/configured_installation.py::_materialize` publishes the exact approved object at install time,
+so nothing is fetched behind the operator's back.
+
+**Consequence.** `tests/consumer_runtime_test.py::test_registry_reference_is_fetched_by_locked_commit_only_for_selected_content`
+characterized the removed mechanism and is deleted, not repaired. Offline behavior for approved
+content is owned by the installation path and is covered there.

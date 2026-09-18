@@ -1,18 +1,36 @@
 # AART Refactor — Next Work
 
-## Release checkpoint (2026-09-18)
+## Where CP-26 is (2026-09-18)
 
-PR #21's public matrix passed on Python 3.10, 3.11 and 3.14. Release Please's PR #22 passed
-its narrow gate and merged; `v0.3.0` and its wheel are published. CI also exposed two literal
-credential-shaped test URLs, now assembled through the fixture helper. D-310 runs the secret-shape
-scanner before dependency installation. CP-26 steps 2–3 are complete; resume step 4 on this branch.
+Steps 1–4 are done on `refactor/cp-26-legacy-removal`. **Step 5 is next**: delete the lock/index
+schema, the tree constants, the legacy halves of both `planning.py` modules and the fixtures that
+only describe the retired representation. B-057 closes there.
+
+Step 5 inherits a known, recorded red set — thirteen tests that step 3 and step 4 left naming
+behavior the retained gates no longer have:
+
+- `tests/registry_vendor_license_test.py` and `tests/registry_quality_planning_test.py`: twelve
+  failures, all expecting `validate`/`audit`/vendoring to accept an unversioned package. D-318 says
+  these describe the removed representation and are deleted with their fixtures, not repaired.
+- `tests/fixtures/protocol/registry-v1/` is the retired fixture tree. Nothing outside those two
+  modules reads it any more; `tests/registry_maintenance_fixtures.py::approved_registry_snapshot`
+  and `write_snapshot` are what replaced it, and they build a Registry through the real promotion
+  rather than transcribing a tree.
+
+Production still importing the retired schema when step 5 starts:
+`agent_artifacts/commands/security.py` (`parse_registry_index`, `parse_registry_lock` behind
+`aart security scan`), `registry_commands/planning.py`, `registry_maintenance/planning.py`,
+`protocol/registry_tree.py::_GENERATED_PATHS`, `protocol/registry_schema.py` itself and the
+`protocol/__init__.py` exports. `aart security scan` takes its index as an operator-supplied file
+and has no producer (B-147) — decide there whether it reads the canonical catalog or is withdrawn,
+and record it.
 
 ## CP-26 scope addition (2026-09-18)
 
 The owner added step 17: remove `M1F1` and `M1F1/aart-cli` from generated Registry content and
 operational defaults. The concrete locations and acceptance scope are in the CP-26 slice. This is
 independent of the removal work and follows the README work in the numbered plan. The `v0.3.0`
-release is complete; step 4 is next.
+release is complete; step 5 is next.
 
 The owner then added step 18 (D-312): `[p] Push` belongs to the local workspace row on Registry
 Maintainer, not to individual wizard success screens. That row distinguishes the accepted snapshot,
@@ -48,7 +66,7 @@ Enterprise, architecture, contributor/testing and release detail moves to those 
 than becoming a second README tutorial. The existing MIT License wording and copyright/footer stay
 last. The gate executes install forms and checks order, explanation size, links and final License.
 
-## Completed record: CP-26 step 2, on `refactor/cp-26-legacy-removal` (2026-09-18)
+## Historical record: CP-26 step 2, on `refactor/cp-26-legacy-removal` (2026-09-18)
 
 **Branch.** Work on `refactor/cp-26-legacy-removal`, rebased onto the released `v0.3.0` main.
 PR #21 and its release PR #22 are merged; the release workflow passed and attached the wheel.
@@ -134,7 +152,7 @@ documentation contract; step 18 restores separately reviewed Push on Registry Ma
 (B-144) precedes step 20 (B-143), so local Registry aliases cannot inherit the existing
 configuration/credential collision; and step 21 runs the broad full-slice gates once. The `ast`
 collector for step 6 is already written and pasted into the design document; do not re-derive it.
-Step 17 reruns step 16's install-line gate if it changes one. Step 3 is next.
+Step 17 reruns step 16's install-line gate if it changes one. Step 5 is next.
 
 **The owner has withdrawn backward compatibility, explicitly and more than once.** No compatibility
 window, no migration command, no deprecation period, no consideration for registries already

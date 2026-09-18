@@ -1,6 +1,6 @@
 # CP-26 — Canonical Registry maintenance, authoring tools and local consumption
 
-Status: **active**. Steps 1–3 are done (D-308/D-311/D-318); step 4 is next. The
+Status: **active**. Steps 1–4 are done (D-308/D-311/D-318/D-319/D-320); step 5 is next. The
 machine plan keeps an unfinished step as `todo` until its completion evidence is recorded.
 
 PR #21 follow-up (2026-09-18): D-308's authoring refusal now points to the runnable `--help`
@@ -269,7 +269,7 @@ no migration command, and no deprecation period.
 | 1 | A registry that has chosen one representation refuses the other's verbs | **done**, D-308 |
 | 2 | `registry scaffold` is deleted | **done**; verb, planner, CLI surface and obsolete tests removed; `publish` remains |
 | 3 | Keep canonical `lock`, `build`, `validate`, `audit`, `format` and aggregate `publish`; remove only legacy branches | **done**; empty and populated canonical Registries share one route; Push remains separate and rejects the retired shape |
-| 4 | The consumer and source validators lose theirs | one clear error naming the shape, no fallback |
+| 4 | The consumer and source validators lose theirs | **done**; one refusal naming the retired paths, one naming the expected shape, no fallback |
 | 5 | The lock/index schema, tree constants, planning halves and fixtures are deleted | B-057 closes here |
 | 6 | The authoring-manifest field surface is collected from the parser, not transcribed | the `ast` oracle; lands before anything generates |
 | 7 | A deterministic YAML emitter for the generated subset | block maps, sequences, plain scalars, comments |
@@ -378,6 +378,56 @@ three changed production modules. Scoped mutation over `registry_maintenance/pro
 all mutants in the new shape detector; ten survivors are in pre-existing package extraction and
 are recorded as B-146. The legacy vendor/audit tests now name behavior removed by this step and are
 deleted with their fixtures in step 5; no broad suite ran under D-317.
+
+### Step 4 — the consumer and source validators have one representation (2026-09-18)
+
+`sources/validation.py::validate_registry_source_candidate` and
+`consumer/runtime.py::_project_graph_source` chose their authority by looking for a `registry/`
+prefix and fell through to the workspace compiler when they did not find one. Both now ask the same
+two questions in the same order, through the one authority that answers them
+(`registry_maintenance/promoted.py`): does this snapshot carry a retired path, and is it a canonical
+approved Registry. A retired or mixed checkout is refused and the offending paths are named; a tree
+that is not a Registry is refused and the two root manifests it must declare are named. Nothing
+falls through.
+
+Deleted with the branch, because nothing reached them afterwards: the consumer's
+`_registry_references`, `_locked_index_agrees`, `_registry_entries`, `_verify_registry_owned` /
+`_materialize_registry_owned`, `_acquire_registry_reference`, `_RegistryReferenceBinding`,
+`_GraphProjection.references` and `_consumer_content_port` (D-320); in the source validator, the
+`validate_registry_workspace` import. `_registry_security_evidence` stopped reading
+`aart.index.json` and now recomputes the canonical registry state digest instead (D-319).
+
+**One correction to a step-3 leftover.** `tests/source_remediation_test.py`'s rs09 audit test ran
+`registry audit` over the retired `registry-v1` fixture, which step 3 had already taught the CLI to
+refuse; the test was red before step 4 began. It now builds a canonical Registry on disk through
+the new `write_snapshot` fixture helper and still holds its claim — `audit` states findings in a
+report, each with its own next step. The twelve failures in `registry_vendor_license_test` and
+`registry_quality_planning_test` are the other step-3 leftovers and are unchanged by step 4; step 5
+deletes them with their fixtures, as D-318 records.
+
+**Tests deleted rather than repaired.** `test_registry_reference_is_fetched_by_locked_commit_only_for_selected_content`
+and `test_reference_only_registry_is_a_valid_marketplace_source` characterized the retired
+external-reference mechanism (D-320). Every other registry test in both modules moved onto
+`approved_registry_snapshot`, a new shared fixture that builds its registry through the real
+promotion rather than by transcribing a tree.
+
+**Targeted semantic mutation (two, one per module).** Weakening the source validator's refusal to
+`if retired and not is_promoted_registry(snapshot)` — the mixed-checkout hole D-308 closed — failed
+`test_a_registry_mixing_both_representations_is_refused_by_name` and nothing else. Deleting the
+consumer's retired-path refusal outright failed
+`test_a_registry_carrying_the_retired_representation_is_refused_by_name` and
+`test_invalid_native_or_registry_snapshots_fail_closed`, and nothing else. Both restored green.
+
+**Focused evidence.** 117 tests across the consumer runtime, source validation/remediation,
+marketplace catalog/projection/trust/lifecycle, source acquisition, TUI marketplace, legacy-authority
+reachability and architecture-boundary modules are green, plus 63 consumer install/marketplace E2E
+tests. Ruff format and lint pass over the whole tree; Mypy passes over both changed production
+modules; `secret-shape-check` is green. Scoped mutation over `sources/validation.py`: 195 mutants,
+3 survivors inside the changed function, all string-spelling variants that keep the asserted
+substring — down from 8, after adding the tests that hold the not-canonical refusal, the empty
+Registry's catalog binding and the returned candidate. Scoped mutation over `consumer/runtime.py`:
+592 mutants, 464 killed, 3 survivors in `_project_graph_source` (one pre-existing, two spelling);
+the rest are recorded as B-148. No broad suite ran under D-317.
 
 ### Step 17 — no maintainer identity as a default
 

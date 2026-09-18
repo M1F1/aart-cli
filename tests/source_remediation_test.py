@@ -52,6 +52,7 @@ from agent_artifacts.tui_sources import (
 from tests.configuration_application_test import _FakePorts as _ConfigurationPorts
 from tests.configuration_application_test import _paths
 from tests.marketplace_lifecycle_e2e_test import _FIXTURE, _environment
+from tests.registry_maintenance_fixtures import approved_registry_snapshot, write_snapshot
 from tests.source_sync_application_test import _candidate, _current, _FakePorts, _request
 
 _COMMAND = re.compile(r"`(aart [^`]+)`")
@@ -67,7 +68,6 @@ _REMOVED_COMMANDS = frozenset(
     {"check", "install", "list", "migrate", "setup", "status", "uninstall", "update", "upstream"}
 )
 _PACKAGE = Path(cli.__file__).resolve().parent
-_REGISTRY_FIXTURE = Path(__file__).parent / "fixtures" / "protocol" / "registry-v1"
 _FINDING_LINE = re.compile(r"^\s+(error|warning): ")
 _PLACEHOLDER = "PLACEHOLDER"
 
@@ -452,8 +452,10 @@ class RegistryRefusalRemediationTest(unittest.TestCase):
         """The other half: `audit` states its problems in a report, not in a refusal."""
 
         with _environment() as env:
-            workspace = env.root / "registry-under-audit"
-            shutil.copytree(_REGISTRY_FIXTURE, workspace)
+            workspace = write_snapshot(
+                env.root / "registry-under-audit",
+                approved_registry_snapshot(),
+            )
             stdout = io.StringIO()
             with (
                 mock.patch.dict(os.environ, env.xdg, clear=False),
