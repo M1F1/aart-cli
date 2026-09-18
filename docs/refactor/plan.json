@@ -814,7 +814,7 @@
         {
           "id": "7",
           "title": "A deterministic YAML emitter for the generated subset",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "8",

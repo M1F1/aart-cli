@@ -2,18 +2,20 @@
 
 ## Where CP-26 is (2026-09-19)
 
-Steps 1–6 are done on `refactor/cp-26-legacy-removal`, and **B-057 and B-149 are both closed**. The
+Steps 1–7 are done on `refactor/cp-26-legacy-removal`, and **B-057 and B-149 are both closed**. The
 retired authoring-workspace representation has no schema, no fixtures, no planning half and no
 command left; `aart registry vendor` writes the approved representation's versioned package through
-`plan_bulk_promotion`; and the authoring field surface is now read out of the parser rather than
-transcribed. `docs/refactor/slices/cp-26-authoring-and-legacy-removal.md` records all three under
-§"Step 5", §"B-149" and §"Step 6" (D-321 to D-327).
+`plan_bulk_promotion`; the authoring field surface is now read out of the parser rather than
+transcribed; and AART can write the YAML subset it parses.
+`docs/refactor/slices/cp-26-authoring-and-legacy-removal.md` records all four under §"Step 5",
+§"B-149", §"Step 6" and §"Step 7" (D-321 to D-328).
 
-**Step 7 is next** — a deterministic YAML emitter for the generated subset: block maps, sequences,
-plain scalars and comments. It is written against `tests/authoring_field_surface.py`, which is the
-oracle step 6 exists to provide. Read D-327 first: three of the parser's seventeen field sites are
-`unresolved`, all in the dynamically dispatched input and descriptor parsing, and step 8's `aart
-author init` has to handle those explicitly rather than emit nothing for them.
+**Step 8 is next** — `aart author init` emits a full-surface `aart.yaml` for `mcp`. The two pieces
+it needs are in place: `tests/authoring_field_surface.py` says which fields exist (D-327) and
+`agent_artifacts/protocol/yaml.py::emit_yaml` writes them without producing a document that reads
+back as something else (D-328). Read D-327 first: three of the parser's seventeen field sites are
+`unresolved`, all in the dynamically dispatched input and descriptor parsing, and `init` has to
+handle those explicitly rather than emit nothing for them.
 
 Two open findings from step 5:
 
@@ -29,7 +31,7 @@ Two open findings from step 5:
 The owner added step 17: remove `M1F1` and `M1F1/aart-cli` from generated Registry content and
 operational defaults. The concrete locations and acceptance scope are in the CP-26 slice. This is
 independent of the removal work and follows the README work in the numbered plan. The `v0.3.0`
-release is complete; step 7 is next.
+release is complete; step 8 is next.
 
 The owner then added step 18 (D-312): `[p] Push` belongs to the local workspace row on Registry
 Maintainer, not to individual wizard success screens. That row distinguishes the accepted snapshot,

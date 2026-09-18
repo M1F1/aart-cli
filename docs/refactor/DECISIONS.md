@@ -8114,3 +8114,27 @@ manifest. It lives in `tests/`: runtime code never reads its own Python source.
 **Consequence.** Seventeen sites are reported, three of them unresolved, all in the dynamically
 dispatched input and descriptor parsing. Steps 8 onward must handle those three explicitly rather
 than emit nothing for them. A new parser field, helper or call site turns the surface tests red.
+
+## D-328 — the YAML emitter refuses rather than writes something that reads back differently
+
+Date: 2026-09-19 · Status: accepted · Scope: CP-26 steps 7 to 12
+
+**Context.** `aart author init` writes `aart.yaml` and AART has no runtime dependencies, so the
+emitter is ours. A hand-written YAML emitter's characteristic failure is not a crash: it is a
+document that parses, and parses as something else -- a string `"true"` returning as a boolean, a
+`#` turning the rest of a value into a comment, a sequence item reading as a mapping.
+
+**Decision.** `emit_yaml` is specified as `parse_yaml`'s inverse and tested as one, by a Hypothesis
+property over generated documents. Quoting is decided by asking `_scalar` whether the plain form
+comes back identical, rather than by a second list of YAML's special forms. Where the subset cannot
+express a value -- an empty block, an invalid key, an out-of-range integer, a bare scalar document
+-- the emitter returns `Err` naming the position instead of writing something close. Comments are
+addressed by path, and a comment aimed at a position the document does not have is a refusal, for
+the same reason step 6's collector reports an unresolved field set rather than an empty one: the
+silent version of that mistake produces a generated manifest nobody notices is wrong.
+
+**Consequence.** Steps 8 to 12 generate documents by building a `JsonValue` and a comment map, and
+cannot produce an `aart.yaml` that reads back as a different document. `str.splitlines` ends a line
+on `\x85`, `\u2028` and `\u2029`, which `ord(c) < 32` does not catch; the plain-scalar rule
+requires `text.splitlines() == [text]` and an exhaustive test derives that set from Python rather
+than listing it.

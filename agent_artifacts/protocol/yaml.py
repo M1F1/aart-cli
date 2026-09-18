@@ -9,12 +9,14 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from types import MappingProxyType
 
 from agent_artifacts.domain.diagnostics import Diagnostic, Severity, SourceLocation
 from agent_artifacts.domain.result import Err, Ok, Result
 
-from .codes import AUTHOR_MANIFEST_INVALID
+from .codes import AUTHOR_MANIFEST_INVALID, AUTHOR_MANIFEST_UNWRITABLE
 from .json import JsonArray, JsonObject, JsonValue
 
 _KEY_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
@@ -241,3 +243,193 @@ def parse_yaml(
                 ),
             )
         )
+
+
+class _EmitProblem(ValueError):
+    """A value the AART YAML subset cannot express, named by where it sits."""
+
+
+#: Characters that open a YAML construct, so a plain scalar may never begin with one.
+_RESERVED_PREFIX = "-?,[]{}#&*!|>'\"%@`"
+
+
+def _plain_safe(text: str) -> bool:
+    """Whether `text` survives being written without quotes.
+
+    The test is the parser's own: a plain scalar is safe when `_scalar` hands the identical string
+    back. That catches `true`, `null`, `12` and `---` without a second list of special forms to
+    keep in step. The checks before it rule out the shapes that never reach `_scalar` intact --
+    surrounding space that `rstrip` eats, a `#` that starts a comment, a `:` that reads as a
+    mapping key inside a sequence item, and any character that opens another construct.
+    """
+
+    if not text or text != text.strip():
+        return False
+    if any(ord(character) < 32 for character in text):
+        return False
+    # `str.splitlines` breaks on more than `\n`: NEL, the line and paragraph separators and the
+    # file separators all end a line for the tokenizer, so a plain scalar holding one would be
+    # emitted as a single line and read back as two.
+    if text.splitlines() != [text]:
+        return False
+    if "#" in text or ":" in text or text[0] in _RESERVED_PREFIX:
+        return False
+    try:
+        return _scalar(text, 0) == text
+    except _YamlProblem:
+        return False
+
+
+def _emit_scalar(value: JsonValue, path: str) -> str:
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int):
+        if not -(2**63) <= value <= 2**63 - 1:
+            raise _EmitProblem(f"{path}: integer is outside the signed 64-bit range")
+        return str(value)
+    if isinstance(value, str):
+        return value if _plain_safe(value) else json.dumps(value)
+    raise _EmitProblem(f"{path}: value is not a scalar")
+
+
+def _is_scalar(value: JsonValue) -> bool:
+    return not isinstance(value, JsonObject | JsonArray)
+
+
+def _child_path(path: str, segment: str) -> str:
+    return segment if not path else f"{path}.{segment}"
+
+
+def _refuse_empty(value: JsonValue, path: str) -> None:
+    """Neither empty block has a spelling in the grammar, so neither may be written."""
+
+    if isinstance(value, JsonObject) and not value.entries:
+        raise _EmitProblem(f"{path}: an empty mapping cannot be written in AART YAML")
+    if isinstance(value, JsonArray) and not value.items:
+        raise _EmitProblem(f"{path}: an empty sequence cannot be written in AART YAML")
+
+
+class _Writer:
+    def __init__(self, comments: dict[str, tuple[str, ...]]):
+        self._comments = comments
+        self.used: set[str] = set()
+        self.lines: list[str] = []
+
+    def comment(self, path: str, indent: int) -> None:
+        lines = self._comments.get(path)
+        if lines is None:
+            return
+        self.used.add(path)
+        pad = " " * indent
+        self.lines.extend(f"{pad}#{f' {line}' if line else ''}" for line in lines)
+
+    def block(self, value: JsonValue, indent: int, path: str) -> None:
+        if isinstance(value, JsonObject):
+            self.mapping(value.entries, indent, path)
+        elif isinstance(value, JsonArray):
+            self.sequence(value, indent, path)
+        else:  # pragma: no cover - callers check before descending
+            raise _EmitProblem(f"{path}: value is not a block")
+
+    def mapping(
+        self,
+        entries: tuple[tuple[str, JsonValue], ...],
+        indent: int,
+        path: str,
+    ) -> None:
+        pad = " " * indent
+        for key, value in entries:
+            if _KEY_RE.fullmatch(key) is None:
+                raise _EmitProblem(f"{_child_path(path, key)}: {key!r} is not a valid mapping key")
+            here = _child_path(path, key)
+            self.comment(here, indent)
+            if _is_scalar(value):
+                self.lines.append(f"{pad}{key}: {_emit_scalar(value, here)}")
+                continue
+            _refuse_empty(value, here)
+            self.lines.append(f"{pad}{key}:")
+            self.block(value, indent + 2, here)
+
+    def sequence(self, value: JsonArray, indent: int, path: str) -> None:
+        pad = " " * indent
+        for position, item in enumerate(value.items):
+            here = _child_path(path, str(position))
+            if _is_scalar(item):
+                self.comment(here, indent)
+                self.lines.append(f"{pad}- {_emit_scalar(item, here)}")
+                continue
+            _refuse_empty(item, here)
+            if isinstance(item, JsonObject) and _is_scalar(item.entries[0][1]):
+                # `- key: scalar` is the grammar's only compact item, and its first field has to be
+                # a scalar; the comment on that field belongs above the marker line it shares.
+                first_key, first_value = item.entries[0]
+                if _KEY_RE.fullmatch(first_key) is None:
+                    raise _EmitProblem(
+                        f"{_child_path(here, first_key)}: {first_key!r} is not a valid mapping key"
+                    )
+                self.comment(here, indent)
+                self.comment(_child_path(here, first_key), indent)
+                scalar = _emit_scalar(first_value, _child_path(here, first_key))
+                self.lines.append(f"{pad}- {first_key}: {scalar}")
+                self.mapping(item.entries[1:], indent + 2, here)
+                continue
+            self.comment(here, indent)
+            self.lines.append(f"{pad}-")
+            self.block(item, indent + 2, here)
+
+
+def emit_yaml(
+    value: JsonValue,
+    *,
+    comments: Mapping[str, Sequence[str]] = MappingProxyType({}),
+    path: str = "aart.yaml",
+) -> Result[str]:
+    """Write the finite YAML subset `parse_yaml` accepts, or refuse to write at all.
+
+    The emitter is the parser's inverse: anything it returns parses back to the value it was given.
+    Where the subset cannot express a value -- an empty block, a key the grammar rejects, an
+    integer outside the protocol range -- it refuses and names the position, rather than writing a
+    document that reads back as something else.
+
+    `comments` maps a position to the lines written above it: `""` for the document header, and
+    otherwise a dotted path of mapping keys and sequence indices, such as `artifact.kind` or
+    `payload.include.0`. A comment aimed at a position the document does not have is a refusal,
+    because silently dropping it is how a generated manifest loses its documentation.
+    """
+
+    fixed = {key: tuple(lines) for key, lines in comments.items()}
+    for position, lines in sorted(fixed.items()):
+        where = position or "the document header"
+        for line in lines:
+            if line.splitlines() not in ([], [line]):
+                return _emit_error(f"comment at {where} contains a newline", path)
+            if any(ord(character) < 32 for character in line):
+                return _emit_error(f"comment at {where} is not text", path)
+    if not isinstance(value, JsonObject | JsonArray):
+        return _emit_error("an AART YAML document must be a mapping or a sequence", path)
+    writer = _Writer(fixed)
+    try:
+        _refuse_empty(value, "the document")
+        writer.comment("", 0)
+        writer.block(value, 0, "")
+    except _EmitProblem as error:
+        return _emit_error(str(error), path)
+    unused = sorted(set(fixed) - writer.used)
+    if unused:
+        return _emit_error(f"comment at {unused[0]} names no such key in the document", path)
+    return Ok("".join(f"{line}\n" for line in writer.lines))
+
+
+def _emit_error(message: str, path: str) -> Err:
+    return Err(
+        (
+            Diagnostic(
+                AUTHOR_MANIFEST_UNWRITABLE,
+                Severity.ERROR,
+                message,
+                SourceLocation(path=path),
+            ),
+        )
+    )

@@ -1,5 +1,17 @@
 # AART Refactor Migration Status
 
+**2026-09-19, CP-26.07 complete.** `protocol/yaml.py` gained `emit_yaml`, specified and tested as
+`parse_yaml`'s inverse over the finite AART subset: block mappings, sequences, plain scalars and
+path-addressed comments. Quoting is decided by asking `_scalar` whether the plain form returns
+identical, so `true`, `null`, `12` and `---` need no second list to stay in step. The emitter
+refuses rather than writes an empty block, an invalid key, an out-of-range integer or a bare scalar
+document, and a comment aimed at a position the document does not have is a refusal rather than a
+silent drop (D-328). A Hypothesis round-trip property found one real hole -- `str.splitlines` ends a
+line on `\x85`, which `ord(c) < 32` does not catch -- and did not find it again on the next run, so
+that rule is held by a test that derives the breaking set from `str.splitlines` itself. Two targeted
+mutations each failed their own claim. Twenty-one tests are green, as is the existing parser module;
+Ruff and Mypy are green. No broad `make quality` ran, under D-317.
+
 **2026-09-19, CP-26.06 complete.** The authoring-manifest field surface is collected from
 `protocol/authoring.py` by reading it, not transcribed. `tests/authoring_field_surface.py`
 discovers field-accepting helpers from their signatures, reads a wrapper's own fixed fields from its

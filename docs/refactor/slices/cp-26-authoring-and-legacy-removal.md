@@ -537,6 +537,40 @@ failed `test_every_field_helper_call_in_the_parser_reaches_the_surface` and noth
 computed field set read as the empty tuple failed `test_a_computed_field_set_is_marked_unresolved`
 and nothing else. Both restored green.
 
+### Step 7 — a deterministic YAML emitter for the generated subset (2026-09-19)
+
+`aart author init` writes `aart.yaml`, and zero runtime dependencies means AART writes it itself.
+`protocol/yaml.py` already held the parser for the finite subset, so the emitter was added beside it
+and is defined as that parser's inverse: whatever `emit_yaml` returns, `parse_yaml` gives back the
+value it was handed. The claim is universal over the subset, so it is a Hypothesis property over
+generated documents, with example-based tests for the shapes `aart.yaml` actually uses.
+
+**Quoting is decided by asking the parser.** A plain scalar is written unquoted only when
+`_scalar` hands the identical string back, which rules out `true`, `null`, `12` and `---` without a
+second list of special forms to keep in step, plus explicit guards for surrounding space, a `#` that
+would start a comment, a `:` that reads as a mapping key inside a sequence item, and a reserved
+opening character. Everything else is JSON-quoted, which the parser reads with `json.loads`.
+
+**A hole the property found, and why an exhaustive test now holds it.** Hypothesis produced
+`"0\x850"`: `\x85` is not a control character by `ord`, but `str.splitlines` ends a line on it, so
+the tokenizer read one emitted line as two. The fix is to require `text.splitlines() == [text]`.
+The property found it once and did not find it again on the next run, so the rule is held by a test
+that derives the breaking set from `str.splitlines` itself and checks every one of them — three
+today (`\x85`, `\u2028`, `\u2029`), and whatever a future Python adds.
+
+**What it refuses rather than write.** An empty mapping or sequence has no spelling in the grammar;
+a key the grammar rejects; an integer outside the protocol range; a document that is a bare scalar.
+Each refusal names the position. `comments` maps a position — `""` for the header, otherwise a
+dotted path of keys and sequence indices — to the lines written above it, and a comment aimed at a
+position the document does not have is a refusal, because silently dropping it is how a generated
+manifest loses its documentation (D-328).
+
+**Targeted semantic mutations (two, one per claim).** Deleting the line-break guard failed
+`test_every_character_python_ends_a_line_on_is_quoted` on all three code points and the sequence-item
+round-trip property. Deleting the unused-comment refusal failed
+`test_a_comment_aimed_at_a_key_the_document_does_not_have_is_refused` and nothing else. Both
+restored green.
+
 ### Step 17 — no maintainer identity as a default
 
 The owner explicitly requires generated registries and operational examples to carry no default
