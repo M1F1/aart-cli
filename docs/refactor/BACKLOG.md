@@ -3435,6 +3435,15 @@ Two values are re-derived rather than preserved: `requires_aart.min_inclusive` c
 version of AART running `init` (pass `--minimum-version` to hold the old one), and `README.md` and
 `.gitignore` come back as templates, losing any local edit.
 
+**The `publish --yes` is not optional, and on a registry holding artifacts it is not one file.**
+`init` rewrites `aart-registry.json` and `aart-source.json`, and both feed the deterministic inputs
+digest the lock records, so the reset invalidates the lock on its own — no artifact has to change.
+A registry pushed after the reset but before the recompile fails its own `validate --strict
+--frozen` with `registry lock does not match deterministic registry inputs`, plus one
+`compiled index disagrees with owned package <kind>/<name>` for every artifact it holds. Confirmed
+against a scratch registry: `publish --yes` clears all of it, after which `lock --check` and
+`build --check` both report `unchanged`. A real Enterprise registry hit exactly this.
+
 ## B-140 — A registry pushed straight after `init` fails its own generated CI
 
 **Evidence.** `registry init` writes six paths and ends with
