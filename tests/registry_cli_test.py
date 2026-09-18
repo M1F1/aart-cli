@@ -96,6 +96,25 @@ class RegistryCliTest(unittest.TestCase):
             )
         self.assertEqual(raised.exception.code, 2)
 
+    def test_the_two_authoring_verbs_are_withdrawn(self) -> None:
+        """CP-26 step 2. Both wrote the older registry representation and nothing else.
+
+        `scaffold` wrote a compiled package by hand, which no canonical package may be: each one
+        carries a `provenance.json` whose origin names the revision it was compiled from, and an
+        artifact authored in place has none. `publish` compiled that same older shape, and on a
+        registry publishing approved versions it skipped locking and then failed a gate nothing it
+        did could satisfy (B-142). Authoring belongs in a source checkout, reached by `scan` and
+        `promote`.
+        """
+
+        for withdrawn in ("scaffold", "publish"):
+            with self.subTest(withdrawn):
+                with self.assertRaises(SystemExit) as raised:
+                    cli.build_parser().parse_args(["registry", withdrawn, "--source", "/tmp/r"])
+                self.assertEqual(raised.exception.code, 2)
+        self.assertFalse(hasattr(CurationAction, "SCAFFOLD"))
+        self.assertFalse(hasattr(CurationAction, "PUBLISH"))
+
     def test_the_compatibility_ceiling_defaults_to_the_running_aart(self) -> None:
         # The upper compatibility point is whichever AART is publishing, not a version frozen in
         # the parser.  A default that never moves refuses every registry whose floor rises above

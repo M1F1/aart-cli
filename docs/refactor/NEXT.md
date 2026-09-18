@@ -1,27 +1,97 @@
 # AART Refactor — Next Work
 
-## PR #21 CI repair (2026-09-18)
+## Release checkpoint (2026-09-18)
 
-The public `pr-check` matrix failed in `source_remediation_test` because the D-308 refusal named
-`aart registry scan` and `aart registry promote` without their required arguments. The remediation
-now names their `--help` forms. The focused test was red before the fix, green after it, and red
-again when `--help` was deliberately removed from `promote`; the correct text was restored. The
-28 tests in `source_remediation_test` and `promoted_registry_maintenance_e2e_test`, plus
-`make lint format-check typecheck`, pass locally. The next CI run exposed two credential-shaped
-URL literals in `enterprise_ci_template_test`: they now use `credential_fixtures.credential_url`.
-At the owner's direction, `secret-shape-check` also runs in the quality action immediately after
-the PR-title and Git ownership checks, before dependency installation (D-310). Its ordering test
-went red when the step was deliberately moved after installation. The focused 100 tests and
-`make lint format-check typecheck secret-shape-check` pass. Next: push this follow-up, confirm
-PR #21's checks, then complete its release before resuming CP-26 step 2.
+PR #21's public matrix passed on Python 3.10, 3.11 and 3.14. Release Please's PR #22 passed
+its narrow gate and merged; `v0.3.0` and its wheel are published. CI also exposed two literal
+credential-shaped test URLs, now assembled through the fixture helper. D-310 runs the secret-shape
+scanner before dependency installation. Resume CP-26 step 2 on this branch.
+
+## Handoff: CP-26 step 2, on `refactor/cp-26-legacy-removal` (2026-09-18)
+
+**Branch.** Work on `refactor/cp-26-legacy-removal`, rebased onto the released `v0.3.0` main.
+PR #21 and its release PR #22 are merged; the release workflow passed and attached the wheel.
+
+**The red test is already in the tree**, committed with this handoff:
+`tests/registry_cli_test.py::RegistryCliTest::test_the_two_authoring_verbs_are_withdrawn`. It
+fails on purpose. It is the step's only new test, and making it pass is the step. Run it with:
+
+```
+poetry run python -c "import agent_artifacts.application, unittest; \
+  unittest.main(module=None, argv=['x','tests.registry_cli_test'])"
+```
+
+The indirection is not decoration: importing `tests.registry_cli_test` directly hits a circular
+import through `registry_commands.model`, and importing `agent_artifacts.application` first breaks
+the cycle. Use it for every test module under `tests/` that touches registry commands.
+
+### What step 2 deletes
+
+Both verbs wrote the older registry representation and have no approved-representation behaviour at
+all. Line numbers are as of this commit and will drift as you cut — take them as a map, not as
+coordinates.
+
+| File | What goes |
+|---|---|
+| `agent_artifacts/cli.py` | `p_scaffold` parser, 717–763; the `"publish"` parser at 1278–1291; the two `registry_action == "scaffold"` default-injections at 1523 and 1527 |
+| `agent_artifacts/curation/model.py` | `CurationAction.SCAFFOLD` (32), `CurationAction.PUBLISH` (39), and the `review.action is CurationAction.PUBLISH` branch at 289 — that branch's whole `if review.mutating:` block collapses to the else string |
+| `agent_artifacts/curation/runtime.py` | `_prepare_scaffold` 464–517, `_prepare_publish` 1345–1453, the import at 15, and the dispatch entries at 217, 1515, 1525, 1533–1534, 1551–1552 |
+| `agent_artifacts/commands/registry.py` | `_run_publish` 956–1099, and the two dispatch arms at 1426–1427 and 1458 |
+| `agent_artifacts/registry_commands/planning.py` | `plan_artifact_scaffold` 705–748 and `_payload` 616–702 — verify `_payload` has no other caller before cutting it |
+| `agent_artifacts/registry_commands/model.py` | `RegistryOperation.SCAFFOLD` (45), `PUBLISH` (57), `ArtifactScaffoldOptions` and its validator (115); the comment at 53 names `scaffold` and needs rewording, not deleting |
+| `agent_artifacts/registry_commands/__init__.py` | the `plan_artifact_scaffold` import (18) and `__all__` entry (43) |
+| `agent_artifacts/application/registry_commands.py` | `prepare_artifact_scaffold` 58–66 and its import at 25 |
+| `agent_artifacts/application/__init__.py` | the import (10) and `__all__` entry (56) |
+| `agent_artifacts/protocol/native_tree.py` | the remediation at 99 tells the reader to run `registry scaffold --help`; it must name `scan`/`promote` instead |
+| `agent_artifacts/registry_commands/templates.py` | the generated tutorial line at 377 runs `registry scaffold` |
+| `agent_artifacts/wizard.py` | `"scaffold"` at 175 |
+
+**One trap.** `agent_artifacts/compiler/model.py:33` defines `PUBLISH = "publish"` as a *compiler
+phase*, alongside `ACQUIRE`, `PARSE`, `NORMALIZE` and the rest. It has nothing to do with the verb
+and must survive. Grep for `CurationAction.PUBLISH` and `RegistryOperation.PUBLISH`, never for the
+bare string.
+
+**Tests to delete, not repair.** They characterize verbs that no longer exist:
+
+- `tests/registry_cli_test.py` — the `_SCAFFOLD` constant (13–16),
+  `test_scaffold_install_scope_and_mode_do_not_silently_include_defaults` (199), and `_SCAFFOLD`
+  from the `_rs02` loop at 136; `"scaffold"` and `"publish"` leave the action set at 29–63.
+- `tests/promoted_registry_maintenance_e2e_test.py` — all three of
+  `test_scaffold_refuses_a_registry_that_publishes_approved_versions`,
+  `test_publish_refuses_a_checkout_carrying_both_representations` and
+  `test_publish_gates_the_approved_representation_without_locking_it`. The first two are D-308's own
+  tests; D-308 guards verbs that step 2 removes, so the guard code inside `_prepare_scaffold` and
+  `_prepare_publish` dies with them. **`is_promoted_registry` itself stays** — step 3 needs it.
+- 35 test files mention one of the two verbs. Most only name them in a list or a docstring. Work
+  from `grep -rln "scaffold\|publish" tests/` and read before cutting.
+
+**Definition of done for step 2:** the new test passes, `grep -rn "CurationAction.SCAFFOLD\|CurationAction.PUBLISH\|plan_artifact_scaffold\|_run_publish" agent_artifacts/` is empty, one recorded
+targeted semantic mutation, `make lint format-check typecheck` plus the affected test modules green,
+then `handoff-plan done 2` and a commit.
+
+### House rules that are easy to miss
+
+- **Never run the full `make quality` locally.** The owner has interrupted it twice. Run the
+  focused test modules plus `make lint format-check typecheck`; the full suite runs in CI on the PR.
+- **One recorded targeted semantic mutation per task** — change the code deliberately, watch the
+  named test go red, record it in the slice document. Coverage is not evidence.
+- **Nothing private in any commit, file or PR.** The owner's Enterprise host, org and secret names
+  must never be written down; use `<instance>`, `<org>`, `<nazwa sekretu>`. Check every staged diff
+  before committing.
+- Commit messages end with `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>` only for commits
+  Claude authors — put your own attribution on yours.
+- Record material choices in `docs/refactor/DECISIONS.md`, non-critical discoveries in
+  `docs/refactor/BACKLOG.md`. The repository, not a chat log, has to be enough for the next agent.
 
 ## CP-26 — start here (2026-09-18)
 
-**Design and plan:** `docs/refactor/slices/cp-26-authoring-and-legacy-removal.md`. The twelve steps
-are in `plan.json` as CP-26; step 1 is `done`, the rest `todo`. Take them in order — the only
-internal constraint is that step 6 (collect the manifest field surface from the parser with `ast`)
-precedes steps 8–9, because the generator is written against the collected surface. The collector
-is already written and pasted into the design document; do not re-derive it.
+**Design and plan:** `docs/refactor/slices/cp-26-authoring-and-legacy-removal.md`. The sixteen steps
+are in `plan.json` as CP-26; step 1 is `done`, the rest `todo`. Take them in order — two internal
+constraints only: step 6 (collect the manifest field surface from the parser with `ast`) precedes
+steps 8–9, because the generator is written against the collected surface; and steps 14–16 (the
+README rewrite) come last, because a README written before the author verbs exist documents a
+surface that is still moving. Step 13 is independent and can be taken at any point. The `ast`
+collector is already written and pasted into the design document; do not re-derive it.
 
 **The owner has withdrawn backward compatibility, explicitly and more than once.** No compatibility
 window, no migration command, no deprecation period, no consideration for registries already
