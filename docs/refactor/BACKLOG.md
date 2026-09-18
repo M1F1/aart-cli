@@ -3435,6 +3435,10 @@ Two values are re-derived rather than preserved: `requires_aart.min_inclusive` c
 version of AART running `init` (pass `--minimum-version` to hold the old one), and `README.md` and
 `.gitignore` come back as templates, losing any local edit.
 
+**Not on a promoted registry.** On a registry carrying `registry/versions/`, `publish` writes
+the legacy `aart.lock.json` / `aart.index.json` pair that B-142 then cannot clear; recompile with
+`build --yes` instead. On an authored registry the `publish --yes` below is required.
+
 **The `publish --yes` is not optional, and on a registry holding artifacts it is not one file.**
 `init` rewrites `aart-registry.json` and `aart-source.json`, and both feed the deterministic inputs
 digest the lock records, so the reset invalidates the lock on its own — no artifact has to change.
@@ -3498,3 +3502,44 @@ is wired into the release action) and set `AART_PACKAGE=aart-cli=={version}` wit
 `AART_PIP_INDEX_URL`. The instance that raised this already has
 `AART_PIP_INDEX_CREDENTIALS_SECRET` set and `AART_PIP_INDEX_URL` unset, so it is one variable and
 one publish away from the supported route.
+
+## B-142 — `publish` on a registry carrying both representations enters a gate it cannot pass
+
+**Critical.** A real registry met this and could not be unblocked by any command the tool offered.
+It is the operator-facing half of B-057, which was reclassified critical on 2026-09-09 and is still
+open.
+
+**What happens.** `_prepare_publish` (`curation/runtime.py:1327`) branches on
+`is_promoted_registry`, which is true when *any* path under `registry/versions/` exists, and skips
+the lock step entirely — `test_publish_gates_the_approved_representation_without_locking_it` states
+that as intended. But `validate_registry_workspace` still checks `aart.lock.json` and
+`aart.index.json` when they are present. A checkout carrying both — which
+`is_promoted_registry`'s own docstring calls "the migration's real shape" — therefore fails publish
+with a set of errors publish structurally cannot fix:
+
+```
+error: registry publish gate failed: compiled index artifact identities are incomplete;
+compiled index disagrees with owned package <kind>/<name>; compiled index does not match
+registry inputs; registry lock does not match deterministic registry inputs
+```
+
+The printed remediation, `aart registry lock --yes, then aart registry build --yes`, is wrong for
+this shape: `lock` dispatches to `_prepare_promoted_lock` and leaves the legacy pair untouched.
+Nothing the operator can run clears it, and nothing says why.
+
+**How a registry gets there.** `init` writes no lock or index; one `publish --yes` on the
+still-empty registry writes both; a later `promote` adds the approved representation beside them.
+Reproduced end to end that way, matching the reported failure line for line.
+
+**Verified remedy, until the migration closes.** Delete `aart.lock.json` and `aart.index.json`.
+All six generated gates then pass and `registry/index.json` is unchanged, so no consumer sees a
+difference — *provided* the registry owns no authored artifacts. Confirmed both ways: with an
+authored artifact present, deleting the pair drops it out of the consumer index while leaving it on
+disk, which is a silent content loss rather than a fix. Going the other way is not available at
+all: deleting `registry/` leaves promotion's versioned `artifacts/<kind>/<name>/<version>/` tree,
+which the authored shape cannot read (`required file is missing: artifact.json`, B-057).
+
+**Shape of the work.** Smallest honest fix: publish refuses a both-shapes checkout by name, says
+which representation it is going to keep, and names the files to remove. Real fix: close B-057 so
+the two shapes cannot coexist. Either way `validate` and `publish` must agree on which files are
+live, because today one refuses to repair what the other insists on checking.
