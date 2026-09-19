@@ -1,5 +1,15 @@
 # AART Refactor Migration Status
 
+**2026-09-19, CP-26.08 amendment.** The generated `mcp` manifest named its payload under
+`payload/`, and `compile_author_snapshot` places the author's files under the package's own
+`payload/` root, so the generated workspace compiled to `payload/payload/server.py`. It parsed and
+it compiled; no gate refuses the doubled form, and the shipped example in
+`docs/examples/author-source` had the right shape all along. The skeleton now names `server.py` and
+`requirements.txt`, and a new test compiles the generated workspace and asserts each payload file
+arrives once, at `payload/<name>`. Two targeted mutations restoring either prefix fail exactly that
+test. The test that had encoded the old convention was corrected to the claim it meant: the written
+payload files and `payload.include` are the same set.
+
 **2026-09-19, CP-26.08 complete.** `aart author init --kind mcp --name <slug> [--into DIR]` writes
 a full-surface authoring workspace: an `aart.yaml` carrying every field `parse_author_manifest`
 accepts, with the optional blocks written out behind `# ` and a line of explanation above each, plus

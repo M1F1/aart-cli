@@ -141,11 +141,11 @@ class RefusalTest(unittest.TestCase):
         """The conflict is found before anything is written, not while writing."""
 
         with _workspace() as root:
-            (root / "payload").mkdir()
-            (root / "payload" / "server.py").write_text("mine\n", encoding="utf-8")
+            taken = _generated().payload[0][0]
+            (root / taken).write_text("mine\n", encoding="utf-8")
 
             self.assertEqual(_init(root), ERROR)
-            self.assertEqual(_tree(root), {"payload", os.path.join("payload", "server.py")})
+            self.assertEqual(_tree(root), {taken})
 
     def test_a_kind_this_build_does_not_generate_writes_nothing(self) -> None:
         with _workspace() as root:

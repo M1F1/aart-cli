@@ -42,6 +42,11 @@ GENERATED_KINDS = ("mcp",)
 #: Where a generated manifest says it came from, for the diagnostics of the verification below.
 SKELETON_MANIFEST_NAME = "aart.yaml"
 
+#: A payload path is relative to the manifest's own directory. The compiler places the author's
+#: files under the package's `payload/` itself, so a `payload/` written here would arrive as
+#: `payload/payload/`: the shipped example in `docs/examples/author-source` is the shape.
+_REQUIREMENTS = "requirements.txt"
+
 
 @dataclass(frozen=True, slots=True)
 class AuthorSkeleton:
@@ -82,7 +87,7 @@ def _mcp_document(name: str) -> tuple[JsonObject, tuple[str, ...]]:
     root field set calls them optional. What the parser demands is what this document keeps live.
     """
 
-    entrypoint = "payload/server.py"
+    entrypoint = "server.py"
     document = _object(
         ("schema", "aart.dev/mcp/v1"),
         (
@@ -97,12 +102,12 @@ def _mcp_document(name: str) -> tuple[JsonObject, tuple[str, ...]]:
         (
             "payload",
             _object(
-                ("exclude", _strings("payload/**/__pycache__/**")),
-                ("include", _strings("payload/**")),
+                ("exclude", _strings("**/__pycache__/**")),
+                ("include", _strings(entrypoint, _REQUIREMENTS)),
             ),
         ),
         ("transport", _object(("type", "stdio"))),
-        ("runtime", _object(("type", "python"), ("version", "3.11"))),
+        ("runtime", _object(("type", "python"), ("version", ">=3.11"))),
         (
             "launch",
             _object(
@@ -124,7 +129,7 @@ def _mcp_document(name: str) -> tuple[JsonObject, tuple[str, ...]]:
             _object(
                 (
                     "dependencies",
-                    _object(("path", "payload/requirements.txt"), ("type", "requirements")),
+                    _object(("path", _REQUIREMENTS), ("type", "requirements")),
                 ),
             ),
         ),
@@ -243,8 +248,8 @@ _ALTERNATIVES: dict[str, tuple[str, ...]] = {
         "## Or resolve from a project file instead, with `type: uv` when you ship a uv lock:",
         "#?   dependencies:",
         "#?     type: pyproject",
-        "#?     pyproject: payload/pyproject.toml",
-        "#?     lock: payload/uv.lock",
+        "#?     pyproject: pyproject.toml",
+        "#?     lock: uv.lock",
     ),
     "inputs": (
         "## An injection other than `environment` names its own field in place of `variable`.",
@@ -423,5 +428,5 @@ def _mcp_payload(full: JsonObject) -> tuple[tuple[str, str], ...]:
             'if __name__ == "__main__":\n'
             "    main()\n",
         ),
-        ("payload/requirements.txt", "# One pinned requirement per line.\n"),
+        (_REQUIREMENTS, "# One pinned requirement per line.\n"),
     )

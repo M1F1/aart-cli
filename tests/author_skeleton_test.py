@@ -22,10 +22,16 @@ from agent_artifacts.authoring.skeleton import (
     PROSE_PREFIX,
     author_skeleton,
 )
+from agent_artifacts.domain.identifiers import SourceAlias
 from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.authoring import DiscoveredAuthorManifest, parse_author_manifest
+from agent_artifacts.protocol.authoring import (
+    DiscoveredAuthorManifest,
+    compile_author_snapshot,
+    parse_author_manifest,
+)
 from agent_artifacts.protocol.paths import parse_relative_path
 from agent_artifacts.protocol.yaml import emit_yaml, parse_yaml
+from tests.authoring_compiler_test import _file, _snapshot
 from tests.authoring_field_surface import parser_field_surface
 
 _NAME = "github-mcp"
@@ -107,6 +113,43 @@ class ParseabilityTest(unittest.TestCase):
         self.assertEqual(parsed, Ok(_skeleton().live))
 
 
+class CompilationTest(unittest.TestCase):
+    """What an author runs next is a compile, so the skeleton is held to compiling."""
+
+    def _compiled(self):
+        skeleton = _skeleton()
+        files = [_file(f"{_NAME}/aart.yaml", skeleton.manifest.encode())]
+        files.extend(
+            _file(f"{_NAME}/{path}", content.encode()) for path, content in skeleton.payload
+        )
+        compiled = compile_author_snapshot(
+            _snapshot(*files),
+            source_alias=SourceAlias("example"),
+            source="https://example.invalid/skeleton.git",
+            revision="a" * 40,
+        )
+        assert isinstance(compiled, Ok), getattr(compiled, "diagnostics", ())
+        self.assertEqual(len(compiled.value), 1)
+        return compiled.value[0]
+
+    def test_the_generated_workspace_compiles_to_one_canonical_package(self) -> None:
+        self.assertEqual(str(self._compiled().package.coordinate.artifact.name), _NAME)
+
+    def test_the_payload_arrives_under_its_own_names_and_not_a_second_time(self) -> None:
+        """A `payload/` written into the manifest lands as `payload/payload/`, and compiles.
+
+        The compiler puts the author's files under the package's payload directory itself, so the
+        paths in `aart.yaml` are relative to the manifest. Nothing refuses the doubled form, which
+        is exactly why this is asserted rather than left to a gate.
+        """
+
+        entries = {str(entry.path) for entry in self._compiled().canonical_entries}
+
+        for path, _ in _skeleton().payload:
+            self.assertIn(f"payload/{path}", entries)
+        self.assertEqual([entry for entry in entries if "payload/payload/" in entry], [])
+
+
 class AntiDriftTest(unittest.TestCase):
     """The oracle of CP-26.6 §1.5: the parser decides what the skeleton must carry."""
 
@@ -168,11 +211,16 @@ class ShapeTest(unittest.TestCase):
         self.assertEqual(_skeleton().manifest, _skeleton().manifest)
 
     def test_the_payload_skeleton_matches_what_the_manifest_includes(self) -> None:
+        """A written file the manifest does not name is not part of the artifact."""
+
         skeleton = _skeleton()
+        parsed = _parsed(skeleton.manifest)
+        assert isinstance(parsed, Ok), parsed
 
         self.assertTrue(skeleton.payload)
-        for path, _content in skeleton.payload:
-            self.assertTrue(path.startswith("payload/"), path)
+        self.assertEqual(
+            sorted(path for path, _content in skeleton.payload), sorted(parsed.value.includes)
+        )
 
     def test_the_manifest_declares_the_entrypoint_the_payload_provides(self) -> None:
         skeleton = _skeleton()

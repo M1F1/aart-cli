@@ -636,6 +636,29 @@ survivors were diagnostic wording variants and `encoding=` spellings that behave
 ASCII, plus three real findings — an unnamed receipt root, an unexercised rollback path and an
 unasserted remediation line — which are the last three targeted mutations above.
 
+### Step 8 amendment — a payload path is relative to the manifest, not under `payload/` (2026-09-19)
+
+The first generated manifest wrote `include: [payload/**]`, `entrypoint: payload/server.py` and a
+dependency path under `payload/`, and put the files there. It parsed, and it compiled — which is
+the whole problem. `compile_author_snapshot` places the author's files under the package's own
+`payload/` root, so the generated workspace compiled to `payload/payload/server.py`. Nothing in the
+parser, the compiler or any gate refuses that; the shipped example in
+`docs/examples/author-source/example-mcp/aart.yaml` has had the correct shape all along, and the
+generator was the thing that disagreed with it.
+
+Found by asking what the author's *next* command does with the file rather than by re-reading the
+manifest, which is the general lesson: a generated manifest is only correct against the pipeline it
+feeds. The skeleton now names `server.py` and `requirements.txt`, and
+`test_the_payload_arrives_under_its_own_names_and_not_a_second_time` compiles the generated
+workspace through `compile_author_snapshot` and asserts both that each payload file arrives at
+`payload/<name>` and that no entry contains `payload/payload/`. Two further targeted mutations —
+restoring either prefix — fail exactly that test.
+
+`test_the_payload_skeleton_matches_what_the_manifest_includes` asserted the old prefix convention
+and was corrected rather than deleted: it now requires the written payload files and
+`payload.include` to be the same set, which is the claim that was meant and does not depend on
+where the files sit.
+
 ### Step 17 — no maintainer identity as a default
 
 The owner explicitly requires generated registries and operational examples to carry no default
