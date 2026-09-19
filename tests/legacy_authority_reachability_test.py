@@ -22,6 +22,12 @@ The exception list is a claim about each name in it, so each one states its reas
 * ``application.activity_telemetry`` -- the deliberately dormant, transport-neutral injection
   boundary for a future explicitly configured Activity telemetry adapter (D-292). The disabled
   adapter is tested now; no runtime imports the module, so its presence cannot opt a user in.
+* ``domain.installation_tree`` -- the §169.3 path policy, written in CP-26.18a because names and
+  paths had to be settled before the installation identity was wired, and wired in CP-26.19, which
+  is the step that measures which directory each harness tolerates a private subtree in (D-346).
+  It is unreachable in exactly the interval between those two steps, and ``domain/placement.py``
+  still holds the authority it will replace -- so this entry is a dated claim, and 19 removing it
+  is part of 19.
 
 ``application.credential_lifecycle`` was on this list, retained for a credential lifecycle nothing
 could run yet. Screen 24's Verify/Replace/Delete rows plan through it now (CP-23 task 12, D-262).
@@ -49,6 +55,7 @@ DELIBERATE_NON_RUNTIME_MODULES = frozenset(
     {
         "aart_cli._commit",
         "aart_cli.application.activity_telemetry",
+        "aart_cli.domain.installation_tree",
         "aart_cli.profiles.loader",
     }
 )

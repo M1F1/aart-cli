@@ -24,7 +24,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from unittest import mock
 
-from aart_cli.configuration.paths import PathOverrides, resolve_config_paths
+from aart_cli.configuration.paths import resolve_config_paths
 from tests.marketplace_lifecycle_e2e_test import _COORDINATE
 from tests.source_sync_command_e2e_test import (
     _environment_over_a_writable_source,
@@ -57,7 +57,7 @@ def _machine_policy(path: Path):
     real = resolve_config_paths
 
     def patched(platform, **kwargs):
-        kwargs["overrides"] = PathOverrides(policy_file=str(path))
+        kwargs["policy_file"] = str(path)
         return real(platform, **kwargs)
 
     with (

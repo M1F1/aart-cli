@@ -104,6 +104,7 @@ the product's single source of truth, which every document below is written agai
 
 **Using AART** — [installing it](docs/install/installing-aart-v1.md) ·
 [the consumer lifecycle](docs/using/consumer-lifecycle-v1.md) ·
+[where AART keeps what it owns](docs/configuration/application-home-v1.md) ·
 [with a company registry](docs/tutorials/company-registry-v1.md) ·
 [with direct sources only](docs/tutorials/direct-source-v1.md) ·
 [the environment AART gives Git](docs/configuration/git-environment-v1.md) ·

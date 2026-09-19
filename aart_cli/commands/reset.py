@@ -13,7 +13,11 @@ from aart_cli.application.factory_reset import (
     plan_factory_reset,
 )
 from aart_cli.command_outcome import ERROR, OK
-from aart_cli.configuration.paths import Platform, resolve_config_paths
+from aart_cli.configuration.paths import (
+    APPLICATION_HOME_VARIABLE,
+    Platform,
+    resolve_config_paths,
+)
 from aart_cli.domain.result import Err
 from aart_cli.model import Request
 
@@ -24,18 +28,26 @@ def _paths(request: Request):
     paths = resolve_config_paths(
         platform,
         home=home,
-        xdg_config_home=os.environ.get("XDG_CONFIG_HOME"),
-        xdg_data_home=os.environ.get("XDG_DATA_HOME"),
-        xdg_cache_home=os.environ.get("XDG_CACHE_HOME"),
+        application_home=os.environ.get(APPLICATION_HOME_VARIABLE) or None,
     )
     return home, paths
 
 
 def _safe_ancestors(target: FactoryResetTarget, *, home: str) -> None:
+    """Walk from the application home to the target, refusing a symlink anywhere on the way.
+
+    `home` is the application home rather than the user's, because that is what the plan is
+    relative to now. Every target is a direct child of it, so the walk usually checks one thing:
+    that the home itself is a real directory. That is the case worth checking -- a symlinked
+    `~/.aart-cli` would put `shutil.rmtree` somewhere nobody named.
+    """
+
     parent = os.path.dirname(target.path)
     relative = os.path.relpath(parent, home)
     if relative == os.pardir or relative.startswith(os.pardir + os.sep):
-        raise ValueError(f"refusing factory reset target outside user home: {target.path}")
+        raise ValueError(
+            f"refusing factory reset target outside the application home: {target.path}"
+        )
     current = home
     for component in () if relative == os.curdir else relative.split(os.sep):
         try:
@@ -83,6 +95,7 @@ def run(request: Request) -> int:
     try:
         home, paths = _paths(request)
         planned = plan_factory_reset(paths, home=home)
+        anchor = paths.application_home
     except ValueError as error:
         print(f"error: {error}")
         return ERROR
@@ -108,17 +121,17 @@ def run(request: Request) -> int:
 
     try:
         observations = tuple(
-            (target, _safe_observation(target, home=home)) for target in plan.targets
+            (target, _safe_observation(target, home=anchor)) for target in plan.targets
         )
         # Validate every existing target before deleting the first one.
         for target, observed in observations:
             if observed is None:
                 continue
-            if _safe_observation(target, home=home) != observed:
+            if _safe_observation(target, home=anchor) != observed:
                 raise ValueError(f"factory reset target changed after Review: {target.path}")
         for target, observed in observations:
             if observed is not None:
-                if _safe_observation(target, home=home) != observed:
+                if _safe_observation(target, home=anchor) != observed:
                     raise ValueError(f"factory reset target changed before deletion: {target.path}")
                 _remove(target)
     except (OSError, ValueError) as error:

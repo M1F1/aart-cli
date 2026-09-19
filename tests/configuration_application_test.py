@@ -14,7 +14,7 @@ from aart_cli.application.configuration import (
     save_user_configuration,
     save_user_configuration_for_source_management,
 )
-from aart_cli.configuration.paths import PathOverrides, Platform, resolve_config_paths
+from aart_cli.configuration.paths import Platform, resolve_config_paths
 from aart_cli.configuration.policy import RuntimeOverrides
 from aart_cli.configuration.schema import parse_organization_policy, parse_user_configuration
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
@@ -61,12 +61,8 @@ def _paths():
     return resolve_config_paths(
         Platform.LINUX,
         home="/never/real/home",
-        overrides=PathOverrides(
-            config_root="/test/config",
-            data_root="/test/data",
-            cache_root="/test/cache",
-            policy_file="/test/policy.json",
-        ),
+        application_home="/test/state",
+        policy_file="/test/policy.json",
     )
 
 

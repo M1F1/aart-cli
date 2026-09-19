@@ -39,9 +39,7 @@ def _first_sync_states(
         paths = resolve_config_paths(
             Platform.DARWIN if sys.platform == "darwin" else Platform.LINUX,
             home=os.environ["HOME"],
-            xdg_config_home=os.environ.get("XDG_CONFIG_HOME"),
-            xdg_data_home=os.environ.get("XDG_DATA_HOME"),
-            xdg_cache_home=os.environ.get("XDG_CACHE_HOME"),
+            application_home=os.environ.get("AART_CLI_HOME") or None,
         )
         parsed = parse_user_configuration(Path(paths.user_config_file).read_bytes())
         effective = apply_configuration(parsed.value, RuntimeOverrides(), OrganizationPolicy(1))
@@ -288,9 +286,7 @@ class ManualTestLabTest(unittest.TestCase):
                 home = str(resolved / f"{role}-home")
                 self.assertEqual(home, env["HOME"])
                 self.assertEqual(str(resolved / project), str(cwd))
-                self.assertTrue(env["XDG_CONFIG_HOME"].startswith(home))
-                self.assertTrue(env["XDG_DATA_HOME"].startswith(home))
-                self.assertTrue(env["XDG_CACHE_HOME"].startswith(home))
+                self.assertTrue(env["AART_CLI_HOME"].startswith(home))
 
     @unittest.skipUnless(sys.platform == "darwin", "the Keychain only exists on macOS")
     def test_each_lab_home_owns_a_keychain_so_no_reset_is_ever_offered(self) -> None:

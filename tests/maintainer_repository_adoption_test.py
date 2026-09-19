@@ -472,11 +472,7 @@ class RepositoryAdoptionCompositionTest(_Lab):
 
         home = self.root / "home"
         home.mkdir()
-        xdg = {
-            "XDG_CONFIG_HOME": str(self.root / "config"),
-            "XDG_DATA_HOME": str(self.root / "data"),
-            "XDG_CACHE_HOME": str(self.root / "cache"),
-        }
+        xdg = {"AART_CLI_HOME": str(self.root / "state")}
 
         def local_transport(request):
             self.assertFalse(request.allow_local_transport)

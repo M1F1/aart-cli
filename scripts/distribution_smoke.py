@@ -43,9 +43,7 @@ def _config_paths(home: Path):
     return resolve_config_paths(
         platform,
         home=str(home),
-        xdg_config_home=os.environ.get("XDG_CONFIG_HOME"),
-        xdg_data_home=os.environ.get("XDG_DATA_HOME"),
-        xdg_cache_home=os.environ.get("XDG_CACHE_HOME"),
+        application_home=os.environ.get("AART_CLI_HOME") or None,
     )
 
 
@@ -476,9 +474,7 @@ def run_smoke(source_root: Path) -> dict[str, Any]:
         environment.update(
             {
                 "HOME": str(home),
-                "XDG_CONFIG_HOME": str(workspace / "xdg-config"),
-                "XDG_DATA_HOME": str(workspace / "xdg-data"),
-                "XDG_CACHE_HOME": str(workspace / "xdg-cache"),
+                "AART_CLI_HOME": str(workspace / "aart-cli-home"),
                 "PIP_DISABLE_PIP_VERSION_CHECK": "1",
                 "PIP_NO_INDEX": "1",
                 "PYTHONDONTWRITEBYTECODE": "1",

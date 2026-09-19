@@ -185,7 +185,7 @@ class CanonicalConsumerEntryTest(unittest.TestCase):
         self.assertIsInstance(composed, Ok, composed)
         arguments = read.call_args.kwargs
         self.assertEqual(arguments["harness_root"], "/work/project")
-        self.assertTrue(arguments["state_root"].endswith("agent-artifacts/state"))
+        self.assertEqual(arguments["state_root"], "/users/alice/.aart-cli/state")
         self.assertEqual(arguments["today"], TODAY)
         # The adapters the machine is measured through are the ones the actions can act on.
         self.assertEqual(

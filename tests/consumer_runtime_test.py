@@ -84,17 +84,13 @@ class ConsumerRuntimeTest(unittest.TestCase):
             home.mkdir()
             project.mkdir()
             xdg = {
-                "XDG_CONFIG_HOME": str(home / ".config"),
-                "XDG_DATA_HOME": str(home / ".local/share"),
-                "XDG_CACHE_HOME": str(home / ".cache"),
+                "AART_CLI_HOME": str(home / ".aart-cli"),
             }
             platform = Platform.DARWIN if sys.platform == "darwin" else Platform.LINUX
             paths = resolve_config_paths(
                 platform,
                 home=str(home),
-                xdg_config_home=xdg["XDG_CONFIG_HOME"],
-                xdg_data_home=xdg["XDG_DATA_HOME"],
-                xdg_cache_home=xdg["XDG_CACHE_HOME"],
+                application_home=xdg["AART_CLI_HOME"],
             )
             source = configured_source("company", SourceKind.REGISTRY_GIT)
             configuration = effective_configuration(
@@ -445,17 +441,13 @@ class ConsumerRuntimeTest(unittest.TestCase):
             home.mkdir()
             project.mkdir()
             xdg = {
-                "XDG_CONFIG_HOME": str(home / ".config"),
-                "XDG_DATA_HOME": str(home / ".local/share"),
-                "XDG_CACHE_HOME": str(home / ".cache"),
+                "AART_CLI_HOME": str(home / ".aart-cli"),
             }
             platform = Platform.DARWIN if sys.platform == "darwin" else Platform.LINUX
             config_paths = resolve_config_paths(
                 platform,
                 home=str(home),
-                xdg_config_home=xdg["XDG_CONFIG_HOME"],
-                xdg_data_home=xdg["XDG_DATA_HOME"],
-                xdg_cache_home=xdg["XDG_CACHE_HOME"],
+                application_home=xdg["AART_CLI_HOME"],
             )
             source = configured_source("team", SourceKind.SOURCE_GIT)
             configuration = effective_configuration((source,)).configuration

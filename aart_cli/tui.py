@@ -899,16 +899,18 @@ def _canonical_consumer_actions(
     an effect belongs, and a draw must never reach back into any of it (D-051).
     """
 
-    from .configuration.paths import Platform, resolve_config_paths
+    from .configuration.paths import (
+        APPLICATION_HOME_VARIABLE,
+        Platform,
+        resolve_config_paths,
+    )
 
     platform = Platform.DARWIN if sys.platform == "darwin" else Platform.LINUX
     home = os.path.abspath(user_home or os.path.expanduser("~"))
     paths = resolve_config_paths(
         platform,
         home=home,
-        xdg_config_home=os.environ.get("XDG_CONFIG_HOME"),
-        xdg_data_home=os.environ.get("XDG_DATA_HOME"),
-        xdg_cache_home=os.environ.get("XDG_CACHE_HOME"),
+        application_home=os.environ.get(APPLICATION_HOME_VARIABLE) or None,
     )
     project_root = os.path.abspath(project or os.getcwd())
     # One set of adapters for the whole application. Measuring a credential through a provider the

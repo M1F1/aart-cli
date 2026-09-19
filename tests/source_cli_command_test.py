@@ -59,10 +59,11 @@ def _runtime(
     effective = apply_configuration(user, RuntimeOverrides(), policy)
     assert isinstance(effective, Ok)
     paths = ConfigPaths(
+        "/tmp/aart-cli",
         "/tmp/aart-cli/config.json",
-        "/tmp/aart-cli/data",
+        "/tmp/aart-cli",
         "/tmp/aart-cli/cache",
-        "/tmp/aart-cli/policy.json",
+        "/etc/aart-cli/policy.json",
     )
 
     def read(_request):
@@ -157,10 +158,12 @@ class SourceCliCommandTests(unittest.TestCase):
     def test_local_source_add_then_agent_browse_uses_durable_state_without_objects(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw).resolve()
+            home = root / "aart-cli-home"
             paths = ConfigPaths(
-                str(root / "config" / "config.json"),
-                str(root / "data"),
-                str(root / "cache"),
+                str(home),
+                str(home / "config.json"),
+                str(home),
+                str(home / "cache"),
                 str(root / "policy.json"),
             )
             fixture = str(

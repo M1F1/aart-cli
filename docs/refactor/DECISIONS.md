@@ -8549,3 +8549,62 @@ offering all three (D-269 keeps them working on a form's non-field rows), and
 `needs_a_new_branch` now names once the question the rows, the renderer, the workspace detail and
 `_prepare_registry_push` were each answering with their own copy of `{None, "main",
 default_branch}`.
+
+## D-344 — one application home, and the one thing it cannot move (CP-26.18a)
+
+`resolve_config_paths` had three roots and a platform branch: `Library/Application Support` beside
+`Library/Caches`, or `XDG_CONFIG_HOME` beside `XDG_DATA_HOME` beside `XDG_CACHE_HOME`. §169.2
+replaces all of it with `AART_CLI_HOME` if it is set and `<user-home>/.aart-cli` otherwise, the same
+on both platforms. The layout underneath needed no design: `object_store_paths` and
+`source_store_paths` already composed `objects/sha256`, `objects/quarantine`, `sources/`, `state/`,
+`locks/` and `tmp/` under one `data_root`, so that root simply became the home and `cache/` moved
+inside it.
+
+An unusable explicit home raises rather than falling back to the default. Falling back is the worse
+failure: a CI job whose variable is misspelt would write its state into the developer's own home and
+look like it worked.
+
+Machine policy does not move with it. An administrator writes `/etc/aart-cli/policy.json` or
+`/Library/Application Support/aart-cli/policy.json`, and a rule that one environment variable can
+step around is not a rule -- so `policy_file` stays platform-owned, outside the home, and a test
+asserts that choosing an application home leaves it exactly where it was.
+
+`PathOverrides` is gone. Its four independent roots existed so tests could take the platform branch
+apart; with one home there is one thing to point somewhere else, and `policy_file` stays a separate
+argument precisely because it is the thing the home does not govern.
+
+## D-345 — reset names the entries, never the home (CP-26.18a)
+
+`plan_factory_reset` used to protect itself by name and by containment: a target's basename had to
+be `agent-artifacts`, and it had to be inside the user's home. Neither survives §169.2. The home can
+be `/runner/work/state`, whose basename is nothing in particular and which is nowhere near the
+user's home -- so both guards would refuse the case the specification exists to support.
+
+The replacement is stronger rather than looser: the plan names the seven entries §169.2 lists plus
+the configuration lock, each a direct child of the home, and never the home itself. A reset then
+cannot delete a directory somebody pointed a variable at, because no plan ever contains one. Two
+homes are still refused outright, since for those even the entries are not ours: a filesystem root,
+whose `tmp` and `state` are the machine's, and the user's home directory, whose `cache` and
+`objects` could be anything.
+
+It also means a file the tool did not write inside its own home survives a reset, which the previous
+`rmtree` of the whole data root did not. `commands/reset.py` anchors its symlink walk on the
+application home for the same reason -- a symlinked `~/.aart-cli` is now the case worth refusing.
+
+## D-346 — the installation tree policy is written here, the harness roots are measured in 19
+
+§169.3 reverses `domain/placement.py`: a tree belongs under the harness that selected it, because
+the owner is the installation rather than the artifact, and a second harness is a second
+installation. `domain/installation_tree.py` holds that rule -- `<harness root>/aart-cli/<kind>/
+<alias>/<name>`, alias-qualified so two connections to one upstream never share a tree, and without
+the version, so an update reconciles the installation that is there.
+
+The harness root is an argument rather than a table. Which directory each harness tolerates a
+private subtree in is a measured fact per harness and scope, CP-26.19 is the step that measures and
+wires it, and a table of guesses written here to look complete would be evidence-shaped without
+being evidence. `domain/placement.py` keeps its authority until 19 replaces it: removing it now
+would leave every lifecycle writer pointing at nothing.
+
+The alias and the artifact name are operator and Registry input, so both are held to the same slug
+the configuration and protocol schemas already validate them against, and refused rather than
+encoded -- an encoded component is a path nobody can read back to the installation it belongs to.

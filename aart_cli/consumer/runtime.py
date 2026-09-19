@@ -17,7 +17,11 @@ from aart_cli.application.promotion import registry_state_digest
 from aart_cli.application.sources import SourceStatusRequest, source_status
 from aart_cli.compiler.graph import GraphSource, compile_marketplace_graph
 from aart_cli.configuration.model import ConfiguredSource, SourceKind, UserConfiguration
-from aart_cli.configuration.paths import Platform, resolve_config_paths
+from aart_cli.configuration.paths import (
+    APPLICATION_HOME_VARIABLE,
+    Platform,
+    resolve_config_paths,
+)
 from aart_cli.configuration.policy import (
     EffectiveConfiguration,
     RuntimeOverrides,
@@ -487,9 +491,7 @@ def load_local_consumer_service(
     config_paths = resolve_config_paths(
         platform,
         home=home,
-        xdg_config_home=os.environ.get("XDG_CONFIG_HOME"),
-        xdg_data_home=os.environ.get("XDG_DATA_HOME"),
-        xdg_cache_home=os.environ.get("XDG_CACHE_HOME"),
+        application_home=os.environ.get(APPLICATION_HOME_VARIABLE) or None,
     )
     loaded = load_configuration(
         ConfigurationRequest(

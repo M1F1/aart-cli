@@ -318,9 +318,7 @@ def _home(home: Path, remotes: Path) -> dict[str, str]:
     env.update(
         {
             "HOME": str(home),
-            "XDG_CONFIG_HOME": str(home / ".config"),
-            "XDG_DATA_HOME": str(home / ".local/share"),
-            "XDG_CACHE_HOME": str(home / ".cache"),
+            "AART_CLI_HOME": str(home / ".aart-cli"),
             "PYTHONPATH": str(CHECKOUT),
         }
     )

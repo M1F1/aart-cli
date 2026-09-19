@@ -16,7 +16,12 @@ from aart_cli.application.configuration import (
     LoadedConfiguration,
     load_configuration,
 )
-from aart_cli.configuration.paths import ConfigPaths, Platform, resolve_config_paths
+from aart_cli.configuration.paths import (
+    APPLICATION_HOME_VARIABLE,
+    ConfigPaths,
+    Platform,
+    resolve_config_paths,
+)
 from aart_cli.configuration.policy import RuntimeOverrides, redact_text
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.result import Err, Ok, Result
@@ -51,9 +56,7 @@ def load_runtime_configuration(
         paths = resolve_config_paths(
             platform,
             home=home,
-            xdg_config_home=os.environ.get("XDG_CONFIG_HOME"),
-            xdg_data_home=os.environ.get("XDG_DATA_HOME"),
-            xdg_cache_home=os.environ.get("XDG_CACHE_HOME"),
+            application_home=os.environ.get(APPLICATION_HOME_VARIABLE) or None,
         )
     except ValueError as error:
         return Err(
@@ -62,7 +65,9 @@ def load_runtime_configuration(
                     DiagnosticCode("config-invalid"),
                     Severity.ERROR,
                     redact_text(f"configuration path environment is invalid: {error}"),
-                    remediation=("set XDG configuration paths to normalized absolute paths",),
+                    remediation=(
+                        f"set {APPLICATION_HOME_VARIABLE} to a normalized absolute path, or unset it",
+                    ),
                 ),
             )
         )

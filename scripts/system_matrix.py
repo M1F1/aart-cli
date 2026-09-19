@@ -147,18 +147,14 @@ def select_scenarios(
 def _environment(scenario_root: Path) -> dict[str, str]:
     home = scenario_root / "home"
     temporary = scenario_root / "tmp"
-    config = scenario_root / "xdg-config"
-    data = scenario_root / "xdg-data"
-    cache = scenario_root / "xdg-cache"
-    for path in (home, temporary, config, data, cache):
+    application_home = scenario_root / "aart-cli-home"
+    for path in (home, temporary, application_home):
         path.mkdir(parents=True)
     environment = {
         "PATH": os.environ.get("PATH", os.defpath),
         "HOME": str(home),
         "TMPDIR": str(temporary),
-        "XDG_CONFIG_HOME": str(config),
-        "XDG_DATA_HOME": str(data),
-        "XDG_CACHE_HOME": str(cache),
+        "AART_CLI_HOME": str(application_home),
         "PYTHONNOUSERSITE": "1",
         "PYTHONDONTWRITEBYTECODE": "1",
         "GIT_CONFIG_NOSYSTEM": "1",

@@ -1035,12 +1035,52 @@ Specification, which the owner had already written in the new namespace: the spe
 commands the executable does not have yet, on purpose, so it is the one linked document that is not
 instructions to a reader and is now excluded there with that reason recorded in the test.
 
-**Still open in this step.** Manifest discovery (`aart.yaml`/`aart.json`), generated file names
-(`aart-registry.json`, `aart-source.json`, `.github/workflows/aart-registry.yml`), managed block
-markers, the project state directory `.agent-artifacts`, the `AART_*` environment and CI variables,
-schema/URI identifiers and the branch prefix; then the one portable `AART_CLI_HOME` with the §169.2
-layout and the adapter-owned path policy; then step 16's executed installation/README contract
-re-run against the changed advertised commands, and the branch suggestion carried in below.
+**Done so far — the names the filesystem sees.** Author manifests are `aart-cli.yaml` and
+`aart-cli.json`; a registry init writes `aart-cli-registry.json`, `aart-cli-source.json` and
+`.github/workflows/aart-cli-registry.yml`; the managed region inside somebody else's `CLAUDE.md` is
+delimited by `<!-- >>> aart-cli memory:<name> >>> -->`; the project state directory is `.aart-cli`;
+payload formats are `aart-cli-<kind>-v1`, compliance levels `aart-cli-native` and
+`aart-cli-compatible`, manifest schemas `aart-cli.dev/<kind>/v1`, the built-in security provider
+`aart-cli-baseline`; and every environment and CI variable is `AART_CLI_*`, including the
+`AART_CLI_SECRET_` and `AART_CLI_CONFIG_` prefixes a launcher injects an installation's inputs
+through. `AART_DUMMY_USER` and `AART_DUMMY_TOKEN` stayed: they belong to a fixture artifact rather
+than to the tool, and an artifact binding whatever variable it likes is what they demonstrate.
+
+Three of those are content-addressed rather than merely spelled, so the rename is a format change
+and is meant to be: the compiler options digest seed, the payload format in every artifact manifest
+and the schema identifier in every author manifest. A regular expression cannot see an assembled
+name, and two places assembled one -- `f"aart-{kind}-v1"` in a security fixture and the marker's
+literal text in two block tests -- which the gate caught.
+
+**Done so far — one portable home.** `resolve_config_paths` resolves `AART_CLI_HOME` if it is set
+and `<user-home>/.aart-cli` otherwise, identically on macOS and Linux, and refuses an unusable
+explicit value rather than falling back (D-344). The §169.2 layout needed no design: `objects/`,
+`sources/`, `state/`, `locks/` and `tmp/` were already composed under one `data_root`, which became
+the home, and `cache/` moved inside it. Machine policy stayed outside, because a rule an
+environment variable can step around is not a rule. `plan_factory_reset` was rewritten rather than
+renamed -- it names the seven managed entries and the configuration lock and never the home itself,
+so a reset cannot delete whatever a variable pointed at, and a file the tool did not write inside
+its own home now survives one (D-345). `domain/installation_tree.py` holds the §169.3 policy,
+`<harness root>/aart-cli/<kind>/<alias>/<name>`, with the harness root as an argument because which
+directory each harness tolerates is measured in 19 (D-346). `docs/configuration/application-home-v1.md`
+documents the home, the variable and what the variable cannot move; nothing documented
+`AART_CLI_HOME` before.
+
+Evidence: four targeted semantic mutations, each red then restored -- an unusable explicit home
+falling back to the default (4 subtests red), machine policy following the home into it (2 red),
+the reset plan naming the home itself (11 red), and the Registry alias dropped from the tree (9
+red). Scoped `make mutants ONLY=aart_cli/configuration/paths.py` left fifteen survivors, all
+message arguments, dead `else` branches under the narrowed test scope, or -- in `_absolute`'s
+`or` -> `and` -- a condition whose behaviour `ConfigPaths.__post_init__` re-checks one layer down,
+so the refusal still happens for the reason the test names. None is a claim the slice makes and
+nobody holds.
+
+**Still open in this step.** Step 16's executed installation/README contract re-run against the
+changed advertised commands, and the branch suggestion carried in below. `install_state/paths.py`
+still writes a project-scope receipt store at `<project>/.aart-cli`, which §169.2 replaces with a
+project-root-qualified record in the application home; that is receipt identity, which step 19 owns
+("Step 19 connects that policy to every lifecycle writer"), and `domain/placement.py` keeps its
+beside-the-receipt authority until the same step replaces it.
 
 **Carried in from step 18.** The Push review's branch suggestion is the constant
 `aart-cli/registry-update`. Step 18 requires it to come from the most recent producing action --

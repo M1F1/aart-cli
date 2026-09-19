@@ -70,17 +70,13 @@ class _Environment:
         # both must point at this temporary home for the test to be hermetic on either platform.
         self.xdg = {
             "HOME": str(self.home),
-            "XDG_CONFIG_HOME": str(self.home / ".config"),
-            "XDG_DATA_HOME": str(self.home / ".local" / "share"),
-            "XDG_CACHE_HOME": str(self.home / ".cache"),
+            "AART_CLI_HOME": str(self.home / ".aart-cli"),
         }
         platform = Platform.DARWIN if os.sys.platform == "darwin" else Platform.LINUX
         self.paths = resolve_config_paths(
             platform,
             home=str(self.home),
-            xdg_config_home=self.xdg["XDG_CONFIG_HOME"],
-            xdg_data_home=self.xdg["XDG_DATA_HOME"],
-            xdg_cache_home=self.xdg["XDG_CACHE_HOME"],
+            application_home=self.xdg["AART_CLI_HOME"],
         )
         self.source = ConfiguredSource(
             SourceAlias("reference"),
