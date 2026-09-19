@@ -1,5 +1,16 @@
 # AART Refactor Migration Status
 
+**2026-09-19, CP-26.10 complete.** `aart author check [--source DIR] [--json]` proves every
+discovered manifest parses. `authoring/check.py` is pure -- snapshot in, one verdict per manifest
+out -- and calls `discover_author_manifests` and `parse_author_manifest` rather than restating
+either. The tree is read through the Source Sync reader (D-330), so `check` sees the file set a
+sync would see. Every manifest is reported rather than the first refusal, and a tree with no
+manifest is a refusal rather than an empty pass. Three targeted mutations each failed only the
+tests naming their claim; M16 also exposed a process trap -- a same-length mutation leaves a
+`__pycache__` entry CPython considers current, so the revert has to clear it or the source and the
+running bytecode disagree. 87 tests across the five affected modules, `make unit`, `make
+typecheck`, Ruff check and format are green. No broad `make quality` ran, under D-317.
+
 **2026-09-19, CP-26.09 complete.** `aart author init --kind skill` writes a skill workspace. The
 generator now holds a `_Blueprint` per kind -- document, disabled keys, nested disabled positions,
 closing notes, payload -- registered in `_BLUEPRINTS`, from which `GENERATED_KINDS` is derived; every

@@ -476,6 +476,7 @@ class Request:
     author_action: Optional[str] = None
     author_name: Optional[str] = None
     author_into: Optional[str] = None
+    author_source: Optional[str] = None
     # Canonical configured-source command surface.
     source_action: Optional[str] = None
     source_alias: Optional[str] = None

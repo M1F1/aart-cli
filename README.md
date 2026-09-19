@@ -336,11 +336,18 @@ replaced.
 ```sh
 aart author init --kind mcp --name github-mcp --into ./github-mcp
 aart author init --kind skill --name code-review --into ./code-review
+aart author check --source ./github-mcp
+aart author check --source . --json
 ```
 
 This build generates the `mcp` and `skill` skeletons. Each carries the payload file its package
 format requires — an entrypoint for an MCP server, a `SKILL.md` for a skill — and names the blocks
 it deliberately leaves to you.
+
+`aart author check` reads the directory the way a Source Sync reads one and puts every `aart.yaml`
+and `aart.json` it finds through the parser a Registry uses, so a manifest that passes here is one
+`aart registry scan` will accept. It is the command to run in a loop while editing; `--json` makes
+the verdict machine-readable.
 
 ## Maintaining a registry
 
@@ -437,7 +444,7 @@ payload-free consumer projection. Both are generated and must pass their gates b
 ## Interface
 
 ```text
-aart author init
+aart author init|check
 aart source add|list|sync|remove|resubscribe|health
 aart marketplace list|search|health|install|update|uninstall|status|setup|receipt
 aart doctor

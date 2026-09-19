@@ -2,22 +2,31 @@
 
 ## Where CP-26 is (2026-09-19)
 
-Steps 1–9 are done on `refactor/cp-26-legacy-removal`, and **B-057 and B-149 are both closed**. The
+Steps 1–10 are done on `refactor/cp-26-legacy-removal`, and **B-057 and B-149 are both closed**. The
 retired authoring-workspace representation has no schema, no fixtures, no planning half and no
 command left; `aart registry vendor` writes the approved representation's versioned package through
 `plan_bulk_promotion`; the authoring field surface is read out of the parser rather than
-transcribed; AART can write the YAML subset it parses; and `aart author init` writes a full-surface
-workspace for `mcp` and for `skill`.
+transcribed; AART can write the YAML subset it parses; `aart author init` writes a full-surface
+workspace for `mcp` and for `skill`; and `aart author check` proves every discovered manifest
+parses, through the real parser and the Source Sync reader.
 `docs/refactor/slices/cp-26-authoring-and-legacy-removal.md` records these under §"Step 5",
-§"B-149" and §"Step 6" to §"Step 9" (D-321 to D-329).
+§"B-149" and §"Step 6" to §"Step 10" (D-321 to D-330).
 
-**Steps 10–11 are next** — `aart author check [--source DIR] [--json]`, the higher-value half of the
-pair (§1.4). Two claims in order: every discovered `aart.yaml`/`aart.json` goes through the real
-`parse_author_manifest`, and the parsed manifest compiles to a canonical package that `registry
-scan` would accept. `tests/author_skeleton_test.py::CompilationTest` already runs the second claim
-against the generated workspaces through `compile_author_snapshot`, which is the function `check`
-should use rather than a reimplementation. Until `check` exists, nothing in the package may name
-`aart author check`: `source_remediation_test` and `adoption_first_contact_test` both refuse it.
+**Step 11 is next** — the second half of §1.4: `check` proves each parsed manifest compiles to a
+canonical package `registry scan` would accept. Use `compile_author_snapshot`, the function
+`tests/author_skeleton_test.py::CompilationTest` already runs against the generated workspaces, not
+a reimplementation. The verdict shape is in place: `ManifestVerdict` carries a path and the
+diagnostics against it, so a compilation refusal joins a parse refusal on the same manifest rather
+than needing a second report. Order matters — a manifest that does not parse cannot be compiled, so
+the promotable claim runs only on the verdicts the parseable claim accepted.
+
+**Then step 12** — `guideline`, `hook` and `memory` skeletons. Registering one is a `_Blueprint` in
+`_BLUEPRINTS`; the open question is whether a Collection skeleton is generated at all, since the
+anti-drift oracle currently excludes `site.owner == "parse_author_collection_manifest"`.
+
+A trap worth keeping: a targeted mutation that does not change a file's length leaves a
+`__pycache__` entry CPython considers current. Clear `__pycache__` after reverting one, or the test
+run disagrees with the source on disk (CP-26.10 record).
 
 Two open findings from step 5:
 

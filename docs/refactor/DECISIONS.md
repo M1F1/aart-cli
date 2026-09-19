@@ -8174,3 +8174,22 @@ microseconds on a document this size, and one import edge from `agent_artifacts.
 `agent_artifacts.protocol.authoring` -- both pure, so no effect boundary is crossed. It also makes
 the emitter self-checking in production rather than only under test: an `emit_yaml` regression that
 produced something the parser reads differently surfaces as a refusal instead of a bad file.
+
+## D-330
+
+**`aart author check` reads the author's tree through the Source Sync reader.**
+
+**Context.** `check` must issue the verdict `registry scan` will later issue. Discovery and parsing
+are already shared functions (§1.4), but *what files exist* is a third input, and a checker that
+walked the tree itself could disagree with the reader a Source Sync uses -- about size limits,
+about what is excluded, about symlinks -- and then accept a manifest the scanner never sees, or
+refuse one it would have read.
+
+**Decision.** `read_author_workspace` is the only entry point, and it builds a
+`LocalSnapshotRequest` for the real `read_local_snapshot` under a `working-tree` alias and a
+synthetic `ConfiguredSource`. The command holds no walk of its own.
+
+**Consequence.** `check` and a Source Sync see the same file set by construction, and any future
+change to snapshot limits reaches both at once. The cost is that the author's root is described as
+a local source for the duration of one read, which is a value built in memory and never written to
+configuration.

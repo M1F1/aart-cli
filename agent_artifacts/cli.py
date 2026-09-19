@@ -1378,6 +1378,23 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="DIR",
         help="where to write the workspace (default: the working directory)",
     )
+    p_author_check = author_sub.add_parser(
+        "check",
+        formatter_class=_HELP_FORMATTER,
+        help="parse every aart.yaml/aart.json under a directory",
+        description=(
+            "Read the directory the way a Source Sync reads one and put every manifest it "
+            "finds through the parser a Registry uses. The verdict is the parser's, so a "
+            "manifest that passes here is one `registry scan` will accept."
+        ),
+    )
+    p_author_check.add_argument(
+        "--source",
+        dest="author_source",
+        metavar="DIR",
+        help="the directory to check (default: the working directory)",
+    )
+    _add_json(p_author_check)
 
     return parser
 
@@ -1472,6 +1489,7 @@ def _to_request(args: argparse.Namespace) -> Request:
         author_action=getattr(args, "author_action", None),
         author_name=getattr(args, "author_name", None),
         author_into=getattr(args, "author_into", None),
+        author_source=getattr(args, "author_source", None),
         source_action=getattr(args, "source_action", None),
         source_alias=getattr(args, "source_alias", None),
         source_kind=getattr(args, "source_kind", None),

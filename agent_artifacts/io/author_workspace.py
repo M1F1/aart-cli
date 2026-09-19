@@ -14,10 +14,19 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from agent_artifacts.authoring.skeleton import SKELETON_MANIFEST_NAME, AuthorSkeleton
+from agent_artifacts.configuration.model import ConfiguredSource, SourceKind
 from agent_artifacts.domain.diagnostics import Diagnostic, Severity
+from agent_artifacts.domain.identifiers import SourceAlias
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.protocol.codes import AUTHOR_MANIFEST_UNWRITABLE
+from agent_artifacts.protocol.native_tree import SourceSnapshot
 from agent_artifacts.protocol.paths import parse_relative_path
+from agent_artifacts.sources.local import read_local_snapshot
+from agent_artifacts.sources.model import (
+    LocalSnapshotRequest,
+    SnapshotLimits,
+    source_instance_id,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,4 +139,36 @@ def _undo(created: list[Path]) -> None:
             return
 
 
-__all__ = ["AuthorWorkspaceWrite", "write_author_skeleton"]
+#: The alias a read of the author's own directory carries. It is not a configured Source and
+#: never becomes one; the name exists because the reader below is the Source reader, deliberately.
+_WORKING_TREE_ALIAS = "working-tree"
+
+
+def read_author_workspace(root: str) -> Result[SourceSnapshot]:
+    """The author's directory, read exactly as a Source Sync would read it.
+
+    `aart author check` has to answer with the verdict `registry scan` will later issue, and half
+    of that verdict is what was in the tree at all. So this is `read_local_snapshot` -- the same
+    bounded, symlink-refusing, special-file-refusing reader -- rather than a second walk with its
+    own idea of what a file is. The Source identity it wants is inert here: nothing is configured,
+    nothing is persisted, and the candidate's digest and revision are discarded.
+    """
+
+    absolute = os.path.abspath(root)
+    alias = SourceAlias(_WORKING_TREE_ALIAS)
+    try:
+        # A value, not a record: `source_instance_id` is a pure function of these fields and
+        # nothing here is written to the Source store or offered to the consumer surface.
+        described = ConfiguredSource(alias, SourceKind.SOURCE_LOCAL, absolute, None, True)
+        request = LocalSnapshotRequest(
+            source_instance_id(described), alias, absolute, SnapshotLimits()
+        )
+    except ValueError as error:  # pragma: no cover - an absolute path is always accepted
+        return _error(f"{root} cannot be read as an authoring workspace: {error}")
+    acquired = read_local_snapshot(request)
+    if isinstance(acquired, Err):
+        return acquired
+    return Ok(acquired.value.snapshot)
+
+
+__all__ = ["AuthorWorkspaceWrite", "read_author_workspace", "write_author_skeleton"]

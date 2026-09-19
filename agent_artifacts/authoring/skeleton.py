@@ -392,7 +392,7 @@ def author_skeleton(kind: str, name: str) -> Result[AuthorSkeleton]:
 
     Refuses before producing anything when the kind is not one this build generates or the name is
     not the slug `artifact.name` requires: a skeleton the parser would reject is worse than none,
-    because the author's first check of it would blame their own edits for the refusal.
+    because the author's first `aart author check` would blame their own edits for it.
     """
 
     if kind not in _BLUEPRINTS:
@@ -409,7 +409,7 @@ def author_skeleton(kind: str, name: str) -> Result[AuthorSkeleton]:
         f"## {_humanized(name)}: an AART {kind} artifact.",
         "## Every field this build accepts is here. Disabled lines begin `# `; `##` is a note and",
         "## `#?` is an alternative to the line above it, not an addition. Delete what you do",
-        "## not need and uncomment what you do.",
+        "## not need, uncomment what you do, then run `aart author check`.",
     )
     trailing[""] = (*trailing.get("", ()), *blueprint.notes)
     emitted = emit_yaml(live, comments={"": header, **comments}, trailing=trailing)

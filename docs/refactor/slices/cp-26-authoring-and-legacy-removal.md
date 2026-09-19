@@ -693,6 +693,44 @@ compilation and protocol tests; dropping the not-generated note failed the anti-
 `skill` and the block-naming test; pointing the `skill` blueprint at `_mcp_blueprint` failed seven
 tests across compilation, the launch-block claim and the payload claim. All restored green.
 
+### Step 10 — `aart author check` proves every manifest parses (2026-09-19)
+
+The first of §1.4's two claims. `agent_artifacts/authoring/check.py` is pure: it takes a
+`SourceSnapshot` somebody else read and returns an `AuthorCheckReport` of one `ManifestVerdict` per
+discovered manifest. Discovery is `discover_author_manifests` and acceptance is
+`parse_author_manifest` -- both called, neither copied, for the reason §1.4 gives: a checker that
+lints licenses a manifest the scanner then rejects, and one that is stricter makes an author edit a
+correct file until a wrong one passes.
+
+**The tree is read the way a Source Sync reads one.** `read_author_workspace` builds a
+`LocalSnapshotRequest` against the same `read_local_snapshot` the source path uses, under a
+`working-tree` alias. So `check` sees the file set a Source Sync would see -- the same limits, the
+same exclusions -- rather than a second walk of its own that could disagree about what is in the
+tree (D-330).
+
+**Every manifest is reported, not the first refusal.** An author with four manifests gets four
+verdicts and one exit code. A tree holding no manifest at all is a refusal rather than an empty
+pass, because an author who mistyped a directory would otherwise read "nothing wrong" as "nothing
+wrong with my manifest".
+
+**Targeted semantic mutations (three).** M14, returning `()` instead of the parser's diagnostics,
+failed the acceptance and refusal tests. M15, treating an empty discovery as a pass, failed the
+empty-tree test. M16, `all` -> `any` in `AuthorCheckReport.accepted`, failed exactly
+`test_one_bad_manifest_beside_a_good_one_fails_the_whole_check`. All restored green.
+
+**A process finding worth carrying.** M16 is a same-length edit, so reverting it left a
+`__pycache__` entry CPython considered current: the source read `all` while the loaded bytecode ran
+`any`, and the test failed against code that was already correct. Disassembling the property found
+it. Any targeted mutation that does not change a file's length must be followed by clearing
+`__pycache__`, or the revert is not real.
+
+**Evidence.** 87 tests across the five affected modules, `make unit`, `make typecheck`, Ruff check
+and format. `aart author check` is now a command the package may name, so the pointers in the
+skeleton header, `init`'s closing line and the README are live again and
+`source_remediation_test` parses them. The empty-tree remediation names
+`aart author init --kind mcp --name my-artifact`, because a bare `aart author init` is a dead end
+that gate refuses.
+
 ### Step 17 — no maintainer identity as a default
 
 The owner explicitly requires generated registries and operational examples to carry no default

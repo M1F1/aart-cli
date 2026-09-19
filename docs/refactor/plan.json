@@ -829,7 +829,7 @@
         {
           "id": "10",
           "title": "`aart author check` proves every discovered manifest parses",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "11",
