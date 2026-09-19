@@ -92,6 +92,30 @@ red then restored, and scoped mutmut killing 44 of 62 — one survivor was a rea
 root returning `TypeError` instead of a refusal, and is now held. `lint`, `format-check`,
 `typecheck`, `docs-check` and `validate` green. No broad `make quality` (D-317).
 
+**2026-09-19, CP-26.19 in progress — every target collects its own answers.** The unit of
+collection is `InstallationOwner`, not `InputId` (D-353). One field per `(owner, declared input)`,
+one `BoundInputs` per owner, and answers that carry the installation that gave them
+(`OwnedInputSource`). `placement_owners` names those installations from the harnesses a placement
+actually reaches, through a registration target or through a delivery, merge or settings entry.
+Two deletions rather than settings: `INPUT_DECLARATION_CONFLICT`, because two artifacts declaring
+one id differently were a conflict only while the id was the key, and
+`InstallationInputField.dependants`, because a field has exactly one owner and that list was what
+made four installations share one value. §165.19's "a contract change must not touch credentials
+owned by any other installation" is now held by separation instead of by refusing the pair.
+
+Planning is not per installation yet and the gap is named (D-354): `generate_launcher` renders the
+credential reference into the launcher text, so one launcher carries one address. Where one
+placement's owners answered differently, `prepared_placements()` refuses by name. Screen 07 still
+shows one row per declared input, with `InputView.owner`/`.row` in place for the row identity it
+will need, and the typed answer is addressed to every owner that declared it. `credential_address`
+stays unwired at `io/consumer_actions.py` for the same reason -- adopting it before launchers are
+per harness would make every multi-harness install refuse. Evidence: `make unit` green (4628
+tests); five targeted semantic mutations each red then restored, one of which survived first and
+was a real hole (a placement claiming every owner, invisible because no test used two artifacts);
+scoped mutmut killing 73 of 94 with one real survivor now held (the argument guard). `lint`,
+`format-check`, `typecheck`, `docs-check` and `validate` green. No broad `make quality` (D-317).
+`domain/installation_owner.py` is runtime-reachable and its reachability exception is removed.
+
 **2026-09-19, CP-26.19 in progress — the name the harness shows.** `installed_name()` projects the
 same owner to §169.7's harness-visible spelling: artifact name, Registry alias and scope joined
 once — `github-company-project`, `github-company-user`. No version, because a name that moved with

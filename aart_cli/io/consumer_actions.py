@@ -49,6 +49,7 @@ from aart_cli.application.consumer_views import (
     ConsumerPlanView,
     ConsumerSettings,
     HarnessTargetView,
+    InputView,
     InstallScopeChoiceView,
     LifecyclePlanView,
     PythonInstallerChoiceView,
@@ -69,6 +70,7 @@ from aart_cli.application.credential_lifecycle import (
     plan_credential_mutation,
 )
 from aart_cli.application.execution import StepProgress
+from aart_cli.application.installation_inputs import OwnedInputSource
 from aart_cli.application.installed_setup import DeclaredArtifactSetup
 from aart_cli.application.maintainer_promotion import (
     CandidatePromotionExecutionResult,
@@ -143,6 +145,7 @@ from .configured_configuration_action import (
     complete_configured_configuration,
     prepare_configured_configuration,
 )
+from .configured_installation import ConfiguredInstallationDraft
 from .configured_installation_action import (
     CompletedConfiguredInstallation,
     InstallationHost,
@@ -229,6 +232,44 @@ def _names_a_command(step: str) -> bool:
 
 
 _ELSEWHERE = "The next step for this is not available on this screen yet."
+
+
+def _one_row_per_input(views: tuple[InputView, ...]) -> tuple[InputView, ...]:
+    """Collapse the per-installation rows screen 07 cannot show separately yet.
+
+    `views()` returns one row per installation, which is what §169.6 asks for and what `row` keys.
+    Screen 07 still renders one row per declared input, and its rows must be distinct, so the first
+    row for each input stands for all of them here. Removing this is the screen-07 change that
+    finishes D-353; until then the answer typed against this row is addressed to every installation
+    by `_addressed_to_owners`.
+    """
+
+    shown: list[InputView] = []
+    for view in views:
+        if all(item.id != view.id for item in shown):
+            shown.append(view)
+    return tuple(shown)
+
+
+def _addressed_to_owners(
+    answers: tuple[InputValueSource, ...],
+    draft: ConfiguredInstallationDraft,
+) -> tuple[OwnedInputSource, ...]:
+    """Address one screen-07 answer to every installation that asked the question.
+
+    Screen 07 still has one row per declared input rather than one per installation, so an answer
+    arrives without an owner. Every owner that declared that input gets it; an answer nobody
+    declared is dropped here rather than refused by the composition, because a stale answer to a
+    field the current selection no longer has is a screen that moved on, not a wiring defect.
+    """
+
+    declared = {(field.owner, field.input.id) for field in draft.inputs.fields}
+    return tuple(
+        OwnedInputSource(owner, answer)
+        for answer in answers
+        for owner in draft.owners
+        if (owner, answer.input) in declared
+    )
 
 
 def _refusal(diagnostics: tuple[Diagnostic, ...]) -> tuple[str, ...]:
@@ -1596,15 +1637,21 @@ class LocalConsumerActions:
         context = self._context
         host = self._host(command.install_scope)
         preferred = PythonInstaller(command.python_installer or context.settings.python_installer)
-        sources: tuple[InputValueSource, ...] = tuple(
+        answered: tuple[InputValueSource, ...] = tuple(
             PromptedConfigValue(InputId(identifier), value)
             for identifier, value in command.config_answers
         )
+        # Every installation this selection would create has to be known before an answer can be
+        # addressed to one (D-353), and only placement knows which harnesses an artifact reaches.
+        # So the draft is built once with nothing answered, and the answers are addressed to the
+        # owners it names. Screen 07 still collects one answer per input rather than one per
+        # installation, so the answer goes to every owner that declared it -- which is the shipped
+        # behaviour, now written down instead of implied by a shared key (D-354).
         prepared = prepare_configured_installation(
             context.effective,
             selection,
             host=host,
-            sources=sources,
+            sources=(),
             policy=context.policy,
             selected_remediations=None,
             credential_providers=context.credential_providers,
@@ -1614,6 +1661,22 @@ class LocalConsumerActions:
         )
         if isinstance(prepared, Err):
             return self._declined(command, _refusal(prepared.diagnostics))
+        sources = _addressed_to_owners(answered, prepared.value.draft)
+        if sources:
+            prepared = prepare_configured_installation(
+                context.effective,
+                selection,
+                host=host,
+                sources=sources,
+                policy=context.policy,
+                selected_remediations=None,
+                credential_providers=context.credential_providers,
+                resolvers=context.credential_providers,
+                previous=previous,
+                preferred_installer=preferred,
+            )
+            if isinstance(prepared, Err):
+                return self._declined(command, _refusal(prepared.diagnostics))
         if not prepared.value.ready:
             unanswered = prepared.value.draft.inputs.unanswered
             provider = next(
@@ -1631,16 +1694,24 @@ class LocalConsumerActions:
                 # The reference is safe application state, never a value. It is stable inside one
                 # AART home and separate across disposable/manual homes, so test runs and users do
                 # not silently share a Keychain item merely because an author reused an input id.
+                # Still one item per machine and declared input, which is the address
+                # `domain/installation_owner.credential_address` replaces. It cannot be adopted
+                # here until a launcher is generated per harness, because a launcher carries its
+                # credential address in its own text and one launcher serves every target today
+                # (D-354). Swapping it now would make every multi-harness install refuse.
                 service = "aart." + hashlib.sha256(host.user_home.encode("utf-8")).hexdigest()[:12]
                 sources = (
                     *sources,
                     *(
-                        SecretProviderReference(
-                            field.input.id,
-                            CredentialProviderRef(
-                                provider.provider,
-                                service,
-                                field.input.id.value,
+                        OwnedInputSource(
+                            field.owner,
+                            SecretProviderReference(
+                                field.input.id,
+                                CredentialProviderRef(
+                                    provider.provider,
+                                    service,
+                                    field.input.id.value,
+                                ),
                             ),
                         )
                         for field in secret_fields
@@ -1666,14 +1737,19 @@ class LocalConsumerActions:
             else ()
         )
         if not prepared.value.ready:
-            config_inputs = tuple(
-                field.input
-                for field in prepared.value.draft.inputs.unanswered
-                if isinstance(field.input, ConfigInput)
-            )
+            # One row per declared input, not one per installation. The composition asks each
+            # installation separately (D-353) and `_addressed_to_owners` sends this one answer to
+            # all of them; collecting per installation is the screen-07 change that follows, and
+            # until then two harnesses must not become two rows spelled identically.
+            config_inputs: tuple[ConfigInput, ...] = ()
+            for field in prepared.value.draft.inputs.unanswered:
+                if isinstance(field.input, ConfigInput) and all(
+                    item.id != field.input.id for item in config_inputs
+                ):
+                    config_inputs = (*config_inputs, field.input)
             if config_inputs:
                 observations = []
-                for reference in prepared.value.draft.inputs.bound.credential_references:
+                for reference in prepared.value.draft.inputs.credential_references:
                     owner = next(
                         (
                             item
@@ -1699,7 +1775,9 @@ class LocalConsumerActions:
                 )
                 return ConsumerActionUpdate(
                     self.source(
-                        installation_inputs=prepared.value.draft.inputs.views(tuple(observations))
+                        installation_inputs=_one_row_per_input(
+                            prepared.value.draft.inputs.views(tuple(observations))
+                        )
                     ),
                     ConsumerUiEvent(
                         ConsumerUiEventKind.ACTION_PREPARED,
@@ -1708,7 +1786,7 @@ class LocalConsumerActions:
                     ),
                 )
             waiting = ", ".join(
-                item.input.id.value for item in prepared.value.draft.inputs.unanswered
+                sorted({item.input.id.value for item in prepared.value.draft.inputs.unanswered})
             )
             return self._declined(
                 command,

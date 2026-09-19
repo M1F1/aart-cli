@@ -353,10 +353,13 @@ class InstallTimeConfigPreparationE2ETest(unittest.TestCase):
         self.assertTrue(second.event.review_digest)
         pending = handler._pending  # noqa: SLF001 - held reviewed action is the assertion subject
         self.assertIsNotNone(pending)
-        self.assertIn(
-            PromptedConfigValue(ORG, "platform-team"),
-            pending.prepared.draft.inputs.sources,  # type: ignore[union-attr]
-        )
+        # The one answer typed on screen 07 reaches every installation the selection would create,
+        # each addressed separately (D-353) rather than shared by input id.
+        composed = pending.prepared.draft.inputs  # type: ignore[union-attr]
+        owners = {owner for owner in pending.prepared.draft.owners}  # type: ignore[union-attr]
+        self.assertGreater(len(owners), 1)
+        for owner in owners:
+            self.assertIn(PromptedConfigValue(ORG, "platform-team"), composed.sources_for(owner))
 
     def test_form_to_success_writes_only_the_two_chosen_harness_files(self) -> None:
         value = "platform-team-form-e2e"

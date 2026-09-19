@@ -19,11 +19,13 @@ from aart_cli.application.consumer_ui import (
 )
 from aart_cli.application.consumer_views import ConsumerScreen, ConsumerSession
 from aart_cli.application.execution import LifecycleExecutionStatus
+from aart_cli.application.installation_inputs import OwnedInputSource
 from aart_cli.configuration.model import SourceKind
 from aart_cli.domain.credentials import CredentialProviderRef
 from aart_cli.domain.harness import Scope
-from aart_cli.domain.identifiers import ArtifactIdentity, SourceId
+from aart_cli.domain.identifiers import ArtifactCoordinate, ArtifactIdentity, SourceId
 from aart_cli.domain.inputs import PromptedConfigValue, SecretProviderReference
+from aart_cli.domain.installation_owner import installation_owner
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.result import Err, Ok
 from aart_cli.domain.selection import ArtifactRequest, ArtifactSelection, VersionConstraint
@@ -119,9 +121,25 @@ class ConfiguredConfigurationActionE2ETest(unittest.TestCase):
             self.effective,
             selection,
             host=self.host,
-            sources=(
-                PromptedConfigValue(ORG, "original-team"),
-                SecretProviderReference(TOKEN, REFERENCE),
+            # One value on every harness is now said once per harness: each is its own
+            # installation and asks its own question (D-353).
+            sources=tuple(
+                OwnedInputSource(
+                    installation_owner(
+                        ArtifactCoordinate(
+                            source.alias, ArtifactIdentity("mcp", "github"), "1.0.0"
+                        ),
+                        scope=Scope.PROJECT,
+                        root=self.project_root,
+                        harness=harness,
+                    ),
+                    answer,
+                )
+                for harness in HARNESSES
+                for answer in (
+                    PromptedConfigValue(ORG, "original-team"),
+                    SecretProviderReference(TOKEN, REFERENCE),
+                )
             ),
             policy=EffectivePolicy(),
             selected_remediations=None,

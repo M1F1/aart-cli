@@ -461,6 +461,15 @@ class ConfigInputView:
     #: omitted from serialized output: the public projection already carries its human hint, while
     #: the form needs the actual rule to refuse every invalid value rather than reimplement it.
     validation: InputValidation | None = None
+    #: Which installation is being asked (D-353). Two rows may share `id` -- one artifact on two
+    #: harnesses is two installations and therefore two questions -- so `id` is no longer a row key.
+    owner: str = ""
+
+    @property
+    def row(self) -> str:
+        """The key that identifies this field on screen 07, unique where `id` is not."""
+
+        return f"{self.owner}\t{self.id}"
 
 
 def config_input_value_problem(view: ConfigInputView, value: str) -> str | None:
@@ -490,6 +499,14 @@ class CredentialInputView:
     detail: str
     #: What each artifact needing it says about it, grouped by what they say (D-263).
     guidance: tuple[CredentialGuidance, ...] = ()
+    #: Which installation is being asked (D-353). See `ConfigInputView.owner`.
+    owner: str = ""
+
+    @property
+    def row(self) -> str:
+        """The key that identifies this field on screen 07, unique where `id` is not."""
+
+        return f"{self.owner}\t{self.id}"
 
 
 InputView = ConfigInputView | CredentialInputView
@@ -519,11 +536,16 @@ def project_required_inputs(
     bound_inputs: BoundInputs = _EMPTY_BOUND_INPUTS,
     credential_observations: tuple[CredentialObservation, ...] = (),
     declared_by: tuple[tuple[str, RuntimeInput], ...] = (),
+    owner: str = "",
 ) -> tuple[InputView, ...]:
     """Project input guidance and binding state without ever projecting credential material.
 
     `declared_by` names which artifact declared each input, so a credential can say who needs it
     and keep each owner's own instructions. Without it the single declaration explains itself.
+
+    `owner` names the installation these fields belong to, and is what makes `InputView.row` unique
+    when the same declared input is asked separately of several installations (D-353). A caller
+    projecting one installation at a time passes it; one projecting a single declaration need not.
     """
 
     if any(not isinstance(item, (SecretInput, ConfigInput)) for item in inputs):
@@ -574,6 +596,7 @@ def project_required_inputs(
                     or gather_credential_guidance(
                         runtime_input.id.value, (("", runtime_input.guidance),)
                     ),
+                    owner,
                 )
             )
             continue
@@ -594,6 +617,7 @@ def project_required_inputs(
                 bound is not None,
                 None if bound is None else _source_name(bound.source),
                 runtime_input.validation,
+                owner,
             )
         )
     return tuple(projected)

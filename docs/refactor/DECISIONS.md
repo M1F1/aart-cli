@@ -8778,3 +8778,74 @@ exactly how two owners quietly become one item.
 **Consequence.** The claim is held by property test over generated owners: two addresses are equal
 if and only if the owners are. Wiring the live call site is the next commit in this step and is
 what removes `domain.installation_owner` from the reachability exception list.
+
+## D-353 — Input collection is keyed by the installation owner, not by the input id
+
+**Context.** §169.4-6 and D-333 say each installation collects its own configuration and secrets,
+with no sharing, no copy-answers and no cross-target prefill. The code says the opposite, in three
+places that agree with each other and disagree with the specification:
+
+- `application/installation_inputs.py` composes `InstallationInputField` as "one semantic form field
+  and every artifact whose launch contract depends on it", keyed by `InputId` across artifacts, and
+  refuses two artifacts that declare one id differently (`INPUT_DECLARATION_CONFLICT`).
+- `domain/inputs.BoundInputs` enforces "each input binds exactly once" over the whole composition.
+- `application/artifact_installation.plan_artifact_installation` binds once and then writes the same
+  `config_values` into every harness's own file, so D-264's per-harness configuration files are four
+  copies of one answer rather than four answers.
+
+The visible consequence is the one the acceptance names: an artifact with two configuration
+variables and one secret installed on four harnesses collects three fields, not the eight ordinary
+fields and four secure entries it must.
+
+**Decision.** The unit of collection is `InstallationOwner`. A field is one owner's own use of one
+declared input, and the composition is unique on `(owner, input id)` rather than on `input id`.
+Sources arrive owner-qualified, each owner binds its own `BoundInputs`, and planning binds once per
+target rather than once per artifact.
+
+Three things follow, and each is a deletion rather than a setting:
+
+`INPUT_DECLARATION_CONFLICT` goes. Two artifacts declaring one id with different semantics is no
+longer a conflict to refuse -- they are two owners, so they are two fields, and each keeps its own
+declaration and its own guidance. The conflict existed only because the id was the key.
+
+`InstallationInputField.dependants` goes. A field has exactly one owner, so a list of dependants is
+a question that no longer has more than one answer.
+
+`ArtifactPlacement.sources` becomes owner-qualified. A placement spans several harness targets, so a
+single flat tuple of sources per placement cannot say which target answered what.
+
+`BoundInputs` is not changed. Its "each input binds exactly once" is correct *within* one owner,
+which is what it now holds, and narrowing the scope it is constructed over is what makes it true.
+
+**Consequence.** Answering a field for one harness leaves the same input unanswered for the other
+three -- which is the point, and is what the acceptance measures. The screen-07 row identity becomes
+the owner-qualified key rather than the input id, because two rows now legitimately share an id.
+This is what makes `domain/installation_owner.py` runtime-reachable and removes it from
+`DELIBERATE_NON_RUNTIME_MODULES`.
+
+## D-354 — Per-target values are collected now and planned later, and the gap refuses rather than shares
+
+**Context.** D-353 makes collection per installation. Planning is not per installation yet, and the
+reason is concrete: `application/runtime_projection.generate_launcher` renders the credential
+reference *into* the launcher script, so one launcher can carry exactly one credential address.
+`plan_artifact_installation` generates one launcher per artifact and registers it with every
+harness, and `PlannedInstallation.__post_init__` requires each harness's configuration file to hold
+`self.bound.config_values` -- one reviewed set, checked against every file. Four harnesses answering
+differently has nowhere to land until either the launcher is generated per harness or it derives
+its address from the harness argument it already receives for its configuration file.
+
+**Decision.** Collect per owner now; refuse the gap rather than paper over it. Where one placement's
+owners have answered the same input differently, `prepared_placements()` refuses by name
+(`configured-installation-per-target-values-differ`) and says why. Where they agree, the placement
+plans exactly as before.
+
+The alternative was to keep collecting once and copying, which is the defect, or to collect per
+owner and then quietly install the first owner's answer everywhere, which is the same defect with
+more code in front of it. A refusal is the only option that does not silently install a value
+nobody confirmed for that target.
+
+**Consequence.** On this branch, answering four harnesses differently is refused at the offer, and
+answering them identically installs as it always did. The refusal is the marker for the follow-up
+task: per-harness launcher generation, which is what lets `credential_address` differ per target
+and makes the acceptance's "four secure entries" reach four Keychain items rather than one. That
+task is recorded in `docs/refactor/plan.json` and must close before CP-26.19 does.

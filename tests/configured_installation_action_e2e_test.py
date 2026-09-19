@@ -26,6 +26,7 @@ from dataclasses import replace
 from datetime import date
 
 from aart_cli.application.execution import InstallationExecutionStatus
+from aart_cli.application.installation_inputs import OwnedInputSource
 from aart_cli.configuration.model import SourceKind
 from aart_cli.domain.credentials import (
     CredentialObservation,
@@ -34,8 +35,9 @@ from aart_cli.domain.credentials import (
     ProviderState,
 )
 from aart_cli.domain.harness import Scope
-from aart_cli.domain.identifiers import ArtifactIdentity, SourceId
+from aart_cli.domain.identifiers import ArtifactCoordinate, ArtifactIdentity, SourceId
 from aart_cli.domain.inputs import PromptedConfigValue, SecretProviderReference
+from aart_cli.domain.installation_owner import installation_owner
 from aart_cli.domain.placement import artifact_root
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.result import Err, Ok
@@ -144,8 +146,32 @@ class ConfiguredInstallationActionTest(unittest.TestCase):
             profiles=("tabnine",),
         )
 
+    def _owner(self, harness="tabnine"):
+        return installation_owner(
+            ArtifactCoordinate(self.source.alias, ArtifactIdentity("mcp", "github"), "1.0.0"),
+            scope=Scope.PROJECT,
+            root=self.project_root,
+            harness=harness,
+        )
+
+    def _addressed(self, *sources):
+        """The same answers addressed to every installation this host would create (D-353).
+
+        Each harness is its own installation and asks its own question, so a caller that wants one
+        value on all of them says so once per harness. Screen 07 does the same fan-out until it
+        collects per installation.
+        """
+
+        return tuple(
+            OwnedInputSource(self._owner(harness), source)
+            for harness in self.host.profiles
+            for source in sources
+        )
+
     def _answers(self):
-        return (PromptedConfigValue(ORG, "acme"), SecretProviderReference(TOKEN, REFERENCE))
+        return self._addressed(
+            PromptedConfigValue(ORG, "acme"), SecretProviderReference(TOKEN, REFERENCE)
+        )
 
     def _prepare(self, sources=None):
         return prepare_configured_installation(
@@ -273,7 +299,9 @@ class ConfiguredInstallationActionTest(unittest.TestCase):
         value = "platform-team-e2e"
         self.host = replace(self.host, profiles=("claude", "tabnine"))
         prepared = self._prepare(
-            sources=(PromptedConfigValue(ORG, value), SecretProviderReference(TOKEN, REFERENCE))
+            sources=self._addressed(
+                PromptedConfigValue(ORG, value), SecretProviderReference(TOKEN, REFERENCE)
+            )
         )
         self.assertIsInstance(prepared, Ok, getattr(prepared, "diagnostics", ()))
         completed = self._complete(prepared.value)

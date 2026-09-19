@@ -35,13 +35,13 @@ from aart_cli.application.installation_action import (
     complete_installation_action,
     prepare_installation_action,
 )
+from aart_cli.application.installation_inputs import OwnedInputSource
 from aart_cli.application.installed_setup import DeclaredArtifactSetup
 from aart_cli.application.marketplace_resolution import ResolutionPolicy
 from aart_cli.application.python_environment import usable_python_installers
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.harness import Scope
 from aart_cli.domain.identifiers import ArtifactCoordinate, ObjectDigest
-from aart_cli.domain.inputs import InputValueSource
 from aart_cli.domain.inspection import (
     EnvironmentFacts,
     RemediationCapability,
@@ -232,7 +232,7 @@ def prepare_configured_installation(
     selection: ArtifactSelection,
     *,
     host: InstallationHost,
-    sources: tuple[InputValueSource, ...],
+    sources: tuple[OwnedInputSource, ...],
     policy: EffectivePolicy,
     selected_remediations: tuple[Remediation, ...] | None,
     credential_providers: tuple[CredentialProviderPort, ...] = (),
@@ -290,7 +290,7 @@ def prepare_configured_installation(
     registry = LocalHarnessRegistry(host.harness_root)
     providers = {provider.provider: provider for provider in credential_providers}
     observations = []
-    for reference in draft.inputs.bound.credential_references:
+    for reference in draft.inputs.credential_references:
         provider = providers.get(reference.provider.provider)
         if provider is None:
             continue

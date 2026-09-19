@@ -77,15 +77,23 @@ recorded in `DELIBERATE_NON_RUNTIME_MODULES` with the reason. What remains in th
 applying that projection at the adapters: installed skill directories and their frontmatter, and
 MCP registration keys, with the collision check run before provider mutation rather than after.
 
-**The next increment, and the fact that decides it.**
-`application/installation_inputs.py` composes `InstallationInputField` as "one semantic form field
-and every artifact whose launch contract depends on it", and refuses duplicates by `InputId`. That
-is the global grouping §169 rejects: it is why one artifact with two config variables and one
-secret on four harnesses collects three fields rather than the twelve the acceptance names, and why
-`io/consumer_actions.py` can still address a Keychain item by the user home alone. Split that
-composition per owner first; everything else in 19 — placement, receipts, Installed, provider
-references, lifecycle — reads the owner that split produces. Wiring it removes the reachability
-exception, which is the signal that the step's foundation is real rather than written.
+**The next increment, and the fact that decides it.** Collection is per installation now
+(D-353); planning is not. `application/runtime_projection.generate_launcher` renders the credential
+reference into the launcher script, and `plan_artifact_installation` generates one launcher per
+artifact and registers it with every harness, so one launcher carries exactly one credential
+address. `PlannedInstallation.__post_init__` then requires every harness's configuration file to
+hold the one reviewed set of values. That is why `prepared_placements()` currently refuses when a
+placement's targets answered differently (D-354), and why `credential_address` is still not wired
+at `io/consumer_actions.py`: adopting it before launchers are per harness would make every
+multi-harness install refuse.
+
+So the next increment is per-harness launcher generation — either one launcher per target, or one
+launcher deriving its address from the harness argument it already receives to find its
+configuration file. That is what lets the acceptance's four harnesses reach four Keychain items,
+and it unblocks wiring `credential_address`. Screen 07 collecting per installation rather than per
+declared input follows it; `InputView.owner` and `InputView.row` are already in place for that row
+identity, and `_one_row_per_input`/`_addressed_to_owners` in `io/consumer_actions.py` are the two
+functions it removes.
 
 
 Naming is included in this task (D-349, §169.7, INV-253; issues #26/#28). Harness-visible names

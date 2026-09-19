@@ -1294,6 +1294,46 @@ as `TypeError`, which is not a refusal), and the rest are message arguments, an 
 `UTF-8`, mutmut's own `X` padding inside the newline set, and the `>`/`>=` boundary of the length
 refusal, which no test pins deliberately.
 
+**Done so far — every target collects its own answers.**
+The unit of collection is now `InstallationOwner` rather than `InputId` (D-353).
+`application/installation_inputs.py` composes one field per `(owner, declared input)`, each owner
+binds its own `BoundInputs`, and answers arrive as `OwnedInputSource` so an answer belongs to the
+installation that gave it. `io/configured_installation.placement_owners` is what names those
+installations: a placement reaches a harness either through a registration target or through a
+delivery, merge or settings entry, and that harness with this scope and this root is the owner.
+
+Two things were deleted rather than configured. `INPUT_DECLARATION_CONFLICT` is gone: two artifacts
+declaring one id differently were a conflict only because the id was the key, and they are now two
+fields each keeping its own declaration and its own guidance. `InstallationInputField.dependants`
+is gone: a field has exactly one owner, so the list of dependants was the thing that made four
+installations share one value. §165.19's "a contract change must not touch credentials owned by any
+other installation" is now held by separation instead of by refusing the pair.
+
+Planning is not per installation yet, and the gap is named rather than papered over (D-354).
+`generate_launcher` renders the credential reference into the launcher text, so one launcher carries
+one address, and `PlannedInstallation` requires every harness's configuration file to hold the one
+reviewed set. Where one placement's owners answered differently, `prepared_placements()` refuses by
+name (`configured-installation-per-target-values-differ`). Screen 07 still shows one row per declared
+input -- `InputView.owner`/`.row` exist for the row identity it will need -- and the answer typed
+there is addressed to every owner that declared it. That is the shipped behaviour, now written down
+instead of implied by a shared key. `credential_address` is deliberately still not wired at
+`io/consumer_actions.py` for the same reason: adopting it before launchers are per harness would
+make every multi-harness install refuse.
+
+Evidence: `make unit` green (4628 tests). Five targeted semantic mutations, each red then restored
+-- the field key dropping the owner, one owner's answers handed to every owner, an answer accepted
+for an installation that never declared it, diverging targets installed with whichever came first,
+and a placement claiming every owner rather than its own artifact's. The last of those survived at
+first and was a real hole: with a multi-artifact Selection a placement would have been prepared
+against answers nobody gave it, and no test used two artifacts. It is now held. Scoped
+`make mutants` over `application/installation_inputs.py` killed 73 of 94; of the fourteen survivors
+one was real -- the argument guard could be weakened so a bad `uses` or `sources` passed unrefused
+-- and is now held, one is a redundant sort (`BoundInputs` orders its own inputs, so the explicit
+key changes nothing observable), and the rest are message arguments.
+
+`domain/installation_owner.py` is reachable from the runtime and no longer carries a
+`DELIBERATE_NON_RUNTIME_MODULES` exception.
+
 **Done so far — the name the harness shows, and the collision it must not resolve by itself.**
 `installed_name()` projects the same owner to §169.7's harness-visible spelling: artifact name,
 Registry alias and scope joined once, `github-company-project` and `github-company-user`. The

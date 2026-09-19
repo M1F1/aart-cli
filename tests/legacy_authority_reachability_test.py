@@ -22,7 +22,6 @@ The exception list is a claim about each name in it, so each one states its reas
 * ``application.activity_telemetry`` -- the deliberately dormant, transport-neutral injection
   boundary for a future explicitly configured Activity telemetry adapter (D-292). The disabled
   adapter is tested now; no runtime imports the module, so its presence cannot opt a user in.
-* ``domain.installation_owner`` -- the §169.4-6 installation identity and the credential address
   derived from it, written first in CP-26.19 because the identity has to exist before the input
   composition can be split per owner. What it replaces is live: ``io/consumer_actions.py`` still
   addresses a Keychain item as ``aart.<hash of the user home>`` with the declared input id, which
@@ -62,7 +61,6 @@ DELIBERATE_NON_RUNTIME_MODULES = frozenset(
     {
         "aart_cli._commit",
         "aart_cli.application.activity_telemetry",
-        "aart_cli.domain.installation_owner",
         "aart_cli.domain.installation_tree",
         "aart_cli.profiles.loader",
     }

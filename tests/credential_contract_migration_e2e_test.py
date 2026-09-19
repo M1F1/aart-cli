@@ -26,8 +26,8 @@ import unittest
 
 from aart_cli.application.consumer_session import assemble_consumer_machine
 from aart_cli.application.installation_inputs import (
-    INPUT_DECLARATION_CONFLICT,
     InstallationInputUse,
+    OwnedInputSource,
     compose_installation_inputs,
 )
 from aart_cli.domain.effects import DeleteCredential
@@ -41,14 +41,21 @@ from aart_cli.domain.inputs import (
 )
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.receipts import InstalledRecord
-from aart_cli.domain.result import Err, Ok
+from aart_cli.domain.result import Ok
 from aart_cli.io.configured_installation_action import InstallationHost
 from aart_cli.io.configured_uninstall_action import prepare_configured_uninstall
 from tests.configured_install_command_e2e_test import COORDINATE, _environment
 from tests.consumer_session_test import OTHER as SECOND_REFERENCE
 from tests.consumer_session_test import TODAY, coordinate, inspection, observed, receipt
 from tests.consumer_session_test import TOKEN as SHARED_REFERENCE
-from tests.installation_inputs_test import KEYCHAIN, ORG, TOKEN, _config, _coordinate, _secret
+from tests.installation_inputs_test import (
+    KEYCHAIN,
+    ORG,
+    TOKEN,
+    _config,
+    _owner,
+    _secret,
+)
 
 
 def _deletions(prepared) -> list[DeleteCredential]:
@@ -206,12 +213,13 @@ class ContractMigrationAsksOnlyForWhatIsNewTest(unittest.TestCase):
         required value." The premise of that sentence is that the fields it *can* map stay mapped.
         """
 
+        owner = _owner("github")
         upgraded = compose_installation_inputs(
             (
-                InstallationInputUse(_coordinate("github"), _config()),
-                InstallationInputUse(_coordinate("github"), _secret()),
+                InstallationInputUse(owner, _config()),
+                InstallationInputUse(owner, _secret()),
             ),
-            (PersistedConfigValue(ORG, "platform-team"),),
+            (OwnedInputSource(owner, PersistedConfigValue(ORG, "platform-team")),),
             EffectivePolicy(),
         )
 
@@ -220,12 +228,14 @@ class ContractMigrationAsksOnlyForWhatIsNewTest(unittest.TestCase):
         self.assertFalse(upgraded.value.ready)
         self.assertEqual([field.input.id for field in upgraded.value.unanswered], [TOKEN])
 
-    def test_an_authentication_model_change_is_refused_rather_than_resolved_quietly(self) -> None:
-        """An artifact that redeclares an input another installation still binds differently.
+    def test_a_contract_change_does_not_touch_the_other_installation(self) -> None:
+        """ "A contract change must not touch credentials owned by any other installation."
 
-        165.19 requires the change to be explicit. The refusal names both owners, which is what
-        makes it explicit rather than merely loud: an operator has to know which other artifact is
-        holding the old contract before they can decide anything.
+        The artifact that moved to a client secret asks for one. The artifact still on the old
+        token keeps the binding and the item it already had, and neither is offered the other's --
+        which is the separation §169.4-6 makes the rule and D-353 makes the key. What this replaces
+        refused the pair outright, because one field served both owners and could hold only one of
+        their two contracts.
         """
 
         old = _secret()
@@ -234,22 +244,28 @@ class ContractMigrationAsksOnlyForWhatIsNewTest(unittest.TestCase):
             EnvironmentBinding("GITHUB_CLIENT_SECRET"),
             guidance=InputGuidance("GitHub client secret", format_hint="opaque secret"),
         )
+        moved = _owner("github")
+        unchanged = _owner("issues")
 
         composed = compose_installation_inputs(
             (
-                InstallationInputUse(_coordinate("github"), new),
-                InstallationInputUse(_coordinate("issues"), old),
+                InstallationInputUse(moved, new),
+                InstallationInputUse(unchanged, old),
             ),
-            (SecretProviderReference(TOKEN, KEYCHAIN),),
+            (OwnedInputSource(unchanged, SecretProviderReference(TOKEN, KEYCHAIN)),),
             EffectivePolicy(),
         )
 
-        self.assertIsInstance(composed, Err)
-        assert isinstance(composed, Err)
-        self.assertEqual(composed.diagnostics[0].code, INPUT_DECLARATION_CONFLICT)
-        message = composed.diagnostics[0].message
-        self.assertIn("company/mcp/github@1.0.0", message)
-        self.assertIn("company/mcp/issues@1.0.0", message)
+        self.assertIsInstance(composed, Ok, getattr(composed, "diagnostics", ()))
+        assert isinstance(composed, Ok)
+        self.assertEqual(
+            (SecretProviderReference(TOKEN, KEYCHAIN),), composed.value.sources_for(unchanged)
+        )
+        self.assertEqual((), composed.value.sources_for(moved))
+        self.assertEqual(
+            [(field.owner, field.input.binding.variable) for field in composed.value.unanswered],
+            [(moved, "GITHUB_CLIENT_SECRET")],
+        )
 
 
 if __name__ == "__main__":  # pragma: no cover - unittest entry point

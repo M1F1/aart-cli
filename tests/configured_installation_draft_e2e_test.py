@@ -9,6 +9,7 @@ import tempfile
 import unittest
 from typing import cast
 
+from aart_cli.application.installation_inputs import OwnedInputSource
 from aart_cli.application.maintainer import reconcile_source_scan
 from aart_cli.application.promotion import (
     PromotionEvidence,
@@ -22,11 +23,17 @@ from aart_cli.configuration.model import SourceKind
 from aart_cli.domain.candidates import CandidateId, assess_candidate
 from aart_cli.domain.credentials import CredentialProviderRef
 from aart_cli.domain.harness import Scope
-from aart_cli.domain.identifiers import ArtifactIdentity, SourceAlias, SourceId
+from aart_cli.domain.identifiers import (
+    ArtifactCoordinate,
+    ArtifactIdentity,
+    SourceAlias,
+    SourceId,
+)
 from aart_cli.domain.inputs import PromptedConfigValue, SecretProviderReference
+from aart_cli.domain.installation_owner import installation_owner
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.registry import PromotionMode, publish_registry_version
-from aart_cli.domain.result import Ok
+from aart_cli.domain.result import Err, Ok
 from aart_cli.domain.selection import (
     ArtifactRequest,
     ArtifactSelection,
@@ -305,16 +312,24 @@ class ConfiguredInstallationDraftTest(unittest.TestCase):
             )
         )
 
-    def _draft(self, sources=()):
+    def _draft(self, sources=(), profiles=("tabnine",)):
         return prepare_configured_installation_draft(
             self.effective,
             self.selection,
             data_root=self.data_root,
             project_root=self.project_root,
             scope=Scope.PROJECT,
-            profiles=("tabnine",),
+            profiles=profiles,
             sources=sources,
             policy=EffectivePolicy(),
+        )
+
+    def _owner(self, harness="tabnine"):
+        return installation_owner(
+            ArtifactCoordinate(self.source.alias, ArtifactIdentity("mcp", "github"), "1.0.0"),
+            scope=Scope.PROJECT,
+            root=self.project_root,
+            harness=harness,
         )
 
     def test_verified_registry_content_is_materialized_and_exposes_pending_inputs(self) -> None:
@@ -337,21 +352,94 @@ class ConfiguredInstallationDraftTest(unittest.TestCase):
         self.assertIsNotNone(stored.value)
 
     def test_submitted_config_and_provider_reference_make_placements_ready(self) -> None:
+        owner = self._owner()
         drafted = self._draft(
             (
-                PromptedConfigValue(ORG, "acme"),
-                SecretProviderReference(TOKEN, KEYCHAIN),
+                OwnedInputSource(owner, PromptedConfigValue(ORG, "acme")),
+                OwnedInputSource(owner, SecretProviderReference(TOKEN, KEYCHAIN)),
             )
         )
 
         self.assertIsInstance(drafted, Ok, getattr(drafted, "diagnostics", ()))
         assert isinstance(drafted, Ok)
         self.assertTrue(drafted.value.ready)
+        self.assertEqual((owner,), drafted.value.owners)
         placed = drafted.value.prepared_placements()
         self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
         assert isinstance(placed, Ok)
-        self.assertEqual(placed.value[0].sources, drafted.value.inputs.sources)
+        self.assertEqual(placed.value[0].sources, drafted.value.inputs.sources_for(owner))
         self.assertFalse(any(hasattr(source, "secret") for source in placed.value[0].sources))
+
+    def test_one_artifact_on_two_harnesses_is_two_installations(self) -> None:
+        """§169.4-6: the harness is part of who owns the configuration, so it is part of the key."""
+
+        drafted = self._draft(profiles=("tabnine", "claude"))
+
+        self.assertIsInstance(drafted, Ok, getattr(drafted, "diagnostics", ()))
+        assert isinstance(drafted, Ok)
+        self.assertEqual((self._owner("claude"), self._owner("tabnine")), drafted.value.owners)
+        self.assertEqual(4, len(drafted.value.inputs.fields))
+        self.assertEqual(
+            {
+                (self._owner("claude"), ORG),
+                (self._owner("claude"), TOKEN),
+                (self._owner("tabnine"), ORG),
+                (self._owner("tabnine"), TOKEN),
+            },
+            {(field.owner, field.input.id) for field in drafted.value.inputs.fields},
+        )
+
+    def test_a_placement_owns_only_its_own_artifact_s_installations(self) -> None:
+        """Another artifact's installations are not this placement's to answer for.
+
+        A Selection installs several artifacts at once, and each placement is prepared with the
+        answers of the installations it created. Were the filter to let a neighbour's owner
+        through, this placement would be compared against answers nobody gave it -- refusing a
+        sound install, or applying a value declared for something else.
+        """
+
+        drafted = self._draft()
+
+        assert isinstance(drafted, Ok), getattr(drafted, "diagnostics", ())
+        neighbour = installation_owner(
+            ArtifactCoordinate(self.source.alias, ArtifactIdentity("mcp", "gitlab"), "1.0.0"),
+            scope=Scope.PROJECT,
+            root=self.project_root,
+            harness="tabnine",
+        )
+        widened = dataclasses.replace(drafted.value, owners=(*drafted.value.owners, neighbour))
+
+        (placement,) = widened.placements
+
+        self.assertIn(neighbour, widened.owners)
+        self.assertNotIn(neighbour, widened.owners_for(placement))
+        self.assertEqual((self._owner(),), widened.owners_for(placement))
+
+    def test_targets_that_answered_differently_refuse_rather_than_pick_one(self) -> None:
+        """One generated launcher carries one set of values, so a disagreement is named (D-354)."""
+
+        claude = self._owner("claude")
+        tabnine = self._owner("tabnine")
+        drafted = self._draft(
+            (
+                OwnedInputSource(claude, PromptedConfigValue(ORG, "acme")),
+                OwnedInputSource(claude, SecretProviderReference(TOKEN, KEYCHAIN)),
+                OwnedInputSource(tabnine, PromptedConfigValue(ORG, "other")),
+                OwnedInputSource(tabnine, SecretProviderReference(TOKEN, KEYCHAIN)),
+            ),
+            profiles=("tabnine", "claude"),
+        )
+
+        assert isinstance(drafted, Ok), getattr(drafted, "diagnostics", ())
+        self.assertTrue(drafted.value.ready)
+        refused = drafted.value.prepared_placements()
+
+        assert isinstance(refused, Err), refused
+        self.assertEqual(
+            refused.diagnostics[0].code.value, "configured-installation-per-target-values-differ"
+        )
+        self.assertIn("claude", refused.diagnostics[0].message)
+        self.assertIn("tabnine", refused.diagnostics[0].message)
 
 
 if __name__ == "__main__":

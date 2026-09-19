@@ -896,7 +896,7 @@ def _configured_lifecycle(
             {
                 "id": field.input.id.value,
                 "kind": "credential" if isinstance(field.input, SecretInput) else "config",
-                "dependants": [str(item) for item in field.dependants],
+                "owner": str(field.owner),
                 **(
                     {"guidance": credential_guidance_to_data(guidance[field.input.id.value])}
                     if isinstance(field.input, SecretInput)
