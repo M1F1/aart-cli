@@ -12,8 +12,11 @@ flows are implemented, the MCP vertical slice works end-to-end, desired-state re
 lifecycle operations, Git-backed live acceptance passes, legacy paths no longer hold product
 authority, and the repository's full quality/release gates are green.
 
-That definition was met by CP-18. CP-19 is the follow-on post-refactor manual acceptance program;
-its open status does not retroactively reopen the verified refactor or its invariant evidence.
+CP-18 met the product contract in force at its completion. CP-19 through CP-26 add accepted
+requirements and corrections. Historical VERIFIED records remain evidence of their original
+behavior; they do not prove the revised contract. Product Specification §169 and the current
+`INVARIANT_TRACEABILITY.md` identify outstanding CP-26 implementation/proof obligations. Read
+`CONTRACT_ALIGNMENT.md` for superseded decisions and the current-versus-target documentation rule.
 
 ## Non-negotiable execution rules
 
@@ -195,15 +198,26 @@ branch push from the exact canonical workspace. The canonical maintenance comman
 remain: only their legacy-representation branches are removed. `publish` ends at the reviewed local
 commit; Push is a distinct explicit Registry Maintainer action.
 
-The owner added B-144 and B-143 as the final two ordered tasks. CP-26.19 makes configuration,
-credential bindings, setup state, receipts and lifecycle ownership belong to a stable
-Registry-alias-qualified installation target. CP-26.20 then adds local Git checkout acquisition as
-a second adapter for the same validated canonical Registry snapshot, Marketplace, resolver and
-installation path. Step 19 precedes step 20 so local aliases cannot amplify the existing consumer-
-state collision. Tasks 2–20 use focused tests and gates over changed files plus measured damage
-radius; CP-26.21 alone owns the full quality and integration/E2E closeout after implementation is
-complete. The complete 21-step order and acceptance criteria are in
-`docs/refactor/slices/cp-26-authoring-and-legacy-removal.md`; step 4 is the next executable task.
+The owner added CP-26.18a on 2026-09-19 (D-332): use `aart-cli` throughout active product
+interfaces and tool-owned names, resolve one portable `~/.aart-cli` / `AART_CLI_HOME`, and define
+harness-owned installation paths. It precedes CP-26.19, which makes runtime trees, configuration,
+credential items, setup state, receipts and lifecycle ownership specific to a complete installation
+(Registry alias + artifact + scope/root + harness/profile). Every new target collects its own
+inputs; four harnesses mean four sets, with no sharing or copy option (D-333, B-144/B-150).
+CP-26.20 then adds local Git checkout acquisition through the same canonical Registry pipeline
+(B-143) and proves the same isolation for local and remote aliases.
+
+D-334 accepts breaking changes throughout CP-26: no backward-compatibility aliases, fallback
+formats, migrations or transition periods are required. Implementation checks are focused and
+proportionate, especially for mechanical namespace changes; accepted isolation and secret boundaries
+remain tested. Remote/local aliases are separate installation entities and filesystem namespaces
+even for identical package bytes.
+
+The ordered plan has 22 tasks; existing ids are preserved, with 18a between 18 and 19.
+Implementation tasks, including 18a, use focused tests and measured damage-radius gates.
+CP-26.21 remains the sole broad quality/integration/E2E closeout after all implementation tasks.
+The full order and acceptance criteria are in
+`docs/refactor/slices/cp-26-authoring-and-legacy-removal.md`; `NEXT.md` names the current task.
 
 ## Dependency order
 

@@ -872,8 +872,13 @@
           "status": "todo"
         },
         {
+          "id": "18a",
+          "title": "Use aart-cli everywhere in active interfaces and one portable ~/.aart-cli home; define harness-owned installation paths",
+          "status": "todo"
+        },
+        {
           "id": "19",
-          "title": "Configuration and credential bindings are keyed by stable alias-qualified installation target",
+          "title": "Each harness/scope installation owns its runtime, receipt and separately entered configuration and secrets; no sharing",
           "status": "todo"
         },
         {

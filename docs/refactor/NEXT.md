@@ -3,7 +3,29 @@
 ## Where CP-26 is (2026-09-19)
 
 Steps 1–13 are **done** on `refactor/cp-26-legacy-removal`; **step 14 is next**. B-057 and B-149
-are both closed.
+are both closed. The plan now has **22 tasks (13 done)**: the owner added **CP-26.18a** between
+18 and 19 without renumbering existing ids. Task 21 remains the final broad verification.
+
+### Accepted installation contract to carry into implementation (2026-09-19)
+
+D-332–D-335 and Product Specification §169 are accepted; runtime implementation is pending.
+The consistency audit is in `CONTRACT_ALIGNMENT.md`; the invariant matrix now records pending
+proof for the revised ownership contract rather than inheriting historical EVIDENCED claims.
+All CP-26 changes may break old names/formats/rules: the owner confirms there are no users requiring
+compatibility. Add no fallback readers, aliases, migrators or transition periods. Use proportionate
+focused checks during implementation; no compatibility matrix or test per mechanical rename.
+Task 21 remains the final broad gate. Remote/local Registry aliases remain distinct installation
+owners and appear in their runtime paths even for identical packages.
+18a renames all active product interfaces/tool-owned names to `aart-cli` and gives macOS/Linux
+one `~/.aart-cli` / `AART_CLI_HOME`. Canonical content and installation metadata live there;
+runtime, payload, launcher and ordinary config belong to each selected harness's installation tree.
+19 wires complete target identity through placement, receipts, Installed, input collection and
+lifecycle. Four harnesses require four independently entered config/secret sets and separate
+provider items. No global input state, cross-target prefill, copy-answers or secret-sharing option
+is allowed. Existing compatible values may survive only the same owner's update/repair. Shared-
+reference allowances in D-313 are superseded; B-150 is promoted into 19 with B-144. Step 20 must
+prove the same isolation for local/remote Registry aliases. Read the detailed 18a/19 acceptance in
+the slice; do not mark either task done for this specification-only segment.
 
 `aart author init` generates all five kinds; `aart author check` answers both halves of §1.4; and
 the README now opens with the route a new user runs rather than with the architecture.
@@ -53,9 +75,16 @@ Four open findings:
   AART writes. Not gated by `make docs-check`. A precondition of CP-26.21.
 - **B-154** — `aart author check` reports a Collection manifest as `skip` rather than checking it.
 - **B-155** — 274 mutants survive in `authoring/skeleton.py`, almost all in generated prose.
-- **B-150** — the owner's installation-identity principle: an installation is
-  (artifact, harness, user-or-project scope), and no artifact shares global state with any other.
-  Input to CP-26 task 19, and to the Product Specification before it.
+- **B-150** — promoted into mandatory CP-26.19 acceptance (D-332/D-333): private harness-owned
+  installation trees and separately entered per-installation inputs, now in Product Specification
+  §169. Depends on 18a's names/home/path policy; implementation remains pending.
+
+## Historical handoffs below
+
+The sections below preserve earlier checkpoints and their evidence. Their “next”, “current” and
+completion counts apply to those dates only; execute from **Where CP-26 is** at the top and
+`plan.json`. Superseded sharing/path rules cannot override Product Specification §169. The current
+consistency audit is recorded in [CONTRACT_ALIGNMENT.md](CONTRACT_ALIGNMENT.md).
 
 ## CP-26 scope addition (2026-09-18)
 

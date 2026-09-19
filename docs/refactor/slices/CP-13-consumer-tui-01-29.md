@@ -1,4 +1,9 @@
 # CP-13 — Consumer TUI 01–29
+
+> **Historical evidence / CP-26 revision:** Product Specification §169 and D-332–D-335 supersede
+> earlier naming, runtime-placement and cross-installation input-sharing assumptions in this record.
+> VERIFIED below refers to the contract tested then. Current implementation/proof belongs to
+> CP-26.18a/19/20; see `../CONTRACT_ALIGNMENT.md` and `../INVARIANT_TRACEABILITY.md`.
 Status: IN PROGRESS (steps 1–5 VERIFIED and every accepted screen 01–29 live; step 6's remaining
 legacy removal depends on CP-14, step 7 DONE)
 

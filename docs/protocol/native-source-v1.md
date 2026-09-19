@@ -1,5 +1,11 @@
 # Native source protocol v1
 
+> **CP-26 transition notice (2026-09-19):** This guide contains retired native-reference and
+> lock/index representation descriptions. Those portions are historical, not an implementation
+> contract. Use the canonical [Product Specification](../product-specification/PRODUCT_SPECIFICATION.md)
+> and its §169 for accepted names and installation ownership. B-151 tracks the required guide
+> rewrite/removal before CP-26.21; CP-26.18a updates active names alongside the executable.
+
 A native AART source is an acquired repository tree whose root contains `aart-source.json`.
 Artifact discovery is deliberately limited to the manifest's explicit `artifact_roots`; AART does
 not crawl arbitrary repository layouts during consumer installation. A foreign layout must be

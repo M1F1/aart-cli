@@ -1,5 +1,11 @@
 # Registry protocol v1
 
+> **CP-26 transition notice (2026-09-19):** This guide contains retired native-reference and
+> lock/index representation descriptions. Those portions are historical, not an implementation
+> contract. Use the canonical [Product Specification](../product-specification/PRODUCT_SPECIFICATION.md)
+> and its §169 for accepted names and installation ownership. B-151 tracks the required guide
+> rewrite/removal before CP-26.21; CP-26.18a updates active names alongside the executable.
+
 An AART registry is a native source with optional curation documents. It may own canonical packages
 under `artifacts/`, or reference native packages in other repositories through `entries/`. The
 reference fixture at `tests/fixtures/protocol/registry-v1/` exercises both forms.

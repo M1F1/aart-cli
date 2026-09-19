@@ -1,5 +1,11 @@
 # AART Refactor Discovery Backlog
 
+> **CP-26 consistency audit (2026-09-19):** Current acceptance follows Product Specification §169
+> and D-332–D-335. B-144/B-150 belong to 19, B-143 to 20, and B-151 remains a precondition of 21.
+> B-121 is absorbed into 19; B-076 concerns explanatory guidance only. Historical findings do not
+> authorize shared runtime inputs. See `CONTRACT_ALIGNMENT.md`; no implementation issue was closed
+> by this documentation audit.
+
 > This is deliberately **not** the critical path.
 > Product Specification + EXECUTION_PLAN are mandatory.
 > Agents append non-blocking discoveries here instead of expanding the active slice.
@@ -1873,6 +1879,10 @@ Evidence/links: INV-123; INV-078 and INV-080; `docs/testing/PLAN-live-acceptance
 
 ## B-074 — INV-057's warning has no destructive credential flow to attach to
 
+> Historical resolution under the former INV-057. D-333 now requires mutation of one sole
+> installation owner; CP-26.19 supplies new evidence. The shared-reference requirement quoted
+> below is historical and must not be reintroduced.
+
 Found: CP-18 step 5 (2026-09-04) · Severity: low · Status: resolved 2026-09-14 (CP-23 task 12, D-262)
 
 Resolution: screen 24's Replace and Delete rows plan through `plan_credential_mutation`. The
@@ -1933,28 +1943,20 @@ input value.
 Evidence/links: INV-067; `agent_artifacts/wizard.py:36-38`; `tests/authoring_inputs_test.py:94-146`;
 `tests/tui_boundary_test.py`.
 
-## B-076 — Collection input guidance neither consolidates nor names its dependants
+## B-076 — Consolidate repeated input guidance while preserving installation owners
 
-INV-164 asks bulk installation to "consolidate equivalent input guidance while preserving which
-artifacts depend on the input". Neither half exists, measured rather than supposed:
-`project_required_inputs` given two artifacts that declare the same `InputId` returns two rows with
-the same id, the same label and the same example, and `ConfigInputView`/`CredentialInputView` have
-no owners field to say which artifacts wanted it.
+Status: OPEN, NONCRITICAL — explanatory presentation only (scope clarified by D-333, 2026-09-19).
 
-The consequence is small today and grows with Collections: installing a Collection whose members
-share one `github-org` asks for it once per member, and a reader who wants to know *why* it is being
-asked has nowhere to look. `RequirementView` already carries `owners` and the remediation views
-carry theirs, so the shape to copy is in the same module.
+INV-164 permits equivalent help text to be displayed once with the affected installation owners
+identified. Input fields, answers and provider references must stay distinct: separate prompts per
+installation are required behavior, including Collection members and multi-harness selection.
+The old suggestion to remove duplicate prompts by grouping values under InputId is withdrawn.
 
-Consolidation must be by identity, not by label: two inputs with the same id but different bindings
-are two different deliveries and must stay two rows, or the projection would merge a stdin secret
-into an environment one.
+The remaining opportunity is to reduce repeated explanatory text without hiding each target's
+alias, artifact, harness/profile, scope and root. It is not required to complete CP-26.19 as long as
+all owners and their independent inputs are clear. New shared-input machinery is out of scope.
 
-Not critical to CP-18. It becomes critical when a Collection with shared inputs is first installed
-through the TUI, which is where the duplicate prompts become visible.
-
-Evidence/links: INV-164; `agent_artifacts/application/consumer_views.py:336-353`;
-`agent_artifacts/application/consumer_views.py:279-312`; INV-131's aggregation clause.
+Evidence/links: Product Specification §§154.6/169; INV-164/246; D-333; B-144.
 
 ## B-077 — The canonical TUI hides its navigation instructions behind an undiscoverable `?`
 
@@ -3088,19 +3090,20 @@ Noncritical: no receipt is claimed, the outcome is stated where the action lands
 involved.
 
 
-## B-121 — Two artifacts sharing one credential in one installation: the second fails its pre-check
+## B-121 — Cross-installation credential merging causes a second-owner pre-check failure
 
-Found 2026-09-14 during CP-23 task 13 (D-263), and reproduced on the unchanged code before it.
-Selecting two MCP servers that declare the same secret input id binds both to one reference.
-Screen 07 correctly asks once and the provider is prompted once. After the first artifact stores
-the credential, though, the second artifact fails with `installed state changed after Review;
-inspect and review a fresh plan`: its reviewed observation said the credential was absent, and the
-first artifact's effect changed that within the same transaction. The install ends Partial.
+Status: ABSORBED INTO CP-26.19 / B-144 (D-333, 2026-09-19); correction pending.
 
-Likely fix: the transaction attributes the shared credential component to one owner and lets later
-owners depend on it, or re-inspects shared references between members. It needs its own review of
-receipts and repair ownership. Noncritical to task 13: the guidance for both owners is shown on
-screen 07 and on the lent terminal, and the second artifact fails visibly rather than silently.
+Found 2026-09-14 during CP-23 task 13 (D-263). The old composer gives two MCP artifacts declaring
+the same input id one provider reference and asks once. The first store changes the observation
+reviewed for the second owner, so the transaction ends Partial. Under Product Specification §169,
+the merged reference and single prompt are themselves invalid.
+
+The old proposed repair by shared-effect ownership/reference counting is withdrawn. CP-26.19 must
+collect values separately and allocate separate provider items before review, preserving independent
+preconditions and receipts. Reuse this failure as characterization of the old defect and prove
+that independent owners complete without changing each other's credential state. Do not implement
+a sharing route to fix it. Closure requires CP-26.19 evidence, not this planning update.
 
 ## B-122 — Advisory mutation survivors outside CP-23's claims in the TUI modules
 
@@ -3597,9 +3600,9 @@ project/user destination + harness/profile), followed by the declared input id. 
 `company/mcp/foo` and `company-local/mcp/foo` must be able to hold two different `endpoint` values
 and two different `token` provider references. So must `company/mcp/foo` installed into project A,
 project B and a user-level harness. Matching canonical bytes, artifact names, input ids or target
-types never merge them. A user may explicitly choose the same external credential reference for
-several targets, which is ordinary shared-credential use and must retain every dependant edge;
-there is no equivalent implicit sharing rule. Update may preserve compatible state only within the
+types never merge them. D-333 also forbids explicitly binding one external credential item to
+several targets. Each installation requires separate value entry and its own provider item; matching
+input names do not supply values for another owner. Update may preserve compatible state only within the
 same exact target owner, and uninstall/reconfigure of one owner must leave every other target
 untouched.
 
@@ -3630,9 +3633,10 @@ the identical state-key rule before `registry-local` exists.
   dependency closure, install/update/status and an invalid local successor; install the same MCP
   from local and remote aliases with different config and secret references, and install one alias
   into two project roots plus user scope with independent values. Then prove update, reconfigure,
-  credential rotation and uninstall of any target cannot affect another. Also prove that deliberate
-  selection of one shared provider reference records every dependant and warns before a destructive
-  credential action.
+  credential rotation and uninstall of any target cannot affect another. Under D-333, attempts to
+  select one provider item for distinct installations are refused; no explicit sharing route exists.
+  Assert alias-qualified runtime paths and distinct harness entry keys even for byte-identical
+  local/remote packages (Product Specification §169.3).
 
 This is distinct from §165.23 Candidate Test Install. Candidate Test Install exercises the compiled
 candidate before promotion; a configured local Registry exercises the exact canonical
@@ -3653,14 +3657,15 @@ Discovered in: issue #23 design review / `application/installation_inputs.py` /
 Registry is acquired. Their complete logical owner is:
 
 ```text
-Registry alias + artifact kind/name + normalized project/user root + harness/profile + input_id
+Registry alias + artifact kind/name + scope + normalized target root + harness/profile + input_id
 ```
 
 Each distinct key must hold an independent ordinary value or credential provider reference. For
 macOS Keychain, it must resolve to a unique generic-password `service`/`account` pair. The encoding
-may hash or otherwise hide the raw target path, but two distinct logical keys may not alias. A user
-can explicitly bind several owners to the same pre-existing provider reference; only that action
-creates shared credential lifecycle.
+may hash or otherwise hide the raw target path, but two distinct logical keys may not alias.
+D-333 (2026-09-19) withdraws the earlier explicit-sharing allowance: no two installations may bind
+the same provider item. Each new installation requires separately entered configuration/secrets,
+including four input sets when four harnesses are selected. No global value pool or copy UI exists.
 
 **Current defect.** Input composition groups declarations globally by `InputId` and one supplied
 source is returned to every owner declaring it. The TUI's automatic Keychain reference uses one
@@ -3673,7 +3678,7 @@ local Registry support would only make them easier to encounter.
 **Why critical now.** The owner added B-143 and B-144 to CP-26 on 2026-09-18. This item is step 19
 and precedes local Registry acquisition in step 20 because the collision already affects remote
 Registries and local aliases would compound it. It does not block the current scaffold removal;
-step 2 remains the next executable task.
+the current next task is recorded at the top of NEXT.md (14 at the 2026-09-19 audit).
 
 **Potential approach.** Introduce one nominal `InstallationTargetId`/input-binding key at the domain
 boundary rather than concatenating strings in adapters. Carry it through input composition,
@@ -3686,13 +3691,15 @@ stable owner so compatible updates at the same target can retain values.
 user scope, and from two aliases into the same target. Give every instance different configuration
 and Keychain references; reopen, update, reconfigure, rotate and uninstall each independently.
 Property-test that distinct valid complete keys never produce the same provider item identity.
-Separately bind several instances explicitly to one provider reference and prove all dependant
-edges and destructive-action warnings remain present. Run scoped mutation over the new identity
-module and the input-composition change.
+Reject attempts to bind distinct installations to one provider item. Exercise four selected
+harnesses with separate fields/prompts/items and a headless missing-target refusal. Prove runtime,
+receipt and lifecycle independence as well as input isolation. Run scoped mutation over the new
+identity module and input-composition change. Product Specification §169 and D-332/D-333 supersede
+the earlier sharing acceptance; CP-26.18a establishes names/home/path policy first.
 
 Invariants touched: INV-051–059, INV-179–180, INV-190, INV-196, INV-231–232, INV-243.
 
-Evidence/links: Product Specification §§38–39, §96, §161.7; D-313; B-143.
+Evidence/links: Product Specification §§38–39, §96, §161.7, §169; D-332–D-335 (supersede D-313 sharing); B-143.
 
 Promotion condition: satisfied by the owner's 2026-09-18 instruction; implement as CP-26.19 before
 CP-26.20 local Registry consumption.
@@ -3825,7 +3832,7 @@ verification.
 
 ## B-150 — An installation's identity is the harness *and* the scope it was installed into
 
-Status: OPEN, NONCRITICAL for CP-26.05 — input to CP-26 task 19
+Status: PROMOTED TO CRITICAL PATH — CP-26.19 (2026-09-19, D-332/D-333); implementation pending
 
 Raised by the owner, 2026-09-18, while CP-26.05 was in flight.
 
@@ -3838,9 +3845,9 @@ target is what the installation path already encodes:
    scopes is two installations, with two configurations and two credential bindings, not one
    installation seen twice.
 
-Consequences to work through when task 19 is opened:
+Mandatory CP-26.19 acceptance, now specified in Product Specification §169:
 
-- `aart list` / "installed" is keyed by (artifact, harness, scope), so the same artifact legitimately
+- Installed is keyed by (Registry alias, artifact, harness/profile, scope, concrete root), so the same artifact legitimately
   appears more than once and each row is independently verifiable, upgradable and removable.
 - Keychain entries and configuration bindings are keyed by that same alias-qualified target, which
   is what CP-26 task 19 already names; this states *why* the key has that shape and adds the
@@ -3850,9 +3857,14 @@ Consequences to work through when task 19 is opened:
 - Whatever AART writes into a harness has to be attributable to exactly one installation entity, or
   the no-shared-state rule cannot be checked.
 
-This is a Product Specification-level statement about what an installation *is*. Before task 19
-implements it, confirm it against `docs/product-specification/PRODUCT_SPECIFICATION.md` and, if the
-specification does not already say it, that is the document the statement belongs in first.
+On 2026-09-19 the owner made this mandatory: private runtime/projection under the harness,
+central canonical objects and receipt metadata under `~/.aart-cli`, and separate configuration and
+secret entry for every installation. Product Specification §§38–39, 84–85, 96, 169 now contain the
+contract. CP-26.18a establishes portable paths and the `aart-cli` namespace; 19 implements isolation.
+Four harnesses mean four input sets and four provider items per secret, with no explicit or implicit
+sharing. This is required for INV-243–247 and therefore promoted from noncritical discussion input
+to critical-path acceptance. Immutable package deduplication and Collection reasons for the same
+complete installation do not permit cross-target mutable state sharing.
 
 Evidence/links: CP-26 task 19; B-150 raised by the owner; `docs/product-specification/PRODUCT_SPECIFICATION.md`.
 

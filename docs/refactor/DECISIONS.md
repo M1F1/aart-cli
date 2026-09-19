@@ -1,5 +1,10 @@
 # AART Refactor Decision Log
 
+> **Current installation/naming authority (2026-09-19):** Product Specification §169 and
+> D-332–D-334. Earlier entries are chronological evidence and remain accepted only where they
+> agree with the current specification. Runtime sharing, cross-installation input reuse and old
+> names/paths are superseded; see `CONTRACT_ALIGNMENT.md` for the affected decisions.
+
 This log records implementation decisions needed to execute the Product Specification. It cannot
 override or weaken the Product Specification. If a decision would change product semantics, update
 the Product Specification first instead of hiding the change here.
@@ -987,6 +992,9 @@ the Product Specification first instead of hiding the change here.
   subset somebody ticked, and the offer must not decide for either.
 
 ## D-071 — An installed artifact's own tree lives beside the manifest that records it
+
+> Superseded by D-332 (2026-09-19): runtime trees belong to individual harness targets; the
+> central aart-cli home holds canonical content and installation metadata. Text below is history.
 - **Decision:** `artifact_root(coordinate, scope, project_root=…, data_root=…)` places the tree an
   artifact owns -- payload, environment, interpreter -- at `<project>/.agent-artifacts/runtimes/
   <source>/<kind>/<name>` for project scope and `<data_root>/runtimes/<source>/<kind>/<name>` for
@@ -1033,6 +1041,8 @@ the Product Specification first instead of hiding the change here.
   reference it may act on, which are also supplied at construction rather than read off the effect.
 
 ## D-073 — One confirmed Selection gets one capability-bound interpreter set
+
+> **CP-26 supersession (2026-09-19):** Per-provider interpreter composition remains valid; any deduplication of credential references across installation owners is superseded by D-333. Each target needs its own provider item.
 - **Decision:** `interpreters_for` assembles the execution adapters for all planned installations
   before execution: one file, Python-runtime and artifact-bound harness interpreter per artifact,
   and one credential interpreter per provider holding the deduplicated references that name it.
@@ -2445,6 +2455,8 @@ the Product Specification first instead of hiding the change here.
     not do. Neither is asserted as though it held.
 
 ## D-130 — Two stores can say an artifact is installed, so there are two setup-record locators
+
+> **CP-26 supersession (2026-09-19):** The dual stores and coordinate-only receipt addressing describe old implementation. D-332/D-333 require one central receipt per complete installation identity, including scope, root and harness/profile.
 
 - **Context:** B-046. D-128 gave configured installs a real setup run whose durable pointer is the
   receipt's `setup_state_ref`, but `setup_receipt.locate_setup_record` reads that pointer only out
@@ -6203,6 +6215,8 @@ those labels promised. Nothing in the runtime could replace or delete a credenti
 
 ## D-263 — Credential guidance is said where the value is asked for: screen 07, the lent terminal and the CLI
 
+> **CP-26 supersession (2026-09-19):** The guidance contract remains. D-333 withdraws one prompt/shared reference for multiple owners: guidance may be consolidated, but values, prompts and provider items remain separate.
+
 Date: 2026-09-14 (CP-23 task 13).
 
 **Context.** An author's `help` for a secret input already survived compile, promotion and the
@@ -6261,6 +6275,9 @@ two artifacts in one transaction still fails the second artifact's pre-check. Th
 existed without these changes and is B-121.
 
 ## D-264 — Configuration values live per harness beside the installed artifact; the launcher reads them
+
+> D-332/D-333 (2026-09-19) retain installation-local ordinary configuration but withdraw the
+> shared launcher and any cross-installation input sharing.
 
 Date: 2026-09-14 (CP-23 task 16, first increment).
 
@@ -6745,6 +6762,8 @@ PROGRESS entries and the CHANGELOG's hand-written sections that link to the dele
 reduced to plain text where a link would break; their prose is historical and left as written.
 
 ## D-276 — The repository starts its history at 0.1.0
+
+> **CP-26 supersession (2026-09-19):** Historical release cleanup only. The decision to retain agent_artifacts, old commands and old tool-owned paths is superseded by D-332/CP-26.18a.
 
 **Context.** The repository was cut from a predecessor project and carried its history:
 - `PLAN.md`, `PROGRESS.md`, `TODO.md` and `feedback.md`;
@@ -7743,6 +7762,9 @@ other wizard success screens.
 
 ## D-313 — Registry alias and installation target qualify configuration and credential bindings
 
+> D-333 (2026-09-19) supersedes the explicit-sharing exception and shared-reference tests below.
+> Each installation now requires separate input entry and a private provider item.
+
 Date: 2026-09-18 · Status: accepted · Scope: general consumer input state / B-144
 
 **Context.** Configuration and credentials belong to consumer installations regardless of whether
@@ -8214,3 +8236,125 @@ requirement AART can satisfy into a step an author can skip.
 touched them. The writer now makes a mode decision, which is a filesystem concern and belongs in
 `io/` where it now lives; the generator only declares the intent. No other kind sets the flag
 today.
+
+## D-332 — One portable aart-cli home and harness-owned installed files
+
+Date: 2026-09-19 · Status: accepted, implementation pending · Scope: CP-26.18a / CP-26.19
+
+**Owner decision.** The product/distribution/executable and tool-owned namespace are `aart-cli`,
+including `aart_cli` imports and `AART_CLI_` environment variables. Every active reader, writer,
+manifest/schema identifier, generated template, CLI/TUI label, packaged entry point and public
+example is reconciled by CP-26.18a. Historical records and third-party filenames are not renamed
+into fictitious history. There is no compatibility alias, path fallback or migration command.
+
+macOS and Linux use `~/.aart-cli` for all tool-owned user data, or an explicit normalized absolute
+`AART_CLI_HOME`. The root contains tool configuration, immutable canonical objects, acquired Source/
+Registry state, target-qualified installation receipts, activity/setup metadata, cache, locks and
+transient state. Project receipts are also central metadata; there is no project-local receipt
+mirror. No artifact configuration value or secret is stored as global state there.
+
+A concrete installed artifact owns its files inside the selected harness's supported paths. MCP
+payload, launcher, ordinary configuration and private runtime are together under its `aart-cli/`
+namespace, qualified by Registry alias and artifact. Claude/user and Tabnine/project have separate
+trees and registrations. Immutable objects may be shared centrally; mutable runtime trees and
+input state may not. Built-in and custom profiles must provide safe distinct target paths or refuse.
+Keychain/other providers and administrator policy retain their separate ownership. Machine policy
+cannot be bypassed by selecting another application home.
+
+**Supersession.** D-071's shared multi-harness runtime premise and central runtime placement are
+withdrawn. D-264's local ordinary-value ownership is retained and narrowed to one complete
+installation; its shared-launcher premise is withdrawn. Product Specification §§84–85, 96, 169 and
+INV-244–247 are authoritative. One home simplifies path resolution; it does not eliminate OS secret,
+process, dependency or harness adapters.
+
+**Execution order.** Add CP-26.18a before 19 without renumbering existing tasks: the plan now has 22
+tasks and task 21 remains the final broad verification. 18a changes namespace/home policy and
+establishes target path contracts; 19 wires installation identity, private trees, inputs and
+lifecycle end to end. This planning segment changes no live installation or runtime code.
+
+## D-333 — No cross-installation configuration or credential sharing
+
+Date: 2026-09-19 · Status: accepted, implementation pending · Scope: CP-26.19 / B-144 / B-150
+
+**Owner decision.** Selecting four harnesses creates four installations. Every new installation
+collects its required ordinary configuration and secrets separately, even when declarations or
+user-entered text match. Two variables and one secret on four harnesses mean eight ordinary input
+fields, four secure entries, four ordinary files and four distinct Keychain items for that secret.
+The provider creates those records. Identical manually entered secret text is permitted without
+comparing values or requiring four upstream tokens.
+
+No cross-installation reuse, copy-answers option, prefill, credential picker or shared-provider
+binding is offered by TUI, CLI or automation. Headless execution supplies each target's bindings
+independently and fails with a target-qualified diagnostic if any are missing. Compatible inputs
+may survive update/repair only for the same stable owner: Registry alias + artifact kind/name +
+scope + concrete normalized target root + harness/profile, then input id. Version is not an owner.
+
+Receipts and Credentials/Installed views may aggregate metadata centrally. Configuration values
+stay with the installation; secret values stay with its provider item. An uninstalled owner's
+retained credential does not become a global reusable credential. Uninstall, rotation or repair
+cannot mutate another installation's files or inputs. Collection ownership reasons may share one
+existing complete owner; they do not join different targets or provider items.
+
+**Supersession.** D-313's explicit-sharing exception and its shared-reference acceptance test are
+withdrawn. Product Specification §§38–39, 96, 154.6, 161.5–8, 169 and INV-057/190/196/243/246 now
+state independent ownership and separate entry. Shared guidance may be deduplicated, input fields
+and answers may not. B-150 is promoted into mandatory CP-26.19 acceptance; B-144 and B-143's tests
+must reject cross-owner binding rather than establish sharing. No sharing feature is scheduled.
+
+## D-334 — CP-26 may break old contracts; implementation checks stay proportional
+
+Date: 2026-09-19 · Status: accepted · Scope: all of CP-26
+
+The owner explicitly accepts breaking changes across the entire epic: the product is starting and
+has no users requiring preservation of old commands, paths, names, schemas, formats or internal
+rules. Implement the accepted Product Specification directly. Do not build compatibility aliases,
+old-format readers, parallel state, migration commands or deprecation periods solely for prior
+behavior. Historical evidence remains history; tests for withdrawn behavior may be updated or
+removed, while still-required behavior and external harness contracts remain held.
+
+The owner also requests proportionate implementation testing. Use focused existing tests and
+small smoke checks for actual changed claims: new command/path behavior, complete installation
+identity, distinct Registry paths, and no file/configuration/credential interference between
+owners. No compatibility matrix, new assertion per mechanical rename, broad repeated suite or
+unrelated mutation campaign. Record the required targeted semantic mutation and scoped mutmut for
+material behavior within the task; namespace substitutions are not separate semantic claims.
+D-317 still assigns full quality/integration/release-facing verification to CP-26.21. Do not weaken
+those gates or hide failures of the accepted contract. This planning-only segment needs document
+and plan checks, not application tests or mutation of unchanged runtime code.
+
+The owner's additional Registry clarification is mandatory: remote alias `company` and local alias
+`company-local` denote separate installation entities even when upstream identity, version and
+package digest match. Runtime paths include the alias, for example
+`~/.claude/aart-cli/mcp/company/github/` and
+`~/.claude/aart-cli/mcp/company-local/github/`; registration keys, receipts, inputs and Installed
+rows remain distinct. CP-26.19 holds the identity/path rule and CP-26.20 exercises both acquisition
+routes. Immutable package objects alone may share storage.
+
+## D-335 — Revised product contracts require revised evidence and a current handoff
+
+Date: 2026-09-19 · Status: accepted, documentation aligned · Scope: CP-26 planning audit
+
+The owner requested a consistency/readiness audit before implementation. Product Specification
+§169 controls the installation revision. Its earlier runtime, Collection, input, registration and
+version-invariant wording is aligned directly, so readers do not need to infer which contradictory
+paragraph wins. Collection reasons may retain one exact owner; host prerequisites/help may
+aggregate; installation values, provider items and runtime state may not cross owners. Bulk
+transaction receipts link per-owner receipts. Shared harness files require coordinated fragment
+updates even across application homes.
+
+Historical VERIFIED slices and passing tests remain evidence of the contract tested then. They
+are not proof of the revised contract. INVARIANT_TRACEABILITY now includes INV-243–247 and marks
+affected claims PARTIAL/CONFLICT with explicit CP-26.18a/19/20 proof obligations. Earlier decisions
+and slices carry supersession notices. B-121's shared-reference repair is absorbed by independent
+ownership in 19; B-076 may group guidance but must not merge required input fields.
+
+Root execution instructions follow D-317/D-334's proportionate checks and final gate at 21.
+CODEX_GOAL, slice index, NEXT, status and local handoff identify the current 13/22 checkpoint and
+14 as next. Public guides containing retired protocol descriptions are labelled historical pending
+B-151; warnings do not count as completing their rewrite. Current code/examples remain actual
+baseline evidence until the implementation task updates them; the accepted specification shows
+the target. CONTRACT_ALIGNMENT records the audit scope, resolved conflicts and remaining work.
+
+No blocking product contradiction was found in the reviewed installation contract. No runtime
+change, installation claim, task completion or release readiness follows from this audit. The
+existing implementation order is retained, and no broad suite is run for documentation changes.

@@ -1,5 +1,10 @@
 # CP-23 — Actionable TUI workflows after the fourth manual run
 
+> **Historical evidence / CP-26 revision:** Product Specification §169 and D-332–D-335 supersede
+> earlier naming, runtime-placement and cross-installation input-sharing assumptions in this record.
+> VERIFIED below refers to the contract tested then. Current implementation/proof belongs to
+> CP-26.18a/19/20; see `../CONTRACT_ALIGNMENT.md` and `../INVARIANT_TRACEABILITY.md`.
+
 Status: CLOSED BY THE OWNER, 2026-09-16 — TASKS 01–16 DONE IN CODE; THE MANUAL ACCEPTANCE WALK AND A GREEN STANDALONE `make integration` (B-108) WERE NEVER RECORDED
 
 Date: 2026-09-14. Authority: the product owner's manual screen reports and request to create CP-23

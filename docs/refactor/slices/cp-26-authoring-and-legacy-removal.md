@@ -1,7 +1,11 @@
 # CP-26 — Canonical Registry maintenance, authoring tools and local consumption
 
-Status: **active**. Steps 1–4 are done (D-308/D-311/D-318/D-319/D-320); step 5 is next. The
-machine plan keeps an unfinished step as `todo` until its completion evidence is recorded.
+Status: **active**. Steps 1–13 are done; step 14 is next. The plan has **22 tasks** after the
+2026-09-19 addition of CP-26.18a (D-332); task 21 remains the final broad gate. D-333 requires
+independent input entry for each installation and withdraws all cross-installation sharing.
+Product Specification §169 defines the accepted layout and namespace; runtime implementation is
+still pending. Historical step records below retain the command names actually verified then.
+The machine plan keeps an unfinished step as `todo` until completion evidence is recorded.
 
 PR #21 follow-up (2026-09-18): D-308's authoring refusal now points to the runnable `--help`
 forms of `scan` and `promote`. The visible-command test was red first, green after correction,
@@ -14,8 +18,11 @@ literal restoration made the scanner red; moving the gate back after installatio
 ordering test red. This release repair likewise precedes step 2.
 
 This supersedes the earlier draft of this file, which planned a compatibility window. The
-maintainer has withdrawn that requirement: AART is early, its users are few, and back-compatibility
-is explicitly not to be paid for. The removal is therefore direct.
+owner confirms the product is just starting and has no users requiring backward compatibility
+(D-334, 2026-09-19). **Every CP-26 task may make breaking changes** to old commands, names, paths,
+formats, schemas and internal rules. Implement the accepted specification directly; do not add
+compatibility aliases, fallback readers, dual state, migration commands or deprecation periods.
+External harness contracts and the new ownership/secret rules remain acceptance boundaries.
 
 ## Why removal and authoring belong in one epic
 
@@ -284,7 +291,8 @@ no migration command, and no deprecation period.
 | 16 | Every final install line and README structural promise is executed by a gate | manual wheel download and `gh release download`, section order, bounded explanation, valid links and final License; later edits rerun it |
 | 17 | Remove `M1F1` as a generated or operational default | Registry workflow/README, CLI guidance, release defaults and public configuration docs; no organization or repository baked into a generated registry |
 | 18 | Registry Maintainer may push its publish-ready local snapshot | workspace-scoped action; visible readiness and blockers; current branch or a new review branch, never `main` or the default branch |
-| 19 | Configuration and credential bindings are keyed by installation target | B-144; alias + artifact + destination + harness/profile + input id, with explicit sharing only |
+| 18a | Use `aart-cli` throughout active names and one portable application home | D-332; `~/.aart-cli` / `AART_CLI_HOME`, central canonical content/receipts, harness-owned installation path contract; no compatibility aliases |
+| 19 | Each installation owns its runtime, receipt, configuration and credentials | D-333; B-144/B-150; alias + artifact + scope/root + harness/profile + input id; separately entered values, no sharing even across four selected harnesses |
 | 20 | Add Registry synchronizes a canonical Registry from a local Git checkout | B-143; one admission/snapshot/Marketplace path for remote and local transports |
 | 21 | Run the full CP-26 verification only after every implementation task is complete | full quality, integration/E2E, packaging/docs/secret gates and final acceptance evidence |
 
@@ -304,10 +312,11 @@ The numbered order is the execution order and is grouped into six dependency pha
    one canonical Registry shape, and follows step 17 so no implicit maintainer repository can become
    a push target. `publish` still ends at the reviewed local commit; Push remains separately
    reviewed on Registry Maintainer.
-5. **Make local consumption safe, then add it (19–20).** Target-qualified state ownership precedes
-   the local Registry adapter so equal local/remote packages cannot collide in configuration or
-   credentials.
-6. **Verify the whole slice once (21).** Only after tasks 2–20 are complete, run the broad repository
+5. **Settle paths and isolate installations, then add local consumption (18a–20).** Step 18a
+   unifies names/home resolution and defines harness-owned destinations. Step 19 wires those
+   destinations and complete ownership through runtime, receipts, inputs and lifecycle, requiring
+   separate entry for every target. Step 20 reuses that contract for local Registry acquisition.
+6. **Verify the whole slice once (21).** Only after all implementation tasks, including 18a, are complete, run the broad repository
    quality and integration/E2E suites and record the final acceptance evidence.
 
 Command survival is an acceptance invariant: step 3 must leave canonical `lock`, `build`,
@@ -318,7 +327,13 @@ that legacy code disappeared is insufficient unless these retained surfaces are 
 
 ### Test cadence for tasks 2–21
 
-Tasks 2–20 use TDD and the smallest evidence set that holds their claim:
+D-334 records the owner's request for proportionate implementation checks: use small focused
+checks, reuse relevant tests and avoid over-testing mechanical changes. No compatibility matrix
+or new test per renamed string is required. A namespace-only substitution is not a separate
+semantic mutation claim. Runtime identity/isolation and new command/path behavior remain the
+material checks; no broad or unrelated test/mutation campaign runs during implementation.
+
+Implementation tasks 2–20, including 18a, use the smallest evidence set that holds their claim:
 
 - run the named red/green test module for the changed behavior;
 - run format, lint and type checks over changed files and production/test files inside the measured
@@ -940,27 +955,89 @@ non-force update and divergence; literal-`main` and default-branch refusals; exa
 ownership; Source and parent-repository refusals; and a mutation proving that skipping any mandatory
 gate makes the action unavailable.
 
-### Step 19 — installation-target-qualified input and credential state (B-144)
+### Step 18a — aart-cli namespace, portable home and harness path contract (D-332)
 
-Introduce one nominal installation-target identity at the domain/application boundary. Its stable
-owner fields are Registry alias, artifact kind/name, normalized destination context (project/user
-scope and concrete root), and harness/profile; `input_id` is unique only inside that owner. Version
-is not part of the owner, so a compatible update at the same exact target may preserve state.
+Status: **todo**. Added by the owner on 2026-09-19; execute after 18 and before 19. Names and
+paths must be settled before wiring the new installation identity. Do not renumber task 21.
 
-Carry that identity through input composition, persisted ordinary values, credential-provider
-references, setup state, receipts and lifecycle dependency edges. Equal input ids or canonical
-bytes never share state implicitly. The macOS Keychain adapter derives a deterministic,
-collision-resistant item identity from the complete key and uses an opaque digest for filesystem
-roots rather than exposing raw paths. Secret values remain solely inside the provider.
+Implement Product Specification §169.1–3/5 and INV-244/247. Inventory all active producers and
+consumers: executable/package/import names (`aart-cli`, `aart_cli`), manifest discovery and schema/
+URI identifiers, CLI/help/JSON labels, filenames, managed markers, environment and CI/release
+names, Registry templates, public docs, examples, scripts and tests. Historical evidence and
+external harness filenames remain literal. Delete former aliases/readers directly; no migration
+command, compatibility window, old-path probing or dual writes. Re-run step 16's executed
+installation/README contract after changing its advertised commands.
 
-Red-first acceptance installs the same remote-Registry artifact into two project roots and user
-scope, and installs equal artifacts from two aliases into one target. Each owner receives distinct
-ordinary values and credential references, survives reopen/update/reconfigure independently, and
-can be uninstalled without touching another owner. A separate path explicitly binds several owners
-to one provider reference and proves every dependant edge and destructive-action warning remains.
-Property tests hold that distinct valid complete keys do not collide; a scoped `mutmut` run covers
-the identity module and input-composition seam. This closes B-144 and establishes INV-243 before
-any local Registry adapter is admitted.
+Resolve one normalized absolute `AART_CLI_HOME`, defaulting to `<user-home>/.aart-cli`, for both
+macOS and Linux. Put tool settings, canonical objects, snapshots/Candidates, receipts/activity/setup
+metadata, cache, locks and temporary files under it. Establish adapter-owned path policy for
+private installation trees under harness directories, qualified by Registry alias and artifact,
+and distinct roots for different profiles/homes. Step 19 connects that policy to every lifecycle
+writer. Preserve administrator-policy and secret-provider authority; an application-home override
+cannot bypass machine policy. No ordinary artifact input values belong in the central home.
+
+Acceptance: same relative layout on macOS/Linux; explicit override honored by CLI, TUI, headless
+execution and reset/doctor paths; invalid/broad destructive roots refused; no fallback to former
+paths/XDG roots; packaged `aart-cli --help`/`--version` work and old entry points are absent;
+generated/public instructions use the same names; bounded cache cleanup leaves receipts/objects
+intact. A reset must expose the effect of forgetting receipts without silently destroying harness
+files or credentials. Unsupported harness destinations refuse before effects. Focused unit/property tests and packaging/docs/reset/CI checks appropriate to changed boundaries,
+one recorded targeted semantic mutation for material behavior and scoped mutmut
+hold these boundaries. No full `make quality` until task 21.
+
+### Step 19 — private installation trees, input entry and lifecycle (B-144/B-150, D-333)
+
+Status: **todo**, depends on 18a. Implement Product Specification §§38–39, 84–85, 96, 161.5–8 and
+169 with INV-243/245/246. Stable owner fields are Registry alias, artifact kind/name, scope,
+normalized concrete project/user target root and harness/profile; `input_id` is unique only inside
+that owner. Version is excluded so compatible updates can retain that owner's inputs.
+
+Expand selected targets before input composition. Give each installation its own harness-local
+payload/runtime/launcher/configuration, registration fragment and central receipt. Wire identity
+through placement, input collection, provider references, setup, Installed/Credentials views,
+health and all lifecycle actions. Reject global InputId grouping and one-source-for-all-targets
+projection. Never copy/prefill another target's values or offer shared/copy-answers controls.
+Ordinary values remain in the installation tree, secrets in its provider; central metadata holds
+paths/digests/references only. macOS Keychain derives distinct deterministic, collision-resistant
+service/account pairs from complete keys with opaque roots. Provider items cannot serve two owners.
+
+Acceptance (red first):
+
+- One MCP into Tabnine/project and Claude/user produces two private trees, two registrations and
+  two independently actionable Installed rows with exact roots, versions and health.
+- One MCP with two config variables and one secret on four eligible harnesses collects eight
+  ordinary fields and four secure entries, then writes four config files, four runtimes, four
+  receipts and four provider items. Four eligible test profiles may exercise the universal rule;
+  this criterion does not require adding support for a new external harness. Exercise CLI/TUI
+  application paths; equal manually entered
+  values still produce independent ownership. No copy/share control or global prefill exists.
+- Headless input bindings are target-qualified; omitting one fails for that target without a
+  prompt, fallback or cross-owner reuse. Reject explicit attempts to bind the same provider item
+  to two owners. Secret values never appear in plans/receipts/logs/files.
+- Same remote artifact in two project roots and user scope, equal packages from two Registry
+  aliases, and separate profiles/homes remain independent. Duplicate selection of one exact owner
+  may coalesce while preserving Collection reasons; distinct targets never coalesce.
+- Install byte-identical `mcp/github@1.5.0` from remote alias `company` and local alias
+  `company-local` into the same harness/scope. Assert two paths under
+  `<harness-root>/aart-cli/mcp/company/github/` and
+  `<harness-root>/aart-cli/mcp/company-local/github/`, distinct registration keys and launchers,
+  receipts, provider items and Installed rows. Repeat across Claude/user and Tabnine/project for
+  four independent installations. Step 19 tests the identity/placement contract; step 20 repeats
+  it through real local and remote acquisition adapters. Canonical package deduplication must not
+  collapse installations or permit alias/path traversal.
+- Multiple owners writing the same harness settings file preserve each other's fragments, even
+  from separate application homes. Complete identity does not permit uncoordinated file overwrite.
+- Reopen, update, configure, rotate, repair and uninstall one owner leave every other owner's
+  files, config, credential and receipt untouched. Compatible update/repair retains inputs only
+  for that owner. Retained credentials never become a pool for new installations.
+- Canonical object availability alone creates no Installed row. Verification failure and partial
+  effects produce honest recorded health. Launch succeeds without the installer or central object
+  store; cache pruning never deletes private runtime state.
+
+Property-test complete owner keys and provider-item uniqueness. Use existing focused tests where
+possible; record targeted semantic mutation evidence for the material isolation claims and scoped
+mutmut over their changed modules. Do not build a broad compatibility or cross-product matrix. B-144 and B-150 close only after this
+acceptance, before step 20 consumes the model. No sharing feature is part of this task.
 
 ### Step 20 — local Git checkout as a configured canonical Registry (B-143)
 
@@ -982,7 +1059,7 @@ Acceptance covers coexistence, alias-qualified selection, unqualified ambiguity,
 Collection closure, install/update/status, receipts containing alias/snapshot/commit/origin, and an
 invalid local successor retaining last-known-good state. Reuse step 19's independent project/user/
 harness configuration and credential cases through the local and remote aliases, including
-explicit shared-provider warnings. Local Sync is read-only with respect to the checkout and proves
+refusal of cross-installation provider-item binding and separate target-qualified input entry. Local Sync is read-only with respect to the checkout and proves
 it performs no network operation. This closes B-143; it remains distinct from Candidate Test
 Install, which exercises pre-promotion candidate content rather than the canonical Registry.
 
@@ -992,3 +1069,44 @@ CP-26 does not support authoring directly inside a Registry. Author manifests an
 a Source checkout; `scan` and `promote` compile them into the canonical Registry representation.
 Supporting Registry-origin authoring would require a future explicit Product Specification change
 and a new provenance origin kind. It is not an alternate implementation of any CP-26 task.
+
+### Planning segment — installation layout and input isolation (2026-09-19)
+
+The owner accepted Product Specification §169 and D-332–D-334, including alias-qualified paths,
+breaking changes throughout CP-26 and proportionate implementation checks. CP-26.18a adds the namespace/home
+work; CP-26.19 now includes private harness runtime placement, one receipt per target and mandatory
+separate inputs. The plan has 22 tasks with existing ids/statuses retained; 13 are complete and 14
+is next at this recording. Shared-credential allowances in the specification and future acceptance
+criteria were removed; previous decision records carry explicit supersession notices. B-150 is
+promoted into mandatory step-19 acceptance, with B-144, and remains unimplemented.
+
+This segment changes specification/planning only. No runtime, live files, Keychain items or step
+completion statuses are changed. Verification: `handoff-plan validate` and a plan comparison pass (22 tasks, 13 done; existing
+statuses unchanged, 18a before 19, 21 last); `make docs-check` passes. `git diff --check` and a
+consistency review of sharing allowances complete the documentation-only checks.
+Targeted semantic mutation/mutmut evidence belongs to implementation tasks 18a/19; no executable
+behavior is claimed here. No broad quality gate is run (D-317).
+
+### Consistency audit — execution and invariant evidence (2026-09-19)
+
+D-335 and `../CONTRACT_ALIGNMENT.md` record the pre-implementation review. The Product Specification
+now uses the complete installation owner consistently in runtime isolation, Collection reasons,
+input aggregation, active-version constraints and registration examples. Bulk receipts link
+per-owner records; shared harness-file mutations preserve independent fragments. Four eligible test
+profiles can prove separate input collection without adding an external harness adapter.
+
+Root instructions, CODEX_GOAL, slice index and local handoff now identify the current work and
+D-317/D-334's focused checks. The invariant matrix adds 243–247 and reclassifies affected historical
+proof instead of treating old passing tests as new acceptance. Earlier decisions/slices are marked
+historical. B-121 is absorbed by 19 and B-076 is guidance-only; B-151 remains open despite the public
+protocol warning banners. No implementation backlog item or task is closed. The plan remains
+13/22 done, 14 next, with 18a → 19 → 20 before final gate 21.
+
+Verification is limited to docs/plan/traceability consistency; no runtime behavior changed.
+Results: `make docs-check` passed; the existing `tests.traceability_matrix_test` passed all five
+tests with the application-first import; `handoff-plan validate` passed (27 epics, 160 units,
+151 done repository-wide). A direct catalog/plan check confirmed all 247 unique invariant rows,
+CP-26's 13/22 done, unchanged existing statuses, 14 next, 18a before 19 and 21 last.
+`git diff --check` passed. No semantic mutation is claimed for this documentation-only segment and
+full `make quality` is not run. The local `.claude/HANDOFF.md` is refreshed but ignored by Git;
+tracked NEXT/status/slice/alignment records contain the same resumption information.

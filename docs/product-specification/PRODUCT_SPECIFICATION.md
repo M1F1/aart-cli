@@ -1,16 +1,21 @@
-# AART Product Specification
+# aart-cli Product Specification
 
 > **STATUS: CANONICAL — SOLE PRODUCT SOURCE OF TRUTH**
 >
+> **2026-09-19 accepted revision:** §169 defines the `aart-cli` namespace, one portable
+> `~/.aart-cli` home, harness-owned installations and independently entered inputs for every
+> installation. Implementation is pending in CP-26.18a and CP-26.19; accepted examples are the
+> target contract, not a claim that the current binary already implements these names or paths.
+>
 > **Target repository:** `M1F1/aart-cli`
 >
-> This document is the canonical product specification for the AART refactor. It defines the
+> This document is the canonical product specification for the aart-cli refactor. It defines the
 > accepted product behavior, architecture, UX, TUI contracts, domain model, registry/source/
 > candidate/marketplace boundaries, lifecycle, reconciliation model, policies, security rules,
 > credential handling, testing expectations, maintainer workflows, consumer workflows, edge cases,
 > migration invariants, and release direction.
 >
-> If any other document, README prose, issue, comment, legacy implementation, or older AART
+> If any other document, README prose, issue, comment, legacy implementation, or older aart-cli
 > repository conflicts with this document, **this Product Specification wins**.
 >
 > Older repositories including `M1F1/aart`, `agent-artifacts`, `Agent Artifacts`, old registry
@@ -27,20 +32,20 @@
 
 ---
 
-# AART Enterprise Architecture v3 — Cumulative Design
+# aart-cli Enterprise Architecture v3 — Cumulative Design
 ## Algebraic model for artifacts, requirements, remediations, effects, policies, MCP runtimes, and TUI-driven configuration
 
 > **Status:** cumulative architecture draft v3  
-> **Primary goal:** design AART as an open-source, enterprise-ready package manager and marketplace for agent artifacts.  
+> **Primary goal:** design aart-cli as an open-source, enterprise-ready package manager and marketplace for agent artifacts.\
 > **Primary human interface:** TUI.  
 > **Automation interface:** deterministic CLI / JSON suitable for CI/CD.  
-> **Out of scope for now:** an autonomous agent itself as an AART artifact type.
+> **Out of scope for now:** an autonomous agent itself as an aart-cli artifact type.
 
 ---
 
 # 1. Product direction
 
-AART should not be only a marketplace for Agent Skills.
+aart-cli should not be only a marketplace for Agent Skills.
 
 It should become:
 
@@ -70,7 +75,7 @@ The architecture should preserve interoperability with external standards instea
 
 ---
 
-# 2. Public AART vs private enterprise configuration
+# 2. Public aart-cli vs private enterprise configuration
 
 A critical invariant is:
 
@@ -130,7 +135,7 @@ Conceptually:
                       ▼
                     PRIVATE
           ┌────────────────────────┐
-          │ enterprise-aart-registry│
+          │ enterprise-aart-cli-registry│
           │                        │
           │ artifacts/             │
           │ policies/              │
@@ -149,13 +154,13 @@ Conceptually:
                  Nexus / Artifactory
 ```
 
-Nexus or Artifactory should be treated as a **distribution/storage layer**, not as the semantic definition of the AART registry.
+Nexus or Artifactory should be treated as a **distribution/storage layer**, not as the semantic definition of the aart-cli registry.
 
 ---
 
 # 3. Avoid mandatory enterprise forks where possible
 
-A company may fork AART, but the architecture should minimize that need.
+A company may fork aart-cli, but the architecture should minimize that need.
 
 Preferred model:
 
@@ -195,7 +200,7 @@ but should not be required for ordinary configuration.
 The original three-algebra model evolves naturally into five related domains:
 
 ```text
-                       AART DOMAIN
+                       aart-cli DOMAIN
                             │
        ┌────────────┬───────┼────────┬────────────┐
        │            │       │        │            │
@@ -216,7 +221,7 @@ Describes **what must be true before the artifact can work**.
 
 ## Effect
 
-Describes **what mutation AART can perform**.
+Describes **what mutation aart-cli can perform**.
 
 ## Remediation
 
@@ -283,7 +288,7 @@ company/hook/pre-commit
 Potential URI:
 
 ```text
-aart://company/mcp/github@1.4.0
+aart-cli://company/mcp/github@1.4.0
 ```
 
 ---
@@ -394,13 +399,13 @@ artifact payload
 └── supporting modules
 ```
 
-the AART model can start conservatively.
+the aart-cli model can start conservatively.
 
 Example:
 
 ```yaml
 kind: mcp
-format: aart-mcp-v2
+format: aart-cli-mcp-v2
 
 transport:
   type: stdio
@@ -437,7 +442,7 @@ Use an incremental maturity model.
 
 ```text
 private artifact contains launcher.sh
-AART installs and registers it
+aart-cli installs and registers it
 ```
 
 ## V2 — declarative launcher
@@ -451,12 +456,12 @@ entrypoint
 environment
 ```
 
-AART generates a launcher deterministically.
+aart-cli generates a launcher deterministically.
 
-## V3 — native AART runtime adapter
+## V3 — native aart-cli runtime adapter
 
 ```text
-AART runtime adapter:
+aart-cli runtime adapter:
 Keychain
   ↓
 transform
@@ -486,7 +491,7 @@ CredentialRequirement(
 
 This describes a condition.
 
-It does not mean AART has already read or stored the credential.
+It does not mean aart-cli has already read or stored the credential.
 
 Other possible requirements:
 
@@ -612,7 +617,7 @@ The TUI therefore displays only compliant options.
 
 Credential management should not be a one-time special case.
 
-AART should explicitly support:
+aart-cli should explicitly support:
 
 ```text
 create
@@ -726,12 +731,8 @@ If the user chooses `Replace credential`:
 ```text
 A credential already exists.
 
-Replacing it may affect other artifacts
-using the same credential reference.
-
-Used by:
-  company/mcp/github
-  company/mcp/repository-search
+Replacing it affects this installation:
+  company/mcp/github · Claude · user · <user-home>
 
 Continue?
 ```
@@ -793,13 +794,13 @@ credential lost
 
 The exact semantics depend on the credential provider interpreter.
 
-AART's abstract effect should express intent; the provider-specific interpreter handles the safest implementation.
+aart-cli's abstract effect should express intent; the provider-specific interpreter handles the safest implementation.
 
 ---
 
 # 18. Never expose the old credential
 
-AART should never offer:
+aart-cli should never offer:
 
 ```text
 Show current token
@@ -867,7 +868,7 @@ and should be discarded as soon as practical.
 Another strong invariant:
 
 ```text
-aart plan does not require reading secret values
+aart-cli plan does not require reading secret values
 ```
 
 Planning should operate on:
@@ -911,7 +912,7 @@ inject environment
 exec server
 ```
 
-AART does not need to persist the actual secret.
+aart-cli does not need to persist the actual secret.
 
 ---
 
@@ -945,7 +946,7 @@ Prefix("Bearer ")
 inject
 ```
 
-Initially, AART may continue supporting script-based launchers.
+Initially, aart-cli may continue supporting script-based launchers.
 
 Later, common transformations can become declarative.
 
@@ -1087,7 +1088,7 @@ launcher.sh executable
 possibly network access
 ```
 
-Runtime requirement does not automatically imply that AART must install the missing dependency.
+Runtime requirement does not automatically imply that aart-cli must install the missing dependency.
 
 It may instead provide a remediation.
 
@@ -1097,7 +1098,7 @@ It may instead provide a remediation.
 
 Enterprise environments generally prefer fewer dependencies.
 
-AART should not assume:
+aart-cli should not assume:
 
 ```text
 Docker
@@ -1163,7 +1164,7 @@ EnsureContainerImage
 RegisterStdioServer
 ```
 
-but should not become a required dependency of AART.
+but should not become a required dependency of aart-cli.
 
 If current enterprise MCPs already work with:
 
@@ -1174,13 +1175,13 @@ Keychain
 stdio
 ```
 
-AART should support that path with zero Docker dependency.
+aart-cli should support that path with zero Docker dependency.
 
 ---
 
 # 28. Policy algebra
 
-Public AART defines policy primitives.
+Public aart-cli defines policy primitives.
 
 Examples:
 
@@ -1212,7 +1213,7 @@ policies/
 
 # 29. Policy composition belongs to the enterprise layer
 
-Public AART owns:
+Public aart-cli owns:
 
 ```text
 policy language
@@ -1353,7 +1354,7 @@ This is a powerful general mechanism beyond credentials.
 
 # 32. TUI as configuration assistant
 
-The user should ideally be able to complete the full lifecycle without leaving AART:
+The user should ideally be able to complete the full lifecycle without leaving aart-cli:
 
 ```text
 search
@@ -1546,13 +1547,17 @@ A user should not need to reinstall an artifact to rotate credentials.
 Potential commands:
 
 ```text
-aart credentials list
-aart credentials inspect github-token
-aart credentials verify github-token
-aart credentials configure github-token
-aart credentials replace github-token
-aart credentials delete github-token
+aart-cli credentials list
+aart-cli credentials inspect github-token
+aart-cli credentials verify github-token
+aart-cli credentials configure github-token
+aart-cli credentials replace github-token
+aart-cli credentials delete github-token
 ```
+
+These command sketches abbreviate the target. `github-token` alone is not a global identifier:
+inspection and mutation must resolve the complete installation owner (§38/169) explicitly, and an
+ambiguous input id must never select a target silently. Listing may aggregate metadata.
 
 Equivalent actions should exist in the TUI.
 
@@ -1560,35 +1565,29 @@ This makes credential lifecycle a first-class application feature.
 
 ---
 
-# 38. Shared credential references
+# 38. Credentials belong to one installation
 
-A credential may be used by multiple artifacts.
+Each concrete installation owns its own credential bindings and provider items. There is no
+cross-installation credential selection, sharing, copying or "use for all targets" action in the
+current product. Ordinary configuration follows the same boundary (§96).
 
-Sharing is explicit through selection of the same provider reference; it is never inferred from an
-equal input identifier, artifact name, canonical payload or target path. Each concrete installation
-target owns its own input binding. Consequently `company/mcp/github` and
-`company-local/mcp/github` start with distinct credential bindings even when their manifests
-declare the same `token` input, and two project installations of either one start distinct too. The
-user may later bind any of them to one credential reference, at which point the ordinary shared-
-credential impact and lifecycle rules apply.
+An installation is identified by Registry alias, artifact kind/name, scope, normalized concrete
+project/user target root and harness/profile. Input identifiers are local to this owner. Version
+is excluded from the stable identity so a compatible update can retain that installation's inputs.
 
-Therefore before replacement or deletion, AART should inspect references.
+Installing one MCP into four harnesses creates four installations. The user enters each required
+secret separately for each installation; with one secret per installation this means four secure
+entries and four distinct provider items, even when the user types identical secret text. aart-cli
+neither compares secret values nor requires the upstream service to issue four different tokens.
 
-Example:
+Replacement, verification and deletion address exactly one installation's credential. The UI shows
+its artifact, harness, scope and target root before mutation. A retained credential after uninstall
+keeps that owner; it does not become a globally selectable credential for another installation.
+Compatible inputs may be retained during update or repair only within the same complete identity.
 
-```text
-github-token is used by:
-
-- company/mcp/github
-- company/mcp/repository-search
-- company/mcp/code-review
-```
-
-Replacement is normally safe if the semantic identity remains the same.
-
-Deletion should warn that dependent artifacts may stop working.
-
-The relationship should exist in registry/runtime metadata, not by searching secret values.
+Non-interactive execution supplies separate target-qualified input bindings through an approved
+provider (§34); a missing binding fails with the affected target rather than opening a prompt or
+borrowing another installation's input.
 
 ---
 
@@ -1614,7 +1613,7 @@ Example:
 CredentialReference(
     input_id="github-token",
     provider="macos-keychain",
-    service="aart.<installation-target-id>",
+    service="aart-cli.<installation-target-id>",
     account="github-token",
 )
 ```
@@ -1624,22 +1623,23 @@ The logical `installation-target-id` is derived deterministically and collision-
 ```text
 Registry alias
 + artifact kind and name
-+ normalized project/user root
++ project/user scope
++ normalized concrete project/user target root
 + harness/profile
 ```
 
 The complete credential-binding key is therefore:
 
 ```text
-Registry alias + artifact + project/user root + harness/profile + input_id
+Registry alias + artifact + scope + concrete target root + harness/profile + input_id
 ```
 
 For macOS Keychain, every distinct complete key creates or selects a distinct generic-password item
 (a distinct `service`/`account` pair). The provider-facing encoding should be opaque and must not
 expose a raw filesystem path, but it must preserve this uniqueness. The rule applies equally to a
 Registry synchronized from a remote URL and one synchronized from a local checkout. Equal package
-bytes, artifact names or input ids do not collapse entries. Reusing one existing Keychain item is a
-separate explicit binding action, not an automatic naming shortcut.
+bytes, artifact names or input ids do not collapse entries. A provider item cannot be bound to a
+second installation, including through an explicit UI, CLI or automation action.
 
 The actual token is never part of this domain object.
 
@@ -1810,7 +1810,7 @@ collections
 Potential private repository:
 
 ```text
-enterprise-agent-artifacts/
+enterprise-aart-cli-registry/
 │
 ├── artifacts/
 │   ├── mcp/
@@ -1852,13 +1852,13 @@ Suggested flow:
 ```text
 PR
  ↓
-aart registry validate
+aart-cli registry validate
  ↓
-aart registry policy-check
+aart-cli registry policy-check
  ↓
-aart registry audit
+aart-cli registry audit
  ↓
-aart registry build
+aart-cli registry build
  ↓
 immutable snapshot
  ↓
@@ -1880,7 +1880,7 @@ foreign source
      ↓
  importer
      ↓
-canonical AART artifact
+canonical aart-cli artifact
      ↓
 validation
      ↓
@@ -1962,7 +1962,7 @@ lock/reproducibility concepts
 marketplace separate from source ownership
 ```
 
-AART generalizes:
+aart-cli generalizes:
 
 ```text
 Source
@@ -2051,7 +2051,7 @@ more restrictive policy cannot produce a more permissive effective policy
 same artifact + target + effective policy + environment facts
 produces the same plan
 
-private enterprise configuration is not embedded into public AART source
+private enterprise configuration is not embedded into public aart-cli source
 
 harness-specific configuration never leaks into canonical artifact semantics
 
@@ -2065,7 +2065,7 @@ consumer installation does not crawl arbitrary foreign repository layouts
 
 receipts record only effects actually performed
 
-credential deletion/replacement warns about dependent artifacts
+credential deletion/replacement identifies and warns about its sole installation owner
 
 interactive remediation can be disabled for CI
 ```
@@ -2091,7 +2091,7 @@ requirement/remediation completeness
 
 unsupported remediation filtering
 
-credential replacement dependency warnings
+credential replacement ownership and isolation
 
 receipt round-tripping
 
@@ -2148,7 +2148,7 @@ permissions(P)
 - [ ] Verify credential.
 - [ ] Replace credential.
 - [ ] Delete credential.
-- [ ] Shared-reference warning.
+- [ ] Installation owner shown before credential mutation.
 - [ ] Re-run requirement check.
 
 ## Phase 4 — policy composition
@@ -2198,7 +2198,7 @@ MCP
 └── harness registration
 ```
 
-AART then adds:
+aart-cli then adds:
 
 ```text
 validation
@@ -2220,7 +2220,7 @@ This minimizes dependencies while immediately testing the full architecture.
 A developer runs:
 
 ```text
-aart
+aart-cli
 ```
 
 Searches for:
@@ -2229,7 +2229,7 @@ Searches for:
 company/mcp/github
 ```
 
-AART shows:
+aart-cli shows:
 
 ```text
 MCP GitHub
@@ -2251,7 +2251,7 @@ Status:
 
 The user chooses install.
 
-AART says:
+aart-cli says:
 
 ```text
 One requirement is missing.
@@ -2261,7 +2261,7 @@ Configure github-token now?
 
 The user pastes the token.
 
-AART:
+aart-cli:
 
 ```text
 ✓ credential validated
@@ -2285,16 +2285,16 @@ Planned changes:
 Later, when the token expires:
 
 ```text
-aart
+aart-cli
 → Credentials
 → github-token
 → Replace
 ```
 
-AART:
+aart-cli:
 
 ```text
-This credential is used by 3 artifacts.
+This credential belongs to company/mcp/github · Claude · user · <user-home>.
 
 Enter replacement token.
 ```
@@ -2304,7 +2304,7 @@ Then:
 ```text
 ✓ new credential validated
 ✓ credential replaced
-✓ dependent artifacts remain configured
+✓ this installation remains configured
 ```
 
 The developer never needs to manually:
@@ -2318,12 +2318,12 @@ leave the TUI
 
 unless enterprise policy explicitly requires an external step.
 
-That is the intended AART experience.
+That is the intended aart-cli experience.
 ---
 
-# 55. Author repository vs AART installation contract
+# 55. Author repository vs aart-cli installation contract
 
-AART must not require an MCP author to redesign the internal implementation of an existing server merely to participate in the marketplace.
+aart-cli must not require an MCP author to redesign the internal implementation of an existing server merely to participate in the marketplace.
 
 An author repository may remain completely usable on its own:
 
@@ -2334,7 +2334,7 @@ agent-mcp-servers/
     ├── launcher.sh
     ├── src/
     ├── tests/
-    └── aart.yaml
+    └── aart-cli.yaml
 ```
 
 The author may continue using:
@@ -2346,15 +2346,15 @@ manual debugging flows
 repository-specific conventions
 ```
 
-AART introduces a separate contract:
+aart-cli introduces a separate contract:
 
-> **You own the MCP implementation. AART owns the installation contract.**
+> **You own the MCP implementation. aart-cli owns the installation contract.**
 
-The `aart.yaml` / `aart.json` manifest is that contract.
+The `aart-cli.yaml` / `aart-cli.json` manifest is that contract.
 
 ---
 
-# 56. `aart.yaml` is a package manifest, not a launcher
+# 56. `aart-cli.yaml` is a package manifest, not a launcher
 
 The closest analogy is:
 
@@ -2391,7 +2391,7 @@ It does not need to contain imperative shell commands.
 Example:
 
 ```yaml
-schema: aart.dev/mcp/v1
+schema: aart-cli.dev/mcp/v1
 
 artifact:
   name: github-mcp
@@ -2436,14 +2436,14 @@ compatibility:
 
 # 57. Manifest discovery defines artifact boundaries
 
-AART should not crawl arbitrary repository layouts and guess what constitutes an artifact.
+aart-cli should not crawl arbitrary repository layouts and guess what constitutes an artifact.
 
 Instead:
 
 ```text
 repository
    ↓
-discover known AART manifests
+discover known aart-cli manifests
    ↓
 each manifest defines one artifact boundary
 ```
@@ -2456,15 +2456,15 @@ agent-mcp-servers/
 ├── github/
 │   ├── server.py
 │   ├── launcher.sh
-│   └── aart.yaml
+│   └── aart-cli.yaml
 │
 ├── jira/
 │   ├── server.py
-│   └── aart.yaml
+│   └── aart-cli.yaml
 │
 └── confluence/
     ├── server.py
-    └── aart.yaml
+    └── aart-cli.yaml
 ```
 
 produces three candidate artifacts.
@@ -2472,8 +2472,8 @@ produces three candidate artifacts.
 The discovery contract should be explicit, for example:
 
 ```text
-**/aart.yaml
-**/aart.json
+**/aart-cli.yaml
+**/aart-cli.json
 ```
 
 rather than heuristic detection of `server.py`, `launcher.sh`, or README contents.
@@ -2531,7 +2531,7 @@ Do not require the convenient developer-facing manifest to be identical to canon
 Recommended split:
 
 ```text
-aart.yaml
+aart-cli.yaml
 ```
 
 is the **authoring format**.
@@ -2545,7 +2545,7 @@ is the **canonical registry package**.
 Conceptually:
 
 ```text
-aart.yaml
+aart-cli.yaml
    ↓
 Manifest Parser
    ↓
@@ -2584,7 +2584,7 @@ provenance
 
 # 60. Promotion into the marketplace
 
-An MCP can exist perfectly well outside AART.
+An MCP can exist perfectly well outside aart-cli.
 
 Example lifecycle:
 
@@ -2597,9 +2597,9 @@ repository becomes useful/popular
       ↓
 team wants marketplace distribution
       ↓
-author adds aart.yaml
+author adds aart-cli.yaml
       ↓
-AART validation
+aart-cli validation
       ↓
 enterprise review/policy
       ↓
@@ -2610,16 +2610,16 @@ registry
 marketplace
 ```
 
-This makes adoption incremental instead of requiring every internal project to use AART from day one.
+This makes adoption incremental instead of requiring every internal project to use aart-cli from day one.
 
 ---
 
-# 61. AART takes responsibility after publication
+# 61. aart-cli takes responsibility after publication
 
-Once an artifact is published through the AART-native path:
+Once an artifact is published through the aart-cli-native path:
 
 ```text
-AART owns:
+aart-cli owns:
     installation planning
     requirement checking
     remediation
@@ -2683,7 +2683,7 @@ credentials:
       env: GITHUB_TOKEN
 ```
 
-which compiles into known AART domain objects and effects.
+which compiles into known aart-cli domain objects and effects.
 
 ---
 
@@ -2699,7 +2699,7 @@ launch:
   path: launcher.sh
 ```
 
-AART should model this explicitly as arbitrary executable behavior rather than pretending it understands the script.
+aart-cli should model this explicitly as arbitrary executable behavior rather than pretending it understands the script.
 
 For example:
 
@@ -2729,14 +2729,14 @@ A useful migration model could expose artifact compliance levels.
 For example:
 
 ```text
-AART Native
-AART Compatible
+aart-cli Native
+aart-cli Compatible
 Legacy
 ```
 
 Possible semantics:
 
-## AART Native
+## aart-cli Native
 
 ```text
 declarative manifest
@@ -2747,17 +2747,17 @@ known effects
 no arbitrary installation scripts
 ```
 
-## AART Compatible
+## aart-cli Compatible
 
 ```text
-valid AART manifest
+valid aart-cli manifest
 but uses an escape hatch such as external launcher
 ```
 
 ## Legacy
 
 ```text
-no AART installation contract
+no aart-cli installation contract
 manual/internal use only
 not eligible for normal marketplace installation
 ```
@@ -2766,7 +2766,7 @@ Enterprise policy can require:
 
 ```yaml
 marketplace:
-  minimum_compliance: aart-native
+  minimum_compliance: aart-cli-native
 ```
 
 for sensitive environments.
@@ -2784,9 +2784,9 @@ The complete publication path becomes:
  ├── server.py
  ├── launcher.sh
  ├── src/
- └── aart.yaml
+ └── aart-cli.yaml
         │
-        │ aart build
+        │ aart-cli build
         ▼
  ┌───────────────────────┐
  │ Manifest Compiler     │
@@ -2805,13 +2805,13 @@ The complete publication path becomes:
        Provenance / Audit
             │
             ▼
-        AART Registry
+        aart-cli Registry
             │
             ▼
          Marketplace
             │
             ▼
-        aart install
+        aart-cli install
             │
             ▼
     Requirement Inspection
@@ -2845,8 +2845,8 @@ Finds explicitly supported manifests.
 ```text
 repo
  ↓
-**/aart.yaml
-**/aart.json
+**/aart-cli.yaml
+**/aart-cli.json
 ```
 
 It should not infer artifact semantics from arbitrary repository contents.
@@ -2857,7 +2857,7 @@ Validates syntax and produces an authoring-domain representation.
 
 ## Compiler
 
-Converts the authoring representation into the canonical AART artifact model.
+Converts the authoring representation into the canonical aart-cli artifact model.
 
 ## Importer
 
@@ -2875,7 +2875,7 @@ AGENTS.md
 This yields:
 
 ```text
-AART manifest ───────► compiler ──┐
+aart-cli manifest ───────► compiler ──┐
                                   │
 Foreign format ──────► importer ──┼──► CanonicalArtifact
                                   │
@@ -2884,20 +2884,20 @@ Native registry pkg ──────────────┘
 
 ---
 
-# 67. AART effect engine is predefined and finite
+# 67. aart-cli effect engine is predefined and finite
 
-The manifest should select from capabilities understood by AART.
+The manifest should select from capabilities understood by aart-cli.
 
 It should not define new effect implementations.
 
 Conceptually:
 
 ```text
-aart.yaml
+aart-cli.yaml
     ↓
 declarations
     ↓
-AART compiler
+aart-cli compiler
     ↓
 predefined ADTs
     ↓
@@ -2925,13 +2925,13 @@ type InstallEffect = (
 )
 ```
 
-New effect types are introduced by new AART versions, reviewed as public tool behavior, rather than injected by artifact manifests.
+New effect types are introduced by new aart-cli versions, reviewed as public tool behavior, rather than injected by artifact manifests.
 
 This is essential for enterprise auditability.
 
 ---
 
-# 68. Manifest declares intent; AART chooses implementation
+# 68. Manifest declares intent; aart-cli chooses implementation
 
 A manifest might say:
 
@@ -2951,7 +2951,7 @@ commands:
   - export GITHUB_TOKEN=...
 ```
 
-AART lowers the declaration using platform-specific interpreters.
+aart-cli lowers the declaration using platform-specific interpreters.
 
 For example:
 
@@ -2985,7 +2985,7 @@ The cumulative architecture is now:
                        Manifest Discovery
                               │
                               ▼
-                         aart.yaml
+                         aart-cli.yaml
                               │
                               ▼
                      Manifest Compiler
@@ -2997,13 +2997,13 @@ The cumulative architecture is now:
                      Canonical Artifact
                               │
                               ▼
-                       AART Registry
+                       aart-cli Registry
                               │
                               ▼
                         Marketplace
                               │
                               ▼
-                         aart install
+                         aart-cli install
                               │
                               ▼
                     Requirement Algebra
@@ -3063,7 +3063,7 @@ Create a real MCP example:
 github/
 ├── server.py
 ├── launcher.sh
-└── aart.yaml
+└── aart-cli.yaml
 ```
 
 ## Slice B — manifest compiler
@@ -3115,7 +3115,7 @@ configure in Keychain
 verify
 replace
 delete
-shared-reference warnings
+installation-qualified credential actions
 ```
 
 ## Slice F — launcher migration
@@ -3134,7 +3134,7 @@ CredentialBinding
 CredentialTransform
 ```
 
-and migrate popular marketplace MCPs toward `AART Native`.
+and migrate popular marketplace MCPs toward `aart-cli Native`.
 
 ---
 
@@ -3143,9 +3143,9 @@ and migrate popular marketplace MCPs toward `AART Native`.
 The marketplace contract should be simple enough to explain to an internal MCP author:
 
 > Your MCP may be implemented and developed however you want.  
-> If you want it distributed through the AART marketplace, add an AART manifest next to the artifact entry point.  
+> If you want it distributed through the aart-cli marketplace, add an aart-cli manifest next to the artifact entry point.\
 > The manifest declares which files form the artifact, what runtime and credentials it needs, how it is launched, and what compatibility it has.  
-> AART validates that declaration, builds a canonical immutable artifact, evaluates enterprise policy, and takes responsibility for installation and configuration.
+> aart-cli validates that declaration, builds a canonical immutable artifact, evaluates enterprise policy, and takes responsibility for installation and configuration.
 
 This preserves developer freedom while standardizing enterprise distribution.
 
@@ -3156,14 +3156,14 @@ Author owns implementation.
 Manifest owns declaration.
 Registry owns approved identity.
 Policy owns permission.
-AART owns installation.
+aart-cli owns installation.
 ```
 
 ---
 
 # 72. Registry synchronization model
 
-AART should distinguish two completely different synchronization workflows:
+aart-cli should distinguish two completely different synchronization workflows:
 
 ```text
 Registry-maintainer synchronization
@@ -3185,15 +3185,15 @@ sources:
     repo: git.company/agent-mcp-servers
     discovery:
       manifests:
-        - "**/aart.yaml"
-        - "**/aart.json"
+        - "**/aart-cli.yaml"
+        - "**/aart-cli.json"
 
   - id: platform-ai
     repo: git.company/platform-ai
     discovery:
       manifests:
-        - "**/aart.yaml"
-        - "**/aart.json"
+        - "**/aart-cli.yaml"
+        - "**/aart-cli.json"
 ```
 
 A scheduled or manually triggered CI workflow scans those repositories:
@@ -3203,7 +3203,7 @@ configured source repositories
             ↓
 checkout source at a concrete commit
             ↓
-discover known AART manifests only
+discover known aart-cli manifests only
             ↓
 parse manifests
             ↓
@@ -3218,14 +3218,14 @@ prepare registry changes
 
 The scanner must not infer artifact boundaries from arbitrary files such as `server.py`, `README.md`, or `launcher.sh`.
 
-The author explicitly opts into AART distribution by adding a supported manifest.
+The author explicitly opts into aart-cli distribution by adding a supported manifest.
 
 The invariant remains:
 
 ```text
 No manifest
 =
-No AART artifact candidate
+No aart-cli artifact candidate
 ```
 
 ---
@@ -3336,14 +3336,14 @@ This makes Git history itself an auditable record of registry evolution.
 
 # 75. Vendored canonical artifact as the default approved form
 
-For approved enterprise registries, AART should default to materializing the complete installable artifact into the registry rather than leaving the registry entry as only a link to an upstream repository.
+For approved enterprise registries, aart-cli should default to materializing the complete installable artifact into the registry rather than leaving the registry entry as only a link to an upstream repository.
 
 Example upstream:
 
 ```text
 agent-mcp-servers/
 └── github/
-    ├── aart.yaml
+    ├── aart-cli.yaml
     ├── server.py
     └── src/
 ```
@@ -3378,7 +3378,7 @@ It vendors only the deterministic artifact boundary declared by the manifest.
 Strong invariant:
 
 ```text
-If an approved artifact version exists in an AART Registry,
+If an approved artifact version exists in an aart-cli Registry,
 that registry contains everything required to install that artifact version.
 ```
 
@@ -3486,7 +3486,7 @@ This distinction is important for maintainability at enterprise scale.
 
 # 78. Artifact digest instead of repository commit churn
 
-A source repository commit changing does not necessarily mean an AART artifact changed.
+A source repository commit changing does not necessarily mean an aart-cli artifact changed.
 
 Especially in monorepositories, unrelated files may change constantly.
 
@@ -3495,7 +3495,7 @@ Therefore registry scanning should compute an `ArtifactInputDigest` from only th
 Conceptually:
 
 ```text
-aart manifest
+aart-cli manifest
 +
 selected payload files
 +
@@ -3525,20 +3525,20 @@ CI configuration
 unrelated application code
 ```
 
-This becomes particularly important when AART scans hundreds of repositories or large monorepositories.
+This becomes particularly important when aart-cli scans hundreds of repositories or large monorepositories.
 
 ---
 
 # 79. Registry CI at scale
 
-The final developer running `aart` should never be responsible for scanning hundreds of enterprise source repositories.
+The final developer running `aart-cli` should never be responsible for scanning hundreds of enterprise source repositories.
 
 Source discovery belongs to registry maintenance infrastructure.
 
 A private enterprise registry repository may look like:
 
 ```text
-enterprise-aart-registry/
+enterprise-aart-cli-registry/
 ├── sources.yaml
 ├── artifacts/
 ├── policies/
@@ -3553,7 +3553,7 @@ scheduled trigger
 manual trigger
 optional repository webhook/event
         ↓
-aart registry scan
+aart-cli registry scan
         ↓
 discover candidate changes
         ↓
@@ -3567,7 +3567,7 @@ This is a GitOps-oriented operating model.
 It scales organizationally because:
 
 - source teams own implementation repositories,
-- artifact authors own `aart.yaml`,
+- artifact authors own `aart-cli.yaml`,
 - registry automation owns discovery and compilation,
 - reviewers own promotion decisions,
 - consumers see only approved registry state.
@@ -3576,7 +3576,7 @@ It scales organizationally because:
 
 # 80. Optional referenced mode
 
-AART may still support a lighter referenced artifact mode:
+aart-cli may still support a lighter referenced artifact mode:
 
 ```python
 type ArtifactSourceMode = Vendored | Referenced
@@ -3711,7 +3711,7 @@ APPROVED REGISTRY
         ↓
 consumer registry sync
         ↓
-AART CLI
+aart-cli CLI
 ```
 
 A consumer may not even need permission to access the original author repository.
@@ -3720,7 +3720,7 @@ A consumer may not even need permission to access the original author repository
 
 # 83. Consumer marketplace and available updates
 
-After consumer registry synchronization, AART compares installed artifact receipts/locks against the approved versions now available in subscribed registries.
+After consumer registry synchronization, aart-cli compares installed artifact receipts/locks against the approved versions now available in subscribed registries.
 
 Example:
 
@@ -3770,129 +3770,51 @@ Artifact update is a separate explicit operation.
 
 ---
 
-# 84. Project and global installation scopes
+# 84. Project and user installation scopes
 
-AART should retain explicit installation scopes.
+Project and user are explicit installation scopes. A user installation is still specific to one
+selected harness/profile and concrete user target root; it is not a runtime shared by all harnesses.
+A project installation is specific to one project root and one selected harness/profile.
 
-At minimum:
+For the same `company/mcp/github` package:
 
-```python
-type InstallScope = (
-    ProjectScope
-    | UserScope
-    | HarnessGlobalScope
-)
-```
+| Target | Installed files | Harness registration |
+|---|---|---|
+| Tabnine / project | `<project>/.tabnine/agent/aart-cli/mcp/company/github/` | `<project>/.tabnine/agent/settings.json` |
+| Claude / user | `<user-home>/.claude/aart-cli/mcp/company/github/` | `<user-home>/.claude.json` |
 
-## 84.1 Project scope
+Each tree contains its own payload, runtime, launcher and ordinary configuration. Its receipt and
+exact installed version/digest are recorded under `~/.aart-cli/state/installations/`. No runtime
+or ordinary input values live in that central state, and no project-local state mirror is created.
+Canonical packages and Registry snapshots are kept under `~/.aart-cli` (§169).
 
-Project-local artifacts are associated with a project and can be pinned reproducibly.
-
-Example:
-
-```text
-my-project/
-└── .aart/
-    ├── lock.json
-    └── receipts/
-```
-
-Typical use cases:
-
-```text
-skills
-guidelines
-hooks
-project-specific MCP servers
-project memory/configuration
-```
-
-Example command:
-
-```text
-aart install company/mcp/github
-```
-
-may default to project scope when executed inside an AART-enabled project.
-
-The lock captures the exact approved artifact version/digest.
-
----
-
-## 84.2 Global / harness scope
-
-Artifacts may also be installed for a user or globally into a selected harness environment.
-
-Examples:
-
-```text
-Claude
-Codex
-Cursor
-other supported harnesses
-```
-
-Conceptually:
-
-```text
-aart install company/mcp/github --global
-```
-
-The receipt records the target:
-
-```yaml
-scope: harness-global
-harness: claude
-artifact: company/mcp/github
-version: 1.5.0
-digest: sha256:...
-```
-
-Global and project installations are independently updateable.
-
-Examples:
-
-```text
-aart update --project
-aart update --global
-```
-
----
+Both installations have independent lifecycle and health. A missing runtime means an existing
+recorded installation needs repair; package availability in the object store alone never means it
+is installed. Harness configuration targets remain adapter-defined and must match the actual
+harness contract; an unsupported target is refused before writing.
 
 # 85. Install target as a first-class domain value
 
-Rather than scattering `--global` logic through installers, scope and harness should form a first-class value in the planning model.
+The stable installation owner is:
 
-Example:
-
-```python
-@dataclass(frozen=True)
-class InstallTarget:
-    scope: InstallScope
-    harness: Harness | None
+```text
+Registry alias + artifact kind/name + scope + normalized concrete target root + harness/profile
 ```
 
-Examples:
+For project scope the context identifies the project. For user scope it identifies the selected
+user/harness home, including an explicitly configured alternate harness home. Distinct homes or
+profiles must not collapse to one installation. Version and package digest belong to the receipt
+but do not create a different owner during update.
 
-```python
-InstallTarget(
-    scope=ProjectScope(path="/workspace/project"),
-    harness=Claude(),
-)
-```
+The planner expands every selected artifact and harness/scope target into an installation before
+collecting inputs. Duplicate selection of the same complete owner is deduplicated; a second
+harness, project, scope, profile or Registry alias creates a different owner. Four selected harnesses
+therefore require four independent configuration sets and four credential sets.
 
-or:
-
-```python
-InstallTarget(
-    scope=HarnessGlobalScope(),
-    harness=Codex(),
-)
-```
-
-The planner can then lower semantic installation intent into target-specific primitive effects.
-
-This keeps scope logic out of the TUI and out of artifact manifests.
+The application lowers each target into owned file effects, one harness registration fragment and
+its central receipt. Target selection and identity have the same meaning in TUI, CLI and headless
+execution. Scope resolution belongs in the domain/application model, with external harness paths
+resolved by the adapter.
 
 ---
 
@@ -3940,7 +3862,7 @@ The cumulative architecture now has two clearly separated sides.
                                      CONSUMER SIDE
                                          │
                                          ▼
-                              aart registry/source sync
+                              aart-cli registry/source sync
                                          │
                                          ▼
                                 Local Marketplace View
@@ -3980,9 +3902,9 @@ Because the two workflows are materially different, the CLI should avoid present
 Possible maintainer-side vocabulary:
 
 ```text
-aart registry scan
-aart registry discover
-aart registry refresh-upstreams
+aart-cli registry scan
+aart-cli registry discover
+aart-cli registry refresh-upstreams
 ```
 
 Preferred semantic meaning:
@@ -3996,13 +3918,13 @@ inspect configured source repositories and produce candidate registry changes
 Possible consumer-side vocabulary:
 
 ```text
-aart source sync
+aart-cli source sync
 ```
 
 or:
 
 ```text
-aart registry sync
+aart-cli registry sync
 ```
 
 Preferred semantic meaning:
@@ -4025,7 +3947,7 @@ The complete trust chain is now:
 Artifact Author
     owns implementation
         ↓
-AART Manifest
+aart-cli Manifest
     declares artifact boundary and requirements
         ↓
 Registry Scanner
@@ -4046,7 +3968,7 @@ Registry
 Marketplace
     exposes approved catalog
         ↓
-Consumer AART
+Consumer aart-cli
     syncs approved registry state
         ↓
 Install Planner
@@ -4107,12 +4029,12 @@ These are strong candidates for property-based and integration testing.
 
 # 90. Recommended default operating mode
 
-For the enterprise AART use case, the recommended default is now:
+For the enterprise aart-cli use case, the recommended default is now:
 
 ```text
 Author repository
     ↓
-aart.yaml
+aart-cli.yaml
     ↓
 automated registry discovery
     ↓
@@ -4150,7 +4072,7 @@ Users install and update explicitly.
 
 # 91. Artifact runtime inputs: secrets vs non-secret configuration
 
-AART must explicitly distinguish confidential runtime inputs from ordinary runtime configuration.
+aart-cli must explicitly distinguish confidential runtime inputs from ordinary runtime configuration.
 
 This distinction must exist in the domain model and manifest schema, not only in the TUI.
 
@@ -4172,21 +4094,21 @@ WHERE a secret comes from
 WHAT non-secret configuration value should be used
 ```
 
-AART connects those two sides during installation.
+aart-cli connects those two sides during installation.
 
 The core rule is:
 
 ```text
 Artifact declares contract.
 Environment declares binding.
-AART builds the installation projection.
+aart-cli builds the installation projection.
 ```
 
 ---
 
 # 92. Runtime input algebra
 
-AART should model runtime inputs as at least two separate classes:
+aart-cli should model runtime inputs as at least two separate classes:
 
 ```python
 type RuntimeInput = (
@@ -4242,7 +4164,7 @@ region
 
 These values are ordinary configuration.
 
-They may be collected interactively during setup and persisted as part of the local AART installation state or generated runtime projection.
+They may be collected interactively during setup and persisted as part of the local aart-cli installation state or generated runtime projection.
 
 They may also be written directly into a generated launcher when policy permits.
 
@@ -4259,12 +4181,12 @@ server.py
   --username <config>
 ```
 
-the artifact manifest should describe those process bindings without coupling them to Keychain, Vault, environment variables, or AART itself.
+the artifact manifest should describe those process bindings without coupling them to Keychain, Vault, environment variables, or aart-cli itself.
 
 Example authoring manifest:
 
 ```yaml
-schema: aart.dev/mcp/v1
+schema: aart-cli.dev/mcp/v1
 
 artifact:
   name: github
@@ -4312,7 +4234,7 @@ macOS Keychain
 1Password
 Vault
 environment variables
-AART credential storage implementation
+aart-cli credential storage implementation
 ```
 
 Those belong to deployment/user configuration.
@@ -4321,7 +4243,7 @@ Those belong to deployment/user configuration.
 
 # 94. Value source and process binding are separate concepts
 
-AART should not conflate:
+aart-cli should not conflate:
 
 ```text
 where a value comes from
@@ -4417,48 +4339,47 @@ The two categories should not share the same generic "variables" abstraction in 
 
 # 96. Persisting non-secret configuration
 
-Non-secret configuration may be persisted in local AART-owned state.
-
-Its ownership uses the same complete installation binding key as credentials:
-
-```text
-Registry alias + artifact + project/user root + harness/profile + input_id
-```
-
-Every distinct target has an independent value. Installing the same remote-Registry artifact into
-two projects, or into project and user scope, must not copy or reuse a value implicitly. Local and
-remote Registry transports follow exactly the same rule. Compatible values may survive an update
-only inside the same complete installation-target identity.
-
-For example:
+Ordinary configuration belongs inside the owning installation's tree in the harness directory.
+It is never stored as a global value in `~/.aart-cli`, Registry metadata or a shared input pool.
+Its complete binding key is:
 
 ```text
-project/
-└── .aart/
-    ├── lock.json
-    ├── config/
-    │   └── company-mcp-github.json
-    └── receipts/
+Registry alias + artifact + scope + concrete target root + harness/profile + input_id
 ```
 
-Example persisted configuration:
+Example for Tabnine in one project:
 
-```json
-{
-  "github-host": "https://github.company",
-  "username": "michal.filek"
-}
+```text
+<project>/.tabnine/agent/aart-cli/mcp/company/github/
+├── payload/
+├── runtime/.venv/
+├── launch.sh
+└── config/
+    └── tabnine.conf
 ```
 
-This state contains no secret values.
+The ordinary configuration file uses literal `input-id=value` lines, for example:
 
-A receipt may reference the configuration identifiers and hashes without treating them as confidential.
+```text
+github-host=https://<instance>
+organisation=<org>
+```
+
+It contains no secrets. The central receipt records ownership, the file path and digest, and secret
+provider references only; it does not duplicate ordinary input values. Configuration remains in
+this installation's tree through supported update/repair, and is removed with that installation.
+
+Each new target collects every required value independently. There is no copy-answers action,
+shared configuration option or cross-target prefill, even within one multi-harness wizard. Remote
+and local Registry acquisition use the same rule. A user may enter equal text separately; equality
+does not create shared state. Compatible values may survive an update or repair only inside the
+same complete installation identity.
 
 ---
 
 # 97. Generated launcher may embed non-secret values
 
-When producing a runtime projection, AART may materialize non-secret configuration values directly into the generated launcher.
+When producing a runtime projection, aart-cli may materialize non-secret configuration values directly into the generated launcher.
 
 Example:
 
@@ -4493,7 +4414,7 @@ username
 → ordinary values materialized during installation
 ```
 
-This keeps runtime independent from AART while preventing secrets from being written into generated files.
+This keeps runtime independent from aart-cli while preventing secrets from being written into generated files.
 
 ---
 
@@ -4556,21 +4477,25 @@ project/
 └── .tabnine/
     └── agent/
         ├── settings.json
-        └── aart/
+        └── aart-cli/
             └── mcp/
-                └── github/
-                    ├── launch.sh
-                    ├── server.py
-                    └── src/
+                └── company/
+                    └── github/
+                        ├── payload/
+                        ├── runtime/.venv/
+                        ├── config/tabnine.conf
+                        └── launch.sh
 ```
 
-Tabnine settings should point directly to the generated runtime projection:
+Tabnine settings point to the absolute launcher path and an alias-qualified key. Here `/workspace/project`
+is the concrete example project root. The adapter must encode the key unambiguously using the
+harness's supported key characters; this example key is illustrative of its ownership:
 
 ```json
 {
   "mcpServers": {
-    "github": {
-      "command": ".tabnine/agent/aart/mcp/github/launch.sh"
+    "company--github": {
+      "command": "/workspace/project/.tabnine/agent/aart-cli/mcp/company/github/launch.sh"
     }
   }
 }
@@ -4590,27 +4515,27 @@ launch.sh
 MCP stdio
 ```
 
-AART is not required at runtime.
+aart-cli is not required at runtime.
 
 ---
 
 # 100. Runtime independence invariant
 
-A successful AART installation must not require the AART executable during artifact runtime unless the artifact explicitly declares AART itself as a runtime dependency.
+A successful aart-cli installation must not require the aart-cli executable during artifact runtime unless the artifact explicitly declares aart-cli itself as a runtime dependency.
 
 Strong invariant:
 
 ```text
 Successful installation
-MUST NOT require `aart` at runtime.
+MUST NOT require `aart-cli` at runtime.
 ```
 
 Therefore:
 
 ```text
-AART = installer / compiler / planner / configurator
+aart-cli = installer / compiler / planner / configurator
 
-AART != implicit artifact runtime
+aart-cli != implicit artifact runtime
 ```
 
 This invariant applies equally to:
@@ -4717,7 +4642,7 @@ without changing the abstract `SecretInput` concept.
 
 # 103. Security note on secrets passed through CLI
 
-AART may support secret delivery through CLI arguments when that is the executable's existing public contract.
+aart-cli may support secret delivery through CLI arguments when that is the executable's existing public contract.
 
 However, this binding has a weaker security profile because command-line arguments can be observable through process inspection on some systems.
 
@@ -4761,7 +4686,7 @@ declares:
 - target harness/scope
 
 
-AART
+aart-cli
 ────
 performs:
 - requirement inspection
@@ -4800,7 +4725,7 @@ Environment declares WHERE values come from.
 Secrets remain indirect.
 Configuration may be materialized.
 
-AART connects the two at install time
+aart-cli connects the two at install time
 and disappears from the runtime path.
 ```
 
@@ -4824,7 +4749,7 @@ An artifact installation must not mutate the user's global Python environment un
 The installed projection may look like:
 
 ```text
-.tabnine/agent/aart/mcp/github/
+.tabnine/agent/aart-cli/mcp/company/github/
 ├── payload/
 │   ├── server.py
 │   ├── requirements.txt
@@ -4836,7 +4761,8 @@ The installed projection may look like:
 
 This isolates dependency versions between MCP servers and makes update, rollback, uninstall, verification, and ownership significantly simpler.
 
-Deduplicating environments may be considered later as an optimization, but it must not weaken isolation or reproducibility semantics.
+Runtime environments are private to one installation. Cross-target environment sharing is outside
+the current product contract; only immutable canonical package storage may be deduplicated.
 
 ---
 
@@ -4912,7 +4838,7 @@ Each category has different inspection, remediation, persistence, security, and 
 
 # 108. Reuse Python ecosystem dependency descriptors
 
-AART should not invent a replacement Python dependency language.
+aart-cli should not invent a replacement Python dependency language.
 
 An artifact should point to an existing Python dependency descriptor such as:
 
@@ -4962,7 +4888,7 @@ The relevant descriptor and lock files must be included in the canonical artifac
 
 # 109. Dependency specification is not the dependency installer
 
-AART must explicitly separate:
+aart-cli must explicitly separate:
 
 ```text
 dependency specification
@@ -4970,7 +4896,7 @@ dependency specification
 dependency installer
 ```
 
-For example, `requirements.txt` describes dependency input. It does not require AART to use `pip`; a compatible backend such as `uv` may install the same requirements.
+For example, `requirements.txt` describes dependency input. It does not require aart-cli to use `pip`; a compatible backend such as `uv` may install the same requirements.
 
 Conceptually:
 
@@ -4989,7 +4915,7 @@ type PythonDependencyInstaller = (
 )
 ```
 
-The artifact declares the dependency specification. The AART environment/platform/profile/policy selects a compatible installer.
+The artifact declares the dependency specification. The aart-cli environment/platform/profile/policy selects a compatible installer.
 
 This keeps artifact metadata portable and prevents package-manager implementation details from leaking into the artifact contract.
 
@@ -5015,7 +4941,7 @@ uv
 
 Poetry support can be added as an additional dependency specification/backend where artifacts already use `pyproject.toml + poetry.lock`.
 
-AART should not require every artifact to provide multiple equivalent formats such as:
+aart-cli should not require every artifact to provide multiple equivalent formats such as:
 
 ```text
 requirements.txt
@@ -5023,7 +4949,7 @@ poetry.lock
 uv.lock
 ```
 
-An artifact chooses one supported dependency contract. AART adapts to that contract.
+An artifact chooses one supported dependency contract. aart-cli adapts to that contract.
 
 ---
 
@@ -5056,7 +4982,7 @@ Cancel
 
 The final choices are filtered through platform capabilities and effective policy.
 
-AART itself can retain zero Python runtime dependencies by invoking available system tooling through its effect interpreters rather than importing package-manager libraries.
+aart-cli itself can retain zero Python runtime dependencies by invoking available system tooling through its effect interpreters rather than importing package-manager libraries.
 
 ---
 
@@ -5151,7 +5077,7 @@ payload/server.py
     -> artifact executable contract
 ```
 
-AART is not present in the runtime path after successful installation.
+aart-cli is not present in the runtime path after successful installation.
 
 ---
 
@@ -5205,18 +5131,19 @@ MCP stdio
 
 # 115. Python environment ownership invariant
 
-The default ownership rule is:
+The ownership rule is per complete installation identity (§85/169). Canonical immutable package
+storage may deduplicate content; each target's installed payload copy and runtime are private.
 
 ```text
 Each installed Python MCP owns:
-- its canonical/materialized payload
+- its installed payload copy
 - its isolated Python environment
 - its resolved dependency installation
 - its generated runtime projection
-- its AART-owned harness configuration fragment
+- its aart-cli-owned harness configuration fragment
 ```
 
-Therefore AART can reason precisely about:
+Therefore aart-cli can reason precisely about:
 
 ```text
 install
@@ -5232,7 +5159,7 @@ without depending on or mutating unrelated global Python state.
 Strong invariant:
 
 ```text
-AART installs artifact dependencies into an artifact-owned isolated runtime by default.
+aart-cli installs artifact dependencies into an artifact-owned isolated runtime by default.
 It MUST NOT mutate the user's global language environment unless explicitly requested and permitted by policy.
 ```
 
@@ -5240,7 +5167,7 @@ It MUST NOT mutate the user's global language environment unless explicitly requ
 
 # 116. TUI evolution strategy: reuse behavior, refactor boundaries
 
-The existing AART TUI should be evolved rather than rewritten from zero.
+The existing aart-cli TUI should be evolved rather than rewritten from zero.
 
 The guiding rule is:
 
@@ -5273,7 +5200,7 @@ The project should optimize for semantic clarity and composability rather than s
 
 # 117. Primary FP/ADT design criterion
 
-The most important design criterion for AART, including the TUI, is:
+The most important design criterion for aart-cli, including the TUI, is:
 
 ```text
 Can this part be expressed as:
@@ -5291,7 +5218,7 @@ Pure transformation
   +
 Explicit effect boundary
   =
-Preferred AART design
+Preferred aart-cli design
 ```
 
 Examples:
@@ -5583,7 +5510,7 @@ TUI modules must not directly become filesystem, subprocess, Git, package-manage
 
 # 123. Zero-dependency TUI remains the default
 
-AART should retain the value of a zero-runtime-dependency CLI/TUI unless a strong product reason appears to change it.
+aart-cli should retain the value of a zero-runtime-dependency CLI/TUI unless a strong product reason appears to change it.
 
 The existing stdlib/curses approach provides useful enterprise properties:
 
@@ -5603,7 +5530,7 @@ If a richer frontend is introduced later, it should preferably remain an optiona
 
 # 124. Canonical Project Invariant Catalog
 
-This section is the **single canonical quick-reference list of AART architectural invariants**.
+This section is the **single canonical quick-reference list of aart-cli architectural invariants**.
 
 Earlier sections may explain or motivate individual invariants, but this catalog is the authoritative place to review the complete set. When a new invariant is introduced, it should be added here in the same change.
 
@@ -5615,7 +5542,7 @@ Earlier sections may explain or motivate individual invariants, but this catalog
 PUBLIC TOOLING != PRIVATE ENTERPRISE CONTENT
 ```
 
-Public AART contains reusable mechanisms, schemas, algebras, planners, adapters, interpreters, CLI/TUI, and policy machinery. Enterprise-specific artifact definitions, policy values, profiles, internal endpoints, credential references, and trust decisions live outside the public tool.
+Public aart-cli contains reusable mechanisms, schemas, algebras, planners, adapters, interpreters, CLI/TUI, and policy machinery. Enterprise-specific artifact definitions, policy values, profiles, internal endpoints, credential references, and trust decisions live outside the public tool.
 
 **INV-002 — Preferred FP decomposition**
 
@@ -5653,7 +5580,7 @@ Receipts record only effects actually performed and sufficient ownership/state i
 
 **INV-009 — Undo respects ownership**
 
-Undo may reverse only state owned or explicitly captured by the corresponding AART operation; it must not blindly restore unrelated external state.
+Undo may reverse only state owned or explicitly captured by the corresponding aart-cli operation; it must not blindly restore unrelated external state.
 
 ## B. Artifact and package invariants
 
@@ -5671,10 +5598,10 @@ The declared artifact boundary determines canonical payload membership.
 
 **INV-012 — No manifest, no native candidate**
 
-For AART-native repository discovery:
+For aart-cli-native repository discovery:
 
 ```text
-No supported AART manifest = No AART artifact candidate
+No supported aart-cli manifest = No aart-cli artifact candidate
 ```
 
 The scanner does not infer native artifacts from `server.py`, README files, launcher names, or other heuristics.
@@ -5712,7 +5639,7 @@ For a pinned source commit, manifest, compiler/importer version, and selected pa
 **INV-019 — Approved vendored artifacts are self-contained**
 
 ```text
-If an approved vendored artifact version exists in an AART Registry,
+If an approved vendored artifact version exists in an aart-cli Registry,
 that registry contains everything required to install that version.
 ```
 
@@ -5750,7 +5677,7 @@ A marketplace is a human-facing projection over configured registries; it does n
 
 **INV-027 — Ambiguous coordinates are not silently shadowed**
 
-When multiple registries expose conflicting coordinates/versions in an enterprise context, AART should surface ambiguity or require explicit selection rather than silently choosing an unreviewed source.
+When multiple registries expose conflicting coordinates/versions in an enterprise context, aart-cli should surface ambiguity or require explicit selection rather than silently choosing an unreviewed source.
 
 ## D. Policy invariants
 
@@ -5784,7 +5711,7 @@ Semantic intent and, where applicable, lowered primitive effects are policy-chec
 RuntimeRequirement != InstallEffect
 ```
 
-A requirement states what must be true; an effect states what AART may do to make/change something.
+A requirement states what must be true; an effect states what aart-cli may do to make/change something.
 
 **INV-034 — Requirements and remediations are separate**
 
@@ -5818,11 +5745,11 @@ For example, stdio does not imply Docker, Python, npm, or any specific package m
 
 Docker/OCI is one optional distribution/runtime mechanism, not an MCP architectural requirement.
 
-**INV-039 — AART is not an implicit runtime**
+**INV-039 — aart-cli is not an implicit runtime**
 
 ```text
-Successful installation MUST NOT require `aart` at artifact runtime
-unless the artifact explicitly declares AART as a runtime dependency.
+Successful installation MUST NOT require `aart-cli` at artifact runtime
+unless the artifact explicitly declares aart-cli as a runtime dependency.
 ```
 
 **INV-040 — Harness semantics do not leak into canonical artifact semantics**
@@ -5850,17 +5777,18 @@ pip / uv / Poetry execution strategy
 
 An MCP need not provide requirements.txt, Poetry lock, and uv lock simultaneously. It provides one supported dependency contract.
 
-**INV-044 — Python MCPs own isolated environments by default**
+**INV-044 — Every Python MCP installation owns its isolated environment**
 
 ```text
 1 installed Python MCP = 1 artifact-owned isolated Python environment
 ```
 
-unless a future explicitly selected and policy-approved sharing model is used.
+The owner is the complete installation identity (§85/169). No cross-installation runtime sharing
+is part of the accepted product.
 
 **INV-045 — No implicit global language mutation**
 
-AART must not mutate the user's global Python/language environment unless explicitly requested and allowed by policy.
+aart-cli must not mutate the user's global Python/language environment unless explicitly requested and allowed by policy.
 
 **INV-046 — Generated launchers use the artifact-owned runtime**
 
@@ -5892,11 +5820,11 @@ A secret may come from Keychain/Vault and still be bound as a CLI argument, stdi
 
 **INV-050 — Executables know their interface, not credential storage**
 
-`server.py` should know its CLI/runtime input contract, not macOS Keychain, AART, Tabnine, or enterprise secret-manager implementation details.
+`server.py` should know its CLI/runtime input contract, not macOS Keychain, aart-cli, Tabnine, or enterprise secret-manager implementation details.
 
-**INV-051 — Secret values never enter persistent AART state**
+**INV-051 — Secret values never enter persistent aart-cli state**
 
-Secret material must never be persisted in normal AART artifact/configuration state.
+Secret material must never be persisted in normal aart-cli artifact/configuration state.
 
 **INV-052 — Secret values never appear in plans or observability outputs**
 
@@ -5922,17 +5850,20 @@ Planning operates on secret references, provider availability, existence/verific
 
 Secret values may exist only as briefly as needed in secure interactive input, credential-provider calls, or runtime invocation preparation and should be discarded promptly.
 
-**INV-055 — Config values may persist only under policy**
+**INV-055 — Config values persist locally to their installation under policy**
 
-Non-secret configuration may be stored/materialized when policy permits; this permission does not extend to secrets.
+Non-secret configuration may be stored/materialized within its harness-owned installation tree
+when policy permits. Central metadata stores only its path/digest, not the values. This permission
+does not extend to secret material, which remains with that owner's provider item.
 
 **INV-056 — Credential replacement does not expose the old secret**
 
 Replacing/rotating a credential must not require reading or displaying the previous value.
 
-**INV-057 — Shared credential mutations surface dependents**
+**INV-057 — Credential mutations identify their sole installation owner**
 
-Deleting/replacing/rebinding a credential reference warns about artifacts that depend on the same reference before destructive mutation.
+Deleting/replacing/rebinding a credential identifies its artifact, harness, scope and concrete
+target root. Binding a provider item to a second installation is refused.
 
 ## H. Scope and ownership invariants
 
@@ -5946,7 +5877,7 @@ Mutating one scope must not silently mutate another.
 
 **INV-060 — Installed artifact ownership is explicit**
 
-An installed Python MCP normally owns its payload, isolated runtime, resolved dependency installation, generated runtime projection, and AART-owned harness configuration fragment.
+An installed Python MCP normally owns its payload, isolated runtime, resolved dependency installation, generated runtime projection, and aart-cli-owned harness configuration fragment.
 
 ## I. TUI / interaction invariants
 
@@ -5992,7 +5923,7 @@ Existing TUI behavior and tests should be reused where valuable, but no current 
 
 **INV-070 — Zero-runtime-dependency frontend remains the default**
 
-The baseline AART CLI/TUI should not gain mandatory presentation dependencies without a demonstrated product/security/maintenance benefit. Richer frontends may be optional skins.
+The baseline aart-cli CLI/TUI should not gain mandatory presentation dependencies without a demonstrated product/security/maintenance benefit. Richer frontends may be optional skins.
 
 **INV-071 — Development verification tooling never leaks into runtime**
 
@@ -6057,7 +5988,7 @@ INV-035  unsupported remediation filtering
 INV-045  no accidental global Python mutation
 INV-052  secret redaction
 INV-053  planning never requires secret values
-INV-057  shared credential dependency warnings
+INV-057  installation-qualified credential mutation
 INV-059  project/global scope independence
 INV-063  pure TUI state transitions
 INV-066  TUI remediation projection matches core output
@@ -6078,7 +6009,7 @@ The invariant catalog should therefore function as both an architectural constit
 
 # 126. CI/CD architecture for public and enterprise forks
 
-AART should continue the strong idea already present in the current repository: the public repository contains one canonical workflow implementation, while an enterprise fork adapts execution through GitHub repository/organization settings rather than rewriting workflow YAML.
+aart-cli should continue the strong idea already present in the current repository: the public repository contains one canonical workflow implementation, while an enterprise fork adapts execution through GitHub repository/organization settings rather than rewriting workflow YAML.
 
 The governing principle is:
 
@@ -6092,7 +6023,7 @@ SAME QUALITY CONTRACT IN A DIFFERENT ENVIRONMENT
 
 Enterprise forks should therefore parameterize infrastructure, not redefine correctness.
 
-## 126.1 What the current AART CI already gets right
+## 126.1 What the current aart-cli CI already gets right
 
 The existing workflow model is a strong base and should be reused conceptually:
 
@@ -6108,9 +6039,9 @@ The existing workflow model is a strong base and should be reused conceptually:
 
 These are worth retaining.
 
-## 126.2 What should be improved as AART grows
+## 126.2 What should be improved as aart-cli grows
 
-As the architecture gains registries, policy, artifact compilation, dependency resolution, TUI tests, credential abstractions, and property tests, a flat list of unrelated `AART_*` variables will become harder to reason about. The solution is not to make GitHub Actions itself more clever. The solution is to define an explicit **CI Profile Contract**.
+As the architecture gains registries, policy, artifact compilation, dependency resolution, TUI tests, credential abstractions, and property tests, a flat list of unrelated `AART_CLI_*` variables will become harder to reason about. The solution is not to make GitHub Actions itself more clever. The solution is to define an explicit **CI Profile Contract**.
 
 Conceptually:
 
@@ -6128,7 +6059,7 @@ class CiProfile:
 
 GitHub repository/organization variables are one interpreter for that profile. They are not the domain model.
 
-This mirrors the wider AART architecture:
+This mirrors the wider aart-cli architecture:
 
 ```text
 GitHub vars/secrets
@@ -6147,29 +6078,29 @@ The advantage is that malformed combinations can be rejected deliberately rather
 Use variables for visible, non-confidential configuration:
 
 ```text
-AART_RUNNER
-AART_CI_IMAGE
-AART_PYTHON
-AART_PYTHON_VERSIONS
-AART_PIP_INDEX_URL
-AART_RELEASE_PYTHON_VERSION
-AART_POETRY
-AART_REFERENCE_REGISTRY_URL
-AART_INDEX_PUBLISH_URL
+AART_CLI_RUNNER
+AART_CLI_CI_IMAGE
+AART_CLI_PYTHON
+AART_CLI_PYTHON_VERSIONS
+AART_CLI_PIP_INDEX_URL
+AART_CLI_RELEASE_PYTHON_VERSION
+AART_CLI_POETRY
+AART_CLI_REFERENCE_REGISTRY_URL
+AART_CLI_INDEX_PUBLISH_URL
 ```
 
 Use variables to point to secret names where dynamic lookup is required:
 
 ```text
-AART_IMAGE_USERNAME_SECRET
-AART_IMAGE_PASSWORD_SECRET
-AART_PIP_INDEX_CREDENTIALS_SECRET
-AART_INDEX_PUBLISH_CREDENTIALS_SECRET
+AART_CLI_IMAGE_USERNAME_SECRET
+AART_CLI_IMAGE_PASSWORD_SECRET
+AART_CLI_PIP_INDEX_CREDENTIALS_SECRET
+AART_CLI_INDEX_PUBLISH_CREDENTIALS_SECRET
 ```
 
 The actual credential values remain only in GitHub Secrets.
 
-This is the CI equivalent of AART's runtime rule:
+This is the CI equivalent of aart-cli's runtime rule:
 
 ```text
 CredentialReference != CredentialValue
@@ -6196,11 +6127,11 @@ secret references
 Bad parameters:
 
 ```text
-AART_SKIP_TESTS=true
-AART_DISABLE_PROPERTY_TESTS=true
-AART_IGNORE_POLICY_FAILURES=true
-AART_MIN_COVERAGE=0
-AART_SKIP_PACKAGING_CHECK=true
+AART_CLI_SKIP_TESTS=true
+AART_CLI_DISABLE_PROPERTY_TESTS=true
+AART_CLI_IGNORE_POLICY_FAILURES=true
+AART_CLI_MIN_COVERAGE=0
+AART_CLI_SKIP_PACKAGING_CHECK=true
 ```
 
 An enterprise fork may need different infrastructure, but it should not get a repository-variable escape hatch that quietly changes what 'green' means. If an organization genuinely wants a different quality policy, that belongs in an explicit reviewed policy/configuration layer committed to its fork, not a hidden mutable Actions setting.
@@ -6288,13 +6219,13 @@ python scripts/ci_profile.py validate
 It can check combinations such as:
 
 ```text
-AART_CI_IMAGE set
+AART_CLI_CI_IMAGE set
   -> Python setup download must not be required
 
 private image credentials selected
   -> both referenced secrets must resolve
 
-AART_PYTHON_VERSIONS with a fixed one-Python image
+AART_CLI_PYTHON_VERSIONS with a fixed one-Python image
   -> reject misleading multi-version matrix
 
 internal publish URL configured
@@ -6318,7 +6249,7 @@ For example:
 
 ```text
 GitHub variable:
-  AART_RUNNER=["self-hosted","linux"]
+  AART_CLI_RUNNER=["self-hosted","linux"]
 
 Committed enterprise policy:
   minimum supported Python = 3.11
@@ -6335,9 +6266,9 @@ For enterprise use, prefer organization variables/secrets for the common executi
 
 ```text
 organization
-├── AART_RUNNER
-├── AART_CI_IMAGE
-├── AART_PIP_INDEX_URL
+├── AART_CLI_RUNNER
+├── AART_CLI_CI_IMAGE
+├── AART_CLI_PIP_INDEX_URL
 ├── secret references
 └── internal publishing endpoints
 
@@ -6345,13 +6276,13 @@ repository
 └── overrides only when genuinely repository-specific
 ```
 
-This makes a newly created AART registry or enterprise fork work with minimal setup and reduces configuration drift across many registries.
+This makes a newly created aart-cli registry or enterprise fork work with minimal setup and reduces configuration drift across many registries.
 
 ## 126.10 Reusable workflows versus local composite actions
 
 The existing local composite actions are a good choice for sharing implementation between public/private-image job shells. Keep them for step composition.
 
-Reusable workflows can be useful later for organization-wide policy, but AART should not require a central enterprise workflow repository to function. A fork must remain self-contained.
+Reusable workflows can be useful later for organization-wide policy, but aart-cli should not require a central enterprise workflow repository to function. A fork must remain self-contained.
 
 Preferred layering:
 
@@ -6359,7 +6290,7 @@ Preferred layering:
 workflow YAML              orchestration / permissions / matrix
 local composite actions    reusable GitHub-specific step adapter
 Python scripts             deterministic build/validation logic
-AART domain/application    reusable semantic logic where applicable
+aart-cli domain/application    reusable semantic logic where applicable
 ```
 
 ## 126.11 Fork portability invariant
@@ -6367,7 +6298,7 @@ AART domain/application    reusable semantic logic where applicable
 The desired enterprise experience remains:
 
 ```text
-1. fork/mirror AART
+1. fork/mirror aart-cli
 2. configure organization/repository variables + secrets
 3. run the same workflows
 4. no source edits required for infrastructure differences
@@ -6377,13 +6308,13 @@ Only intentional semantic customization should require committed source/policy c
 
 ## 126.12 Development tooling boundary
 
-Hypothesis, pytest, mutmut, ruff, mypy, coverage, and similar tools are CI/development dependencies only. Their presence in CI is encouraged; their presence in the installed AART runtime is forbidden by INV-071.
+Hypothesis, pytest, mutmut, ruff, mypy, coverage, and similar tools are CI/development dependencies only. Their presence in CI is encouraged; their presence in the installed aart-cli runtime is forbidden by INV-071.
 
 ---
 
 # 116. Automated Semantic Versioning and Release Automation
 
-AART release versioning MUST be automatic, driven from reviewed change semantics, and MUST NOT depend on hand-maintained version consistency tests between source files, tags, release metadata, or package metadata.
+aart-cli release versioning MUST be automatic, driven from reviewed change semantics, and MUST NOT depend on hand-maintained version consistency tests between source files, tags, release metadata, or package metadata.
 
 The release model is based on Semantic Versioning plus Conventional Commits:
 
@@ -6398,19 +6329,19 @@ The version is a derived release artifact, not a value developers manually keep 
 
 ## 116.1 Release automation tool
 
-For AART, the preferred default is **Release Please** rather than Python Semantic Release.
+For aart-cli, the preferred default is **Release Please** rather than Python Semantic Release.
 
 Reasons:
 
-1. AART already uses GitHub Actions as the public CI orchestration layer.
+1. aart-cli already uses GitHub Actions as the public CI orchestration layer.
 2. Release Please creates and continuously updates a release PR from Conventional Commits.
 3. The release PR makes the generated CHANGELOG and proposed SemVer bump reviewable before release.
 4. Merging the release PR creates the tag and GitHub Release.
-5. Package publication remains a separate explicit release effect, which fits AART's existing CI architecture and enterprise-fork model.
-6. Release Please supports Python packages but does not become a runtime dependency of AART.
+5. Package publication remains a separate explicit release effect, which fits aart-cli's existing CI architecture and enterprise-fork model.
+6. Release Please supports Python packages but does not become a runtime dependency of aart-cli.
 7. Release automation runs in CI only and therefore does not violate the zero-runtime-dependency invariant.
 
-Python Semantic Release is a good Python-native alternative, but it couples version calculation, source version stamping, changelog generation, tagging, and publication more tightly. AART prefers release orchestration where version decision/release metadata and package publication remain separable effects.
+Python Semantic Release is a good Python-native alternative, but it couples version calculation, source version stamping, changelog generation, tagging, and publication more tightly. aart-cli prefers release orchestration where version decision/release metadata and package publication remain separable effects.
 
 `setuptools-scm` is NOT the primary release automation mechanism. It derives package versions from Git tags and repository state but does not by itself provide Conventional-Commit-driven patch/minor/major release decisions plus release-PR changelog workflow.
 
@@ -6466,7 +6397,7 @@ or a commit containing a `BREAKING CHANGE:` footer produces `2.0.0`.
 
 ## 116.3 Squash merge as the preferred Git model
 
-AART SHOULD use squash merge for normal feature PRs.
+aart-cli SHOULD use squash merge for normal feature PRs.
 
 The PR title becomes the canonical Conventional Commit entering `main`:
 
@@ -6598,13 +6529,13 @@ If a company chooses to mirror Release Please or use an approved equivalent tool
 
 Release Please, Conventional Commit validators, changelog tooling, or any equivalent release automation tooling are development/CI dependencies only.
 
-They MUST NOT become AART runtime dependencies.
+They MUST NOT become aart-cli runtime dependencies.
 
 This extends the development-tool isolation invariant already covering Hypothesis, pytest, mutmut, ruff, mypy, and coverage.
 
 ## 116.9 Release tests that should disappear
 
-AART SHOULD remove tests whose only purpose is keeping manually duplicated version values synchronized, for example tests asserting that:
+aart-cli SHOULD remove tests whose only purpose is keeping manually duplicated version values synchronized, for example tests asserting that:
 
 ```text
 source version == tag
@@ -6642,7 +6573,7 @@ Release versions MUST be derived automatically from the last released version an
 
 ### INV-082 — Conventional change semantics
 
-AART's default release semantics are `fix -> PATCH`, `feat -> MINOR`, and breaking changes -> `MAJOR`.
+aart-cli's default release semantics are `fix -> PATCH`, `feat -> MINOR`, and breaking changes -> `MAJOR`.
 
 ### INV-083 — No manual routine version bumps
 
@@ -6666,7 +6597,7 @@ Changing from public to enterprise publication infrastructure MUST NOT change th
 
 ### INV-088 — Release tooling remains outside runtime
 
-Semantic-release/changelog/commit-validation tooling MUST NOT enter AART's runtime dependency graph.
+Semantic-release/changelog/commit-validation tooling MUST NOT enter aart-cli's runtime dependency graph.
 
 ### INV-089 — Release artifact verification targets outputs, not bookkeeping
 
@@ -6679,7 +6610,7 @@ Under the preferred squash-merge workflow, the reviewed PR title/squash commit i
 
 ## 116.10 Hands-off release mode
 
-AART distinguishes automatic version calculation from release approval.
+aart-cli distinguishes automatic version calculation from release approval.
 
 The default recommended mode is reviewable automation: Release Please maintains the release PR automatically; merging that PR materializes the release.
 
@@ -6696,7 +6627,7 @@ Whether release materialization is reviewable or hands-off, the next SemVer and 
 
 ## Canonical release flow
 
-AART uses Conventional Commits semantics, Semantic Versioning, and Release Please to automate version calculation and changelog generation while retaining an explicit release boundary.
+aart-cli uses Conventional Commits semantics, Semantic Versioning, and Release Please to automate version calculation and changelog generation while retaining an explicit release boundary.
 
 ```text
 feature/fix PR
@@ -6768,7 +6699,7 @@ A new change merged to `main` updates the existing release PR rather than creati
 
 ## Release PR quality gates
 
-The generated release PR passes the normal project quality contract. AART does not introduce a second large release-specific source test suite merely to repeat tests already proven on ordinary pull requests.
+The generated release PR passes the normal project quality contract. aart-cli does not introduce a second large release-specific source test suite merely to repeat tests already proven on ordinary pull requests.
 
 The release PR remains reviewable committed state and provides a clear auditable publication boundary.
 
@@ -6800,8 +6731,8 @@ Useful artifact checks include:
 - wheel metadata describes the intended released version;
 - the wheel installs in a clean supported Python environment;
 - runtime dependency metadata remains empty unless the architecture explicitly changes;
-- `aart --version` works;
-- `aart --help` works;
+- `aart-cli --version` works;
+- `aart-cli --help` works;
 - package contents and integrity are valid.
 
 These tests validate the artifact being published. They do not exist to reconcile several manually maintained copies of a version number.
@@ -6908,9 +6839,9 @@ The following invariants extend the canonical catalog. They are normative and sh
 
 ---
 
-# 141. Migration strategy: evolve the existing AART repository
+# 141. Migration strategy: evolve the existing aart-cli repository
 
-The preferred implementation strategy is to refactor the existing AART repository rather than
+The preferred implementation strategy is to refactor the existing aart-cli repository rather than
 create a greenfield replacement. This is a controlled architectural migration, not incremental
 feature accumulation.
 
@@ -6993,7 +6924,7 @@ network I/O.
 The preferred first serious vertical slice is MCP installation:
 
 ```text
-aart.yaml
+aart-cli.yaml
 → Manifest Parser
 → CanonicalArtifact
 → Requirements
@@ -7021,10 +6952,10 @@ MCP → skills → guidelines/rules → memory → hooks
 
 # 142. Live acceptance ecosystem
 
-AART has a verification layer above unit, property, integration and deterministic E2E tests:
+aart-cli has a verification layer above unit, property, integration and deterministic E2E tests:
 a **Git-backed live acceptance ecosystem**.
 
-It models the topology in which AART actually operates:
+It models the topology in which aart-cli actually operates:
 
 ```text
 aart-cli
@@ -7033,13 +6964,13 @@ aart-cli
   │     ├── mcp/github/
   │     │     ├── server.py
   │     │     ├── dependency descriptor
-  │     │     └── aart.yaml
+  │     │     └── aart-cli.yaml
   │     └── other artifacts + manifests
   │
   ├── artifact source repo B
   │     └── artifacts + manifests
   │
-  ├── synthetic AART registry repo
+  ├── synthetic aart-cli registry repo
   │     ├── artifacts/
   │     ├── policies/
   │     ├── profiles/
@@ -7047,12 +6978,12 @@ aart-cli
   │
   └── consumer project repo
         ├── harness configuration
-        ├── .aart state
+        ├── harness-owned installation trees (receipts under ~/.aart-cli/state)
         └── normal project files
 ```
 
 The source repositories are ordinary artifact-development repositories. Artifacts can exist and run
-without AART; AART integration begins with their manifests.
+without aart-cli; aart-cli integration begins with their manifests.
 
 ## 142.1 Live acceptance complements deterministic tests
 
@@ -7133,12 +7064,12 @@ representation merely for convenience.
 The exact repository count is not fixed. One possible topology is:
 
 ```text
-aart
-aart-live-source-mcp
-aart-live-source-skills
-aart-live-registry
-aart-live-consumer-tabnine
-aart-live-consumer-generic
+aart-cli
+aart-cli-live-source-mcp
+aart-cli-live-source-skills
+aart-cli-live-registry
+aart-cli-live-consumer-tabnine
+aart-cli-live-consumer-generic
 ```
 
 A consolidated live-fixtures repository is also valid if it preserves real Git-backed,
@@ -7225,7 +7156,7 @@ supported public contracts and observable behaviour, not private implementation 
 
 **INV-115 — Acceptance fixtures model repositories.** Live source and registry fixtures should
 behave as real Git repositories with realistic commits, paths and state transitions rather than
-mocks of internal AART functions.
+mocks of internal aart-cli functions.
 
 **INV-116 — Characterize before replacement.** Existing critical behaviour should receive
 acceptance characterization before its implementation path is replaced, unless that behaviour is
@@ -7246,7 +7177,7 @@ servers, at least one relevant live acceptance scenario must prove that the gene
 projection actually starts the artifact and satisfies its declared transport contract.
 
 **INV-121 — Verification dependencies never become runtime dependencies.** Unit/property/mutation/
-acceptance/lint/type/coverage/CI tooling must not leak into AART's production runtime dependency
+acceptance/lint/type/coverage/CI tooling must not leak into aart-cli's production runtime dependency
 graph.
 
 **INV-122 — Acceptance topology is implementation-independent.** Repositories may be split or
@@ -7261,7 +7192,7 @@ run in deep-quality, scheduled or release-candidate workflows.
 
 # 145. Multi-artifact installation, Collections and TUI Selection
 
-AART installation is modeled as:
+aart-cli installation is modeled as:
 
 ```text
 Selection → Resolution → Requirements → Configuration/Credentials
@@ -7298,8 +7229,9 @@ artifacts:
   - company/rule/python@^4
 ```
 
-Resolution produces exact approved versions and deduplicates artifacts while retaining why each is
-present. The same artifact may be required by a direct selection and multiple Collections.
+Resolution produces exact approved versions and deduplicates identical complete installation
+owners while retaining why each is present. Direct selection and multiple Collections may require
+the same owner. Different Registry aliases or harness targets remain separate installations.
 
 An exact Collection installation is distinct from using a Collection as a selection template. If a
 member is removed before installation, the resulting state is a custom selection derived from the
@@ -7311,9 +7243,13 @@ still required by another Collection or direct installation intent.
 ## 145.2 One transaction wizard
 
 Bulk installation must not create N independent wizards. Requirements are aggregated across the
-resolved set, with equivalent requirements deduplicated while preserving dependants.
+resolved set, with equivalent host prerequisites deduplicated while preserving dependants.
+Artifact configuration and credential requirements retain their complete installation identity.
 
-Configuration and secrets remain separate stages. One final InstallPlan describes all artifact
+Configuration and secrets remain separate stages. Target-qualified input fields and secure prompts
+are never deduplicated across installations: one MCP on four harnesses needs four independent
+sets of answers. Shared guidance and one review do not imply shared values. One final InstallPlan
+describes all artifact
 versions, isolated runtimes, configuration, credential mutations, harness projections and file
 effects.
 
@@ -7330,7 +7266,7 @@ Reference view:
 
 ```text
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│ AART / Marketplace                                      scope: PROJECT       │
+│ aart-cli / Marketplace                                      scope: PROJECT       │
 ├───────────────────┬──────────────────────────────────────────────────────────┤
 │ Marketplace       │ Search: _                                                │
 │                   │                                                          │
@@ -7423,10 +7359,13 @@ Reference Collection detail:
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-Installed views preserve Collection ownership and show all ownership reasons when an artifact is
-shared.
+Installed views preserve Collection ownership and show all reasons retaining the same complete
+installation. This does not merge different targets or their mutable state.
 
 # 148. Bulk Install Plan reference
+
+In this example, an existing Jira credential belongs to the same already installed target being
+reconciled. It is never borrowed from another installation.
 
 ```text
 ┌──────────────────────────────────────────────────────────────────────────────┐
@@ -7451,8 +7390,8 @@ shared.
 │     + jira-mcp                                                               │
 │                                                                              │
 │ Files                                                                        │
-│ + .tabnine/agent/aart/mcp/github/**                                          │
-│ + .tabnine/agent/aart/mcp/jira/**                                            │
+│ + .tabnine/agent/aart-cli/mcp/company/github/**                                          │
+│ + .tabnine/agent/aart-cli/mcp/company/jira/**                                            │
 │ + .agents/skills/code-review/**                                              │
 │                                                                              │
 │ 3 artifacts · 17 effects · 2 configs · 1 credential mutation                │
@@ -7478,17 +7417,22 @@ artifact is present.
 **INV-128 — Exact Collection identity requires exact membership.** Removing Collection members
 produces a Collection-derived custom selection.
 
-**INV-129 — Shared ownership prevents unsafe removal.** Removing one ownership reason cannot remove
-an artifact still required by another.
+**INV-129 — Multiple reasons may retain one complete installation.** Direct selection and multiple
+Collections may require the same complete installation owner. Removing one reason cannot remove
+that installation while another reason remains. Different artifacts, Registry aliases, harnesses,
+profiles, scopes or concrete roots never share mutable installation state.
 
 **INV-130 — Bulk installation produces one coherent plan.** A multi-artifact operation has one
 InstallPlan and one review boundary.
 
-**INV-131 — Requirements aggregate semantically.** Equivalent requirements should be deduplicated
-while preserving which artifacts depend on them.
+**INV-131 — Common prerequisites may aggregate; installation inputs do not.** Equivalent host
+prerequisites (such as availability of a Python interpreter) may be checked once with dependants
+retained. Configuration and credential requirements remain keyed by complete installation identity
+plus input id; equal declarations never merge their values, prompts or provider items.
 
 **INV-132 — Config and secrets remain distinct during bulk setup.** Aggregation cannot collapse
-ConfigInput and SecretInput into an untyped prompt flow.
+ConfigInput and SecretInput into an untyped prompt flow, or collapse inputs across installation
+owners. Each selected harness/scope/root has its own answers and provider items.
 
 **INV-133 — Partial execution is explicit and recoverable.** Receipts expose successful, failed and
 compensated effects and preserve enough state for safe recovery.
@@ -7512,7 +7456,7 @@ resolved artifacts, effects and final ownership relationships.
 
 # 150. Durable refactoring progress and agent handoff
 
-The AART migration will span multiple sessions and may be implemented by different coding agents.
+The aart-cli migration will span multiple sessions and may be implemented by different coding agents.
 Progress MUST therefore be durable repository state and MUST NOT depend on chat history or one
 agent's memory.
 
@@ -7686,7 +7630,7 @@ unit, its preconditions, completion criteria and important prohibitions.
 
 # 152. Progressive disclosure: Fast and Verbose installation UX
 
-AART serves users with different levels of infrastructure knowledge. The installation workflow must
+aart-cli serves users with different levels of infrastructure knowledge. The installation workflow must
 therefore support **progressive disclosure** without creating different installation semantics.
 
 The same domain pipeline and the same InstallPlan are rendered at different levels of detail:
@@ -7722,7 +7666,7 @@ Data Scientists who want an artifact to work and do not need infrastructure-leve
 
 The design goal is:
 
-> Ask only for decisions or values that AART cannot safely derive.
+> Ask only for decisions or values that aart-cli cannot safely derive.
 
 Fast mode should hide satisfied requirements, routine dependency-resolution details, low-risk
 derived effects and implementation mechanics unless they require user attention.
@@ -7740,7 +7684,7 @@ Example:
 │ GitHub token                                                                 │
 │ [ •••••••••••••••••••••••••••                                            ] │
 │                                                                              │
-│ AART will securely store the token in macOS Keychain.                       │
+│ aart-cli will securely store the token in macOS Keychain.                       │
 │                                                                              │
 │ ✓ Ready to install                                                          │
 │                                                                              │
@@ -7902,12 +7846,12 @@ Ready to install
 
 Fast mode is not permission to hide material risk.
 
-AART must surface information when user action or informed approval is required, including:
+aart-cli must surface information when user action or informed approval is required, including:
 
 ```text
 missing required input
 credential creation/replacement/deletion
-shared credential impact
+credential owner and lifecycle impact
 policy warning
 approval requirement
 high-risk execution
@@ -7974,8 +7918,8 @@ Installation detail
 A command invocation may also explicitly request detail level, conceptually:
 
 ```text
-aart marketplace install ...
-aart marketplace install ... --verbose
+aart-cli marketplace install ...
+aart-cli marketplace install ... --verbose
 ```
 
 Exact CLI flags remain an implementation decision.
@@ -7991,7 +7935,7 @@ should remain complete, stable and structured while still respecting secret-reda
 different planner, policy path, resolver or effect semantics.
 
 **INV-150 — Minimal mode asks only necessary questions.** Fast installation should request only
-values/decisions AART cannot safely derive plus approvals required by risk or policy.
+values/decisions aart-cli cannot safely derive plus approvals required by risk or policy.
 
 **INV-151 — Minimalism cannot hide material risk.** Credential mutation, destructive changes,
 high-risk execution, policy warnings, conflicts and other meaningful approval information must
@@ -8028,7 +7972,7 @@ Runtime inputs should be able to carry **human-facing guidance metadata** so use
 expected and where to obtain it.
 
 This is especially important in Fast mode, where the goal is to help a less technical user complete
-installation without understanding AART internals.
+installation without understanding aart-cli internals.
 
 The registry/canonical artifact metadata may expose guidance such as:
 
@@ -8078,7 +8022,7 @@ GitHub token
   (Create token: github.company/settings/tokens)
 ```
 
-The purpose is to remove the need for the user to leave AART and guess what is required.
+The purpose is to remove the need for the user to leave aart-cli and guess what is required.
 
 ## 154.2 Structured format guidance
 
@@ -8156,7 +8100,7 @@ Forbidden:
 
 ```text
 real token
-shared credential value
+credential value from any installation
 example copied from a live environment
 embedded password
 ```
@@ -8202,9 +8146,10 @@ Jira
 • Token (Create token → Jira profile settings)
 ```
 
-If multiple artifacts have equivalent input guidance, AART may avoid repeating the explanatory
+If multiple artifacts have equivalent input guidance, aart-cli may avoid repeating the explanatory
 copy where safe to do so. This presentation deduplication must not merge their values or credential
-bindings. Reuse across artifacts is a separate, explicit user decision.
+bindings or their entry fields. Reuse across installations is not offered; even identical input
+declarations require separately supplied values for each installation.
 
 ---
 
@@ -8226,8 +8171,9 @@ typed/domain validation remains authoritative.
 installation should expose enough of it to let a user obtain or construct the required value without
 guesswork.
 
-**INV-164 — Collection guidance aggregates without duplication.** Multi-artifact installation
-should consolidate equivalent input guidance while preserving which artifacts depend on the input.
+**INV-164 — Collection guidance may aggregate without merging inputs.** Equivalent explanatory
+help may be displayed once with each installation owner identified. Every owner's value fields,
+secure prompts and provider bindings remain separate; help-text grouping is presentation only.
 
 **INV-165 — Guidance cannot bypass trust policy.** Runtime-fetched or unreviewed remote content must
 not silently replace approved registry guidance during installation.
@@ -8337,7 +8283,7 @@ format hints and obtain-from locations rather than plausible credential values.
 
 # 158. Desired-state reconciliation and minimal repair
 
-AART is not only an installer. For installed artifacts it acts as a declarative desired-state
+aart-cli is not only an installer. For installed artifacts it acts as a declarative desired-state
 manager capable of reconciling the smallest independently repairable part of an installation.
 
 The fundamental model is:
@@ -8504,7 +8450,7 @@ github-mcp                          ⚠ Needs repair
 ✓ Tabnine configuration
 ```
 
-AART may propose:
+aart-cli may propose:
 
 ```text
 CreatePythonEnvironment
@@ -8727,10 +8673,12 @@ Failed updates should restore the previous working state where effect capabiliti
 possible, and report the actual result clearly.
 
 Uninstall planning must respect the ownership graph. Removing a Collection removes only members no
-longer owned/required elsewhere. Shared artifacts are retained with a user-facing explanation.
+longer required by any reason for that exact installation owner. Retained installations carry a
+user-facing explanation; other targets remain independent.
 
-Credentials are retained by default when the final dependent artifact is removed unless the user
-explicitly chooses credential deletion or policy requires another outcome.
+Credentials are retained by default when their owning installation is removed unless the user
+explicitly chooses credential deletion or policy requires another outcome. Retention does not
+allow another installation to adopt the item.
 
 ---
 
@@ -8757,7 +8705,7 @@ planning/policy/effect/receipt machinery rather than become unrelated imperative
 **INV-174 — Repairability is explicit.** The architecture must not assume every effect is
 inspectable, idempotent, reversible or independently repairable.
 
-**INV-175 — Unsupported repair semantics are surfaced.** When AART cannot safely inspect or repair a
+**INV-175 — Unsupported repair semantics are surfaced.** When aart-cli cannot safely inspect or repair a
 component independently, it must say so rather than fabricate a minimal-repair guarantee.
 
 **INV-176 — Repair is re-verified when possible.** Successful effect execution alone is not enough
@@ -8931,7 +8879,10 @@ GitHub token
   Create token → GitHub settings
 ```
 
-Known valid config is pre-filled. Existing secrets are shown only as `Configured securely`.
+Known valid config is pre-filled only for an existing identical installation owner. Existing
+secrets for that owner are shown only as `Configured securely`. New targets have separate fields
+and secure prompts, including four separate input sets when four harnesses are selected. No
+"same for all" control or cross-installation credential picker is provided.
 
 ### 08 Remediation
 
@@ -8940,7 +8891,7 @@ Only meaningful choices are surfaced. Example:
 ```text
 Python environment required
 
-AART will create an isolated Python environment for 2 MCP servers.
+aart-cli will create an isolated Python environment for 2 MCP servers.
 This will not modify your system Python.
 
 [ Continue ]
@@ -8971,7 +8922,10 @@ Installed is health-oriented:
 
 ### 12 Installed
 
-Lists Collections and artifacts with health, version and ownership/use context.
+Lists installation instances with Registry-qualified artifact, version, harness/profile, scope,
+concrete target root and health. The same package in Tabnine/project and Claude/user produces two
+independently actionable entries; four harness targets produce four entries. Collections may group
+entries without collapsing their installation identities.
 
 ### 13 Installed Artifact Details
 
@@ -9035,7 +8989,7 @@ Add Registry accepts two transports for the same canonical Registry contract:
 - **Local Git checkout** — a normalized absolute path whose containing worktree root is a canonical
   Registry and whose current `HEAD` is the revision to synchronize.
 
-Transport does not change Registry authority. Before either connection is saved, AART snapshots the
+Transport does not change Registry authority. Before either connection is saved, aart-cli snapshots the
 exact revision, runs the same Registry validation and records the same stable snapshot identity.
 Sync repeats that acquisition and validation; a local connection performs no network operation and
 reads the checkout's new `HEAD`. An invalid successor never replaces the last known valid snapshot.
@@ -9063,42 +9017,40 @@ B and a user-level harness likewise owns three independent sets of values and re
 within one exact installation target may preserve compatible inputs, but changing the Registry
 alias, project/user destination or harness target creates a different owner and never imports them
 implicitly. Removing, updating or reconfiguring one owner cannot mutate another owner's values,
-references or files. Explicitly choosing the same credential provider reference for several owners
-is allowed and then makes the normal shared-credential warnings applicable; AART never infers that
-sharing from matching names or paths.
+references or files. Neither explicit nor implicit sharing of configuration values or credential
+provider items is supported. Every new installation receives separately entered inputs (§169).
 
 **Registry sync is not artifact update.** Sync may discover `github-mcp 1.6`; installed `1.5` remains untouched until an explicit update plan is accepted.
 
 ## 161.8 22–24 Credentials — ACCEPTED
 
-Credentials is a reference/lifecycle view, never a password manager exposing values.
+Credentials is a view of installation-owned provider references and their lifecycle. It never
+exposes secret values and never offers a global credential pool or a cross-installation selector.
+The global navigation entry may list metadata from several installations, with each owner visible:
 
 ```text
-✓ GitHub token       Ready
-  Used by 3 artifacts
-
-⚠ Jira token         Attention
-  Authentication failed
-  Used by jira-mcp
-
-○ Database token     Unused
+GitHub token    Ready      company/mcp/github · Tabnine · project · <project>
+GitHub token    Ready      company/mcp/github · Claude  · user    · <user-home>
+Jira token     Attention  company/mcp/jira   · Claude  · user    · <user-home>
 ```
 
-Credential Details show provider, health, consumers and actions:
+Details identify the one installation and show provider, health and actions:
 
 ```text
-GitHub token                                      ✓ Ready
+GitHub token — company/mcp/github
+Claude · user · <user-home>
 Stored securely: macOS Keychain
-
-Used by
-• github-mcp
-• code-review-mcp
-• repository-search
+Status: Ready
 
 [ Verify ] [ Replace ] [ Delete ]
 ```
 
-A CredentialReference may be shared by multiple artifact consumers. Replacement is a single credential mutation followed by verification of affected consumers where supported. Deleting an in-use credential clearly shows affected artifacts and remains policy governed.
+Each action is scoped to that owner. A retained item after uninstall is shown with its former owner
+and may be explicitly deleted; it cannot be adopted by another installation. Reference metadata may
+be indexed centrally, but neither secret values nor ordinary configuration values become global
+state. UI grouping never changes credential ownership.
+
+---
 
 ## 161.9 25–27 Activity / Receipts — ACCEPTED
 
@@ -9145,7 +9097,7 @@ Maintainer Mode OFF hides Sources, Candidates, Promotion, Registry Diff, Validat
 Doctor performs environment-wide inspection and reconciliation:
 
 ```text
-AART / Check system
+aart-cli / Check system
 
 ✓ github-mcp
 ✓ database-mcp
@@ -9163,7 +9115,7 @@ AART / Check system
 CLI equivalent:
 
 ```text
-aart doctor
+aart-cli doctor
 ```
 
 Doctor never means reinstall-all. It inspects installed artifacts, computes drift and constructs minimal repair plans through the same reconciliation engine.
@@ -9232,7 +9184,9 @@ Maintainer navigation is added as a separate advanced area only when Maintainer 
 
 **INV-189 — Credentials UI is reference-oriented, not value-oriented.** Consumer views may expose provider, health, usage and lifecycle actions but never secret values.
 
-**INV-190 — Shared credentials preserve consumer relationships.** A credential reference may serve multiple artifacts and replacement/verification must account for affected consumers.
+**INV-190 — Each credential reference has one installation owner.** Provider items and bindings
+cannot be shared across installations. Credential lifecycle actions identify and affect that owner
+only; metadata aggregation in the Credentials view does not permit sharing.
 
 **INV-191 — Fast audit UX is Activity.** Receipt remains the complete technical/audit record while the default consumer projection describes meaningful user actions.
 
@@ -9244,7 +9198,9 @@ Maintainer navigation is added as a separate advanced area only when Maintainer 
 
 **INV-195 — Consumer screens progressively disclose implementation detail.** Fast describes outcomes and required decisions; Verbose exposes technical resolution, provenance, requirements, effects and receipts without changing semantics.
 
-**INV-196 — Known valid inputs are reused.** Installation, update, configuration and repair do not reprompt for valid values AART can safely reuse.
+**INV-196 — Known valid inputs are retained only within their owner.** Update, configuration and
+repair may retain compatible values already belonging to the same complete installation identity.
+Every new installation collects its own inputs, including each target in a bulk install.
 
 **INV-197 — Conditional steps stay conditional.** Required Inputs and Remediation screens exist only when the current plan actually requires user input or a meaningful choice.
 
@@ -9300,7 +9256,7 @@ Source ≠ Candidate ≠ Registry ≠ Marketplace
 
 ```text
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│ AART / Maintainer                                              Verbose       │
+│ aart-cli / Maintainer                                              Verbose       │
 ├───────────────────┬──────────────────────────────────────────────────────────┤
 │ Dashboard         │ Maintainer overview                                      │
 │ Marketplace       │                                                          │
@@ -9328,11 +9284,11 @@ A Source is an authoring/discovery location. It is not itself an approved regist
 Discovery is explicit and manifest-driven:
 
 ```text
-**/aart.yaml
-**/aart.json
+**/aart-cli.yaml
+**/aart-cli.json
 ```
 
-AART must not discover artifacts by guessing from arbitrary README files, `server.py`, `pyproject`
+aart-cli must not discover artifacts by guessing from arbitrary README files, `server.py`, `pyproject`
 or repository layout.
 
 Source list:
@@ -9485,11 +9441,11 @@ Registry review remains semantic-first:
 Registry validation checks schema, identities, digests, provenance, dependency closure, collections,
 policy and snapshot reproducibility.
 
-Commit is explicit. AART creates the local registry commit.
+Commit is explicit. aart-cli creates the local registry commit.
 
 **Accepted revision, 2026-09-18: Registry Maintainer owns explicit Push.** Push is an action on the
 local Registry workspace row on screen 46, not the terminal step of initialization, rebuild or
-promotion. Returning to Registry Maintainer after any of those workflows — or reopening AART later
+promotion. Returning to Registry Maintainer after any of those workflows — or reopening aart-cli later
 — derives the same answer from the current checkout. A connected Registry snapshot row, Candidate
 or Source never offers Push.
 
@@ -9509,27 +9465,27 @@ and required compatibility checks. A failed or not-yet-run gate makes Push unava
 Maintainer lists the failed check and its actionable diagnostic. Preparation and execution recheck
 the evidence so a change after drawing the screen is refused.
 
-Choosing Push opens a separate review step with an explicit branch target. When AART was launched
+Choosing Push opens a separate review step with an explicit branch target. When aart-cli was launched
 in an existing named Registry branch that is neither `main` nor the Registry default, that current
 branch is the target; the action cannot redirect its commit to another existing branch. When the
 checkout is on `main`, another default branch or in detached HEAD, the form instead accepts a new
 branch name. It is prefilled from the action that most recently produced the local commit when that
-context is available, and otherwise with `aart/registry-update`. The configured Registry remote is
+context is available, and otherwise with `aart-cli/registry-update`. The configured Registry remote is
 shown; `origin` is the fallback when no other remote is configured.
 
 The push moves the exact recorded commit, never a later moving `HEAD`. A branch that does not exist
 is created. An existing branch may advance only through an ordinary non-force push; divergence is
 reported and never overwritten. The branch named `main` is always refused. The Registry's default,
 consumer-visible branch is also refused by name and checked again against the remote's advertised
-default. AART does not merge or open a pull request. Before offering or executing the action, AART
+default. aart-cli does not merge or open a pull request. Before offering or executing the action, aart-cli
 resolves the one Git worktree containing the launch workspace and proves that its root is the
 Registry whose reviewed commit the result records.
-If that worktree is a Source or any other repository, AART refuses; it does not continue walking to
+If that worktree is a Source or any other repository, aart-cli refuses; it does not continue walking to
 a parent checkout in search of a Registry. Registry Maintainer keeps the local workspace row visible
 but marks Push unavailable with that reason. Escape or leaving the review without confirming Push
 keeps the operation local.
 
-After a successful push, AART explains the remaining steps: complete review/merge into the
+After a successful push, aart-cli explains the remaining steps: complete review/merge into the
 consumer-visible branch where required, update the local checkout, and synchronize the Registry
 subscription to observe the approved state. Pushing a review branch alone does not make its
 artifacts available to consumers subscribed to the default branch. Source Sync discovers upstream
@@ -9698,10 +9654,12 @@ requires >=2,<3
 No single version satisfies both.
 ```
 
-AART never silently chooses a conflicting version.
+aart-cli never silently chooses a conflicting version.
 
-V1 defaults to one active version per artifact coordinate per scope. Namespaced multi-version
-support may be added later but is not assumed by the initial architecture.
+V1 has one active version per complete installation identity (§85): Registry alias + artifact +
+harness/profile + scope + concrete target root. Different targets may independently run different
+versions. Constraints from multiple Collections conflict only when they address the same complete
+owner. Concurrent versions within one owner are outside this contract.
 
 Update conflicts are surfaced before mutation. Exact Collections are not partially updated merely
 to bypass a conflict.
@@ -9756,7 +9714,7 @@ commit C
 commit D = revert C
 ```
 
-AART may provide `Prepare Revert`, but the resulting state remains auditable through ordinary Git
+aart-cli may provide `Prepare Revert`, but the resulting state remains auditable through ordinary Git
 history.
 
 Each consumer-visible registry snapshot has stable identity, including a digest and corresponding
@@ -9842,7 +9800,7 @@ physical deletion.
 Physical purge is a high-risk exceptional operation for cases such as legal requirements, malware
 or accidentally published secret material.
 
-If a secret is discovered in canonical payload, AART must clearly state that removing the current
+If a secret is discovered in canonical payload, aart-cli must clearly state that removing the current
 payload does not guarantee removal from Git history and that repository-specific secret-removal and
 credential-rotation procedures are still required.
 
@@ -9890,7 +9848,7 @@ Receipt records applied effects, verification result and final health.
 
 ## 165.13 Partial multi-artifact failure
 
-AART does not claim transaction atomicity beyond actual effect guarantees.
+aart-cli does not claim transaction atomicity beyond actual effect guarantees.
 
 If all applied effects are safely compensatable, the previous state may be restored.
 
@@ -9903,7 +9861,7 @@ Otherwise:
 2 restored
 1 needs attention
 
-AART could not fully restore:
+aart-cli could not fully restore:
 database-mcp
 
 [ Repair ]
@@ -9917,7 +9875,7 @@ Partial outcomes are explicit and auditable.
 An interrupted operation is never resumed by blindly continuing from the next imperative command.
 
 ```text
-AART found an interrupted operation.
+aart-cli found an interrupted operation.
 
 Data Scientist Kit installation
 
@@ -9952,12 +9910,12 @@ inspection remains available.
 
 ## 165.16 External manual modification
 
-AART detects drift in owned/generated state.
+aart-cli detects drift in owned/generated state.
 
 ```text
-⚠ github-mcp configuration changed outside AART
+⚠ github-mcp configuration changed outside aart-cli
 
-[ Restore AART version ]
+[ Restore aart-cli version ]
 [ Ignore temporarily ]
 ```
 
@@ -9986,7 +9944,7 @@ change.
 
 Version updates may alter input contracts.
 
-If AART cannot safely map an old config field to a new one, it asks only for the newly required
+If aart-cli cannot safely map an old config field to a new one, it asks only for the newly required
 value.
 
 Authentication-model changes are explicit:
@@ -10001,7 +9959,8 @@ You will need:
 • Client secret
 ```
 
-Old credentials remain if still referenced by other installed artifacts.
+Old credentials retain their installation owner and follow explicit cleanup policy. A contract
+change must not touch credentials owned by any other installation.
 
 ## 165.20 Collection update blocked by one member
 
@@ -10022,7 +9981,7 @@ Collection update cannot continue as an exact Collection.
 [ View blocker ]
 ```
 
-AART does not silently convert the exact Collection into a 7/8 custom selection.
+aart-cli does not silently convert the exact Collection into a 7/8 custom selection.
 
 ## 165.21 Policy drift after installation
 
@@ -10044,7 +10003,7 @@ state.
 
 ## 165.22 Multi-registry collisions
 
-When the same coordinate/version exists in multiple registries with different content, AART
+When the same coordinate/version exists in multiple registries with different content, aart-cli
 surfaces ambiguity rather than applying silent registry priority.
 
 ```text
@@ -10056,8 +10015,11 @@ github-mcp 1.6.0
 ○ platform-ai
 ```
 
-Identical digests may be deduplicated visually, but installation provenance still records the
-selected registry/snapshot.
+Marketplace may group byte-identical packages visually only if every Registry alias remains
+visible and individually selectable. An unqualified match across aliases requires a choice even
+when digests match. Installed never merges those entries: each alias has its own target-qualified
+path, receipt, runtime, input bindings and lifecycle (§169.3). Provenance retains the selected
+Registry origin and snapshot.
 
 Cross-registry dependency resolution is supported only when allowed by effective policy and remains
 visible in Verbose resolution output.
@@ -10071,7 +10033,7 @@ Maintainers may test a candidate before registry promotion using an explicit dev
 for example:
 
 ```text
-aart dev install ./mcp/github
+aart-cli dev install ./mcp/github
 ```
 
 or Candidate Detail → `Test Install`.
@@ -10123,14 +10085,14 @@ warnings
 ```
 
 Identity of human approvers may be delegated to Git/PR systems. The architecture supports external
-audit references rather than requiring AART to implement its own enterprise RBAC system.
+audit references rather than requiring aart-cli to implement its own enterprise RBAC system.
 
 ## 165.27 Git PR publication workflow
 
 Recommended enterprise publication:
 
 ```text
-AART promote
+aart-cli promote
    ↓
 registry commit
    ↓
@@ -10147,7 +10109,7 @@ merge
 consumer registry sync
 ```
 
-AART owns artifact/registry validation and preparation. Existing Git hosting owns branch protection,
+aart-cli owns artifact/registry validation and preparation. Existing Git hosting owns branch protection,
 review and merge authorization.
 
 ## 165.28 Promotion is not publication
@@ -10176,7 +10138,7 @@ must not collapse discovery state, review state, approved canonical state and co
 **INV-200 — Source Sync never promotes.** Discovery may create/update candidates but cannot silently
 change approved registry contents.
 
-**INV-201 — Manifest discovery is explicit.** Native source discovery uses declared AART manifests
+**INV-201 — Manifest discovery is explicit.** Native source discovery uses declared aart-cli manifests
 rather than heuristic repository crawling.
 
 **INV-202 — Maintainer review is semantic-first.** Semantic artifact changes are the primary review
@@ -10188,7 +10150,7 @@ published coordinate/version is a hard conflict requiring a new version.
 **INV-204 — Enterprise promotion vendors by default.** Referenced promotion may exist as an explicit
 weaker mode, but vendored canonical payload is the enterprise default.
 
-**INV-205 — Promotion never implies push.** AART may validate, materialize and commit registry
+**INV-205 — Promotion never implies push.** aart-cli may validate, materialize and commit registry
 changes but must not silently push them to a remote repository.
 
 **INV-206 — Bulk promotion has one registry transaction boundary.** Selected candidates are reviewed,
@@ -10210,7 +10172,8 @@ plans and applicable policy.
 **INV-211 — Dependency conflicts fail explicitly.** Resolution never silently chooses a version that
 violates another selected/installed requirement.
 
-**INV-212 — V1 assumes one active version per coordinate per scope.** Multi-version activation
+**INV-212 — V1 assumes one active version per complete installation identity.** Registry alias,
+artifact, harness/profile, scope and concrete target root determine that identity. Multi-version activation
 requires a future explicit namespacing design.
 
 **INV-213 — Exact Collections preserve exactness.** Install/update/repair cannot silently degrade an
@@ -10240,7 +10203,7 @@ relevant revocation through the resolved dependency graph.
 **INV-221 — Physical purge is exceptional and high-risk.** Ordinary lifecycle uses
 deprecated/revoked/hidden states; destructive purge requires explicit exceptional handling.
 
-**INV-222 — AART does not claim Git secret erasure.** Emergency payload purge cannot be represented
+**INV-222 — aart-cli does not claim Git secret erasure.** Emergency payload purge cannot be represented
 as proof that sensitive material disappeared from repository history.
 
 **INV-223 — Offline capability is decomposed.** Cached metadata, payload and runtime dependencies are
@@ -10249,16 +10212,18 @@ separate capabilities and must not be conflated.
 **INV-224 — Verification failure changes final health.** Applied effects followed by failed
 verification are not reported as clean success.
 
-**INV-225 — Transaction guarantees match effect guarantees.** AART never claims atomicity,
+**INV-225 — Transaction guarantees match effect guarantees.** aart-cli never claims atomicity,
 reversibility or compensation that its effects/interpreters cannot provide.
 
 **INV-226 — Interrupted operations re-inspect before resume.** Resume is reconciliation from observed
 state, not continuation from an assumed imperative program counter.
 
-**INV-227 — Concurrent mutations are serialized by scope.** Conflicting mutating operations cannot
+**INV-227 — Conflicting mutations are serialized over owned effects.** Complete installation
+identities are independent, but updates to a shared harness settings file must preserve all owned
+fragments, including operations from different application homes. Conflicting mutating operations cannot
 race over the same managed state.
 
-**INV-228 — External drift is detected.** Owned/generated state changed outside AART is surfaced
+**INV-228 — External drift is detected.** Owned/generated state changed outside aart-cli is surfaced
 before repair; arbitrary drift is not silently adopted.
 
 **INV-229 — Superseded candidates remain auditable.** New candidate revisions do not erase prior
@@ -10267,7 +10232,7 @@ review state.
 **INV-230 — Downgrade is reconciliation, not receipt undo.** Version downgrade is planned against
 current requirements, policy and compatibility.
 
-**INV-231 — Input contract migrations are explicit.** AART asks for or transforms changed inputs only
+**INV-231 — Input contract migrations are explicit.** aart-cli asks for or transforms changed inputs only
 when the mapping is declared and safe; it does not invent semantic migrations.
 
 **INV-232 — Credential contract changes preserve unrelated credential ownership.** Authentication
@@ -10297,7 +10262,7 @@ material source change reopens review.
 **INV-240 — Promotion decisions are auditable.** Promotion state retains source, validation, policy,
 mode and before/after registry evidence.
 
-**INV-241 — AART does not replace Git review authorization.** Enterprise PR/CI/branch protection can
+**INV-241 — aart-cli does not replace Git review authorization.** Enterprise PR/CI/branch protection can
 remain the authority for human approval and publication.
 
 **INV-242 — Local promotion is not publication.** Published means present on the canonical
@@ -10307,7 +10272,8 @@ consumer-visible registry branch/snapshot, not merely prepared or committed loca
 and credential bindings belong to one stable installation-target identity that includes the
 configured Registry alias, artifact identity, project/user destination and harness/profile. Equal
 artifact names or input identifiers across aliases, projects, user scope or harness targets never
-cause implicit state sharing; sharing one credential reference requires an explicit choice.
+permit value or provider-item sharing. Explicit sharing and copying are also excluded; every new
+installation collects configuration and secrets independently.
 
 ---
 
@@ -10341,7 +10307,7 @@ not a claim that the existing implementation already satisfies it.
 - **Marketplace:** the row under the cursor has a description from approved artifact metadata in
   a separate block, shown under Verbose and collapsed in Fast with `v`, following the later
   all-screen clarification. No description is invented or fetched during rendering.
-- **Remediation:** describe proposed AART changes as actions AART will perform after approval,
+- **Remediation:** describe proposed aart-cli changes as actions aart-cli will perform after approval,
   not unexplained chores the user must perform. Continue is a working control outside explanatory
   prose. Keep required decisions and material risk visible; routine derived changes do not force
   a redundant remediation stop when no decision is needed.
@@ -10402,12 +10368,12 @@ authoring, Registry-maintenance, Enterprise, contributor, quality or release man
 Its content order is contractual:
 
 1. After the title and at most one outcome sentence, the fastest supported quick start installs
-   AART, connects and synchronizes a Registry, finds or selects an artifact in Marketplace,
+   aart-cli, connects and synchronizes a Registry, finds or selects an artifact in Marketplace,
    installs it into a selected harness and verifies the result. The TUI is the primary human route;
    a compact deterministic CLI equivalent may follow. Repository, Registry, artifact and harness
    values that cannot be universal remain explicit placeholders and never become organization-
    specific defaults.
-2. A short explanation of what AART is follows the working quick start. It may identify AART as an
+2. A short explanation of what aart-cli is follows the working quick start. It may identify aart-cli as an
    agent-artifact package manager, Registry client, policy/review surface and installer, name the
    supported artifact families, and summarize Source → Candidate → Registry → Marketplace only far
    enough to orient a new user. Detailed architecture does not remain inline.
@@ -10423,3 +10389,232 @@ Detailed material currently in README moves to focused documentation rather than
 discarded. The final documentation gate executes the advertised installation forms and checks the
 section order, bounded product explanation, link targets and final License placement. A later task
 that changes README or its install lines reruns that gate.
+
+# 169. Accepted installation ownership, filesystem layout and product namespace
+
+Status: **ACCEPTED 2026-09-19 — implementation pending in CP-26.18a and CP-26.19**.
+This owner-approved contract supersedes the shared-runtime premise in D-071 and the explicit
+cross-installation credential-sharing allowance in D-313. Earlier release records describe
+historical behavior; this section defines the required result.
+
+## 169.1 One product namespace
+
+The package, executable, user-facing product name and tool-owned filesystem namespace are
+`aart-cli`. The Python import package is `aart_cli`. Author manifests are `aart-cli.yaml` and
+`aart-cli.json`; tool-owned schema/URI identifiers, generated files, block markers, branch
+prefixes, environment variables and CI/release interfaces follow the same namespace, with
+`AART_CLI_` for environment-variable identifiers. External harness filenames and formats remain
+those required by each harness. Historical repository identities and legal attribution remain
+literal historical facts.
+
+Breaking changes are accepted throughout CP-26, not only for paths or names. The owner states that
+the product is just starting and has no users requiring preservation of its old interfaces. Old
+commands, names, files, schemas, formats, defaults and internal product rules may be replaced or
+deleted directly to satisfy the accepted specification. Backward compatibility is not an
+acceptance requirement. Do not add compatibility aliases, fallback readers, old-path probing,
+dual-written state, migration commands or deprecation periods solely to preserve old behavior.
+Update or remove obsolete behavior tests; retain tests of still-required behavior and ownership.
+External harness contracts, secret protection and the new installation invariants still apply.
+
+CP-26.18a inventories and changes every active producer, reader, packaged entry point, template,
+example, test and public document. Implementation verification is proportional: focused tests or
+smoke checks for changed behavior and the affected ownership boundaries, no old-version matrix,
+no repetitive repository-wide runs. Existing relevant assertions should be reused; namespace-only
+substitutions do not each need a new test or mutation. Required targeted semantic mutation/scoped
+mutation evidence remains bounded to material behavior claims. CP-26.21 owns the final broad gates;
+accepting breaking changes does not justify suppressing failures against the new contract.
+
+## 169.2 One portable home for tool-owned user data
+
+macOS and Linux resolve the same application home:
+
+```text
+explicit AART_CLI_HOME (normalized absolute path)
+otherwise <user-home>/.aart-cli
+```
+
+`AART_CLI_HOME` is resolved once at the process boundary and passed through explicit path values;
+domain code does not inspect environment variables or the filesystem. No platform-specific user
+data/cache/config roots or XDG fallback are used. CI and isolated agent jobs can select a private
+absolute directory without changing the OS user's home or the harness's home.
+
+The managed layout is:
+
+```text
+~/.aart-cli/
+├── config.json                     # Registry/Source connections and tool settings
+├── objects/
+│   ├── sha256/                      # immutable canonical package content by digest
+│   └── quarantine/                  # rejected/corrupt object evidence
+├── sources/                        # acquired Registry/Source snapshots and Candidate evidence
+├── state/
+│   ├── installations/              # one receipt per complete installation identity
+│   ├── activity/                   # action records, including bulk transaction results
+│   ├── setup/                      # target-qualified setup metadata
+│   ├── object-references.json      # canonical object retention metadata
+│   └── consumer-settings.json      # UI preferences
+├── cache/                          # disposable derived data, including security assessments
+├── locks/                          # concurrency control
+└── tmp/                            # bounded staging and transient operation files
+```
+
+Configuration here means configuration of `aart-cli` itself. Artifact configuration values are
+excluded from this home, including receipts, setup records, logs, recovery copies and temporary
+global value stores. Receipts may contain target identity, version/digest, owned paths, file
+digests and credential references. Secret values are excluded from all these files.
+
+Identical canonical packages may share immutable object storage. They never share mutable runtime
+trees, environments, launchers, configuration files or credential provider items. Deleting cache
+does not remove installation receipts or required package evidence. Object pruning respects
+recorded references. A central installation index is metadata, not shared configuration state.
+
+Project installation receipts also live in this home, qualified by the concrete project root.
+The tool creates no second `<project>/.aart-cli` receipt store or project-global runtime directory.
+A bulk operation may additionally write one transaction/activity receipt linking the individual
+installation receipts (INV-138); this is not a replacement for per-owner records. Multiple
+Collections may retain one exact installation through ownership reasons (INV-129), without joining
+different installations or inputs.
+Author Sources and Registry checkouts remain in the locations explicitly selected by their owner;
+this home stores acquired snapshots, not relocated author repositories.
+
+## 169.3 Installed files belong to the selected harness
+
+For a locally executed MCP, one installation owns a payload copy, an isolated runtime (a private
+`runtime/.venv/` for Python), a launcher and a plain ordinary configuration file inside a
+namespaced subtree of the selected harness. The namespace includes Registry alias, artifact kind
+and name; the enclosing harness root and profile resolution distinguish targets. A profile or
+alternate harness home must receive a distinct tree whenever it denotes a different installation.
+
+Example on either supported platform (`~` means the selected user's home):
+
+```text
+<project>/.tabnine/agent/
+├── settings.json                   # owns only this installation's MCP entry
+└── aart-cli/mcp/company/github/
+    ├── payload/
+    ├── runtime/.venv/
+    ├── config/tabnine.conf
+    └── launch.sh
+
+~/.claude/
+└── aart-cli/mcp/company/github/
+    ├── payload/
+    ├── runtime/.venv/
+    ├── config/claude.conf
+    └── launch.sh
+
+~/.claude.json                      # owns only this installation's MCP entry
+```
+
+Each registration uses the absolute path of its own launcher and a collision-resistant
+alias-qualified entry key. Other entries and settings in the harness file are preserved. The
+launcher resolves only that installation's provider references and starts its own runtime;
+successful launch does not depend on `aart-cli` or on live reads from its canonical object store.
+Files must not be linked back into a shared mutable runtime under the application home.
+
+Registry connection identity is part of the path, even when two connections point to the same
+upstream Registry or expose byte-identical packages. For example, connect the remote Registry as
+`company` and its local checkout as `company-local`. Installing `mcp/github@1.5.0` from both into
+Claude/user produces:
+
+```text
+~/.claude/aart-cli/mcp/company/github/
+~/.claude/aart-cli/mcp/company-local/github/
+```
+
+Both have their own payload, runtime, launcher, config file and provider items. The two entries in
+`~/.claude.json` use distinct keys derived from the alias-qualified identities and point to their
+respective launchers. Two central receipts and two Installed rows retain `company/mcp/github` and
+`company-local/mcp/github` as separate entities. Installing both into Tabnine/project as well adds:
+
+```text
+<project>/.tabnine/agent/aart-cli/mcp/company/github/
+<project>/.tabnine/agent/aart-cli/mcp/company-local/github/
+```
+
+That is four installations, four independently collected input sets and four Installed rows.
+Equality of package digest, version, upstream Registry id or original Source provenance never
+merges those owners. Only their immutable canonical package object may be deduplicated by digest.
+The configured Registry alias is a validated path component (or is safely encoded); it cannot
+escape the managed root. Repointing a connection must not silently adopt another Registry's
+existing installation; receipts retain Registry origin/snapshot provenance. A change of alias
+creates a different installation namespace, not a credential/configuration transfer.
+
+Skills, guidelines, hooks and memory continue to use the harness's documented discovery paths
+and owned fragments; they do not gain a Python runtime merely to fit the MCP layout. Every emitted
+file, tree or fragment has one installation owner. If two selected installations cannot coexist
+under a harness's addressing rules, planning reports the conflict before writing. An adapter
+without a safe supported destination refuses that target; it does not silently place the runtime
+in the central application home. Registered stdio behavior and external filenames still require
+harness-specific adapters.
+
+An installation is recorded after its actual effects are applied, with its own verification result.
+Presence in the canonical object store means available, not installed. Failed verification is
+visible as unhealthy; partial execution records only actual effects. Installed shows independently
+actionable rows for `company/mcp/github · Tabnine · project · <project>` and
+`company/mcp/github · Claude · user · <user-home>`, each with its version and health. Grouping by
+artifact or Collection must preserve those rows and their separate update/configure/repair/uninstall
+actions. Removing one must not change the other's tree, receipt or credential item.
+
+## 169.4 Every installation collects its own inputs
+
+The complete key is:
+
+```text
+Registry alias + artifact kind/name + scope + normalized concrete target root + harness/profile
+then input_id within that installation
+```
+
+Every new installation collects every required ordinary value and secret separately. Selecting
+four eligible harnesses for one MCP is four installations, even in one wizard and one transaction.
+With two ordinary variables and one secret, that operation has eight ordinary input fields and
+four secure secret entries. It writes four ordinary configuration files and four independent
+Keychain items for that secret on macOS. The provider creates the items; the user does not need to
+create Keychain records manually. The user may type the same text independently for each target.
+
+There is no global input pool, automatic value propagation, cross-target prefill, copy-answers
+button, shared credential picker or explicit sharing option. Input guidance may be displayed once,
+but each target's fields and owner remain visible. A single bulk review preserves all four owners.
+Compatible values may be retained during update/repair of an existing identical owner; that never
+satisfies another installation's new-input requirements. Uninstall credential retention follows
+the existing explicit cleanup policy while preserving the original owner.
+
+In non-interactive CI, each required binding must be supplied separately with its installation
+identity through approved configuration input channels and secret providers. No secret enters the
+serialized plan or receipt. A missing target's input yields a structured failure naming that
+target; it never prompts, borrows another target's answer, or treats a generic input-id environment
+variable as a value for all targets. Providers must keep distinct target-owned references/items;
+one external provider item cannot be selected by two installations.
+
+## 169.5 Platform boundaries that remain
+
+The application home is portable. Harness discovery/configuration, Python executables and native
+dependencies, permissions, process execution and secret providers retain their actual platform
+contracts. A macOS environment is not copied into Linux CI merely because the path is identical.
+
+macOS secrets live in Keychain; Linux/headless execution uses an approved available provider.
+Provider implementation details and external provider files are outside the application home.
+Machine policy remains administrator-controlled at
+`/Library/Application Support/aart-cli/policy.json` on macOS and `/etc/aart-cli/policy.json` on
+Linux. Relocating `AART_CLI_HOME` cannot disable or replace that policy. Trusted deployment/CI policy
+provisioning must preserve the same authority boundary. Combining user data into one home does not
+move administrator policy into a user-writable file.
+
+## 169.6 Acceptance invariants
+
+**INV-244 — One portable application home.** All tool-owned user configuration, immutable package
+storage, snapshots, receipts, cache and transient state resolve beneath `~/.aart-cli` or the
+explicit `AART_CLI_HOME` on macOS and Linux; project scope does not create another receipt store.
+
+**INV-245 — Executable installation state belongs to one harness target.** Every installation has
+its own harness-owned files/fragments, runtime and ordinary configuration. Immutable central
+objects and metadata never imply a shared runtime or cross-target lifecycle mutation.
+
+**INV-246 — New targets require separate input entry.** Four harnesses mean four independent
+configuration and credential sets. TUI, CLI and CI neither implicitly nor explicitly share values
+or provider items across installations; compatible reuse is confined to the same existing owner.
+
+**INV-247 — The active namespace is aart-cli.** Distribution, executable, tool-owned filenames,
+protocol identifiers, environment variables and generated/public guidance use the accepted
+namespace, with no compatibility aliases or old-path fallback. Literal history and external
+harness contracts remain identifiable as such.

@@ -38,6 +38,13 @@ Handoff:
 A slice file is operational state, not a product specification. If it conflicts with the Product
 Specification, fix the slice.
 
-Implemented post-refactor acceptance slice awaiting operator retest:
+## Current execution
 
-- `CP-20-operator-clarity-and-reproducible-testing.md`
+The active stream is [CP-26](cp-26-authoring-and-legacy-removal.md): 13 of 22 tasks done,
+14 next, with 18a → 19 → 20 before final gate 21. Read `../NEXT.md` and `../plan.json` for
+current status, and `../CONTRACT_ALIGNMENT.md` for the accepted installation revision.
+
+Older slices preserve evidence for the contract they tested. Their VERIFIED labels, shared runtime/
+credential assumptions, names and path examples cannot establish compliance with Product
+Specification §169. Retain still-valid behavior evidence and replace the withdrawn assumptions in
+CP-26.18a/19. CP-20's operator-retest note is historical, not the active next task.

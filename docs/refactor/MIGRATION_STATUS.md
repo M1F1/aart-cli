@@ -1,4 +1,29 @@
-# AART Refactor Migration Status
+# aart-cli Refactor Migration Status
+
+This file is a chronological evidence log, newest first. Earlier VERIFIED states apply to the
+contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
+`INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
+
+**2026-09-19, contract consistency audit complete.** The Product Specification's ownership,
+Collection aggregation, version identity and input invariants agree with §169. The invariant matrix
+now includes INV-243–247 and withdraws affected historical completion claims. Root execution
+instructions, CODEX_GOAL, slice index and local handoff identify the current CP-26 stream and focused
+gates. No implementation task is marked done: 13/22 complete, 14 next, 18a/19/20 pending. See
+`CONTRACT_ALIGNMENT.md` for the reviewed surfaces and remaining implementation/documentation work.
+
+**2026-09-19, installation design accepted; implementation pending.** Product Specification §169
+and D-332–D-334 establish `aart-cli` as the active namespace, `~/.aart-cli` / `AART_CLI_HOME` as
+one portable macOS/Linux home for canonical content and metadata, and harness-owned private
+installation files/runtime/configuration. Each new target collects its own inputs; four harnesses
+mean four configuration/credential sets with no sharing, copying or cross-target prefill. Central
+receipts hold references/digests, never artifact configuration values or secrets. Administrator
+policy and secret providers remain outside the user home authority. CP-26.18a is added before 19;
+19 now owns full target isolation and B-150 as mandatory acceptance. There are 22 tasks, 13 done;
+14 remains next. Remote/local Registry aliases remain distinct entities and path namespaces even
+for identical packages. Breaking changes are accepted throughout CP-26; no compatibility machinery
+is required. Implementation checks stay focused and proportional, with full gates only at task 21.
+This is a planning/specification segment, not an implementation or verification
+claim for 18a/19. Existing task statuses and live installations are untouched.
 
 **2026-09-19, CP-26.13 complete.** The README opens with the route a new user runs: install AART,
 connect a Registry, find the artifact, install it into a harness, verify -- then the TUI as the

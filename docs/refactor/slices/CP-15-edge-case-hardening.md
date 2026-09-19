@@ -1,4 +1,9 @@
 # CP-15 — Accepted lifecycle/edge-case hardening 54–100
+
+> **Historical evidence / CP-26 revision:** Product Specification §169 and D-332–D-335 supersede
+> earlier naming, runtime-placement and cross-installation input-sharing assumptions in this record.
+> VERIFIED below refers to the contract tested then. Current implementation/proof belongs to
+> CP-26.18a/19/20; see `../CONTRACT_ALIGNMENT.md` and `../INVARIANT_TRACEABILITY.md`.
 Status: VERIFIED (opened 2026-09-03, closed 2026-09-03)
 
 ## Goal
