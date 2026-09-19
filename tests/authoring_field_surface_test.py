@@ -160,9 +160,7 @@ class UnresolvedSiteTest(unittest.TestCase):
         """The two sites CP-26.8 would otherwise generate a skeleton without."""
 
         names = {
-            name
-            for item in parser_field_surface()
-            for name in (*item.required, *item.optional)
+            name for item in parser_field_surface() for name in (*item.required, *item.optional)
         }
 
         self.assertLessEqual({"required", "help", "default", "validation"}, names)

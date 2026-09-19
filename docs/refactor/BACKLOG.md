@@ -3889,3 +3889,38 @@ their Registry refuse every gate. Treat this as a precondition of task 21, not a
 
 Evidence/links: D-318, D-321, D-322, D-324; CP-26 tasks 13–16 and 21;
 `agent_artifacts/registry_maintenance/promoted.py::legacy_registry_paths`.
+
+## B-152 — Four registry diagnostic codes have had no user since CP-26.05
+
+Status: OPEN, NONCRITICAL for CP-26.08
+
+Found while executing CP-26.06, 2026-09-19.
+
+`agent_artifacts/protocol/codes.py` still defines `REGISTRY_LOCK_INVALID`,
+`REGISTRY_LOCK_STALE`, `REGISTRY_TREE_INVALID` and `REGISTRY_SELF_REFERENCE`. Step 5 deleted the
+only code that raised them along with the retired representation's schema and planning halves;
+nothing in `agent_artifacts` references any of the four today.
+
+Why it is not a step's: a diagnostic code is a stable identifier and removing one is a
+compatibility statement about what AART may emit, not a cleanup. It belongs with the step that
+settles the shipped diagnostic vocabulary rather than inside an authoring slice. Nothing breaks
+while they exist; what they cost is a reader who searches for `registry-lock-stale`, finds a
+definition, and concludes AART still checks a lock.
+
+## B-153 — `ruff format .` rewrites the Product Specification's code blocks
+
+Status: OPEN, NONCRITICAL for CP-26.08
+
+Found while executing CP-26.08, 2026-09-19.
+
+The `format-check` and `lint` gates scope ruff to `agent_artifacts`, `tests` and `scripts`
+(`scripts/quality.py`). Run from the repository root without those paths, this build's ruff also
+formats the Python fenced blocks inside Markdown: `ruff format .` reflowed eleven code blocks in
+`docs/product-specification/PRODUCT_SPECIFICATION.md`, plus blocks in two slice documents. The
+Product Specification is the sole source of product truth and a formatter is not allowed to be an
+author of it.
+
+No gate is wrong — the gate is correctly scoped and the damage came from a hand-run command — so
+this is not a defect in the quality suite. What is missing is a statement in the repository that
+ruff is scoped on purpose, and, if this build's ruff supports it, an exclusion that makes the
+unscoped invocation safe as well. Worth doing before more agents run formatters by hand.

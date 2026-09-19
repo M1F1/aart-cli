@@ -470,6 +470,12 @@ class Request:
     publisher_source_id: Optional[str] = None
     security_registry_inputs_digest: Optional[str] = None
     publisher_trust: Optional[str] = None
+    # The authoring group. Its own fields rather than a reuse of the registry ones: `author`
+    # writes into the author's working directory, and a field shared with a Registry command
+    # would be one typo away from aiming one at the other.
+    author_action: Optional[str] = None
+    author_name: Optional[str] = None
+    author_into: Optional[str] = None
     # Canonical configured-source command surface.
     source_action: Optional[str] = None
     source_alias: Optional[str] = None

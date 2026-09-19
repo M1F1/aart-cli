@@ -312,18 +312,42 @@ def _refuse_empty(value: JsonValue, path: str) -> None:
 
 
 class _Writer:
-    def __init__(self, comments: dict[str, tuple[str, ...]]):
+    def __init__(self, comments: dict[str, tuple[str, ...]], trailing: dict[str, tuple[str, ...]]):
         self._comments = comments
+        self._trailing = trailing
         self.used: set[str] = set()
+        self.closed: set[str] = set()
         self.lines: list[str] = []
+
+    def _write(self, lines: tuple[str, ...], indent: int) -> None:
+        """Write comment lines at `indent`.
+
+        A line that already begins with `#` is written as it stands rather than commented again, so
+        a caller can put a doubled `##` note or a `#?` alternative beside plain disabled YAML and
+        have the three remain distinguishable to whoever reads the file.
+        """
+
+        pad = " " * indent
+        self.lines.extend(
+            f"{pad}{line}" if line.startswith("#") else f"{pad}#{f' {line}' if line else ''}"
+            for line in lines
+        )
 
     def comment(self, path: str, indent: int) -> None:
         lines = self._comments.get(path)
         if lines is None:
             return
         self.used.add(path)
-        pad = " " * indent
-        self.lines.extend(f"{pad}#{f' {line}' if line else ''}" for line in lines)
+        self._write(lines, indent)
+
+    def close(self, path: str, indent: int) -> None:
+        """Write what belongs after a block's last entry, at the entries' own indentation."""
+
+        lines = self._trailing.get(path)
+        if lines is None:
+            return
+        self.closed.add(path)
+        self._write(lines, indent)
 
     def block(self, value: JsonValue, indent: int, path: str) -> None:
         if isinstance(value, JsonObject):
@@ -351,6 +375,7 @@ class _Writer:
             _refuse_empty(value, here)
             self.lines.append(f"{pad}{key}:")
             self.block(value, indent + 2, here)
+        self.close(path, indent)
 
     def sequence(self, value: JsonArray, indent: int, path: str) -> None:
         pad = " " * indent
@@ -378,12 +403,14 @@ class _Writer:
             self.comment(here, indent)
             self.lines.append(f"{pad}-")
             self.block(item, indent + 2, here)
+        self.close(path, indent)
 
 
 def emit_yaml(
     value: JsonValue,
     *,
     comments: Mapping[str, Sequence[str]] = MappingProxyType({}),
+    trailing: Mapping[str, Sequence[str]] = MappingProxyType({}),
     path: str = "aart.yaml",
 ) -> Result[str]:
     """Write the finite YAML subset `parse_yaml` accepts, or refuse to write at all.
@@ -395,12 +422,15 @@ def emit_yaml(
 
     `comments` maps a position to the lines written above it: `""` for the document header, and
     otherwise a dotted path of mapping keys and sequence indices, such as `artifact.kind` or
-    `payload.include.0`. A comment aimed at a position the document does not have is a refusal,
-    because silently dropping it is how a generated manifest loses its documentation.
+    `payload.include.0`. `trailing` does the same below a *block's* last entry, at the entries' own
+    indentation, for the lines that have no following key to sit above. A comment aimed at a
+    position the document does not have is a refusal in either map, because silently dropping it is
+    how a generated manifest loses its documentation.
     """
 
     fixed = {key: tuple(lines) for key, lines in comments.items()}
-    for position, lines in sorted(fixed.items()):
+    closers = {key: tuple(lines) for key, lines in trailing.items()}
+    for position, lines in sorted((*fixed.items(), *closers.items())):
         where = position or "the document header"
         for line in lines:
             if line.splitlines() not in ([], [line]):
@@ -409,7 +439,7 @@ def emit_yaml(
                 return _emit_error(f"comment at {where} is not text", path)
     if not isinstance(value, JsonObject | JsonArray):
         return _emit_error("an AART YAML document must be a mapping or a sequence", path)
-    writer = _Writer(fixed)
+    writer = _Writer(fixed, closers)
     try:
         _refuse_empty(value, "the document")
         writer.comment("", 0)
@@ -419,6 +449,11 @@ def emit_yaml(
     unused = sorted(set(fixed) - writer.used)
     if unused:
         return _emit_error(f"comment at {unused[0]} names no such key in the document", path)
+    unclosed = sorted(set(closers) - writer.closed)
+    if unclosed:
+        return _emit_error(
+            f"trailing comment at {unclosed[0] or 'the document'} names no such block", path
+        )
     return Ok("".join(f"{line}\n" for line in writer.lines))
 
 

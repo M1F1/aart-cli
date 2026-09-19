@@ -582,6 +582,60 @@ round-trip property. Deleting the unused-comment refusal failed
 `test_a_comment_aimed_at_a_key_the_document_does_not_have_is_refused` and nothing else. Both
 restored green.
 
+### Step 8 — `aart author init` writes a full-surface `mcp` workspace (2026-09-19)
+
+A new top-level group, `author`, rather than an action under `registry` or `source`: a Registry is
+where an artifact is published to, never where it is written, and `source` is about subscriptions.
+`aart author init --kind mcp --name <slug> [--into DIR]` writes `aart.yaml` plus the payload the
+manifest declares. `--kind` offers all five kinds from `get_args(AuthorKind)` — the parser's own
+vocabulary, so a kind it gains appears in the help without an edit here — and the generator refuses
+the four it does not yet build, by name.
+
+**The full surface, with the optional part commented rather than absent.** Every block the parser
+accepts is in the file. What is not required is written out as YAML behind `# `, one line of
+explanation above it, so narrowing the manifest down is an edit rather than a search through
+`protocol/authoring.py`. Three prefixes carry three meanings: `# ` is a line of the document that is
+not enabled, `## ` is prose, `#? ` is an alternative to the line above it rather than an addition.
+Uncommenting every `# ` yields exactly `AuthorSkeleton.full`, and a test proves that equality — the
+commented text is produced by `emit_yaml` from the value itself, which is what makes it true.
+
+**The generator is not a second authority on the schema, twice over.** Statically,
+`tests/authoring_field_surface.py` reads the parser and the skeleton must name every field it finds
+(step 6, D-327). Dynamically, `author_skeleton` parses what it just generated with the real
+`parse_author_manifest` before returning it, so `artifact.name`'s rule is the parser's rule rather
+than a copy of it — `github-mcp-` reads as a slug to a scan over the alphabet and is not one
+(D-329).
+
+**Three inputs, because one cannot carry every accepted field.** §91 keeps the confidential class
+free of any field a credential could be written into, so a secret takes no `default`, no
+`validation` and no `help.example`; and a validation is `pattern` or `url`, never both. So the
+skeleton carries a secret, a URL-validated config and a pattern-validated config.
+
+**The writer either writes the whole workspace or leaves the directory as it was.** `author init`
+is the first AART command an author runs, often into a directory already holding their own work, so
+every target is checked with `lexists` before the first byte — a dangling symlink is still something
+they put there — and a failure part-way removes what the call made. The generator's own paths go
+through `parse_relative_path`, because a path that climbs out of the workspace would be AART's
+mistake to catch, not the author's.
+
+**Two repository gates caught real drift and both were right.** `source_remediation_test` and
+`adoption_first_contact_test` refused `aart author check` in the skeleton header and the command's
+report: steps 10–11 add that command and until then naming it sends an author to a usage error. The
+README now documents `author init`, because a shipped top-level command the README has no route to
+is capability nobody can find.
+
+**Targeted semantic mutations (eight, one per claim).** Neutralizing the occupied-target refusal
+failed the three refusal tests; following links instead of `lexists` failed only the symlink test;
+writing `content.strip()` failed only the byte-for-byte test; skipping the parser verification
+failed the two name tests and the command's write-nothing test; dropping `parse_relative_path`
+failed only the escape test; an empty receipt root, a removed `_undo` and a removed remediation line
+each failed only the test that names that claim. All restored green.
+
+**`make mutants` (advisory, scoped).** 87 mutants over `io/author_workspace.py`, 60 killed. The
+survivors were diagnostic wording variants and `encoding=` spellings that behave identically for
+ASCII, plus three real findings — an unnamed receipt root, an unexercised rollback path and an
+unasserted remediation line — which are the last three targeted mutations above.
+
 ### Step 17 — no maintainer identity as a default
 
 The owner explicitly requires generated registries and operational examples to carry no default

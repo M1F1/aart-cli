@@ -1,5 +1,24 @@
 # AART Refactor Migration Status
 
+**2026-09-19, CP-26.08 complete.** `aart author init --kind mcp --name <slug> [--into DIR]` writes
+a full-surface authoring workspace: an `aart.yaml` carrying every field `parse_author_manifest`
+accepts, with the optional blocks written out behind `# ` and a line of explanation above each, plus
+the payload the manifest declares. Three prefixes are distinguished -- `# ` a disabled line of the
+document, `## ` prose, `#? ` an alternative rather than an addition -- and uncommenting every `# `
+yields exactly the full document, which a test proves by equality because the commented text is
+produced by `emit_yaml` from the value itself. `author` is a new top-level group: a Registry is
+where an artifact is published to, never where it is written. The generator restates no rule the
+parser owns -- it parses what it just emitted with the real `parse_author_manifest` and returns that
+refusal (D-329), and `--kind` offers `get_args(AuthorKind)` -- so the only thing it declares is
+which kinds it can build, currently `mcp`. The writer checks every target with `lexists` before the
+first byte and removes what it made if a later write fails, so an author's directory is either
+whole or untouched. Two repository gates caught real drift and both were right: the package may not
+name `aart author check` before steps 10-11 ship it, and the README must document a route to every
+shipped top-level command. Eight targeted mutations each failed only the test naming that claim;
+`make mutants` over `io/author_workspace.py` killed 60 of 87 and its three substantive survivors
+became three of those eight. The 127 tests of the affected modules, `make docs-check`, Ruff and
+Mypy are green. No broad `make quality` ran, under D-317.
+
 **2026-09-19, CP-26.07 complete.** `protocol/yaml.py` gained `emit_yaml`, specified and tested as
 `parse_yaml`'s inverse over the finite AART subset: block mappings, sequences, plain scalars and
 path-addressed comments. Quoting is decided by asking `_scalar` whether the plain form returns

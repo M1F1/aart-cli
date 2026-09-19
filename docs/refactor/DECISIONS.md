@@ -8149,3 +8149,28 @@ cannot produce an `aart.yaml` that reads back as a different document. `str.spli
 on `\x85`, `\u2028` and `\u2029`, which `ord(c) < 32` does not catch; the plain-scalar rule
 requires `text.splitlines() == [text]` and an exhaustive test derives that set from Python rather
 than listing it.
+
+## D-329 — a generated manifest is verified by the parser before it is offered to anybody
+
+Date: 2026-09-19 · Status: accepted · Scope: CP-26 steps 8 to 12
+
+**Context.** `aart author init` generates `aart.yaml`. The static half of the anti-drift defence is
+D-327's oracle: a test reads `protocol/authoring.py` and fails until the skeleton names every field
+it finds. That holds the *field names*. It does not hold the rest of what the parser demands -- that
+`artifact.name` is a slug, that an `mcp` has stdio transport and a python launch, that a secret
+carries no `example`. A generator that wrote those rules out again would be exactly the second
+authority on the schema §1.3 forbids, and the first person to discover the copy had drifted would
+be an author being told their own edits were wrong.
+
+**Decision.** `author_skeleton` parses the document it just emitted with the real
+`parse_author_manifest` and returns that `Err` when it refuses. No rule the parser owns is restated
+in the generator; `GENERATED_KINDS` names what this build can *build*, and everything about whether
+the result is valid comes from the parser reading it. The CLI's `--kind` choices come from
+`get_args(AuthorKind)` for the same reason.
+
+**Consequence.** An `author init` that would have written a manifest the author's next command
+refuses now refuses first, with the parser's own words. The cost is a parse per invocation, which is
+microseconds on a document this size, and one import edge from `agent_artifacts.authoring` to
+`agent_artifacts.protocol.authoring` -- both pure, so no effect boundary is crossed. It also makes
+the emitter self-checking in production rather than only under test: an `emit_yaml` regression that
+produced something the parser reads differently surfaces as a refusal instead of a bad file.

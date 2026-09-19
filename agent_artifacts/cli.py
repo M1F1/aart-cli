@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from typing import Callable, Optional, Sequence, Tuple
+from typing import Callable, Optional, Sequence, Tuple, get_args
 
 from . import __version__
 from .command_outcome import OK
@@ -25,6 +25,7 @@ from .commands import upgrade
 from .curation.model import DEFAULT_MAXIMUM_AART, DEFAULT_MINIMUM_AART
 from .model import Request
 from .outcomes import CommandOutcome
+from .protocol.authoring import AuthorKind
 
 
 def _run_registry(request: Request) -> int:
@@ -63,6 +64,12 @@ def _run_reset(request: Request) -> int:
     return reset.run(request)
 
 
+def _run_author(request: Request) -> int:
+    from .commands import author
+
+    return author.run(request)
+
+
 # Command name -> handler. Value-keyed dispatch, not a class hierarchy.
 DISPATCH: dict[str, Callable[[Request], int]] = {
     "upgrade": upgrade.run,
@@ -72,6 +79,7 @@ DISPATCH: dict[str, Callable[[Request], int]] = {
     "marketplace": _run_marketplace,
     "doctor": _run_doctor,
     "reset": _run_reset,
+    "author": _run_author,
 }
 
 # Structured results used by interactive frontends. Flag mode retains ``DISPATCH`` and its
@@ -1328,6 +1336,49 @@ def build_parser() -> argparse.ArgumentParser:
     p_security = security_sub.add_parser("suites", help="list built-in analyzer suites")
     _add_json(p_security)
 
+    # author ------------------------------------------------------------------ #
+    p = sub.add_parser(
+        "author",
+        formatter_class=_HELP_FORMATTER,
+        help="start and check an artifact you are writing",
+        description=(
+            "Write artifacts. This group targets your own working directory: a Registry is "
+            "somewhere an artifact is published to, never where it is written."
+        ),
+    )
+    author_sub = p.add_subparsers(dest="author_action", metavar="ACTION", required=True)
+    p_author_init = author_sub.add_parser(
+        "init",
+        formatter_class=_HELP_FORMATTER,
+        help="write an aart.yaml carrying every accepted field, plus a payload skeleton",
+        description=(
+            "Write a manifest that carries the whole accepted field surface, with the optional "
+            "blocks commented out and one line of explanation each, so narrowing it down is an "
+            "edit rather than a search through the schema. Nothing existing is replaced."
+        ),
+    )
+    p_author_init.add_argument(
+        "--kind",
+        dest="artifact_kind",
+        required=True,
+        # The vocabulary is the parser's own, so a kind it gains appears here without an edit.
+        choices=sorted(get_args(AuthorKind)),
+        help="what kind of artifact to start",
+    )
+    p_author_init.add_argument(
+        "--name",
+        dest="author_name",
+        required=True,
+        metavar="SLUG",
+        help="the artifact name, as a lowercase slug",
+    )
+    p_author_init.add_argument(
+        "--into",
+        dest="author_into",
+        metavar="DIR",
+        help="where to write the workspace (default: the working directory)",
+    )
+
     return parser
 
 
@@ -1418,6 +1469,9 @@ def _to_request(args: argparse.Namespace) -> Request:
         publisher_source_id=getattr(args, "publisher_source_id", None),
         security_registry_inputs_digest=getattr(args, "security_registry_inputs_digest", None),
         publisher_trust=getattr(args, "publisher_trust", None),
+        author_action=getattr(args, "author_action", None),
+        author_name=getattr(args, "author_name", None),
+        author_into=getattr(args, "author_into", None),
         source_action=getattr(args, "source_action", None),
         source_alias=getattr(args, "source_alias", None),
         source_kind=getattr(args, "source_kind", None),

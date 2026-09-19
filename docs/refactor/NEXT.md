@@ -2,20 +2,23 @@
 
 ## Where CP-26 is (2026-09-19)
 
-Steps 1–7 are done on `refactor/cp-26-legacy-removal`, and **B-057 and B-149 are both closed**. The
+Steps 1–8 are done on `refactor/cp-26-legacy-removal`, and **B-057 and B-149 are both closed**. The
 retired authoring-workspace representation has no schema, no fixtures, no planning half and no
 command left; `aart registry vendor` writes the approved representation's versioned package through
-`plan_bulk_promotion`; the authoring field surface is now read out of the parser rather than
-transcribed; and AART can write the YAML subset it parses.
-`docs/refactor/slices/cp-26-authoring-and-legacy-removal.md` records all four under §"Step 5",
-§"B-149", §"Step 6" and §"Step 7" (D-321 to D-328).
+`plan_bulk_promotion`; the authoring field surface is read out of the parser rather than
+transcribed; AART can write the YAML subset it parses; and `aart author init --kind mcp` writes a
+full-surface authoring workspace.
+`docs/refactor/slices/cp-26-authoring-and-legacy-removal.md` records these under §"Step 5",
+§"B-149" and §"Step 6" to §"Step 8" (D-321 to D-329).
 
-**Step 8 is next** — `aart author init` emits a full-surface `aart.yaml` for `mcp`. The two pieces
-it needs are in place: `tests/authoring_field_surface.py` says which fields exist (D-327) and
-`agent_artifacts/protocol/yaml.py::emit_yaml` writes them without producing a document that reads
-back as something else (D-328). Read D-327 first: three of the parser's seventeen field sites are
-`unresolved`, all in the dynamically dispatched input and descriptor parsing, and `init` has to
-handle those explicitly rather than emit nothing for them.
+**Step 9 is next** — the same generator for `skill`. `agent_artifacts/authoring/skeleton.py`
+generates one kind today: `GENERATED_KINDS` names it, `_mcp_document` builds it, and
+`author_skeleton` refuses the other four by name. A `skill` is a different shape — delivered by
+`copy-tree`, with no transport, runtime or launch — so step 9 is a second document builder behind
+the same anti-drift oracle, not a parameter on the first. The oracle in
+`tests/author_skeleton_test.py` currently excludes `parse_author_collection_manifest`'s field site,
+because an artifact manifest cannot carry a Collection's fields; step 12 decides whether a
+Collection skeleton is generated at all.
 
 Two open findings from step 5:
 

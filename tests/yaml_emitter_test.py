@@ -182,6 +182,69 @@ class CommentTest(unittest.TestCase):
         self.assertIn("newline", message)
 
 
+class CommentPrefixTest(unittest.TestCase):
+    """A line that is already a comment is written as it stands, at the position's indentation.
+
+    The skeleton generator writes three kinds of comment beside each other -- a disabled line of
+    the document, a prose note, and an alternative to the line above -- and a reader has to be able
+    to tell them apart. Doubling the hash is how; the emitter must not double it again.
+    """
+
+    _DOCUMENT = JsonObject((("artifact", JsonObject((("kind", "mcp"),))),))
+
+    def test_a_plain_line_becomes_a_comment(self) -> None:
+        emitted = _emitted(self._DOCUMENT, comments={"artifact.kind": ("summary: One.",)})
+
+        self.assertIn("  # summary: One.\n", emitted)
+
+    def test_a_line_that_is_already_a_comment_is_left_alone(self) -> None:
+        emitted = _emitted(
+            self._DOCUMENT, comments={"artifact.kind": ("## A note.", "#? kind: skill")}
+        )
+
+        self.assertIn("  ## A note.\n", emitted)
+        self.assertIn("  #? kind: skill\n", emitted)
+        self.assertEqual(_reparsed(emitted), self._DOCUMENT)
+
+
+class TrailingCommentTest(unittest.TestCase):
+    """A comment with nothing after it to sit above still has to reach the document.
+
+    Keys are written in one order, so an optional block that sorts after every live key in its
+    mapping -- `artifact.summary` after `version` -- has no following key to anchor to. `trailing`
+    is that anchor: it names a block rather than a key, and writes below the block's last entry.
+    """
+
+    _DOCUMENT = JsonObject((("artifact", JsonObject((("kind", "mcp"), ("version", "0.1.0")))),))
+
+    def test_a_trailing_comment_closes_the_block_it_names(self) -> None:
+        emitted = _emitted(self._DOCUMENT, trailing={"artifact": ("summary: One server.",)})
+
+        self.assertEqual(
+            emitted,
+            "artifact:\n  kind: mcp\n  version: 0.1.0\n  # summary: One server.\n",
+        )
+        self.assertEqual(_reparsed(emitted), self._DOCUMENT)
+
+    def test_a_trailing_comment_on_the_document_closes_the_document(self) -> None:
+        emitted = _emitted(self._DOCUMENT, trailing={"": ("python:",)})
+
+        self.assertTrue(emitted.endswith("# python:\n"))
+        self.assertEqual(_reparsed(emitted), self._DOCUMENT)
+
+    def test_a_trailing_comment_naming_a_block_the_document_does_not_have_is_refused(self) -> None:
+        message = _refusal(emit_yaml(self._DOCUMENT, trailing={"payload": ("include:",)}))
+
+        self.assertIn("payload", message)
+        self.assertIn("no such", message)
+
+    def test_a_trailing_comment_naming_a_scalar_rather_than_a_block_is_refused(self) -> None:
+        message = _refusal(emit_yaml(self._DOCUMENT, trailing={"artifact.kind": ("x:",)}))
+
+        self.assertIn("artifact.kind", message)
+        self.assertIn("no such", message)
+
+
 class RefusalTest(unittest.TestCase):
     def test_an_empty_mapping_is_refused_because_the_grammar_cannot_express_it(self) -> None:
         message = _refusal(emit_yaml(JsonObject((("install", JsonObject(())),))))

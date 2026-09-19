@@ -819,7 +819,7 @@
         {
           "id": "8",
           "title": "`aart author init` emits a full-surface `aart.yaml` for `mcp`",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "9",

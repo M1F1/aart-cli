@@ -325,6 +325,20 @@ repairs everything.
 What it cannot repair, it still reports: an artifact whose payload is missing or divergent is named
 with what is wrong, rather than being omitted because no repair for it exists.
 
+## Writing an artifact
+
+`aart author init` starts one in the directory you name. It writes an `aart.yaml` carrying every
+field this build accepts — the optional blocks commented out, one line of explanation above each —
+so narrowing the manifest down to what your artifact needs is an edit rather than a search through
+a schema. A payload skeleton is written beside it, and nothing already in the directory is
+replaced.
+
+```sh
+aart author init --kind mcp --name github-mcp --into ./github-mcp
+```
+
+This build generates the `mcp` skeleton.
+
 ## Maintaining a registry
 
 A registry is an ordinary Git checkout. Maintainer mutations prepare reviewed files and stop. The
@@ -420,6 +434,7 @@ payload-free consumer projection. Both are generated and must pass their gates b
 ## Interface
 
 ```text
+aart author init
 aart source add|list|sync|remove|resubscribe|health
 aart marketplace list|search|health|install|update|uninstall|status|setup|receipt
 aart doctor
