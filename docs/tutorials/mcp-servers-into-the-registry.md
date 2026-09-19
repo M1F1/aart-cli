@@ -228,7 +228,7 @@ afterwards, and what to add. Write it by hand only for a package with no upstrea
     "scopes": ["user", "project"]
   },
   "payload": {
-    "format": "aart-mcp-v1",
+    "format": "aart-cli-mcp-v1",
     "root": "payload"
   },
   "setup": {

@@ -27,7 +27,7 @@ from aart_cli.domain.receipts import (
 )
 from aart_cli.domain.result import Err, Ok
 
-ROOT = "/home/agent/.agent-artifacts/runtimes/public/skill/code-review"
+ROOT = "/home/agent/.aart-cli/runtimes/public/skill/code-review"
 
 
 def _digest(character: str = "a") -> ObjectDigest:

@@ -39,13 +39,13 @@ BLOCK_UNMERGEABLE = DiagnosticCode("managed-block-unmergeable")
 
 #: A markdown comment, because the harness reads this file as instructions: a marker it rendered as
 #: content would become part of what the agent is told.
-_BEGIN = "<!-- >>> agent-artifacts memory:{name} >>> -->"
-_END = "<!-- <<< agent-artifacts memory:{name} <<< -->"
+_BEGIN = "<!-- >>> aart-cli memory:{name} >>> -->"
+_END = "<!-- <<< aart-cli memory:{name} <<< -->"
 
 #: The string every marker contains. A body carrying it is refused before it is ever written,
 #: because an artifact that can write a marker chooses where AART's region stops, and everything
 #: past it becomes the user's text as far as a later withdrawal is concerned.
-MANAGED_MARKER = "agent-artifacts"
+MANAGED_MARKER = "aart-cli"
 
 #: The name reaches a marker that is later matched literally, so it may not carry a newline, a
 #: space or any part of the delimiter syntax -- a name that did could close its own region early.

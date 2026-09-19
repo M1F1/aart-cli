@@ -897,7 +897,7 @@ def new_run_directory(plan: SetupPlan) -> str:
 
     runs_root = os.path.join(
         plan.run_root,
-        ".agent-artifacts",
+        ".aart-cli",
         "setup-runs",
     )
     os.makedirs(runs_root, mode=0o700, exist_ok=True)
@@ -1118,13 +1118,13 @@ def _custom_phase(
     env = _minimal_env(runtime)
     env.update(
         {
-            "AART_SETUP_PLAN_HASH": plan_hash,
-            "AART_SETUP_RUN_DIR": run_dir,
-            "AART_SETUP_ARTIFACT": str(effect.config.get("artifact", "")),
-            "AART_SETUP_PROFILE": str(effect.config.get("profile", "")),
-            "AART_SETUP_SCOPE": str(effect.config.get("scope", "")),
-            "AART_SETUP_SOURCE": str(effect.config.get("source_label", "")),
-            "AART_SETUP_INSTALLER_HASH": str(effect.config.get("descriptor_hash", "")),
+            "AART_CLI_SETUP_PLAN_HASH": plan_hash,
+            "AART_CLI_SETUP_RUN_DIR": run_dir,
+            "AART_CLI_SETUP_ARTIFACT": str(effect.config.get("artifact", "")),
+            "AART_CLI_SETUP_PROFILE": str(effect.config.get("profile", "")),
+            "AART_CLI_SETUP_SCOPE": str(effect.config.get("scope", "")),
+            "AART_CLI_SETUP_SOURCE": str(effect.config.get("source_label", "")),
+            "AART_CLI_SETUP_INSTALLER_HASH": str(effect.config.get("descriptor_hash", "")),
         }
     )
     result = runtime.process(tuple(argv), env=env, cwd=run_dir, timeout=120, capture=True)

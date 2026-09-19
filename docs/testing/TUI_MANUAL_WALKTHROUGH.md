@@ -246,7 +246,7 @@ prove and nothing else in the run tests it:
 
 ```sh
 cd /tmp/aart-cli-manual-lab/repositories/skill
-printf 'not json' > manual-check/aart.json
+printf 'not json' > manual-check/aart-cli.json
 git commit -am 'break one manifest' && git push
 ```
 

@@ -26,7 +26,7 @@ def install_state_paths(
     user_home = _absolute(user_home, "user home")
     data_root = _absolute(data_root, "data root")
     if scope == "project":
-        state_root = posixpath.join(project_root, ".agent-artifacts")
+        state_root = posixpath.join(project_root, ".aart-cli")
         return InstallStatePaths(
             scope,
             posixpath.join(state_root, "manifest.json"),

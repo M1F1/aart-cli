@@ -378,7 +378,7 @@ class LifecycleUpdateStatusUninstallE2ETest(unittest.TestCase):
             )
 
             self.assertEqual(code, 0, payload)
-            state = json.loads((env.project / ".agent-artifacts" / "manifest.json").read_text())
+            state = json.loads((env.project / ".aart-cli" / "manifest.json").read_text())
             self.assertEqual(len(state["installations"]), 1, state)
 
     def test_a_bare_update_selects_every_installation_in_the_scope(self) -> None:
@@ -540,7 +540,7 @@ class LifecycleDiagnosticsE2ETest(unittest.TestCase):
         # worse, treating the project as if nothing were installed and reinstalling over it.
         with _environment() as env:
             env.run("marketplace", "install", _COORDINATE, "--profile", "claude", "--yes")
-            state = env.project / ".agent-artifacts" / "manifest.json"
+            state = env.project / ".aart-cli" / "manifest.json"
             self.assertTrue(state.exists(), sorted(map(str, env.project.rglob("*"))))
             state.write_text("{ this is not valid json ]", encoding="utf-8")
 

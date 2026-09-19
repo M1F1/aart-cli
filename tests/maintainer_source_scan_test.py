@@ -46,7 +46,7 @@ def _compiled(
     version: str = "1.0.0",
 ):
     manifest = {
-        "schema": "aart.dev/mcp/v1",
+        "schema": "aart-cli.dev/mcp/v1",
         "artifact": {"name": "github-mcp", "kind": "mcp", "version": version},
         "payload": {"include": ["server.py", "requirements.txt"]},
         "transport": {"type": "stdio"},
@@ -57,7 +57,7 @@ def _compiled(
     snapshot = SourceSnapshot(
         SnapshotOrigin.IMMUTABLE_GIT,
         (
-            _entry("github/aart.json", json.dumps(manifest)),
+            _entry("github/aart-cli.json", json.dumps(manifest)),
             _entry("github/server.py", server),
             _entry("github/requirements.txt", "dependency==1.0\n"),
             _entry("README.md", unrelated),

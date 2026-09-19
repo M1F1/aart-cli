@@ -225,7 +225,7 @@ class CanonicalSymlinkTest(unittest.TestCase):
             shutil.rmtree(environment)
 
             self.assertEqual((destination / "SKILL.md").read_text(), "# Installed v1\n")
-            state = parse_install_state((project / ".agent-artifacts/manifest.json").read_bytes())
+            state = parse_install_state((project / ".aart-cli/manifest.json").read_bytes())
             assert isinstance(state, Ok), state
             effect = state.value.installations[0].effects[0]
             self.assertEqual(effect.actual_mode, "symlink")
@@ -658,7 +658,7 @@ class CanonicalSymlinkTest(unittest.TestCase):
             assert isinstance(outcome, Ok), outcome
             self.assertEqual(outcome.value.status, InstallStatus.FAILED)
             self.assertFalse((project / ".claude/skills/review").exists())
-            self.assertFalse((project / ".agent-artifacts/manifest.json").exists())
+            self.assertFalse((project / ".aart-cli/manifest.json").exists())
 
 
 if __name__ == "__main__":

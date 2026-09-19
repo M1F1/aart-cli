@@ -45,7 +45,7 @@ _MANIFEST: dict = {
     "name": "code-review",
     "version": "1.2.0",
     "summary": "Code review",
-    "payload": {"format": "aart-skill-v1", "root": "payload"},
+    "payload": {"format": "aart-cli-skill-v1", "root": "payload"},
     "compatibility": {"platforms": ["darwin", "linux"], "profiles": ["claude"]},
     "install": {"effects": ["copy-tree"], "modes": ["copy"], "scopes": ["project", "user"]},
 }

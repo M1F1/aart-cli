@@ -52,7 +52,7 @@ def _candidate(*members: ArtifactRequest) -> CollectionCandidate:
     source_alias = SourceAlias("authors")
     target = SourceAlias("company")
     input_digest = _digest("a")
-    path = "collections/data-engineer/aart.yaml"
+    path = "collections/data-engineer/aart-cli.yaml"
     return CollectionCandidate(
         collection_candidate_id_for(source_alias, path, input_digest, target),
         source_alias,

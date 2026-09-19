@@ -19,7 +19,7 @@ venv/
 # Agent harness targets. AART installs into these paths, so a live-acceptance run inside this
 # checkout leaves real artifacts here; they are one user's local state, never repository content.
 # Anchored to the root: the same names under tests/ are fixtures and must stay tracked.
-/.agent-artifacts/
+/.aart-cli/
 /.claude/
 /.agents/
 /.tabnine/

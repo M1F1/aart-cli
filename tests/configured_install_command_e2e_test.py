@@ -234,7 +234,7 @@ class ConfiguredInstallCommandTest(unittest.TestCase):
                 SKILL_BODY,
             )
             self.assertFalse(
-                (env.project / ".agent-artifacts/manifest.json").exists(),
+                (env.project / ".aart-cli/manifest.json").exists(),
                 "the registry route fell back to the legacy install-state writer",
             )
             state = pathlib.Path(env.paths.data_root) / "state"

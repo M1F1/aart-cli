@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from .publication import REGISTRY_PUBLICATION_GATES
 
-REGISTRY_GITIGNORE = b""".agent-artifacts/
-.agent-artifacts-bak/
+REGISTRY_GITIGNORE = b""".aart-cli/
+.aart-cli-bak/
 .claude/
 .coverage
 .mcp.json
@@ -34,15 +34,15 @@ htmlcov/
 # none of them needs a build backend.  That is what lets these run on a private runner.
 _PROVIDE_AART = b"""      - name: Provide AART
         env:
-          PACKAGE: ${{ vars.AART_PACKAGE }}
-          WHEEL_URL: ${{ vars.AART_WHEEL_URL }}
-          TOOL_PATH: ${{ vars.AART_TOOL_PATH }}
-          TOOL_URL: ${{ vars.AART_TOOL_URL || (vars.AART_REPOSITORY && format('{0}/{1}.git', github.server_url, vars.AART_REPOSITORY)) || '' }}
-          TOOL_REF: ${{ vars.AART_REF }}
-          INDEX_URL: ${{ vars.AART_PIP_INDEX_URL || 'https://pypi.org/simple' }}
-          INDEX_CREDENTIALS: ${{ secrets[vars.AART_PIP_INDEX_CREDENTIALS_SECRET] }}
-          GIT_CREDENTIALS: ${{ secrets[vars.AART_GIT_CREDENTIALS_SECRET] }}
-          PY: ${{ vars.AART_PYTHON || 'python3' }}
+          PACKAGE: ${{ vars.AART_CLI_PACKAGE }}
+          WHEEL_URL: ${{ vars.AART_CLI_WHEEL_URL }}
+          TOOL_PATH: ${{ vars.AART_CLI_TOOL_PATH }}
+          TOOL_URL: ${{ vars.AART_CLI_TOOL_URL || (vars.AART_CLI_REPOSITORY && format('{0}/{1}.git', github.server_url, vars.AART_CLI_REPOSITORY)) || '' }}
+          TOOL_REF: ${{ vars.AART_CLI_REF }}
+          INDEX_URL: ${{ vars.AART_CLI_PIP_INDEX_URL || 'https://pypi.org/simple' }}
+          INDEX_CREDENTIALS: ${{ secrets[vars.AART_CLI_PIP_INDEX_CREDENTIALS_SECRET] }}
+          GIT_CREDENTIALS: ${{ secrets[vars.AART_CLI_GIT_CREDENTIALS_SECRET] }}
+          PY: ${{ vars.AART_CLI_PYTHON || 'python3' }}
         run: |
           # `sh`, not `bash`.  This step names no shell, and Actions serves `bash -e {0}` only if
           # the image has bash -- otherwise it falls back to `sh -e {0}`.  An Enterprise image
@@ -77,11 +77,11 @@ _PROVIDE_AART = b"""      - name: Provide AART
           # from*, which is a fact about the instance.  Neither repeats the other.
           PIN=""
           if [ -f .aart-cli-version ]; then PIN=$(tr -d ' \\t\\r\\n' < .aart-cli-version); fi
-          # An explicit AART_REF is the escape hatch for someone testing a fork branch.  It wins,
+          # An explicit AART_CLI_REF is the escape hatch for someone testing a fork branch.  It wins,
           # but it switches the version check off, so it says so rather than quietly disagreeing
           # with a file that is still in the repository.
           override=""
-          if [ -n "$PIN" ] && [ -n "$TOOL_REF" ]; then override=" (pin $PIN overridden by AART_REF)"; fi
+          if [ -n "$PIN" ] && [ -n "$TOOL_REF" ]; then override=" (pin $PIN overridden by AART_CLI_REF)"; fi
           ref="$TOOL_REF"
           if [ -z "$ref" ]; then ref="${PIN:+v$PIN}"; fi
           if [ -z "$ref" ]; then ref="main"; fi
@@ -124,10 +124,10 @@ _PROVIDE_AART = b"""      - name: Provide AART
             # the answer to "nothing is set" is to say what to set (D-309).
             if [ -z "$TOOL_URL" ]; then
               echo "AART: no source configured. Set one repository variable, first one set wins:" >&2
-              echo "  AART_PACKAGE     a requirement on your package index" >&2
-              echo "  AART_WHEEL_URL   a released wheel" >&2
-              echo "  AART_TOOL_PATH   a directory already on the runner" >&2
-              echo "  AART_TOOL_URL    a git URL, or AART_REPOSITORY as owner/name on this instance" >&2
+              echo "  AART_CLI_PACKAGE     a requirement on your package index" >&2
+              echo "  AART_CLI_WHEEL_URL   a released wheel" >&2
+              echo "  AART_CLI_TOOL_PATH   a directory already on the runner" >&2
+              echo "  AART_CLI_TOOL_URL    a git URL, or AART_CLI_REPOSITORY as owner/name on this instance" >&2
               echo "Set it on the organisation and it configures every registry at once." >&2
               exit 1
             fi
@@ -195,7 +195,7 @@ _PROVIDE_AART = b"""      - name: Provide AART
           echo "AART: aart-cli $got  via $how${PIN:+  pinned by .aart-cli-version}$override"
 """
 
-_RUNS_ON = b"""    runs-on: ${{ fromJSON(vars.AART_RUNNER || '["ubuntu-latest"]') }}
+_RUNS_ON = b"""    runs-on: ${{ fromJSON(vars.AART_CLI_RUNNER || '["ubuntu-latest"]') }}
 """
 
 # A private image needs a `credentials` block, and that block cannot be made conditional.  Measured
@@ -205,16 +205,16 @@ _RUNS_ON = b"""    runs-on: ${{ fromJSON(vars.AART_RUNNER || '["ubuntu-latest"]'
 # itself, only inside `credentials`.  So the choice is made in the one place a choice survives --
 # `if:` at job level -- and each job is emitted twice.  The plain variant is byte-for-byte the job
 # this template always produced, so a registry that names no secrets sees no change whatsoever.
-_PLAIN_CONTAINER = b"""    container: ${{ vars.AART_CI_IMAGE }}
+_PLAIN_CONTAINER = b"""    container: ${{ vars.AART_CLI_CI_IMAGE }}
 """
 _PRIVATE_CONTAINER = b"""    container:
-      image: ${{ vars.AART_CI_IMAGE }}
+      image: ${{ vars.AART_CLI_CI_IMAGE }}
       credentials:
-        username: ${{ secrets[vars.AART_IMAGE_USERNAME_SECRET] }}
-        password: ${{ secrets[vars.AART_IMAGE_PASSWORD_SECRET] }}
+        username: ${{ secrets[vars.AART_CLI_IMAGE_USERNAME_SECRET] }}
+        password: ${{ secrets[vars.AART_CLI_IMAGE_PASSWORD_SECRET] }}
 """
-_PLAIN_WHEN = b"vars.AART_IMAGE_USERNAME_SECRET == ''"
-_PRIVATE_WHEN = b"vars.AART_IMAGE_USERNAME_SECRET != ''"
+_PLAIN_WHEN = b"vars.AART_CLI_IMAGE_USERNAME_SECRET == ''"
+_PRIVATE_WHEN = b"vars.AART_CLI_IMAGE_USERNAME_SECRET != ''"
 
 
 def _job(job_id: bytes, body: bytes, header: bytes = b"", when: bytes = b"") -> bytes:
@@ -295,7 +295,7 @@ def _aggregate(job_id: bytes) -> bytes:
           # means the gates never ran at all -- a broken condition, an image variable set to
           # something unexpected -- and that must fail rather than look like a pass.
           if [ "$PLAIN" = "skipped" ] && [ "$PRIVATE" = "skipped" ]; then
-            echo "::error::neither gate job ran; check AART_IMAGE_USERNAME_SECRET" >&2
+            echo "::error::neither gate job ran; check AART_CLI_IMAGE_USERNAME_SECRET" >&2
             exit 1
           fi
           # An allowlist rather than a check for "failure": a cancelled run is neither success nor
@@ -374,9 +374,9 @@ Its registry id is `__REGISTRY_ID__`. Consumers name it when they add this regis
 
 | Path | What it is |
 |---|---|
-| `aart-registry.json` | The registry marker: id, display name, and the AART version window it declares |
+| `aart-cli-registry.json` | The registry marker: id, display name, and the AART version window it declares |
 | `.aart-cli-version` | The AART version CI runs. One line. Bump it in a pull request |
-| `aart-source.json` | Where artifacts and collections live in this tree |
+| `aart-cli-source.json` | Where artifacts and collections live in this tree |
 | `artifacts/` | One directory per packaged artifact |
 | `collections/` | Named groups of artifacts installed together |
 | `registry/` | Approved version records and the catalogs derived from them. Generated |
@@ -444,18 +444,18 @@ wins**, and they are never combined:
 
 | Order | Variable | Example | How it fetches |
 |---|---|---|---|
-| 1 | `AART_PACKAGE` | `aart-cli=={version}` | `pip` from `AART_PIP_INDEX_URL` |
-| 2 | `AART_WHEEL_URL` | `https://host/.../v{version}/aart_cli-{version}-py3-none-any.whl` | fetch, then unzip |
-| 3 | `AART_TOOL_PATH` | `/opt/aart` | Already on the runner |
-| 4 | `AART_TOOL_URL` | `https://ghe.corp/platform/aart-cli.git` | `git clone` at `v` + the pin. Private copy: name a secret in `AART_GIT_CREDENTIALS_SECRET` |
+| 1 | `AART_CLI_PACKAGE` | `aart-cli=={version}` | `pip` from `AART_CLI_PIP_INDEX_URL` |
+| 2 | `AART_CLI_WHEEL_URL` | `https://host/.../v{version}/aart_cli-{version}-py3-none-any.whl` | fetch, then unzip |
+| 3 | `AART_CLI_TOOL_PATH` | `/opt/aart` | Already on the runner |
+| 4 | `AART_CLI_TOOL_URL` | `https://ghe.corp/platform/aart-cli.git` | `git clone` at `v` + the pin. Private copy: name a secret in `AART_CLI_GIT_CREDENTIALS_SECRET` |
 
 `{version}` is replaced with whatever `.aart-cli-version` says, so the version appears **once**, in
-Git, and never in a settings page. Set `AART_REF` to override the pin for one registry - the run
+Git, and never in a settings page. Set `AART_CLI_REF` to override the pin for one registry - the run
 then says so out loud and the version check is switched off, because you asked for a different
 build on purpose.
 
 The order runs from the most governed supply chain to the least. That matters when you migrate:
-stand up an internal index later, set `AART_PACKAGE`, and it takes over. You do not have to unset
+stand up an internal index later, set `AART_CLI_PACKAGE`, and it takes over. You do not have to unset
 anything first.
 
 **Set none of them** and the first run stops and says so, listing these four. Where AART comes
@@ -476,13 +476,13 @@ AART: aart-cli 0.1.0  via index https://nexus.corp/pypi/simple (aart-cli==0.1.0)
 
 | Variable | Default | What it does |
 |---|---|---|
-| `AART_PIP_INDEX_URL` | `https://pypi.org/simple` | Index used by `AART_PACKAGE` |
-| `AART_REPOSITORY` | unset | `owner/name` of your AART repository, combined with this instance's own URL. Shorter than `AART_TOOL_URL` when the copy is on this instance |
-| `AART_GIT_CREDENTIALS_SECRET` | unset | **Name** of a secret holding a token, or `user:token`, for the `git clone` arm. A bare token is used as `x-access-token`. Without it the clone is anonymous, and a private copy answers `could not read Username` |
-| `AART_REF` | `v` + the pin | Escape hatch: a branch or tag instead of `.aart-cli-version`. Switches the version check off |
-| `AART_RUNNER` | `["ubuntu-latest"]` | JSON array of runner labels. Must be JSON, not a bare word |
-| `AART_CI_IMAGE` | unset | Container image for the jobs. Unset means the runner's own environment |
-| `AART_PYTHON` | `python3` | The interpreter's name inside that image |
+| `AART_CLI_PIP_INDEX_URL` | `https://pypi.org/simple` | Index used by `AART_CLI_PACKAGE` |
+| `AART_CLI_REPOSITORY` | unset | `owner/name` of your AART repository, combined with this instance's own URL. Shorter than `AART_CLI_TOOL_URL` when the copy is on this instance |
+| `AART_CLI_GIT_CREDENTIALS_SECRET` | unset | **Name** of a secret holding a token, or `user:token`, for the `git clone` arm. A bare token is used as `x-access-token`. Without it the clone is anonymous, and a private copy answers `could not read Username` |
+| `AART_CLI_REF` | `v` + the pin | Escape hatch: a branch or tag instead of `.aart-cli-version`. Switches the version check off |
+| `AART_CLI_RUNNER` | `["ubuntu-latest"]` | JSON array of runner labels. Must be JSON, not a bare word |
+| `AART_CLI_CI_IMAGE` | unset | Container image for the jobs. Unset means the runner's own environment |
+| `AART_CLI_PYTHON` | `python3` | The interpreter's name inside that image |
 
 ## Protecting `main`
 
@@ -497,7 +497,7 @@ dependencies did, and fails if any arm failed or if no arm ran at all.
 
 ## The version window
 
-`aart-registry.json` declares the *range* of AART versions this registry supports. The quality
+`aart-cli-registry.json` declares the *range* of AART versions this registry supports. The quality
 gate runs at **both** ends of it, which is what `compatibility: [minimum, latest]` means in the
 workflow.
 

@@ -39,7 +39,7 @@ def _payload_file(location: Path) -> Path:
 
 
 def _record(env) -> dict:
-    state = json.loads((env.project / ".agent-artifacts" / "manifest.json").read_text())
+    state = json.loads((env.project / ".aart-cli" / "manifest.json").read_text())
     installations = state["installations"]
     assert len(installations) == 1, state
     return installations[0]

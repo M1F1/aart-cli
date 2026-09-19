@@ -151,7 +151,7 @@ class RegistryAdoptionCliTest(_Lab):
         self._adopt()
         old = self.registry / "artifacts" / "skill" / "brainstorming" / "2.1.0"
         old_bytes = (old / "payload" / "SKILL.md").read_bytes()
-        manifest = self.author.path / "skills" / "brainstorming" / "aart.yaml"
+        manifest = self.author.path / "skills" / "brainstorming" / "aart-cli.yaml"
         manifest.write_text(OTHER_MANIFEST.replace("2.1.0", "2.2.0"), encoding="utf-8")
         (manifest.parent / "SKILL.md").write_text("# brainstorming 2.2\n", encoding="utf-8")
         _git(self.author.path, "add", "-A")
@@ -255,7 +255,7 @@ class RegistryAdoptionCliTest(_Lab):
 
     def test_a_stale_expect_refuses_the_upstream_finalization(self) -> None:
         self._adopt()
-        manifest = self.author.path / "skills" / "brainstorming" / "aart.yaml"
+        manifest = self.author.path / "skills" / "brainstorming" / "aart-cli.yaml"
         manifest.write_text(OTHER_MANIFEST.replace("2.1.0", "2.2.0"), encoding="utf-8")
         (manifest.parent / "SKILL.md").write_text("# brainstorming 2.2\n", encoding="utf-8")
         _git(self.author.path, "add", "-A")

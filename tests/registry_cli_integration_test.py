@@ -61,7 +61,7 @@ class RegistryCliIntegrationTest(unittest.TestCase):
             self.assertEqual(finalized["phase"], "finalized")
             self.assertEqual(finalized["review"]["phase"], "review")
             self.assertEqual(finalized["outcome"]["status"], "succeeded")
-            self.assertTrue((root / ".github/workflows/aart-registry.yml").is_file())
+            self.assertTrue((root / ".github/workflows/aart-cli-registry.yml").is_file())
 
             before_reads = _tree_bytes(root)
             for arguments in (
@@ -85,7 +85,7 @@ class RegistryCliIntegrationTest(unittest.TestCase):
             self.assertTrue((root / "registry/index.json").is_file())
             self.assertTrue((root / "registry/snapshot.json").is_file())
 
-            marker = root / "aart-registry.json"
+            marker = root / "aart-cli-registry.json"
             marker.write_text("{ " + marker.read_text(encoding="utf-8")[1:], encoding="utf-8")
             noncanonical = marker.read_bytes()
             code, output = _run("registry", "format", "--source", str(root), "--check", "--json")

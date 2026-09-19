@@ -156,7 +156,7 @@ def _validate_protocol_entry_kinds(
 ) -> Result[None]:
     roots = (*manifest.artifact_roots, *manifest.collection_roots)
     for path, entry in entries.items():
-        relevant = path == "aart-source.json" or any(
+        relevant = path == "aart-cli-source.json" or any(
             _under(path, root) is not None for root in roots
         )
         if relevant and entry.kind in {SnapshotEntryKind.SYMLINK, SnapshotEntryKind.SPECIAL}:
@@ -617,7 +617,7 @@ def _compatibility_diagnostics(
             _diagnostic(
                 SOURCE_INCOMPATIBLE,
                 f"AART {executable_version} is outside source compatibility bounds",
-                "aart-source.json",
+                "aart-cli-source.json",
             )
         )
     decision = negotiate_capabilities(
@@ -631,7 +631,7 @@ def _compatibility_diagnostics(
             _diagnostic(
                 SOURCE_INCOMPATIBLE,
                 f"source requires unavailable capabilities: {missing}",
-                "aart-source.json",
+                "aart-cli-source.json",
             )
         )
     return tuple(diagnostics)
@@ -699,11 +699,11 @@ def load_native_source(
     if isinstance(validated, Err):
         return validated
     entries = validated.value
-    marker = entries.get("aart-source.json")
+    marker = entries.get("aart-cli-source.json")
     if marker is None or marker.kind is not SnapshotEntryKind.FILE:
         return _error(
             SOURCE_MARKER_MISSING,
-            "native source requires aart-source.json at the acquired tree root",
+            "native source requires aart-cli-source.json at the acquired tree root",
         )
     parsed_manifest = parse_source_manifest(marker.content)
     if isinstance(parsed_manifest, Err):

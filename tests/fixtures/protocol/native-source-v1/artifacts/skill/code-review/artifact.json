@@ -6,7 +6,7 @@
   "summary": "Review code changes with a repeatable quality checklist.",
   "payload": {
     "root": "payload",
-    "format": "aart-skill-v1"
+    "format": "aart-cli-skill-v1"
   },
   "compatibility": {
     "profiles": ["claude", "tabnine"],

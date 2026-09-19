@@ -38,8 +38,8 @@ class MaintainerProvenanceProjectionTest(unittest.TestCase):
         self.assertEqual(view.source_url, "https://git.example/authors.git")
         self.assertEqual(view.git_revision, "a" * 40)
         self.assertIsNone(view.local_snapshot_digest)
-        self.assertEqual(view.manifest_path, "github/aart.json")
-        self.assertEqual(view.importer_id, "aart-native-author")
+        self.assertEqual(view.manifest_path, "github/aart-cli.json")
+        self.assertEqual(view.importer_id, "aart-cli-native-author")
         self.assertEqual(view.importer_version, "1.0.0")
         self.assertEqual(
             view.payload_paths,
@@ -144,7 +144,7 @@ class MaintainerProvenanceShellTest(unittest.TestCase):
 
         self.assertEqual(opened, [])
         self.assertIn("Pinned Git revision", drawn)
-        self.assertIn("aart-native-author 1.0.0", drawn)
+        self.assertIn("aart-cli-native-author 1.0.0", drawn)
         self.assertIn("payload/server.py", drawn)
 
 

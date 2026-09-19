@@ -34,14 +34,14 @@ class MaintainerLifecycleIntegrationTest(unittest.TestCase):
             package = author / "github"
             package.mkdir(parents=True)
             manifest = {
-                "schema": "aart.dev/mcp/v1",
+                "schema": "aart-cli.dev/mcp/v1",
                 "artifact": {"name": "github-mcp", "kind": "mcp", "version": "1.0.0"},
                 "payload": {"include": ["server.py"]},
                 "transport": {"type": "stdio"},
                 "runtime": {"type": "python", "version": ">=3.11"},
                 "launch": {"type": "python", "entrypoint": "server.py"},
             }
-            (package / "aart.json").write_text(json.dumps(manifest), encoding="utf-8")
+            (package / "aart-cli.json").write_text(json.dumps(manifest), encoding="utf-8")
             (package / "server.py").write_text("print('durable')\n", encoding="utf-8")
             alias = SourceAlias("authors")
             configured = ConfiguredSource(alias, SourceKind.SOURCE_LOCAL, str(author), None, True)

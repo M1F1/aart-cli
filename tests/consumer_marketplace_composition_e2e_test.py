@@ -67,7 +67,7 @@ def _at_version(version: str):
 
     manifest = {**SKILL_MANIFEST, "artifact": {**SKILL_MANIFEST["artifact"], "version": version}}
     return tuple(
-        (path, json.dumps(manifest)) if path.endswith("aart.json") else (path, content)
+        (path, json.dumps(manifest)) if path.endswith("aart-cli.json") else (path, content)
         for path, content in AUTHORED_SKILL
     )
 

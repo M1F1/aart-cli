@@ -46,7 +46,7 @@ from tests.artifact_placement_resolution_test import SKILL_MANIFEST, _stored_art
 #: `declared_harness_narrowing_test.py` (`QA-078`, `D-231`). Constraining it here would make every
 #: assertion below depend on two rules at once and say which of them failed for neither.
 MEMORY_MANIFEST = {
-    "schema": "aart.dev/memory/v1",
+    "schema": "aart-cli.dev/memory/v1",
     "artifact": {"name": "house-rules", "kind": "memory", "version": "1.0.0"},
     "payload": {"include": ["house.md"]},
 }
@@ -75,7 +75,9 @@ class _PlacementFixture(unittest.TestCase):
         name = str(self.manifest["artifact"]["name"])  # type: ignore[index]
         repository = self.scope / "author"
         (repository / name).mkdir(parents=True)
-        (repository / name / "aart.json").write_text(json.dumps(self.manifest), encoding="utf-8")
+        (repository / name / "aart-cli.json").write_text(
+            json.dumps(self.manifest), encoding="utf-8"
+        )
         for filename, content in self.files:
             (repository / name / filename).write_text(content, encoding="utf-8")
 

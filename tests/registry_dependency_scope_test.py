@@ -56,9 +56,9 @@ def _with_collection(name: str, *members: str) -> SourceSnapshot:
     """An approved Registry that declares a collection root and holds one collection in it."""
 
     registry = approved_registry_snapshot()
-    source = json.loads(snapshot_file(registry, "aart-source.json"))
+    source = json.loads(snapshot_file(registry, "aart-cli-source.json"))
     source["collection_roots"] = ["collections"]
-    declared = replace_snapshot_file(registry, "aart-source.json", json.dumps(source).encode())
+    declared = replace_snapshot_file(registry, "aart-cli-source.json", json.dumps(source).encode())
     return append_snapshot_file(declared, f"collections/{name}.json", _collection(name, *members))
 
 
@@ -66,7 +66,7 @@ def _compiled(snapshot: SourceSnapshot):
     """Compile the registry's own content exactly as every maintainer command does."""
 
     files: dict[str, SnapshotEntry] = {str(entry.path): entry for entry in snapshot.entries}
-    registry = parse_registry_manifest(files["aart-registry.json"].content)
+    registry = parse_registry_manifest(files["aart-cli-registry.json"].content)
     assert isinstance(registry, Ok), registry
     version = parse_semver("2.1.0")
     assert isinstance(version, Ok), version

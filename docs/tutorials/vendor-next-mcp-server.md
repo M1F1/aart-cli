@@ -29,7 +29,7 @@ An agent following this document must obey all of these. They are not style pref
 5. **Do not edit files under `payload/` after vendoring.** Those bytes are pinned to an upstream
    commit and their digest is verified. Editing one turns every later check into a copy-integrity
    failure.
-6. **Never delete `.agent-artifacts/` in a consumer project.** It is the only record of what was
+6. **Never delete `.aart-cli/` in a consumer project.** It is the only record of what was
    written and what was overwritten.
 
 ## 1. Inputs to collect before running anything
@@ -54,11 +54,11 @@ Fill these in first. Every later command is a substitution of these values.
 
 **Every command below runs from the root of the registry checkout.** `cd` there once, and the
 registry is `.` from then on: maintainer commands default `--source` to the current directory, so the
-flag never appears in this document. Confirm where you are before starting — `aart-registry.json` must
+flag never appears in this document. Confirm where you are before starting — `aart-cli-registry.json` must
 be in the current directory, and `.git` must be there too, not in a parent.
 
 ```sh
-ls aart-registry.json aart-source.json .git >/dev/null && echo "in the registry root"
+ls aart-cli-registry.json aart-cli-source.json .git >/dev/null && echo "in the registry root"
 ```
 
 **The registry is never `URL`.** `URL` is the foreign repository the bytes are copied *from*: remote,
@@ -420,12 +420,12 @@ cd "$CONSUMER"
 ```
 
 `CONSUMER` must not be the registry checkout, and it must not be a directory you are unwilling to have
-`.tabnine/` and `.agent-artifacts/` written into. A throwaway project is the right kind of place; the
+`.tabnine/` and `.aart-cli/` written into. A throwaway project is the right kind of place; the
 registry itself is the wrong one, because a test install there leaves harness files inside the
 repository you publish. Guard it:
 
 ```sh
-[ -f aart-registry.json ] && echo "REFUSE: this is the registry, not a consumer project"
+[ -f aart-cli-registry.json ] && echo "REFUSE: this is the registry, not a consumer project"
 ```
 
 If `ALIAS` is not configured here yet, add it once. Which kind you choose depends on whether the

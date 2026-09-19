@@ -52,12 +52,12 @@ def read_json(path: Path) -> dict:
 def artifact_roots(registry: Path) -> tuple[list[str], str]:
     """Where this registry keeps artifacts and collections, as it declares them itself."""
 
-    source = read_json(registry / "aart-source.json")
+    source = read_json(registry / "aart-cli-source.json")
     roots = source.get("artifact_roots") or ["artifacts"]
     collections = source.get("collection_roots") or []
     if not collections:
         die(
-            "this registry declares no `collection_roots` in aart-source.json; add "
+            "this registry declares no `collection_roots` in aart-cli-source.json; add "
             '`"collection_roots": ["collections"]` to it — a collection outside a declared root '
             "is a file the compiler never reads"
         )
@@ -236,8 +236,8 @@ def main(argv: list[str] | None = None) -> int:
     if SLUG_RE.fullmatch(args.name) is None:
         die("a collection name must be lowercase words joined by single hyphens")
     registry = Path(args.source).expanduser().resolve()
-    if not (registry / "aart-source.json").is_file():
-        die(f"{registry} is not a registry checkout: no aart-source.json")
+    if not (registry / "aart-cli-source.json").is_file():
+        die(f"{registry} is not a registry checkout: no aart-cli-source.json")
 
     roots, collection_root = artifact_roots(registry)
     artifacts = installed_artifacts(registry, roots)
@@ -296,7 +296,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  aart-cli registry build --source {args.source} --yes")
     print("  git add -A && git commit -m 'rebuild the index'")
     print("\nthen a colleague installs the whole thing with one command:")
-    source_id = read_json(registry / "aart-source.json").get("source_id", "<source>")
+    source_id = read_json(registry / "aart-cli-source.json").get("source_id", "<source>")
     print(
         f"  aart-cli marketplace install {source_id}/collection/{args.name} --profile tabnine --yes"
     )

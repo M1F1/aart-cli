@@ -65,7 +65,7 @@ from tests.marketplace_fixtures import configured_source, effective_configuratio
 TODAY = date(2026, 8, 31)
 
 SKILL_MANIFEST = {
-    "schema": "aart.dev/skill/v1",
+    "schema": "aart-cli.dev/skill/v1",
     "artifact": {"name": "code-review", "kind": "skill", "version": "1.2.0"},
     "payload": {"include": ["SKILL.md", "reference/style.md"]},
     "compatibility": {"harnesses": ["claude"]},
@@ -75,7 +75,7 @@ SKILL_BODY = "# Code review\n\nRead reference/style.md before commenting.\n"
 STYLE_BODY = "Prefer naming the failure over describing the code.\n"
 
 AUTHORED_SKILL: tuple[tuple[str, str], ...] = (
-    ("code-review/aart.json", json.dumps(SKILL_MANIFEST)),
+    ("code-review/aart-cli.json", json.dumps(SKILL_MANIFEST)),
     ("code-review/SKILL.md", SKILL_BODY),
     ("code-review/reference/style.md", STYLE_BODY),
 )

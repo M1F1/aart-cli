@@ -87,7 +87,7 @@ def _fixture(
         ArtifactIdentity(kind, "review"),  # type: ignore[arg-type]
         SemVer(1, 0, 0),
         "Review agent changes before merging.",
-        PayloadSpec(_path("payload"), f"aart-{kind}-v1"),
+        PayloadSpec(_path("payload"), f"aart-cli-{kind}-v1"),
         CompatibilitySpec(("claude",), ("darwin",)),
         InstallSpec(("project",), ("copy",), effects),  # type: ignore[arg-type]
         setup,

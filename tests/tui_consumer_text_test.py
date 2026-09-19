@@ -51,7 +51,7 @@ class TuiConsumerTextTest(unittest.TestCase):
     def test_canonical_setup_queue_has_separate_authorize_review_apply_feedback(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             fixture = SetupFixture(Path(raw))
-            (fixture.project / ".agent-artifacts/manifest.json").unlink()
+            (fixture.project / ".aart-cli/manifest.json").unlink()
             service = ConsumerApplicationService(
                 ConsumerContext(
                     fixture.catalog,
@@ -104,7 +104,7 @@ class TuiConsumerTextTest(unittest.TestCase):
     def test_canonical_decline_repeats_v2_manual_route_after_the_payload_is_installed(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             fixture = SetupFixture(Path(raw), setup_version=2)
-            (fixture.project / ".agent-artifacts/manifest.json").unlink()
+            (fixture.project / ".aart-cli/manifest.json").unlink()
             service = ConsumerApplicationService(
                 ConsumerContext(
                     fixture.catalog,
@@ -149,7 +149,7 @@ class TuiConsumerTextTest(unittest.TestCase):
         policy = OrganizationPolicy(1, allowed_setup_capabilities=(Capability("keychain"),))
         with tempfile.TemporaryDirectory() as raw:
             fixture = SetupFixture(Path(raw), policy=policy, setup_version=2)
-            (fixture.project / ".agent-artifacts/manifest.json").unlink()
+            (fixture.project / ".aart-cli/manifest.json").unlink()
             service = ConsumerApplicationService(
                 ConsumerContext(
                     fixture.catalog,
@@ -192,7 +192,7 @@ class TuiConsumerTextTest(unittest.TestCase):
     def test_canonical_setup_state_reuses_versioned_consumer_identity(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             fixture = SetupFixture(Path(raw))
-            (fixture.project / ".agent-artifacts/manifest.json").unlink()
+            (fixture.project / ".aart-cli/manifest.json").unlink()
             service = ConsumerApplicationService(
                 ConsumerContext(
                     fixture.catalog,
@@ -244,7 +244,7 @@ class QuietSetupQueueTest(unittest.TestCase):
         writes: list[str] = []
         with tempfile.TemporaryDirectory() as raw:
             fixture = SetupFixture(Path(raw))
-            (fixture.project / ".agent-artifacts/manifest.json").unlink()
+            (fixture.project / ".aart-cli/manifest.json").unlink()
             service = ConsumerApplicationService(
                 ConsumerContext(
                     fixture.catalog,

@@ -259,7 +259,7 @@ def _project_graph_source(
     if not is_promoted_registry(snapshot):
         return _error(
             f"registry {configured.alias} is not a canonical approved Registry: its root must "
-            "declare aart-registry.json and aart-source.json"
+            "declare aart-cli-registry.json and aart-cli-source.json"
         )
     approved = project_configured_registry(configured, current)
     if isinstance(approved, Err):

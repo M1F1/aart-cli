@@ -89,7 +89,7 @@ ORG = InputId("github-org")
 KIT = OwnershipReason(OwnershipKind.COLLECTION, "public/collection/data-scientist@1.0.0")
 
 MANIFEST = {
-    "schema": "aart.dev/mcp/v1",
+    "schema": "aart-cli.dev/mcp/v1",
     "artifact": {"name": "github", "kind": "mcp", "version": "1.5.0"},
     "payload": {"include": ["server.py", "requirements.txt"]},
     "transport": {"type": "stdio"},
@@ -145,7 +145,7 @@ class CodexMcpInstallationTest(unittest.TestCase):
     def _compile(self):
         repository = self.scope / "author"
         (repository / "github").mkdir(parents=True)
-        (repository / "github/aart.json").write_text(json.dumps(MANIFEST), encoding="utf-8")
+        (repository / "github/aart-cli.json").write_text(json.dumps(MANIFEST), encoding="utf-8")
         (repository / "github/server.py").write_text(SERVER_SOURCE, encoding="utf-8")
         (repository / "github/requirements.txt").write_text(
             "# no third-party packages\n", encoding="utf-8"

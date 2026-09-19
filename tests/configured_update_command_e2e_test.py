@@ -33,13 +33,13 @@ UPDATED_SKILL_BODY = "# Code review\n\nRead reference/style.md, then comment on 
 
 def _authored(version: str, body: str) -> tuple[tuple[str, str], ...]:
     manifest = {
-        "schema": "aart.dev/skill/v1",
+        "schema": "aart-cli.dev/skill/v1",
         "artifact": {"name": "code-review", "kind": "skill", "version": version},
         "payload": {"include": ["SKILL.md", "reference/style.md"]},
         "compatibility": {"harnesses": ["claude"]},
     }
     return (
-        ("code-review/aart.json", json.dumps(manifest)),
+        ("code-review/aart-cli.json", json.dumps(manifest)),
         ("code-review/SKILL.md", body),
         ("code-review/reference/style.md", STYLE_BODY),
     )

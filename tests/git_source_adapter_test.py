@@ -28,7 +28,7 @@ from tests.credential_fixtures import credential_url
 
 def _archive(path: str, *, unsafe: bool = False) -> None:
     with tarfile.open(path, "w") as archive:
-        name = "../escape" if unsafe else "aart-source.json"
+        name = "../escape" if unsafe else "aart-cli-source.json"
         content = b'{"schema_version":1}'
         info = tarfile.TarInfo(name)
         info.size = len(content)
@@ -62,7 +62,7 @@ class _GitRunner:
             return Ok(GitProcessReceipt(("a" * 40 + "\n").encode(), b""))
         if "ls-tree" in argv:
             size = len(b'{"schema_version":1}')
-            record = f"100644 blob {'b' * 40} {size}\taart-source.json\0".encode()
+            record = f"100644 blob {'b' * 40} {size}\taart-cli-source.json\0".encode()
             return Ok(GitProcessReceipt(record, b""))
         if "archive" in argv:
             output = next(
@@ -194,7 +194,7 @@ class GitSourceAdapterTest(unittest.TestCase):
 
             _archive(archive_path)
             self.assertIsInstance(
-                _snapshot_from_archive(archive_path, {"aart-source.json": 999}, request), Err
+                _snapshot_from_archive(archive_path, {"aart-cli-source.json": 999}, request), Err
             )
 
             with tarfile.open(archive_path, "w") as archive:

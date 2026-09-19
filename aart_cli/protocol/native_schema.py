@@ -197,7 +197,7 @@ def _check_schema_version(value: JsonObject, code: DiagnosticCode, *, path: str)
 def parse_source_manifest(
     data: bytes | str,
     *,
-    path: str = "aart-source.json",
+    path: str = "aart-cli-source.json",
 ) -> Result[SourceManifest]:
     document = _document(data, SOURCE_INVALID, path=path)
     if isinstance(document, Err):

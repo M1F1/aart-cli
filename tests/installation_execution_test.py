@@ -42,7 +42,7 @@ from aart_cli.io.installation_execution import (
 from tests.artifact_installation_test import ORG, TOKEN, _description, _plan
 from tests.installation_proposal_test import _resolved
 
-SECOND_ROOT = "/home/agent/.agent-artifacts/runtimes/public/mcp/gitlab"
+SECOND_ROOT = "/home/agent/.aart-cli/runtimes/public/mcp/gitlab"
 
 
 def _dispatch(effect, interpreters):

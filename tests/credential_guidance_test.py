@@ -121,7 +121,7 @@ def _authored(name: str, help_: dict | None):
     """One author tree: an MCP server declaring a single secret with `help_` as its help."""
 
     return (
-        (f"{name}/aart.json", _manifest(name, help_)),
+        (f"{name}/aart-cli.json", _manifest(name, help_)),
         (f"{name}/server.py", SERVER_SOURCE),
         (f"{name}/requirements.txt", "# no third-party packages\n"),
     )

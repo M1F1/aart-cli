@@ -50,10 +50,10 @@ class RegistryInitScaffoldTest(unittest.TestCase):
         # written by the promotion the maintainer runs. The unversioned package this test used to
         # assemble by hand is the retired authoring workspace, which maintenance now refuses by name.
         registry = approved_registry_snapshot()
-        source = json.loads(snapshot_file(registry, "aart-source.json"))
+        source = json.loads(snapshot_file(registry, "aart-cli-source.json"))
         source["collection_roots"] = ["collections"]
         with_artifact = replace_snapshot_file(
-            registry, "aart-source.json", json.dumps(source).encode()
+            registry, "aart-cli-source.json", json.dumps(source).encode()
         )
 
         authored = plan_registry_collection(
@@ -122,13 +122,13 @@ class RegistryInitScaffoldTest(unittest.TestCase):
         self.assertNotIn(".github/ISSUE_TEMPLATE/usage-report.yml", files)
         self.assertNotIn(".github/workflows/aart-usage-validate.yml", files)
         self.assertNotIn(".github/workflows/aart-usage-dashboard.yml", files)
-        self.assertIn("aart-registry.json", files)
-        self.assertIn(".github/workflows/aart-registry.yml", files)
+        self.assertIn("aart-cli-registry.json", files)
+        self.assertIn(".github/workflows/aart-cli-registry.yml", files)
         manifest = parse_registry_manifest(
             next(
                 item.content
                 for item in projected.value.entries
-                if str(item.path) == "aart-registry.json"
+                if str(item.path) == "aart-cli-registry.json"
             )
         )
         assert isinstance(manifest, Ok), manifest
@@ -149,23 +149,23 @@ class RegistryInitScaffoldTest(unittest.TestCase):
         projected = project_registry_workspace_plan(empty, first.value)
         assert isinstance(projected, Ok), projected
         files = {str(item.path): item.content for item in projected.value.entries}
-        self.assertIn("aart-registry.json", files)
-        self.assertIn("aart-source.json", files)
-        self.assertIn(".github/workflows/aart-registry.yml", files)
+        self.assertIn("aart-cli-registry.json", files)
+        self.assertIn("aart-cli-source.json", files)
+        self.assertIn(".github/workflows/aart-cli-registry.yml", files)
         self.assertIn(".gitignore", files)
         generated_readme = files["README.md"]
         self.assertNotIn(b"registry scaffold", generated_readme)
         self.assertIn(b"registry scan --help", generated_readme)
         self.assertIn(b"registry promote --help", generated_readme)
         ignored = files[".gitignore"].decode("utf-8").splitlines()
-        self.assertIn(".agent-artifacts/", ignored)
-        self.assertIn(".agent-artifacts-bak/", ignored)
+        self.assertIn(".aart-cli/", ignored)
+        self.assertIn(".aart-cli-bak/", ignored)
         self.assertIn(".claude/", ignored)
         self.assertIn(".tabnine/", ignored)
         self.assertIn(".opencode/", ignored)
         self.assertIn(".vibe/", ignored)
         self.assertIn(".mcp.json", ignored)
-        workflow = files[".github/workflows/aart-registry.yml"]
+        workflow = files[".github/workflows/aart-cli-registry.yml"]
         self.assertIn(b"registry test", workflow)
         self.assertIn(b"minimum", workflow)
         self.assertIn(b"latest", workflow)
@@ -173,20 +173,20 @@ class RegistryInitScaffoldTest(unittest.TestCase):
         # Unconfigured, the tool is resolved from a source tree rather than installed: AART has
         # no runtime dependencies and ships __main__.py, so the gates run on a private runner
         # that can reach no package index at all.  `pip` appears once, inside the arm that only
-        # runs when somebody sets AART_PACKAGE to point at one.
+        # runs when somebody sets AART_CLI_PACKAGE to point at one.
         # One `pip install` per job, and the job is emitted once per container shape.
         self.assertEqual(workflow.count(b"pip install"), workflow.count(b"- name: Provide AART"))
         self.assertIn(b'if [ -n "$PACKAGE" ]', workflow)
         self.assertIn(b"PYTHONPATH=", workflow)
         self.assertIn(b"-m aart_cli", workflow)
-        self.assertIn(b"vars.AART_REPOSITORY", workflow)
+        self.assertIn(b"vars.AART_CLI_REPOSITORY", workflow)
         # One checkout per job — the registry's own — and it still persists no credential.  The
         # tool is cloned without one, because AART carries no credential of its own.
         self.assertEqual(
             workflow.count(b"persist-credentials: false"), workflow.count(b"uses: actions/checkout")
         )
         self.assertNotIn(b"git push", workflow)
-        manifest = parse_registry_manifest(files["aart-registry.json"])
+        manifest = parse_registry_manifest(files["aart-cli-registry.json"])
         assert isinstance(manifest, Ok)
         self.assertEqual(
             tuple(str(item) for item in manifest.value.required_capabilities),
@@ -225,7 +225,7 @@ class RegistryInitScaffoldTest(unittest.TestCase):
                 self.assertEqual(cli.build_parser().parse_args(argv).command, "registry")
 
     def test_init_never_overwrites_an_existing_registry_workflow(self) -> None:
-        path = parse_relative_path(".github/workflows/aart-registry.yml")
+        path = parse_relative_path(".github/workflows/aart-cli-registry.yml")
         assert isinstance(path, Ok)
         snapshot = SourceSnapshot(
             SnapshotOrigin.LOCAL,
@@ -292,9 +292,11 @@ class RegistryInitScaffoldTest(unittest.TestCase):
         registry = project_registry_workspace_plan(empty, initialized.value)
         assert isinstance(registry, Ok)
         marker = next(
-            item.content for item in registry.value.entries if str(item.path) == "aart-source.json"
+            item.content
+            for item in registry.value.entries
+            if str(item.path) == "aart-cli-source.json"
         ).replace(b'"artifact_roots":["artifacts"]', b'"artifact_roots":["packages"]')
-        unsupported = replace_snapshot_file(registry.value, "aart-source.json", marker)
+        unsupported = replace_snapshot_file(registry.value, "aart-cli-source.json", marker)
 
         planned = plan_registry_collection(
             unsupported,
@@ -373,7 +375,7 @@ class GeneratedRegistryReadmeTest(unittest.TestCase):
         import json
 
         changes = self._init()
-        window = json.loads(changes["aart-registry.json"])["requires_aart"]
+        window = json.loads(changes["aart-cli-registry.json"])["requires_aart"]
         pin = parse_semver(changes[".aart-cli-version"].decode("utf-8").strip())
         self.assertIsInstance(pin, Ok)
         low = parse_semver(window["min_inclusive"])
@@ -386,12 +388,17 @@ class GeneratedRegistryReadmeTest(unittest.TestCase):
 
         readme = self._init()["README.md"].decode("utf-8")
         workflow = REGISTRY_CI_WORKFLOW.decode("utf-8")
-        for name in ("AART_PACKAGE", "AART_WHEEL_URL", "AART_TOOL_PATH", "AART_TOOL_URL"):
+        for name in (
+            "AART_CLI_PACKAGE",
+            "AART_CLI_WHEEL_URL",
+            "AART_CLI_TOOL_PATH",
+            "AART_CLI_TOOL_URL",
+        ):
             self.assertIn(name, readme, name)
             self.assertIn(name, workflow, name)
-        self.assertLess(readme.index("AART_PACKAGE"), readme.index("AART_WHEEL_URL"))
-        self.assertLess(readme.index("AART_WHEEL_URL"), readme.index("AART_TOOL_PATH"))
-        self.assertLess(readme.index("AART_TOOL_PATH"), readme.index("AART_TOOL_URL"))
+        self.assertLess(readme.index("AART_CLI_PACKAGE"), readme.index("AART_CLI_WHEEL_URL"))
+        self.assertLess(readme.index("AART_CLI_WHEEL_URL"), readme.index("AART_CLI_TOOL_PATH"))
+        self.assertLess(readme.index("AART_CLI_TOOL_PATH"), readme.index("AART_CLI_TOOL_URL"))
 
     def test_an_existing_readme_survives_a_real_init_on_disk(self):
         """The unit tests above build a snapshot by hand, so they cannot see this failure.
@@ -434,7 +441,7 @@ class GeneratedRegistryReadmeTest(unittest.TestCase):
             self.assertEqual(finished.returncode, 0, finished.stderr)
             self.assertEqual((root / "README.md").read_text(encoding="utf-8"), "# hands off\n")
             self.assertEqual((root / ".aart-cli-version").read_text(encoding="utf-8"), "9.9.9\n")
-            self.assertTrue((root / "aart-registry.json").is_file())
+            self.assertTrue((root / "aart-cli-registry.json").is_file())
 
     def test_a_real_init_on_an_empty_directory_writes_the_readme(self):
         import subprocess
@@ -467,7 +474,7 @@ class GeneratedRegistryReadmeTest(unittest.TestCase):
             self.assertEqual(finished.returncode, 0, finished.stderr)
             written = (root / "README.md").read_text(encoding="utf-8")
             self.assertTrue(written.startswith("# Company Registry\n"))
-            self.assertIn("AART_PACKAGE", written)
+            self.assertIn("AART_CLI_PACKAGE", written)
             self.assertEqual(
                 (root / ".aart-cli-version").read_text(encoding="utf-8"), f"{EXECUTABLE_VERSION}\n"
             )

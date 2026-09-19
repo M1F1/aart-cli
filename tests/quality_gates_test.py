@@ -62,7 +62,7 @@ class QualitySurfaceTest(unittest.TestCase):
         # evaluates rather than where the line breaks were typed; the arm itself is
         # `release_pr_gate_test.py`'s claim, not this one's.
         self.assertIn(
-            '|| vars.AART_PYTHON_VERSIONS || \'["3.10", "3.11", "3.14"]\') }}',
+            '|| vars.AART_CLI_PYTHON_VERSIONS || \'["3.10", "3.11", "3.14"]\') }}',
             re.sub(r"\s+", " ", workflow),
         )
         # The steps live in a composite action now: two jobs differ only in how their container

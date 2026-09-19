@@ -142,8 +142,8 @@ class RegistryWorkspaceChange:
 def _managed_path(path: SafeRelativePath) -> bool:
     raw = str(path)
     if raw in {
-        "aart-registry.json",
-        "aart-source.json",
+        "aart-cli-registry.json",
+        "aart-cli-source.json",
         ".gitignore",
         # A plan may *write* these two; that is not the same as AART owning them.  `init` writes
         # each only when it is absent and never compares it afterwards, so these entries permit
@@ -151,7 +151,7 @@ def _managed_path(path: SafeRelativePath) -> bool:
         # bumped by a person in a pull request; the README is the page they read.
         "README.md",
         ".aart-cli-version",
-        ".github/workflows/aart-registry.yml",
+        ".github/workflows/aart-cli-registry.yml",
     }:
         return True
     # `security/` carries committed assessment evidence.  It is not a registry input — the inputs

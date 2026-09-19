@@ -25,7 +25,7 @@ def _delivered(env) -> pathlib.Path:
 
 
 def _artifact_tree(env) -> pathlib.Path:
-    return env.project / ".agent-artifacts/runtimes/company/skill/code-review"
+    return env.project / ".aart-cli/runtimes/company/skill/code-review"
 
 
 class ConfiguredUninstallCommandTest(unittest.TestCase):

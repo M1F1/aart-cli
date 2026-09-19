@@ -135,8 +135,8 @@ class RegistrySourceValidationTest(unittest.TestCase):
         assert isinstance(result, Err)
         message = result.diagnostics[0].message
         self.assertIn("is not a canonical approved Registry", message)
-        self.assertIn("aart-registry.json", message)
-        self.assertIn("aart-source.json", message)
+        self.assertIn("aart-cli-registry.json", message)
+        self.assertIn("aart-cli-source.json", message)
 
     def test_an_empty_approved_registry_still_has_to_bind_its_catalogs(self) -> None:
         """Nothing promoted yet is not nothing to check: the catalogs still describe this tree."""
@@ -167,13 +167,15 @@ class RegistrySourceValidationTest(unittest.TestCase):
         approved = approved_registry_snapshot()
         declared = json.loads(
             next(
-                entry.content for entry in approved.entries if str(entry.path) == "aart-source.json"
+                entry.content
+                for entry in approved.entries
+                if str(entry.path) == "aart-cli-source.json"
             )
         )
         declared["source_id"] = "different-registry"
         mismatched = replace_snapshot_file(
             approved,
-            "aart-source.json",
+            "aart-cli-source.json",
             json.dumps(declared).encode(),
         )
 

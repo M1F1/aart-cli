@@ -1,9 +1,9 @@
 # AART author manifest for one MCP server.
-# Put this file next to the server code, e.g. <repo>/example-mcp/aart.yaml, and commit it.
-# AART reads only committed aart.yaml / aart.json files; everything else in the repo is ignored.
+# Put this file next to the server code, e.g. <repo>/example-mcp/aart-cli.yaml, and commit it.
+# AART reads only committed aart-cli.yaml / aart-cli.json files; everything else in the repo is ignored.
 # AART's YAML reader is a strict subset: write lists one `- item` per line, never `[a, b]`.
 # Held by tests/author_manifest_example_test.py.
-schema: aart.dev/mcp/v1
+schema: aart-cli.dev/mcp/v1
 
 artifact:
   name: example-mcp          # lowercase slug, unique within this repository

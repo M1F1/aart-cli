@@ -1,6 +1,6 @@
 """The emitter is the parser's inverse over the AART YAML subset.
 
-`aart-cli author init` (CP-26.8) writes `aart.yaml`. Zero runtime dependencies means AART emits that
+`aart-cli author init` (CP-26.8) writes `aart-cli.yaml`. Zero runtime dependencies means AART emits that
 document itself, and a hand-written emitter is only trustworthy if it cannot produce a document
 that reads back as something else -- a string `"true"` that returns as a boolean, a value that a
 `#` turns into a comment, a sequence item that reads as a mapping. So the claim held here is
@@ -8,7 +8,7 @@ round-trip: whatever `emit_yaml` writes, `parse_yaml` returns unchanged.
 
 The claim is universal over the subset, so it is stated as a property over generated documents
 rather than over a handful of examples. The example-based tests below cover the specific shapes
-`aart.yaml` uses and the refusals the emitter owes its caller.
+`aart-cli.yaml` uses and the refusals the emitter owes its caller.
 """
 
 from __future__ import annotations

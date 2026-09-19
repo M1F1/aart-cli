@@ -80,7 +80,7 @@ def _digest(character: str) -> ObjectDigest:
 
 def _manifest(name: str, *, inputs: list[dict[str, object]] | None = None) -> dict[str, object]:
     manifest: dict[str, object] = {
-        "schema": "aart.dev/mcp/v1",
+        "schema": "aart-cli.dev/mcp/v1",
         "artifact": {"name": name, "kind": "mcp", "version": "1.0.0"},
         "payload": {"include": ["server.py"]},
         "transport": {"type": "stdio"},
@@ -96,7 +96,7 @@ def _scan(names, *, registry: str = "company", flawed: frozenset[str] = frozense
     entries: list[SnapshotEntry] = []
     for name in names:
         manifest = _manifest(name, inputs=[_ARGV_SECRET] if name in flawed else None)
-        entries.append(_entry(f"{name}/aart.json", json.dumps(manifest, sort_keys=True)))
+        entries.append(_entry(f"{name}/aart-cli.json", json.dumps(manifest, sort_keys=True)))
         entries.append(_entry(f"{name}/server.py", "print('x')\n"))
     compiled = compile_author_snapshot(
         SourceSnapshot(SnapshotOrigin.IMMUTABLE_GIT, tuple(entries)),

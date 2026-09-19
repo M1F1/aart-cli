@@ -38,7 +38,7 @@ from tests.maintainer_scan_cli_test import _author_checkout, _git
 
 _EVIDENCE = ("--validation-report", "sha256:" + "7" * 64, "--policy-result", "sha256:" + "8" * 64)
 
-#: What `.github/workflows/aart-registry.yml` runs on every pull request, in its order.
+#: What `.github/workflows/aart-cli-registry.yml` runs on every pull request, in its order.
 GENERATED_GATE: tuple[tuple[str, ...], ...] = (
     ("format", "--check"),
     ("validate",),
@@ -89,7 +89,7 @@ class RegistryShapeTest(unittest.TestCase):
         self.assertEqual(legacy_registry_paths(canonical), ())
 
     def test_empty_canonical_old_and_mixed_registry_shapes_are_distinct(self) -> None:
-        roots = ("aart-registry.json", "aart-source.json")
+        roots = ("aart-cli-registry.json", "aart-cli-source.json")
         self.assertTrue(is_promoted_registry(_shape(*roots)))
         self.assertFalse(is_promoted_registry(_shape(*roots, "aart.lock.json")))
         self.assertTrue(
@@ -231,7 +231,7 @@ class PromotedRegistryMaintenanceE2ETest(unittest.TestCase):
         with self._promoted_registry() as checkout:
             catalog = checkout / "registry/index.json"
             approved = catalog.read_bytes()
-            catalog.write_bytes(b'{"schema": "aart.dev/registry-index/v1"}')
+            catalog.write_bytes(b'{"schema": "aart-cli.dev/registry-index/v1"}')
 
             code, text = _cli("registry", "build", "--source", str(checkout), "--check")
 

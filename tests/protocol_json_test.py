@@ -115,7 +115,7 @@ class SchemaPrimitiveTest(unittest.TestCase):
         from aart_cli.protocol.json import parse_json
         from aart_cli.protocol.schema import expect_object, expect_string
 
-        location = SourceLocation(SourceAlias("company"), "aart-source.json", "/display_name")
+        location = SourceLocation(SourceAlias("company"), "aart-cli-source.json", "/display_name")
         wrong_object = expect_object(_unwrap(parse_json("[]")), location=location)
         wrong_string = expect_string(_unwrap(parse_json("42")), location=location)
 

@@ -40,25 +40,25 @@ class SourceSyncRefusalViewTest(unittest.TestCase):
         )
 
     def test_a_refused_manifest_still_counts_as_a_discovered_manifest(self) -> None:
-        view = self._view((("bad/aart.json", "invalid SemVer: 'not-a-version'"),))
+        view = self._view((("bad/aart-cli.json", "invalid SemVer: 'not-a-version'"),))
 
         self.assertEqual(2, view.manifest_count)
         self.assertEqual(1, view.candidate_count)
 
     def test_the_view_carries_each_refused_manifest_with_its_path(self) -> None:
-        view = self._view((("bad/aart.json", "invalid SemVer: 'not-a-version'"),))
+        view = self._view((("bad/aart-cli.json", "invalid SemVer: 'not-a-version'"),))
 
-        self.assertEqual((("bad/aart.json", "invalid SemVer: 'not-a-version'"),), view.refusals)
+        self.assertEqual((("bad/aart-cli.json", "invalid SemVer: 'not-a-version'"),), view.refusals)
 
     def test_a_refused_manifest_is_named_on_the_screen_the_sync_lands_on(self) -> None:
         drawn = "\n".join(
             render_source_sync_result(
-                self._view((("bad/aart.json", "invalid SemVer: 'not-a-version'"),)),
+                self._view((("bad/aart-cli.json", "invalid SemVer: 'not-a-version'"),)),
                 PresentationProfile.FAST,
             )
         )
 
-        self.assertIn("bad/aart.json", drawn)
+        self.assertIn("bad/aart-cli.json", drawn)
         self.assertIn("not-a-version", drawn)
 
     def test_a_clean_sync_says_nothing_about_refusals(self) -> None:
@@ -70,7 +70,7 @@ class SourceSyncRefusalViewTest(unittest.TestCase):
         self.assertNotIn("refus", drawn.casefold())
 
     def test_a_refusal_cannot_carry_a_blank_path_or_a_line_break(self) -> None:
-        for refusal in (("", "why"), ("bad/aart.json", ""), ("bad\naart.json", "why")):
+        for refusal in (("", "why"), ("bad/aart-cli.json", ""), ("bad\naart.json", "why")):
             with self.subTest(refusal=refusal):
                 with self.assertRaises(ValueError):
                     self._view((refusal,))

@@ -50,7 +50,7 @@ minimum/latest compatibility checks. The workflow has read-only repository permi
 no commit or push step. [Rolling out AART on GitHub Enterprise Server](../ci/github-enterprise-rollout.md)
 lists the variables.
 
-Artifacts are authored in a separate Source checkout with an explicit `aart.yaml` or `aart.json`
+Artifacts are authored in a separate Source checkout with an explicit `aart-cli.yaml` or `aart-cli.json`
 and payload. Commit that clean checkout, then use the Registry's Candidate workflow:
 
 ```console

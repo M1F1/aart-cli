@@ -293,7 +293,7 @@ def _review(value: JsonValue, code: DiagnosticCode, *, path: str) -> Result[Revi
 def parse_registry_manifest(
     data: bytes | str,
     *,
-    path: str = "aart-registry.json",
+    path: str = "aart-cli-registry.json",
 ) -> Result[RegistryManifest]:
     document = _document(data, REGISTRY_INVALID, path=path)
     if isinstance(document, Err):

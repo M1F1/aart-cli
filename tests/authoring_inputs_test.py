@@ -60,7 +60,7 @@ HOST = {
 
 def _document(**overrides: object) -> dict[str, object]:
     document: dict[str, object] = {
-        "schema": "aart.dev/mcp/v1",
+        "schema": "aart-cli.dev/mcp/v1",
         "artifact": {"name": "github-mcp", "kind": "mcp", "version": "1.4.0"},
         "payload": {"include": ["server.py", "requirements.txt"]},
         "transport": {"type": "stdio"},
@@ -76,7 +76,7 @@ def _document(**overrides: object) -> dict[str, object]:
 
 
 def _manifest(**overrides: object):
-    entry = _file("github/aart.json", json.dumps(_document(**overrides), sort_keys=True))
+    entry = _file("github/aart-cli.json", json.dumps(_document(**overrides), sort_keys=True))
     discovered = discover_author_manifests(_snapshot(entry))
     assert isinstance(discovered, Ok), getattr(discovered, "diagnostics", ())
     return discovered.value[0]
@@ -232,7 +232,7 @@ class DeclaredDependencyTest(unittest.TestCase):
 
         compiled = compile_author_snapshot(
             _snapshot(
-                _file("github/aart.json", json.dumps(_document(), sort_keys=True)),
+                _file("github/aart-cli.json", json.dumps(_document(), sort_keys=True)),
                 _file("github/server.py", "print()\n"),
             ),
             source_alias=SourceAlias("public"),
@@ -248,7 +248,7 @@ class CompiledDeclarationTest(unittest.TestCase):
     def compile(self, **overrides: object):
         compiled = compile_author_snapshot(
             _snapshot(
-                _file("github/aart.json", json.dumps(_document(**overrides), sort_keys=True)),
+                _file("github/aart-cli.json", json.dumps(_document(**overrides), sort_keys=True)),
                 _file("github/server.py", "print()\n"),
                 _file("github/requirements.txt", "mcp==1.0.0\n"),
             ),
@@ -262,7 +262,7 @@ class CompiledDeclarationTest(unittest.TestCase):
     def authoring(self, artifact) -> dict:
         for entry in artifact.canonical_entries:
             if str(entry.path) == "artifact.json":
-                return json.loads(entry.content)["aart.authoring"]
+                return json.loads(entry.content)["aart-cli.authoring"]
         raise AssertionError("the compiled artifact has no manifest")
 
     def test_what_the_author_declared_reaches_the_compiled_artifact(self) -> None:

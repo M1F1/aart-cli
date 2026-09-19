@@ -1,6 +1,6 @@
 """The consumer refuses a registry whose two identity documents disagree.
 
-A registry whose `aart-registry.json` and `aart-source.json` declare different identities is
+A registry whose `aart-cli-registry.json` and `aart-cli-source.json` declare different identities is
 refused by `registry validate --strict --frozen` — the publisher's own gate — and must be refused by
 every consumer path too, because it is the value the entire subscription model pins.
 
@@ -24,7 +24,7 @@ _DISAGREEING = "some-other-identity"
 
 
 def _registry_document(registry_id: str) -> str:
-    """A valid `aart-registry.json` at one chosen identity.
+    """A valid `aart-cli-registry.json` at one chosen identity.
 
     It must actually parse: the agreement check has nothing to compare against a malformed registry
     marker, so a document short of the schema's required fields would make these tests pass for the
@@ -56,7 +56,7 @@ class IdentityAgreementTest(unittest.TestCase):
         """The check must not turn every ordinary native source into a registry."""
 
         with _environment() as env:
-            self.assertFalse((env.source_location / "aart-registry.json").exists())
+            self.assertFalse((env.source_location / "aart-cli-registry.json").exists())
 
             code, payload = env.run(
                 "marketplace", "install", _COORDINATE, "--profile", "claude", "--yes"
@@ -67,7 +67,7 @@ class IdentityAgreementTest(unittest.TestCase):
     def test_agreeing_identity_documents_are_accepted(self) -> None:
         with _environment() as staging:
             source = self._source_copy(staging.root, "agreeing-source")
-            (source / "aart-registry.json").write_text(
+            (source / "aart-cli-registry.json").write_text(
                 _registry_document(_DECLARED), encoding="utf-8"
             )
 
@@ -85,7 +85,7 @@ class IdentityAgreementTest(unittest.TestCase):
             with _environment(source) as env:
                 # Synchronized once while the documents agreed, so the refusal below is the sync
                 # itself and not a first-acquisition failure.
-                (source / "aart-registry.json").write_text(
+                (source / "aart-cli-registry.json").write_text(
                     _registry_document(_DISAGREEING), encoding="utf-8"
                 )
 
@@ -95,8 +95,8 @@ class IdentityAgreementTest(unittest.TestCase):
                 self.assertFalse(payload["sources"][0]["ok"], payload)
                 diagnostic = self._only_diagnostic(payload["sources"][0])
                 self.assertEqual(diagnostic["code"], "source-invalid")
-                self.assertIn("aart-registry.json", diagnostic["message"])
-                self.assertIn("aart-source.json", diagnostic["message"])
+                self.assertIn("aart-cli-registry.json", diagnostic["message"])
+                self.assertIn("aart-cli-source.json", diagnostic["message"])
                 self.assertIn(_DECLARED, diagnostic["message"])
                 self.assertIn(_DISAGREEING, diagnostic["message"])
                 self.assertTrue(diagnostic["remediation"], diagnostic)
@@ -104,7 +104,7 @@ class IdentityAgreementTest(unittest.TestCase):
     def test_source_add_refuses_disagreeing_identity_documents(self) -> None:
         with _environment() as env:
             mirror = self._source_copy(env.root, "disagreeing-mirror")
-            (mirror / "aart-registry.json").write_text(
+            (mirror / "aart-cli-registry.json").write_text(
                 _registry_document(_DISAGREEING), encoding="utf-8"
             )
 
@@ -131,14 +131,14 @@ class IdentityAgreementTest(unittest.TestCase):
     def test_rs08_a_registry_marker_that_does_not_parse_is_refused(self) -> None:
         """The skipped check, taken as its own decision.
 
-        A source shaped like a registry whose `aart-registry.json` is broken must not be admitted in
+        A source shaped like a registry whose `aart-cli-registry.json` is broken must not be admitted in
         silence — it is the one file that declares the identity the whole subscription model pins.
         A marker that is present must parse; there is no third state where it is ignored.
         """
 
         with _environment() as env:
             mirror = self._source_copy(env.root, "broken-marker-mirror")
-            (mirror / "aart-registry.json").write_text(
+            (mirror / "aart-cli-registry.json").write_text(
                 json.dumps({"schema_version": 1, "registry_id": _DECLARED}), encoding="utf-8"
             )
 
@@ -157,7 +157,7 @@ class IdentityAgreementTest(unittest.TestCase):
             self.assertEqual(code, 1, payload)
             diagnostic = self._only_diagnostic(payload)
             self.assertEqual(diagnostic["code"], "source-invalid")
-            self.assertIn("aart-registry.json", diagnostic["message"])
+            self.assertIn("aart-cli-registry.json", diagnostic["message"])
             self.assertIn("does not parse", diagnostic["message"])
             self.assertTrue(diagnostic["remediation"], diagnostic)
             _, listed = _source(env, "source", "list")
@@ -166,7 +166,9 @@ class IdentityAgreementTest(unittest.TestCase):
     def test_rs08_a_marker_that_is_not_json_at_all_is_refused(self) -> None:
         with _environment() as env:
             mirror = self._source_copy(env.root, "not-json-mirror")
-            (mirror / "aart-registry.json").write_text("this is not a registry", encoding="utf-8")
+            (mirror / "aart-cli-registry.json").write_text(
+                "this is not a registry", encoding="utf-8"
+            )
 
             code, payload = _source(
                 env,
@@ -190,7 +192,7 @@ class IdentityAgreementTest(unittest.TestCase):
             source = self._source_copy(staging.root, "breaking-marker-source")
 
             with _environment(source) as env:
-                (source / "aart-registry.json").write_text("{", encoding="utf-8")
+                (source / "aart-cli-registry.json").write_text("{", encoding="utf-8")
 
                 code, payload = _source(env, "source", "sync", "--alias", "reference")
 
@@ -205,7 +207,7 @@ class IdentityAgreementTest(unittest.TestCase):
 
         with _environment() as staging:
             source = self._source_copy(staging.root, "still-fine-source")
-            (source / "aart-registry.json").write_text(
+            (source / "aart-cli-registry.json").write_text(
                 _registry_document(_DECLARED), encoding="utf-8"
             )
 

@@ -93,7 +93,7 @@ class BulkInstallFromOneCommitTest(_Chain):
             env, _ = self._synchronized(raw)
             self._install_both(env)
 
-            launcher = env.project / ".agent-artifacts/runtimes/company/mcp/notes/launch.sh"
+            launcher = env.project / ".aart-cli/runtimes/company/mcp/notes/launch.sh"
             replies = speak(str(launcher), [{"jsonrpc": "2.0", "id": 1, "method": "initialize"}])
 
             self.assertEqual("aart-e2e-github", replies[0]["result"]["serverInfo"]["name"])
@@ -161,7 +161,7 @@ class CollectionsAreNotReachableTest(_Chain):
             (diagnostic,) = refused["diagnostics"]
             self.assertEqual("collection-not-found", diagnostic["code"])
             # Nothing was installed, and no harness was touched on the way to the refusal.
-            self.assertFalse((env.project / ".agent-artifacts/runtimes").exists())
+            self.assertFalse((env.project / ".aart-cli/runtimes").exists())
             mcp = env.project / ".mcp.json"
             self.assertEqual(
                 {}, json.loads(mcp.read_text()).get("mcpServers", {}) if mcp.exists() else {}

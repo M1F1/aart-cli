@@ -230,8 +230,8 @@ def _merge_effect_status(effect: EffectProof, snapshot: PathSnapshot) -> Lifecyc
 def _memory_markers(record: InstallationRecord) -> tuple[str, str]:
     name = record.artifact.identity.name
     return (
-        f"<!-- >>> agent-artifacts memory:{name} >>> -->",
-        f"<!-- <<< agent-artifacts memory:{name} <<< -->",
+        f"<!-- >>> aart-cli memory:{name} >>> -->",
+        f"<!-- <<< aart-cli memory:{name} <<< -->",
     )
 
 

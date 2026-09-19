@@ -360,29 +360,29 @@ class FindingPoetryTest(unittest.TestCase):
         self.build = _load_script("build_wheel")
 
     def test_the_variable_names_the_interpreter_outright(self):
-        with mock.patch.dict(os.environ, {"AART_POETRY": "/opt/poetry/bin/poetry"}):
+        with mock.patch.dict(os.environ, {"AART_CLI_POETRY": "/opt/poetry/bin/poetry"}):
             self.assertEqual(["/opt/poetry/bin/poetry"], self.build.poetry_command())
 
     def test_a_poetry_on_path_is_used_as_found(self):
-        with mock.patch.dict(os.environ, {"AART_POETRY": ""}):
+        with mock.patch.dict(os.environ, {"AART_CLI_POETRY": ""}):
             with mock.patch.object(shutil, "which", return_value="/usr/bin/poetry"):
                 self.assertEqual(["/usr/bin/poetry"], self.build.poetry_command())
 
     def test_the_module_is_used_only_when_it_is_the_cli(self):
-        with mock.patch.dict(os.environ, {"AART_POETRY": ""}):
+        with mock.patch.dict(os.environ, {"AART_CLI_POETRY": ""}):
             with mock.patch.object(shutil, "which", return_value=None):
                 with mock.patch.object(self.build, "_poetry_module_runs", return_value=True):
                     self.assertEqual([sys.executable, "-m", "poetry"], self.build.poetry_command())
 
     def test_no_poetry_at_all_says_what_to_set(self):
-        with mock.patch.dict(os.environ, {"AART_POETRY": ""}):
+        with mock.patch.dict(os.environ, {"AART_CLI_POETRY": ""}):
             with mock.patch.object(shutil, "which", return_value=None):
                 with mock.patch.object(self.build, "_poetry_module_runs", return_value=False):
                     with self.assertRaises(SystemExit) as raised:
                         self.build.poetry_command()
 
         message = str(raised.exception)
-        self.assertIn("AART_POETRY", message)
+        self.assertIn("AART_CLI_POETRY", message)
         self.assertIn("docs/ci/github-enterprise-rollout.md", message)
         # The message a bare `python -m poetry` would have produced instead.
         self.assertNotIn("cannot be directly executed", message)

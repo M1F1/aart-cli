@@ -38,7 +38,7 @@ def _renamed(artifact, name: str):
 
 #: Declares one harness. Three of the machine's four are outside it.
 DECLARED_SKILL = {
-    "schema": "aart.dev/skill/v1",
+    "schema": "aart-cli.dev/skill/v1",
     "artifact": {"name": "manual-check", "kind": "skill", "version": "1.0.0"},
     "payload": {"include": ["SKILL.md"]},
     "compatibility": {"harnesses": ["claude"]},
@@ -46,14 +46,14 @@ DECLARED_SKILL = {
 
 #: Declares nothing at all, like `company/mcp/notes@1.0.0` in the fixture registry.
 UNDECLARED_SKILL = {
-    "schema": "aart.dev/skill/v1",
+    "schema": "aart-cli.dev/skill/v1",
     "artifact": {"name": "open-check", "kind": "skill", "version": "1.0.0"},
     "payload": {"include": ["SKILL.md"]},
 }
 
 #: Declares the empty list, which the schema cannot tell apart from the one above.
 EMPTY_SKILL = {
-    "schema": "aart.dev/skill/v1",
+    "schema": "aart-cli.dev/skill/v1",
     "artifact": {"name": "empty-check", "kind": "skill", "version": "1.0.0"},
     "payload": {"include": ["SKILL.md"]},
     "compatibility": {"harnesses": []},

@@ -68,7 +68,7 @@ def _every():
 
 
 def _parsed(text: str):
-    path = parse_relative_path("aart.yaml")
+    path = parse_relative_path("aart-cli.yaml")
     assert isinstance(path, Ok), path
     return parse_author_manifest(DiscoveredAuthorManifest(path.value, text.encode()))
 
@@ -144,7 +144,7 @@ class CompilationTest(unittest.TestCase):
     def _compiled(self, kind: str = "mcp"):
         skeleton = _skeleton(kind)
         root = skeleton.name
-        files = [_file(f"{root}/aart.yaml", skeleton.manifest.encode())]
+        files = [_file(f"{root}/aart-cli.yaml", skeleton.manifest.encode())]
         files.extend(
             _file(f"{root}/{file.path}", file.content.encode(), executable=file.executable)
             for file in skeleton.payload
@@ -171,7 +171,7 @@ class CompilationTest(unittest.TestCase):
         """A `payload/` written into the manifest lands as `payload/payload/`, and compiles.
 
         The compiler puts the author's files under the package's payload directory itself, so the
-        paths in `aart.yaml` are relative to the manifest. Nothing refuses the doubled form, which
+        paths in `aart-cli.yaml` are relative to the manifest. Nothing refuses the doubled form, which
         is exactly why this is asserted rather than left to a gate.
         """
 

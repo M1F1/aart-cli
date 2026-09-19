@@ -69,7 +69,7 @@ python scripts/release_artifact.py --tag vX.Y.Z
 ```
 
 The seven registry checks are reported `skipped`, never `passed`, when no registry checkout is
-available. In CI that choice is one repository variable, `AART_REFERENCE_REGISTRY_URL` — set, the
+available. In CI that choice is one repository variable, `AART_CLI_REFERENCE_REGISTRY_URL` — set, the
 registry is cloned and reconciled against; unset, those checks are skipped. It has no default,
 because a default naming a github.com repository reproduces nothing on an instance that cannot
 reach it.

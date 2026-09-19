@@ -429,7 +429,7 @@ def describe_delivery(kind: str, payload: Mapping[str, bytes]) -> DeliveryFindin
         withheld,
         tuple(sorted({item for item in values if _names_payload_file(item, payload)})),
         note,
-        # An `aart-mcp-v1` descriptor is `{"name": …, "server": {…}}`.  A document shaped like the
+        # An `aart-cli-mcp-v1` descriptor is `{"name": …, "server": {…}}`.  A document shaped like the
         # harness file it ends up in — `{"mcpServers": {…}}` — parses, loads, installs, and merges
         # an empty object: the artifact is delivered and starts nothing.
         starts_nothing=not isinstance(server, JsonObject) or not server.entries,

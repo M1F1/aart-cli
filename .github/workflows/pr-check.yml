@@ -31,20 +31,20 @@ permissions:
 # the common shape -- names it in this variable instead; unset, every step falls back to plain
 # `poetry`.  See docs/ci/github-enterprise-rollout.md.
 env:
-  AART_POETRY: ${{ vars.AART_POETRY }}
+  AART_CLI_POETRY: ${{ vars.AART_CLI_POETRY }}
 
 jobs:
   gates:
-    if: vars.AART_IMAGE_USERNAME_SECRET == ''
+    if: vars.AART_CLI_IMAGE_USERNAME_SECRET == ''
     name: gates (Python ${{ matrix.python-version }})
-    runs-on: ${{ fromJSON(vars.AART_RUNNER || '["ubuntu-latest"]') }}
+    runs-on: ${{ fromJSON(vars.AART_CLI_RUNNER || '["ubuntu-latest"]') }}
     # Every job takes its interpreter from an image, never from a download: a step-level `if:`
     # decides whether a step runs, not whether its action is fetched, so an instance that does not
     # carry `actions/setup-python` could never have escaped it by configuration.  Unset, the
     # matrix entry names the official image for that interpreter, so the public run still
-    # exercises all three.  Set AART_CI_IMAGE and it replaces all of them -- pin
-    # AART_PYTHON_VERSIONS to one entry then, because one image is one Python.
-    container: ${{ vars.AART_CI_IMAGE || format('python:{0}', matrix.python-version) }}
+    # exercises all three.  Set AART_CLI_CI_IMAGE and it replaces all of them -- pin
+    # AART_CLI_PYTHON_VERSIONS to one entry then, because one image is one Python.
+    container: ${{ vars.AART_CLI_CI_IMAGE || format('python:{0}', matrix.python-version) }}
     strategy:
       fail-fast: false
       matrix:
@@ -57,14 +57,14 @@ jobs:
         # more (INV-096).
         python-version: >-
           ${{ fromJSON(startsWith(github.head_ref, 'release-please--')
-          && format('["{0}"]', vars.AART_RELEASE_PYTHON_VERSION || '3.11')
-          || vars.AART_PYTHON_VERSIONS || '["3.10", "3.11", "3.14"]') }}
+          && format('["{0}"]', vars.AART_CLI_RELEASE_PYTHON_VERSION || '3.11')
+          || vars.AART_CLI_PYTHON_VERSIONS || '["3.10", "3.11", "3.14"]') }}
     env:
       # The tool's own gates need ruff, mypy and coverage.  That is the one place this repository
       # needs a package index; the registry gates need none.  The variable holds the bare host and
       # names the secret holding `user:pass`, because a variable cannot hold a credential.
-      AART_INDEX_URL: ${{ vars.AART_PIP_INDEX_URL || 'https://pypi.org/simple' }}
-      AART_INDEX_CREDENTIALS: ${{ secrets[vars.AART_PIP_INDEX_CREDENTIALS_SECRET] }}
+      AART_CLI_INDEX_URL: ${{ vars.AART_CLI_PIP_INDEX_URL || 'https://pypi.org/simple' }}
+      AART_CLI_INDEX_CREDENTIALS: ${{ secrets[vars.AART_CLI_PIP_INDEX_CREDENTIALS_SECRET] }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -77,7 +77,7 @@ jobs:
 
       - uses: ./.github/actions/quality
         with:
-          python: ${{ vars.AART_PYTHON || 'python' }}
+          python: ${{ vars.AART_CLI_PYTHON || 'python' }}
           # Empty is the full canonical run.  A release pull request narrows it to the gates that
           # can prove what it actually changes: the release identity it writes into the tree, the
           # artifact that identity produces, and the documents it rewrites (INV-096).
@@ -92,24 +92,24 @@ jobs:
             && github.event.pull_request.base.sha || '' }}
 
   gates-private-image:
-    if: vars.AART_IMAGE_USERNAME_SECRET != ''
+    if: vars.AART_CLI_IMAGE_USERNAME_SECRET != ''
     name: gates (Python ${{ matrix.python-version }}, private image)
-    runs-on: ${{ fromJSON(vars.AART_RUNNER || '["ubuntu-latest"]') }}
+    runs-on: ${{ fromJSON(vars.AART_CLI_RUNNER || '["ubuntu-latest"]') }}
     container:
-      image: ${{ vars.AART_CI_IMAGE }}
+      image: ${{ vars.AART_CLI_CI_IMAGE }}
       credentials:
-        username: ${{ secrets[vars.AART_IMAGE_USERNAME_SECRET] }}
-        password: ${{ secrets[vars.AART_IMAGE_PASSWORD_SECRET] }}
+        username: ${{ secrets[vars.AART_CLI_IMAGE_USERNAME_SECRET] }}
+        password: ${{ secrets[vars.AART_CLI_IMAGE_PASSWORD_SECRET] }}
     strategy:
       fail-fast: false
       matrix:
         python-version: >-
           ${{ fromJSON(startsWith(github.head_ref, 'release-please--')
-          && format('["{0}"]', vars.AART_RELEASE_PYTHON_VERSION || '3.11')
-          || vars.AART_PYTHON_VERSIONS || '["3.10", "3.11", "3.14"]') }}
+          && format('["{0}"]', vars.AART_CLI_RELEASE_PYTHON_VERSION || '3.11')
+          || vars.AART_CLI_PYTHON_VERSIONS || '["3.10", "3.11", "3.14"]') }}
     env:
-      AART_INDEX_URL: ${{ vars.AART_PIP_INDEX_URL || 'https://pypi.org/simple' }}
-      AART_INDEX_CREDENTIALS: ${{ secrets[vars.AART_PIP_INDEX_CREDENTIALS_SECRET] }}
+      AART_CLI_INDEX_URL: ${{ vars.AART_CLI_PIP_INDEX_URL || 'https://pypi.org/simple' }}
+      AART_CLI_INDEX_CREDENTIALS: ${{ secrets[vars.AART_CLI_PIP_INDEX_CREDENTIALS_SECRET] }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -122,7 +122,7 @@ jobs:
 
       - uses: ./.github/actions/quality
         with:
-          python: ${{ vars.AART_PYTHON || 'python' }}
+          python: ${{ vars.AART_CLI_PYTHON || 'python' }}
           # Empty is the full canonical run.  A release pull request narrows it to the gates that
           # can prove what it actually changes: the release identity it writes into the tree, the
           # artifact that identity produces, and the documents it rewrites (INV-096).
@@ -139,7 +139,7 @@ jobs:
   # The one name branch protection can require.
   #
   # It cannot require either job above.  Each is a matrix, so its name carries an interpreter
-  # version and changes whenever `AART_PYTHON_VERSIONS` does; and only one of the two arms ever
+  # version and changes whenever `AART_CLI_PYTHON_VERSIONS` does; and only one of the two arms ever
   # runs, so a rule naming the arm this fork does not use would wait forever.  This job's name is
   # the same on every instance and in every configuration.
   #
@@ -150,7 +150,7 @@ jobs:
     if: always()
     name: pr-check
     needs: [gates, gates-private-image]
-    runs-on: ${{ fromJSON(vars.AART_RUNNER || '["ubuntu-latest"]') }}
+    runs-on: ${{ fromJSON(vars.AART_CLI_RUNNER || '["ubuntu-latest"]') }}
     steps:
       - name: Report the gate results
         shell: bash
@@ -166,7 +166,7 @@ jobs:
           # means the gates never ran at all -- a broken condition, an image variable set to
           # something unexpected -- and that must fail rather than look like a pass.
           if [ "$PLAIN" = "skipped" ] && [ "$PRIVATE" = "skipped" ]; then
-            echo "::error::neither gate job ran; check AART_IMAGE_USERNAME_SECRET" >&2
+            echo "::error::neither gate job ran; check AART_CLI_IMAGE_USERNAME_SECRET" >&2
             exit 1
           fi
           for result in "$PLAIN" "$PRIVATE"; do

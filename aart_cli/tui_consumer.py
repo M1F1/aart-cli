@@ -1953,8 +1953,8 @@ _REGISTRY_ADD_INTRO: tuple[str, ...] = (
 """What connecting a registry does, said under the fields rather than over them (`QA-087`)."""
 
 _SOURCE_ADD_INTRO: tuple[str, ...] = (
-    "Subscribe to an authoring repository. AART discovers only the aart.yaml and",
-    "aart.json manifests its authors committed; nothing here is approved content yet.",
+    "Subscribe to an authoring repository. AART discovers only the aart-cli.yaml and",
+    "aart-cli.json manifests its authors committed; nothing here is approved content yet.",
     "",
     "This adds another Source. Nothing already connected is changed.",
 )
@@ -1972,7 +1972,7 @@ _REGISTRY_INIT_INTRO: tuple[str, ...] = (
 """What initializing a registry writes, and the boundary the run stops at (`QA-087`)."""
 
 _REPOSITORY_SCAN_INTRO: tuple[str, ...] = (
-    "Look at one repository for explicit aart.yaml and aart.json manifests.",
+    "Look at one repository for explicit aart-cli.yaml and aart-cli.json manifests.",
     "This is a one-off read: the repository is not saved as a Source or monitored.",
 )
 """What a scan reads, and what it deliberately does not keep (`QA-087`)."""

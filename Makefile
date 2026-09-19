@@ -1,4 +1,4 @@
-# agent-artifacts — build & validation tasks (WP-21).
+# aart-cli — build & validation tasks (WP-21).
 #
 # Zero runtime deps. Poetry builds the wheel and installs the developer tooling; nothing it
 # installs reaches the runtime, which stays standard-library only. The wheel produced by
@@ -27,7 +27,7 @@ release-freeze:
 	$(PYTHON) scripts/release.py freeze --write
 
 release-check:
-	@test -n "$(REGISTRY)" || (echo "REGISTRY=/path/to/agent-artifacts-registry is required" >&2; exit 2)
+	@test -n "$(REGISTRY)" || (echo "REGISTRY=/path/to/aart-cli-registry is required" >&2; exit 2)
 	$(PYTHON) scripts/release.py check --registry "$(REGISTRY)"
 
 # Stamp the git commit, then build the wheel into dist/ with Poetry.

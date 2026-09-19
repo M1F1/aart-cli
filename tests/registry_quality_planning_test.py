@@ -34,7 +34,7 @@ class RegistryQualityPlanningTest(unittest.TestCase):
     def test_format_is_canonical_and_checkable_without_mutation(self) -> None:
         snapshot = replace_snapshot_file(
             empty_registry_snapshot(),
-            "aart-registry.json",
+            "aart-cli-registry.json",
             b'{ "schema_version": 1, "protocol_version": 1, "registry_id": "test-registry", '
             b'"display_name": "Test Registry", "requires_aart": {"min_inclusive": "1.0.0", '
             b'"max_exclusive": "2.0.0"}, "required_capabilities": [], '

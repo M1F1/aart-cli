@@ -83,7 +83,7 @@ def _words(result: Err) -> str:
 
 
 def _change_registry(root: Path, display_name: str) -> None:
-    marker = root / "aart-registry.json"
+    marker = root / "aart-cli-registry.json"
     document = json.loads(marker.read_text(encoding="utf-8"))
     document["display_name"] = display_name
     marker.write_text(json.dumps(document, sort_keys=True) + "\n", encoding="utf-8")
@@ -94,7 +94,7 @@ class RegistryBaselineDiagnosisTest(TestCase):
         with _environment() as env:
             candidate_id = _candidate(env)
             _change_registry(env.registry, "Awaiting Review")
-            _git(env.registry, "add", "aart-registry.json")
+            _git(env.registry, "add", "aart-cli-registry.json")
             _git(env.registry, "commit", "-m", "prior registry promotion")
 
             words = _words(_prepare(env, candidate_id))
@@ -110,7 +110,7 @@ class RegistryBaselineDiagnosisTest(TestCase):
         with _environment() as env:
             old = _git(env.registry, "rev-parse", "HEAD")
             _change_registry(env.registry, "Published Registry")
-            _git(env.registry, "add", "aart-registry.json")
+            _git(env.registry, "add", "aart-cli-registry.json")
             _git(env.registry, "commit", "-m", "published registry change")
             candidate_id = _candidate(env)
             _git(env.registry, "checkout", "--detach", old)

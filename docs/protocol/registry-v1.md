@@ -60,7 +60,7 @@ something no consumer of that artifact runs. The per-type delivery table is in
 
 ## Authored inputs
 
-`aart-registry.json` declares protocol compatibility, required compiler capabilities, a default
+`aart-cli-registry.json` declares protocol compatibility, required compiler capabilities, a default
 channel, and optional service advertisements. Service kinds are opaque lowercase identifiers;
 provider-specific requirements belong to the consumer of a service, not to this base schema.
 Authored registry, entry, artifact, and index documents cannot assign effective trust.

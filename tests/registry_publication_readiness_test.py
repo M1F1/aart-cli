@@ -89,10 +89,10 @@ class RegistryPublicationReadinessTest(unittest.TestCase):
 
     def test_one_skipped_format_gate_makes_publication_unready(self) -> None:
         snapshot = empty_registry_snapshot()
-        manifest = snapshot_file(snapshot, "aart-registry.json")
+        manifest = snapshot_file(snapshot, "aart-cli-registry.json")
         unformatted = replace_snapshot_file(
             snapshot,
-            "aart-registry.json",
+            "aart-cli-registry.json",
             b"  " + manifest.replace(b":", b": ", 1),
         )
 

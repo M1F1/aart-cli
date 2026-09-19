@@ -1,6 +1,6 @@
 # Writing an artifact
 
-`aart-cli author init` starts one in the directory you name. It writes an `aart.yaml` carrying every
+`aart-cli author init` starts one in the directory you name. It writes an `aart-cli.yaml` carrying every
 field this build accepts — the optional blocks commented out, one line of explanation above each —
 so narrowing the manifest down to what your artifact needs is an edit rather than a search through
 a schema. A payload skeleton is written beside it, and nothing already in the directory is
@@ -21,13 +21,13 @@ payload its package format requires: one Markdown document for a guideline or me
 script and `hook.json` for a hook, an entrypoint for an MCP server, or `SKILL.md` for a skill. Each
 skeleton also names the blocks it deliberately leaves to you.
 
-`aart-cli author check` reads the directory the way a Source Sync reads one and puts every `aart.yaml`
-and `aart.json` it finds through the parser *and* the compiler a Registry uses. A manifest that
+`aart-cli author check` reads the directory the way a Source Sync reads one and puts every `aart-cli.yaml`
+and `aart-cli.json` it finds through the parser *and* the compiler a Registry uses. A manifest that
 passes here parses and compiles to the package `aart-cli registry scan` would accept, and the check
 prints the coordinate it compiled to:
 
 ```
-ok    github-mcp/aart.yaml  ->  mcp/github-mcp@0.1.0
+ok    github-mcp/aart-cli.yaml  ->  mcp/github-mcp@0.1.0
 ```
 
 It is the command to run in a loop while editing; `--json` makes the verdict machine-readable.

@@ -83,11 +83,11 @@ class GeneratedRegistryTest(unittest.TestCase):
         self.assertEqual(completed.returncode, 1)
         said = completed.stdout + completed.stderr
         for variable in (
-            "AART_PACKAGE",
-            "AART_WHEEL_URL",
-            "AART_TOOL_PATH",
-            "AART_TOOL_URL",
-            "AART_REPOSITORY",
+            "AART_CLI_PACKAGE",
+            "AART_CLI_WHEEL_URL",
+            "AART_CLI_TOOL_PATH",
+            "AART_CLI_TOOL_URL",
+            "AART_CLI_REPOSITORY",
         ):
             with self.subTest(variable=variable):
                 self.assertIn(variable, said)
@@ -96,7 +96,7 @@ class GeneratedRegistryTest(unittest.TestCase):
         workflow = templates.REGISTRY_CI_WORKFLOW.decode("utf-8")
         line = next(item for item in workflow.splitlines() if "TOOL_URL:" in item)
 
-        self.assertIn("vars.AART_REPOSITORY", line)
+        self.assertIn("vars.AART_CLI_REPOSITORY", line)
         # `format` with no fallback literal: an unset variable produces an empty URL, which the
         # script above refuses, rather than a repository the reader never named.
         self.assertNotIn("'M1F1", line)

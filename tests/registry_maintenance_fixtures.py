@@ -76,8 +76,8 @@ def empty_registry_snapshot() -> SourceSnapshot:
     return SourceSnapshot(
         SnapshotOrigin.LOCAL,
         (
-            _file("aart-registry.json", _canonical(registry)),
-            _file("aart-source.json", _canonical(source)),
+            _file("aart-cli-registry.json", _canonical(registry)),
+            _file("aart-cli-source.json", _canonical(source)),
         ),
     )
 
@@ -190,14 +190,14 @@ def approved_registry_snapshot(
     entries = []
     for name in names:
         manifest = {
-            "schema": "aart.dev/mcp/v1",
+            "schema": "aart-cli.dev/mcp/v1",
             "artifact": {"name": name, "kind": "mcp", "version": version},
             "payload": {"include": ["server.py"]},
             "transport": {"type": "stdio"},
             "runtime": {"type": "python", "version": ">=3.11"},
             "launch": {"type": "python", "entrypoint": "server.py"},
         }
-        entries.append(_file(f"{name}/aart.json", json.dumps(manifest).encode()))
+        entries.append(_file(f"{name}/aart-cli.json", json.dumps(manifest).encode()))
         entries.append(_file(f"{name}/server.py", f"print('{name}')\n".encode()))
     revision = "a" * 40
     compiled = compile_author_snapshot(

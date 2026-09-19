@@ -223,7 +223,7 @@ class CurationRuntimeTest(unittest.TestCase):
                     for command in initialized.value.review.follow_up_commands
                 )
             )
-            self.assertFalse((root / "aart-registry.json").exists())
+            self.assertFalse((root / "aart-cli-registry.json").exists())
             wrong = service.finalize(
                 initialized.value,
                 ObjectDigest("sha256", "f" * 64),
@@ -234,7 +234,7 @@ class CurationRuntimeTest(unittest.TestCase):
                 initialized.value.review.review_digest,
             )
             assert isinstance(applied, Ok), applied
-            self.assertTrue((root / "aart-registry.json").is_file())
+            self.assertTrue((root / "aart-cli-registry.json").is_file())
             duplicate_init = service.prepare(
                 CurationRequest(
                     CurationAction.INIT,
@@ -296,7 +296,7 @@ class CurationRuntimeTest(unittest.TestCase):
             )
             reviewed = service.prepare(CurationRequest(CurationAction.VALIDATE, str(root)))
             assert isinstance(reviewed, Ok), reviewed
-            marker = root / "aart-registry.json"
+            marker = root / "aart-cli-registry.json"
             marker.write_bytes(marker.read_bytes() + b" ")
             stale = service.finalize(reviewed.value, reviewed.value.review.review_digest)
             self.assertIsInstance(stale, Err)

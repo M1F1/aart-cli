@@ -74,7 +74,7 @@ _WRITING_ACTIONS = {
 }
 
 #: What makes a directory a registry rather than a project that could hold one.
-_REGISTRY_MARKER = "aart-registry.json"
+_REGISTRY_MARKER = "aart-cli-registry.json"
 
 
 @dataclass(frozen=True, slots=True)

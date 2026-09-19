@@ -30,9 +30,9 @@ from .model import (
     source_instance_id,
 )
 
-_REGISTRY_MARKER = "aart-registry.json"
-_SOURCE_MARKER = "aart-source.json"
-_AUTHOR_MANIFESTS = "aart.yaml/aart.json"
+_REGISTRY_MARKER = "aart-cli-registry.json"
+_SOURCE_MARKER = "aart-cli-source.json"
+_AUTHOR_MANIFESTS = "aart-cli.yaml/aart-cli.json"
 
 
 def validate_source_candidate(
@@ -53,7 +53,7 @@ def validate_source_candidate(
     # `registry validate --strict --frozen` did, and the one-way adaptation rule says a consumer
     # does not soften a rule the publisher's tooling enforces.
     # A marker that is there must be readable. Comparing the two identities only when both
-    # documents parse would leave a third state nobody chose — a broken `aart-registry.json` would
+    # documents parse would leave a third state nobody chose — a broken `aart-cli-registry.json` would
     # skip the comparison in silence. On the registry path the workspace validation refuses first;
     # this is the same refusal on the direct/local path.
     unreadable = _unreadable_registry_marker(request)
@@ -97,8 +97,8 @@ def validate_authoring_source_candidate(
     """Admit one authoring Source: a native package tree, or an explicit author manifest tree.
 
     An authoring Source is a location that *offers Candidates*, which Product Specification 72.1
-    and 164.2 describe as a repository an author opted into by committing an `aart.yaml` or
-    `aart.json`.  It is not a consumer native package tree, and requiring it to be one refused
+    and 164.2 describe as a repository an author opted into by committing an `aart-cli.yaml` or
+    `aart-cli.json`.  It is not a consumer native package tree, and requiring it to be one refused
     every real authoring repository at the public entrance (B-094/QA-020).
 
     Admission is exactly INV-201 and no more: *some* explicit manifest is declared here.  It is
@@ -168,9 +168,9 @@ def _root_entry(request: SourceValidationRequest, path: str):
 
 
 def _unreadable_registry_marker(request: SourceValidationRequest) -> Diagnostic | None:
-    """The refusal when a root `aart-registry.json` is present and cannot be read.
+    """The refusal when a root `aart-cli-registry.json` is present and cannot be read.
 
-    Absence is not the case this answers: a source publishing `aart-source.json` alone is an
+    Absence is not the case this answers: a source publishing `aart-cli-source.json` alone is an
     ordinary native source and stays one.  What is refused is a snapshot that reserves the registry
     marker's name and then does not honour it — a directory under that name, or a document that
     does not parse.  Either way the identity comparison below has nothing to compare, and admitting
@@ -211,8 +211,8 @@ def _identity_disagreement(request: SourceValidationRequest) -> Diagnostic | Non
 
     "Nothing to compare" is deliberately narrow: only a snapshot that carries both markers as
     regular files, each parsing as its own protocol document, has an agreement to check.  A source
-    publishing `aart-source.json` alone is not a registry and is unaffected; a malformed
-    `aart-registry.json` is refused before this runs, by `_unreadable_registry_marker`.
+    publishing `aart-cli-source.json` alone is not a registry and is unaffected; a malformed
+    `aart-cli-registry.json` is refused before this runs, by `_unreadable_registry_marker`.
     """
 
     registry_file = _root_file(request, _REGISTRY_MARKER)

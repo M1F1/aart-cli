@@ -13,7 +13,7 @@ schema freeze (D-154).
 The exception list is a claim about each name in it, so each one states its reason:
 
 * ``_commit`` -- written by the build, which stamps a commit into release artifacts.
-* ``profiles.loader`` -- reads ``<project>/.agent-artifacts/profiles.json`` over the built-ins.
+* ``profiles.loader`` -- reads ``<project>/.aart-cli/profiles.json`` over the built-ins.
   Kept, and *not* legacy: INV-001 requires enterprise profiles to live outside the public tool, and
   this is the only mechanism by which a profile defined outside it can get in.  What is wrong is
   that nothing calls it -- ``consumer/runtime.py`` passes ``builtin()`` straight into the consumer

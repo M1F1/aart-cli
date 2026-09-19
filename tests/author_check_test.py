@@ -54,17 +54,17 @@ def _check(root: Path, *, as_json: bool = False) -> tuple[int, str]:
 
 
 def _manifest(root: Path) -> Path:
-    return next(root.rglob("aart.yaml"))
+    return next(root.rglob("aart-cli.yaml"))
 
 
 def _write_collection(directory: Path) -> None:
     """A Collection manifest: discovered by the same walk, compiled by a different function."""
 
     directory.mkdir(parents=True)
-    (directory / "aart.json").write_text(
+    (directory / "aart-cli.json").write_text(
         json.dumps(
             {
-                "schema": "aart.dev/collection/v1",
+                "schema": "aart-cli.dev/collection/v1",
                 "name": "data-engineer",
                 "version": "2.1.0",
                 "summary": "Approved data engineering tools.",
@@ -83,7 +83,7 @@ class AcceptanceTest(unittest.TestCase):
             code, printed = _check(root)
 
             self.assertEqual(code, OK)
-            self.assertIn("aart.yaml", printed)
+            self.assertIn("aart-cli.yaml", printed)
 
     def test_every_generated_kind_passes(self) -> None:
         for kind, name in (("mcp", _NAME), ("skill", "code-review")):
@@ -100,8 +100,8 @@ class AcceptanceTest(unittest.TestCase):
             code, printed = _check(root)
 
             self.assertEqual(code, OK)
-            self.assertIn(f"{_NAME}/aart.yaml", printed)
-            self.assertIn("code-review/aart.yaml", printed)
+            self.assertIn(f"{_NAME}/aart-cli.yaml", printed)
+            self.assertIn("code-review/aart-cli.yaml", printed)
 
 
 class RefusalTest(unittest.TestCase):
@@ -135,7 +135,7 @@ class RefusalTest(unittest.TestCase):
             code, printed = _check(root)
 
             self.assertEqual(code, ERROR)
-            self.assertIn("aart.yaml", printed)
+            self.assertIn("aart-cli.yaml", printed)
 
     def test_a_directory_holding_no_manifest_is_not_a_pass(self) -> None:
         """Nothing found is not everything fine: the exit code an agent branches on says so."""
@@ -162,12 +162,12 @@ class RefusalTest(unittest.TestCase):
         with _workspace() as root:
             broken = root / "broken"
             broken.mkdir()
-            (broken / "aart.yaml").write_text("schema: aart.dev/mcp/v1\n", encoding="utf-8")
+            (broken / "aart-cli.yaml").write_text("schema: aart-cli.dev/mcp/v1\n", encoding="utf-8")
 
             code, printed = _check(root)
 
             self.assertEqual(code, ERROR)
-            self.assertIn("broken/aart.yaml", printed)
+            self.assertIn("broken/aart-cli.yaml", printed)
 
     def test_every_discovered_manifest_is_reported_however_the_one_before_it_ended(self) -> None:
         """A report that stopped at the first refusal would hide the manifests after it.
@@ -179,13 +179,17 @@ class RefusalTest(unittest.TestCase):
         with _workspace() as root:
             broken = root / "aaa-broken"
             broken.mkdir()
-            (broken / "aart.yaml").write_text("schema: aart.dev/mcp/v1\n", encoding="utf-8")
+            (broken / "aart-cli.yaml").write_text("schema: aart-cli.dev/mcp/v1\n", encoding="utf-8")
             _write_collection(root / "bbb-collection")
 
             code, printed = _check(root)
 
             self.assertEqual(code, ERROR)
-            for path in ("aaa-broken/aart.yaml", "bbb-collection/aart.json", f"{_NAME}/aart.yaml"):
+            for path in (
+                "aaa-broken/aart-cli.yaml",
+                "bbb-collection/aart-cli.json",
+                f"{_NAME}/aart-cli.yaml",
+            ):
                 self.assertIn(path, printed)
 
 
@@ -235,7 +239,7 @@ class PromotionTest(unittest.TestCase):
             code, printed = _check(root)
 
             self.assertEqual(code, OK)
-            self.assertIn("data-engineer/aart.json", printed)
+            self.assertIn("data-engineer/aart-cli.json", printed)
             self.assertNotIn("missing required field", printed)
 
 
@@ -250,11 +254,13 @@ class JsonTest(unittest.TestCase):
             self.assertEqual(code, OK)
             self.assertIs(report["ok"], True)
             self.assertEqual(report["operation"], "author.check")
-            self.assertEqual([item["path"] for item in report["manifests"]], [f"{_NAME}/aart.yaml"])
+            self.assertEqual(
+                [item["path"] for item in report["manifests"]], [f"{_NAME}/aart-cli.yaml"]
+            )
 
     def test_a_failing_check_carries_the_diagnostics_under_the_manifest(self) -> None:
         with _workspace() as root:
-            _manifest(root).write_text("schema: aart.dev/mcp/v1\n", encoding="utf-8")
+            _manifest(root).write_text("schema: aart-cli.dev/mcp/v1\n", encoding="utf-8")
 
             code, printed = _check(root, as_json=True)
             report = json.loads(printed)
@@ -280,7 +286,9 @@ class JsonTest(unittest.TestCase):
             _write_collection(root / "collections" / "data-engineer")
 
             report = json.loads(_check(root, as_json=True)[1])
-            entry = next(item for item in report["manifests"] if item["path"].endswith("aart.json"))
+            entry = next(
+                item for item in report["manifests"] if item["path"].endswith("aart-cli.json")
+            )
 
             self.assertIs(entry["ok"], True)
             self.assertIs(entry["checked"], False)

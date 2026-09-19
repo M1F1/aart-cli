@@ -31,7 +31,7 @@ class AnalyzerSuite:
             or required != self.required_provider_ids
             or optional != self.optional_provider_ids
             or set(required) & set(optional)
-            or required != ("aart-baseline",)
+            or required != ("aart-cli-baseline",)
             or not set(optional) <= _KNOWN_OPTIONAL_PROVIDERS
         ):
             raise ValueError("analyzer suite is invalid")
@@ -43,19 +43,19 @@ BUILTIN_ANALYZER_SUITES = tuple(
             AnalyzerSuite(
                 "baseline",
                 "Run AART's zero-dependency structural installation-risk assessment.",
-                ("aart-baseline",),
+                ("aart-cli-baseline",),
                 (),
             ),
             AnalyzerSuite(
                 "recommended",
                 "Add locally installed static, secret, and shell analyzers without network access.",
-                ("aart-baseline",),
+                ("aart-cli-baseline",),
                 ("bandit", "detect-secrets", "ruff", "shellcheck"),
             ),
             AnalyzerSuite(
                 "extended",
                 "Add every discovered analyzer, including the network-using dependency advisory provider.",
-                ("aart-baseline",),
+                ("aart-cli-baseline",),
                 ("bandit", "detect-secrets", "pip-audit", "ruff", "shellcheck"),
             ),
         ),

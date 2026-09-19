@@ -207,8 +207,8 @@ class RegistryBootstrapTest(unittest.TestCase):
         )
         self.assertTrue(report.value.passed, report.value.stages)
         for name in (
-            "aart-registry.json",
-            "aart-source.json",
+            "aart-cli-registry.json",
+            "aart-cli-source.json",
             "registry/index.json",
             "registry/snapshot.json",
         ):
@@ -279,7 +279,7 @@ class RegistryBootstrapTest(unittest.TestCase):
 
         self.assertIsInstance(refused, Err)
         assert isinstance(refused, Err)
-        self.assertFalse(os.path.exists(os.path.join(root, "aart-registry.json")))
+        self.assertFalse(os.path.exists(os.path.join(root, "aart-cli-registry.json")))
         self.assertNotIn("aart ", "\n".join(refused.diagnostics[0].interactive))
 
     def test_a_stage_refusing_mid_run_stops_the_ones_after_it(self) -> None:
@@ -470,8 +470,8 @@ class MaintainerRegistryInitActionTest(unittest.TestCase):
             )
             project = str(env.project)
             markers = (
-                "aart-registry.json",
-                "aart-source.json",
+                "aart-cli-registry.json",
+                "aart-cli-source.json",
                 "aart.lock.json",
                 "aart.index.json",
             )
@@ -483,7 +483,7 @@ class MaintainerRegistryInitActionTest(unittest.TestCase):
             )
 
         self.assertTrue(finished.event.text, "the run recorded nothing")
-        self.assertEqual(written, ["aart-registry.json", "aart-source.json"])
+        self.assertEqual(written, ["aart-cli-registry.json", "aart-cli-source.json"])
         self.assertEqual(catalogs, ["index.json", "snapshot.json"])
         notice = "\n".join(finished.source.screens.notice)
         for stage in REGISTRY_BOOTSTRAP_STAGES:

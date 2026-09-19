@@ -183,7 +183,7 @@ class DuplicateConnectionSpeaksInteractivelyTest(unittest.TestCase):
 class NoFrameDrawsACommandTest(unittest.TestCase):
     """`B-091`'s audit, as a sweep rather than a reading: every screen, with a refusal on it."""
 
-    #: A command, not a filename. `aart.yaml`, `aart-registry.json` and the `AART /` title are all
+    #: A command, not a filename. `aart-cli.yaml`, `aart-cli-registry.json` and the `AART /` title are all
     #: legitimate; `aart-cli source sync --alias company` is the thing this must never draw.
     COMMAND = re.compile(
         r"aart-cli (source|registry|marketplace|setup|doctor|security|memory|reporting)\b"

@@ -121,7 +121,7 @@ class SourceIdentityChangeRecoveryTest(unittest.TestCase):
         )
 
     def _republish(self, origin: Path, source_id: str) -> None:
-        descriptor = origin / "aart-source.json"
+        descriptor = origin / "aart-cli-source.json"
         document = json.loads(descriptor.read_text(encoding="utf-8"))
         document["source_id"] = source_id
         descriptor.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")

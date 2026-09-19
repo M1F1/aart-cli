@@ -41,7 +41,7 @@ def _manifest_json(name: str) -> str:
       "version": "1.2.0",
       "summary": "Use {name} during agent work.",
       "requires_aart": {{"min_inclusive": "1.1.0", "max_exclusive": "2.0.0"}},
-      "payload": {{"root": "payload", "format": "aart-skill-v1"}},
+      "payload": {{"root": "payload", "format": "aart-cli-skill-v1"}},
       "compatibility": {{"profiles": ["tabnine", "claude"], "platforms": ["linux", "darwin"]}},
       "install": {{"scopes": ["user", "project"], "modes": ["symlink", "copy"], "effects": ["copy-tree"]}}
     }}"""
@@ -83,7 +83,7 @@ def _configured_package() -> NativeArtifactPackage:
           "name": "atlassian",
           "version": "2.1.0",
           "summary": "Connect reviewed Atlassian tools.",
-          "payload": {"root": "payload", "format": "aart-mcp-v1"},
+          "payload": {"root": "payload", "format": "aart-cli-mcp-v1"},
           "compatibility": {"profiles": ["claude"], "platforms": ["darwin"]},
           "install": {"scopes": ["user"], "modes": ["copy"], "effects": ["merge-json"]},
           "setup": {"recipe": "setup/installer.json", "platforms": ["darwin"]}

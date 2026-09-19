@@ -120,7 +120,7 @@ def _environment_whose_rollback_fails():
 def _working_copies(env) -> list[Path]:
     """Whatever is under the run root the engine writes into, which is not the project root."""
 
-    runs = Path(env.paths.data_root, ".agent-artifacts", "setup-runs")
+    runs = Path(env.paths.data_root, ".aart-cli", "setup-runs")
     return sorted(runs.iterdir()) if runs.exists() else []
 
 

@@ -109,14 +109,14 @@ def _two_ready_candidates():
     entries: list[SnapshotEntry] = []
     for name in ("github-mcp", "jira-mcp"):
         manifest = {
-            "schema": "aart.dev/mcp/v1",
+            "schema": "aart-cli.dev/mcp/v1",
             "artifact": {"name": name, "kind": "mcp", "version": "1.0.0"},
             "payload": {"include": ["server.py"]},
             "transport": {"type": "stdio"},
             "runtime": {"type": "python", "version": ">=3.11"},
             "launch": {"type": "python", "entrypoint": "server.py"},
         }
-        parsed_manifest = parse_relative_path(f"{name}/aart.json")
+        parsed_manifest = parse_relative_path(f"{name}/aart-cli.json")
         parsed_payload = parse_relative_path(f"{name}/server.py")
         assert isinstance(parsed_manifest, Ok) and isinstance(parsed_payload, Ok)
         entries.append(
@@ -163,7 +163,7 @@ def _collection_scan():
     """
 
     manifest = {
-        "schema": "aart.dev/mcp/v1",
+        "schema": "aart-cli.dev/mcp/v1",
         "artifact": {"name": "github-mcp", "kind": "mcp", "version": "1.0.0"},
         "payload": {"include": ["server.py"]},
         "transport": {"type": "stdio"},
@@ -171,7 +171,7 @@ def _collection_scan():
         "launch": {"type": "python", "entrypoint": "server.py"},
     }
     collection = {
-        "schema": "aart.dev/collection/v1",
+        "schema": "aart-cli.dev/collection/v1",
         "name": "data-engineer",
         "version": "2.1.0",
         "summary": "Approved data engineering tools.",
@@ -181,8 +181,8 @@ def _collection_scan():
     }
     entries = []
     for path, payload in (
-        ("github-mcp/aart.json", json.dumps(manifest, sort_keys=True)),
-        ("collections/data-engineer/aart.json", json.dumps(collection, sort_keys=True)),
+        ("github-mcp/aart-cli.json", json.dumps(manifest, sort_keys=True)),
+        ("collections/data-engineer/aart-cli.json", json.dumps(collection, sort_keys=True)),
     ):
         parsed = parse_relative_path(path)
         assert isinstance(parsed, Ok)
@@ -326,10 +326,10 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             )
             package = author_root / "authoring" / "github"
             package.mkdir(parents=True)
-            package.joinpath("aart.json").write_text(
+            package.joinpath("aart-cli.json").write_text(
                 json.dumps(
                     {
-                        "schema": "aart.dev/mcp/v1",
+                        "schema": "aart-cli.dev/mcp/v1",
                         "artifact": {
                             "name": "github",
                             "kind": "mcp",
@@ -690,7 +690,7 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             # An approved snapshot is connected Registry content, not proof that this project is
             # itself a Registry checkout.  This scenario exercises a real local Registry, so give
             # it the marker whose absence must make the Maintainer screen say otherwise.
-            (registry_root / "aart-registry.json").write_text(
+            (registry_root / "aart-cli-registry.json").write_text(
                 json.dumps(
                     {
                         "schema_version": 1,

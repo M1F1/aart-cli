@@ -75,7 +75,7 @@ class InstallConcurrencyE2ETest(unittest.TestCase):
                 )
             )
             destination = project / ".claude/skills/review/SKILL.md"
-            state_path = project / ".agent-artifacts/manifest.json"
+            state_path = project / ".aart-cli/manifest.json"
             self.assertEqual(destination.read_text(encoding="utf-8"), "# Installed\n")
             state = parse_install_state(state_path.read_bytes(), path=str(state_path))
             assert isinstance(state, Ok)

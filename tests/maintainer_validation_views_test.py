@@ -80,7 +80,7 @@ def _entry(path: str, content: str) -> SnapshotEntry:
 
 def _scan(*, inputs: list[dict[str, object]] | None = None):
     manifest: dict[str, object] = {
-        "schema": "aart.dev/mcp/v1",
+        "schema": "aart-cli.dev/mcp/v1",
         "artifact": {"name": "github-mcp", "kind": "mcp", "version": "1.0.0"},
         "payload": {"include": ["server.py"]},
         "transport": {"type": "stdio"},
@@ -93,7 +93,7 @@ def _scan(*, inputs: list[dict[str, object]] | None = None):
         SourceSnapshot(
             SnapshotOrigin.IMMUTABLE_GIT,
             (
-                _entry("github/aart.json", json.dumps(manifest, sort_keys=True)),
+                _entry("github/aart-cli.json", json.dumps(manifest, sort_keys=True)),
                 _entry("github/server.py", "print('x')\n"),
             ),
         ),

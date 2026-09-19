@@ -76,7 +76,7 @@ _TRUST_RANK = {
 _PLACEHOLDER = re.compile(r"\$\{([^}]+)\}")
 # The sidecar a memory ``replace`` parks displaced content in, sitting beside the destination so
 # the operator finds it without consulting install state.
-_BACKUP_SUFFIX = ".agent-artifacts-bak"
+_BACKUP_SUFFIX = ".aart-cli-bak"
 
 
 @dataclass(frozen=True, slots=True)
@@ -340,8 +340,8 @@ def _render_template(template: object, values: Mapping[str, object]) -> object:
 
 
 def _memory_block(existing: str | None, name: str, body: str, *, position: str) -> str:
-    begin = f"<!-- >>> agent-artifacts memory:{name} >>> -->"
-    end = f"<!-- <<< agent-artifacts memory:{name} <<< -->"
+    begin = f"<!-- >>> aart-cli memory:{name} >>> -->"
+    end = f"<!-- <<< aart-cli memory:{name} <<< -->"
     block = f"{begin}\n{body.rstrip(chr(10))}\n{end}"
     base = existing or ""
     start = base.find(begin)
@@ -871,8 +871,8 @@ def _shared_managed_memory_is_current(
         ):
             continue
         name = record.artifact.identity.name
-        begin = f"<!-- >>> agent-artifacts memory:{name} >>> -->"
-        end = f"<!-- <<< agent-artifacts memory:{name} <<< -->"
+        begin = f"<!-- >>> aart-cli memory:{name} >>> -->"
+        end = f"<!-- <<< aart-cli memory:{name} <<< -->"
         if text.count(begin) == text.count(end) == 1 and text.index(begin) < text.index(end):
             return True
     return False

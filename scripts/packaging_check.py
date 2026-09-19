@@ -200,8 +200,8 @@ def record(raw, path):
 
 
 for raw, path in (
-    (LEGACY, "/probe/project/.agent-artifacts/manifest.json"),
-    (INVALID, "/probe/project/.agent-artifacts/state.json"),
+    (LEGACY, "/probe/project/.aart-cli/manifest.json"),
+    (INVALID, "/probe/project/.aart-cli/state.json"),
 ):
     for line in render_wizard_stage_failure(record(raw, path), width=80):
         print(line)

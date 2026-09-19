@@ -1,4 +1,4 @@
-"""Profile loader. Built-ins overlaid by ``<project>/.agent-artifacts/profiles.json``."""
+"""Profile loader. Built-ins overlaid by ``<project>/.aart-cli/profiles.json``."""
 
 from __future__ import annotations
 
@@ -130,14 +130,14 @@ def _targets_from_dict(record: Mapping[str, Any]) -> ProfileTargets:
 def load_profiles(project: Optional[str] = None) -> Mapping[str, Profile]:
     """Built-in profiles merged with the project's override file (pure merge over data).
 
-    If *project* is given and ``<project>/.agent-artifacts/profiles.json`` exists,
+    If *project* is given and ``<project>/.aart-cli/profiles.json`` exists,
     parse it and overlay/add those profiles over the built-ins. User records
     replace or add by name.  Missing project or file -> just the built-ins.
     """
     base = dict(builtin())  # mutable copy for merging
 
     if project is not None:
-        override_path = os.path.join(project, ".agent-artifacts", "profiles.json")
+        override_path = os.path.join(project, ".aart-cli", "profiles.json")
         if os.path.isfile(override_path):
             with open(override_path, encoding="utf-8") as fh:
                 overrides: Mapping[str, Any] = json.load(fh)

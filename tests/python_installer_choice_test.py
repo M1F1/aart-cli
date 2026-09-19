@@ -432,7 +432,7 @@ class TheReviewScreenOffersTheBackendTest(unittest.TestCase):
 
 
 _DEPENDENT_MANIFEST = {
-    "schema": "aart.dev/mcp/v1",
+    "schema": "aart-cli.dev/mcp/v1",
     "artifact": {"name": "code-review", "kind": "mcp", "version": "1.2.0"},
     "payload": {"include": ["server.py", "requirements.txt"]},
     "transport": {"type": "stdio"},
@@ -444,7 +444,7 @@ _DEPENDENT_MANIFEST = {
 #: An artifact that actually needs Python resolved, which the standard fixture does not. Without
 #: one the backend rows can never appear, and every claim about them is a claim about nothing.
 AUTHORED_DEPENDENT = (
-    ("code-review/aart.json", json.dumps(_DEPENDENT_MANIFEST)),
+    ("code-review/aart-cli.json", json.dumps(_DEPENDENT_MANIFEST)),
     ("code-review/server.py", "print('code review')\n"),
     ("code-review/requirements.txt", "attrs\n"),
 )

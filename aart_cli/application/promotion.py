@@ -666,7 +666,7 @@ def _version_content(version: RegistryArtifactVersion) -> bytes:
                 ("registry", version.coordinate.source.value),
                 ("registry_snapshot", str(version.registry_snapshot)),
                 ("replacement", version.replacement),
-                ("schema", "aart.dev/registry-version/v1"),
+                ("schema", "aart-cli.dev/registry-version/v1"),
                 ("version", version.coordinate.version),
             )
         )
@@ -675,8 +675,8 @@ def _version_content(version: RegistryArtifactVersion) -> bytes:
 
 #: The derived files of the approved representation: everything else in it is decided, not computed.
 REGISTRY_CATALOGS: tuple[tuple[str, str], ...] = (
-    ("registry/index.json", "aart.dev/registry-index/v1"),
-    ("registry/snapshot.json", "aart.dev/registry-snapshot/v1"),
+    ("registry/index.json", "aart-cli.dev/registry-index/v1"),
+    ("registry/snapshot.json", "aart-cli.dev/registry-snapshot/v1"),
 )
 
 
@@ -1287,7 +1287,7 @@ def _parse_version_record(content: bytes, path: str) -> Result[RegistryArtifactV
         return _error(f"registry version record is invalid JSON: {path}")
     value = parsed.value
     try:
-        if value.get("schema") != "aart.dev/registry-version/v1":
+        if value.get("schema") != "aart-cli.dev/registry-version/v1":
             raise ValueError("registry version schema is unsupported")
         kind = _required_text(value, "kind")
         if kind not in {"skill", "guideline", "mcp", "hook", "memory", "collection"}:

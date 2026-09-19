@@ -95,8 +95,8 @@ from .yaml import parse_yaml
 
 AuthorKind = Literal["skill", "guideline", "mcp", "hook", "memory"]
 
-_MANIFEST_NAMES = frozenset({"aart.json", "aart.yaml"})
-_COLLECTION_SCHEMA = "aart.dev/collection/v1"
+_MANIFEST_NAMES = frozenset({"aart-cli.json", "aart-cli.yaml"})
+_COLLECTION_SCHEMA = "aart-cli.dev/collection/v1"
 _SLUG_RE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 _KIND_BY_VALUE: dict[AuthorKind, ArtifactKind] = {
     "skill": ArtifactKind.SKILL,
@@ -129,15 +129,15 @@ PACKAGE_PAYLOAD_DIRECTORY = "payload"
 PACKAGE_MANIFEST_FILENAME = "artifact.json"
 #: The extension a package carries its author's declarations in, and the only thing that lets an
 #: installer say what installing it would involve.
-AUTHORING_EXTENSION = "aart.authoring"
-_COMPILER_ID = "aart-native-author"
+AUTHORING_EXTENSION = "aart-cli.authoring"
+_COMPILER_ID = "aart-cli-native-author"
 _COMPILER_VERSION = SemVer(1, 0, 0)
-_COMPILER_OPTIONS_DIGEST = sha256_bytes(b"AART-NATIVE-AUTHOR-COMPILER-V1\n")
+_COMPILER_OPTIONS_DIGEST = sha256_bytes(b"AART-CLI-NATIVE-AUTHOR-COMPILER-V1\n")
 
 
 class ComplianceLevel(str, Enum):
-    AART_NATIVE = "aart-native"
-    AART_COMPATIBLE = "aart-compatible"
+    AART_CLI_NATIVE = "aart-cli-native"
+    AART_CLI_COMPATIBLE = "aart-cli-compatible"
 
 
 @dataclass(frozen=True, slots=True)
@@ -870,7 +870,7 @@ def describe_installation(manifest: AuthorManifest) -> InstallDescription:
 
 
 def read_install_description(intent: JsonValue, *, path: str) -> Result[InstallDescription]:
-    """The install description a compiled package still carries, read from `aart.authoring`.
+    """The install description a compiled package still carries, read from `aart-cli.authoring`.
 
     The machine doing an installation has the package, not the author's repository, so what an
     install needs has to survive compilation and be readable back out of `artifact.json`. This
@@ -882,7 +882,7 @@ def read_install_description(intent: JsonValue, *, path: str) -> Result[InstallD
     unfamiliar key would make every later manifest field a breaking change for old installations.
     """
 
-    parsed = _object(intent, "aart.authoring", path=path)
+    parsed = _object(intent, "aart-cli.authoring", path=path)
     if isinstance(parsed, Err):
         return parsed
     fields = dict(parsed.value.entries)
@@ -1271,7 +1271,7 @@ def _declared_payload_files(manifest: AuthorManifest) -> tuple[str, ...]:
 
 def _parse_document(manifest: DiscoveredAuthorManifest) -> Result[JsonObject]:
     raw_path = str(manifest.path)
-    if manifest.path.parts[-1] == "aart.json":
+    if manifest.path.parts[-1] == "aart-cli.json":
         parsed = parse_json(manifest.content, location=SourceLocation(path=raw_path))
         if isinstance(parsed, Err):
             return _error(
@@ -1522,10 +1522,10 @@ def parse_author_manifest(manifest: DiscoveredAuthorManifest) -> Result[AuthorMa
             path=raw_path,
         )
     author_kind = kind.value
-    if schema_result.value != f"aart.dev/{author_kind}/v1":
+    if schema_result.value != f"aart-cli.dev/{author_kind}/v1":
         return _error(
             AUTHOR_MANIFEST_INVALID,
-            f"schema must be 'aart.dev/{author_kind}/v1' for artifact.kind {author_kind!r}",
+            f"schema must be 'aart-cli.dev/{author_kind}/v1' for artifact.kind {author_kind!r}",
             path=raw_path,
         )
     parsed_version = parse_semver(
@@ -1635,7 +1635,7 @@ def parse_author_manifest(manifest: DiscoveredAuthorManifest) -> Result[AuthorMa
     if isinstance(contract, Err):
         return contract
 
-    compliance = ComplianceLevel.AART_NATIVE
+    compliance = ComplianceLevel.AART_CLI_NATIVE
     if author_kind == "mcp":
         if transport != "stdio":
             return _error(
@@ -1657,7 +1657,7 @@ def parse_author_manifest(manifest: DiscoveredAuthorManifest) -> Result[AuthorMa
                     "external-script MCP launch requires launch.path",
                     path=raw_path,
                 )
-            compliance = ComplianceLevel.AART_COMPATIBLE
+            compliance = ComplianceLevel.AART_CLI_COMPATIBLE
         else:
             return _error(
                 AUTHOR_MANIFEST_INVALID,
@@ -1895,14 +1895,14 @@ def _canonical_payload_entries(
         assert manifest.entrypoint is not None
         if manifest.launch == "python":
             server_entries: tuple[tuple[str, JsonValue], ...] = (
-                ("command", "${AART_RUNTIME_PYTHON}"),
+                ("command", "${AART_CLI_RUNTIME_PYTHON}"),
                 (
                     "args",
-                    JsonArray((f"${{AART_PAYLOAD}}/{manifest.entrypoint}",)),
+                    JsonArray((f"${{AART_CLI_PAYLOAD}}/{manifest.entrypoint}",)),
                 ),
             )
         else:
-            server_entries = (("command", f"${{AART_PAYLOAD}}/{manifest.entrypoint}"),)
+            server_entries = (("command", f"${{AART_CLI_PAYLOAD}}/{manifest.entrypoint}"),)
         descriptor = JsonObject(
             (
                 ("name", manifest.name),

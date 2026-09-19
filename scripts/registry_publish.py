@@ -109,8 +109,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     registry = Path(args.source).expanduser().resolve()
-    if not (registry / "aart-registry.json").is_file():
-        die(f"{registry} is not a registry checkout: no aart-registry.json")
+    if not (registry / "aart-cli-registry.json").is_file():
+        die(f"{registry} is not a registry checkout: no aart-cli-registry.json")
     if git(registry, "rev-parse", "--git-dir").returncode != 0:
         die(f"{registry} is not a Git repository; `git init` first")
 

@@ -22,7 +22,7 @@ SECOND_MANIFEST = {
     "artifact": {**SKILL_MANIFEST["artifact"], "name": "documentation"},
 }
 SECOND_AUTHORED_SKILL: tuple[tuple[str, str], ...] = (
-    ("documentation/aart.json", json.dumps(SECOND_MANIFEST)),
+    ("documentation/aart-cli.json", json.dumps(SECOND_MANIFEST)),
     ("documentation/SKILL.md", "# Documentation\n\nExplain the public contract.\n"),
     ("documentation/reference/style.md", "Prefer one observable example.\n"),
 )

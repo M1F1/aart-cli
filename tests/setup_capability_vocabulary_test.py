@@ -148,7 +148,7 @@ def _published_capabilities(project, installer: SetupInstaller):
           "name": "atlassian",
           "version": "2.1.0",
           "summary": "Connect reviewed Atlassian tools.",
-          "payload": {"root": "payload", "format": "aart-mcp-v1"},
+          "payload": {"root": "payload", "format": "aart-cli-mcp-v1"},
           "compatibility": {"profiles": ["claude"], "platforms": ["darwin"]},
           "install": {"scopes": ["user"], "modes": ["copy"], "effects": ["merge-json"]},
           "setup": {"recipe": "setup/installer.json", "platforms": ["darwin"]}

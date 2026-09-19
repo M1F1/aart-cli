@@ -163,7 +163,7 @@ class Fixture:
             ArtifactIdentity("skill", "review"),
             SemVer(1, 0, 0),
             "Use review to improve agent work.",
-            PayloadSpec(_path("payload"), "aart-skill-v1"),
+            PayloadSpec(_path("payload"), "aart-cli-skill-v1"),
             CompatibilitySpec(profiles, ("darwin",)),
             InstallSpec(("project",), ("copy",), ("copy-tree",)),
             SetupReference(_path("setup/installer.json"), setup_platforms),
@@ -938,7 +938,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
             self.assertEqual([call[1] for call in custom_calls], ["plan", "apply", "verify"])
             copied = Path(custom_calls[0][0])
             self.assertTrue(all(Path(call[0]) == copied for call in custom_calls))
-            self.assertTrue(copied.is_relative_to(fixture.data / ".agent-artifacts/setup-runs"))
+            self.assertTrue(copied.is_relative_to(fixture.data / ".aart-cli/setup-runs"))
             self.assertFalse(copied.is_relative_to(Path(planned.value.object_root)))
             self.assertEqual(
                 sha256_bytes(copied.read_bytes()), planned.value.custom_entrypoint_digest

@@ -61,7 +61,7 @@ class RegistryPublishCommandTest(unittest.TestCase):
             paths = {item["path"] for item in result["commit"]["paths"]}
             self.assertIn("registry/index.json", paths)
             self.assertIn("registry/snapshot.json", paths)
-            self.assertIn("aart-registry.json", paths)
+            self.assertIn("aart-cli-registry.json", paths)
             self.assertFalse((root / "aart.lock.json").exists())
             self.assertFalse((root / "aart.index.json").exists())
             self.assertNotEqual(_git(root, "rev-parse", "HEAD").returncode, 0)

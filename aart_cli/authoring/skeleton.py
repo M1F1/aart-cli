@@ -43,7 +43,7 @@ ALTERNATIVE_PREFIX = "#? "
 GENERATED_KINDS: tuple[str, ...]
 
 #: Where a generated manifest says it came from, for the diagnostics of the verification below.
-SKELETON_MANIFEST_NAME = "aart.yaml"
+SKELETON_MANIFEST_NAME = "aart-cli.yaml"
 
 #: A payload path is relative to the manifest's own directory. The compiler places the author's
 #: files under the package's `payload/` itself, so a `payload/` written here would arrive as
@@ -72,7 +72,7 @@ class AuthorSkeleton:
 
     kind: str
     name: str
-    #: The `aart.yaml` to write: `live` plus every other block as commented-out YAML.
+    #: The `aart-cli.yaml` to write: `live` plus every other block as commented-out YAML.
     manifest: str
     #: What `manifest` parses to with its comments stripped.
     live: JsonObject
@@ -128,7 +128,7 @@ def _mcp_blueprint(name: str) -> _Blueprint:
 
     entrypoint = "server.py"
     document = _object(
-        ("schema", "aart.dev/mcp/v1"),
+        ("schema", "aart-cli.dev/mcp/v1"),
         (
             "artifact",
             _object(
@@ -404,7 +404,7 @@ def _anchored(
 
 
 def author_skeleton(kind: str, name: str) -> Result[AuthorSkeleton]:
-    """The `aart.yaml` and payload one `aart-cli author init` writes, as text.
+    """The `aart-cli.yaml` and payload one `aart-cli author init` writes, as text.
 
     Refuses before producing anything when the kind is not one this build generates or the name is
     not the slug `artifact.name` requires: a skeleton the parser would reject is worse than none,
@@ -478,7 +478,7 @@ def _skill_blueprint(name: str) -> _Blueprint:
     """
 
     document = _object(
-        ("schema", "aart.dev/skill/v1"),
+        ("schema", "aart-cli.dev/skill/v1"),
         (
             "artifact",
             _object(
@@ -620,7 +620,7 @@ def _document_blueprint(
     return _Blueprint(
         kind,
         _object(
-            ("schema", f"aart.dev/{kind}/v1"),
+            ("schema", f"aart-cli.dev/{kind}/v1"),
             (
                 "artifact",
                 _object(
@@ -710,7 +710,7 @@ def _hook_blueprint(name: str) -> _Blueprint:
     return _Blueprint(
         "hook",
         _object(
-            ("schema", "aart.dev/hook/v1"),
+            ("schema", "aart-cli.dev/hook/v1"),
             (
                 "artifact",
                 _object(

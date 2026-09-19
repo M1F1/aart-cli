@@ -64,7 +64,7 @@ def _entry(path: str, content: str) -> SnapshotEntry:
 
 def _mcp(name: str, version: str) -> tuple[SnapshotEntry, ...]:
     manifest = {
-        "schema": "aart.dev/mcp/v1",
+        "schema": "aart-cli.dev/mcp/v1",
         "artifact": {"name": name, "kind": "mcp", "version": version},
         "payload": {"include": ["server.py"]},
         "transport": {"type": "stdio"},
@@ -72,20 +72,20 @@ def _mcp(name: str, version: str) -> tuple[SnapshotEntry, ...]:
         "launch": {"type": "python", "entrypoint": "server.py"},
     }
     return (
-        _entry(f"{name}/aart.json", json.dumps(manifest, sort_keys=True)),
+        _entry(f"{name}/aart-cli.json", json.dumps(manifest, sort_keys=True)),
         _entry(f"{name}/server.py", "print('serve')\n"),
     )
 
 
 def _skill(name: str, version: str) -> tuple[SnapshotEntry, ...]:
     manifest = {
-        "schema": "aart.dev/skill/v1",
+        "schema": "aart-cli.dev/skill/v1",
         "artifact": {"name": name, "kind": "skill", "version": version},
         "payload": {"include": ["SKILL.md"]},
         "compatibility": {"harnesses": ["claude"]},
     }
     return (
-        _entry(f"{name}/aart.json", json.dumps(manifest, sort_keys=True)),
+        _entry(f"{name}/aart-cli.json", json.dumps(manifest, sort_keys=True)),
         _entry(f"{name}/SKILL.md", f"# {name}\n\nA body.\n"),
     )
 

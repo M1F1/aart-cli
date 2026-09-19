@@ -69,7 +69,7 @@ maintain it directly.
 ```sh
 aart-cli marketplace health \
   reference/collection/residuality \
-  --environment .agent-artifacts/runtime-environment.json \
+  --environment .aart-cli/runtime-environment.json \
   --json
 ```
 

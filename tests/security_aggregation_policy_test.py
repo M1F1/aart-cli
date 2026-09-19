@@ -38,7 +38,7 @@ def _assessment(
     status: AssessmentStatus,
     severity: FindingSeverity = FindingSeverity.UNKNOWN,
     *,
-    provider_id: str = "aart-baseline",
+    provider_id: str = "aart-cli-baseline",
 ) -> SecurityAssessment:
     complete = status in {AssessmentStatus.COMPLETE, AssessmentStatus.STALE}
     coverage = AssessmentCoverage(
@@ -85,7 +85,7 @@ def _evidence(
     severity: FindingSeverity = FindingSeverity.UNKNOWN,
     *,
     trust: AttestationTrust = AttestationTrust.LOCAL,
-    provider_id: str = "aart-baseline",
+    provider_id: str = "aart-cli-baseline",
 ) -> ArtifactSecurityEvidence:
     return ArtifactSecurityEvidence(
         _coordinate(name),
@@ -194,7 +194,7 @@ class SecurityAggregationPolicyTest(unittest.TestCase):
         strict = SecurityInstallPolicy(
             minimum_attestation_trust=AttestationTrust.COMPANY_REVIEWED,
             insufficient_trust_action=SecurityPolicyAction.BLOCK,
-            required_provider_ids=("aart-baseline", "ruff"),
+            required_provider_ids=("aart-cli-baseline", "ruff"),
             missing_provider_action=SecurityPolicyAction.CONFIRM,
             scopes=("user",),
         )

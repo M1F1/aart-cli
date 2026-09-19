@@ -36,7 +36,7 @@ from .model import (
     risk_from_evidence,
 )
 
-BASELINE_PROVIDER_ID = "aart-baseline"
+BASELINE_PROVIDER_ID = "aart-cli-baseline"
 BASELINE_PROVIDER_VERSION = "1"
 # Bumped when the rules or their reach change: a recorded assessment made under the old revision
 # has a different rules digest and is reported stale rather than silently reused.

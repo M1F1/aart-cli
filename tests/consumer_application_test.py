@@ -363,7 +363,7 @@ class ConsumerApplicationTest(unittest.TestCase):
     ) -> None:
         with tempfile.TemporaryDirectory() as raw:
             fixture = SetupFixture(Path(raw))
-            (fixture.project / ".agent-artifacts/manifest.json").unlink()
+            (fixture.project / ".aart-cli/manifest.json").unlink()
             context = ConsumerContext(
                 fixture.catalog,
                 fixture.effective,

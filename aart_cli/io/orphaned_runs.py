@@ -18,7 +18,7 @@ def read_orphaned_runs(*, run_root: str) -> OrphanedRuns:
 
     if not run_root:
         return OrphanedRuns(readable=False)
-    runs_root = os.path.join(run_root, ".agent-artifacts", "setup-runs")
+    runs_root = os.path.join(run_root, ".aart-cli", "setup-runs")
     try:
         entries = sorted(os.listdir(runs_root))
     except FileNotFoundError:

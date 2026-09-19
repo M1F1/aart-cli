@@ -203,12 +203,12 @@ def _registry_catalog(root: str) -> Result[tuple[IndexArtifact, ...]]:
         (
             entry
             for entry in snapshot.value.entries
-            if str(entry.path) == "aart-registry.json" and entry.kind is SnapshotEntryKind.FILE
+            if str(entry.path) == "aart-cli-registry.json" and entry.kind is SnapshotEntryKind.FILE
         ),
         None,
     )
     if marker is None:
-        return _error("registry root declares no aart-registry.json")
+        return _error("registry root declares no aart-cli-registry.json")
     manifest = parse_registry_manifest(marker.content)
     versions = promoted_registry_versions(snapshot.value)
     if isinstance(manifest, Err):

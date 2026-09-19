@@ -42,17 +42,17 @@ from tests.frame_contract import key_violations
 
 _COMPATIBLE = ["claude", "opencode", "tabnine"]
 _SKILL_MANIFEST = {
-    "schema": "aart.dev/skill/v1",
+    "schema": "aart-cli.dev/skill/v1",
     "artifact": {"name": "code-review", "kind": "skill", "version": "1.2.0"},
     "payload": {"include": ["SKILL.md"]},
     "compatibility": {"harnesses": _COMPATIBLE},
 }
 _AUTHORED_SKILL = (
-    ("code-review/aart.json", json.dumps(_SKILL_MANIFEST)),
+    ("code-review/aart-cli.json", json.dumps(_SKILL_MANIFEST)),
     ("code-review/SKILL.md", "# Code review\n\nChosen harness delivery.\n"),
 )
 _MCP_MANIFEST = {
-    "schema": "aart.dev/mcp/v1",
+    "schema": "aart-cli.dev/mcp/v1",
     "artifact": {"name": "dummy", "kind": "mcp", "version": "1.0.0"},
     "payload": {"include": ["server.py"]},
     "transport": {"type": "stdio"},
@@ -61,7 +61,7 @@ _MCP_MANIFEST = {
     "compatibility": {"harnesses": _COMPATIBLE},
 }
 _AUTHORED_MCP = (
-    ("dummy/aart.json", json.dumps(_MCP_MANIFEST)),
+    ("dummy/aart-cli.json", json.dumps(_MCP_MANIFEST)),
     ("dummy/server.py", "print('dummy')\n"),
 )
 

@@ -1,6 +1,6 @@
 # Installation-risk baseline v1
 
-The `aart-baseline` provider produces deterministic, explainable evidence for one immutable
+The `aart-cli-baseline` provider produces deterministic, explainable evidence for one immutable
 canonical artifact object. It is implemented with the Python standard library, performs no IO,
 network access, process execution, or optional imports, and does not certify an artifact or claim
 general vulnerability coverage.

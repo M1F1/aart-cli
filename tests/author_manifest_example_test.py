@@ -23,12 +23,12 @@ from aart_cli.protocol.authoring import (
 from tests.authoring_compiler_test import _file, _snapshot
 
 ROOT = Path(__file__).resolve().parents[1]
-EXAMPLE = ROOT / "docs/examples/author-source/example-mcp/aart.yaml"
+EXAMPLE = ROOT / "docs/examples/author-source/example-mcp/aart-cli.yaml"
 
 
 def _example_snapshot():
     return _snapshot(
-        _file("example-mcp/aart.yaml", EXAMPLE.read_bytes()),
+        _file("example-mcp/aart-cli.yaml", EXAMPLE.read_bytes()),
         _file("example-mcp/server.py", "print()\n"),
         _file("example-mcp/requirements.txt", "mcp==1.0.0\n"),
     )
@@ -46,7 +46,7 @@ class AuthorManifestExampleTest(unittest.TestCase):
     def test_example_declares_a_python_stdio_mcp(self) -> None:
         manifest = self._parsed()
 
-        self.assertEqual(manifest.schema, "aart.dev/mcp/v1")
+        self.assertEqual(manifest.schema, "aart-cli.dev/mcp/v1")
         self.assertEqual(
             (manifest.kind, manifest.name, str(manifest.version)), ("mcp", "example-mcp", "1.0.0")
         )
@@ -85,7 +85,7 @@ class AuthorManifestExampleTest(unittest.TestCase):
     def test_example_is_refused_without_the_dependency_file_it_points_at(self) -> None:
         compiled = compile_author_snapshot(
             _snapshot(
-                _file("example-mcp/aart.yaml", EXAMPLE.read_bytes()),
+                _file("example-mcp/aart-cli.yaml", EXAMPLE.read_bytes()),
                 _file("example-mcp/server.py", "print()\n"),
             ),
             source_alias=SourceAlias("example"),

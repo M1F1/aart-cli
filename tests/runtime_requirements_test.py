@@ -20,7 +20,7 @@ def _manifest(extension: object | None = None, *, key: str = "aart.runtime-requi
         "name": "example",
         "version": "1.0.0",
         "summary": "Example skill.",
-        "payload": {"root": "payload", "format": "aart-skill-v1"},
+        "payload": {"root": "payload", "format": "aart-cli-skill-v1"},
         "compatibility": {"profiles": ["claude"], "platforms": ["darwin"]},
         "install": {
             "scopes": ["project"],

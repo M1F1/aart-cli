@@ -82,7 +82,7 @@ class EachHarnessGetsItsOwnFileTest(unittest.TestCase):
         assert isinstance(planned, Ok)
         self.assertEqual(planned.value.configuration, ())
         self.assertEqual(planned.value.registrations[0].arguments, ())
-        self.assertNotIn("AART_HARNESS", planned.value.launcher.content)
+        self.assertNotIn("AART_CLI_HARNESS", planned.value.launcher.content)
 
     def test_a_credential_pasted_into_a_configuration_answer_is_never_planned_to_disk(self):
         refused = _plan(

@@ -264,7 +264,7 @@ def _declaring(profiles: tuple[str, ...], platforms: tuple[str, ...], *detected:
 
 def _skill(harnesses: list[str] | None = None, platforms: list[str] | None = None):
     manifest: dict[str, object] = {
-        "schema": "aart.dev/skill/v1",
+        "schema": "aart-cli.dev/skill/v1",
         "artifact": {"name": "code-review", "kind": "skill", "version": "1.2.0"},
         "payload": {"include": ["SKILL.md"]},
     }
@@ -276,7 +276,7 @@ def _skill(harnesses: list[str] | None = None, platforms: list[str] | None = Non
     if compatibility:
         manifest["compatibility"] = compatibility
     return (
-        ("code-review/aart.json", json.dumps(manifest)),
+        ("code-review/aart-cli.json", json.dumps(manifest)),
         ("code-review/SKILL.md", "# Code review\n"),
     )
 
@@ -328,7 +328,7 @@ class OneEligibilityRuleTest(unittest.TestCase):
 
 class ADeclaredPlatformNarrowsInstallationTest(_PlacementFixture):
     manifest = {
-        "schema": "aart.dev/skill/v1",
+        "schema": "aart-cli.dev/skill/v1",
         "artifact": {"name": "elsewhere-check", "kind": "skill", "version": "1.0.0"},
         "payload": {"include": ["SKILL.md"]},
         "compatibility": {"harnesses": ["claude"], "platforms": [_ELSEWHERE]},
@@ -354,7 +354,7 @@ class ADeclaredPlatformNarrowsInstallationTest(_PlacementFixture):
 
 class ThisPlatformIsDeclaredTest(_PlacementFixture):
     manifest = {
-        "schema": "aart.dev/skill/v1",
+        "schema": "aart-cli.dev/skill/v1",
         "artifact": {"name": "here-check", "kind": "skill", "version": "1.0.0"},
         "payload": {"include": ["SKILL.md"]},
         "compatibility": {"harnesses": ["claude"], "platforms": [platform_name(), _ELSEWHERE]},

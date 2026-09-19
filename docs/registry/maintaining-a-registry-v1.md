@@ -5,7 +5,7 @@ explicit `registry publish --yes` flow runs every publisher gate and creates the
 stops there. `registry push --branch NAME` then pushes that commit to a review branch — never the
 registry's default branch, which is refused by name, because a subscriber reads the default branch
 and only a merge should change what it can install. Merging is the reviewer's work, on the forge.
-An empty Git repository is not a registry until its `aart-registry.json` marker exists.
+An empty Git repository is not a registry until its `aart-cli-registry.json` marker exists.
 
 AART reaches every remote by running system Git, with an allowlisted environment rather than the
 operator's. If a repository clones at a shell prompt but not through AART, the environment is where
@@ -55,7 +55,7 @@ For the complete path, use the [walked company-registry tutorial for Tabnine](..
 The [vendoring tutorial](../tutorials/vendoring-v1.md) covers provenance and re-vendoring, and
 [porting an MCP server](../tutorials/mcp-servers-into-the-registry.md) covers setup recipes.
 
-An author team whose repository becomes a Source commits one `aart.yaml` beside each artifact. A
+An author team whose repository becomes a Source commits one `aart-cli.yaml` beside each artifact. A
 complete MCP example — Python stdio server, `requirements.txt` dependencies, one Keychain secret and
-one per-harness setting — is [docs/examples/author-source/example-mcp/aart.yaml](../examples/author-source/example-mcp/aart.yaml),
+one per-harness setting — is [docs/examples/author-source/example-mcp/aart-cli.yaml](../examples/author-source/example-mcp/aart-cli.yaml),
 held to what AART accepts by `tests/author_manifest_example_test.py`.

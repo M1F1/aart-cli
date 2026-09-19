@@ -208,7 +208,7 @@ def test_laf61_an_orphaned_run_directory_is_named_and_not_removed() -> None:
 
     def orphans(plan_hash: str):
         seen.append(plan_hash)
-        return ("/p/.agent-artifacts/setup-runs/aaaaaaaaaaaaaaaa-xyz",)
+        return ("/p/.aart-cli/setup-runs/aaaaaaaaaaaaaaaa-xyz",)
 
     status, detail = _statuses(_record(), _probes(orphan_run_directories=orphans))[NO_ORPHAN_RUN]
 

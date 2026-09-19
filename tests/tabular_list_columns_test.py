@@ -62,7 +62,7 @@ def _candidate(
         source_alias=source,
         source_location=f"https://git.example.test/team/{source}.git",
         source_revision="a" * 40,
-        manifest_path="aart.yaml",
+        manifest_path="aart-cli.yaml",
         input_digest="sha256:" + "b" * 64,
         payload_digest="sha256:" + "c" * 64,
         canonical_digest="sha256:" + "d" * 64,

@@ -40,14 +40,14 @@ CONFIGURED = ".code-review.toml"
 #: A setup declaration must name a subset of the artifact's platforms, and the setup engine supports
 #: exactly `darwin`, so an artifact that declares no platforms at all cannot declare setup.
 MANIFEST = {
-    "schema": "aart.dev/skill/v1",
+    "schema": "aart-cli.dev/skill/v1",
     "artifact": {"name": "code-review", "kind": "skill", "version": "1.2.0"},
     "payload": {"include": ["SKILL.md", "reference/style.md"]},
     "compatibility": {"harnesses": ["claude"], "platforms": ["darwin", "linux"]},
 }
 
 AUTHORED: tuple[tuple[str, str], ...] = (
-    ("code-review/aart.json", json.dumps(MANIFEST)),
+    ("code-review/aart-cli.json", json.dumps(MANIFEST)),
     ("code-review/SKILL.md", SKILL_BODY),
     ("code-review/reference/style.md", STYLE_BODY),
 )

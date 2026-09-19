@@ -149,7 +149,7 @@ class TestLoadProfilesOverride(unittest.TestCase):
     """load_profiles with a project override file."""
 
     def _write_override(self, tmp: str, data: dict) -> None:
-        override_dir = os.path.join(tmp, ".agent-artifacts")
+        override_dir = os.path.join(tmp, ".aart-cli")
         os.makedirs(override_dir, exist_ok=True)
         with open(os.path.join(override_dir, "profiles.json"), "w", encoding="utf-8") as fh:
             json.dump(data, fh)

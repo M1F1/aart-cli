@@ -53,7 +53,7 @@ def _entry(path: str, content: str) -> SnapshotEntry:
 
 def _snapshot() -> SourceSnapshot:
     manifest = {
-        "schema": "aart.dev/mcp/v1",
+        "schema": "aart-cli.dev/mcp/v1",
         "artifact": {"name": "github", "kind": "mcp", "version": "1.0.0"},
         "payload": {"include": ["server.py"]},
         "transport": {"type": "stdio"},
@@ -63,7 +63,7 @@ def _snapshot() -> SourceSnapshot:
     return SourceSnapshot(
         SnapshotOrigin.LOCAL,
         (
-            _entry("github/aart.json", json.dumps(manifest, sort_keys=True)),
+            _entry("github/aart-cli.json", json.dumps(manifest, sort_keys=True)),
             _entry("github/server.py", "print('ready')\n"),
         ),
     )
@@ -71,7 +71,7 @@ def _snapshot() -> SourceSnapshot:
 
 def _collection_snapshot() -> SourceSnapshot:
     manifest = {
-        "schema": "aart.dev/collection/v1",
+        "schema": "aart-cli.dev/collection/v1",
         "name": "data-engineer",
         "version": "2.1.0",
         "summary": "Approved data engineering tools.",
@@ -79,7 +79,7 @@ def _collection_snapshot() -> SourceSnapshot:
     }
     return SourceSnapshot(
         SnapshotOrigin.LOCAL,
-        (_entry("collections/data-engineer/aart.json", json.dumps(manifest, sort_keys=True)),),
+        (_entry("collections/data-engineer/aart-cli.json", json.dumps(manifest, sort_keys=True)),),
     )
 
 

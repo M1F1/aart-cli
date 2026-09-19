@@ -31,7 +31,7 @@ class SourceLocalAdapterTest(unittest.TestCase):
         assert isinstance(first, Ok)
         self.assertEqual(first.value.snapshot.origin.value, "local")
         self.assertIn(
-            "aart-source.json", tuple(str(item.path) for item in first.value.snapshot.entries)
+            "aart-cli-source.json", tuple(str(item.path) for item in first.value.snapshot.entries)
         )
         self.assertTrue(all(str(item.path) != ".git" for item in first.value.snapshot.entries))
 

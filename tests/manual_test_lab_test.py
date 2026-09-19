@@ -124,7 +124,7 @@ class ManualTestLabTest(unittest.TestCase):
         self.assertTrue(second.branch.startswith("manual/"))
         self.assertTrue((self.root / "consumer-project").is_dir())
         self.assertFalse((self.root / "consumer-home/.config/agent-artifacts/config.json").exists())
-        manifest = json.loads((self.root / "repositories/mcp/dummy-mcp/aart.json").read_text())
+        manifest = json.loads((self.root / "repositories/mcp/dummy-mcp/aart-cli.json").read_text())
         self.assertEqual(manifest["inputs"][0]["kind"], "secret")
         self.assertEqual(manifest["inputs"][0]["id"], "dummy-token")
         # CP-23 task 13: the lab credential demonstrates complete guidance, including how a
@@ -146,7 +146,7 @@ class ManualTestLabTest(unittest.TestCase):
             "AART_DUMMY_USER", (self.root / "repositories/mcp/dummy-mcp/server.py").read_text()
         )
         skill_manifest = json.loads(
-            (self.root / "repositories/skill/manual-check/aart.json").read_text()
+            (self.root / "repositories/skill/manual-check/aart-cli.json").read_text()
         )
         self.assertEqual(
             skill_manifest["compatibility"]["harnesses"],
@@ -177,10 +177,10 @@ class ManualTestLabTest(unittest.TestCase):
         registry = self.root / "repositories/registry"
         # The author sources still exist: an author publishes independently of any registry, and
         # the maintainer run needs something to discover.
-        self.assertTrue((self.root / "repositories/skill/manual-check/aart.json").is_file())
-        self.assertTrue((self.root / "repositories/mcp/dummy-mcp/aart.json").is_file())
+        self.assertTrue((self.root / "repositories/skill/manual-check/aart-cli.json").is_file())
+        self.assertTrue((self.root / "repositories/mcp/dummy-mcp/aart-cli.json").is_file())
         # The registry does not. Not its manifest, not a promotion, not a published version.
-        self.assertFalse((registry / "aart-registry.json").exists())
+        self.assertFalse((registry / "aart-cli-registry.json").exists())
         self.assertEqual((), tuple((registry / "registry").rglob("*.json")))
         self.assertEqual((), tuple((registry / "artifacts").rglob("*.json")))
         # And no configured Source either: adding them is itself a Maintainer screen under test.
@@ -203,7 +203,7 @@ class ManualTestLabTest(unittest.TestCase):
 
         setup_lab(self.root)
 
-        self.assertTrue((self.root / "repositories/registry/aart-registry.json").is_file())
+        self.assertTrue((self.root / "repositories/registry/aart-cli-registry.json").is_file())
         self.assertTrue(
             tuple((self.root / "repositories/registry/registry/versions").rglob("*.json"))
         )
@@ -411,7 +411,7 @@ class ManualTestLabTest(unittest.TestCase):
         from scripts.manual_test import reset_lab, setup_lab
 
         setup_lab(self.root)
-        payload = self.root / "repositories/registry/.agent-artifacts/runtimes/lab/mcp/payload"
+        payload = self.root / "repositories/registry/.aart-cli/runtimes/lab/mcp/payload"
         payload.mkdir(parents=True)
         (payload / "server.py").write_text("owned\n")
         (payload / "mcp.json").write_text("{}\n")

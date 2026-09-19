@@ -100,7 +100,7 @@ KIT = OwnershipReason(OwnershipKind.COLLECTION, "public/collection/data-scientis
 #: The same authored server the Tabnine E2E uses, declaring OpenCode instead. Everything the
 #: install needs -- runtime, dependencies, launch arguments, both inputs -- is declared here once.
 MANIFEST = {
-    "schema": "aart.dev/mcp/v1",
+    "schema": "aart-cli.dev/mcp/v1",
     "artifact": {"name": "github", "kind": "mcp", "version": "1.5.0"},
     "payload": {"include": ["server.py", "requirements.txt"]},
     "transport": {"type": "stdio"},
@@ -156,7 +156,7 @@ class OpenCodeMcpInstallationTest(unittest.TestCase):
     def _compile(self):
         repository = self.scope / "author"
         (repository / "github").mkdir(parents=True)
-        (repository / "github/aart.json").write_text(json.dumps(MANIFEST), encoding="utf-8")
+        (repository / "github/aart-cli.json").write_text(json.dumps(MANIFEST), encoding="utf-8")
         (repository / "github/server.py").write_text(SERVER_SOURCE, encoding="utf-8")
         (repository / "github/requirements.txt").write_text(
             "# no third-party packages\n", encoding="utf-8"

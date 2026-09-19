@@ -81,7 +81,7 @@ class ConfiguredConfigurationActionE2ETest(unittest.TestCase):
         config_input["default"] = "acme-team"
         config_input["validation"] = {"type": "pattern", "pattern": "[a-z]+-team"}
         authored = tuple(
-            (item[0], json.dumps(manifest)) if item[0] == "github/aart.json" else item
+            (item[0], json.dumps(manifest)) if item[0] == "github/aart-cli.json" else item
             for item in AUTHORED_MCP
         )
         candidate = make_source_candidate(

@@ -97,7 +97,7 @@ def source_state(
         origin,
         (
             SnapshotEntry(
-                SafeRelativePath(("aart-source.json",)),
+                SafeRelativePath(("aart-cli-source.json",)),
                 SnapshotEntryKind.FILE,
                 content,
             ),

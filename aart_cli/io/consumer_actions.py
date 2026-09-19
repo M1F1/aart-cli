@@ -1243,7 +1243,7 @@ class LocalConsumerActions:
                     f"  kind: {parsed.value.kind.value}",
                     f"  location: {parsed.value.location}",
                     f"  branch or tag: {parsed.value.ref or 'not applicable'}",
-                    "  next: acquire a pinned snapshot, discover declared aart.yaml/aart.json "
+                    "  next: acquire a pinned snapshot, discover declared aart-cli.yaml/aart-cli.json "
                     "manifests, then save the subscription",
                 )
             ),

@@ -749,8 +749,8 @@ def build_parser() -> argparse.ArgumentParser:
         "scan",
         help="discover native Candidates in one pinned author checkout",
         description=(
-            "Read a clean Git author checkout at its exact HEAD, compile only explicit aart.json "
-            "or aart.yaml manifests, and report Candidate state. Source Scan never changes the "
+            "Read a clean Git author checkout at its exact HEAD, compile only explicit aart-cli.json "
+            "or aart-cli.yaml manifests, and report Candidate state. Source Scan never changes the "
             "target registry and never promotes a Candidate."
         ),
     )
@@ -866,7 +866,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="scan explicit manifests and adopt selected artifacts without subscribing",
         description=(
             "Acquire one credential-free Git URL/ref without saving it as a Source, compile only "
-            "explicit aart.yaml/aart.json manifests, and report them. Repeat --artifact to prepare "
+            "explicit aart-cli.yaml/aart-cli.json manifests, and report them. Repeat --artifact to prepare "
             "selected immutable Registry copies. Without --yes this is review-only; with --yes it "
             "writes the reviewed local transaction and never commits, pushes or merges."
         ),
@@ -1350,7 +1350,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_author_init = author_sub.add_parser(
         "init",
         formatter_class=_HELP_FORMATTER,
-        help="write an aart.yaml carrying every accepted field, plus a payload skeleton",
+        help="write an aart-cli.yaml carrying every accepted field, plus a payload skeleton",
         description=(
             "Write a manifest that carries the whole accepted field surface, with the optional "
             "blocks commented out and one line of explanation each, so narrowing it down is an "
@@ -1381,7 +1381,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_author_check = author_sub.add_parser(
         "check",
         formatter_class=_HELP_FORMATTER,
-        help="parse every aart.yaml/aart.json under a directory",
+        help="parse every aart-cli.yaml/aart-cli.json under a directory",
         description=(
             "Read the directory the way a Source Sync reads one and put every manifest it "
             "finds through the parser a Registry uses. The verdict is the parser's, so a "

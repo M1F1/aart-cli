@@ -259,8 +259,8 @@ class ConsumerRuntimeTest(unittest.TestCase):
             assert isinstance(refused, Err), refused
             message = refused.diagnostics[0].message
             self.assertIn("is not a canonical approved Registry", message)
-            self.assertIn("aart-registry.json", message)
-            self.assertIn("aart-source.json", message)
+            self.assertIn("aart-cli-registry.json", message)
+            self.assertIn("aart-cli-source.json", message)
 
     def test_an_approved_registry_projects_every_published_version(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -293,7 +293,7 @@ class ConsumerRuntimeTest(unittest.TestCase):
                 native_snapshot().origin,
                 tuple(
                     replace(entry, content=b"{ not json\n")
-                    if str(entry.path) == "aart-source.json"
+                    if str(entry.path) == "aart-cli-source.json"
                     else entry
                     for entry in native_snapshot().entries
                 ),
@@ -304,7 +304,7 @@ class ConsumerRuntimeTest(unittest.TestCase):
                 paths,
             )
             registry = configured_source("company", SourceKind.REGISTRY_GIT)
-            # A native package source is not a Registry: it declares no `aart-registry.json`, so
+            # A native package source is not a Registry: it declares no `aart-cli-registry.json`, so
             # it is refused for what it is rather than compiled as an empty catalog.
             not_a_registry = _graph_source(
                 registry,
@@ -339,7 +339,7 @@ class ConsumerRuntimeTest(unittest.TestCase):
     def test_an_authoring_source_contributes_nothing_and_takes_nothing_away(self) -> None:
         """INV-199 at the consumer projection: a Source of Candidates is not Marketplace content.
 
-        An authoring repository declares no `aart-source.json` -- it declares `aart.yaml`
+        An authoring repository declares no `aart-cli-source.json` -- it declares `aart-cli.yaml`
         manifests, which compile to Candidates a maintainer has not approved yet.  Reading it as
         a broken native package tree refused the *whole* projection, which is how one subscribed
         author repository used to empty a consumer's Marketplace (B-094/QA-020).  The right
@@ -352,8 +352,8 @@ class ConsumerRuntimeTest(unittest.TestCase):
             authoring = configured_source("authors", SourceKind.SOURCE_GIT)
             snapshot = append_snapshot_file(
                 SourceSnapshot(native_snapshot().origin, ()),
-                "skills/review/aart.yaml",
-                b"schema: aart.dev/skill/v1\n",
+                "skills/review/aart-cli.yaml",
+                b"schema: aart-cli.dev/skill/v1\n",
             )
 
             projected = _graph_source(
@@ -541,7 +541,7 @@ class ConsumerRuntimeTest(unittest.TestCase):
                     AssessmentCacheKey(
                         1,
                         artifact.object_digest,
-                        "aart-baseline",
+                        "aart-cli-baseline",
                         "1",
                         BASELINE_RULES_DIGEST,
                         empty_digest,
@@ -615,7 +615,7 @@ class ConsumerRuntimeTest(unittest.TestCase):
                 },
             )
             self.assertTrue(
-                all(item.assessment.providers[0].id == "aart-baseline" for item in evidence)
+                all(item.assessment.providers[0].id == "aart-cli-baseline" for item in evidence)
             )
 
             missing_documents = append_snapshot_file(

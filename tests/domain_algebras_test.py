@@ -66,7 +66,7 @@ def _artifact(*capabilities: str) -> ArtifactPackage:
         provenance=Provenance(
             source="git.company/ai/mcp",
             revision="b" * 40,
-            manifest_path="github/aart.yaml",
+            manifest_path="github/aart-cli.yaml",
             input_digest=_digest("c"),
             compiler="aart-cli/0.0.1",
         ),

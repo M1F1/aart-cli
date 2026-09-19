@@ -42,7 +42,7 @@ ACTIONS = tuple(sorted((ROOT / ".github" / "actions").rglob("action.yml")))
 TEMPLATE_TEXT = REGISTRY_CI_WORKFLOW.decode("utf-8")
 _SHIPPED = {"registry quality": REGISTRY_CI_WORKFLOW}
 EMITTED = {label: body.decode("utf-8") for label, body in _SHIPPED.items()}
-_VARIABLE = re.compile(r"vars\.(AART_[A-Z0-9_]+)")
+_VARIABLE = re.compile(r"vars\.(AART_CLI_[A-Z0-9_]+)")
 _SECRET = re.compile(r"secrets(\.[A-Za-z_][A-Za-z0-9_]*|\[[^\]]+\])")
 _URL = re.compile(r"https?://([A-Za-z0-9.-]*\.[A-Za-z]{2,})")
 
@@ -123,11 +123,18 @@ class TheReleaseEngineIsPortableTooTest(unittest.TestCase):
 
     def test_the_runner_is_the_one_variable_it_still_reads(self) -> None:
         body = _uncommented(_read(RELEASE_ENGINE))
-        self.assertIn("runs-on: ${{ fromJSON(vars.AART_RUNNER || '[\"ubuntu-latest\"]') }}", body)
+        self.assertIn(
+            "runs-on: ${{ fromJSON(vars.AART_CLI_RUNNER || '[\"ubuntu-latest\"]') }}", body
+        )
 
     def test_it_reads_none_of_the_plumbing_it_does_not_use(self) -> None:
         body = _uncommented(_read(RELEASE_ENGINE))
-        for unused in ("AART_CI_IMAGE", "AART_PYTHON", "AART_PIP_INDEX_URL", "AART_POETRY"):
+        for unused in (
+            "AART_CLI_CI_IMAGE",
+            "AART_CLI_PYTHON",
+            "AART_CLI_PIP_INDEX_URL",
+            "AART_CLI_POETRY",
+        ):
             with self.subTest(variable=unused):
                 self.assertNotIn(unused, body)
 
@@ -204,7 +211,7 @@ class VariablesAreDocumentedTest(unittest.TestCase):
             used.update(_VARIABLE.findall(body))
         for path in WORKFLOWS:
             used.update(_VARIABLE.findall(_read(path)))
-        listed = set(re.findall(r"`(AART_[A-Z0-9_]+)`", _read(PAGE)))
+        listed = set(re.findall(r"`(AART_CLI_[A-Z0-9_]+)`", _read(PAGE)))
         self.assertEqual(
             listed - used,
             set(),
@@ -218,11 +225,11 @@ class DefaultsReproduceThePublicRunTest(unittest.TestCase):
     def test_runner_container_and_index_defaults(self) -> None:
         for path in WORKFLOWS:
             workflow = _read(path)
-            self.assertIn("fromJSON(vars.AART_RUNNER || '[\"ubuntu-latest\"]')", workflow)
-            self.assertIn("vars.AART_PIP_INDEX_URL || 'https://pypi.org/simple'", workflow)
+            self.assertIn("fromJSON(vars.AART_CLI_RUNNER || '[\"ubuntu-latest\"]')", workflow)
+            self.assertIn("vars.AART_CLI_PIP_INDEX_URL || 'https://pypi.org/simple'", workflow)
             # An unset image must leave the public run exactly as it was, which now means the
             # official image for the interpreter that job is about rather than the bare runner.
-            self.assertIn("container: ${{ vars.AART_CI_IMAGE ||", workflow)
+            self.assertIn("container: ${{ vars.AART_CLI_CI_IMAGE ||", workflow)
 
     def test_the_registry_url_is_the_switch_and_carries_no_default(self) -> None:
         """One variable decides whether a release reconciles against a registry at all.
@@ -231,7 +238,7 @@ class DefaultsReproduceThePublicRunTest(unittest.TestCase):
         behave the way this repository always has.  This one cannot: a default naming a
         github.com repository reproduces nothing on an instance that cannot reach github.com --
         it guarantees a failed clone.  So the default is gone and presence is the switch, the
-        same shape `AART_IMAGE_USERNAME_SECRET` already uses.
+        same shape `AART_CLI_IMAGE_USERNAME_SECRET` already uses.
 
         Actions cannot tell an unset variable from an empty one, which is why a default and an
         opt-out cannot both exist here.  This repository sets the variable explicitly; clearing
@@ -239,8 +246,10 @@ class DefaultsReproduceThePublicRunTest(unittest.TestCase):
         """
 
         workflow = _read(WORKFLOWS[1])
-        self.assertIn("REFERENCE_REGISTRY_URL: ${{ vars.AART_REFERENCE_REGISTRY_URL }}", workflow)
-        self.assertNotIn("AART_REFERENCE_REGISTRY_URL ||", workflow)
+        self.assertIn(
+            "REFERENCE_REGISTRY_URL: ${{ vars.AART_CLI_REFERENCE_REGISTRY_URL }}", workflow
+        )
+        self.assertNotIn("AART_CLI_REFERENCE_REGISTRY_URL ||", workflow)
         # And no `GH_HOST` is set here any more -- checked outside the comments, which say why.
         # The wheel is attached through the REST API at `GITHUB_API_URL`, which the runner sets
         # to this instance, so there is no host to configure and none to forget.  `gh` defaulted
@@ -262,7 +271,7 @@ class DefaultsReproduceThePublicRunTest(unittest.TestCase):
 
         Every action a job references is resolved during "Set up job", before any condition is
         read.  So an instance that does not carry `actions/setup-python` could not escape it by
-        setting `AART_CI_IMAGE` -- the reference itself had to go, and this is the claim that it
+        setting `AART_CLI_CI_IMAGE` -- the reference itself had to go, and this is the claim that it
         stays gone.  A comment may still name it; a `uses:` may not.
         """
 
@@ -275,12 +284,12 @@ class DefaultsReproduceThePublicRunTest(unittest.TestCase):
 
         The public default is an official `python:<version>` image per matrix entry, so the three
         interpreters the gates have always exercised are still three interpreters.  A fork that
-        sets `AART_CI_IMAGE` replaces all of them with its own, exactly as before.
+        sets `AART_CLI_CI_IMAGE` replaces all of them with its own, exactly as before.
         """
 
         gates = _read(ROOT / ".github" / "workflows" / "pr-check.yml")
         self.assertIn(
-            "container: ${{ vars.AART_CI_IMAGE || format('python:{0}', matrix.python-version) }}",
+            "container: ${{ vars.AART_CLI_CI_IMAGE || format('python:{0}', matrix.python-version) }}",
             gates,
         )
         for path in (
@@ -290,8 +299,8 @@ class DefaultsReproduceThePublicRunTest(unittest.TestCase):
             with self.subTest(path=path.relative_to(ROOT)):
                 body = _read(path)
                 self.assertIn(
-                    "container: ${{ vars.AART_CI_IMAGE || format('python:{0}',"
-                    " vars.AART_RELEASE_PYTHON_VERSION || '3.11') }}",
+                    "container: ${{ vars.AART_CLI_CI_IMAGE || format('python:{0}',"
+                    " vars.AART_CLI_RELEASE_PYTHON_VERSION || '3.11') }}",
                     body,
                 )
 
@@ -316,7 +325,7 @@ class ToolNeedsNoPackagingTest(unittest.TestCase):
         """Unconfigured, the template still needs no packaging: it clones and sets PYTHONPATH.
 
         `pip` appears exactly once, inside the arm that exists to use an index, and that arm is
-        unreachable unless somebody sets `AART_PACKAGE`.  So the claim this test has always made
+        unreachable unless somebody sets `AART_CLI_PACKAGE`.  So the claim this test has always made
         survives the four arms: a fork that configures nothing needs no build backend.
         """
 
@@ -362,7 +371,7 @@ class EveryEmittedWorkflowIsPortableTest(unittest.TestCase):
     def test_none_of_them_pins_a_hosted_runner(self) -> None:
         for label, body in EMITTED.items():
             self.assertNotIn("runs-on: ubuntu-latest", body, label)
-            self.assertIn("fromJSON(vars.AART_RUNNER", body, label)
+            self.assertIn("fromJSON(vars.AART_CLI_RUNNER", body, label)
 
 
 class RegistryGatesAreCompleteTest(unittest.TestCase):
@@ -414,7 +423,7 @@ class EveryFetchArmIsReachableTest(unittest.TestCase):
         """Every other arm must be empty unless somebody sets it, or it shadows the ones below."""
 
         for label, body in EMITTED.items():
-            for name in ("AART_PACKAGE", "AART_WHEEL_URL", "AART_TOOL_PATH"):
+            for name in ("AART_CLI_PACKAGE", "AART_CLI_WHEEL_URL", "AART_CLI_TOOL_PATH"):
                 self.assertIn(f"${{{{ vars.{name} }}}}", body, label)
 
     def test_the_run_log_names_which_arm_answered(self) -> None:
@@ -464,11 +473,11 @@ class ThePinIsReadFromTheRepositoryTest(unittest.TestCase):
             self.assertIn('ref="${PIN:+v$PIN}"', body, label)
 
     def test_no_variable_carries_a_default_ref_any_more(self) -> None:
-        """`AART_REF` with a `main` default would silently outrank the pin on every run."""
+        """`AART_CLI_REF` with a `main` default would silently outrank the pin on every run."""
 
         for label, body in EMITTED.items():
-            self.assertIn("TOOL_REF: ${{ vars.AART_REF }}", body, label)
-            self.assertNotIn("vars.AART_REF || 'main'", body, label)
+            self.assertIn("TOOL_REF: ${{ vars.AART_CLI_REF }}", body, label)
+            self.assertNotIn("vars.AART_CLI_REF || 'main'", body, label)
 
     def test_the_fetched_version_is_verified_against_the_pin(self) -> None:
         """A pin that is only declared is the stamp again. This one is checked on every arm."""
@@ -481,7 +490,7 @@ class ThePinIsReadFromTheRepositoryTest(unittest.TestCase):
 
     def test_an_override_is_announced_rather_than_silent(self) -> None:
         for label, body in EMITTED.items():
-            self.assertIn("overridden by AART_REF", body, label)
+            self.assertIn("overridden by AART_CLI_REF", body, label)
 
 
 def _job_bodies(workflow: str) -> dict[str, str]:
@@ -582,7 +591,7 @@ class TheContainerSwitchTest(unittest.TestCase):
                     continue
                 expected = "!=" if name.endswith("-private-image") else "=="
                 self.assertIn(
-                    f"vars.AART_IMAGE_USERNAME_SECRET {expected} ''", body, f"{label}: {name}"
+                    f"vars.AART_CLI_IMAGE_USERNAME_SECRET {expected} ''", body, f"{label}: {name}"
                 )
 
     def test_the_default_shape_carries_no_credentials_block(self) -> None:
@@ -595,7 +604,7 @@ class TheContainerSwitchTest(unittest.TestCase):
                 # `persist-credentials: false` on the checkout is a different key at a different
                 # depth; what must be absent is the container's own block.
                 self.assertNotIn("\n      credentials:\n", body, f"{label}: {name}")
-                self.assertNotIn("secrets[vars.AART_IMAGE_", body, f"{label}: {name}")
+                self.assertNotIn("secrets[vars.AART_CLI_IMAGE_", body, f"{label}: {name}")
 
     def test_the_credentialed_shape_names_both_secrets_through_variables(self) -> None:
         """A secret's *name* is not a secret, so an instance keeps its own naming."""
@@ -606,10 +615,10 @@ class TheContainerSwitchTest(unittest.TestCase):
                     continue
                 where = f"{label}: {name}"
                 self.assertIn(
-                    "username: ${{ secrets[vars.AART_IMAGE_USERNAME_SECRET] }}", body, where
+                    "username: ${{ secrets[vars.AART_CLI_IMAGE_USERNAME_SECRET] }}", body, where
                 )
                 self.assertIn(
-                    "password: ${{ secrets[vars.AART_IMAGE_PASSWORD_SECRET] }}", body, where
+                    "password: ${{ secrets[vars.AART_CLI_IMAGE_PASSWORD_SECRET] }}", body, where
                 )
 
 
@@ -619,7 +628,7 @@ class VariablesCannotWeakenTheGatesTest(unittest.TestCase):
     Enterprise configuration is allowed to replace runners, images, indexes, tool locations and
     credential references. What it must not be able to do is weaken the semantic quality contract
     "merely by changing repository variables" -- and the shape that would do it is small and easy
-    to add by accident: one `if: vars.AART_SKIP_SOMETHING != 'true'` on a gate step, and a fork
+    to add by accident: one `if: vars.AART_CLI_SKIP_SOMETHING != 'true'` on a gate step, and a fork
     turns a check off from a settings page with nothing in the diff to review.
 
     So the property is closed rather than sampled. Every conditional in every workflow -- the ones
@@ -633,10 +642,10 @@ class VariablesCannotWeakenTheGatesTest(unittest.TestCase):
         **EMITTED,
     }
 
-    #: `AART_IMAGE_USERNAME_SECRET` chooses which of two identical shapes of a job runs, and
+    #: `AART_CLI_IMAGE_USERNAME_SECRET` chooses which of two identical shapes of a job runs, and
     #: `TheContainerSwitchTest` holds the two to the same steps. A second name here is a new power
     #: over the quality contract and needs its own case.
-    INFRASTRUCTURE = frozenset({"AART_IMAGE_USERNAME_SECRET"})
+    INFRASTRUCTURE = frozenset({"AART_CLI_IMAGE_USERNAME_SECRET"})
 
     def _conditions(self, text: str) -> list[str]:
         """Every condition, in both spellings.
@@ -764,7 +773,7 @@ class NoPublicHostIsReachedThatAVariableCannotRetargetTest(unittest.TestCase):
             for line in _uncommented(text).splitlines():
                 if not _URL.search(line):
                     continue
-                retargetable = "vars.AART_" in line or ":-http" in line
+                retargetable = "vars.AART_CLI_" in line or ":-http" in line
                 if not retargetable:
                     offences.append(f"{label}: {line.strip()}")
         self.assertEqual([], offences, "INV-078: a public host no variable can retarget")

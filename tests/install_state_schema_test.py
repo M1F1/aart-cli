@@ -84,8 +84,8 @@ class InstallStateSchemaTests(unittest.TestCase):
 
         payload = (self.fixtures / "legacy-v01-manifest.json").read_bytes()
         for path in (
-            "/fixture/project/.agent-artifacts/manifest.json",
-            "/fixture/user/.agent-artifacts/manifest.json",
+            "/fixture/project/.aart-cli/manifest.json",
+            "/fixture/user/.aart-cli/manifest.json",
         ):
             with self.subTest(path=path):
                 result = parse_install_state(payload, path=path)
@@ -130,7 +130,7 @@ class InstallStateSchemaTests(unittest.TestCase):
 
         result = parse_install_state(
             (self.fixtures / "malformed-v2-manifest.json").read_bytes(),
-            path="/fixture/project/.agent-artifacts/manifest.json",
+            path="/fixture/project/.aart-cli/manifest.json",
         )
 
         self.assertIsInstance(result, Err)

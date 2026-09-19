@@ -58,8 +58,8 @@ def _workspace(*, marker: str | None = None) -> Iterator[pathlib.Path]:
         _git(root, "config", "user.name", "AART Test")
         _git(root, "config", "user.email", "aart@example.invalid")
         if marker is not None:
-            (root / "aart-registry.json").write_text(marker, encoding="utf-8")
-            _git(root, "add", "aart-registry.json")
+            (root / "aart-cli-registry.json").write_text(marker, encoding="utf-8")
+            _git(root, "add", "aart-cli-registry.json")
             _git(root, "commit", "-m", "Initialize registry")
         yield root
 
@@ -148,7 +148,7 @@ class RegistryWorkspaceReaderTest(unittest.TestCase):
     def test_a_registry_no_git_ever_touched_is_left_unobserved(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary).resolve()
-            (root / "aart-registry.json").write_text(_manifest(), encoding="utf-8")
+            (root / "aart-cli-registry.json").write_text(_manifest(), encoding="utf-8")
 
             view = read_registry_workspace(str(root))
 

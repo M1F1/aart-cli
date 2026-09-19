@@ -37,7 +37,7 @@ RUNTIMES_DIRECTORY = "runtimes"
 
 #: The project-scope root, matching `install_state_paths`: the manifest and the runtime it records
 #: are siblings rather than two places to look.
-_PROJECT_STATE_DIRECTORY = ".agent-artifacts"
+_PROJECT_STATE_DIRECTORY = ".aart-cli"
 
 
 def _absolute(path: str, label: str) -> str:

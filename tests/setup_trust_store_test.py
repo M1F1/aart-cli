@@ -228,7 +228,7 @@ class AppliedExportTest(unittest.TestCase):
             consent=lambda _e: True,
         )
         self.assertEqual(record.status, "apply_failed_rolled_back")
-        self.assertEqual(os.listdir(os.path.join(self.home, ".agent-artifacts", "setup-runs")), [])
+        self.assertEqual(os.listdir(os.path.join(self.home, ".aart-cli", "setup-runs")), [])
 
     def test_the_export_will_not_overwrite_a_file_the_package_ships(self) -> None:
         with open(os.path.join(self.payload, "company-ca.pem"), "w", encoding="utf-8") as stream:
@@ -240,8 +240,8 @@ class AppliedExportTest(unittest.TestCase):
     def test_nothing_outside_the_run_directory_is_written(self) -> None:
         before = sorted(os.listdir(self.home))
         apply_setup_plan(self._plan(), self._runtime(_Tools()), consent=lambda _e: True)
-        self.assertEqual(sorted(os.listdir(self.home)), sorted(set(before) | {".agent-artifacts"}))
-        self.assertEqual(os.listdir(os.path.join(self.home, ".agent-artifacts", "setup-runs")), [])
+        self.assertEqual(sorted(os.listdir(self.home)), sorted(set(before) | {".aart-cli"}))
+        self.assertEqual(os.listdir(os.path.join(self.home, ".aart-cli", "setup-runs")), [])
 
 
 if __name__ == "__main__":

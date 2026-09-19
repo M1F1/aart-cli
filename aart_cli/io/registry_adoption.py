@@ -9,7 +9,7 @@ the repository will be watched (INV-199, INV-200).
 
 Three things are load-bearing and each is a boundary rather than a convenience.
 
-**Discovery is explicit.** Only committed `aart.yaml`/`aart.json` manifests are read, through the
+**Discovery is explicit.** Only committed `aart-cli.yaml`/`aart-cli.json` manifests are read, through the
 same `compile_author_snapshot` the monitored path uses. A conventional-looking directory that
 declares nothing is not an artifact (INV-201).
 
@@ -226,7 +226,7 @@ def _registry_alias(registry_root: str) -> Result[SourceAlias]:
         (
             entry
             for entry in snapshot.value.entries
-            if str(entry.path) == "aart-source.json" and entry.kind is SnapshotEntryKind.FILE
+            if str(entry.path) == "aart-cli-source.json" and entry.kind is SnapshotEntryKind.FILE
         ),
         None,
     )
@@ -364,7 +364,7 @@ def scan_repository(
         return compiled
     if not compiled.value:
         return _error(
-            f"{url} declares no aart.yaml or aart.json artifact at {ref}",
+            f"{url} declares no aart-cli.yaml or aart-cli.json artifact at {ref}",
             "AART reads only manifests the authors committed. Ask them to declare one, or scan "
             "a branch or tag where they already did.",
         )

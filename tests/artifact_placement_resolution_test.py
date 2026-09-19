@@ -45,7 +45,7 @@ PROFILES = ("tabnine",)
 #: `declared_harness_narrowing_test.py` (`QA-078`, `D-231`). It used to declare one harness while
 #: the tests placed it into several, which is the defect itself written down as a fixture.
 SKILL_MANIFEST = {
-    "schema": "aart.dev/skill/v1",
+    "schema": "aart-cli.dev/skill/v1",
     "artifact": {"name": "code-review", "kind": "skill", "version": "1.2.0"},
     "payload": {"include": ["SKILL.md", "reference.md"]},
 }
@@ -64,7 +64,7 @@ class PlacementResolutionTest(unittest.TestCase):
     def _publish(self):
         repository = self.scope / "author"
         (repository / "github").mkdir(parents=True)
-        (repository / "github/aart.json").write_text(json.dumps(MANIFEST), encoding="utf-8")
+        (repository / "github/aart-cli.json").write_text(json.dumps(MANIFEST), encoding="utf-8")
         (repository / "github/server.py").write_text(SERVER_SOURCE, encoding="utf-8")
         (repository / "github/requirements.txt").write_text("# none\n", encoding="utf-8")
 
@@ -115,7 +115,7 @@ class PlacementResolutionTest(unittest.TestCase):
 
         self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
         self.assertTrue(
-            placed.value.root.startswith(f"{self.project}/.agent-artifacts/runtimes/"),
+            placed.value.root.startswith(f"{self.project}/.aart-cli/runtimes/"),
             placed.value.root,
         )
         self.assertNotIn(".tabnine", placed.value.root)
@@ -191,7 +191,7 @@ class DeliveredPlacementTest(unittest.TestCase):
     def _publish(self):
         repository = self.scope / "author"
         (repository / "code-review").mkdir(parents=True)
-        (repository / "code-review/aart.json").write_text(
+        (repository / "code-review/aart-cli.json").write_text(
             json.dumps(SKILL_MANIFEST), encoding="utf-8"
         )
         (repository / "code-review/SKILL.md").write_text("# review\n", encoding="utf-8")

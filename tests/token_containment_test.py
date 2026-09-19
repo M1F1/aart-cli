@@ -177,7 +177,7 @@ class TokenContainmentTest(unittest.TestCase):
     # Channel 3 — what the run left on disk. See `RunDirectoryChannelTest` for what it holds
     # while the run is still in flight, which is the half a post-run walk cannot see.
     def test_the_run_directory_does_not_outlive_the_run_that_made_it(self) -> None:
-        runs = os.path.join(self.home, ".agent-artifacts", "setup-runs")
+        runs = os.path.join(self.home, ".aart-cli", "setup-runs")
 
         self.assertTrue(os.path.isdir(runs), "the run made a working copy, so the root exists")
         self.assertEqual(os.listdir(runs), [], "a failed run removes its working copy")

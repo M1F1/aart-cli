@@ -58,7 +58,7 @@ class SetupStateTests(unittest.TestCase):
     def test_state_path_reuses_scope_root(self):
         self.assertEqual(
             setup_state_path("/fake-home"),
-            "/fake-home/.agent-artifacts/setup-state.json",
+            "/fake-home/.aart-cli/setup-state.json",
         )
 
     def test_canonical_evidence_is_all_or_nothing_and_strictly_typed(self):

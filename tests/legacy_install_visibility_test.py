@@ -97,10 +97,10 @@ class LegacyInstallVisibilityTest(unittest.TestCase):
         self.data_root = self.root / "data"
         self.state_root = self.data_root / "state"
         self.state_root.mkdir(parents=True)
-        (self.project / ".agent-artifacts").mkdir(parents=True)
+        (self.project / ".aart-cli").mkdir(parents=True)
 
     def _write(self, *records: InstallationRecord) -> None:
-        (self.project / ".agent-artifacts/manifest.json").write_bytes(
+        (self.project / ".aart-cli/manifest.json").write_bytes(
             install_state_bytes(InstallState(2, records))
         )
 
@@ -221,7 +221,7 @@ class LegacyInstallVisibilityTest(unittest.TestCase):
     def test_an_unreadable_manifest_refuses_rather_than_reporting_nothing_installed(self) -> None:
         """The one answer that is never safe here is "nothing is installed"."""
 
-        (self.project / ".agent-artifacts/manifest.json").write_text(
+        (self.project / ".aart-cli/manifest.json").write_text(
             json.dumps({"schema_version": 2, "installations": [{"broken": True}]}),
             encoding="utf-8",
         )

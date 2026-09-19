@@ -74,7 +74,7 @@ class ScopeDomainTests(unittest.TestCase):
 
     def test_custom_profile_loads_explicit_user_targets_and_reasons(self):
         with tempfile.TemporaryDirectory() as project:
-            state = pathlib.Path(project) / ".agent-artifacts"
+            state = pathlib.Path(project) / ".aart-cli"
             state.mkdir()
             (state / "profiles.json").write_text(
                 json.dumps(
@@ -105,7 +105,7 @@ class ScopeDomainTests(unittest.TestCase):
     def test_custom_profile_rejects_malformed_unsupported_reasons(self):
         for malformed in (("not-an-object",), {"hook": ""}, {"other": "no target"}):
             with self.subTest(malformed=malformed), tempfile.TemporaryDirectory() as project:
-                state = pathlib.Path(project) / ".agent-artifacts"
+                state = pathlib.Path(project) / ".aart-cli"
                 state.mkdir()
                 (state / "profiles.json").write_text(
                     json.dumps(

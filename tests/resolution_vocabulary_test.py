@@ -39,10 +39,10 @@ def _configure_cold_source(env) -> None:
 
     mirror = env.root / "mirror-source"
     shutil.copytree(_FIXTURE, mirror)
-    identity = json.loads((mirror / "aart-source.json").read_text(encoding="utf-8"))
+    identity = json.loads((mirror / "aart-cli-source.json").read_text(encoding="utf-8"))
     # A distinct identity: two subscriptions to one source ID is a different refusal entirely.
     identity["source_id"] = "mirror-native-source"
-    (mirror / "aart-source.json").write_text(json.dumps(identity), encoding="utf-8")
+    (mirror / "aart-cli-source.json").write_text(json.dumps(identity), encoding="utf-8")
     cold = ConfiguredSource(SourceAlias("mirror"), SourceKind.SOURCE_LOCAL, str(mirror), None, True)
     Path(env.paths.user_config_file).write_bytes(
         user_configuration_bytes(

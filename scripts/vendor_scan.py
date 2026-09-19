@@ -532,8 +532,8 @@ def command_adopt(args: argparse.Namespace) -> int:
 
     manifest = load(args.manifest)
     registry = Path(args.source).expanduser().resolve()
-    if not (registry / "aart-registry.json").is_file():
-        die(f"{registry} is not a registry checkout: no aart-registry.json")
+    if not (registry / "aart-cli-registry.json").is_file():
+        die(f"{registry} is not a registry checkout: no aart-cli-registry.json")
     adoptable = [
         hint for hint in manifest.get("hints", []) if hint["looks_like"] in {"memory", "guideline"}
     ]
@@ -627,8 +627,8 @@ def command_adopt(args: argparse.Namespace) -> int:
 def command_vendor(args: argparse.Namespace) -> int:
     manifest = load(args.manifest)
     registry = Path(args.source).expanduser().resolve()
-    if not (registry / "aart-registry.json").is_file():
-        die(f"{registry} is not a registry checkout: no aart-registry.json")
+    if not (registry / "aart-cli-registry.json").is_file():
+        die(f"{registry} is not a registry checkout: no aart-cli-registry.json")
     selected = [item for item in manifest["candidates"] if item.get("selected")]
     if not selected:
         die(f"nothing is selected in {args.manifest}; run `review` first")

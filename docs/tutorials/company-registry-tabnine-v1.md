@@ -62,9 +62,9 @@ Review canonical Maintainer action: init
   Review digest: sha256:209d2da8…
   Mutation: yes, only on Finalize
   - added: .gitignore
-  - added: .github/workflows/aart-registry.yml
-  - added: aart-registry.json
-  - added: aart-source.json
+  - added: .github/workflows/aart-cli-registry.yml
+  - added: aart-cli-registry.json
+  - added: aart-cli-source.json
   AART will not commit or push; review the working-tree diff afterward.
 ```
 
@@ -75,7 +75,7 @@ aart-cli registry init --source . --source-id company --display-name "Company AA
 `--source-id` is the identity every artifact coordinate starts with — your colleagues will type
 `company/skill/release-evidence`. It is stable; changing it later changes every coordinate.
 The generated `.gitignore` excludes AART caches, build output, and the project/user harness targets
-used by the built-in profiles (`.agent-artifacts/`, `.claude/`, `.tabnine/`, `.opencode/`, `.vibe/`,
+used by the built-in profiles (`.aart-cli/`, `.claude/`, `.tabnine/`, `.opencode/`, `.vibe/`,
 and `.mcp.json`), so an acceptance install inside the checkout does not pollute the next publish.
 
 The marker it writes declares which AART versions may read this registry:
@@ -98,7 +98,7 @@ git add -A && git commit -m "Initialize the company AART registry"
 
 This is the step that matters for adoption. Your company already has useful material — a prompt
 somebody keeps pasting into Slack, a checklist in a platform-team repo, a monorepo of MCP servers.
-None of it declares `aart-source.json`, and none of its owners want to be told to add one.
+None of it declares `aart-cli-source.json`, and none of its owners want to be told to add one.
 
 `registry vendor` copies a subtree of any Git repository into your registry as a package **your
 registry owns**, pinned to the exact commit it was taken from, with a `provenance.json` recording
@@ -189,7 +189,7 @@ aart-cli registry vendor guideline branch-conventions --source . \
 
 ### When *not* to vendor
 
-If the upstream repository already is an AART native source — it has `aart-source.json` and its
+If the upstream repository already is an AART native source — it has `aart-cli-source.json` and its
 packages sit at `<root>/<kind>/<name>` — take its reviewed Candidate in with `registry scan` and
 `registry promote` instead of copying bytes by hand. Almost everything in a normal company is not
 a native source, which is why almost everything gets vendored.
@@ -263,9 +263,9 @@ aart-cli marketplace install company/collection/platform-baseline --profile tabn
 ```
 ## 4. Write an artifact of your own
 
-Author new material in a separate Source checkout. Add an explicit `aart.yaml` or `aart.json` beside
+Author new material in a separate Source checkout. Add an explicit `aart-cli.yaml` or `aart-cli.json` beside
 the payload, following the [native Source contract](../protocol/native-source-v1.md) and the
-[example MCP Source](../examples/author-source/example-mcp/aart.yaml), then commit the checkout.
+[example MCP Source](../examples/author-source/example-mcp/aart-cli.yaml), then commit the checkout.
 From the Registry checkout, scan that exact revision and promote the reviewed Candidate:
 
 ```sh
@@ -417,7 +417,7 @@ Walked, not quoted from a design document:
 .tabnine/agent/skills/release-evidence/LICENSE
 .tabnine/agent/skills/release-evidence/references/verification-checklist.md
 .tabnine/guidelines/branch-conventions.md
-.agent-artifacts/manifest.json
+.aart-cli/manifest.json
 ```
 
 | Artifact kind | Where it goes in a project | Walked |
@@ -428,7 +428,7 @@ Walked, not quoted from a design document:
 | `mcp` | `.tabnine/agent/settings.json`, key `mcpServers` | yes — project and user filesystem contract |
 | `hook` | `.tabnine/agent/hooks/<name>/` plus `hooks.BeforeTool`/`AfterTool`/`SessionEnd` in `.tabnine/agent/settings.json` | no |
 
-`.agent-artifacts/manifest.json` is AART's own record of what it installed. Commit it if you want
+`.aart-cli/manifest.json` is AART's own record of what it installed. Commit it if you want
 the project's artifact set to be reproducible for the next person who clones; it contains no
 secrets.
 

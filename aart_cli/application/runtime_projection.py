@@ -57,8 +57,8 @@ MISSING_ENVIRONMENT_STATUS = 78
 UNRESOLVED_CREDENTIAL_STATUS = 77
 MISSING_CONFIGURATION_STATUS = 76
 
-_SECRET_VARIABLE_PREFIX = "AART_SECRET_"
-_CONFIG_VARIABLE_PREFIX = "AART_CONFIG_"
+_SECRET_VARIABLE_PREFIX = "AART_CLI_SECRET_"
+_CONFIG_VARIABLE_PREFIX = "AART_CLI_CONFIG_"
 
 
 class CredentialResolutionPort(Protocol):
@@ -152,18 +152,18 @@ def _configuration_reader(environment: ArtifactEnvironment, items: list[BoundInp
     directory = shell_quote(f"{environment.root}/{CONFIGURATION_DIRECTORY}/")
     status = MISSING_CONFIGURATION_STATUS
     lines = [
-        'AART_HARNESS="${1-}"',
-        'case "$AART_HARNESS" in',
+        'AART_CLI_HARNESS="${1-}"',
+        'case "$AART_CLI_HARNESS" in',
         "  ''|*[!a-z0-9-]*)",
         "    printf 'aart: %s was started without the harness whose configuration it reads; "
         f"repair the installation\\n' {artifact} >&2",
         f"    exit {status}",
         "    ;;",
         "esac",
-        f'AART_CONFIGURATION={directory}"$AART_HARNESS"{shell_quote(CONFIGURATION_SUFFIX)}',
-        'if [ ! -r "$AART_CONFIGURATION" ]; then',
+        f'AART_CLI_CONFIGURATION={directory}"$AART_CLI_HARNESS"{shell_quote(CONFIGURATION_SUFFIX)}',
+        'if [ ! -r "$AART_CLI_CONFIGURATION" ]; then',
         "  printf 'aart: %s has no configuration for %s; set it in AART under User variables "
-        f'and credentials\\n\' {artifact} "$AART_HARNESS" >&2',
+        f'and credentials\\n\' {artifact} "$AART_CLI_HARNESS" >&2',
         f"  exit {status}",
         "fi",
     ]
@@ -180,21 +180,21 @@ def _configuration_reader(environment: ArtifactEnvironment, items: list[BoundInp
                 f"    {shell_quote(identifier + '=')}*)",
                 f'      if [ -n "${variable}" ]; then',
                 f"        printf 'aart: %s sets %s twice in %s\\n' {artifact} "
-                f'{shell_quote(identifier)} "$AART_CONFIGURATION" >&2',
+                f'{shell_quote(identifier)} "$AART_CLI_CONFIGURATION" >&2',
                 f"        exit {status}",
                 "      fi",
                 f'      {variable}="${{aart_line#{identifier}=}}"',
                 "      ;;",
             ]
         )
-    lines.extend(["  esac", 'done < "$AART_CONFIGURATION"'])
+    lines.extend(["  esac", 'done < "$AART_CLI_CONFIGURATION"'])
     for item in items:
         variable = _config_variable(item)
         lines.extend(
             [
                 f'if [ -z "${variable}" ]; then',
                 f"  printf 'aart: %s has no value for %s in %s\\n' {artifact} "
-                f'{shell_quote(item.input.id.value)} "$AART_CONFIGURATION" >&2',
+                f'{shell_quote(item.input.id.value)} "$AART_CLI_CONFIGURATION" >&2',
                 f"  exit {status}",
                 "fi",
             ]
@@ -345,10 +345,10 @@ def _render(
         "# configuration from the starting harness's file under config/ when this script runs.",
         "set -eu",
         "",
-        f"AART_INTERPRETER={interpreter}",
-        f"AART_ENTRYPOINT={entrypoint}",
+        f"AART_CLI_INTERPRETER={interpreter}",
+        f"AART_CLI_ENTRYPOINT={entrypoint}",
         "",
-        'if [ ! -x "$AART_INTERPRETER" ]; then',
+        'if [ ! -x "$AART_CLI_INTERPRETER" ]; then',
         f"  printf '%s\\n' {missing} >&2",
         f"  exit {MISSING_ENVIRONMENT_STATUS}",
         "fi",
@@ -357,6 +357,6 @@ def _render(
         lines.extend(["", *assignments])
     if exports:
         lines.extend(["", *exports])
-    invocation = ['exec "$AART_INTERPRETER" "$AART_ENTRYPOINT"', *arguments]
+    invocation = ['exec "$AART_CLI_INTERPRETER" "$AART_CLI_ENTRYPOINT"', *arguments]
     lines.extend(["", " ".join(invocation), ""])
     return "\n".join(lines)

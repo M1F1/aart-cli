@@ -84,7 +84,7 @@ def check_author_manifests(
                 Diagnostic(
                     AUTHOR_TREE_INVALID,
                     Severity.ERROR,
-                    "no author manifest found: AART reads only `aart.yaml` and `aart.json`",
+                    "no author manifest found: AART reads only `aart-cli.yaml` and `aart-cli.json`",
                     remediation=(
                         "Run `aart-cli author init --kind mcp --name my-artifact` to write one.",
                     ),

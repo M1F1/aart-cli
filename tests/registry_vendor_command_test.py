@@ -432,7 +432,7 @@ class VendorRequiresAnApprovedReviewTest(unittest.TestCase):
             "artifact_roots": ["artifacts"],
             "collection_roots": [],
         }
-        parsed = parse_relative_path("aart-source.json")
+        parsed = parse_relative_path("aart-cli-source.json")
         assert isinstance(parsed, Ok)
         return SourceSnapshot(
             SnapshotOrigin.LOCAL,

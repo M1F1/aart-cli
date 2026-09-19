@@ -76,7 +76,7 @@ def _authored(item: tuple[str, str] | tuple[str, str, bool]) -> SnapshotEntry:
 
 #: One MCP server, as an author's repository holds it before anything compiles it.
 AUTHORED_MCP: tuple[tuple[str, str] | tuple[str, str, bool], ...] = (
-    ("github/aart.json", json.dumps(MANIFEST)),
+    ("github/aart-cli.json", json.dumps(MANIFEST)),
     ("github/server.py", SERVER_SOURCE),
     ("github/requirements.txt", "# no third-party packages\n"),
 )
@@ -86,7 +86,7 @@ AUTHORED_MCP: tuple[tuple[str, str] | tuple[str, str, bool], ...] = (
 class AuthoredSetup:
     """The setup an artifact declares, as the three files a native package carries it in.
 
-    The authoring format has no setup section -- `aart.json` cannot declare one -- so an artifact
+    The authoring format has no setup section -- `aart-cli.json` cannot declare one -- so an artifact
     that needs configuring after placement acquires its declaration when it is packaged, not when
     it is written. Modelling that here as an injection into the compiled package rather than as a
     field on the author manifest is not a shortcut around the compiler; it is where the declaration

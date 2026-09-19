@@ -4,7 +4,7 @@ The accepted flow is Product Specification 72.1 and 164.2 read end to end:
 
 ```text
 Git author repository
-        -> explicit aart.yaml/aart.json discovery
+        -> explicit aart-cli.yaml/aart-cli.json discovery
         -> Candidate
         -> selected promotion
         -> Registry
@@ -13,8 +13,8 @@ Git author repository
 
 Its public entrance is `aart-cli source add --kind source-git`. Until B-094 that entrance validated
 every acquired tree through `load_native_source`, the loader for a *consumer* native package
-tree: a root `aart-source.json` plus `<root>/<kind>/<name>/artifact.json` and `payload/`. An
-authoring repository declares none of that -- it declares one `aart.yaml` next to the files that
+tree: a root `aart-cli-source.json` plus `<root>/<kind>/<name>/artifact.json` and `payload/`. An
+authoring repository declares none of that -- it declares one `aart-cli.yaml` next to the files that
 manifest names -- so it was refused before manifest discovery could run, and INV-201's "no
 manifest = no candidate" rule never got the chance to say yes to a manifest that was there.
 
@@ -79,7 +79,7 @@ from aart_cli.sources.model import (
 from tests.git_backed_consumer_e2e_test import _materialize, _registry_snapshot
 
 AUTHOR_LOCATION = "https://git.example/superpowers.git"
-SKILL_MANIFEST = """schema: aart.dev/skill/v1
+SKILL_MANIFEST = """schema: aart-cli.dev/skill/v1
 artifact:
   name: verification-before-completion
   kind: skill
@@ -110,8 +110,8 @@ def _git(repository: Path, *arguments: str) -> str:
 class _AuthoringRepository:
     """A real Git repository shaped like the authoring repositories the acceptance run uses.
 
-    Nothing here is an AART package: there is no `aart-source.json`, no `artifact.json` and no
-    `payload/` directory. There is one explicit `aart.yaml` inside the directory it describes,
+    Nothing here is an AART package: there is no `aart-cli-source.json`, no `artifact.json` and no
+    `payload/` directory. There is one explicit `aart-cli.yaml` inside the directory it describes,
     which is exactly what 72.1 says an author opts in with, plus one unrelated file so that
     "discovery finds only the manifest" is a claim with something to be wrong about.
     """
@@ -120,7 +120,7 @@ class _AuthoringRepository:
         self.path = root / "superpowers"
         self.skill = self.path / "skills" / "verification-before-completion"
         self.skill.mkdir(parents=True)
-        (self.skill / "aart.yaml").write_text(SKILL_MANIFEST, encoding="utf-8")
+        (self.skill / "aart-cli.yaml").write_text(SKILL_MANIFEST, encoding="utf-8")
         (self.skill / "SKILL.md").write_text(SKILL_BODY, encoding="utf-8")
         (self.path / "README.md").write_text("# Superpowers\n", encoding="utf-8")
         _git(self.path, "init", "-b", "main")
@@ -329,7 +329,7 @@ class AuthoringSourceAdmissionTest(unittest.TestCase):
         """
 
         with _environment() as env:
-            (env.author.skill / "aart.yaml").unlink()
+            (env.author.skill / "aart-cli.yaml").unlink()
             _git(env.author.path, "add", "-A")
             _git(env.author.path, "commit", "-m", "remove the manifest")
 

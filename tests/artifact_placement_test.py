@@ -48,7 +48,7 @@ from aart_cli.domain.requirements import HarnessRequirement
 from aart_cli.domain.result import Err, Ok
 from aart_cli.domain.selection import OwnershipKind, OwnershipReason, ResolvedArtifact
 
-ROOT = "/home/agent/.agent-artifacts/runtimes/public/skill/code-review"
+ROOT = "/home/agent/.aart-cli/runtimes/public/skill/code-review"
 PAYLOAD_SOURCE = "/var/lib/aart/store/skill/code-review/2.0.0"
 KIT = OwnershipReason(OwnershipKind.COLLECTION, "public/collection/reviewers@1.0.0")
 

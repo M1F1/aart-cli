@@ -105,7 +105,7 @@ class RegistryWorkspaceAdapterTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp) / "managed-snapshot"
             root.mkdir()
-            (root / "aart-registry.json").write_text("{}", encoding="utf-8")
+            (root / "aart-cli-registry.json").write_text("{}", encoding="utf-8")
             os.chmod(root, 0o500)
             try:
                 result = FilesystemRegistryWorkspace(str(root)).snapshot()
@@ -119,7 +119,7 @@ class RegistryWorkspaceAdapterTest(unittest.TestCase):
             root.mkdir()
             target = Path(temp) / "marker.json"
             target.write_text("{}", encoding="utf-8")
-            (root / "aart-registry.json").symlink_to(target)
+            (root / "aart-cli-registry.json").symlink_to(target)
             self.assertIsInstance(FilesystemRegistryWorkspace(str(root)).snapshot(), Err)
 
     def test_partial_write_failure_rolls_back_files_and_created_directories(self) -> None:
@@ -239,7 +239,7 @@ class RegistryWorkspaceAdapterTest(unittest.TestCase):
                 os.close(descriptor)
 
             self.assertIsInstance(applied, Err)
-            self.assertFalse((root / "aart-registry.json").exists())
+            self.assertFalse((root / "aart-cli-registry.json").exists())
 
 
 if __name__ == "__main__":

@@ -33,20 +33,20 @@ def _snapshot(
     include_second: bool = False,
 ):
     document = {
-        "schema": "aart.dev/collection/v1",
+        "schema": "aart-cli.dev/collection/v1",
         "name": "data-engineer",
         "version": version,
         "summary": "Approved data engineering tools.",
         "artifacts": [member],
     }
-    files = [_file("collections/data-engineer/aart.json", json.dumps(document))]
+    files = [_file("collections/data-engineer/aart-cli.json", json.dumps(document))]
     if include_second:
         second = {
             **document,
             "name": "platform-engineer",
             "summary": "Approved platform engineering tools.",
         }
-        files.append(_file("collections/platform-engineer/aart.json", json.dumps(second)))
+        files.append(_file("collections/platform-engineer/aart-cli.json", json.dumps(second)))
     return SourceSnapshot(SnapshotOrigin.IMMUTABLE_GIT, tuple(files))
 
 

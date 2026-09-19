@@ -2,7 +2,7 @@
 
 The other install E2E starts from a `PlannedInstallation` a test wrote. This one starts from an
 author's manifest and never writes one: the runtime, the dependency descriptor, the launch
-arguments and both runtime inputs are declared once in `aart.json`, compiled into a package,
+arguments and both runtime inputs are declared once in `aart-cli.json`, compiled into a package,
 written to a store as bytes, and read back out of `artifact.json` by the machine doing the
 installing -- which has never seen the author's repository.
 
@@ -122,7 +122,7 @@ KIT = OwnershipReason(OwnershipKind.COLLECTION, "public/collection/data-scientis
 #: `declared_harness_narrowing_test.py` (`QA-078`, `D-231`). It used to declare one harness while
 #: the tests placed it into several, which is the defect itself written down as a fixture.
 MANIFEST = {
-    "schema": "aart.dev/mcp/v1",
+    "schema": "aart-cli.dev/mcp/v1",
     "artifact": {"name": "github", "kind": "mcp", "version": "1.5.0"},
     "payload": {"include": ["server.py", "requirements.txt"]},
     "transport": {"type": "stdio"},
@@ -175,7 +175,7 @@ class AuthoredInstallationTest(unittest.TestCase):
     def _compile(self):
         repository = self.scope / "author"
         (repository / "github").mkdir(parents=True)
-        (repository / "github/aart.json").write_text(json.dumps(MANIFEST), encoding="utf-8")
+        (repository / "github/aart-cli.json").write_text(json.dumps(MANIFEST), encoding="utf-8")
         (repository / "github/server.py").write_text(SERVER_SOURCE, encoding="utf-8")
         # Empty of packages on purpose: this proves the descriptor is carried, read and honoured
         # without the test reaching a package index.

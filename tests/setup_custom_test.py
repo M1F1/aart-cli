@@ -94,7 +94,7 @@ class CustomProtocolTests(unittest.TestCase):
             custom_calls = [call for call in fake.calls if call[0].endswith("install.sh")]
             self.assertEqual([call[1] for call in custom_calls], ["plan", "apply", "verify"])
             self.assertIn("--plan-hash", custom_calls[1])
-            run_dirs = list(pathlib.Path(target, ".agent-artifacts", "setup-runs").iterdir())
+            run_dirs = list(pathlib.Path(target, ".aart-cli", "setup-runs").iterdir())
             self.assertEqual(len(run_dirs), 1)
             self.assertEqual(run_dirs[0].stat().st_mode & 0o777, 0o700)
             executed = pathlib.Path(custom_calls[0][0])

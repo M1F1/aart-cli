@@ -19,11 +19,11 @@ InstallMode = Literal["copy", "symlink"]
 InstallEffect = Literal["copy-tree", "write-file", "merge-json", "managed-block"]
 
 PAYLOAD_FORMATS: tuple[tuple[CanonicalArtifactType, str], ...] = (
-    ("skill", "aart-skill-v1"),
-    ("guideline", "aart-guideline-v1"),
-    ("mcp", "aart-mcp-v1"),
-    ("hook", "aart-hook-v1"),
-    ("memory", "aart-memory-v1"),
+    ("skill", "aart-cli-skill-v1"),
+    ("guideline", "aart-cli-guideline-v1"),
+    ("mcp", "aart-cli-mcp-v1"),
+    ("hook", "aart-cli-hook-v1"),
+    ("memory", "aart-cli-memory-v1"),
 )
 PAYLOAD_FORMAT_BY_TYPE: Mapping[CanonicalArtifactType, str] = MappingProxyType(
     dict(PAYLOAD_FORMATS)

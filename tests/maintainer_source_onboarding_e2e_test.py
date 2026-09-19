@@ -58,7 +58,7 @@ class MaintainerSourceOnboardingTest(unittest.TestCase):
         with _environment() as env, mock.patch.dict(os.environ, env.xdg, clear=False):
             author_root = env.root / "authors"
             author_root.mkdir()
-            manifest = author_root / "aart.yaml"
+            manifest = author_root / "aart-cli.yaml"
             manifest.write_text(SKILL_MANIFEST, encoding="utf-8")
             (author_root / "SKILL.md").write_text(SKILL_BODY, encoding="utf-8")
             handler = _actions(env)

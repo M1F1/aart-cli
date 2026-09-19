@@ -31,7 +31,7 @@ from aart_cli.domain.identifiers import ArtifactCoordinate, ObjectDigest
 from aart_cli.domain.receipts import ArtifactDelivery, PlacedArtifactReceipt
 from aart_cli.domain.reconciliation import Component, ComponentState
 
-ROOT = "/home/agent/.agent-artifacts/runtimes/public/skill/code-review"
+ROOT = "/home/agent/.aart-cli/runtimes/public/skill/code-review"
 SOURCE = f"{ROOT}/payload/skill"
 
 

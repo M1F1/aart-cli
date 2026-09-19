@@ -48,7 +48,7 @@ REGISTRY_INPUTS = sha256_bytes(b"registry-inputs")
 def _assessment() -> SecurityAssessment:
     coverage = AssessmentCoverage(1, 1)
     provider = ProviderAssessment(
-        "aart-baseline",
+        "aart-cli-baseline",
         "1",
         RULES,
         AssessmentStatus.COMPLETE,
@@ -71,7 +71,7 @@ def _key(**changes: object) -> AssessmentCacheKey:
     values: dict[str, object] = {
         "schema_version": 1,
         "object_digest": OBJECT,
-        "provider_id": "aart-baseline",
+        "provider_id": "aart-cli-baseline",
         "provider_version": "1",
         "rules_digest": RULES,
         "options_digest": OPTIONS,

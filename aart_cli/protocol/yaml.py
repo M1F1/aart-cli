@@ -205,7 +205,7 @@ def _parse_block(lines: tuple[_Line, ...], index: int, indent: int) -> tuple[Jso
 def parse_yaml(
     data: bytes | str,
     *,
-    path: str = "aart.yaml",
+    path: str = "aart-cli.yaml",
 ) -> Result[JsonValue]:
     """Parse the finite YAML subset accepted by native AART authoring manifests."""
 
@@ -411,7 +411,7 @@ def emit_yaml(
     *,
     comments: Mapping[str, Sequence[str]] = MappingProxyType({}),
     trailing: Mapping[str, Sequence[str]] = MappingProxyType({}),
-    path: str = "aart.yaml",
+    path: str = "aart-cli.yaml",
 ) -> Result[str]:
     """Write the finite YAML subset `parse_yaml` accepts, or refuse to write at all.
 

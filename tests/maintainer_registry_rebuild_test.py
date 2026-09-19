@@ -201,7 +201,7 @@ class RegistryRefreshTest(unittest.TestCase):
 
     def test_one_run_locks_builds_validates_and_audits_without_initializing_again(self) -> None:
         root = self._registry()
-        identity = open(os.path.join(root, "aart-registry.json"), "rb").read()
+        identity = open(os.path.join(root, "aart-cli-registry.json"), "rb").read()
         os.remove(os.path.join(root, "registry", "index.json"))
 
         report = refresh_registry_workspace(root=root)
@@ -214,7 +214,7 @@ class RegistryRefreshTest(unittest.TestCase):
         self.assertTrue(report.value.passed, report.value.stages)
         self.assertTrue(os.path.isfile(os.path.join(root, "registry", "index.json")))
         # `init` is not part of this run: the registry's identity is left exactly as it was.
-        self.assertEqual(open(os.path.join(root, "aart-registry.json"), "rb").read(), identity)
+        self.assertEqual(open(os.path.join(root, "aart-cli-registry.json"), "rb").read(), identity)
 
     def test_one_named_stage_runs_alone(self) -> None:
         root = self._registry()

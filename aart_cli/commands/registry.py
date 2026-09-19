@@ -103,7 +103,7 @@ _STATE_THE_RELEASE = (
     "state the release to test against: `aart-cli registry test --latest-version VERSION`",
 )
 _MINIMUM_VERSION = (
-    "record a minimum AART version in `aart-registry.json` — `requires_aart.min_inclusive` — then "
+    "record a minimum AART version in `aart-cli-registry.json` — `requires_aart.min_inclusive` — then "
     "`aart-cli registry test`",
 )
 
@@ -409,9 +409,9 @@ def _run_audit(request: Request, workspace: FilesystemRegistryWorkspace) -> int:
 
 def _registry_manifest(snapshot: SourceSnapshot) -> Result[RegistryManifest]:
     for item in snapshot.entries:
-        if str(item.path) == "aart-registry.json" and item.kind is SnapshotEntryKind.FILE:
+        if str(item.path) == "aart-cli-registry.json" and item.kind is SnapshotEntryKind.FILE:
             return parse_registry_manifest(item.content)
-    return _error("registry workspace requires aart-registry.json", _INITIALIZE)
+    return _error("registry workspace requires aart-cli-registry.json", _INITIALIZE)
 
 
 def _run_test(request: Request, workspace: FilesystemRegistryWorkspace) -> int:

@@ -35,7 +35,7 @@ Member order is Poetry's. It is stable, which is what byte-reproducibility needs
 
 ## Building it needs Poetry
 
-Besides git and an interpreter, a CI image that builds the wheel must carry Poetry. An image that keeps Poetry off `PATH` names it in the `AART_POETRY`
+Besides git and an interpreter, a CI image that builds the wheel must carry Poetry. An image that keeps Poetry off `PATH` names it in the `AART_CLI_POETRY`
 repository variable — `/opt/poetry/bin/poetry` is the usual place.
 
 Poetry is needed for the *build* only. The quality gates install their tools with pip, from the

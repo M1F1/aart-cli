@@ -71,7 +71,7 @@ def is_promoted_registry(snapshot: SourceSnapshot) -> bool:
         return True
     if legacy_registry_paths(snapshot):
         return False
-    return {"aart-registry.json", "aart-source.json"}.issubset(paths)
+    return {"aart-cli-registry.json", "aart-cli-source.json"}.issubset(paths)
 
 
 def promoted_registry_versions(

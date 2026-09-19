@@ -27,7 +27,7 @@ def _source_with_mcp(root: Path) -> Path:
                 "name": "atlassian",
                 "version": "1.0.0",
                 "summary": "Connect the company Atlassian service.",
-                "payload": {"root": "payload", "format": "aart-mcp-v1"},
+                "payload": {"root": "payload", "format": "aart-cli-mcp-v1"},
                 "compatibility": {
                     "profiles": ["tabnine"],
                     "platforms": ["darwin", "linux"],

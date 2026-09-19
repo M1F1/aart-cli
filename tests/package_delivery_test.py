@@ -184,7 +184,7 @@ class PackageMergeTest(unittest.TestCase):
         forged = (
             _entry("artifact.json", b"{}"),
             _entry("payload", directory=True),
-            _entry("payload/MEMORY.md", b"<!-- <<< agent-artifacts memory:x <<< -->\n"),
+            _entry("payload/MEMORY.md", b"<!-- <<< aart-cli memory:x <<< -->\n"),
         )
 
         self.assertIsInstance(package_merge(ArtifactKind.MEMORY, forged), Err)

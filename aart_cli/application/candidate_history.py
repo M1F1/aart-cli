@@ -326,9 +326,9 @@ def serialize_source_scan(scan: SourceScan) -> Result[SerializedSourceScan]:
         "manifest_count": scan.manifest_count,
         "revision": scan.revision,
         "schema": (
-            "aart.dev/candidate-history/v2"
+            "aart-cli.dev/candidate-history/v2"
             if scan.collection_active or scan.collection_history
-            else "aart.dev/candidate-history/v1"
+            else "aart-cli.dev/candidate-history/v1"
         ),
         "source_alias": scan.source_alias.value,
     }
@@ -565,12 +565,12 @@ def source_scan_object_digests(index: bytes) -> Result[tuple[ObjectDigest, ...]]
         fields = frozenset(
             {"active", "history", "manifest_count", "revision", "schema", "source_alias"}
         )
-        if schema == "aart.dev/candidate-history/v2":
+        if schema == "aart-cli.dev/candidate-history/v2":
             fields |= frozenset({"collection_active", "collection_history"})
         data = _mapping(decoded, fields, "Candidate history index")
         if schema not in {
-            "aart.dev/candidate-history/v1",
-            "aart.dev/candidate-history/v2",
+            "aart-cli.dev/candidate-history/v1",
+            "aart-cli.dev/candidate-history/v2",
         }:
             raise ValueError("Candidate history schema is unsupported")
         history = data["history"]
@@ -609,12 +609,12 @@ def parse_source_scan(
         fields = frozenset(
             {"active", "history", "manifest_count", "revision", "schema", "source_alias"}
         )
-        if schema == "aart.dev/candidate-history/v2":
+        if schema == "aart-cli.dev/candidate-history/v2":
             fields |= frozenset({"collection_active", "collection_history"})
         data = _mapping(decoded, fields, "Candidate history index")
         if schema not in {
-            "aart.dev/candidate-history/v1",
-            "aart.dev/candidate-history/v2",
+            "aart-cli.dev/candidate-history/v1",
+            "aart-cli.dev/candidate-history/v2",
         }:
             raise ValueError("Candidate history schema is unsupported")
         history_data = data["history"]
@@ -640,7 +640,7 @@ def parse_source_scan(
             raise ValueError("active Candidate history does not bind the Source Scan revision")
         collection_history: tuple[CollectionCandidate, ...] = ()
         collection_active: tuple[CollectionCandidate, ...] = ()
-        if schema == "aart.dev/candidate-history/v2":
+        if schema == "aart-cli.dev/candidate-history/v2":
             collection_history_data = data["collection_history"]
             collection_active_data = data["collection_active"]
             if not isinstance(collection_history_data, list) or not isinstance(

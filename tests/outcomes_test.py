@@ -106,7 +106,7 @@ class OutcomeAggregationTest(unittest.TestCase):
                 OutcomeItem("CLAUDE.md", "preserved", detail="user content preserved"),
             ),
             warnings=("managed config was already absent",),
-            recovery=("Restore from CLAUDE.md.agent-artifacts-bak if needed.",),
+            recovery=("Restore from CLAUDE.md.aart-cli-bak if needed.",),
         )
 
         lines = render_summary(summary)
@@ -114,7 +114,7 @@ class OutcomeAggregationTest(unittest.TestCase):
         self.assertEqual(lines[0], "Removed 1 artifact; 1 manifest entry removed.")
         self.assertIn("warning: managed config was already absent", lines)
         self.assertIn(
-            "next: Restore from CLAUDE.md.agent-artifacts-bak if needed.",
+            "next: Restore from CLAUDE.md.aart-cli-bak if needed.",
             lines,
         )
 

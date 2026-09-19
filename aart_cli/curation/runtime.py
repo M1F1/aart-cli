@@ -345,8 +345,8 @@ class LocalCurationService:
             f"registry CI runs AART {EXECUTABLE_VERSION}, pinned in .aart-cli-version -- bump it in a "
             "pull request and the gates run against the new version before it is merged",
             "where CI fetches that version from is a repository variable, first one set wins: "
-            "AART_PACKAGE (package index), AART_WHEEL_URL (released wheel), AART_TOOL_PATH "
-            "(already on the runner), then AART_TOOL_URL (git clone, or AART_REPOSITORY as "
+            "AART_CLI_PACKAGE (package index), AART_CLI_WHEEL_URL (released wheel), AART_CLI_TOOL_PATH "
+            "(already on the runner), then AART_CLI_TOOL_URL (git clone, or AART_CLI_REPOSITORY as "
             "owner/name on this instance). Set none and the first run stops and lists them "
             "rather than guessing; set one on the organisation so it configures every registry "
             "at once",

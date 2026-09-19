@@ -166,7 +166,7 @@ class FailClosedReviewTest(unittest.TestCase):
 
             self.assertEqual(code, 0, payload)
             self.assertFalse(payload["finalized"], payload)
-            self.assertFalse((env.project / ".agent-artifacts" / "manifest.json").exists())
+            self.assertFalse((env.project / ".aart-cli" / "manifest.json").exists())
 
     def test_the_review_carries_the_digest_a_later_invocation_must_match(self) -> None:
         """Consent travels between two commands as a digest, so it has to be in the payload."""
@@ -187,7 +187,7 @@ class FailClosedReviewTest(unittest.TestCase):
 
             self.assertEqual(code, 0, payload)
             self.assertTrue(payload["finalized"], payload)
-            state = json.loads((env.project / ".agent-artifacts" / "manifest.json").read_text())
+            state = json.loads((env.project / ".aart-cli" / "manifest.json").read_text())
             self.assertEqual(len(state["installations"]), 1, state)
 
 

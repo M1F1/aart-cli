@@ -28,7 +28,7 @@ def _entry(path: str, content: str) -> SnapshotEntry:
 
 def _compiled(*, revision: str, version: str, server: str, requirement: str):
     manifest = {
-        "schema": "aart.dev/mcp/v1",
+        "schema": "aart-cli.dev/mcp/v1",
         "artifact": {"name": "github-mcp", "kind": "mcp", "version": version},
         "payload": {"include": ["server.py", "requirements.txt"]},
         "transport": {"type": "stdio"},
@@ -61,7 +61,7 @@ def _compiled(*, revision: str, version: str, server: str, requirement: str):
         SourceSnapshot(
             SnapshotOrigin.IMMUTABLE_GIT,
             (
-                _entry("github/aart.json", json.dumps(manifest, sort_keys=True)),
+                _entry("github/aart-cli.json", json.dumps(manifest, sort_keys=True)),
                 _entry("github/server.py", server),
                 _entry("github/requirements.txt", requirement),
             ),
@@ -117,7 +117,7 @@ class MaintainerCandidateProjectionTest(unittest.TestCase):
         self.assertEqual(view.version, "1.1.0")
         self.assertEqual(view.source_alias, "authors")
         self.assertEqual(view.source_revision, "b" * 40)
-        self.assertEqual(view.manifest_path, "github/aart.json")
+        self.assertEqual(view.manifest_path, "github/aart-cli.json")
         self.assertEqual(view.runtime, "python >=3.11")
         self.assertEqual(view.transport, "stdio")
         self.assertEqual(view.dependency_descriptor, "requirements: requirements.txt")

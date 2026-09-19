@@ -29,7 +29,7 @@ COORDINATE = ArtifactCoordinate(
     SourceAlias("public"), ArtifactIdentity("skill", "code-review"), "2.0.0"
 )
 KIT = OwnershipReason(OwnershipKind.COLLECTION, "public/collection/reviewers@1.0.0")
-ROOT = "/opt/agents/.agent-artifacts/runtimes/public/skill/code-review"
+ROOT = "/opt/agents/.aart-cli/runtimes/public/skill/code-review"
 
 
 def _digest(character: str = "a") -> ObjectDigest:

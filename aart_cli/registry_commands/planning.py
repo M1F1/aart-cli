@@ -156,7 +156,7 @@ _COPY_INTEGRITY = (
     "commit that agreed with the record before re-vendoring",
 )
 _CANONICAL_ROOTS = (
-    "restore the canonical `artifacts/` and `collections/` roots in `aart-source.json`, then "
+    "restore the canonical `artifacts/` and `collections/` roots in `aart-cli-source.json`, then "
     "`aart-cli registry validate`",
 )
 _SETUP_RECIPE = (
@@ -210,7 +210,7 @@ _RECORDED_ORIGIN = (
     "the new bytes from that origin",
 )
 _IDENTITIES = (
-    "make `registry_id` in `aart-registry.json` and `source_id` in `aart-source.json` the same "
+    "make `registry_id` in `aart-cli-registry.json` and `source_id` in `aart-cli-source.json` the same "
     "value, then `aart-cli registry validate`",
 )
 
@@ -478,7 +478,7 @@ def plan_registry_init(
     files = _files(snapshot)
     if isinstance(files, Err):
         return files
-    occupied = {"aart-registry.json", "aart-source.json"} & files.value.keys()
+    occupied = {"aart-cli-registry.json", "aart-cli-source.json"} & files.value.keys()
     if occupied:
         return _error("registry init refuses an existing registry workspace", _ALREADY_A_REGISTRY)
     # Every registry gets byte-identical files.  Where CI fetches AART from is a repository
@@ -486,7 +486,7 @@ def plan_registry_init(
     # regenerated when a company moves the tool.
     templates = (
         (".gitignore", REGISTRY_GITIGNORE),
-        (".github/workflows/aart-registry.yml", REGISTRY_CI_WORKFLOW),
+        (".github/workflows/aart-cli-registry.yml", REGISTRY_CI_WORKFLOW),
     )
     # The README is the one generated file a maintainer is meant to edit, so it is written when
     # absent and left alone otherwise -- never compared, never overwritten.  Managing it would
@@ -554,12 +554,12 @@ def plan_registry_init(
         (
             *((path, content, False) for path, content in (*templates, *written_once)),
             (
-                "aart-registry.json",
+                "aart-cli-registry.json",
                 canonical_json_bytes(registry_manifest_to_json(registry)),
                 False,
             ),
             (
-                "aart-source.json",
+                "aart-cli-source.json",
                 canonical_json_bytes(source_manifest_to_json(source)),
                 False,
             ),
@@ -568,9 +568,9 @@ def plan_registry_init(
 
 
 def _source_manifest(files: dict[str, SnapshotEntry]) -> Result[SourceManifest]:
-    marker = files.get("aart-source.json")
+    marker = files.get("aart-cli-source.json")
     if marker is None or marker.kind is not SnapshotEntryKind.FILE:
-        return _error("registry workspace requires aart-source.json", _INITIALIZE)
+        return _error("registry workspace requires aart-cli-source.json", _INITIALIZE)
     parsed = parse_source_manifest(marker.content)
     if isinstance(parsed, Err):
         return parsed
@@ -764,7 +764,7 @@ def _promote_vendor(
     files = _files(snapshot)
     if isinstance(files, Err):
         return files
-    marker = files.value.get("aart-registry.json")
+    marker = files.value.get("aart-cli-registry.json")
     if marker is None or marker.kind is not SnapshotEntryKind.FILE:
         return _error("registry marker is missing", _INITIALIZE)
     registry = parse_registry_manifest(marker.content)
@@ -814,7 +814,7 @@ def _promote_vendor(
             artifact,
             native.value,
             entries,
-            ComplianceLevel.AART_COMPATIBLE,
+            ComplianceLevel.AART_CLI_COMPATIBLE,
         ),
     )
     approved = load_registry_versions(snapshot)
@@ -1137,7 +1137,7 @@ def plan_registry_format(snapshot: SourceSnapshot) -> Result[RegistryWorkspacePl
         return source
 
     def is_protocol_document(path: str) -> bool:
-        if path in {"aart-registry.json", "aart-source.json"}:
+        if path in {"aart-cli-registry.json", "aart-cli-source.json"}:
             return path.endswith(".json")
         parts = tuple(path.split("/"))
         for root in source.value.collection_roots:
@@ -1171,9 +1171,9 @@ def _registry_inputs(
     files = _files(snapshot)
     if isinstance(files, Err):
         return files
-    registry_file = files.value.get("aart-registry.json")
+    registry_file = files.value.get("aart-cli-registry.json")
     if registry_file is None or registry_file.kind is not SnapshotEntryKind.FILE:
-        return _error("registry workspace requires aart-registry.json", _INITIALIZE)
+        return _error("registry workspace requires aart-cli-registry.json", _INITIALIZE)
     registry = parse_registry_manifest(registry_file.content)
     source = _source_manifest(files.value)
     if isinstance(registry, Err):

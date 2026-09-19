@@ -28,7 +28,7 @@ from unittest import mock
 from aart_cli import cli
 from tests.marketplace_lifecycle_e2e_test import _COORDINATE, _FIXTURE, _environment
 
-_MANIFEST = Path(".agent-artifacts") / "manifest.json"
+_MANIFEST = Path(".aart-cli") / "manifest.json"
 _INSTALLED = Path(".claude") / "skills" / "code-review"
 
 

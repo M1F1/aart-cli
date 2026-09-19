@@ -138,13 +138,13 @@ class SecurityProjectionSuitesTest(unittest.TestCase):
         names = tuple(item.id for item in BUILTIN_ANALYZER_SUITES)
 
         self.assertEqual(names, ("baseline", "extended", "recommended"))
-        self.assertEqual(BUILTIN_ANALYZER_SUITES[0].required_provider_ids, ("aart-baseline",))
+        self.assertEqual(BUILTIN_ANALYZER_SUITES[0].required_provider_ids, ("aart-cli-baseline",))
         for suite in BUILTIN_ANALYZER_SUITES:
             self.assertEqual(
                 tuple(sorted(set(suite.optional_provider_ids))), suite.optional_provider_ids
             )
             self.assertTrue(set(suite.optional_provider_ids) <= providers)
-            self.assertNotIn("aart-baseline", suite.optional_provider_ids)
+            self.assertNotIn("aart-cli-baseline", suite.optional_provider_ids)
 
 
 if __name__ == "__main__":

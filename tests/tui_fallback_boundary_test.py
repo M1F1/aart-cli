@@ -200,7 +200,7 @@ class CursesFallbackBoundaryTests(unittest.TestCase):
                 tui, "run_consumer", side_effect=ValueError("/Users/secret/path leaked")
             ),
             mock.patch.object(tui, "run_consumer_text", return_value=None) as fallback,
-            mock.patch.dict(tui.os.environ, {"AART_DEBUG": "1"}, clear=False),
+            mock.patch.dict(tui.os.environ, {"AART_CLI_DEBUG": "1"}, clear=False),
             redirect_stdout(output),
             redirect_stderr(debug),
         ):

@@ -64,7 +64,7 @@ def _snapshot() -> SourceSnapshot:
         SnapshotOrigin.IMMUTABLE_GIT,
         (
             SnapshotEntry(
-                SafeRelativePath(("aart-source.json",)),
+                SafeRelativePath(("aart-cli-source.json",)),
                 SnapshotEntryKind.FILE,
                 b'{"schema_version":1}',
             ),

@@ -113,8 +113,8 @@ def missing_poetry(name: str) -> str:
         f"Poetry is not installed, or is not on PATH as {name!r}.\n"
         "It builds the wheel, so a build without it cannot happen.\n"
         "Install it (https://python-poetry.org/docs/#installation), or name it:\n"
-        "  AART_POETRY=/opt/poetry/bin/poetry python scripts/build_wheel.py\n"
-        "In CI, set the AART_POETRY repository variable -- see docs/ci/github-enterprise-rollout.md."
+        "  AART_CLI_POETRY=/opt/poetry/bin/poetry python scripts/build_wheel.py\n"
+        "In CI, set the AART_CLI_POETRY repository variable -- see docs/ci/github-enterprise-rollout.md."
     )
 
 
@@ -138,11 +138,11 @@ def _poetry_module_runs() -> bool:
 def poetry_command() -> list[str]:
     """How to invoke Poetry here.
 
-    `AART_POETRY` names it outright, for an image that installs Poetry somewhere off `PATH` --
+    `AART_CLI_POETRY` names it outright, for an image that installs Poetry somewhere off `PATH` --
     a company CI image commonly does, as `/opt/poetry/bin/poetry`.
     """
 
-    override = os.environ.get("AART_POETRY", "").strip()
+    override = os.environ.get("AART_CLI_POETRY", "").strip()
     if override:
         return [override]
     found = shutil.which("poetry")

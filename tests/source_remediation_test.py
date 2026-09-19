@@ -456,7 +456,7 @@ class RegistryRefusalRemediationTest(unittest.TestCase):
     def test_rs09_the_guard_sees_a_refusal_that_carries_nothing(self) -> None:
         """The guard is only worth having if it fails on the thing it claims to catch."""
 
-        planted = ast.parse('return _error("registry workspace requires aart-registry.json")\n')
+        planted = ast.parse('return _error("registry workspace requires aart-cli-registry.json")\n')
         calls = [
             node
             for node in ast.walk(planted)
@@ -577,7 +577,7 @@ class RendererParityTest(unittest.TestCase):
             shutil.copytree(_FIXTURE, source)
 
             with _environment(source) as env:
-                marker = source / "aart-source.json"
+                marker = source / "aart-cli-source.json"
                 document = json.loads(marker.read_text(encoding="utf-8"))
                 document["source_id"] = "renamed-reference-source"
                 marker.write_text(json.dumps(document, indent=2), encoding="utf-8")

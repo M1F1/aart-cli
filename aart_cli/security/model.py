@@ -180,7 +180,7 @@ def make_finding(
     *,
     path: SafeRelativePath | None = None,
     line: int | None = None,
-    provider_id: str = "aart-baseline",
+    provider_id: str = "aart-cli-baseline",
 ) -> SecurityFinding:
     fingerprint = _finding_fingerprint(provider_id, rule_id, path, line)
     return SecurityFinding(

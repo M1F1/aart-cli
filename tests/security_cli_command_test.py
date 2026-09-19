@@ -85,7 +85,7 @@ class SecurityCliCommandTest(unittest.TestCase):
         key = AssessmentCacheKey(
             1,
             candidate.digest,
-            "aart-baseline",
+            "aart-cli-baseline",
             "1",
             BASELINE_RULES_DIGEST,
             empty,
@@ -210,7 +210,7 @@ class SecurityCliCommandTest(unittest.TestCase):
         key = AssessmentCacheKey(
             1,
             candidate.digest,
-            "aart-baseline",
+            "aart-cli-baseline",
             "1",
             BASELINE_RULES_DIGEST,
             empty,

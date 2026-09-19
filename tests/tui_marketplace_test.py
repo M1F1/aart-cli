@@ -76,7 +76,7 @@ def _catalog():
 def _security(item) -> ArtifactSecurityEvidence:
     coverage = AssessmentCoverage(1, 1)
     provider = ProviderAssessment(
-        "aart-baseline",
+        "aart-cli-baseline",
         "1",
         item.artifact.artifact.object_digest,
         AssessmentStatus.COMPLETE,
@@ -482,7 +482,7 @@ class ArtifactProjectionTest(unittest.TestCase):
             "severity unknown",
             "complete",
             "1/1",
-            "aart-baseline@1",
+            "aart-cli-baseline@1",
             "claude:current",
             "copy",
         ):

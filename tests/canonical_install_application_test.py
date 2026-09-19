@@ -232,7 +232,7 @@ class CanonicalInstallApplicationTest(unittest.TestCase):
                 (project / ".claude/skills/review/SKILL.md").read_text(),
                 "# Installed\n",
             )
-            state_path = project / ".agent-artifacts/manifest.json"
+            state_path = project / ".aart-cli/manifest.json"
             state = parse_install_state(state_path.read_bytes(), path=str(state_path))
             assert isinstance(state, Ok), state
             record = state.value.installations[0]
@@ -356,7 +356,7 @@ class CanonicalInstallApplicationTest(unittest.TestCase):
             self.assertEqual(outcome.value.status, InstallStatus.CONFLICTED)
             self.assertEqual(outcome.value.changed, 0)
             self.assertEqual((destination / "foreign.txt").read_text(), "new after review\n")
-            self.assertFalse((project / ".agent-artifacts/manifest.json").exists())
+            self.assertFalse((project / ".aart-cli/manifest.json").exists())
 
     def test_finalize_rejects_organization_policy_change_after_review(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -480,7 +480,7 @@ class CanonicalInstallApplicationTest(unittest.TestCase):
             self.assertTrue(any(item.status == "rolled-back" for item in outcome.value.effects))
             self.assertFalse((project / ".claude/hooks/review").exists())
             self.assertEqual(settings.read_bytes(), original_settings)
-            self.assertFalse((project / ".agent-artifacts/manifest.json").exists())
+            self.assertFalse((project / ".aart-cli/manifest.json").exists())
 
     def test_merge_preserves_foreign_configuration_and_becomes_a_no_op(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

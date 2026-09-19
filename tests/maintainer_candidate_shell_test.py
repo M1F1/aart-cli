@@ -60,7 +60,7 @@ def _compiled(*, alias: str, revision: str, version: str, server: str):
     """One compiled `github-mcp` manifest, deliberately named the same in every Source."""
 
     manifest = {
-        "schema": "aart.dev/mcp/v1",
+        "schema": "aart-cli.dev/mcp/v1",
         "artifact": {"name": "github-mcp", "kind": "mcp", "version": version},
         "payload": {"include": ["server.py"]},
         "transport": {"type": "stdio"},
@@ -71,7 +71,7 @@ def _compiled(*, alias: str, revision: str, version: str, server: str):
         SourceSnapshot(
             SnapshotOrigin.IMMUTABLE_GIT,
             (
-                _entry("github/aart.json", json.dumps(manifest, sort_keys=True)),
+                _entry("github/aart-cli.json", json.dumps(manifest, sort_keys=True)),
                 _entry("github/server.py", server),
             ),
         ),

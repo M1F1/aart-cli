@@ -59,7 +59,7 @@ def _ready_bundle(
     revision: str = "a" * 40,
 ) -> CandidateBundle:
     manifest = {
-        "schema": "aart.dev/mcp/v1",
+        "schema": "aart-cli.dev/mcp/v1",
         "artifact": {"name": name, "kind": "mcp", "version": version},
         "payload": {"include": ["server.py"]},
         "transport": {"type": "stdio"},
@@ -70,7 +70,7 @@ def _ready_bundle(
         SourceSnapshot(
             SnapshotOrigin.LOCAL if revision.startswith("local:") else SnapshotOrigin.IMMUTABLE_GIT,
             (
-                _entry(f"{name}/aart.json", json.dumps(manifest)),
+                _entry(f"{name}/aart-cli.json", json.dumps(manifest)),
                 _entry(f"{name}/server.py", server),
             ),
         ),

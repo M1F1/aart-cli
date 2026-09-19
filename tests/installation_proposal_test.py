@@ -159,7 +159,7 @@ LAUNCHER_BODY = (
     "  exit 78\n"
     "fi\n"
     "export GITHUB_TOKEN\n"
-    'GITHUB_ORG="$AART_CONFIG_GITHUB_ORG"\n'
+    'GITHUB_ORG="$AART_CLI_CONFIG_GITHUB_ORG"\n'
     "export GITHUB_ORG\n"
     "exec true\n"
 )

@@ -48,7 +48,7 @@ from tests.marketplace_fixtures import (
 
 
 def _state(project: Path) -> InstallState:
-    parsed = parse_install_state((project / ".agent-artifacts/manifest.json").read_bytes())
+    parsed = parse_install_state((project / ".aart-cli/manifest.json").read_bytes())
     assert isinstance(parsed, Ok), parsed
     return parsed.value
 
@@ -167,7 +167,7 @@ class CanonicalLifecycleTest(unittest.TestCase):
             self.assertEqual(remaining, {"mcpServers": {"foreign": {"command": "keep-me"}}})
             # The last record out of the scope takes the manifest with it, so "no
             # installations remain" is now read from the absence of the state itself.
-            self.assertFalse((project / ".agent-artifacts").exists())
+            self.assertFalse((project / ".aart-cli").exists())
 
     def test_profile_target_migration_refuses_orphan_then_uninstalls_and_reinstalls(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -348,7 +348,7 @@ class CanonicalLifecycleTest(unittest.TestCase):
                     Diagnostic(
                         DiagnosticCode("source-invalid"),
                         Severity.ERROR,
-                        "aart-registry.json is present and does not parse",
+                        "aart-cli-registry.json is present and does not parse",
                     ),
                 ),
             )
@@ -944,7 +944,7 @@ class CanonicalLifecycleTest(unittest.TestCase):
                 effects=(replace(original.effects[0], installed_digest=json_digest(None)),),
             )
             state = InstallState(2, (record,))
-            state_path = project / ".agent-artifacts/manifest.json"
+            state_path = project / ".aart-cli/manifest.json"
             state_path.write_bytes(install_state_bytes(state))
             config_path = project / ".mcp.json"
             config = json.loads(config_path.read_text())
@@ -1040,8 +1040,8 @@ class CanonicalLifecycleTest(unittest.TestCase):
             record = state.installations[0]
             destination = project / "CLAUDE.md"
             content = destination.read_text()
-            begin = "<!-- >>> agent-artifacts memory:review >>> -->"
-            end = "<!-- <<< agent-artifacts memory:review <<< -->"
+            begin = "<!-- >>> aart-cli memory:review >>> -->"
+            end = "<!-- <<< aart-cli memory:review <<< -->"
             destination.write_text(
                 content.replace(begin, "TOKEN").replace(end, begin).replace("TOKEN", end)
             )
@@ -1414,7 +1414,7 @@ class CreatedMergeFileReclamationTest(unittest.TestCase):
                 effects=(replace(original.effects[0], created_destination=False),),
             )
             state = InstallState(2, (record,))
-            (project / ".agent-artifacts/manifest.json").write_bytes(install_state_bytes(state))
+            (project / ".aart-cli/manifest.json").write_bytes(install_state_bytes(state))
 
             planned = prepare_uninstall(record, state, location, paths, adapter)
             assert isinstance(planned, Ok), planned

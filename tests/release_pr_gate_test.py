@@ -160,8 +160,8 @@ class ReleasePullRequestRunsTheNarrowGateTest(unittest.TestCase):
         self.assertEqual(
             workflow.count(
                 f"python-version: >- ${{{{ fromJSON({RELEASE_BRANCH}"
-                " && format('[\"{0}\"]', vars.AART_RELEASE_PYTHON_VERSION || '3.11')"
-                ' || vars.AART_PYTHON_VERSIONS || \'["3.10", "3.11", "3.14"]\') }}'
+                " && format('[\"{0}\"]', vars.AART_CLI_RELEASE_PYTHON_VERSION || '3.11')"
+                ' || vars.AART_CLI_PYTHON_VERSIONS || \'["3.10", "3.11", "3.14"]\') }}'
             ),
             2,
         )

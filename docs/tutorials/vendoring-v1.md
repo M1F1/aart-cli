@@ -1,6 +1,6 @@
 # Tutorial: vendoring an MCP server into a company registry
 
-Upstream publishes a useful MCP server in a monorepo. It has no `aart-source.json`, no
+Upstream publishes a useful MCP server in a monorepo. It has no `aart-cli-source.json`, no
 `artifact.json`, and no interest in acquiring either. Your consumers must install it from your
 registry and from nowhere else. This is the case `aart-cli registry vendor` exists for: it copies a
 subtree of any Git repository into your registry as a package you own, pinned to a resolved commit,
@@ -49,7 +49,7 @@ artifacts/mcp/atlassian/
   setup/installer.json
 ```
 
-`payload/mcp.json` is the `aart-mcp-v1` payload the type requires. It names one server and the
+`payload/mcp.json` is the `aart-cli-mcp-v1` payload the type requires. It names one server and the
 command that starts it:
 
 ```json
@@ -187,7 +187,7 @@ Nothing in those four commands knows what vendoring is. `artifact.json` is an or
 ```json
 {"compatibility":{"platforms":["darwin"],"profiles":["claude"]},
  "install":{"effects":["merge-json"],"modes":["copy"],"scopes":["project"]},
- "license":"MIT","name":"atlassian","payload":{"format":"aart-mcp-v1","root":"payload"},
+ "license":"MIT","name":"atlassian","payload":{"format":"aart-cli-mcp-v1","root":"payload"},
  "schema_version":1,"setup":{"platforms":["darwin"],"recipe":"setup/installer.json"},
  "summary":"Atlassian MCP server, vendored from upstream.","type":"mcp","version":"1.0.0"}
 ```

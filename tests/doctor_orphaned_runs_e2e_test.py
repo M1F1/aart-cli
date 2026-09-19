@@ -45,7 +45,7 @@ _SETUP = (
 
 
 def _runs_root(env) -> Path:
-    return Path(env.paths.data_root, ".agent-artifacts", "setup-runs")
+    return Path(env.paths.data_root, ".aart-cli", "setup-runs")
 
 
 @unittest.skipUnless(

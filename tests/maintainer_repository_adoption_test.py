@@ -61,7 +61,7 @@ _ADOPTED = AdoptedArtifact(
     "https://github.com/M1F1/superpowers-aart-test.git",
     "main",
     _COMMIT,
-    "skills/brainstorming/aart.yaml",
+    "skills/brainstorming/aart-cli.yaml",
     "sha256:" + "1" * 64,
 )
 
@@ -74,7 +74,7 @@ def _scan() -> RepositoryScan:
             "brainstorming",
             "2.1.0",
             "Explore an idea before implementation.",
-            "skills/brainstorming/aart.yaml",
+            "skills/brainstorming/aart-cli.yaml",
             "sha256:" + "1" * 64,
             "ready",
             ("payload/SKILL.md",),
@@ -86,7 +86,7 @@ def _scan() -> RepositoryScan:
             "unfinished",
             "1.0.0",
             "An invalid example.",
-            "skills/unfinished/aart.yaml",
+            "skills/unfinished/aart-cli.yaml",
             "sha256:" + "2" * 64,
             "invalid",
             ("payload/SKILL.md",),
@@ -530,7 +530,7 @@ class RepositoryAdoptionCompositionTest(_Lab):
                 ("skill/brainstorming@2.1.0",),
             )
 
-            manifest = self.author.path / "skills" / "brainstorming" / "aart.yaml"
+            manifest = self.author.path / "skills" / "brainstorming" / "aart-cli.yaml"
             manifest.write_text(OTHER_MANIFEST.replace("2.1.0", "2.2.0"), encoding="utf-8")
             (manifest.parent / "SKILL.md").write_text("# brainstorming 2.2\n", encoding="utf-8")
             _git(self.author.path, "add", "-A")

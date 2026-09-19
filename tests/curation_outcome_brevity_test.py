@@ -35,7 +35,7 @@ def _review(*warnings: str) -> CurationReview:
         mutating=True,
         review_digest=DIGEST,
         snapshot_digest=ObjectDigest("sha256", "b" * 64),
-        changes=(CurationChange("aart-registry.json", "added"),),
+        changes=(CurationChange("aart-cli-registry.json", "added"),),
         warnings=warnings,
     )
 
@@ -121,8 +121,8 @@ class FollowUpCommandTest(unittest.TestCase):
         commands = _follow_up(
             "/tmp/registry",
             (
-                CurationChange("aart-registry.json", "added"),
-                CurationChange("aart-source.json", "added"),
+                CurationChange("aart-cli-registry.json", "added"),
+                CurationChange("aart-cli-source.json", "added"),
             ),
             CurationAction.INIT,
         )
@@ -146,7 +146,7 @@ class FollowUpCommandTest(unittest.TestCase):
 
         commands = _follow_up(
             "/tmp/registry",
-            (CurationChange("aart-registry.json", "changed"),),
+            (CurationChange("aart-cli-registry.json", "changed"),),
             CurationAction.FORMAT,
         )
 

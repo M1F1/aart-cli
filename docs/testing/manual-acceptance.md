@@ -168,8 +168,8 @@ Each entry records:
 - [ ] **QA-020 — A YAML authoring repository cannot enter the monitored Source → Candidate flow.**
       Authoring-Source admission is now manifest discovery rather than native-package validation:
       `source add --kind source-git` admits a repository that declares at least one explicit
-      `aart.yaml`/`aart.json`, keeps the native-package rule for a tree that declares
-      `aart-source.json`, and still refuses a tree that declares neither. Transport, identity,
+      `aart-cli.yaml`/`aart-cli.json`, keeps the native-package rule for a tree that declares
+      `aart-cli-source.json`, and still refuses a tree that declares neither. Transport, identity,
       symlink, special-file and last-known-good boundaries are unchanged. An authoring Source
       contributes no Marketplace offers and cannot empty the consumer's Marketplace. B-094/D-176.
 
@@ -179,7 +179,7 @@ Each entry records:
       Severity: high
       Blocks current monitored-Source stage: no; this is a second required onboarding model
       Reproduction: provide the Superpowers URL/ref without adding it as a configured Source, then
-      try to discover its `aart.yaml` files and select one Skill for Registry ownership
+      try to discover its `aart-cli.yaml` files and select one Skill for Registry ownership
       Expected: `Scan Repository` finds only explicit YAML/JSON manifests, presents selectable
       artifacts, and vendors only each selected manifest's `payload.include` files with pinned
       provenance; the repository is not saved as a Source
@@ -347,7 +347,7 @@ Each entry records:
 
 - [ ] **QA-032 — A Registry produced by TUI promotion fails its generated GitHub Actions.**
       Stage: publishing the first promoted artifact through Registry PR #1
-      Surface: generated `.github/workflows/aart-registry.yml`
+      Surface: generated `.github/workflows/aart-cli-registry.yml`
       Severity: blocking
       Blocks current stage: yes, unless the known false-negative checks are consciously bypassed
       Reproduction: promote `skill/verification-before-completion@1.0.0` through the TUI, push the
@@ -569,7 +569,7 @@ Each entry records:
       Observed: stages 1-3 are entirely CLI and GitHub setup, stage 4 adds author Sources through
       the CLI although adding a Source is itself a Maintainer screen, and the CP-20 head advertising
       `make manual-test-setup` was never reconciled with a body that still exports
-      `$AART_MAINTAINER_HOME`. The default lab also publishes both fixtures, so the whole Maintainer
+      `$AART_CLI_MAINTAINER_HOME`. The default lab also publishes both fixtures, so the whole Maintainer
       run — Initialize Registry, Add Source, Sync, Candidates, validation, promotion, commit — is
       already done by the setup script and an operator walking those screens re-reads a result
       instead of producing one. Expected: a TUI-first walkthrough over a Registry that starts empty.

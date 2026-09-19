@@ -90,7 +90,7 @@ class EmptyRegistryAuditTest(unittest.TestCase):
     def test_a_manifest_outside_the_declared_roots_is_not_a_package_of_this_registry(
         self,
     ) -> None:
-        """`aart-source.json` declares where this registry's packages live, and only there.
+        """`aart-cli-source.json` declares where this registry's packages live, and only there.
 
         A valid `artifact.json` sitting outside those roots belongs to something else — a vendored
         working copy, a fixture, an unrelated tree committed alongside — so it must not make an

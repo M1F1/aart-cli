@@ -42,8 +42,8 @@ class ManagedBlockRenderingTest(unittest.TestCase):
     def test_the_block_is_delimited_by_markers_that_name_what_owns_it(self) -> None:
         block = managed_block(NAME, BODY)
 
-        self.assertTrue(block.startswith("<!-- >>> agent-artifacts memory:house-style >>> -->\n"))
-        self.assertTrue(block.endswith("\n<!-- <<< agent-artifacts memory:house-style <<< -->"))
+        self.assertTrue(block.startswith("<!-- >>> aart-cli memory:house-style >>> -->\n"))
+        self.assertTrue(block.endswith("\n<!-- <<< aart-cli memory:house-style <<< -->"))
         self.assertIn("Always name the failure.", block)
 
     def test_a_markdown_comment_is_invisible_to_the_harness_that_reads_the_file(self) -> None:
@@ -70,12 +70,12 @@ class ManagedBlockInsertionTest(unittest.TestCase):
     def test_appending_puts_the_block_after_what_was_there(self) -> None:
         merged = _merged(NOTES, position=BlockPosition.BOTTOM)
 
-        self.assertLess(merged.index("Something I wrote."), merged.index("agent-artifacts"))
+        self.assertLess(merged.index("Something I wrote."), merged.index("aart-cli"))
 
     def test_prepending_puts_the_block_before_what_was_there(self) -> None:
         merged = _merged(NOTES, position=BlockPosition.TOP)
 
-        self.assertLess(merged.index("agent-artifacts"), merged.index("Something I wrote."))
+        self.assertLess(merged.index("aart-cli"), merged.index("Something I wrote."))
 
     def test_a_file_with_no_final_newline_does_not_lose_its_last_line(self) -> None:
         merged = _merged("no trailing newline", position=BlockPosition.BOTTOM)
@@ -89,7 +89,7 @@ class ManagedBlockReplacementTest(unittest.TestCase):
         twice = merge_managed_block(once, NAME, "Different guidance.\n")
 
         assert isinstance(twice, Ok), getattr(twice, "diagnostics", ())
-        self.assertEqual(1, twice.value.count("<!-- >>> agent-artifacts memory:house-style"))
+        self.assertEqual(1, twice.value.count("<!-- >>> aart-cli memory:house-style"))
         self.assertIn("Different guidance.", twice.value)
         self.assertNotIn("Always name the failure.", twice.value)
 
@@ -133,7 +133,7 @@ class ManagedBlockRefusalTest(unittest.TestCase):
         """The legacy path writes from the opening marker to the end of the file, which destroys
         everything the user wrote below a block somebody half-deleted."""
 
-        damaged = "<!-- >>> agent-artifacts memory:house-style >>> -->\nbody\n" + NOTES
+        damaged = "<!-- >>> aart-cli memory:house-style >>> -->\nbody\n" + NOTES
 
         merged = merge_managed_block(damaged, NAME, BODY)
 
@@ -160,7 +160,7 @@ class ManagedBlockRemovalTest(unittest.TestCase):
         removed = remove_managed_block(merged, NAME)
 
         assert isinstance(removed, Ok), getattr(removed, "diagnostics", ())
-        self.assertNotIn("agent-artifacts", removed.value)
+        self.assertNotIn("aart-cli", removed.value)
         self.assertIn("Something I wrote.", removed.value)
 
     def test_removing_what_was_never_there_leaves_the_file_exactly_as_it_was(self) -> None:
@@ -227,7 +227,7 @@ class ManagedBlockBodyTest(unittest.TestCase):
         self.assertEqual("Somebody changed this.", managed_block_body(edited, NAME).value)
 
     def test_a_half_open_region_is_refused_rather_than_read_to_the_end_of_the_file(self) -> None:
-        damaged = f"{NOTES}<!-- >>> agent-artifacts memory:{NAME} >>> -->\nstill mine\n"
+        damaged = f"{NOTES}<!-- >>> aart-cli memory:{NAME} >>> -->\nstill mine\n"
 
         self.assertIsInstance(managed_block_body(damaged, NAME), Err)
 

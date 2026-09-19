@@ -123,7 +123,7 @@ effect. That distinction is INV-105, and it is why the workflow contains nothing
 
 ## For a fork
 
-`release-please.yml` reads one repository variable, `AART_RUNNER`. It reads no image, no
+`release-please.yml` reads one repository variable, `AART_CLI_RUNNER`. It reads no image, no
 interpreter and no index, because the action it runs brings its own runtime. Everything else about
 a fork's release — where it runs, which image, which index, which registry, where the wheel is
 published — is on

@@ -238,7 +238,7 @@ class FailedActionShellTest(unittest.TestCase):
             assert isinstance(created, Ok) and created.value.passed, created
             # The marker still exists, so the review is prepared exactly as it would be; the run
             # itself is what cannot complete.
-            marker = os.path.join(str(env.project), "aart-registry.json")
+            marker = os.path.join(str(env.project), "aart-cli-registry.json")
             with open(marker, "w", encoding="utf-8") as handle:
                 handle.write("{ this is not a registry manifest")
             composed = tui._canonical_consumer_actions(

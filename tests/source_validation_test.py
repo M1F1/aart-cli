@@ -89,7 +89,7 @@ class SourceValidationTest(unittest.TestCase):
 
     def test_corrupt_source_marker_is_rejected_without_mutating_acquired_bytes(self) -> None:
         with tempfile.TemporaryDirectory() as root:
-            marker = Path(root) / "aart-source.json"
+            marker = Path(root) / "aart-cli-source.json"
             marker.write_bytes(
                 b'{"schema_version":1,' + secret_field("token", "secret").encode("utf-8")
             )
@@ -115,7 +115,7 @@ class AuthoringSourceAdmissionRuleTest(unittest.TestCase):
 
     `authoring_source_admission_e2e_test` proves the public command admits one real repository.
     This proves the rule that made it do so is a rule: for *any* tree carrying no
-    `aart-source.json`, admission is exactly whether an explicit manifest basename is present
+    `aart-cli-source.json`, admission is exactly whether an explicit manifest basename is present
     anywhere in it (INV-201), and the alias is the identity a tree that declares none receives.
     """
 
@@ -151,7 +151,9 @@ class AuthoringSourceAdmissionRuleTest(unittest.TestCase):
                     min_size=0,
                     max_size=3,
                 ).map(tuple),
-                st.sampled_from(("aart.yaml", "aart.json", "README.md", "server.py", "SKILL.md")),
+                st.sampled_from(
+                    ("aart-cli.yaml", "aart-cli.json", "README.md", "server.py", "SKILL.md")
+                ),
             ),
             min_size=1,
             max_size=6,
@@ -170,12 +172,12 @@ class AuthoringSourceAdmissionRuleTest(unittest.TestCase):
             entries.append(_entry("/".join((*parts, name))))
         # Two manifest spellings in one directory is a tree-shape refusal of its own, and it is
         # discovery's to make, not this rule's; excluding it keeps the property about admission.
-        both = any({"aart.yaml", "aart.json"} <= names for names in by_directory.values())
+        both = any({"aart-cli.yaml", "aart-cli.json"} <= names for names in by_directory.values())
         snapshot = SourceSnapshot(SnapshotOrigin.IMMUTABLE_GIT, tuple(entries))
 
         result = validate_authoring_source_candidate(self._configured(), self._request(snapshot))
 
-        declared = any(name in {"aart.yaml", "aart.json"} for _, name in raw)
+        declared = any(name in {"aart-cli.yaml", "aart-cli.json"} for _, name in raw)
         if both:
             self.assertIsInstance(result, Err)
         elif declared:
@@ -191,8 +193,8 @@ class AuthoringSourceAdmissionRuleTest(unittest.TestCase):
         snapshot = SourceSnapshot(
             SnapshotOrigin.IMMUTABLE_GIT,
             (
-                _entry("aart-source.json", b"{ not json\n"),
-                _entry("skills/review/aart.yaml", b"schema: aart.dev/skill/v1\n"),
+                _entry("aart-cli-source.json", b"{ not json\n"),
+                _entry("skills/review/aart-cli.yaml", b"schema: aart-cli.dev/skill/v1\n"),
             ),
         )
 

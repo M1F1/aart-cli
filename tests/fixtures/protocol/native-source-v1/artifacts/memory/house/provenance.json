@@ -8,7 +8,7 @@
     "input_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
   },
   "importer": {
-    "id": "aart-memory-v1",
+    "id": "aart-cli-memory-v1",
     "version": "1.0.0",
     "options_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
   },

@@ -1790,7 +1790,7 @@ def receipt_matches_plan(receipt: Mapping[str, object], plan: SetupPlan) -> bool
         return receipt.get("output") == effect.config.get("output")
     if effect.module == "custom.install@1":
         run_dir = str(receipt.get("run_dir", ""))
-        expected_runs = os.path.join(plan.run_root, ".agent-artifacts", "setup-runs")
+        expected_runs = os.path.join(plan.run_root, ".aart-cli", "setup-runs")
         script = str(receipt.get("script", ""))
         try:
             inside_runs = (
@@ -1832,7 +1832,7 @@ def mark_unstarted_skipped(
 
 
 def setup_state_path(scope_root: str) -> str:
-    return os.path.join(scope_root, ".agent-artifacts", "setup-state.json")
+    return os.path.join(scope_root, ".aart-cli", "setup-state.json")
 
 
 def _redact(value: object) -> object:

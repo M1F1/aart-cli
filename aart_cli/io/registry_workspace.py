@@ -37,7 +37,7 @@ from aart_cli.sources.model import source_snapshot_digest
 
 REGISTRY_WORKSPACE_INVALID = DiagnosticCode("registry-workspace-invalid")
 
-_REGISTRY_MARKER = "aart-registry.json"
+_REGISTRY_MARKER = "aart-cli-registry.json"
 
 #: Long enough for local Git plumbing on a cold cache, short enough that a wedged process cannot
 #: hold a screen open. Nothing read here touches the network: every question is answered from refs
@@ -186,8 +186,8 @@ REGISTRY_WORKSPACE_APPLY_FAILED = DiagnosticCode("registry-workspace-apply-faile
 # handed, so a reader that skipped them would turn the refusal into silence (CP-26.5).
 _ROOT_FILES = frozenset(
     {
-        "aart-registry.json",
-        "aart-source.json",
+        "aart-cli-registry.json",
+        "aart-cli-source.json",
         "aart.lock.json",
         "aart.index.json",
         ".gitignore",
@@ -205,7 +205,7 @@ _ROOT_DIRECTORIES = frozenset(
 _GITHUB_DIRECTORIES = frozenset({".github", ".github/workflows"})
 _GITHUB_FILES = frozenset(
     {
-        ".github/workflows/aart-registry.yml",
+        ".github/workflows/aart-cli-registry.yml",
     }
 )
 _MAX_ENTRIES = 100_000

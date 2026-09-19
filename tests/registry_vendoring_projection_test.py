@@ -50,7 +50,7 @@ from aart_cli.store.model import make_object_candidate
 _CAPABILITIES = EXECUTABLE_CAPABILITIES
 _COMMIT = "f" * 40
 _URL = "https://github.com/example/atlassian-mcp.git"
-# An `aart-mcp-v1` descriptor: `name` and a `server` object.  It was written here as
+# An `aart-cli-mcp-v1` descriptor: `name` and a `server` object.  It was written here as
 # `{"mcpServers": …}` — the shape of the harness file the entry is merged *into* — which parses,
 # loads, installs, and starts nothing, because `server` is absent and the merge writes `{}`.
 _MCP_JSON = (
@@ -167,7 +167,7 @@ def _registry_snapshot(package: VendoredPackage) -> SourceSnapshot:
     """The emitted package as ordinary registry content, with nothing else in the registry."""
 
     entries = [
-        _file("aart-source.json", json.dumps(_SOURCE_MARKER).encode()),
+        _file("aart-cli-source.json", json.dumps(_SOURCE_MARKER).encode()),
         *(
             _file(relative, content, executable=executable)
             for relative, content, executable in package.files

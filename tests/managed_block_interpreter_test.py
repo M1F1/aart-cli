@@ -142,7 +142,7 @@ class ManagedBlockInterpreterTest(unittest.TestCase):
 
     def test_a_damaged_region_is_refused_rather_than_rewritten(self) -> None:
         self.destination.write_text(
-            "Mine.\n<!-- >>> agent-artifacts memory:house-style >>> -->\nstill mine\n", "utf-8"
+            "Mine.\n<!-- >>> aart-cli memory:house-style >>> -->\nstill mine\n", "utf-8"
         )
         before = self.destination.read_text(encoding="utf-8")
 

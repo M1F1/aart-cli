@@ -1,6 +1,6 @@
 """Parser-owned authoring field surface for the CP-26 generator oracle.
 
-Steps 7 to 12 generate `aart.yaml` from the fields `protocol/authoring.py` accepts. Transcribing
+Steps 7 to 12 generate `aart-cli.yaml` from the fields `protocol/authoring.py` accepts. Transcribing
 those names into the generator would make every later parser change silently produce a manifest
 that is one field short, so they are read out of the parser instead.
 

@@ -217,7 +217,7 @@ class RegistryPushMovesNothingItDoesNotOwnTest(unittest.TestCase):
         with _registry() as (root, _remote, _revision):
             source = root / "vendor-source"
             source.mkdir()
-            (source / "aart-source.json").write_text("{}\n", encoding="utf-8")
+            (source / "aart-cli-source.json").write_text("{}\n", encoding="utf-8")
 
             self.assertIsNone(read_registry_workspace(str(source)))
 

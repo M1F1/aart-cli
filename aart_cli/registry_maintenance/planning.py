@@ -76,7 +76,7 @@ def _required_file(files: dict[str, SnapshotEntry], path: str) -> Result[Snapsho
 
 
 def _registry_manifest(files: dict[str, SnapshotEntry]) -> Result[RegistryManifest]:
-    marker = _required_file(files, "aart-registry.json")
+    marker = _required_file(files, "aart-cli-registry.json")
     if isinstance(marker, Err):
         return marker
     return parse_registry_manifest(marker.value.content)
@@ -86,7 +86,7 @@ def _registry_source_manifest(
     files: dict[str, SnapshotEntry],
     registry: RegistryManifest,
 ) -> Result[SourceManifest]:
-    marker = _required_file(files, "aart-source.json")
+    marker = _required_file(files, "aart-cli-source.json")
     if isinstance(marker, Err):
         return marker
     source = parse_source_manifest(marker.value.content)
@@ -218,7 +218,7 @@ def project_registry_mutation(
 def _collections_without_index(
     files: dict[str, SnapshotEntry],
 ) -> Result[tuple[CollectionManifest, ...]]:
-    marker = _required_file(files, "aart-source.json")
+    marker = _required_file(files, "aart-cli-source.json")
     if isinstance(marker, Err):
         return marker
     source = parse_source_manifest(marker.value.content)

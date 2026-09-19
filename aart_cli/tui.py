@@ -585,7 +585,7 @@ def internal_failure_lines(
 def _debug_traceback_enabled() -> bool:
     """Enable an explicitly local traceback channel without changing normal terminal output."""
 
-    return os.environ.get("AART_DEBUG") == "1"
+    return os.environ.get("AART_CLI_DEBUG") == "1"
 
 
 def _render_internal_failure(

@@ -17,8 +17,8 @@ EMBEDDED_CATALOG_PATHS = (
     "bundles",
     "artifacts",
     "collections",
-    "aart-source.json",
-    "aart-registry.json",
+    "aart-cli-source.json",
+    "aart-cli-registry.json",
     "aart.lock.json",
     "aart.index.json",
 )

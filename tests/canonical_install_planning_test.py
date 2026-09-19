@@ -260,7 +260,7 @@ class CanonicalInstallPlanningTest(unittest.TestCase):
                 Diagnostic(
                     DiagnosticCode("source-invalid"),
                     Severity.ERROR,
-                    "aart-registry.json is present and does not parse",
+                    "aart-cli-registry.json is present and does not parse",
                 ),
             ),
         )

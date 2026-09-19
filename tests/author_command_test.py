@@ -78,7 +78,7 @@ class InitTest(unittest.TestCase):
 
             written = _tree(root)
 
-        self.assertIn("aart.yaml", written)
+        self.assertIn("aart-cli.yaml", written)
         for file in _generated().payload:
             self.assertIn(file.path, written)
 
@@ -90,7 +90,9 @@ class InitTest(unittest.TestCase):
         with _workspace() as root:
             _init(root)
 
-            self.assertEqual((root / "aart.yaml").read_text(encoding="utf-8"), skeleton.manifest)
+            self.assertEqual(
+                (root / "aart-cli.yaml").read_text(encoding="utf-8"), skeleton.manifest
+            )
             for file in skeleton.payload:
                 self.assertEqual((root / file.path).read_text(encoding="utf-8"), file.content)
 
@@ -103,9 +105,9 @@ class InitTest(unittest.TestCase):
     def test_the_written_manifest_parses(self) -> None:
         with _workspace() as root:
             _init(root)
-            text = (root / "aart.yaml").read_bytes()
+            text = (root / "aart-cli.yaml").read_bytes()
 
-        path = parse_relative_path("aart.yaml")
+        path = parse_relative_path("aart-cli.yaml")
         assert isinstance(path, Ok), path
 
         self.assertIsInstance(parse_author_manifest(DiscoveredAuthorManifest(path.value, text)), Ok)
@@ -115,7 +117,7 @@ class InitTest(unittest.TestCase):
             target = root / "artifacts" / "github-mcp"
 
             self.assertEqual(_init(target), OK)
-            self.assertTrue((target / "aart.yaml").is_file())
+            self.assertTrue((target / "aart-cli.yaml").is_file())
 
     def test_every_written_path_is_named_in_what_the_command_prints(self) -> None:
         """An agent reads the report; a path written but unreported is a file nobody edits."""
@@ -138,7 +140,7 @@ class InitTest(unittest.TestCase):
             finally:
                 os.chdir(previous)
 
-            self.assertTrue((root / "aart.yaml").is_file())
+            self.assertTrue((root / "aart-cli.yaml").is_file())
 
 
 class RefusalTest(unittest.TestCase):
@@ -146,11 +148,11 @@ class RefusalTest(unittest.TestCase):
 
     def test_an_existing_manifest_is_never_overwritten(self) -> None:
         with _workspace() as root:
-            (root / "aart.yaml").write_text("mine\n", encoding="utf-8")
+            (root / "aart-cli.yaml").write_text("mine\n", encoding="utf-8")
 
             self.assertEqual(_init(root), ERROR)
-            self.assertEqual((root / "aart.yaml").read_text(encoding="utf-8"), "mine\n")
-            self.assertEqual(_tree(root), {"aart.yaml"})
+            self.assertEqual((root / "aart-cli.yaml").read_text(encoding="utf-8"), "mine\n")
+            self.assertEqual(_tree(root), {"aart-cli.yaml"})
 
     def test_an_existing_payload_file_stops_the_manifest_being_written(self) -> None:
         """The conflict is found before anything is written, not while writing."""
@@ -188,7 +190,7 @@ class RefusalTest(unittest.TestCase):
         for kind in GENERATED_KINDS:
             with self.subTest(kind=kind), _workspace() as root:
                 self.assertEqual(_init(root, kind=kind, name="code-review"), OK)
-                self.assertTrue((root / "aart.yaml").is_file())
+                self.assertTrue((root / "aart-cli.yaml").is_file())
 
     def test_a_name_the_parser_rejects_writes_nothing(self) -> None:
         with _workspace() as root:
@@ -211,7 +213,7 @@ class RefusalTest(unittest.TestCase):
         with _workspace() as root:
             elsewhere = root / "elsewhere"
             elsewhere.mkdir()
-            (elsewhere / "aart.yaml").symlink_to(elsewhere / "absent.yaml")
+            (elsewhere / "aart-cli.yaml").symlink_to(elsewhere / "absent.yaml")
 
             self.assertEqual(_init(elsewhere), ERROR)
             self.assertFalse((elsewhere / "absent.yaml").exists())
@@ -257,7 +259,7 @@ class WriterTest(unittest.TestCase):
         """A refusal with no remediation makes the author guess at what AART wants."""
 
         with _workspace() as root:
-            (root / "aart.yaml").write_text("mine\n", encoding="utf-8")
+            (root / "aart-cli.yaml").write_text("mine\n", encoding="utf-8")
             written = write_author_skeleton(_generated(), into=str(root))
 
             assert isinstance(written, Err), written

@@ -39,7 +39,7 @@ from tests.artifact_placement_test import _resolved as _resolved_skill
 from tests.installation_offer_test import _placement
 from tests.installation_proposal_test import ROOT
 
-SKILL_ROOT = "/home/agent/.agent-artifacts/runtimes/public/skill/code-review"
+SKILL_ROOT = "/home/agent/.aart-cli/runtimes/public/skill/code-review"
 
 
 def _skill_placement(harness: str = "claude", **overrides: object) -> ArtifactPlacement:

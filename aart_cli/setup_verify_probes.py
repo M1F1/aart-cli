@@ -145,7 +145,7 @@ def orphan_run_directories(run_root: str, plan_hash: str) -> Tuple[str, ...] | N
     """Working copies an interrupted run left behind under the run root.
 
     The root is the one the run itself used, handed in rather than derived here.  This probe used
-    to compose `<project_root>/.agent-artifacts/setup-runs`, while `new_run_directory` composes
+    to compose `<project_root>/.aart-cli/setup-runs`, while `new_run_directory` composes
     `<plan.run_root>/...` and `setup_engine/application.py` passes `run_root=location.data_root`.
     The two are never the same directory, so the claim answered `true` in every scope without ever
     looking at the place runs are created.
@@ -156,7 +156,7 @@ def orphan_run_directories(run_root: str, plan_hash: str) -> Tuple[str, ...] | N
 
     if not run_root:
         return None
-    runs_root = os.path.join(run_root, ".agent-artifacts", "setup-runs")
+    runs_root = os.path.join(run_root, ".aart-cli", "setup-runs")
     prefix = f"{plan_hash[:16]}-"
     try:
         entries = sorted(os.listdir(runs_root))

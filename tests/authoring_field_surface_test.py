@@ -1,6 +1,6 @@
 """The CP-26.6 oracle derives the authoring field surface from the parser's own source.
 
-Steps 7 to 12 generate `aart.yaml`. A generator that transcribes the accepted field names goes
+Steps 7 to 12 generate `aart-cli.yaml`. A generator that transcribes the accepted field names goes
 stale the moment the parser gains one, and nothing fails. So the field surface is collected from
 `protocol/authoring.py` by reading it, and these tests hold the collector to the two properties a
 generator oracle has to have: it reaches *every* site where the parser accepts fields, and it never

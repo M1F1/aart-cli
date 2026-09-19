@@ -23,7 +23,7 @@ class AuthorCompilerIntegrationTest(unittest.TestCase):
             (artifact / "src").mkdir(parents=True)
             (artifact / "tests").mkdir()
             manifest = {
-                "schema": "aart.dev/mcp/v1",
+                "schema": "aart-cli.dev/mcp/v1",
                 "artifact": {"name": "github-mcp", "kind": "mcp", "version": "1.0.0"},
                 "payload": {
                     "include": ["server.py", "src/**", "requirements.txt"],
@@ -34,7 +34,7 @@ class AuthorCompilerIntegrationTest(unittest.TestCase):
                 "launch": {"type": "python", "entrypoint": "server.py"},
                 "compatibility": {"harnesses": ["codex"]},
             }
-            (artifact / "aart.json").write_text(json.dumps(manifest), encoding="utf-8")
+            (artifact / "aart-cli.json").write_text(json.dumps(manifest), encoding="utf-8")
             (artifact / "server.py").write_text("print('ready')\n", encoding="utf-8")
             (artifact / "src" / "service.py").write_text("READY = True\n", encoding="utf-8")
             (artifact / "requirements.txt").write_text("dependency==1.0\n", encoding="utf-8")
@@ -64,7 +64,7 @@ class AuthorCompilerIntegrationTest(unittest.TestCase):
             self.assertIsInstance(compiled, Ok)
             assert isinstance(compiled, Ok)
             package = compiled.value[0]
-            self.assertEqual(str(package.manifest_path), "github/aart.json")
+            self.assertEqual(str(package.manifest_path), "github/aart-cli.json")
             self.assertEqual(
                 tuple(
                     str(entry.path)

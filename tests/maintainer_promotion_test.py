@@ -96,7 +96,7 @@ def _digest(character: str) -> ObjectDigest:
 
 def _scan(*, inputs: list[dict[str, object]] | None = None, revision: str = "a" * 40):
     manifest: dict[str, object] = {
-        "schema": "aart.dev/mcp/v1",
+        "schema": "aart-cli.dev/mcp/v1",
         "artifact": {"name": "github-mcp", "kind": "mcp", "version": "1.0.0"},
         "payload": {"include": ["server.py"]},
         "transport": {"type": "stdio"},
@@ -111,7 +111,7 @@ def _scan(*, inputs: list[dict[str, object]] | None = None, revision: str = "a" 
             if source_revision_kind(revision) == "git"
             else SnapshotOrigin.LOCAL,
             (
-                _entry("github/aart.json", json.dumps(manifest, sort_keys=True)),
+                _entry("github/aart-cli.json", json.dumps(manifest, sort_keys=True)),
                 _entry("github/server.py", "print('x')\n"),
             ),
         ),

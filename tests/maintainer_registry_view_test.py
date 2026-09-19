@@ -72,7 +72,7 @@ def _digest(character: str) -> ObjectDigest:
 
 def _bundle(*, name: str = "github-mcp", kind: str = "mcp", version: str = "1.0.0"):
     manifest: dict[str, object] = {
-        "schema": f"aart.dev/{kind}/v1",
+        "schema": f"aart-cli.dev/{kind}/v1",
         "artifact": {"name": name, "kind": kind, "version": version},
         "payload": {"include": ["server.py"]},
         "transport": {"type": "stdio"},
@@ -83,7 +83,7 @@ def _bundle(*, name: str = "github-mcp", kind: str = "mcp", version: str = "1.0.
         SourceSnapshot(
             SnapshotOrigin.IMMUTABLE_GIT,
             (
-                _entry(f"{name}/aart.json", json.dumps(manifest, sort_keys=True)),
+                _entry(f"{name}/aart-cli.json", json.dumps(manifest, sort_keys=True)),
                 _entry(f"{name}/server.py", "print('x')\n"),
             ),
         ),

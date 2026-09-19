@@ -169,7 +169,7 @@ class MaterializeBuildContextTest(unittest.TestCase):
     def test_the_copy_lives_under_the_run_root_and_nowhere_else(self) -> None:
         run_dir = new_run_directory(_plan(_item(self.workspace), self.run_root))
         context = materialize_build_context(self.payload, run_dir)
-        expected = os.path.join(self.run_root, ".agent-artifacts", "setup-runs")
+        expected = os.path.join(self.run_root, ".aart-cli", "setup-runs")
         self.assertEqual(os.path.commonpath((expected, context)), expected)
 
     def test_a_symlink_in_the_subtree_is_refused_and_leaves_nothing_behind(self) -> None:

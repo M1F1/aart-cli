@@ -177,7 +177,7 @@ class GeneratedLauncherTest(unittest.TestCase):
                 invoked.add(stripped.split()[1])
             for match in re.finditer(r"\$\((\S+)", stripped):
                 invoked.add(match.group(1))
-        self.assertEqual(invoked, {'"$AART_INTERPRETER"', "'/usr/bin/security'"})
+        self.assertEqual(invoked, {'"$AART_CLI_INTERPRETER"', "'/usr/bin/security'"})
 
     def test_a_secret_is_resolved_at_launch_rather_than_written_into_the_file(self):
         content = generate(bind(BoundInput(token_input(), token_source()))).value.content
@@ -202,14 +202,14 @@ class GeneratedLauncherTest(unittest.TestCase):
 
     def test_a_launcher_without_configuration_reads_no_file_and_takes_no_harness(self):
         content = generate(bind(BoundInput(token_input(), token_source()))).value.content
-        self.assertNotIn("AART_HARNESS", content)
+        self.assertNotIn("AART_CLI_HARNESS", content)
         self.assertNotIn("/config/", content)
 
     def test_a_cli_bound_secret_reaches_the_command_line_through_a_variable(self):
         bound = bind(BoundInput(token_input(CliArgumentBinding("--token")), token_source()))
         content = generate(bound).value.content
         self.assertIn("--token", content)
-        self.assertIn('"$AART_SECRET_GITHUB_TOKEN"', content)
+        self.assertIn('"$AART_CLI_SECRET_GITHUB_TOKEN"', content)
 
     def test_a_stdin_binding_is_refused_because_the_transport_owns_stdin(self):
         bound = bind(BoundInput(token_input(StdinBinding()), token_source()))
@@ -241,7 +241,7 @@ class GeneratedLauncherTest(unittest.TestCase):
         bound = bind(
             BoundInput(token_input(CliArgumentBinding("--token")), token_source()),
             BoundInput(
-                ConfigInput(InputId("shadow"), EnvironmentBinding("AART_SECRET_GITHUB_TOKEN")),
+                ConfigInput(InputId("shadow"), EnvironmentBinding("AART_CLI_SECRET_GITHUB_TOKEN")),
                 PersistedConfigValue(InputId("shadow"), "overwritten"),
             ),
         )
@@ -396,7 +396,7 @@ class LauncherReadsHarnessConfigurationTest(unittest.TestCase):
                 PersistedConfigValue(InputId("org"), "acme"),
             ),
             BoundInput(
-                ConfigInput(InputId("shadow"), EnvironmentBinding("AART_CONFIG_ORG")),
+                ConfigInput(InputId("shadow"), EnvironmentBinding("AART_CLI_CONFIG_ORG")),
                 PersistedConfigValue(InputId("shadow"), "overwritten"),
             ),
         )

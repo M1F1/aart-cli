@@ -228,7 +228,7 @@ class AppliedBuildTest(unittest.TestCase):
         )
 
     def _runs_root(self) -> str:
-        return os.path.join(self.home, ".agent-artifacts", "setup-runs")
+        return os.path.join(self.home, ".aart-cli", "setup-runs")
 
     def test_a_build_runs_in_a_copy_of_the_package_and_records_what_it_built_from(self) -> None:
         docker = _Docker()

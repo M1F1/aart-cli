@@ -158,7 +158,7 @@ def _manifest(snapshot: SourceSnapshot):
         (
             item
             for item in snapshot.entries
-            if str(item.path) == "aart-registry.json" and item.kind is SnapshotEntryKind.FILE
+            if str(item.path) == "aart-cli-registry.json" and item.kind is SnapshotEntryKind.FILE
         ),
         None,
     )

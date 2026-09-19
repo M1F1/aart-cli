@@ -205,7 +205,7 @@ class MachineFromDiskTest(InstalledFixture):
         unknown row an invitation to install what is already here.
         """
 
-        manifest = pathlib.Path(self.scope) / ".agent-artifacts" / "manifest.json"
+        manifest = pathlib.Path(self.scope) / ".aart-cli" / "manifest.json"
         manifest.parent.mkdir(parents=True, exist_ok=True)
         manifest.write_bytes(install_state_bytes(InstallState(2, (_shadow_of_the_receipt(),))))
 
