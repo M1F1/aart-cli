@@ -1345,11 +1345,22 @@ changed files. Targeted mutations, each red and then restored: `lock` marked as 
 keys returned to their old position after the 46j block (frame matrix red); the edited branch
 ignored by the status (one red). No broad `make quality` ran, under D-317.
 
-**Not yet covered, and what the next agent should start from.** The slice's acceptance list also
-asks for: state recomposition after init, rebuild and single/bulk promotion and after a process
-restart; the accepted-versus-local snapshot presentation held as its own claim; non-force update
-and divergence; the Source and parent-repository ownership refusals as tests rather than as code;
-and the branch suggestion derived from the most recent producing action (`aart/init-registry`,
-`aart/rebuild-registry`, `aart/promote-…`, `aart/bulk-promote`) rather than the constant
-`aart-cli/registry-update` the view carries today. Step 18a renames that namespace, so the
-suggestion's *spelling* is 18a's; which action it comes from is still step 18's.
+**The acceptance list, second pass.** Five of the six open items are now held as tests.
+`RegistryPushMovesNothingItDoesNotOwnTest` states them against a real Git repository, because what
+is being claimed is what Git does: an existing review branch is advanced by an ordinary push, a
+diverged one is refused rather than forced, resolution stops at the launch directory instead of
+walking up to the registry above it, a Source checkout inside a Registry worktree is not that
+Registry, and readiness is read from the directory each time it is asked -- a later commit moves
+it, which is the restart claim stated where it can be observed.
+`ThreeFactsScreen46KeepsApartTest` holds the accepted snapshot, the local snapshot and push
+readiness apart on screen 46, and proves `[p]` is absent while anything blocks. Four more targeted
+mutations, each red then restored: `--force` on the push; the upward walk restored to the reader;
+the local content digest dropped from the row; the ready row offered regardless of blockers.
+
+**One item is deliberately left.** The branch suggestion is still the constant
+`aart-cli/registry-update` rather than the most recent producing action (`aart/init-registry`,
+`aart/rebuild-registry`, `aart/promote-…`, `aart/bulk-promote`). Deriving it needs the reducer to
+carry which action last produced the commit -- the durable alternative, the commit subject, cannot
+tell init from rebuild, since both are written by `publish`. Step 18a renames that whole namespace,
+so implementing the scheme now means writing strings 18a rewrites. The field is editable and the
+constant is correct, so nothing is unsafe meanwhile. Do it in 18a, with the new names.

@@ -16,6 +16,7 @@ from typing import Iterator
 
 from agent_artifacts import cli
 from agent_artifacts.commands import registry as registry_command
+from agent_artifacts.io.registry_workspace import read_registry_workspace
 
 
 def _git(root: pathlib.Path, *arguments: str) -> str:
@@ -156,6 +157,93 @@ class RegistryPushCliTest(unittest.TestCase):
             self.assertNotEqual(
                 0, _run("registry", "push", "--source", str(root), "--branch", "registry-update")
             )
+
+
+class RegistryPushMovesNothingItDoesNotOwnTest(unittest.TestCase):
+    """CP-26.18: the launch directory is a boundary, and the remote branch is only ever advanced.
+
+    Each of these is stated against a real Git repository rather than a fake, because what is
+    being claimed is what Git does -- an ordinary push refusing a rewrite, and a resolution that
+    stops at a directory instead of walking up to the registry above it.
+    """
+
+    def test_an_existing_review_branch_is_advanced_by_an_ordinary_push(self) -> None:
+        with _registry() as (root, remote, _revision):
+            self.assertEqual(
+                0, _run("registry", "push", "--source", str(root), "--branch", "registry-update")
+            )
+            readme = root / "README.md"
+            readme.write_text(
+                readme.read_text(encoding="utf-8") + "\nSecond reviewed update.\n",
+                encoding="utf-8",
+            )
+            _git(root, "add", "README.md")
+            _git(root, "commit", "-m", "Promote example@1.1.0")
+            second = _git(root, "rev-parse", "HEAD")
+
+            self.assertEqual(
+                0, _run("registry", "push", "--source", str(root), "--branch", "registry-update")
+            )
+            self.assertEqual(second, _git(remote, "rev-parse", "refs/heads/registry-update"))
+
+    def test_a_diverged_review_branch_is_refused_rather_than_forced(self) -> None:
+        with _registry() as (root, remote, _revision):
+            self.assertEqual(
+                0, _run("registry", "push", "--source", str(root), "--branch", "registry-update")
+            )
+            published = _git(remote, "rev-parse", "refs/heads/registry-update")
+            _git(root, "reset", "--hard", "HEAD~1")
+            readme = root / "README.md"
+            readme.write_text(
+                readme.read_text(encoding="utf-8") + "\nA different reviewed update.\n",
+                encoding="utf-8",
+            )
+            _git(root, "add", "README.md")
+            _git(root, "commit", "-m", "Promote other@1.0.0")
+
+            code = _run("registry", "push", "--source", str(root), "--branch", "registry-update")
+
+            self.assertNotEqual(0, code)
+            self.assertEqual(published, _git(remote, "rev-parse", "refs/heads/registry-update"))
+
+    def test_resolution_stops_at_the_launch_directory_and_never_walks_up(self) -> None:
+        with _registry() as (root, _remote, _revision):
+            inside = root / "registry"
+            self.assertTrue(inside.is_dir())
+
+            self.assertIsNone(read_registry_workspace(str(inside)))
+
+    def test_a_source_checkout_is_never_read_as_the_registry_it_sits_in(self) -> None:
+        with _registry() as (root, _remote, _revision):
+            source = root / "vendor-source"
+            source.mkdir()
+            (source / "aart-source.json").write_text("{}\n", encoding="utf-8")
+
+            self.assertIsNone(read_registry_workspace(str(source)))
+
+    def test_readiness_is_read_from_the_directory_each_time_it_is_asked(self) -> None:
+        """Reopening AART derives the same answer, and a later commit moves it (`D-341`)."""
+
+        with _registry() as (root, _remote, revision):
+            first = read_registry_workspace(str(root))
+            again = read_registry_workspace(str(root))
+            assert first is not None and again is not None
+            self.assertEqual(first, again)
+            self.assertTrue(first.push_ready, first.push_blockers)
+            self.assertEqual(revision, first.revision)
+
+            readme = root / "README.md"
+            readme.write_text(
+                readme.read_text(encoding="utf-8") + "\nA later promotion.\n", encoding="utf-8"
+            )
+            _git(root, "add", "README.md")
+            _git(root, "commit", "-m", "Promote later@1.0.0")
+
+            later = read_registry_workspace(str(root))
+            assert later is not None
+            self.assertTrue(later.push_ready, later.push_blockers)
+            self.assertEqual(_git(root, "rev-parse", "HEAD"), later.revision)
+            self.assertNotEqual(first.revision, later.revision)
 
 
 if __name__ == "__main__":
