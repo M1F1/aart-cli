@@ -91,6 +91,12 @@ from agent_artifacts.application.maintainer_views import (
     project_source_sync_result,
     project_source_sync_review,
 )
+from agent_artifacts.application.registry_publication import (
+    RegistryPublicationCommand,
+    RegistryPublicationReceipt,
+    prepare_registry_publication,
+    publication_summary,
+)
 from agent_artifacts.configuration.model import ConfiguredSource, SourceKind
 from agent_artifacts.configuration.policy import EffectiveConfiguration, redact_text
 from agent_artifacts.configuration.schema import configured_source_from_input
@@ -121,6 +127,7 @@ from agent_artifacts.domain.reconciliation import DesiredState
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.domain.selection import ArtifactRequest, ArtifactSelection, VersionConstraint
 from agent_artifacts.protocol.authoring import read_package_description
+from agent_artifacts.protocol.hashing import parse_sha256
 from agent_artifacts.store.model import ObjectReadRequest, object_store_paths
 from agent_artifacts.tui_consumer import (
     CanonicalScreenSource,
@@ -180,6 +187,8 @@ from .registry_bootstrap import (
     registry_absent_refusal,
     registry_identity_refusal,
 )
+from .registry_publication import publish_registry_commit
+from .registry_workspace import read_registry_workspace
 
 __all__ = [
     "CONSUMER_ACTION_NOT_INSTALLED",
@@ -450,6 +459,17 @@ class _PendingRegistryRebuild:
 
 
 @dataclass(frozen=True, slots=True)
+class _PendingRegistryPush:
+    command: RegistryPublicationCommand
+    root: str
+    content_digest: str
+
+    @property
+    def review_digest(self):
+        return self.command.review_digest
+
+
+@dataclass(frozen=True, slots=True)
 class RegistryConnectionSnapshot:
     """Configuration-derived views re-read after a subscription succeeds.
 
@@ -482,6 +502,9 @@ RegistryRemovalPort = Callable[[ConfiguredSource], Result[RegistryConnectionSnap
 SourceConnectionPort = Callable[[SourceDraft], Result[RegistryConnectionSnapshot]]
 RegistryBootstrapPort = Callable[[RegistryInitDraft], Result[RegistryBootstrapCompletion]]
 RegistryRebuildPort = Callable[[tuple[str, ...]], Result[RegistryBootstrapCompletion]]
+RegistryPublicationPort = Callable[
+    [str, RegistryPublicationCommand], Result[RegistryPublicationReceipt]
+]
 RepositoryScanPort = Callable[[RepositoryScanDraft], Result[RepositoryScan]]
 RepositoryUpstreamCheckPort = Callable[[str], Result[AdoptionUpstreamCheck]]
 RepositoryAdoptedListPort = Callable[[], Result[tuple[AdoptedArtifact, ...]]]
@@ -511,6 +534,7 @@ _Pending = (
     | _PendingSourceAddition
     | _PendingRegistryInit
     | _PendingRegistryRebuild
+    | _PendingRegistryPush
     | PreparedAdoption
     | _PendingCredentialAction
     | PreparedConfiguredConfiguration
@@ -556,6 +580,7 @@ class LocalConsumerActions:
         source_connection: SourceConnectionPort | None = None,
         registry_bootstrap: RegistryBootstrapPort | None = None,
         registry_rebuild: RegistryRebuildPort | None = None,
+        registry_publication: RegistryPublicationPort = publish_registry_commit,
         repository_scan: RepositoryScanPort | None = None,
         repository_adoption: RepositoryAdoptionPort | None = None,
         adopted_artifacts: tuple[AdoptedArtifact, ...] = (),
@@ -581,6 +606,7 @@ class LocalConsumerActions:
         self._source_connection = source_connection
         self._registry_bootstrap = registry_bootstrap
         self._registry_rebuild = registry_rebuild
+        self._registry_publication = registry_publication
         self._repository_scan = repository_scan
         self._repository_adoption = repository_adoption
         self._adopted_artifacts = adopted_artifacts
@@ -808,6 +834,8 @@ class LocalConsumerActions:
             return self._prepare_registry_init(command)
         if action is ConsumerActionKind.REGISTRY_REBUILD:
             return self._prepare_registry_rebuild(command)
+        if action is ConsumerActionKind.REGISTRY_PUSH:
+            return self._prepare_registry_push(command)
         if action is ConsumerActionKind.REPOSITORY_SCAN:
             return self._prepare_repository_scan(command)
         if action is ConsumerActionKind.REPOSITORY_ADOPT:
@@ -835,6 +863,65 @@ class LocalConsumerActions:
         if action in _CREDENTIAL_INTENTS:
             return self._prepare_credential_action(command)
         return self._prepare_uninstall(command)
+
+    def _prepare_registry_push(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        """Re-read screen 46's exact workspace and bind its eligible commit to one target."""
+
+        root = self._context.host.project_root
+        workspace = read_registry_workspace(root) if root else None
+        if workspace is None:
+            return self._declined(
+                command, _lines("Push requires the canonical Registry worktree root")
+            )
+        if not workspace.push_ready:
+            return self._declined(command, _lines(*workspace.push_blockers))
+        if (
+            workspace.root is None
+            or workspace.revision is None
+            or workspace.content_digest is None
+            or workspace.publication_review_digest is None
+        ):
+            return self._declined(command, _lines("Push has no exact reviewed Registry state"))
+        digest = parse_sha256(workspace.publication_review_digest)
+        if isinstance(digest, Err):
+            return self._declined(command, _refusal(digest.diagnostics))
+        # A checkout already on a branch of its own pushes that branch; one standing where
+        # subscribers read pushes the reviewed name instead. `needs_a_new_branch` is the same
+        # question screen 46j asked, so the answer cannot drift between the review and the push.
+        branch = (
+            workspace.branch
+            if not workspace.needs_a_new_branch and workspace.branch is not None
+            else (command.publication_branch or workspace.suggested_branch)
+        )
+        current_is_target = not workspace.needs_a_new_branch
+        if current_is_target and command.publication_branch not in {"", workspace.branch}:
+            return self._declined(
+                command,
+                _lines(f"this Registry commit belongs to its current branch {workspace.branch}"),
+            )
+        prepared = prepare_registry_publication(
+            registry=SourceAlias(workspace.name),
+            remote=workspace.remote,
+            default_branch=workspace.default_branch,
+            requested_branch=branch,
+            revision=workspace.revision,
+            review_digest=digest.value,
+        )
+        if isinstance(prepared, Err):
+            return self._declined(command, _refusal(prepared.diagnostics))
+        self._pending = _PendingRegistryPush(
+            prepared.value, workspace.root, workspace.content_digest
+        )
+        self._pending_action = command.action
+        return ConsumerActionUpdate(
+            self.source(),
+            ConsumerUiEvent(
+                ConsumerUiEventKind.ACTION_PREPARED,
+                action=command.action,
+                text=branch,
+                review_digest=str(prepared.value.review_digest),
+            ),
+        )
 
     def _prepare_credential_action(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
         """Plan one credential action against what the provider says now (CP-23 task 12, D-262).
@@ -1933,6 +2020,8 @@ class LocalConsumerActions:
             return self._execute_registry_init(command, pending)
         if isinstance(pending, _PendingRegistryRebuild):
             return self._execute_registry_rebuild(command, pending)
+        if isinstance(pending, _PendingRegistryPush):
+            return self._execute_registry_push(command, pending)
         if isinstance(pending, PreparedAdoption):
             return self._execute_repository_adoption(command, pending)
         if isinstance(pending, PreparedConfiguredRepair):
@@ -1947,6 +2036,48 @@ class LocalConsumerActions:
             return self._execute_credential_action(command, pending)
         assert isinstance(pending, PreparedConfiguredUninstall)
         return self._execute_uninstall(command, pending)
+
+    def _execute_registry_push(
+        self, command: ConsumerUiCommand, pending: _PendingRegistryPush
+    ) -> ConsumerActionUpdate:
+        """Fail closed if any reviewed workspace or gate evidence changed, then push once."""
+
+        workspace = read_registry_workspace(pending.root)
+        if (
+            workspace is None
+            or not workspace.push_ready
+            or workspace.root != pending.root
+            or workspace.revision != pending.command.revision
+            or workspace.content_digest != pending.content_digest
+            or workspace.publication_review_digest != str(pending.command.review_digest)
+        ):
+            blockers = () if workspace is None else workspace.push_blockers
+            return self._failed(
+                command,
+                _lines(
+                    "Registry Push readiness changed after review",
+                    *blockers,
+                    "Review the current Registry state and prepare Push again.",
+                ),
+            )
+        published = self._registry_publication(pending.root, pending.command)
+        if isinstance(published, Err):
+            return self._failed(command, _refusal(published.diagnostics))
+        if self._data_root is not None:
+            refreshed = read_maintainer_views(
+                self._context.effective,
+                data_root=self._data_root,
+                observed_at_epoch_seconds=int(self._now().timestamp()),
+                registry_root=self._context.host.project_root,
+            )
+            if isinstance(refreshed, Ok):
+                self._context = replace(self._context, maintainer=refreshed.value)
+        recorded_at, _today = self._moment()
+        return self._recorded(
+            command,
+            recorded_at,
+            notice=publication_summary(published.value),
+        )
 
     def _execute_repository_adoption(
         self,

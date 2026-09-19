@@ -3976,3 +3976,23 @@ generate.
 **Noncritical.** Closing the rest would mean asserting generated prose, which the repository
 deliberately does not do. It becomes critical only if the *placement* of a disabled block becomes a
 contract -- for instance if a shipped example were diffed against a generated one byte for byte.
+
+## B-156 — every generated registry's CI has failed its validation gate since 0.0.1
+
+**Found:** 2026-09-19, CP-26.18. **Fixed in the same change**; recorded here for the lesson.
+
+The generated workflow ran `aart registry validate --source . --strict --frozen`. Neither flag has
+ever existed on the CLI, so the step died with `unrecognized arguments` in every registry `registry
+init` has ever produced. `docs/refactor/slices/cp-26-authoring-and-legacy-removal.md` step 18 still
+describes the gate set as "strict/frozen validation", which is where the flags came from.
+
+`EveryVisibleCommandMentionTest` exists to catch exactly this: it parses every `aart …` string the
+package names with the shipped parser. It could not see this one, because the command lived inside
+a `bytes` template literal that the guard's `ast` walk reads as a `bytes` constant rather than a
+visible string. CP-26.18 moved the gate list into `registry_commands/publication.py` as ordinary
+`str`s, and the guard failed on the first run.
+
+**Noncritical as a backlog item, because the defect is closed.** What is open is the class: any
+other operator-facing command still living in a `bytes` template is invisible to the guard. Making
+`_visible_strings` decode `bytes` constants would close it, and would need the false positives
+measured first -- most `bytes` literals in the package are file content, not advice.

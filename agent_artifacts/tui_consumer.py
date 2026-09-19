@@ -79,6 +79,7 @@ from agent_artifacts.application.maintainer_views import (
     REGISTRY_MAINTENANCE_STAGES,
     REGISTRY_REBUILD_EVERYTHING,
     REGISTRY_STAGE_PURPOSE,
+    REGISTRY_WORKSPACE_READY_ROW,
     REGISTRY_WORKSPACE_ROW,
     MaintainerAdoptedArtifactView,
     MaintainerAdoptionReviewView,
@@ -135,6 +136,7 @@ from agent_artifacts.tui_maintainer import (
     maintainer_collection_candidate_detail,
     maintainer_registry_descriptor,
     maintainer_registry_detail,
+    maintainer_registry_push_status,
     maintainer_registry_rows,
     maintainer_registry_status,
     maintainer_validation_check_detail,
@@ -157,6 +159,7 @@ from agent_artifacts.tui_maintainer import (
     render_maintainer_provenance,
     render_maintainer_registry_commit,
     render_maintainer_registry_diff,
+    render_maintainer_registry_push,
     render_maintainer_registry_validation,
     render_maintainer_source,
     render_maintainer_sources,
@@ -2024,6 +2027,7 @@ _WORKFLOW_LABELS: dict[ApplicationScreen, str] = {
     MaintainerScreen.REGISTRY_DIFF: "Registry Diff",
     MaintainerScreen.REGISTRY_VALIDATION: "Registry Validation",
     MaintainerScreen.REGISTRY_COMMIT: "Commit",
+    MaintainerScreen.REGISTRY_PUSH: "Push Registry",
 }
 
 
@@ -3090,8 +3094,20 @@ class CanonicalScreenSource:
             # `QA-098`: the registry this project publishes is a row, above the ones it subscribes
             # to. It had been prose, so the screen had nothing for a cursor to stand on at all.
             workspace = self._registry_workspace()
-            return (() if workspace is None else (REGISTRY_WORKSPACE_ROW,)) + tuple(
+            workspace_row = (
+                REGISTRY_WORKSPACE_READY_ROW
+                if workspace is not None and workspace.push_ready
+                else REGISTRY_WORKSPACE_ROW
+            )
+            return (() if workspace is None else (workspace_row,)) + tuple(
                 item.alias for item in self._screens.maintainer_registries()
+            )
+        if screen is MaintainerScreen.REGISTRY_PUSH:
+            workspace = self._registry_workspace()
+            return (
+                ("branch", "continue")
+                if workspace is not None and workspace.needs_a_new_branch
+                else ()
             )
         if screen is MaintainerScreen.SCAN_RESULT:
             scan = self._screens.repository_scan
@@ -3289,7 +3305,7 @@ class CanonicalScreenSource:
             # Screen 46's rows are registries; opening one is where its transaction is assembled.
             # The registry this project *publishes* is not one of them: it has no candidates to
             # promote through it, so Enter on it opens nothing (`QA-098`).
-            if row == REGISTRY_WORKSPACE_ROW:
+            if row in {REGISTRY_WORKSPACE_ROW, REGISTRY_WORKSPACE_READY_ROW}:
                 return None
             return MaintainerScreen.BULK_PROMOTION if self._screens.bulk_promotions() else None
         if screen is MaintainerScreen.SOURCES:
@@ -3602,7 +3618,10 @@ class CanonicalScreenSource:
             # where that registry has got to -- repository, branch, what its checkout knows of the
             # remote, and what is waiting to be pushed.
             workspace = self._registry_workspace()
-            if workspace is not None and state.current_row == REGISTRY_WORKSPACE_ROW:
+            if workspace is not None and state.current_row in {
+                REGISTRY_WORKSPACE_ROW,
+                REGISTRY_WORKSPACE_READY_ROW,
+            }:
                 return maintainer_workspace_detail(workspace)
             # `QA-095`: what a snapshot is for, which `[v]` gates because `_described` is the only
             # caller, followed by the registry under the cursor with its digests in full. With no
@@ -3714,6 +3733,18 @@ class CanonicalScreenSource:
             return prose
         if screen is ConsumerScreen.REQUIRED_INPUTS and state.config_form_active:
             return installation_config_status(screens.installation_inputs)
+        if screen is MaintainerScreen.REGISTRY_PUSH and self.rows(state):
+            # What is being pushed is the state of the view; the branch field and Continue are the
+            # only things the cursor acts on. With no rows there is no actions block at all, so
+            # `_body` draws the whole review and this must not say it a second time.
+            workspace = self._registry_workspace()
+            return (
+                ()
+                if workspace is None
+                else maintainer_registry_push_status(
+                    workspace, branch=state.publication_branch or None
+                )
+            )
         if screen is ConsumerScreen.CONFIGURATION_VALUE and self.rows(state):
             return configuration_value_status(
                 state.user_inputs_artifact,
@@ -4052,7 +4083,9 @@ class CanonicalScreenSource:
                 if workspace is None
                 else (
                     maintainer_workspace_row(
-                        workspace, selected=state.current_row == REGISTRY_WORKSPACE_ROW
+                        workspace,
+                        selected=state.current_row
+                        in {REGISTRY_WORKSPACE_ROW, REGISTRY_WORKSPACE_READY_ROW},
                     ),
                 )
             )
@@ -4106,6 +4139,17 @@ class CanonicalScreenSource:
                 ("That registry commit is not available.",)
                 if screens.promotion_commit is None
                 else render_maintainer_registry_commit(screens.promotion_commit, profile)
+            )
+        if screen is MaintainerScreen.REGISTRY_PUSH:
+            workspace = self._registry_workspace()
+            return (
+                ("Registry Push is unavailable.",)
+                if workspace is None
+                else render_maintainer_registry_push(
+                    workspace,
+                    branch=state.publication_branch or None,
+                    selected=state.current_row,
+                )
             )
         if screen in (MaintainerScreen.PROMOTION_REVIEW, MaintainerScreen.PROMOTION_MODE):
             # Screen 42 asks which promotion, so it draws the review of the mode currently chosen

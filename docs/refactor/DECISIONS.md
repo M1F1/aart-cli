@@ -8512,3 +8512,40 @@ published; they named the predecessor `M1F1/agent-artifacts` and are corrected t
 The Product Specification's identification of the target repository, the CHANGELOG's release links
 and the refactor records are records of what happened. None of them is a value another deployment
 inherits, which is the distinction D-309 draws and the one this step enforces.
+
+## D-342 — one publication gate list, and it says where each gate runs (CP-26.18)
+
+`registry_commands/publication.py` is the single list step 18 asks for: `publish`, Push readiness
+and the generated workflow all read it instead of keeping a third copy. Rendering it whole into the
+workflow, however, is not the same thing as sharing it, and the first attempt put `lock` back into
+every generated registry's CI -- the gate CP-26.5 removed, because over the approved representation
+a lock resolves nothing and the step can only ever report "nothing to resolve". It remains a real
+gate over the local workspace, so removing it from the list would be equally wrong.
+
+The spec therefore carries `in_generated_workflow`, and `compatibility` stays a template line
+because CI already runs a matrix over the two targets -- the shape there is the workflow's, not the
+list's. `registry_init_scaffold_test` counts the workflow's five gates per container shape and
+`registry_publication_readiness_test` names the one gate CI does not run and why.
+
+The gate set the slice describes as "strict/frozen validation" is `aart registry validate
+--source .`: the two flags never existed (B-156).
+
+## D-343 — screen 46j draws its facts as the view's status, not among its rows
+
+§167 gives the actions block rows and nothing else; a labelled value is the state of the view. The
+Push review had six labelled facts and a sentence sitting between the branch field and Continue,
+which the recorded frame matrix caught the moment the screen was recorded in it. The facts moved to
+`maintainer_registry_push_status`, and `render_maintainer_registry_push` now returns the two rows --
+or, on a checkout already standing on its own branch, the facts and the one line addressed to the
+reader, because there is nothing left to choose and so no actions block at all.
+
+The matrix cannot catch facts that stop being drawn, only facts drawn in the wrong block, so
+`RegistryPushReviewFrameTest` asserts what the status says and that the actions block is exactly the
+two rows. A deliberate mutation that drops the status turns eight of its assertions red.
+
+Two further repairs came out of recording the screen: `MaintainerScreen.REGISTRY_PUSH` answered
+every key itself and so swallowed `v`, `?` and `q` on its `continue` row while the legend went on
+offering all three (D-269 keeps them working on a form's non-field rows), and
+`needs_a_new_branch` now names once the question the rows, the renderer, the workspace detail and
+`_prepare_registry_push` were each answering with their own copy of `{None, "main",
+default_branch}`.

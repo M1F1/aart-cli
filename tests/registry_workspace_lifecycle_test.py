@@ -25,6 +25,7 @@ from agent_artifacts.application.consumer_views import (
     project_dashboard,
 )
 from agent_artifacts.application.maintainer_views import (
+    REGISTRY_WORKSPACE_READY_ROW,
     REGISTRY_WORKSPACE_ROW,
     MaintainerPublicationState,
     MaintainerRegistryWorkspaceView,
@@ -132,20 +133,16 @@ class RegistryWorkspaceFrameTest(TestCase):
     def test_the_description_names_the_repository_and_the_branch(self) -> None:
         described = maintainer_workspace_detail(self._view())
 
-        self.assertIn("Repository: https://git.example.test/acme/registry.git", described)
+        self.assertIn("Remote: origin (https://git.example.test/acme/registry.git)", described)
         self.assertIn("Branch: registry-main", described)
 
-    def test_a_branch_never_pushed_says_so_and_says_who_has_to_push_it(self) -> None:
-        """*"aart tego za Ciebie nie zrobi, musisz to zrobic sam"*."""
+    def test_a_branch_never_pushed_says_so_and_lists_why_push_is_unavailable(self) -> None:
 
         described = maintainer_workspace_detail(self._view())
 
         self.assertIn("Remote branch: none — this branch has not been pushed yet.", described)
-        self.assertIn(
-            "Changes reach subscribers of this branch once it is pushed. "
-            "AART does not push it for you.",
-            described,
-        )
+        self.assertIn("Push unavailable:", described)
+        self.assertIn("- publication readiness has not been established", described)
 
     def test_work_waiting_to_be_pushed_is_counted_rather_than_hinted_at(self) -> None:
         described = maintainer_workspace_detail(
@@ -168,11 +165,23 @@ class RegistryWorkspaceFrameTest(TestCase):
         )
 
         self.assertIn("Nothing here is waiting to be pushed.", described)
-        self.assertNotIn(
-            "Changes reach subscribers of this branch once it is pushed. "
-            "AART does not push it for you.",
-            described,
+        self.assertIn("Push unavailable:", described)
+
+    def test_a_ready_workspace_names_the_exact_commit_content_and_target(self) -> None:
+        described = maintainer_workspace_detail(
+            self._view(
+                root="/lab/registry",
+                revision="a" * 40,
+                content_digest="sha256:" + "b" * 64,
+                publication_review_digest="sha256:" + "c" * 64,
+                push_blockers=(),
+            )
         )
+
+        self.assertIn("Workspace: /lab/registry", described)
+        self.assertIn(f"Local HEAD: {'a' * 40}", described)
+        self.assertIn(f"Local canonical content: sha256:{'b' * 64}", described)
+        self.assertIn("Push: ready — review target origin/registry-main.", described)
 
     def test_a_remote_branch_nobody_has_measured_against_is_not_reported_either_way(self) -> None:
         described = maintainer_workspace_detail(self._view(remote_branch="origin/registry-main"))
@@ -243,9 +252,9 @@ class RegistryMaintainerScreenTest(TestCase):
         source, state = self._state(verbose=True)
         drawn = "\n".join(frame(source, state))
 
-        self.assertIn("Repository: https://git.example.test/acme/registry.git", drawn)
+        self.assertIn("Remote: origin (https://git.example.test/acme/registry.git)", drawn)
         self.assertIn("Branch: registry-main", drawn)
-        self.assertIn("AART does not push it for you.", drawn)
+        self.assertIn("Push unavailable:", drawn)
 
     def test_fast_keeps_all_of_that_collapsed(self) -> None:
         """`QA-070`: `[v]` opens every explanation, and this is no exception."""
@@ -262,3 +271,27 @@ class RegistryMaintainerScreenTest(TestCase):
         source, state = self._state()
 
         self.assertIsNone(source.detail(state))
+
+    def test_only_a_ready_workspace_row_carries_the_push_identity(self) -> None:
+        source, state = self._state()
+        workspace = project_registry_workspace(
+            "manual-registry",
+            commit="eed6c4f",
+            branch="registry-main",
+            root="/lab/registry",
+            revision="a" * 40,
+            content_digest="sha256:" + "b" * 64,
+            publication_review_digest="sha256:" + "c" * 64,
+            push_blockers=(),
+        )
+        assert source._screens.maintainer is not None
+        ready_source = CanonicalScreenSource(
+            ConsumerScreens(
+                project_dashboard((), registry_count=0),
+                maintainer=replace(source._screens.maintainer, registry_workspace=workspace),
+            )
+        )
+        ready_state = replace(state, rows=())
+        ready_state = replace(ready_state, rows=ready_source.rows(ready_state), cursor=0)
+
+        self.assertEqual((REGISTRY_WORKSPACE_READY_ROW,), ready_state.rows)

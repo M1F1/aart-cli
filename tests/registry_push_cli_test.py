@@ -51,8 +51,9 @@ def _registry() -> Iterator[tuple[pathlib.Path, pathlib.Path, str]]:
         )
         if initialized != 0:
             raise RuntimeError("canonical Registry fixture did not initialize")
-        _git(root, "add", ".")
-        _git(root, "commit", "-m", "Initial registry")
+        published = _run("registry", "publish", "--source", str(root), "--yes")
+        if published != 0:
+            raise RuntimeError("canonical Registry fixture did not publish")
         _git(root, "remote", "add", "origin", str(remote))
         _git(root, "push", "origin", "main")
         readme = root / "README.md"
@@ -102,6 +103,50 @@ class RegistryPushCliTest(unittest.TestCase):
             self.assertNotEqual(0, code)
             self.assertEqual(before, _git(remote, "rev-parse", "refs/heads/main"))
             self.assertNotEqual(before, revision)
+
+    def test_an_eligible_current_branch_is_the_only_target(self) -> None:
+        with _registry() as (root, remote, revision):
+            _git(root, "switch", "-c", "reviewed-change")
+
+            code = _run("registry", "push", "--source", str(root), "--branch", "redirected-change")
+
+            self.assertNotEqual(0, code)
+            self.assertNotEqual(
+                0,
+                subprocess.run(
+                    (
+                        "git",
+                        "-C",
+                        str(remote),
+                        "show-ref",
+                        "--verify",
+                        "refs/heads/redirected-change",
+                    ),
+                    capture_output=True,
+                ).returncode,
+            )
+
+    def test_dirty_committed_bytes_are_not_push_ready(self) -> None:
+        with _registry() as (root, remote, _revision):
+            (root / "README.md").write_text("changed after review\n", encoding="utf-8")
+
+            code = _run("registry", "push", "--source", str(root), "--branch", "registry-update")
+
+            self.assertNotEqual(0, code)
+            self.assertNotEqual(
+                0,
+                subprocess.run(
+                    (
+                        "git",
+                        "-C",
+                        str(remote),
+                        "show-ref",
+                        "--verify",
+                        "refs/heads/registry-update",
+                    ),
+                    capture_output=True,
+                ).returncode,
+            )
 
     def test_a_checkout_with_nothing_committed_yet_is_refused_rather_than_pushed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

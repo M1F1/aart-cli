@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .publication import REGISTRY_PUBLICATION_GATES
+
 REGISTRY_GITIGNORE = b""".agent-artifacts/
 .agent-artifacts-bak/
 .claude/
@@ -343,11 +345,15 @@ jobs:
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
 """
         + _PROVIDE_AART
-        + b"""      - run: aart registry format --source . --check
-      - run: aart registry validate --source .
-      - run: aart registry build --source . --check
-      - run: aart registry audit --source .
-      - run: aart registry test --source . --compatibility ${{ matrix.compatibility }}
+        + b"".join(
+            f"      - run: {command}\n".encode()
+            for gate in REGISTRY_PUBLICATION_GATES
+            # Compatibility is the one gate whose shape is the workflow's rather than this list's:
+            # CI already runs a matrix over the two targets, so it is the line below, once.
+            if gate.in_generated_workflow and gate.name != "compatibility"
+            for command in gate.commands
+        )
+        + b"""      - run: aart registry test --source . --compatibility ${{ matrix.compatibility }}
 """,
     )
     + _aggregate(b"registry-quality")

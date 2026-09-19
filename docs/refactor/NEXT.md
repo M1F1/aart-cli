@@ -2,7 +2,9 @@
 
 ## Where CP-26 is (2026-09-19)
 
-Steps 1–17 are **done** on `refactor/cp-26-legacy-removal`; **step 18 is next**. B-057 and B-149
+Steps 1–17 are **done** on `refactor/cp-26-legacy-removal`; **step 18 is in progress** -- the
+shared gate contract, the derived readiness, screen 46j and the branch targeting are in and green;
+the slice record names the acceptance items still open, which is where to resume. B-057 and B-149
 are both closed. The plan has **22 tasks (17 done)**: the owner added **CP-26.18a** between
 18 and 19 without renumbering existing ids. Task 21 remains the final broad verification.
 

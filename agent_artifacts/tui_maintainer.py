@@ -87,6 +87,8 @@ __all__ = [
     "render_maintainer_registry",
     "render_maintainer_registry_diff",
     "render_maintainer_registry_commit",
+    "render_maintainer_registry_push",
+    "maintainer_registry_push_status",
     "render_maintainer_registry_validation",
     "render_repository_adoption_review",
     "render_adopted_artifacts",
@@ -1097,14 +1099,6 @@ _WHO_SUBSCRIBES = (
     "A maintainer may subscribe to this branch; everyone else subscribes to the repository's main."
 )
 
-#: The operator asked for this sentence by name -- *"dopisz ze zeby zmiany byly dostepne to nalezy
-#: zpushowac zmiany na remote brancha, ale aart tego za Ciebie nie zrobi, musisz to zrobic sam"*.
-#: It stands only while something is actually waiting, so it stays an instruction rather than
-#: becoming decoration on a screen with nothing to do.
-_NOBODY_PUSHES_FOR_YOU = (
-    "Changes reach subscribers of this branch once it is pushed. AART does not push it for you."
-)
-
 
 def maintainer_workspace_detail(view: MaintainerRegistryWorkspaceView) -> tuple[str, ...]:
     """Where this registry stands: its repository, its branch, and what is waiting (`QA-098`).
@@ -1117,9 +1111,17 @@ def maintainer_workspace_detail(view: MaintainerRegistryWorkspaceView) -> tuple[
 
     if not isinstance(view, MaintainerRegistryWorkspaceView):
         raise ValueError("a registry workspace description needs a workspace view")
-    where = [(f"Repository: {view.origin}",)] if view.origin else []
+    where: list[tuple[str, ...]] = [(f"Workspace: {view.root}",)] if view.root else []
+    if view.origin:
+        where.append((f"Remote: {view.remote} ({view.origin})",))
     if view.branch:
         where.append((f"Branch: {view.branch}",))
+    else:
+        where.append(("Branch: detached HEAD — Push review requires a new branch name.",))
+    if view.revision:
+        where.append((f"Local HEAD: {view.revision}",))
+    if view.content_digest:
+        where.append((f"Local canonical content: {view.content_digest}",))
     if view.state is MaintainerPublicationState.UNPUBLISHED:
         where.append(("Remote branch: none — this branch has not been pushed yet.",))
     elif view.remote_branch:
@@ -1141,11 +1143,82 @@ def maintainer_workspace_detail(view: MaintainerRegistryWorkspaceView) -> tuple[
                 "press u to check upstream.",
             )
         )
-    if view.state in {MaintainerPublicationState.UNPUBLISHED, MaintainerPublicationState.AHEAD}:
-        where.append((_NOBODY_PUSHES_FOR_YOU,))
+    if view.push_ready:
+        target = view.suggested_branch if view.needs_a_new_branch else view.branch
+        where.append((f"Push: ready — review target {view.remote}/{target}.",))
+    else:
+        where.append(("Push unavailable:", *(f"- {item}" for item in view.push_blockers)))
     if view.branch:
         where.append((_WHO_SUBSCRIBES,))
     return separate(*where)
+
+
+def render_maintainer_registry_push(
+    view: MaintainerRegistryWorkspaceView,
+    *,
+    branch: str | None = None,
+    selected: str = "",
+) -> tuple[str, ...]:
+    """What the cursor acts on before Push: which branch, and going on with it.
+
+    What is being pushed -- the commit, the content digest, the remote -- is the state of the
+    view and is drawn by `maintainer_registry_push_status`. §167 keeps the two apart: the actions
+    block holds rows and only rows, and a labelled value is not one. Drawing the facts here put
+    six lines of prose among the two rows, which is what the recorded frame matrix caught.
+
+    A checkout already standing on a branch of its own has nothing left to choose, so the review
+    is the facts plus the one line addressed to the reader, and there are no rows at all.
+    """
+
+    if not isinstance(view, MaintainerRegistryWorkspaceView):
+        raise ValueError("Registry Push review needs a workspace view")
+    if not view.needs_a_new_branch:
+        return action_prompt(
+            maintainer_registry_push_status(view, branch=branch),
+            "Enter pushes this exact commit without force or merge.",
+        )
+    return (
+        f"{'>' if selected == 'branch' else ' '} Review branch: {branch or view.suggested_branch}",
+        f"{'>' if selected == 'continue' else ' '} Continue",
+    )
+
+
+def maintainer_registry_push_status(
+    view: MaintainerRegistryWorkspaceView, *, branch: str | None = None
+) -> tuple[str, ...]:
+    """Screen 46j's state: what exactly would go where, and what stops it if anything does.
+
+    The target is stated here rather than left to the branch row alone, because on a checkout that
+    already stands on its own branch there is no row -- and "this exact commit" would then name a
+    destination the reader was never told.
+    """
+
+    if not isinstance(view, MaintainerRegistryWorkspaceView):
+        raise ValueError("Registry Push review needs a workspace view")
+    target = branch or (
+        view.suggested_branch if view.needs_a_new_branch else view.branch or view.suggested_branch
+    )
+    facts = (
+        f"Registry: {view.name}",
+        f"Workspace: {view.root or 'not established'}",
+        f"Exact commit: {view.revision or 'not established'}",
+        f"Canonical content: {view.content_digest or 'not established'}",
+        f"Remote: {view.remote}",
+        f"Target branch: {target}",
+    )
+    return separate(
+        facts,
+        (
+            ("The current branch is the one subscribers read, so Push targets a new branch.",)
+            if view.needs_a_new_branch
+            else ()
+        ),
+        (
+            ()
+            if view.push_ready
+            else ("Push unavailable:", *(f"- {item}" for item in view.push_blockers))
+        ),
+    )
 
 
 def maintainer_registry_descriptor(

@@ -150,7 +150,22 @@ def _mentions(text: str) -> tuple[str, ...]:
     for match in _BARE.finditer(_BACKTICKED.sub(" ", text)):
         if match.group(1) in _COMMAND_NAMES or " --" in match.group(0):
             found.append(match.group(0))
-    return tuple(mention.strip().rstrip(".") for mention in found)
+    return tuple(_without_sentence_stop(mention.strip()) for mention in found)
+
+
+def _without_sentence_stop(mention: str) -> str:
+    """Drop a full stop that ends the sentence, keep one that is an argument.
+
+    `aart registry audit --source .` ends in a period that names the current directory, and
+    stripping it turned a correct command into `--source: expected one argument` -- the guard
+    reporting a defect it had introduced itself. A period is punctuation only when something other
+    than a space precedes it; `--source .` has a space, and no shell would read that as the end of
+    a sentence either.
+    """
+
+    if mention.endswith(".") and not mention.endswith(" ."):
+        return mention[:-1]
+    return mention
 
 
 def _visible_strings(tree: ast.AST):

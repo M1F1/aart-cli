@@ -4,6 +4,21 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-09-19, CP-26.18 in progress.** Push belongs to screen 46's local workspace row and to
+nothing else; the commit screen offers no `p`. Readiness is computed, never asserted: one gate list
+in `registry_commands/publication.py` feeds `registry publish`, `read_registry_workspace` and the
+generated workflow, and the list says where each gate runs -- rendering it whole had put `lock`
+back into every generated registry's CI, the gate CP-26.5 removed because over the approved
+representation it resolves nothing (D-342). Moving the list out of a `bytes` template made
+`EveryVisibleCommandMentionTest` see a command it had never been able to read, and it was wrong:
+`aart registry validate --source . --strict --frozen` has been in every generated registry since
+`0.0.1` and the CLI accepts neither flag, so that CI step has always failed (B-156). Recording
+screen 46j in the frame matrix found three more faults -- labelled facts drawn among the rows,
+`v`/`?`/`q` swallowed on the `continue` row, and four copies of the branch question, now
+`needs_a_new_branch` (D-343). Evidence: `make unit` (4556 tests, green), `make typecheck`, Ruff,
+and four targeted mutations each red then restored. No broad `make quality` (D-317). The slice
+record names what the step's acceptance list still does not cover.
+
 **2026-09-19, CP-26.17 complete.** `M1F1` is no longer an operational default anywhere a
 deployment could inherit it. The generated workflow's `TOOL_URL` no longer carries a repository:
 unset means empty, and the Git arm stops listing `AART_PACKAGE`, `AART_WHEEL_URL`, `AART_TOOL_PATH`

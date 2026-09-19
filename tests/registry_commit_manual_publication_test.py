@@ -1,4 +1,4 @@
-"""CP-23 task 05: TUI promotion ends at the local commit; publication is manual Git (D-249).
+"""CP-26.18: promotion ends locally and Push belongs only to screen 46's workspace row.
 
 The owner reversed D-228 for the terminal surface. Screen 45 reviews and writes the exact local
 transaction and then says what happens next outside AART: push the Registry branch, get it
@@ -11,45 +11,43 @@ from __future__ import annotations
 
 import dataclasses
 import inspect
-import string
 import unittest
-
-from hypothesis import given
-from hypothesis import strategies as st
 
 from agent_artifacts import tui_consumer
 from agent_artifacts.application.consumer_ui import (
     ConsumerActionKind,
-    ConsumerUiCommand,
     ConsumerUiCommandKind,
+    ConsumerUiEvent,
     ConsumerUiEventKind,
     ConsumerUiState,
     key_bindings,
     key_event,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import PresentationProfile
+from agent_artifacts.application.consumer_views import PresentationProfile, project_dashboard
 from agent_artifacts.application.maintainer_promotion import CandidatePromotionExecutionResult
 from agent_artifacts.application.maintainer_views import (
+    REGISTRY_WORKSPACE_READY_ROW,
     MaintainerRegistryCommitView,
     MaintainerScreen,
     project_maintainer_registry_commit,
 )
-from agent_artifacts.io.consumer_actions import LocalConsumerActions
+from agent_artifacts.tui_consumer import (
+    CanonicalScreenSource,
+    ConsumerScreens,
+    _reload,
+    compose_frame,
+)
 from agent_artifacts.tui_layout import CONTENT_MEASURE
 from agent_artifacts.tui_maintainer import render_maintainer_registry_commit
 from tests.maintainer_promotion_shell_execution_test import _on, _prepared
+from tests.screen_cases import screen_cases
 
 _STEPS = (
     "push this Registry branch",
     "pull request",
     "update this local checkout",
     "run Registry Sync",
-)
-
-_KEYS = st.one_of(
-    st.sampled_from(("up", "down", "enter", "escape", "backspace", " ")),
-    st.sampled_from(tuple(string.ascii_letters + string.digits + string.punctuation)),
 )
 
 
@@ -131,23 +129,7 @@ class RegistryCommitScreenExplainsManualPublicationTest(unittest.TestCase):
         self.assertIn("in Git yourself", intro)
 
 
-class NoTuiKeyReachesAPushTest(unittest.TestCase):
-    def test_the_ui_vocabulary_has_no_publication_action_event_or_field(self) -> None:
-        names = (
-            *(item.name for item in ConsumerActionKind),
-            *(item.name for item in ConsumerUiEventKind),
-            *(field.name.upper() for field in dataclasses.fields(ConsumerUiState)),
-            *(field.name.upper() for field in dataclasses.fields(ConsumerUiCommand)),
-        )
-
-        self.assertEqual([name for name in names if "PUBLICATION" in name], [])
-
-    def test_the_tui_action_handler_accepts_no_push_or_remote_port(self) -> None:
-        parameters = set(inspect.signature(LocalConsumerActions).parameters)
-
-        self.assertNotIn("registry_publication", parameters)
-        self.assertNotIn("registry_default_branch", parameters)
-
+class RegistryMaintainerOwnsPushTest(unittest.TestCase):
     def test_p_on_the_committed_screen_is_not_a_key_and_the_legend_does_not_offer_it(
         self,
     ) -> None:
@@ -161,28 +143,160 @@ class NoTuiKeyReachesAPushTest(unittest.TestCase):
         self.assertFalse(any("ublish" in binding.label for binding in legend))
         self.assertIn(("Enter", "Continue"), {(item.key, item.label) for item in legend})
 
-    @given(keys=st.lists(_KEYS, max_size=12))
-    def test_no_key_sequence_after_the_commit_prepares_or_executes_anything(
-        self, keys: list[str]
+    def test_p_on_a_ready_local_workspace_opens_the_separate_push_review(self) -> None:
+        state = dataclasses.replace(
+            _on(MaintainerScreen.REGISTRY),
+            rows=(REGISTRY_WORKSPACE_READY_ROW, "connected-registry"),
+            cursor=0,
+        )
+
+        event = key_event("p", state)
+        self.assertEqual(
+            event,
+            ConsumerUiEvent(
+                ConsumerUiEventKind.REQUEST_ACTION,
+                action=ConsumerActionKind.REGISTRY_PUSH,
+            ),
+        )
+        assert event is not None
+        moved, commands = reduce_consumer_ui(state, event)
+
+        self.assertIs(moved.session.screen, MaintainerScreen.REGISTRY_PUSH)
+        self.assertEqual(commands[0].kind, ConsumerUiCommandKind.PREPARE_ACTION)
+        self.assertIs(commands[0].action, ConsumerActionKind.REGISTRY_PUSH)
+
+    def test_p_is_absent_on_a_connected_snapshot_or_unready_workspace(self) -> None:
+        for row in ("connected-registry", "registry-workspace"):
+            with self.subTest(row=row):
+                state = dataclasses.replace(_on(MaintainerScreen.REGISTRY), rows=(row,), cursor=0)
+                self.assertIsNone(key_event("p", state))
+                self.assertNotIn("Push", {item.label for item in key_bindings(state)})
+
+    def test_default_branch_review_accepts_an_edited_new_branch_before_confirmation(self) -> None:
+        state = dataclasses.replace(
+            _on(
+                MaintainerScreen.REGISTRY_PUSH,
+                action=ConsumerActionKind.REGISTRY_PUSH,
+                digest="sha256:" + "a" * 64,
+            ),
+            rows=("branch", "continue"),
+            publication_branch="aart-cli/registry-update",
+        )
+
+        edited, commands = reduce_consumer_ui(
+            state,
+            ConsumerUiEvent(
+                ConsumerUiEventKind.EDIT_PUBLICATION_BRANCH,
+                text="review/registry-update",
+            ),
+        )
+
+        self.assertEqual((), commands)
+        self.assertEqual("review/registry-update", edited.publication_branch)
+        self.assertIsNone(edited.session.review_digest)
+        continued = dataclasses.replace(edited, cursor=1)
+        event = key_event("enter", continued)
+        self.assertEqual(
+            event,
+            ConsumerUiEvent(
+                ConsumerUiEventKind.REQUEST_ACTION,
+                action=ConsumerActionKind.REGISTRY_PUSH,
+            ),
+        )
+        assert event is not None
+        _prepared, prepare_commands = reduce_consumer_ui(continued, event)
+        self.assertEqual("review/registry-update", prepare_commands[0].publication_branch)
+
+
+class RegistryPushReviewFrameTest(unittest.TestCase):
+    """What screen 46j says, and which block says it.
+
+    The facts live in the view's status and the rows in the actions block, because §167 admits no
+    labelled value among the rows. Splitting them is why nothing here asserts the drawn string of
+    the whole screen: the recorded frame matrix already holds the shape, and it would go on
+    passing over a review that had quietly stopped saying what is being pushed -- which is the
+    only thing that makes "Enter pushes this exact commit" a sentence the reader can act on.
+    """
+
+    def _case(self):
+        return next(
+            case for case in screen_cases() if case.screen is MaintainerScreen.REGISTRY_PUSH
+        )
+
+    def test_the_actions_block_is_the_two_rows_and_nothing_else(self) -> None:
+        case = self._case()
+
+        blocks = compose_frame(case.source, case.state)
+
+        self.assertEqual(
+            blocks.actions, ("> Review branch: aart-cli/registry-update", "  Continue")
+        )
+
+    def test_the_status_states_what_would_be_pushed_and_where(self) -> None:
+        case = self._case()
+
+        said = " ".join(line.strip() for line in compose_frame(case.source, case.state).status)
+
+        for fact in (
+            "Registry: manual-registry",
+            "Workspace: /lab/registry",
+            f"Exact commit: {'a' * 40}",
+            f"Canonical content: sha256:{'b' * 64}",
+            "Remote: origin",
+            "Target branch: aart-cli/registry-update",
+        ):
+            with self.subTest(fact=fact):
+                self.assertIn(fact, said)
+        self.assertIn("The current branch is the one subscribers read", said)
+
+    def test_editing_the_field_moves_the_target_the_status_names(self) -> None:
+        case = self._case()
+
+        edited, _commands = reduce_consumer_ui(
+            case.state,
+            ConsumerUiEvent(
+                ConsumerUiEventKind.EDIT_PUBLICATION_BRANCH, text="review/registry-update"
+            ),
+        )
+        said = " ".join(compose_frame(case.source, edited).status)
+
+        self.assertIn("Target branch: review/registry-update", said)
+        self.assertNotIn("Target branch: aart-cli/registry-update", said)
+
+    def test_a_checkout_already_on_its_own_branch_has_no_row_and_still_states_the_facts(
+        self,
     ) -> None:
-        state = _committed()
-        for key in keys:
-            if state.session.screen is not MaintainerScreen.REGISTRY_COMMIT or state.quit_pending:
-                break
-            event = key_event(key, state)
-            if event is None:
-                continue
-            self.assertNotIn(
-                event.kind,
-                (ConsumerUiEventKind.REQUEST_ACTION, ConsumerUiEventKind.CONFIRM_ACTION),
-                key,
+        """There is nothing left to choose, so §167 gives the screen no actions block at all."""
+
+        case = self._case()
+        assert case.source._screens.maintainer is not None
+        workspace = case.source._screens.maintainer.registry_workspace
+        assert workspace is not None
+        source = CanonicalScreenSource(
+            ConsumerScreens(
+                project_dashboard((), registry_count=0),
+                maintainer=dataclasses.replace(
+                    case.source._screens.maintainer,
+                    registry_workspace=dataclasses.replace(
+                        workspace, branch="aart-cli/registry-update"
+                    ),
+                ),
             )
-            state, commands = reduce_consumer_ui(state, event)
-            self.assertFalse(
-                {command.kind for command in commands}
-                & {ConsumerUiCommandKind.PREPARE_ACTION, ConsumerUiCommandKind.EXECUTE_ACTION},
-                key,
-            )
+        )
+        state = _reload(
+            source,
+            dataclasses.replace(case.state, rows=(), cursor=0, publication_branch=""),
+            entering=True,
+        )
+
+        blocks = compose_frame(source, state)
+
+        self.assertEqual((), state.rows)
+        self.assertEqual((), blocks.actions)
+        said = " ".join(blocks.status)
+        self.assertIn("Target branch: aart-cli/registry-update", said)
+        self.assertIn(f"Exact commit: {'a' * 40}", said)
+        self.assertNotIn("subscribers read", said)
 
 
 if __name__ == "__main__":

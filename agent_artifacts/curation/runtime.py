@@ -17,6 +17,7 @@ from agent_artifacts.application.registry_commands import (
     prepare_registry_init,
     read_vendored_artifact_origin,
 )
+from agent_artifacts.application.registry_publication import prepare_registry_publication_state
 from agent_artifacts.configuration.model import ConfiguredSource, SourceKind
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.identifiers import ArtifactIdentity, ObjectDigest, SourceAlias
@@ -1056,44 +1057,27 @@ class LocalCurationService:
         return Ok(self._workspace_review(request, planned.value))
 
     def _prepare_publish(self, request: CurationRequest) -> Result[PreparedCuration]:
-        """Plan lock + build and run both publisher gates over the one projected result."""
+        """Use the same complete publication preparation as Push readiness and CI."""
 
         current = self._canonical_current()
         if isinstance(current, Err):
             return current
-        built = plan_promoted_registry_build(current.value)
-        if isinstance(built, Err):
-            return built
-        published_snapshot = project_registry_workspace_plan(current.value, built.value)
-        if isinstance(published_snapshot, Err):
-            return published_snapshot
-        validated = validate_registry_workspace(
-            published_snapshot.value,
+        prepared = prepare_registry_publication_state(
+            current.value,
             executable_version=_VERSION,
             available_capabilities=_CAPABILITIES,
         )
-        if isinstance(validated, Err):
-            return validated
-        audited = audit_registry_workspace(
-            published_snapshot.value,
-            executable_version=_VERSION,
-            available_capabilities=_CAPABILITIES,
-        )
-        if isinstance(audited, Err):
-            return audited
+        if isinstance(prepared, Err):
+            return prepared
         failed = tuple(
-            diagnostic.message
-            for report in (validated.value, audited.value)
-            for check in report.checks
-            for diagnostic in check.diagnostics
-            if diagnostic.severity is Severity.ERROR
+            detail for gate in prepared.value.gates if not gate.passed for detail in gate.details
         )
         if failed:
             return _error("registry publish gate failed: " + "; ".join(failed))
-        touched = {str(change.path) for change in built.value.changes}
+        touched = {str(change.path) for change in prepared.value.plan.changes}
         files = {
             str(entry.path): entry
-            for entry in published_snapshot.value.entries
+            for entry in prepared.value.snapshot.entries
             if entry.kind is SnapshotEntryKind.FILE
         }
         aggregate = plan_registry_workspace_files(
@@ -1111,9 +1095,12 @@ class LocalCurationService:
             self._workspace_review(
                 request,
                 aggregate.value,
-                checks=(*_checks(validated.value), *_checks(audited.value)),
+                checks=tuple(
+                    CurationCheck(gate.name, gate.passed, gate.details)
+                    for gate in prepared.value.gates
+                ),
                 warnings=(
-                    "Publish builds, validates, and audits one reviewed snapshot; the approved records need no lock.",
+                    "Publish runs the canonical format, lock, build, validation, audit, and compatibility contract over one reviewed snapshot.",
                     "Finalizing commits every listed Git change in the registry checkout and never pushes.",
                 ),
             )

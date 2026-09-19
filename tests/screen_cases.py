@@ -32,6 +32,7 @@ from agent_artifacts.application.maintainer_views import (
     project_maintainer_dashboard,
     project_maintainer_provenance,
     project_maintainer_version_conflict,
+    project_registry_workspace,
 )
 from agent_artifacts.domain.policies import EffectivePolicy
 from agent_artifacts.tui_consumer import CanonicalScreenSource, ConsumerScreens, _reload
@@ -133,6 +134,7 @@ RECORDED_SCREENS: tuple[ApplicationScreen, ...] = (
     MaintainerScreen.UPSTREAM_CHECK,
     MaintainerScreen.REGISTRY_REBUILD,
     MaintainerScreen.REGISTRY_REBUILD_REVIEW,
+    MaintainerScreen.REGISTRY_PUSH,
     MaintainerScreen.BULK_PROMOTION,
     MaintainerScreen.CANDIDATE_LIFECYCLE,
     MaintainerScreen.PROVENANCE,
@@ -406,6 +408,39 @@ def _maintainer_cases() -> dict[MaintainerScreen, ScreenCase]:
             execution.source,
             _reload(execution.source, state, entering=True),
         )
+
+    # Screen 46j only exists over a workspace that may actually be pushed: a checkout whose
+    # approved content is committed, whose review digest is known and which has no blocker. On a
+    # branch subscribers read it offers the branch field, which is the state worth recording --
+    # the empty-row form is what the other `46j` cases in `conditional_cases` are for.
+    assert registry.source._screens.maintainer is not None
+    push_source = CanonicalScreenSource(
+        ConsumerScreens(
+            project_dashboard((), registry_count=0),
+            maintainer=replace(
+                registry.source._screens.maintainer,
+                registry_workspace=project_registry_workspace(
+                    "manual-registry",
+                    commit="eed6c4f",
+                    origin="https://git.example.test/acme/registry.git",
+                    branch="main",
+                    root="/lab/registry",
+                    revision="a" * 40,
+                    content_digest="sha256:" + "b" * 64,
+                    publication_review_digest="sha256:" + "c" * 64,
+                    push_blockers=(),
+                ),
+            ),
+        )
+    )
+    push_state = ConsumerUiState(
+        ConsumerSession(MaintainerScreen.REGISTRY_PUSH), settings=settings, focus="company"
+    )
+    cases[MaintainerScreen.REGISTRY_PUSH] = ScreenCase(
+        "46j:pushable-workspace",
+        push_source,
+        _reload(push_source, push_state, entering=True),
+    )
 
     bulk = maintainer_bulk_promotion_test.BulkPromotionShellTest()
     bulk.setUp()

@@ -6,7 +6,6 @@ import json
 import os
 import re
 import subprocess
-from hashlib import sha256
 
 from agent_artifacts import command_outcome as _common
 from agent_artifacts.application.maintainer import CandidateBundle, reconcile_source_scan
@@ -42,7 +41,7 @@ from agent_artifacts.domain.diagnostics import (
     Severity,
     diagnostic_to_data,
 )
-from agent_artifacts.domain.identifiers import ObjectDigest, SourceAlias
+from agent_artifacts.domain.identifiers import SourceAlias
 from agent_artifacts.domain.registry import PromotionMode, RegistryArtifactVersion
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.io.git import GitProcessRequest, run_git_process
@@ -58,7 +57,10 @@ from agent_artifacts.io.registry_adoption import (
 )
 from agent_artifacts.io.registry_promotion import FilesystemPromotionOutput
 from agent_artifacts.io.registry_publication import publish_registry_commit
-from agent_artifacts.io.registry_workspace import FilesystemRegistryWorkspace
+from agent_artifacts.io.registry_workspace import (
+    FilesystemRegistryWorkspace,
+    read_registry_workspace,
+)
 from agent_artifacts.model import Request
 from agent_artifacts.protocol.authoring import compile_author_snapshot
 from agent_artifacts.protocol.hashing import parse_sha256
@@ -1362,26 +1364,85 @@ def _run_push(request: Request) -> int:
     """
 
     root = _root(request)
-    snapshot = _canonical_snapshot(FilesystemRegistryWorkspace(root))
-    if isinstance(snapshot, Err):
-        return _emit_error(request, "push", snapshot)
-    resolved = run_git_process(
-        GitProcessRequest(("git", "-C", root, "rev-parse", "--verify", "HEAD"), root, 30.0, 128)
-    )
-    if isinstance(resolved, Err):
-        return _emit_error(request, "push", resolved)
-    revision = resolved.value.stdout.decode("ascii", errors="replace").strip()
-    default_branch = _configured_registry_branch(request)
+    readiness = read_registry_workspace(root)
+    if readiness is None:
+        return _emit_error(
+            request,
+            "push",
+            _error(
+                "push requires the canonical Registry at the exact worktree root",
+                ("Run Push from the root of the Registry checkout.",),
+            ),
+        )
+    if not readiness.push_ready:
+        return _emit_error(
+            request,
+            "push",
+            _error(
+                "Registry Push is unavailable: " + "; ".join(readiness.push_blockers),
+                ("Resolve every listed publication blocker, then review Push again.",),
+            ),
+        )
+    branch = request.publication_branch or ""
+    current_is_target = readiness.branch not in {None, "main", readiness.default_branch}
+    if current_is_target and branch != readiness.branch:
+        return _emit_error(
+            request,
+            "push",
+            _error(
+                f"this Registry commit belongs to its current branch {readiness.branch}",
+                (f"Push to {readiness.branch}; AART does not redirect it to another branch.",),
+            ),
+        )
+    if readiness.revision is None or readiness.publication_review_digest is None:
+        return _emit_error(
+            request,
+            "push",
+            _error(
+                "Registry Push has no exact reviewed commit",
+                ("Review Push again after the Registry publication gates pass.",),
+            ),
+        )
+    review_digest = parse_sha256(readiness.publication_review_digest)
+    if isinstance(review_digest, Err):
+        return _emit_error(request, "push", review_digest)
     prepared = prepare_registry_publication(
         registry=SourceAlias(os.path.basename(root) or "registry"),
         remote=request.publication_remote,
-        default_branch=default_branch,
-        requested_branch=request.publication_branch or "",
-        revision=revision,
-        review_digest=ObjectDigest("sha256", sha256(revision.encode("ascii")).hexdigest()),
+        default_branch=readiness.default_branch,
+        requested_branch=branch,
+        revision=readiness.revision,
+        review_digest=review_digest.value,
     )
     if isinstance(prepared, Err):
         return _emit_error(request, "push", prepared)
+    repeated = read_registry_workspace(root)
+    if (
+        repeated is None
+        or not repeated.push_ready
+        or any(
+            before != after
+            for before, after in (
+                (readiness.root, repeated.root if repeated else None),
+                (readiness.revision, repeated.revision if repeated else None),
+                (readiness.content_digest, repeated.content_digest if repeated else None),
+                (
+                    readiness.publication_review_digest,
+                    repeated.publication_review_digest if repeated else None,
+                ),
+            )
+        )
+    ):
+        blockers = () if repeated is None else repeated.push_blockers
+        return _emit_error(
+            request,
+            "push",
+            _error(
+                "Registry Push readiness changed after review"
+                + (": " + "; ".join(blockers) if blockers else ""),
+                ("Review the current Registry state and prepare Push again.",),
+            ),
+        )
     published = publish_registry_commit(root, prepared.value)
     if isinstance(published, Err):
         return _emit_error(request, "push", published)

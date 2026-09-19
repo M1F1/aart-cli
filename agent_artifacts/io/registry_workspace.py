@@ -13,6 +13,7 @@ from agent_artifacts.application.maintainer_views import (
     MaintainerRegistryWorkspaceView,
     project_registry_workspace,
 )
+from agent_artifacts.application.registry_publication import prepare_registry_publication_state
 from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from agent_artifacts.domain.result import Err, Ok, Result
 from agent_artifacts.io.git import GitProcessRequest, run_git_process
@@ -31,6 +32,8 @@ from agent_artifacts.registry_commands.model import (
     WorkspaceChangeKind,
 )
 from agent_artifacts.registry_commands.planning import project_registry_workspace_plan
+from agent_artifacts.runtime_contract import EXECUTABLE_CAPABILITIES, EXECUTABLE_VERSION
+from agent_artifacts.sources.model import source_snapshot_digest
 
 REGISTRY_WORKSPACE_INVALID = DiagnosticCode("registry-workspace-invalid")
 
@@ -76,21 +79,85 @@ def read_registry_workspace(root: str) -> MaintainerRegistryWorkspaceView | None
     if not os.path.isfile(marker):
         return None
     name = _registry_name(marker) or os.path.basename(root)
+    revision = _git_line(root, "rev-parse", "--verify", "HEAD")
     commit = _git_line(root, "rev-parse", "--short", "HEAD")
     branch = _git_line(root, "rev-parse", "--abbrev-ref", "HEAD")
+    worktree_root = _git_line(root, "rev-parse", "--show-toplevel")
+    remote = "origin"
+    remote_head = _git_line(root, "symbolic-ref", "--short", f"refs/remotes/{remote}/HEAD")
+    default_branch = (
+        remote_head[len(remote) + 1 :]
+        if remote_head is not None and remote_head.startswith(f"{remote}/")
+        else "main"
+    )
     remote_branch = _git_line(root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
     unpushed: int | None = None
     if remote_branch is not None:
         counted = _git_line(root, "rev-list", "--count", f"{remote_branch}..HEAD")
         unpushed = int(counted) if counted is not None and counted.isdigit() else None
+    blockers: list[str] = []
+    content_digest: str | None = None
+    review_digest: str | None = None
+    if worktree_root is None or os.path.normpath(worktree_root) != root:
+        blockers.append("the launch workspace is not the root of this canonical Registry worktree")
+    if revision is None:
+        blockers.append("the Registry has no exact HEAD commit")
+    if _git_line(root, "status", "--porcelain=v1", "--untracked-files=all") is not None:
+        blockers.append("the Registry worktree or index is dirty")
+    current = FilesystemRegistryWorkspace(root).current()
+    if isinstance(current, Err):
+        blockers.extend(item.message for item in current.diagnostics)
+    else:
+        digest = source_snapshot_digest(current.value)
+        if isinstance(digest, Err):
+            blockers.append("the local Registry content digest could not be computed")
+        else:
+            content_digest = str(digest.value)
+        prepared = prepare_registry_publication_state(
+            current.value,
+            executable_version=EXECUTABLE_VERSION,
+            available_capabilities=EXECUTABLE_CAPABILITIES,
+        )
+        if isinstance(prepared, Err):
+            blockers.extend(item.message for item in prepared.diagnostics)
+        else:
+            review_digest = str(prepared.value.plan.review_digest)
+            if prepared.value.plan.changed_paths:
+                blockers.append("canonical generated outputs would change; run registry publish")
+            blockers.extend(
+                detail or f"the {gate.name} publication gate failed"
+                for gate in prepared.value.gates
+                if not gate.passed
+                for detail in (gate.details or ("",))
+            )
+    current_branch = None if branch == "HEAD" else branch
+    if current_branch in {"main", default_branch}:
+        # The review screen will ask for a new branch. The current branch is never silently used.
+        target_base = f"refs/remotes/{remote}/{default_branch}"
+        ahead = _git_line(root, "rev-list", "--count", f"{target_base}..HEAD")
+        if ahead == "0":
+            blockers.append("there is no committed Registry change to publish")
+    elif current_branch is not None and remote_branch is not None and unpushed == 0:
+        blockers.append("there is no committed Registry change to publish")
+    elif current_branch is None:
+        # Detached HEAD is eligible only through the explicit new-branch field on the review.
+        if revision is None:
+            blockers.append("detached HEAD has no exact commit to publish")
     return project_registry_workspace(
         name,
         commit=commit,
         origin=_git_line(root, "remote", "get-url", "origin"),
         # A detached HEAD reports the literal "HEAD", which names no branch anybody can push.
-        branch=None if branch == "HEAD" else branch,
+        branch=current_branch,
         remote_branch=remote_branch,
         unpushed=unpushed,
+        root=root,
+        revision=revision,
+        content_digest=content_digest,
+        remote=remote,
+        default_branch=default_branch,
+        push_blockers=tuple(dict.fromkeys(blockers)),
+        publication_review_digest=review_digest,
     )
 
 

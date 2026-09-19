@@ -119,6 +119,7 @@ __all__ = [
     "project_maintainer_registry",
     "MaintainerWorkingTreeView",
     "REGISTRY_WORKSPACE_ROW",
+    "REGISTRY_WORKSPACE_READY_ROW",
     "MaintainerPublicationState",
     "MaintainerRegistryWorkspaceView",
     "project_registry_workspace",
@@ -233,6 +234,7 @@ class MaintainerScreen(str, Enum):
     # promotion the maintainer wants all four, and while fixing one refusal they want validate.
     REGISTRY_REBUILD = "46h-rebuild-registry"
     REGISTRY_REBUILD_REVIEW = "46i-review-rebuild"
+    REGISTRY_PUSH = "46j-review-push"
     BULK_PROMOTION = "47-bulk-promotion"
     CANDIDATE_LIFECYCLE = "48-candidate-lifecycle"
     PROVENANCE = "49-provenance"
@@ -2785,11 +2787,18 @@ _NAVIGATION: dict[MaintainerScreen, tuple[MaintainerScreen, ...]] = {
         MaintainerScreen.REGISTRY_REBUILD,
         MaintainerScreen.REPOSITORY_SCAN,
         MaintainerScreen.ADOPTED_ARTIFACTS,
+        # Push is reached from this screen and from nowhere else: it is an action on the local
+        # workspace row, not a step any promotion or rebuild flows into (D-312).
+        MaintainerScreen.REGISTRY_PUSH,
     ),
     MaintainerScreen.REGISTRY_INIT: (MaintainerScreen.REGISTRY_INIT_REVIEW,),
     MaintainerScreen.REGISTRY_INIT_REVIEW: (MaintainerScreen.REGISTRY,),
     MaintainerScreen.REGISTRY_REBUILD: (MaintainerScreen.REGISTRY_REBUILD_REVIEW,),
     MaintainerScreen.REGISTRY_REBUILD_REVIEW: (MaintainerScreen.REGISTRY,),
+    # Back to the workspace it was launched from, like every other review screen. Without an entry
+    # here `navigation_targets` raises rather than refusing, so the screen would be unreachable in
+    # one direction and a crash in the other.
+    MaintainerScreen.REGISTRY_PUSH: (MaintainerScreen.REGISTRY,),
     MaintainerScreen.REPOSITORY_SCAN: (MaintainerScreen.SCAN_RESULT,),
     MaintainerScreen.SCAN_RESULT: (MaintainerScreen.ADOPTION_REVIEW,),
     MaintainerScreen.ADOPTION_REVIEW: (MaintainerScreen.REGISTRY,),
@@ -3507,6 +3516,7 @@ def project_maintainer_registry_commit(
 
 
 REGISTRY_WORKSPACE_ROW = "registry-workspace"
+REGISTRY_WORKSPACE_READY_ROW = "registry-workspace-push-ready"
 """Screen 46's row for the registry this project publishes, rather than one it subscribes to.
 
 A reserved identity rather than the registry's own name (`QA-098`): a subscribed registry could be
@@ -3551,6 +3561,15 @@ class MaintainerRegistryWorkspaceView:
     remote_branch: str | None = None
     unpushed: int | None = None
     state: MaintainerPublicationState = MaintainerPublicationState.UNOBSERVED
+    root: str | None = None
+    revision: str | None = None
+    content_digest: str | None = None
+    remote: str = "origin"
+    default_branch: str = "main"
+    suggested_branch: str = "aart-cli/registry-update"
+    push_ready: bool = False
+    push_blockers: tuple[str, ...] = ()
+    publication_review_digest: str | None = None
 
     def __post_init__(self) -> None:
         if (
@@ -3558,13 +3577,38 @@ class MaintainerRegistryWorkspaceView:
             or not isinstance(self.state, MaintainerPublicationState)
             or any(
                 not (value is None or isinstance(value, str))
-                for value in (self.commit, self.origin, self.branch, self.remote_branch)
+                for value in (
+                    self.commit,
+                    self.origin,
+                    self.branch,
+                    self.remote_branch,
+                    self.root,
+                    self.revision,
+                    self.content_digest,
+                    self.publication_review_digest,
+                )
             )
             or not (
                 self.unpushed is None or (isinstance(self.unpushed, int) and self.unpushed >= 0)
             )
+            or not self.remote
+            or not self.default_branch
+            or not self.suggested_branch
+            or not isinstance(self.push_ready, bool)
+            or any(not item or "\n" in item or "\r" in item for item in self.push_blockers)
+            or (self.push_ready and self.push_blockers)
         ):
             raise ValueError("Maintainer registry workspace view is invalid")
+
+    @property
+    def needs_a_new_branch(self) -> bool:
+        """The checkout stands where subscribers read, so a push has to target a branch of its own.
+
+        Screen 46j asks which branch exactly when this holds, and the same answer decides what it
+        draws and what its rows are, so both read it here rather than each repeating the set.
+        """
+
+        return self.branch in {None, "main", self.default_branch}
 
 
 def project_registry_workspace(
@@ -3575,6 +3619,14 @@ def project_registry_workspace(
     branch: str | None = None,
     remote_branch: str | None = None,
     unpushed: int | None = None,
+    root: str | None = None,
+    revision: str | None = None,
+    content_digest: str | None = None,
+    remote: str = "origin",
+    default_branch: str = "main",
+    suggested_branch: str = "aart-cli/registry-update",
+    push_blockers: tuple[str, ...] = ("publication readiness has not been established",),
+    publication_review_digest: str | None = None,
 ) -> MaintainerRegistryWorkspaceView:
     """One read of the registry checkout as the state it puts the registry in (`QA-098`).
 
@@ -3596,7 +3648,22 @@ def project_registry_workspace(
     else:
         state = MaintainerPublicationState.PUBLISHED
     return MaintainerRegistryWorkspaceView(
-        name, commit, origin, branch, remote_branch, unpushed, state
+        name,
+        commit,
+        origin,
+        branch,
+        remote_branch,
+        unpushed,
+        state,
+        root,
+        revision,
+        content_digest,
+        remote,
+        default_branch,
+        suggested_branch,
+        not push_blockers,
+        push_blockers,
+        publication_review_digest,
     )
 
 

@@ -35,6 +35,7 @@ from .consumer_views import (
     target_from_row,
 )
 from .maintainer_views import (
+    REGISTRY_WORKSPACE_READY_ROW,
     MaintainerCandidateFilter,
     MaintainerScreen,
     parse_candidate_filter_row,
@@ -83,6 +84,7 @@ class ConsumerActionKind(str, Enum):
     SOURCE_ADD = "source-add"
     REGISTRY_INIT = "registry-init"
     REGISTRY_REBUILD = "registry-rebuild"
+    REGISTRY_PUSH = "registry-push"
     REPOSITORY_SCAN = "repository-scan"
     REPOSITORY_ADOPT = "repository-adopt"
     REPOSITORY_UPSTREAM_CHECK = "repository-upstream-check"
@@ -120,6 +122,7 @@ class ConsumerUiEventKind(str, Enum):
     EDIT_SOURCE = "edit-source"
     EDIT_REGISTRY_INIT = "edit-registry-init"
     EDIT_REPOSITORY_SCAN = "edit-repository-scan"
+    EDIT_PUBLICATION_BRANCH = "edit-publication-branch"
     EDIT_INSTALL_CONFIG = "edit-install-config"
     EDIT_CONFIGURATION = "edit-configuration"
 
@@ -422,12 +425,14 @@ class ConsumerUiCommand:
     #: preference". Separate from `install_scope`: where files land and what resolves them are two
     #: questions, and answering one is not answering the other (issue #11b).
     python_installer: str = ""
+    publication_branch: str = ""
 
     def __post_init__(self) -> None:
         if (
             not isinstance(self.kind, ConsumerUiCommandKind)
             or self.install_scope not in ("", "project", "user")
             or self.python_installer not in ("", "pip", "uv")
+            or not _safe_identity(self.publication_branch)
             or (
                 self.screen is not None
                 and not isinstance(self.screen, (ConsumerScreen, MaintainerScreen))
@@ -571,6 +576,9 @@ class ConsumerUiState:
     #: interpretation know whether Enter commits or leaves for the Registry: publication is manual
     #: Git and has no state here (D-255).
     registry_commit_applied: bool = False
+    #: Screen 46j's editable new-branch target. It is used only when HEAD is detached or names a
+    #: protected/default branch; an eligible current branch remains the only possible target.
+    publication_branch: str = ""
     repository_scan_draft: RepositoryScanDraft = RepositoryScanDraft()
     #: The directory this session was launched from, already written for a reader. It is context
     #: for every screen -- an install and a Registry edit land relative to it -- so it is carried
@@ -600,6 +608,7 @@ class ConsumerUiState:
             or not isinstance(self.settings, ConsumerSettings)
             or self.install_scope not in ("", "project", "user")
             or self.python_installer not in ("", "pip", "uv")
+            or not _safe_identity(self.publication_branch)
             or not _rows_valid(self.rows)
             or not isinstance(self.cursor, int)
             or isinstance(self.cursor, bool)
@@ -1130,6 +1139,10 @@ _ACTION_REVIEW: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
         MaintainerScreen.REGISTRY_REBUILD,
     ): MaintainerScreen.REGISTRY_REBUILD_REVIEW,
     (
+        ConsumerActionKind.REGISTRY_PUSH,
+        MaintainerScreen.REGISTRY,
+    ): MaintainerScreen.REGISTRY_PUSH,
+    (
         ConsumerActionKind.REPOSITORY_SCAN,
         MaintainerScreen.REPOSITORY_SCAN,
     ): MaintainerScreen.SCAN_RESULT,
@@ -1238,6 +1251,20 @@ def _request_action(
 ) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
     if action is None:
         return state, ()
+    if (
+        action is ConsumerActionKind.REGISTRY_PUSH
+        and state.session.screen is MaintainerScreen.REGISTRY_PUSH
+    ):
+        if not state.publication_branch:
+            return state, ()
+        return replace(state, action=action, quit_pending=False), (
+            ConsumerUiCommand(
+                ConsumerUiCommandKind.PREPARE_ACTION,
+                action=action,
+                focus=state.focus,
+                publication_branch=state.publication_branch,
+            ),
+        )
     if action is ConsumerActionKind.CONFIGURE and (
         not state.configuration_targets or not state.configuration_draft.ready
     ):
@@ -1326,6 +1353,9 @@ def _request_action(
     prepared = replace(
         moved,
         action=action,
+        publication_branch=(
+            "" if action is ConsumerActionKind.REGISTRY_PUSH else moved.publication_branch
+        ),
         quit_pending=False,
         registry_commit_applied=(
             False
@@ -1369,6 +1399,7 @@ def _request_action(
                 state.configuration_draft.answers if action is ConsumerActionKind.CONFIGURE else ()
             )
         ),
+        publication_branch="",
     )
     return prepared, (command, *navigation)
 
@@ -1450,7 +1481,17 @@ def _action_prepared(
         selection_identity=event.selection_identity or None,
         review_digest=event.review_digest,
     )
-    return replace(state, session=session, config_form_active=False, quit_pending=False), ()
+    return replace(
+        state,
+        session=session,
+        config_form_active=False,
+        publication_branch=(
+            event.text
+            if action is ConsumerActionKind.REGISTRY_PUSH and event.text
+            else state.publication_branch
+        ),
+        quit_pending=False,
+    ), ()
 
 
 _ACTION_RUNNING: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationScreen | None] = {
@@ -1482,6 +1523,7 @@ _ACTION_RUNNING: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationS
     (ConsumerActionKind.CREDENTIAL_SET, ConsumerScreen.CREDENTIAL_REVIEW): None,
     (ConsumerActionKind.CREDENTIAL_DELETE, ConsumerScreen.CREDENTIAL_REVIEW): None,
     (ConsumerActionKind.CONFIGURE, ConsumerScreen.CONFIGURATION_REVIEW): None,
+    (ConsumerActionKind.REGISTRY_PUSH, MaintainerScreen.REGISTRY_PUSH): None,
 }
 
 
@@ -1538,6 +1580,7 @@ _ACTION_RESULT: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
         ConsumerActionKind.REGISTRY_REBUILD,
         MaintainerScreen.REGISTRY_REBUILD_REVIEW,
     ): MaintainerScreen.REGISTRY,
+    (ConsumerActionKind.REGISTRY_PUSH, MaintainerScreen.REGISTRY_PUSH): MaintainerScreen.REGISTRY,
     (ConsumerActionKind.INSTALL, ConsumerScreen.INSTALLING): ConsumerScreen.SUCCESS,
     (ConsumerActionKind.UPDATE, ConsumerScreen.UPDATING): ConsumerScreen.ACTIVITY_DETAILS,
     (
@@ -1706,6 +1749,15 @@ def reduce_consumer_ui(
         return _action_recorded(state, event)
     if event.kind is ConsumerUiEventKind.ACTION_FAILED:
         return _action_failed(state, event)
+    if event.kind is ConsumerUiEventKind.EDIT_PUBLICATION_BRANCH:
+        if state.session.screen is not MaintainerScreen.REGISTRY_PUSH:
+            return state, ()
+        return replace(
+            state,
+            publication_branch=event.text,
+            session=replace(state.session, review_digest=None),
+            quit_pending=False,
+        ), ()
     if event.kind is ConsumerUiEventKind.EDIT_INSTALL_CONFIG:
         if (
             state.session.screen is not ConsumerScreen.REQUIRED_INPUTS
@@ -1961,6 +2013,7 @@ _SCREEN_BINDINGS: dict[ApplicationScreen, tuple[_ScreenBinding, ...]] = {
         _navigate_binding("b", "Rebuild", MaintainerScreen.REGISTRY_REBUILD),
         _navigate_binding("s", "Scan Repository", MaintainerScreen.REPOSITORY_SCAN),
         _navigate_binding("u", "Check upstream", MaintainerScreen.ADOPTED_ARTIFACTS),
+        _action_binding("p", "Push", ConsumerActionKind.REGISTRY_PUSH),
     ),
     # The end of a Source journey. Enter is bound here rather than left to the generic rule
     # because a result screen has nothing to open, and an Enter that does nothing is how somebody
@@ -2010,6 +2063,7 @@ _FORM_TEXT_ROWS: dict[ApplicationScreen, frozenset[str]] = {
     MaintainerScreen.SOURCE_ADD: frozenset({"alias", "location", "ref"}),
     MaintainerScreen.REGISTRY_INIT: frozenset({"id", "name"}),
     MaintainerScreen.REPOSITORY_SCAN: frozenset({"url", "ref"}),
+    MaintainerScreen.REGISTRY_PUSH: frozenset({"branch"}),
 }
 #: The keys every screen offers, which a form gives up while the cursor is on a text field.
 _UNIVERSAL_LETTERS: dict[str, ConsumerUiEventKind] = {
@@ -2061,6 +2115,7 @@ _CONFIRM_SCREENS = frozenset(
         MaintainerScreen.SOURCE_ADD_REVIEW,
         MaintainerScreen.REGISTRY_INIT_REVIEW,
         MaintainerScreen.REGISTRY_REBUILD_REVIEW,
+        MaintainerScreen.REGISTRY_PUSH,
         ConsumerScreen.CREDENTIAL_REVIEW,
         ConsumerScreen.CONFIGURATION_REVIEW,
     }
@@ -2099,6 +2154,8 @@ def _binding_enabled(binding: _ScreenBinding, state: ConsumerUiState) -> bool:
         ConsumerActionKind.REGISTRY_REMOVE,
     ):
         return state.current_row not in ("", "add-registry")
+    if binding.event.action is ConsumerActionKind.REGISTRY_PUSH:
+        return state.current_row == REGISTRY_WORKSPACE_READY_ROW
     return True
 
 
@@ -2264,6 +2321,40 @@ def key_event(
         and key in _UNIVERSAL_LETTERS
     ):
         return ConsumerUiEvent(_UNIVERSAL_LETTERS[key])
+
+    # Screen 46j answers every other key itself, so the universal letters have to be settled above
+    # it: D-269 keeps `v`, `?` and `q` working on a form's non-field rows, and reading `continue`
+    # here had returned None for all three while the legend went on offering them.
+    if state.session.screen is MaintainerScreen.REGISTRY_PUSH and state.rows:
+        row = cursor or state.current_row
+        if key == "escape":
+            return ConsumerUiEvent(ConsumerUiEventKind.BACK)
+        if key == "up":
+            return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="up")
+        if key == "down":
+            return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="down")
+        if row == "branch":
+            if key == "enter":
+                return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="down")
+            if key == "backspace":
+                return ConsumerUiEvent(
+                    ConsumerUiEventKind.EDIT_PUBLICATION_BRANCH,
+                    text=state.publication_branch[:-1],
+                )
+            if len(key) == 1 and key.isprintable():
+                return ConsumerUiEvent(
+                    ConsumerUiEventKind.EDIT_PUBLICATION_BRANCH,
+                    text=state.publication_branch + key,
+                )
+            return None
+        if row == "continue" and key == "enter":
+            return ConsumerUiEvent(
+                ConsumerUiEventKind.CONFIRM_ACTION
+                if state.session.review_digest
+                else ConsumerUiEventKind.REQUEST_ACTION,
+                action=(None if state.session.review_digest else ConsumerActionKind.REGISTRY_PUSH),
+            )
+        return None
 
     if state.session.screen is ConsumerScreen.CONFIGURATION_VALUE:
         row = cursor or state.current_row

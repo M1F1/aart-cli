@@ -27,6 +27,20 @@ from agent_artifacts.domain.identifiers import (
 )
 from agent_artifacts.domain.publication import PublicationBranch, resolve_publication_branch
 from agent_artifacts.domain.result import Err, Ok, Result
+from agent_artifacts.protocol.capabilities import Capability
+from agent_artifacts.protocol.native_tree import SnapshotEntryKind, SourceSnapshot
+from agent_artifacts.protocol.registry_schema import parse_registry_manifest
+from agent_artifacts.protocol.semver import SemVer
+from agent_artifacts.registry_commands.model import RegistryWorkspacePlan
+from agent_artifacts.registry_commands.planning import (
+    audit_registry_workspace,
+    plan_promoted_registry_build,
+    plan_registry_format,
+    project_registry_workspace_plan,
+    test_registry_compatibility,
+    validate_registry_workspace,
+)
+from agent_artifacts.registry_commands.publication import REGISTRY_PUBLICATION_GATES
 
 REGISTRY_PUBLICATION_INVALID = DiagnosticCode("registry-publication-invalid")
 
@@ -89,6 +103,161 @@ class RegistryPublicationReceipt:
 
 
 PublishRegistryPort = Callable[[RegistryPublicationCommand], Result[RegistryPublicationReceipt]]
+
+
+@dataclass(frozen=True, slots=True)
+class RegistryPublicationGate:
+    """One mandatory check over the exact snapshot proposed for publication."""
+
+    name: str
+    passed: bool
+    details: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if (
+            not self.name
+            or not isinstance(self.passed, bool)
+            or any(not item or "\n" in item or "\r" in item for item in self.details)
+        ):
+            raise ValueError("registry publication gate is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class RegistryPublicationPreparation:
+    """The one build and gate result used by publish and Push readiness."""
+
+    plan: RegistryWorkspacePlan
+    snapshot: SourceSnapshot
+    gates: tuple[RegistryPublicationGate, ...]
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.plan, RegistryWorkspacePlan)
+            or not isinstance(self.snapshot, SourceSnapshot)
+            or not self.gates
+            or any(not isinstance(item, RegistryPublicationGate) for item in self.gates)
+        ):
+            raise ValueError("registry publication preparation is invalid")
+
+    @property
+    def passed(self) -> bool:
+        return all(item.passed for item in self.gates)
+
+
+def _gate(name: str, report) -> RegistryPublicationGate:
+    diagnostics = tuple(
+        f"{diagnostic.severity.value}: {diagnostic.message}"
+        for check in report.checks
+        for diagnostic in check.diagnostics
+    )
+    return RegistryPublicationGate(name, report.passed, diagnostics)
+
+
+def _manifest(snapshot: SourceSnapshot):
+    marker = next(
+        (
+            item
+            for item in snapshot.entries
+            if str(item.path) == "aart-registry.json" and item.kind is SnapshotEntryKind.FILE
+        ),
+        None,
+    )
+    return None if marker is None else parse_registry_manifest(marker.content)
+
+
+def prepare_registry_publication_state(
+    snapshot: SourceSnapshot,
+    *,
+    executable_version: SemVer,
+    available_capabilities: tuple[Capability, ...],
+) -> Result[RegistryPublicationPreparation]:
+    """Prepare canonical outputs and run the complete publication contract once.
+
+    ``registry publish`` may apply ``plan`` before making its local commit. Push readiness requires
+    the same plan to be a no-op. Both consume the same named gates, so the CLI, screen 46 and the
+    generated workflow cannot silently grow different definitions of publishable bytes.
+    """
+
+    if (
+        not isinstance(snapshot, SourceSnapshot)
+        or not isinstance(executable_version, SemVer)
+        or any(not isinstance(item, Capability) for item in available_capabilities)
+    ):
+        return _refuse("publication preparation needs a Registry snapshot and runtime contract")
+    formatted = plan_registry_format(snapshot)
+    if isinstance(formatted, Err):
+        return formatted
+    format_gate = RegistryPublicationGate(
+        "format",
+        formatted.value.changed_paths == 0,
+        (
+            ()
+            if formatted.value.changed_paths == 0
+            else ("registry format would change managed files",)
+        ),
+    )
+    built = plan_promoted_registry_build(snapshot)
+    if isinstance(built, Err):
+        return built
+    projected = project_registry_workspace_plan(snapshot, built.value)
+    if isinstance(projected, Err):
+        return projected
+    reproduced = plan_promoted_registry_build(projected.value)
+    if isinstance(reproduced, Err):
+        return reproduced
+    validated = validate_registry_workspace(
+        projected.value,
+        executable_version=executable_version,
+        available_capabilities=available_capabilities,
+    )
+    if isinstance(validated, Err):
+        return validated
+    audited = audit_registry_workspace(
+        projected.value,
+        executable_version=executable_version,
+        available_capabilities=available_capabilities,
+    )
+    if isinstance(audited, Err):
+        return audited
+    manifest = _manifest(projected.value)
+    if manifest is None or isinstance(manifest, Err):
+        return _refuse("publication preparation cannot read the Registry compatibility window")
+    minimum = manifest.value.requires_aart.min_inclusive
+    if minimum is None:
+        return _refuse("publication preparation needs a minimum compatible aart-cli version")
+    compatible = test_registry_compatibility(
+        projected.value,
+        minimum=minimum,
+        latest=executable_version,
+        available_capabilities=available_capabilities,
+    )
+    if isinstance(compatible, Err):
+        return compatible
+    gates = (
+        format_gate,
+        RegistryPublicationGate(
+            "lock",
+            True,
+            ("approved versions carry their canonical pins",),
+        ),
+        RegistryPublicationGate(
+            "build",
+            reproduced.value.changed_paths == 0,
+            (
+                ()
+                if reproduced.value.changed_paths == 0
+                else ("canonical generated outputs do not reproduce",)
+            ),
+        ),
+        _gate("validate", validated.value),
+        _gate("audit", audited.value),
+        _gate("compatibility", compatible.value),
+    )
+    if tuple(item.name for item in gates) != tuple(
+        item.name for item in REGISTRY_PUBLICATION_GATES
+    ):
+        return _refuse("publication gate implementation does not match the canonical gate contract")
+    return Ok(RegistryPublicationPreparation(built.value, projected.value, gates))
 
 
 def _is_remote_name(value: object) -> bool:
@@ -167,7 +336,10 @@ __all__ = [
     "PublicationOutcome",
     "PublishRegistryPort",
     "RegistryPublicationCommand",
+    "RegistryPublicationGate",
+    "RegistryPublicationPreparation",
     "RegistryPublicationReceipt",
     "prepare_registry_publication",
+    "prepare_registry_publication_state",
     "publication_summary",
 ]

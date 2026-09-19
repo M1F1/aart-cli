@@ -1308,3 +1308,48 @@ D-317.
 
 **Step 16's gate was rerun** as the slice requires: `make unit` includes it and passed. Nothing in
 this step changed README content or an install line.
+
+### Step 18 — Registry Maintainer owns Push and explains readiness (2026-09-19, partial)
+
+**Status: in progress.** The shared contract, the readiness computation, the screen and the branch
+targeting are in. The acceptance list below is not yet fully covered; what is missing is named at
+the end of this record rather than implied by an absence.
+
+**One gate contract, three readers.** `registry_commands/publication.py` names the mandatory gates
+once. `prepare_registry_publication_state` computes readiness from it, `registry publish` runs it,
+and the generated workflow renders it. D-342 records why the list also has to say *where* each gate
+runs: rendering it whole put `lock` back into every generated registry's CI, which CP-26.5 removed
+because over the approved representation it resolves nothing.
+
+**A shipped defect the shared list exposed (B-156).** `aart registry validate --source . --strict
+--frozen` had been in the generated workflow since `0.0.1` and the CLI has never accepted either
+flag, so that step failed with `unrecognized arguments` in every registry `registry init` has ever
+produced. `EveryVisibleCommandMentionTest` could not see it while it lived in a `bytes` template;
+moving the list into a `.py` file made the guard fail on the first run. The slice text above still
+says "strict/frozen validation" -- the correct command is `aart registry validate --source .`.
+
+**Screen 46j.** Push is reached from screen 46's ready workspace row and from nowhere else; the
+commit screen offers no `p` and promises no push. Recording the screen in the frame matrix found
+three faults at once, all repaired and recorded as D-343: six labelled facts drawn among the two
+rows, `v`/`?`/`q` swallowed on the `continue` row while the legend offered them, and four separate
+copies of the "is this a branch subscribers read" question, now `needs_a_new_branch`.
+
+**Readiness is derived, never asserted.** `read_registry_workspace` blocks on a launch directory
+that is not this worktree's root, a missing exact `HEAD`, a dirty worktree or index, generated
+outputs that would change, any failed gate, and nothing committed to publish. `_prepare_registry_push`
+re-reads all of it, so stale UI state fails closed.
+
+**Evidence.** `make unit` (4556 tests, green), `make typecheck`, Ruff check and format on the
+changed files. Targeted mutations, each red and then restored: `lock` marked as running in CI
+(readiness test red); the push status dropped from the view (eight assertions red); the universal
+keys returned to their old position after the 46j block (frame matrix red); the edited branch
+ignored by the status (one red). No broad `make quality` ran, under D-317.
+
+**Not yet covered, and what the next agent should start from.** The slice's acceptance list also
+asks for: state recomposition after init, rebuild and single/bulk promotion and after a process
+restart; the accepted-versus-local snapshot presentation held as its own claim; non-force update
+and divergence; the Source and parent-repository ownership refusals as tests rather than as code;
+and the branch suggestion derived from the most recent producing action (`aart/init-registry`,
+`aart/rebuild-registry`, `aart/promote-…`, `aart/bulk-promote`) rather than the constant
+`aart-cli/registry-update` the view carries today. Step 18a renames that namespace, so the
+suggestion's *spelling* is 18a's; which action it comes from is still step 18's.
