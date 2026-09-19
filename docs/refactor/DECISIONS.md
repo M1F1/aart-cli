@@ -8887,3 +8887,34 @@ harness: that silence is the defect D-354 recorded, not a fallback.
 it today changes. Threading the template through `plan_artifact_installation` belongs with moving
 the stored secret to `credential_address`, because a launcher that reads the new address before the
 secret is written there would find nothing; until both land together, the D-354 refusal stands.
+
+## D-356 — A credential component is named by its input only while that still names one item
+
+**Context.** D-355 lets one launcher reach four Keychain items, and `io/consumer_actions.py` now
+addresses each installation's secret with `credential_address` rather than one per-machine service.
+That made the reconciliation vocabulary wrong rather than merely coarse: a credential component was
+named `credential:<declared input>`, and four installations of one artifact declaring one input
+produce four components with that one name. `DesiredState` refuses a state that names the same
+component twice -- correctly, because nothing downstream could tell the four apart.
+
+**Decision.** `domain.credentials.credential_component_names` names a whole set at once. An input
+that still names exactly one item in that set keeps the name it always had, so every existing
+message, receipt and screen line is unchanged. An input naming more than one is suffixed with the
+first eight hex characters of the SHA-256 of the whole reference: stable across runs, distinct
+between installations, and derived from an address rather than from any value.
+
+Both sides take their names from that one function -- `application/installed_state` for the desired
+state and `io/installation_observation.credential_component_states` for what was observed. Naming
+them separately is how an observation silently stops answering the component it measured, which
+reports a credential that is present as unobserved.
+
+The alternative was to name the component by the whole address. It is unique without a digest, but
+it is the length of a service label and it would have rewritten every line of every reconciliation
+report for the ordinary case where one item still needs no disambiguation at all.
+
+**Consequence.** `credential:github-token` remains what a single installation shows.
+`credential:github-token.3f9a1c22` is what four harnesses of one artifact show, one per harness.
+The recording provider in `tests/credential_action_rows_test.py` was corrected in the same change:
+it held one `present` flag for every address, so storing one installation's item made every other
+installation look ready. Per-reference state is what a provider actually has, and without it the
+second of two artifacts failed its pre-execution check with "installed state changed after Review".

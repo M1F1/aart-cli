@@ -19,9 +19,10 @@ from aart_cli.application.promotion import (
     project_lifecycle_update,
     project_promotion,
 )
+from aart_cli.application.runtime_projection import HARNESS_PLACEHOLDER
 from aart_cli.configuration.model import SourceKind
 from aart_cli.domain.candidates import CandidateId, assess_candidate
-from aart_cli.domain.credentials import CredentialProviderRef
+from aart_cli.domain.credentials import CredentialProviderRef, CredentialReference
 from aart_cli.domain.harness import Scope
 from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
@@ -30,7 +31,11 @@ from aart_cli.domain.identifiers import (
     SourceId,
 )
 from aart_cli.domain.inputs import PromptedConfigValue, SecretProviderReference
-from aart_cli.domain.installation_owner import installation_owner
+from aart_cli.domain.installation_owner import (
+    credential_address,
+    credential_service_template,
+    installation_owner,
+)
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.registry import PromotionMode, publish_registry_version
 from aart_cli.domain.result import Err, Ok
@@ -414,6 +419,128 @@ class ConfiguredInstallationDraftTest(unittest.TestCase):
         self.assertIn(neighbour, widened.owners)
         self.assertNotIn(neighbour, widened.owners_for(placement))
         self.assertEqual((self._owner(),), widened.owners_for(placement))
+
+    def test_each_target_s_own_credential_address_prepares_into_one_open_slot(self) -> None:
+        """§169.4-6 and D-355: separate items are not a disagreement the placement must refuse.
+
+        Two harnesses addressing their own Keychain item is the contract, not a conflict. The one
+        thing that differs between those addresses is the harness, and the launcher composes that
+        at start, so the placement carries the address with its slot open and prepares.
+        """
+
+        claude = self._owner("claude")
+        tabnine = self._owner("tabnine")
+        drafted = self._draft(
+            (
+                OwnedInputSource(claude, PromptedConfigValue(ORG, "acme")),
+                OwnedInputSource(
+                    claude, SecretProviderReference(TOKEN, credential_address(claude, TOKEN))
+                ),
+                OwnedInputSource(tabnine, PromptedConfigValue(ORG, "acme")),
+                OwnedInputSource(
+                    tabnine, SecretProviderReference(TOKEN, credential_address(tabnine, TOKEN))
+                ),
+            ),
+            profiles=("tabnine", "claude"),
+        )
+
+        assert isinstance(drafted, Ok), getattr(drafted, "diagnostics", ())
+        prepared = drafted.value.prepared_placements()
+
+        assert isinstance(prepared, Ok), getattr(prepared, "diagnostics", ())
+        (placement,) = prepared.value
+        self.assertEqual(
+            credential_service_template(claude, HARNESS_PLACEHOLDER),
+            placement.credential_service_template,
+        )
+        (secret,) = tuple(
+            item for item in placement.sources if isinstance(item, SecretProviderReference)
+        )
+        self.assertEqual(placement.credential_service_template, secret.provider.service)
+        # Neither harness's own address is what the placement carries; the open slot is.
+        for owner in (claude, tabnine):
+            self.assertNotEqual(credential_address(owner, TOKEN).service, secret.provider.service)
+
+    def test_the_placement_still_names_every_real_item_it_would_need(self) -> None:
+        """The open slot is for the launcher's text alone; nothing may be asked of a provider.
+
+        The address the launcher composes is not an item anyone holds. What a provider is asked to
+        inspect or store, and what the receipt records, is every installation's own concrete
+        address -- one per harness, which is what §169.4-6 is for.
+        """
+
+        claude = self._owner("claude")
+        tabnine = self._owner("tabnine")
+        drafted = self._draft(
+            (
+                OwnedInputSource(claude, PromptedConfigValue(ORG, "acme")),
+                OwnedInputSource(
+                    claude, SecretProviderReference(TOKEN, credential_address(claude, TOKEN))
+                ),
+                OwnedInputSource(tabnine, PromptedConfigValue(ORG, "acme")),
+                OwnedInputSource(
+                    tabnine, SecretProviderReference(TOKEN, credential_address(tabnine, TOKEN))
+                ),
+            ),
+            profiles=("tabnine", "claude"),
+        )
+
+        assert isinstance(drafted, Ok), getattr(drafted, "diagnostics", ())
+        prepared = drafted.value.prepared_placements()
+
+        assert isinstance(prepared, Ok), getattr(prepared, "diagnostics", ())
+        (placement,) = prepared.value
+        self.assertEqual(
+            (
+                CredentialReference(TOKEN, credential_address(claude, TOKEN)),
+                CredentialReference(TOKEN, credential_address(tabnine, TOKEN)),
+            ),
+            placement.credential_addresses,
+        )
+        for reference in placement.credential_addresses:
+            self.assertNotIn(HARNESS_PLACEHOLDER, str(reference))
+
+    def test_an_address_that_is_not_the_target_s_own_is_still_a_disagreement(self) -> None:
+        """Only the harness may differ. Anything else two targets disagree about has no slot."""
+
+        claude = self._owner("claude")
+        tabnine = self._owner("tabnine")
+        drafted = self._draft(
+            (
+                OwnedInputSource(claude, PromptedConfigValue(ORG, "acme")),
+                OwnedInputSource(
+                    claude, SecretProviderReference(TOKEN, credential_address(claude, TOKEN))
+                ),
+                OwnedInputSource(tabnine, PromptedConfigValue(ORG, "acme")),
+                OwnedInputSource(tabnine, SecretProviderReference(TOKEN, KEYCHAIN)),
+            ),
+            profiles=("tabnine", "claude"),
+        )
+
+        assert isinstance(drafted, Ok), getattr(drafted, "diagnostics", ())
+        refused = drafted.value.prepared_placements()
+
+        assert isinstance(refused, Err), refused
+        self.assertEqual(
+            refused.diagnostics[0].code.value, "configured-installation-per-target-values-differ"
+        )
+
+    def test_one_target_needs_no_slot_left_open(self) -> None:
+        """A single installation's launcher can read the address it was given, as it always did."""
+
+        owner = self._owner()
+        drafted = self._draft(
+            (
+                OwnedInputSource(owner, PromptedConfigValue(ORG, "acme")),
+                OwnedInputSource(owner, SecretProviderReference(TOKEN, KEYCHAIN)),
+            )
+        )
+
+        assert isinstance(drafted, Ok), getattr(drafted, "diagnostics", ())
+        prepared = drafted.value.prepared_placements()
+
+        assert isinstance(prepared, Ok), getattr(prepared, "diagnostics", ())
+        self.assertIsNone(prepared.value[0].credential_service_template)
 
     def test_targets_that_answered_differently_refuse_rather_than_pick_one(self) -> None:
         """One generated launcher carries one set of values, so a disagreement is named (D-354)."""

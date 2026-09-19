@@ -71,6 +71,33 @@ targeted mutation went red and was restored; scoped mutmut killed all 135 mutant
 reran step 16's executable install/README contract; lint, format, type, packaging, documentation and
 secret-shape gates also passed. Step 19 is next. No broad `make quality` ran (D-317/D-334).
 
+**2026-09-19, CP-26.19 in progress — every installation reaches its own Keychain item.**
+`io/consumer_actions.py` addresses a secret with `credential_address(field.owner, field.input.id)`;
+the per-machine `aart.<sha256(home)[:12]>` service is deleted, not kept beside it (D-334). Three
+things moved with it in one slice, because any alone leaves the product broken. The launcher is one
+file registered with every harness, so `plan_artifact_installation` carries
+`credential_service_template` to `generate_launcher` (D-355) and the substitution happens inside an
+argv word, since a provider may name the service as its own argument or fold it into one reference
+string; the sentence the launcher prints when it cannot read the item passes the composed address
+as a `printf` argument rather than substituting into prose. The placement carries both the template
+(launcher text, naming nothing anyone holds) and `credential_addresses` (every installation's
+concrete item), and the latter is what a provider is inspected for and what the receipt records
+through `PlannedInstallation.credentials`. `prepared_placements()` folds each owner's own address
+back to the template and compares what remains, so separate items stop reading as a disagreement
+while a reference pointing anywhere else still refuses (D-354, narrowed). Reconciliation stopped
+naming a credential component by its declared input alone (D-356): four installations of one
+artifact name one component four times, which `DesiredState` refuses, so
+`credential_component_names` names a whole set — an input still naming one item keeps exactly the
+name it had, one that does not is suffixed with a short digest of its address, and both the desired
+state and the observation take names from that one function. The characterization that changed is
+the one that said it: two artifacts declaring one input were asked for once with both owners in a
+single briefing and are now asked for separately, each in front of its own author's guidance. The
+recording provider double held one `present` flag for every address, so storing one installation's
+item made every other look ready and the second of two artifacts failed its pre-execution check
+with "installed state changed after Review"; it now holds state per item, as a provider does. Evidence: focused suites, `lint`, `format-check` and `typecheck`
+green; **`make unit` was started and stopped unfinished when the segment ended and is the next
+agent's first action**, together with the targeted mutation and scoped mutmut this slice owes.
+
 **2026-09-19, CP-26.19 in progress — one launcher, four addresses.** `generate_launcher` composes
 its credential address instead of carrying one (D-355). Given `credential_service_template` — the
 installation's service with its harness left open as `HARNESS_PLACEHOLDER`, built from the same join

@@ -8,8 +8,10 @@ interpreter, never in a domain value that a plan, receipt, log or snapshot could
 from __future__ import annotations
 
 import re
+from collections import Counter
 from dataclasses import dataclass
 from enum import Enum
+from hashlib import sha256
 
 from .identifiers import InputId
 
@@ -63,6 +65,30 @@ class CredentialReference:
 
     def __str__(self) -> str:
         return f"{self.input}@{self.provider}"
+
+
+def credential_component_names(
+    references: tuple[CredentialReference, ...],
+) -> tuple[str, ...]:
+    """One component name per reference, in the order given.
+
+    The declared input was a name while one artifact held one item for it. Each installation of an
+    artifact holding its own (§169.4-6) means that id can appear several times in one desired
+    state, where naming the same component twice is refused. So an id that still names exactly one
+    item is left exactly as it was, and one that does not is suffixed with a short digest of the
+    whole address: stable across runs, unique between installations, and derived from a reference
+    rather than from any value.
+    """
+
+    if any(not isinstance(item, CredentialReference) for item in references):
+        raise ValueError("credential component names are taken from credential references")
+    shared = Counter(item.input.value for item in references)
+    return tuple(
+        item.input.value
+        if shared[item.input.value] == 1
+        else f"{item.input.value}.{sha256(str(item).encode('utf-8')).hexdigest()[:8]}"
+        for item in references
+    )
 
 
 class ProviderState(str, Enum):

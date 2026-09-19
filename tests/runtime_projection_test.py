@@ -566,10 +566,12 @@ class LauncherComposesItsOwnCredentialAddressTest(unittest.TestCase):
         """Silently installing one fixed address for every harness is the defect, not a fallback."""
 
         class _Opaque:
+            """Addressed by declared input alone: there is no service in the command to replace."""
+
             provider = "macos-keychain"
 
             def resolution_argv(self, reference):
-                return ("/usr/bin/opaque", "read", "--ref", str(reference))
+                return ("/usr/bin/opaque", "read", "--input", reference.input.value)
 
         refused = generate_launcher(
             ENVIRONMENT,
@@ -603,6 +605,30 @@ class LauncherComposesItsOwnCredentialAddressTest(unittest.TestCase):
                 self.assertIsInstance(refused, Err, refused)
                 self.assertEqual(refused.diagnostics[0].code, LAUNCHER_INVALID)
                 self.assertTrue(refused.diagnostics[0].message)
+
+    def test_a_provider_that_folds_the_service_into_one_argument_still_composes(self):
+        """Not every provider names the service on its own; the substitution is inside the word."""
+
+        class _Folded:
+            provider = "macos-keychain"
+
+            def resolution_argv(self, reference):
+                return ("/usr/bin/read-secret", str(reference))
+
+        generated = generate_launcher(
+            ENVIRONMENT,
+            LaunchContract("server.py"),
+            bind(BoundInput(token_input(), token_source())),
+            resolvers=(_Folded(),),
+            credential_service_template=self.template,
+        )
+
+        assert isinstance(generated, Ok), generated
+        self.assertIn('"$AART_CLI_SERVICE"', generated.value.content)
+        self.assertNotIn(HARNESS_PLACEHOLDER, generated.value.content)
+        self.assertNotIn(f"macos-keychain:{KEYCHAIN.service}/", generated.value.content)
+        # The sentence names the item it actually asked for, without a wrong address written in.
+        self.assertIn("could not read %s from macos-keychain", generated.value.content)
 
     def test_without_a_template_the_address_is_still_written_in_as_before(self):
         generated = generate(bind(BoundInput(token_input(), token_source())))

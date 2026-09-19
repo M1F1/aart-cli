@@ -105,7 +105,6 @@ from aart_cli.configuration.schema import configured_source_from_input
 from aart_cli.domain.candidates import CandidateId
 from aart_cli.domain.credentials import (
     CredentialIntent,
-    CredentialProviderRef,
     CredentialState,
     ProviderState,
 )
@@ -122,6 +121,7 @@ from aart_cli.domain.inputs import (
     SecretInput,
     SecretProviderReference,
 )
+from aart_cli.domain.installation_owner import credential_address
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.python_runtime import PythonInstaller
 from aart_cli.domain.receipts import ArtifactReceipt, InstallationReceipt, InstalledRecord
@@ -1691,15 +1691,11 @@ class LocalConsumerActions:
                 field for field in unanswered if isinstance(field.input, SecretInput)
             )
             if provider is not None and secret_fields:
-                # The reference is safe application state, never a value. It is stable inside one
-                # AART home and separate across disposable/manual homes, so test runs and users do
-                # not silently share a Keychain item merely because an author reused an input id.
-                # Still one item per machine and declared input, which is the address
-                # `domain/installation_owner.credential_address` replaces. It cannot be adopted
-                # here until a launcher is generated per harness, because a launcher carries its
-                # credential address in its own text and one launcher serves every target today
-                # (D-354). Swapping it now would make every multi-harness install refuse.
-                service = "aart." + hashlib.sha256(host.user_home.encode("utf-8")).hexdigest()[:12]
+                # The reference is safe application state, never a value. Each installation
+                # addresses its own item (§169.4-6): the address carries the Registry alias, the
+                # artifact, the scope, the root and the harness, so two harnesses of one artifact
+                # no longer read one secret, and two homes never collide. The launcher composes
+                # the harness half of it at start rather than carrying one (D-355).
                 sources = (
                     *sources,
                     *(
@@ -1707,10 +1703,10 @@ class LocalConsumerActions:
                             field.owner,
                             SecretProviderReference(
                                 field.input.id,
-                                CredentialProviderRef(
-                                    provider.provider,
-                                    service,
-                                    field.input.id.value,
+                                credential_address(
+                                    field.owner,
+                                    field.input.id,
+                                    provider=provider.provider,
                                 ),
                             ),
                         )

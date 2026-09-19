@@ -19,10 +19,18 @@ from aart_cli.application.installation_inputs import (
 from aart_cli.application.installation_offer import ArtifactPlacement
 from aart_cli.application.marketplace_resolution import ResolutionPolicy
 from aart_cli.application.promotion import load_published_registry_versions
+from aart_cli.application.runtime_projection import HARNESS_PLACEHOLDER
 from aart_cli.configuration.policy import EffectiveConfiguration
+from aart_cli.domain.credentials import CredentialReference
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.harness import Scope
-from aart_cli.domain.installation_owner import InstallationOwner, installation_owner
+from aart_cli.domain.inputs import InputValueSource, SecretProviderReference
+from aart_cli.domain.installation_owner import (
+    InstallationOwner,
+    credential_address,
+    credential_service_template,
+    installation_owner,
+)
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.python_runtime import PythonInstaller
 from aart_cli.domain.registry import PromotionMode, RegistryArtifactVersion
@@ -62,8 +70,9 @@ __all__ = [
 
 CONFIGURED_INSTALLATION_INVALID = DiagnosticCode("configured-installation-invalid")
 CONFIGURED_INSTALLATION_INPUTS_REQUIRED = DiagnosticCode("configured-installation-inputs-required")
-#: One placement's targets answered the same input differently, and a single generated launcher can
-#: carry only one answer. Refused rather than installed with whichever came first (D-354).
+#: One placement's targets answered the same input differently in something other than the
+#: credential each addresses, and a single generated launcher carries one set of configuration
+#: values. Refused rather than installed with whichever came first (D-354, narrowed by D-355).
 CONFIGURED_INSTALLATION_VALUES_DIFFER = DiagnosticCode(
     "configured-installation-per-target-values-differ"
 )
@@ -71,6 +80,43 @@ CONFIGURED_INSTALLATION_VALUES_DIFFER = DiagnosticCode(
 
 def _error(code: DiagnosticCode, message: str) -> Err:
     return Err((Diagnostic(code, Severity.ERROR, message),))
+
+
+def _harness_slot_template(owners: tuple[InstallationOwner, ...]) -> str | None:
+    """The credential service these installations share, with the harness they differ in left open.
+
+    `None` where there is nothing to compose: one installation's launcher can read the address it
+    was given, and owners that differ in anything but the harness have no single template between
+    them. Every owner of one placement shares its alias, artifact, scope and root by construction,
+    so in practice the second case is the profile, which nothing sets yet.
+    """
+
+    if len(owners) < 2:
+        return None
+    templates = {credential_service_template(owner, HARNESS_PLACEHOLDER) for owner in owners}
+    return templates.pop() if len(templates) == 1 else None
+
+
+def _with_open_harness_slot(
+    source: InputValueSource,
+    owner: InstallationOwner,
+    template: str | None,
+) -> InputValueSource:
+    """An installation's own credential address, written as the template it composes from.
+
+    Only the address this owner is entitled to is folded: a reference pointing anywhere else is
+    left as it is, so two targets naming different arbitrary items still read as the disagreement
+    they are rather than being quietly unified.
+    """
+
+    if (
+        template is None
+        or not isinstance(source, SecretProviderReference)
+        or source.provider
+        != credential_address(owner, source.input, provider=source.provider.provider)
+    ):
+        return source
+    return replace(source, provider=replace(source.provider, service=template))
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,9 +149,12 @@ class ConfiguredInstallationDraft:
         """Apply each installation's own answers to the placement whose declarations asked for them.
 
         A placement spans every harness it registers with, and each of those is its own
-        installation with its own answers (D-353). One generated launcher can carry only one set,
-        so where the targets of a placement disagree this refuses by name rather than choosing for
-        them (D-354).
+        installation with its own answers (D-353). The one thing those answers are *meant* to
+        differ in is the credential each addresses: separate items are §169.4-6's contract, not a
+        conflict. So each installation's own address is folded back to the template it composes
+        from (D-355), and what remains has to agree -- one generated launcher still carries one set
+        of configuration values, and a disagreement about those is refused by name rather than
+        settled by whichever came first (D-354).
         """
 
         if not self.ready:
@@ -118,8 +167,14 @@ class ConfiguredInstallationDraft:
             )
         prepared: list[ArtifactPlacement] = []
         for placement in self.placements:
+            owners = self.owners_for(placement)
+            template = _harness_slot_template(owners)
             answered = {
-                owner: self.inputs.sources_for(owner) for owner in self.owners_for(placement)
+                owner: tuple(
+                    _with_open_harness_slot(source, owner, template)
+                    for source in self.inputs.sources_for(owner)
+                )
+                for owner in owners
             }
             distinct = {tuple(values) for values in answered.values()}
             if len(distinct) > 1:
@@ -127,10 +182,34 @@ class ConfiguredInstallationDraft:
                     CONFIGURED_INSTALLATION_VALUES_DIFFER,
                     f"{placement.coordinate} is registered with "
                     + ", ".join(sorted(owner.harness for owner in answered))
-                    + ", which answered its inputs differently; one generated launcher carries "
-                    "one set of values, so per-harness launchers are needed before this installs",
+                    + ", which answered its inputs differently in something other than the "
+                    "credential each addresses; one generated launcher carries one set of values, "
+                    "so there is nothing here to compose per harness",
                 )
-            prepared.append(replace(placement, sources=next(iter(distinct), ())))
+            sources = next(iter(distinct), ())
+            composed = tuple(
+                item
+                for item in sources
+                if isinstance(item, SecretProviderReference) and item.provider.service == template
+            )
+            prepared.append(
+                replace(
+                    placement,
+                    sources=sources,
+                    credential_service_template=template if composed else None,
+                    # What the launcher composes is text; what a provider is asked for is an item.
+                    # So every installation's own address is carried beside the template, because
+                    # the template itself names nothing anyone holds.
+                    credential_addresses=tuple(
+                        CredentialReference(
+                            item.input,
+                            credential_address(owner, item.input, provider=item.provider.provider),
+                        )
+                        for owner in owners
+                        for item in composed
+                    ),
+                )
+            )
         return Ok(tuple(prepared))
 
     def owners_for(self, placement: ArtifactPlacement) -> tuple[InstallationOwner, ...]:

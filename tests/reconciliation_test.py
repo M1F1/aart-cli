@@ -19,7 +19,11 @@ from aart_cli.application.reconciliation import (
     repair_converged,
     repair_plan_to_data,
 )
-from aart_cli.domain.credentials import CredentialProviderRef, CredentialReference
+from aart_cli.domain.credentials import (
+    CredentialProviderRef,
+    CredentialReference,
+    credential_component_names,
+)
 from aart_cli.domain.effects import (
     ConfigureHarness,
     CopyTree,
@@ -39,6 +43,7 @@ from aart_cli.domain.identifiers import (
     ObjectDigest,
     SourceAlias,
 )
+from aart_cli.domain.installation_owner import credential_address, installation_owner
 from aart_cli.domain.launch import Transport
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.receipts import InstallationReceipt
@@ -562,3 +567,61 @@ class InstalledStateBridgeTest(unittest.TestCase):
                 self.receipt,
                 InstallationObservation(),
             )
+
+
+class CredentialComponentNamesTest(unittest.TestCase):
+    """§169.4-6: one declared input, several installations, and a name that still says which.
+
+    The input id was a name while one artifact held one item for it. Each installation holding its
+    own means the id alone can appear four times in one desired state, where naming the same
+    component twice is refused -- correctly, because nothing downstream could tell the four apart.
+    """
+
+    def _reference(self, harness: str, input_id: str = "github-token"):
+        return CredentialReference(
+            InputId(input_id),
+            credential_address(
+                installation_owner(
+                    ArtifactCoordinate(
+                        SourceAlias("company"), ArtifactIdentity("mcp", "github"), "1.0.0"
+                    ),
+                    scope=Scope.PROJECT,
+                    root="/work/project",
+                    harness=harness,
+                ),
+                InputId(input_id),
+            ),
+        )
+
+    def test_one_item_for_an_input_keeps_the_name_it_always_had(self):
+        names = credential_component_names((self._reference("claude"),))
+
+        self.assertEqual(("github-token",), names)
+
+    def test_installations_holding_their_own_item_are_told_apart(self):
+        references = (self._reference("claude"), self._reference("opencode"))
+
+        names = credential_component_names(references)
+
+        self.assertEqual(2, len(set(names)))
+        for name in names:
+            self.assertTrue(name.startswith("github-token."))
+            self.assertIsNotNone(ComponentId(Component.CREDENTIAL, name))
+
+    def test_a_name_is_the_same_every_time_it_is_asked_for(self):
+        references = (self._reference("claude"), self._reference("opencode"))
+
+        self.assertEqual(
+            credential_component_names(references), credential_component_names(references)
+        )
+
+    def test_a_second_input_is_not_disambiguated_because_another_one_was(self):
+        references = (
+            self._reference("claude"),
+            self._reference("opencode"),
+            self._reference("claude", "github-org"),
+        )
+
+        names = credential_component_names(references)
+
+        self.assertEqual("github-org", names[2])

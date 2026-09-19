@@ -19,7 +19,10 @@ from __future__ import annotations
 from collections.abc import Iterable, Iterator
 from collections.abc import Set as AbstractSet
 
-from aart_cli.domain.credentials import CredentialReference
+from aart_cli.domain.credentials import (
+    CredentialReference,
+    credential_component_names,
+)
 from aart_cli.domain.effects import (
     ConfigureHarness,
     CopyTree,
@@ -69,8 +72,7 @@ __all__ = [
 ]
 
 
-def _credential_component(reference: CredentialReference) -> DesiredComponent:
-    name = str(reference.input)
+def _credential_component(reference: CredentialReference, name: str) -> DesiredComponent:
     provider = reference.provider.provider
     return DesiredComponent(
         ComponentId(Component.CREDENTIAL, name),
@@ -148,7 +150,14 @@ def desired_state_from_receipt(
             (WriteFile(receipt.launcher, str(receipt.launcher_digest), True),),
         )
     )
-    components.extend(_credential_component(reference) for reference in receipt.credentials)
+    components.extend(
+        _credential_component(reference, name)
+        for reference, name in zip(
+            receipt.credentials,
+            credential_component_names(receipt.credentials),
+            strict=True,
+        )
+    )
     components.extend(
         DesiredComponent(
             ComponentId(Component.HARNESS, registration.target.harness),
@@ -215,11 +224,15 @@ def removal_state_from_receipt(
     if delete_credentials:
         components.extend(
             DesiredComponent(
-                ComponentId(Component.CREDENTIAL, str(reference.input)),
+                ComponentId(Component.CREDENTIAL, name),
                 (DeleteCredential(str(reference), reference.provider.provider),),
                 target=absent,
             )
-            for reference in receipt.credentials
+            for reference, name in zip(
+                receipt.credentials,
+                credential_component_names(receipt.credentials),
+                strict=True,
+            )
         )
     return DesiredState(coordinate, tuple(components))
 

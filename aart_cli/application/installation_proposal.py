@@ -22,6 +22,7 @@ from dataclasses import dataclass, replace
 from typing import TypeAlias
 
 from aart_cli.domain.configuration_files import parse_configuration_file
+from aart_cli.domain.credentials import CredentialReference
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.effects import Effect
 from aart_cli.domain.harness import McpRegistration
@@ -108,6 +109,22 @@ class PlannedInstallation:
     declared: tuple[RuntimeInput, ...] = ()
     #: One configuration file per harness when the artifact has configuration values (D-264).
     configuration: tuple[ConfigurationProjection, ...] = ()
+    #: The real items this installation would need, one per harness that owns one (§169.4-6).
+    #: Empty where a single set is addressed the same way for every harness, and the bound inputs
+    #: already name it.
+    credential_addresses: tuple[CredentialReference, ...] = ()
+
+    @property
+    def credentials(self) -> tuple[CredentialReference, ...]:
+        """What a provider is asked about and what the receipt records.
+
+        A launcher registered with several harnesses composes its address from the one it is
+        started with (D-355), so the reference bound into it names no item on its own. Where that
+        is what happened, the concrete per-harness addresses are carried beside it and are what
+        this answers with.
+        """
+
+        return self.credential_addresses or self.bound.credential_references
 
     def __post_init__(self) -> None:
         if (
@@ -228,7 +245,7 @@ def intended_receipt(planned: PlannedInstallation) -> InstallationReceipt:
         planned.environment.interpreter,
         planned.contract.transport,
         planned.registrations,
-        planned.bound.credential_references,
+        planned.credentials,
         base_interpreter=planned.base_interpreter,
         # See `intended_placement_receipt`: which package this is, written down where the plan
         # already knows it.

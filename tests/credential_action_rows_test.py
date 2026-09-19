@@ -352,7 +352,13 @@ class _Journal:
 
 
 class _Provider:
-    """A provider that records every call and never holds or returns a value."""
+    """A provider that records every call and never holds or returns a value.
+
+    It keeps state per reference, not one flag for all of them. Each installation holds its own
+    item (§169.4-6), so storing one must not make another look present -- a double that answered
+    for every address at once would report an install as ready when nobody had entered its value.
+    `present` remains the state of every address nothing has been done to.
+    """
 
     provider = "macos-keychain"
 
@@ -362,13 +368,15 @@ class _Provider:
         self.present = CredentialState.PRESENT
         self.after_store = CredentialState.PRESENT
         self.stored: list[tuple[object, bool]] = []
+        self._held: dict[str, CredentialState] = {}
 
     def available(self) -> ProviderState:
         return self._provider_state
 
     def _observation(self, reference) -> Ok:
         known = self._provider_state is ProviderState.AVAILABLE
-        state = self.present if known else CredentialState.UNKNOWN
+        held = self._held.get(str(reference), self.present)
+        state = held if known else CredentialState.UNKNOWN
         return Ok(CredentialObservation(reference, self._provider_state, state))
 
     def inspect(self, reference):
@@ -378,12 +386,12 @@ class _Provider:
     def store(self, reference, secret=None, *, replace=False):
         self._journal.entries.append("prompted")
         self.stored.append((secret, replace))
-        self.present = self.after_store
+        self._held[str(reference)] = self.after_store
         return self._observation(reference)
 
     def delete(self, reference):
         self._journal.entries.append("deleted")
-        self.present = CredentialState.ABSENT
+        self._held[str(reference)] = CredentialState.ABSENT
         return self._observation(reference)
 
 

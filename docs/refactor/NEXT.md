@@ -89,14 +89,24 @@ executes a generated launcher against a stub provider and asserts claude and ope
 different services, each equal to `credential_address` for that harness. Without a template the
 launcher is byte-for-byte what it was.
 
-**The next increment.** Thread that template through `plan_artifact_installation` to
-`io/consumer_actions.py` *together with* writing the secret at `credential_address`, and delete the
-D-354 divergence refusal in `io/configured_installation.py` in the same slice — separately, a
-launcher reading the new address would find nothing at it. `PlannedInstallation.__post_init__` also
-still requires every harness's configuration file to hold the one reviewed set of values, so the
-per-harness config values it checks move with them. The shipped
-`service = "aart." + sha256(user_home)[:12]` in `io/consumer_actions.py`, marked with its D-354
-comment, is what that increment deletes.
+**Done since: every installation reaches its own Keychain item.** `io/consumer_actions.py`
+addresses a secret with `credential_address(field.owner, field.input.id)`; the per-machine
+`aart.<sha256(home)[:12]>` service is deleted. The template is threaded through
+`plan_artifact_installation`; `ArtifactPlacement` carries it beside `credential_addresses` (the
+concrete per-installation items, which are what a provider is inspected for and what the receipt
+records through `PlannedInstallation.credentials`); `prepared_placements()` folds each owner's own
+address back to the template and refuses only what still disagrees; and
+`domain.credentials.credential_component_names` (D-356) keeps the reconciliation vocabulary able to
+name four installations of one artifact.
+
+**The next action, before anything else.** Run `make unit`. It was started for this slice and
+stopped unfinished when the work segment ended, so the broad gate has not passed over a change that
+touched the reconciliation vocabulary and the receipt's credential list. The focused suites,
+`lint`, `format-check` and `typecheck` were green. Owed with it: targeted semantic mutations for
+this slice's two claims -- a composed address that names a fixed harness, and a credential
+component name that falls back to the input id alone -- each red on exactly the test that names it,
+plus scoped `make mutants` over `aart_cli/domain/credentials.py` and
+`aart_cli/io/configured_installation.py`.
 
 Screen 07 collecting per installation rather than per declared input follows; `InputView.owner` and
 `InputView.row` are already in place for that row identity, and `_one_row_per_input` /

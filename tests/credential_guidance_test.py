@@ -700,7 +700,15 @@ class SourceToPromptE2ETest(unittest.TestCase):
         self.assertEqual(journal.briefings, [])
         self.assertEqual(provider.stored, [])
 
-    def test_two_artifacts_sharing_a_credential_are_asked_once_with_both_owners(self) -> None:
+    def test_two_artifacts_declaring_one_input_are_asked_for_separately(self) -> None:
+        """§169.4-6: two artifacts are two installations, so one declared id is two credentials.
+
+        They were once asked for once, with both owners named in a single briefing, because one
+        item served both. Each installation holding its own means each is entered on its own, in
+        front of the guidance its own author wrote -- the value for one artifact is never quietly
+        the value for another.
+        """
+
         terminal, journal, provider = _install(
             _authored("alpha", TOKEN_HELP),
             _authored("beta", MANUAL_HELP),
@@ -710,10 +718,12 @@ class SourceToPromptE2ETest(unittest.TestCase):
         drawn = _screen_07(terminal)
         self.assertIn("GitHub token — needed by company/mcp/alpha@1.5.0", drawn)
         self.assertIn("Service token — needed by company/mcp/beta@1.5.0", drawn)
-        self.assertEqual(provider.stored, [(None, False)])
-        (briefing,) = journal.briefings
-        self.assertIn("GitHub token — needed by company/mcp/alpha@1.5.0", briefing)
-        self.assertIn("Service token — needed by company/mcp/beta@1.5.0", briefing)
+        self.assertEqual(provider.stored, [(None, False), (None, False)])
+        first, second = journal.briefings
+        self.assertIn("GitHub token — needed by company/mcp/alpha@1.5.0", first)
+        self.assertNotIn("Service token — needed by company/mcp/beta@1.5.0", first)
+        self.assertIn("Service token — needed by company/mcp/beta@1.5.0", second)
+        self.assertNotIn("GitHub token — needed by company/mcp/alpha@1.5.0", second)
 
     def test_no_frame_or_briefing_holds_anything_credential_shaped(self) -> None:
         from aart_cli.redaction import contains_credential_shape

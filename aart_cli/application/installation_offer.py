@@ -24,6 +24,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
+from aart_cli.domain.credentials import CredentialReference
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.harness import McpTarget
 from aart_cli.domain.identifiers import ArtifactCoordinate, ObjectDigest
@@ -97,6 +98,14 @@ class ArtifactPlacement:
     #: a hook's script is placed where the harness keeps them, and this is what runs it.
     settings: tuple[ArtifactSettingsEntry, ...] = ()
     payload_digest: ObjectDigest | None = None
+    #: This installation's credential service with its harness left open (D-355), when the
+    #: placement reaches more than one harness and each of them addresses its own item. `None` for
+    #: a placement whose one launcher can read the address it was given, as it always did.
+    credential_service_template: str | None = None
+    #: Every real item this placement would need: one per installation, concrete. The template
+    #: above is launcher text and names nothing a provider holds, so what is inspected, stored and
+    #: recorded is taken from here instead.
+    credential_addresses: tuple[CredentialReference, ...] = ()
 
     def __post_init__(self) -> None:
         if (
@@ -240,6 +249,8 @@ def offer_installation(
                 targets=placement.targets,
                 resolvers=resolvers,  # type: ignore[arg-type]
                 preferred_installer=placement.preferred_installer,
+                credential_service_template=placement.credential_service_template,
+                credential_addresses=placement.credential_addresses,
             )
         if isinstance(planned, Err):
             # Returned as it came: the planner's diagnostic already names the artifact and why,

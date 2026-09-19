@@ -19,6 +19,7 @@ references, and the launcher is derived rather than written.
 
 from __future__ import annotations
 
+from aart_cli.domain.credentials import CredentialReference
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.harness import McpRegistration, McpTarget
 from aart_cli.domain.inputs import InputValueSource, SecretInput
@@ -140,8 +141,18 @@ def plan_artifact_installation(
     targets: tuple[McpTarget, ...] = (),
     resolvers: tuple[CredentialResolutionPort, ...] = (),
     preferred_installer: PythonInstaller | None = None,
+    credential_service_template: str | None = None,
+    credential_addresses: tuple[CredentialReference, ...] = (),
 ) -> Result[PlannedInstallation]:
-    """Everything decided about installing `artifact` here, before anything is touched."""
+    """Everything decided about installing `artifact` here, before anything is touched.
+
+    `credential_service_template` is this installation's credential service with its harness left
+    open (D-355). One launcher is registered with every harness the artifact reaches, so the address
+    it reads has to be composed at start rather than written in; the planner carries the template
+    to `generate_launcher` and decides nothing about it. `credential_addresses` are the real items
+    those harnesses would each hold, which is what a provider is asked about and what the receipt
+    records; the template is launcher text and names nothing anyone holds.
+    """
 
     if not isinstance(artifact, ResolvedArtifact) or not isinstance(
         description, InstallDescription
@@ -168,7 +179,13 @@ def plan_artifact_installation(
     if isinstance(bound, Err):
         return bound
 
-    launcher = generate_launcher(environment, contract, bound.value, resolvers=resolvers)
+    launcher = generate_launcher(
+        environment,
+        contract,
+        bound.value,
+        resolvers=resolvers,
+        credential_service_template=credential_service_template,
+    )
     if isinstance(launcher, Err):
         return launcher
     if launcher.value.path != launcher_path(environment):
@@ -232,6 +249,7 @@ def plan_artifact_installation(
                 description.runtime,
                 description.inputs,
                 tuple(configuration),
+                credential_addresses,
             )
         )
     except ValueError as error:

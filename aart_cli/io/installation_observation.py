@@ -30,7 +30,11 @@ from aart_cli.application.installed_state import (
     current_state_from_observation,
     current_state_from_placement,
 )
-from aart_cli.domain.credentials import CredentialReference, CredentialState
+from aart_cli.domain.credentials import (
+    CredentialReference,
+    CredentialState,
+    credential_component_names,
+)
 from aart_cli.domain.receipts import (
     ArtifactReceipt,
     InstallationReceipt,
@@ -79,15 +83,18 @@ def credential_component_states(
 
     by_provider = {item.provider: item for item in providers}
     states: list[tuple[str, ComponentState]] = []
-    for reference in references:
+    # The same naming the desired state uses, from the one place that decides it: an input that
+    # several installations each hold their own item for is no longer a name on its own (§169.4-6),
+    # and an observation named differently from what it answers would be reported as unobserved.
+    for reference, name in zip(references, credential_component_names(references), strict=True):
         provider = by_provider.get(reference.provider.provider)
         if provider is None:
-            states.append((reference.input.value, ComponentState.UNKNOWN))
+            states.append((name, ComponentState.UNKNOWN))
             continue
         observed = provider.inspect(reference)
         states.append(
             (
-                reference.input.value,
+                name,
                 ComponentState.UNKNOWN
                 if isinstance(observed, Err)
                 else COMPONENT_STATE[observed.value.state],

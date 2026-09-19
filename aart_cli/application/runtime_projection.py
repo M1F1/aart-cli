@@ -185,6 +185,26 @@ def _service_composition(template: str) -> list[str]:
     return [f'{_SERVICE_VARIABLE}={shell_quote(prefix)}"${_HARNESS_VARIABLE}"{shell_quote(suffix)}']
 
 
+def _with_service_variable(part: str, service: str) -> str:
+    """One argv word with every mention of the service replaced by the composed variable.
+
+    A provider may name the service as its own argument (`-s <service>`) or fold it into a single
+    reference string; both are one word once quoted, so the substitution happens inside the word
+    rather than over the list. Each surrounding fragment stays single-quoted and the fragments are
+    written adjacent, so only the variable is expanded and the result is still one word.
+    """
+
+    pieces = part.split(service)
+    quoted = [shell_quote(piece) for piece in pieces]
+    if len(quoted) > 1:
+        # An empty fragment at either end would quote to '', which is a word this does not need.
+        if not pieces[0]:
+            quoted[0] = ""
+        if not pieces[-1]:
+            quoted[-1] = ""
+    return f'"${_SERVICE_VARIABLE}"'.join(quoted)
+
+
 def _configuration_reader(environment: ArtifactEnvironment, items: list[BoundInput]) -> list[str]:
     """Read each configured value from the starting harness's file, or stop saying which is missing.
 
@@ -341,27 +361,29 @@ def generate_launcher(
                     f"input {item.input.id} needs the shell variable {variable}, which another "
                     "input already binds to the environment",
                 )
+            unreadable = f"aart: could not read {item.source.reference} from its provider"
+            said = f"'%s\\n' {shell_quote(unreadable)}"
             if credential_service_template is None:
                 command = " ".join(shell_quote(part) for part in argv)
             else:
                 service = item.source.reference.provider.service
-                if service not in argv:
+                if not any(service in part for part in argv):
                     return _error(
                         LAUNCHER_PROVIDER_UNPARAMETERISED,
                         f"resolving {item.input.id} from "
                         f"{item.source.provider.provider} does not name the credential service, so "
                         "this launcher could only read one harness's item for every harness",
                     )
-                command = " ".join(
-                    f'"${_SERVICE_VARIABLE}"' if part == service else shell_quote(part)
-                    for part in argv
-                )
+                command = " ".join(_with_service_variable(part, service) for part in argv)
+                # The composed item, passed as an argument rather than substituted into the
+                # sentence: what the launcher says it could not read is then the item it actually
+                # asked for, and no prose is searched for something that looks like an address.
+                sentence = f"aart: could not read %s from {item.source.provider.provider}" + "\\n"
+                said = f'{shell_quote(sentence)} "${_SERVICE_VARIABLE}"'
                 parameterised = True
             assignments.append(
                 f'if ! {variable}="$({command})"; then\n'
-                f"  printf '%s\\n' "
-                f"{shell_quote(f'aart: could not read {item.source.reference} from its provider')}"
-                " >&2\n"
+                f"  printf {said} >&2\n"
                 f"  exit {UNRESOLVED_CREDENTIAL_STATUS}\n"
                 "fi"
             )

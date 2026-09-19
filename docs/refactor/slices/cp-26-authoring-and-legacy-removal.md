@@ -1334,6 +1334,51 @@ key changes nothing observable), and the rest are message arguments.
 `domain/installation_owner.py` is reachable from the runtime and no longer carries a
 `DELIBERATE_NON_RUNTIME_MODULES` exception.
 
+**Done so far — every installation reaches its own Keychain item.**
+`io/consumer_actions.py` addresses a secret with `credential_address(field.owner, field.input.id)`.
+The per-machine `aart.<sha256(home)[:12]>` service is gone: one item per machine and declared input
+was the address §169.4-6 replaces, and it is deleted rather than kept beside the new one (D-334).
+
+Three things had to move with it, in one slice, because any of them alone leaves the product broken.
+
+The *launcher* is one file registered with every harness, so `plan_artifact_installation` carries
+`credential_service_template` to `generate_launcher` (D-355) and the launcher composes its address
+from the harness it is started with. `_with_service_variable` substitutes inside an argv word
+rather than over the list, because a provider may name the service as its own argument (`-s
+<service>`) or fold it into one reference string, and both are one word once quoted. The sentence
+the launcher prints when it cannot read the item passes the composed address as a `printf`
+argument rather than substituting into prose -- searching a sentence for something that looks like
+an address is how `aart: could not read` became `"$AART_CLI_SERVICE": could not read`.
+
+The *placement* now carries both: `credential_service_template` is launcher text and names nothing
+anyone holds, so `credential_addresses` carries every installation's concrete item beside it, and
+that is what a provider is inspected for and what the receipt records
+(`PlannedInstallation.credentials`). `prepared_placements()` folds each owner's own address back to
+the template it composes from and compares what remains, so separate items stop reading as a
+disagreement; a reference pointing anywhere else is left alone and still refuses (D-354, narrowed).
+
+The *reconciliation vocabulary* had to stop naming a credential component by its declared input
+alone (D-356), because four installations of one artifact then name one component four times, which
+`DesiredState` refuses. `credential_component_names` names a whole set: an input that still names
+one item keeps exactly the name it had, and one that does not is suffixed with a short digest of
+its address. Both the desired state and the observation take names from that one function.
+
+The characterization that changed is the one that said it: two artifacts declaring one input were
+asked for once with both owners in a single briefing. They are now asked for separately, each in
+front of its own author's guidance, which is what §169.4-6 means by a value never being quietly the
+value for something else. The recording provider in `tests/credential_action_rows_test.py` held one
+`present` flag for every address; storing one installation's item made every other look ready, and
+the second of two artifacts then failed its pre-execution check with "installed state changed after
+Review". A provider holds state per item, and the double now does too.
+
+Evidence: focused suites green -- `tests/runtime_projection_test.py` (32), the configured-draft,
+planning, proposal, reconciliation, credential-guidance and credential-action-row suites. `lint`,
+`format-check`, `typecheck` green. **`make unit` was started and stopped unfinished when this
+segment ended; it is the first thing the next agent runs**, because this slice changed the
+reconciliation vocabulary and the receipt's credential list, which reach further than the suites
+listed here. Targeted mutation and scoped `make mutants` over `domain/credentials.py` and
+`io/configured_installation.py` are owed with it.
+
 **Done so far — one launcher, four addresses (D-355).**
 The launcher already receives the harness that started it, because D-264 is why it can find its own
 configuration file. `generate_launcher` now accepts `credential_service_template`: the
