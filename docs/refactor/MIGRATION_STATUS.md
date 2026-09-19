@@ -71,6 +71,30 @@ targeted mutation went red and was restored; scoped mutmut killed all 135 mutant
 reran step 16's executable install/README contract; lint, format, type, packaging, documentation and
 secret-shape gates also passed. Step 19 is next. No broad `make quality` ran (D-317/D-334).
 
+**2026-09-19, CP-26.19 in progress — one launcher, four addresses.** `generate_launcher` composes
+its credential address instead of carrying one (D-355). Given `credential_service_template` — the
+installation's service with its harness left open as `HARNESS_PLACEHOLDER`, built from the same join
+`credential_address` uses so the two cannot drift — the launcher emits the harness preamble it
+already needed to find its configuration file (D-264), composes `AART_CLI_SERVICE` around
+`"$AART_CLI_HARNESS"`, and substitutes it for the service element of the provider's resolution argv.
+One generated file therefore reaches four Keychain items. Nothing composed is evaluated: `$1` is held
+to a canonical slug before anything is built from it, each side of the template is single-quoted, the
+placeholder itself is refused unless it is letters, digits, underscore or hyphen, and a template must
+leave exactly one slot open. A provider whose argv does not name the service is refused
+(`launcher-provider-unparameterised`) rather than silently given one address for every harness.
+Evidence is executed, not inspected: the generated launcher runs against a stub provider that reports
+the service it was asked for, once as `claude` and once as `opencode`, and the two differ and each
+equals `credential_address` for that harness. 31 tests; one targeted semantic mutation — the composed
+address naming a fixed harness — red on exactly the test that names it, then restored; scoped mutmut
+286/316 killed, 28 unreached, two survivors both real and now held (`_error` could drop its message;
+`partition` could become `rpartition`, which the one-slot guard makes equivalent). `lint`,
+`format-check`, `typecheck`, `docs-check` green; dependent projection, proposal, verification and
+planning suites green. No broad `make quality` (D-317). Without a template the launcher is
+byte-for-byte unchanged, which is what lets this land before its call sites move: threading the
+template through `plan_artifact_installation` belongs in one slice with writing the secret at
+`credential_address` and deleting the D-354 divergence refusal, because a launcher reading the new
+address before the secret is written there would find nothing at it.
+
 **2026-09-19, CP-26.19 in progress — who an installation is.** `domain/installation_owner.py` is
 the complete owner §169.4-6 names: Registry alias, artifact kind and name, scope, normalized
 concrete root, harness and profile. The version is dropped inside `installation_owner()` so no

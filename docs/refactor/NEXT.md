@@ -77,23 +77,30 @@ recorded in `DELIBERATE_NON_RUNTIME_MODULES` with the reason. What remains in th
 applying that projection at the adapters: installed skill directories and their frontmatter, and
 MCP registration keys, with the collision check run before provider mutation rather than after.
 
-**The next increment, and the fact that decides it.** Collection is per installation now
-(D-353); planning is not. `application/runtime_projection.generate_launcher` renders the credential
-reference into the launcher script, and `plan_artifact_installation` generates one launcher per
-artifact and registers it with every harness, so one launcher carries exactly one credential
-address. `PlannedInstallation.__post_init__` then requires every harness's configuration file to
-hold the one reviewed set of values. That is why `prepared_placements()` currently refuses when a
-placement's targets answered differently (D-354), and why `credential_address` is still not wired
-at `io/consumer_actions.py`: adopting it before launchers are per harness would make every
-multi-harness install refuse.
+**The launcher no longer carries one harness's address (D-355).** `generate_launcher` takes an
+optional `credential_service_template` — the installation's credential service with its harness left
+open as `HARNESS_PLACEHOLDER`, built by `domain.installation_owner.credential_service_template` from
+the same join `credential_address` uses. Given one, the launcher emits the harness preamble it
+already needed for its configuration file (D-264), composes `AART_CLI_SERVICE` around
+`"$AART_CLI_HARNESS"` and substitutes it for the service element of the provider's resolution argv;
+a provider whose argv does not name the service is refused (`launcher-provider-unparameterised`)
+rather than silently given one address for every harness. `tests/runtime_projection_test.py`
+executes a generated launcher against a stub provider and asserts claude and opencode ask for
+different services, each equal to `credential_address` for that harness. Without a template the
+launcher is byte-for-byte what it was.
 
-So the next increment is per-harness launcher generation — either one launcher per target, or one
-launcher deriving its address from the harness argument it already receives to find its
-configuration file. That is what lets the acceptance's four harnesses reach four Keychain items,
-and it unblocks wiring `credential_address`. Screen 07 collecting per installation rather than per
-declared input follows it; `InputView.owner` and `InputView.row` are already in place for that row
-identity, and `_one_row_per_input`/`_addressed_to_owners` in `io/consumer_actions.py` are the two
-functions it removes.
+**The next increment.** Thread that template through `plan_artifact_installation` to
+`io/consumer_actions.py` *together with* writing the secret at `credential_address`, and delete the
+D-354 divergence refusal in `io/configured_installation.py` in the same slice — separately, a
+launcher reading the new address would find nothing at it. `PlannedInstallation.__post_init__` also
+still requires every harness's configuration file to hold the one reviewed set of values, so the
+per-harness config values it checks move with them. The shipped
+`service = "aart." + sha256(user_home)[:12]` in `io/consumer_actions.py`, marked with its D-354
+comment, is what that increment deletes.
+
+Screen 07 collecting per installation rather than per declared input follows; `InputView.owner` and
+`InputView.row` are already in place for that row identity, and `_one_row_per_input` /
+`_addressed_to_owners` in `io/consumer_actions.py` are the two functions it removes.
 
 
 Naming is included in this task (D-349, §169.7, INV-253; issues #26/#28). Harness-visible names

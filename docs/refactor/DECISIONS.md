@@ -8849,3 +8849,41 @@ answering them identically installs as it always did. The refusal is the marker 
 task: per-harness launcher generation, which is what lets `credential_address` differ per target
 and makes the acceptance's "four secure entries" reach four Keychain items rather than one. That
 task is recorded in `docs/refactor/plan.json` and must close before CP-26.19 does.
+
+## D-355 — One launcher composes its own credential address from the harness it is started with
+
+**Context.** D-354 named the gap it refused: `generate_launcher` renders the credential reference
+into the launcher's own text, so one launcher can hold exactly one credential address, while
+`plan_artifact_installation` generates one launcher per artifact and registers it with every
+harness. Four targets of one installation therefore reach one Keychain item, which is what §169.4-6
+forbids.
+
+**Decision.** The launcher composes its address instead of carrying one. `generate_launcher` takes
+an optional `credential_service_template`: the installation's credential service with its harness
+left open as `HARNESS_PLACEHOLDER`, produced by `domain.installation_owner.credential_service_template`
+from the same join that `credential_address` uses, so the two cannot drift. Given one, the launcher
+emits the harness preamble it already needed to find its configuration file (D-264), composes
+`AART_CLI_SERVICE` from the template around `"$AART_CLI_HARNESS"`, and substitutes that variable for
+the service element of the provider's resolution argv.
+
+The alternative was one launcher per harness target. It was rejected because the launcher is already
+harness-parameterised by D-264 -- it receives the harness as `$1` precisely so one file can read
+four configuration files -- and reversing that would multiply launcher paths through registrations,
+receipts, reconciliation and repair for no gain the composed address does not give.
+
+**Safety.** Nothing composed is evaluated. The preamble holds `$1` to a canonical slug
+(`''|*[!a-z0-9-]*` is refused with `MISSING_CONFIGURATION_STATUS`) before anything is built from it;
+each side of the template is emitted single-quoted, so no part of an address is ever read by the
+shell; and `credential_service_template` refuses a placeholder that is not letters, digits,
+underscore or hyphen, so `$(id)` cannot become one. A template must leave exactly one slot open --
+none has no harness to fill and two have no single one -- which also makes the partition it is split
+on unambiguous.
+
+A provider whose resolution argv does not name the service is refused
+(`launcher-provider-unparameterised`) rather than silently given one fixed address for every
+harness: that silence is the defect D-354 recorded, not a fallback.
+
+**Consequence.** Without a template the launcher is byte-for-byte what it was, so nothing that calls
+it today changes. Threading the template through `plan_artifact_installation` belongs with moving
+the stored secret to `credential_address`, because a launcher that reads the new address before the
+secret is written there would find nothing; until both land together, the D-354 refusal stands.

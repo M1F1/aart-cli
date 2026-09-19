@@ -44,6 +44,7 @@ __all__ = [
     "MAX_INSTALLED_NAME_LENGTH",
     "InstallationOwner",
     "credential_address",
+    "credential_service_template",
     "installation_owner",
     "installed_name",
     "installed_names",
@@ -85,6 +86,10 @@ _SEPARATOR = "."
 #: Stands in for a harness with no profile. It is not a usable slug, so a profile can never be read
 #: as an absent one, and `claude` at user scope stays distinct from profile `user` at project scope.
 _NO_PROFILE = "-"
+
+#: What a harness placeholder may be. Not a shell expression: the launcher splits the template on
+#: this token and quotes each side, so nothing in it is ever read by a shell.
+_PLACEHOLDER_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 #: How much of the root's digest identifies it. Sixty-four bits: enough that two roots colliding is
 #: not a thing that happens, short enough to stay readable beside the labels.
@@ -182,23 +187,58 @@ def credential_address(
         raise ValueError("a credential address needs an installation owner")
     if not isinstance(input_id, InputId):
         raise ValueError("a credential address needs a declared input id")
-    service = _SEPARATOR.join(
-        (
-            CREDENTIAL_SERVICE_PREFIX,
-            owner.harness,
-            owner.profile or _NO_PROFILE,
-            owner.scope.value,
-            owner.source.value,
-            owner.artifact.kind,
-            owner.artifact.name,
-            _root_discriminator(owner.root),
-        )
-    )
+    service = _SEPARATOR.join(_service_labels(owner, owner.harness))
     if len(service) > MAX_CREDENTIAL_SERVICE_LENGTH:
         raise ValueError(
             f"credential service exceeds {MAX_CREDENTIAL_SERVICE_LENGTH} characters: {len(service)}"
         )
     return CredentialProviderRef(provider, service, input_id.value)
+
+
+def _service_labels(owner: InstallationOwner, harness: str) -> tuple[str, ...]:
+    """The address's labels in order, with `harness` already decided by the caller.
+
+    One function composes them so `credential_address` and `credential_service_template` cannot
+    drift apart: a launcher that composed a different address from the one this product stored at
+    would read an item that is not there, and the failure would look like a missing credential.
+    """
+
+    return (
+        CREDENTIAL_SERVICE_PREFIX,
+        harness,
+        owner.profile or _NO_PROFILE,
+        owner.scope.value,
+        owner.source.value,
+        owner.artifact.kind,
+        owner.artifact.name,
+        _root_discriminator(owner.root),
+    )
+
+
+def credential_service_template(owner: InstallationOwner, placeholder: str) -> str:
+    """This owner's credential service on every harness, with the harness slot left to fill.
+
+    A launcher is generated once for an artifact and told at start which harness started it -- the
+    same argument it already uses to find that harness's configuration file. Giving it the address
+    with one slot open lets it compose its own rather than carry one harness's, which is what keeps
+    one artifact on four harnesses reading four items instead of one.
+
+    Substituting any canonical harness slug yields exactly the service `credential_address` returns
+    for that harness, and that equivalence is a property test rather than a comment.
+
+    The placeholder is a token to split on, never an expression. It is held to letters, digits,
+    underscore and hyphen: a separator in it would make the address parse as a different owner, and
+    anything a shell reads -- a dollar, a quote, a backtick -- would be a way to make a generated
+    launcher run something at start. The caller substitutes; nothing here is evaluated anywhere.
+    """
+
+    if not isinstance(owner, InstallationOwner):
+        raise ValueError("a credential service template needs an installation owner")
+    if not isinstance(placeholder, str) or _PLACEHOLDER_RE.fullmatch(placeholder) is None:
+        raise ValueError(
+            f"a harness placeholder must be letters, digits, underscore or hyphen: {placeholder!r}"
+        )
+    return _SEPARATOR.join(_service_labels(owner, placeholder))
 
 
 def _refuse(code: DiagnosticCode, message: str, *remediation: str) -> Err:

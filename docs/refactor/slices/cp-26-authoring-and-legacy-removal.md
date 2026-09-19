@@ -1334,6 +1334,44 @@ key changes nothing observable), and the rest are message arguments.
 `domain/installation_owner.py` is reachable from the runtime and no longer carries a
 `DELIBERATE_NON_RUNTIME_MODULES` exception.
 
+**Done so far — one launcher, four addresses (D-355).**
+The launcher already receives the harness that started it, because D-264 is why it can find its own
+configuration file. `generate_launcher` now accepts `credential_service_template`: the
+installation's credential service with its harness left open as `HARNESS_PLACEHOLDER`, produced by
+`credential_service_template()` from the same `_service_labels` join `credential_address` uses, so
+the address the launcher composes and the address anything else derives cannot drift apart. The
+launcher emits its harness preamble, composes `AART_CLI_SERVICE` from the template around
+`"$AART_CLI_HARNESS"`, and substitutes that variable for the service element of the provider's
+resolution argv. That is what turns one generated file into four Keychain items.
+
+Nothing composed is evaluated. The preamble holds `$1` to a canonical slug before anything is built
+from it; each side of the template is single-quoted, so no part of an address is read by the shell;
+and the placeholder itself must be letters, digits, underscore or hyphen, so `$(id)` cannot be one.
+A template must leave exactly one slot open -- none has no harness and two have no single one --
+which is also what makes the partition unambiguous. A provider whose argv does not name the service
+is refused (`launcher-provider-unparameterised`) instead of quietly given one address for every
+harness, because that silence is the defect, not a fallback.
+
+The evidence is executed rather than inspected: the test writes the generated launcher to disk with
+a stub provider that reports the `-s` service it was asked for, runs it once as `claude` and once as
+`opencode`, and asserts the two differ and each equals `credential_address` for that harness.
+Without a template the launcher is byte-for-byte what it was, which is what lets this land before
+the call sites move.
+
+Evidence: 31 tests in `tests/runtime_projection_test.py`; `lint`, `format-check`, `typecheck` green;
+the dependent projection/proposal/verification/planning suites green. One targeted semantic mutation
+-- the composed address naming one fixed harness instead of the starting one -- turned exactly the
+test that names it red, then restored. Scoped `make mutants` over
+`application/runtime_projection.py` killed 286 of 316 with 28 unreached (`configuration_projection`,
+which this file does not exercise) and two survivors, both real and both now held: `_error` could
+drop its message with no test noticing, and `partition` could become `rpartition`, which the
+exactly-one-slot guard now makes equivalent by construction.
+
+Still open, and deliberately one slice: threading the template through
+`plan_artifact_installation` to `io/consumer_actions.py` belongs with writing the secret at
+`credential_address` and deleting the D-354 divergence refusal. A launcher reading the new address
+before the secret is written there would find nothing at it.
+
 **Done so far — the name the harness shows, and the collision it must not resolve by itself.**
 `installed_name()` projects the same owner to §169.7's harness-visible spelling: artifact name,
 Registry alias and scope joined once, `github-company-project` and `github-company-user`. The

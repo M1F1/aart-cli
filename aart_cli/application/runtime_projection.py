@@ -50,6 +50,9 @@ LAUNCHER_BINDING_UNSUPPORTED = DiagnosticCode("launcher-binding-unsupported")
 LAUNCHER_INVALID = DiagnosticCode("launcher-invalid")
 LAUNCHER_PROVIDER_UNRESOLVABLE = DiagnosticCode("launcher-provider-unresolvable")
 LAUNCHER_TRANSPORT_CONFLICT = DiagnosticCode("launcher-transport-conflict")
+#: The provider's resolution command does not name the service anywhere, so this launcher cannot
+#: parameterise it by harness. Refused: one fixed address for every harness is the defect (D-354).
+LAUNCHER_PROVIDER_UNPARAMETERISED = DiagnosticCode("launcher-provider-unparameterised")
 
 # Distinct enough to tell apart in a harness log: the environment is missing versus the provider
 # would not answer. Both are ordinary repair cases, and neither is the artifact failing.
@@ -59,6 +62,15 @@ MISSING_CONFIGURATION_STATUS = 76
 
 _SECRET_VARIABLE_PREFIX = "AART_CLI_SECRET_"
 _CONFIG_VARIABLE_PREFIX = "AART_CLI_CONFIG_"
+
+#: The token a caller leaves in a credential service template where the harness goes. It is split
+#: on, never evaluated: each side is quoted as a literal and only the validated harness variable is
+#: expanded between them, so nothing in the address can be read by the shell.
+HARNESS_PLACEHOLDER = "AART-CLI-HARNESS-SLOT"
+
+#: The variable the launcher validates as a canonical slug before it composes anything from it.
+_HARNESS_VARIABLE = "AART_CLI_HARNESS"
+_SERVICE_VARIABLE = "AART_CLI_SERVICE"
 
 
 class CredentialResolutionPort(Protocol):
@@ -140,6 +152,39 @@ def _config_variable(bound: BoundInput) -> str:
     return _CONFIG_VARIABLE_PREFIX + bound.input.id.value.upper().replace("-", "_")
 
 
+def _harness_preamble(environment: ArtifactEnvironment) -> list[str]:
+    """Take the harness this launcher was started with, and refuse anything that is not one.
+
+    Everything composed from it afterwards -- the configuration file it reads and the credential
+    item it asks the provider for -- is composed from a value already held to a canonical slug, so
+    neither a path nor a shell expression can reach either.
+    """
+
+    artifact = shell_quote(environment.artifact)
+    return [
+        f'{_HARNESS_VARIABLE}="${{1-}}"',
+        f'case "${_HARNESS_VARIABLE}" in',
+        "  ''|*[!a-z0-9-]*)",
+        "    printf 'aart: %s was started without the harness it belongs to; "
+        f"repair the installation\\n' {artifact} >&2",
+        f"    exit {MISSING_CONFIGURATION_STATUS}",
+        "    ;;",
+        "esac",
+    ]
+
+
+def _service_composition(template: str) -> list[str]:
+    """Compose this harness's credential service from the address with its harness slot open.
+
+    The template is split on the placeholder and each side is emitted single-quoted, so no part of
+    the address is ever read by the shell. Only the harness variable is expanded, and the preamble
+    has already held it to a slug.
+    """
+
+    prefix, _, suffix = template.partition(HARNESS_PLACEHOLDER)  # exactly one slot; see the guard
+    return [f'{_SERVICE_VARIABLE}={shell_quote(prefix)}"${_HARNESS_VARIABLE}"{shell_quote(suffix)}']
+
+
 def _configuration_reader(environment: ArtifactEnvironment, items: list[BoundInput]) -> list[str]:
     """Read each configured value from the starting harness's file, or stop saying which is missing.
 
@@ -152,18 +197,11 @@ def _configuration_reader(environment: ArtifactEnvironment, items: list[BoundInp
     directory = shell_quote(f"{environment.root}/{CONFIGURATION_DIRECTORY}/")
     status = MISSING_CONFIGURATION_STATUS
     lines = [
-        'AART_CLI_HARNESS="${1-}"',
-        'case "$AART_CLI_HARNESS" in',
-        "  ''|*[!a-z0-9-]*)",
-        "    printf 'aart: %s was started without the harness whose configuration it reads; "
-        f"repair the installation\\n' {artifact} >&2",
-        f"    exit {status}",
-        "    ;;",
-        "esac",
-        f'AART_CLI_CONFIGURATION={directory}"$AART_CLI_HARNESS"{shell_quote(CONFIGURATION_SUFFIX)}',
+        f'AART_CLI_CONFIGURATION={directory}"${_HARNESS_VARIABLE}"'
+        f"{shell_quote(CONFIGURATION_SUFFIX)}",
         'if [ ! -r "$AART_CLI_CONFIGURATION" ]; then',
         "  printf 'aart: %s has no configuration for %s; set it in AART under User variables "
-        f'and credentials\\n\' {artifact} "$AART_CLI_HARNESS" >&2',
+        f'and credentials\\n\' {artifact} "${_HARNESS_VARIABLE}" >&2',
         f"  exit {status}",
         "fi",
     ]
@@ -218,8 +256,15 @@ def generate_launcher(
     bound: BoundInputs,
     *,
     resolvers: tuple[CredentialResolutionPort, ...] = (),
+    credential_service_template: str | None = None,
 ) -> Result[RuntimeProjection]:
-    """Derive the launcher for one installed artifact. Pure: nothing here touches a filesystem."""
+    """Derive the launcher for one installed artifact. Pure: nothing here touches a filesystem.
+
+    Given `credential_service_template` -- the installation's credential address with its harness
+    left as `HARNESS_PLACEHOLDER` -- the launcher composes the item to read from the harness it is
+    started with, so one generated launcher serves every target of one installation without any of
+    them reaching another's secret.
+    """
 
     if (
         not isinstance(environment, ArtifactEnvironment)
@@ -227,6 +272,15 @@ def generate_launcher(
         or not isinstance(bound, BoundInputs)
     ):
         return _error(LAUNCHER_INVALID, "launcher generation needs an environment and a contract")
+    if credential_service_template is not None and (
+        not isinstance(credential_service_template, str)
+        or credential_service_template.count(HARNESS_PLACEHOLDER) != 1
+    ):
+        return _error(
+            LAUNCHER_INVALID,
+            "a credential service template must leave exactly one harness slot open as "
+            f"{HARNESS_PLACEHOLDER}; anything else has no single address to compose",
+        )
 
     declared = {
         item.binding.variable
@@ -236,6 +290,7 @@ def generate_launcher(
     exports: list[str] = []
     assignments: list[str] = []
     arguments: list[str] = [shell_quote(argument) for argument in contract.arguments]
+    parameterised = False
     configured = [
         item for item in bound.inputs if not isinstance(item.source, SecretProviderReference)
     ]
@@ -286,7 +341,22 @@ def generate_launcher(
                     f"input {item.input.id} needs the shell variable {variable}, which another "
                     "input already binds to the environment",
                 )
-            command = " ".join(shell_quote(part) for part in argv)
+            if credential_service_template is None:
+                command = " ".join(shell_quote(part) for part in argv)
+            else:
+                service = item.source.reference.provider.service
+                if service not in argv:
+                    return _error(
+                        LAUNCHER_PROVIDER_UNPARAMETERISED,
+                        f"resolving {item.input.id} from "
+                        f"{item.source.provider.provider} does not name the credential service, so "
+                        "this launcher could only read one harness's item for every harness",
+                    )
+                command = " ".join(
+                    f'"${_SERVICE_VARIABLE}"' if part == service else shell_quote(part)
+                    for part in argv
+                )
+                parameterised = True
             assignments.append(
                 f'if ! {variable}="$({command})"; then\n'
                 f"  printf '%s\\n' "
@@ -313,8 +383,11 @@ def generate_launcher(
                 f"input {item.input.id} uses a binding this launcher cannot render",
             )
 
+    preamble = _harness_preamble(environment) if configured or parameterised else []
+    if parameterised and credential_service_template is not None:
+        preamble += _service_composition(credential_service_template)
     reader = _configuration_reader(environment, configured) if configured else []
-    content = _render(environment, contract, reader + assignments, exports, arguments)
+    content = _render(environment, contract, preamble + reader + assignments, exports, arguments)
     try:
         return Ok(
             RuntimeProjection(
