@@ -112,6 +112,16 @@ went from 65 to 64 survivors after a provider-preservation hole in the test was 
 `consumer_ui.py` generated 2502 mutants across unrelated screens and was stopped after 253 as
 disproportionate; B-158 records the runner limitation.
 
+**In flight in the working tree, and red.** That next action was begun and left unfinished: the
+uncommitted diff adds `aart_cli/application/skill_projection.py` (untracked) with
+`tests/skill_projection_test.py`, and edits `artifact_installation.py`, `installation_offer.py`,
+`installation_owner.py`, `receipts.py`, `configured_installation.py` and five test files. Six tests
+fail because the projection is not wired into placement yet -- `artifact_placement_resolution_test`
+expects each requested harness to get its own delivery under the projected name, and
+`placed_installation_e2e_test` expects `<project>/.claude/skills/code-review-company-project/SKILL.md`
+to exist. Nothing of it is committed. Resume it or `git checkout --` it deliberately; do not assume
+the tree is clean.
+
 **The next action.** Apply `installed_name()` at the adapters before any provider or filesystem
 mutation: skill directory/frontmatter names and MCP registration keys first, with the operation-wide
 collision check. Then replace the remaining shared runtime/payload/receipt placement with one
