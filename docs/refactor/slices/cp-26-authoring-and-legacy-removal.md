@@ -731,6 +731,51 @@ skeleton header, `init`'s closing line and the README are live again and
 `aart author init --kind mcp --name my-artifact`, because a bare `aart author init` is a dead end
 that gate refuses.
 
+### Step 11 — `aart author check` proves the manifest would be promoted (2026-09-19)
+
+§1.4's second claim, and the one a person cannot check by eye. `check` now calls
+`compile_author_manifests` -- the per-manifest boundary -- and reports the coordinate each manifest
+compiled to:
+
+```
+ok    github-mcp/aart.yaml  ->  mcp/github-mcp@0.1.0
+```
+
+**The compile needs an identity the tree already has.** Compiling requires a canonical source
+location and an immutable pin, and the local reader computes both. `read_author_workspace` now
+returns `AuthorWorkspaceRead(root, revision, snapshot)` rather than a bare snapshot, so the
+`local:<sha256>` revision the reader produced is what the compiler is handed. Nothing is invented
+and nothing is persisted.
+
+**The redundant parse was deleted, and mutmut is why.** The first version called
+`parse_author_manifest` and then the compiler. `make mutants` killed 61 of 70 and one survivor was
+`parsed = None` -- which is correct, because `_compile_manifest` parses first and carries the
+parser's own diagnostics as the refusal. The explicit parse produced the same text twice and made
+this module a second place §1.4's ordering could drift, so it is gone. Ordering is still held,
+inside the function that owns it.
+
+**A Collection manifest is no longer judged as a broken artifact.** `registry scan` compiles
+artifacts and passes over Collections; the step 10 checker parsed every discovered manifest as an
+artifact and told an author with a correct `aart.json` that it was "missing required field
+'artifact'" -- §1.4's stricter-is-no-better failure, in the form an author would actually hit. A
+manifest the compiler neither compiled nor refused is how the compiler says "not mine", so it is
+reported `skip` with the reason and no package. Checking a Collection against
+`parse_author_collection_manifest` is **B-154**, not this step.
+
+**Targeted semantic mutations (three).** Ignoring the compiler's refusals failed the
+parses-but-will-not-compile test; treating an uncompiled manifest as an artifact failed the
+Collection test and its JSON twin; dropping the version from the reported coordinate failed the
+coordinate test and its JSON twin. All restored green.
+
+**`make mutants` findings, acted on.** Two `continue` -> `break` survivors said no test held that
+every discovered manifest is reported however the one before it ended; one said the empty-tree
+refusal need not name a command. Both are now tests. Survivors fell from 9 to 4, and the four left
+are `"text"` -> `"XXtextXX"` and case flips on prose, which is the class this repository does not
+pin in a test.
+
+**Evidence.** 17 tests in `author_check_test`, `make unit`, `make integration`, `make typecheck`,
+`make docs-check`, Ruff check and format. No broad `make quality` ran, under D-317.
+
 ### Step 17 — no maintainer identity as a default
 
 The owner explicitly requires generated registries and operational examples to carry no default

@@ -2,37 +2,44 @@
 
 ## Where CP-26 is (2026-09-19)
 
-Steps 1–10 are done on `refactor/cp-26-legacy-removal`, and **B-057 and B-149 are both closed**. The
+Steps 1–11 are done on `refactor/cp-26-legacy-removal`, and **B-057 and B-149 are both closed**. The
 retired authoring-workspace representation has no schema, no fixtures, no planning half and no
 command left; `aart registry vendor` writes the approved representation's versioned package through
 `plan_bulk_promotion`; the authoring field surface is read out of the parser rather than
 transcribed; AART can write the YAML subset it parses; `aart author init` writes a full-surface
-workspace for `mcp` and for `skill`; and `aart author check` proves every discovered manifest
-parses, through the real parser and the Source Sync reader.
+workspace for `mcp` and for `skill`; and `aart author check` answers both halves of §1.4 — every
+discovered manifest parses, and each one compiles to the package `registry scan` would accept,
+reported as `ok  <path>  ->  <kind>/<name>@<version>`.
 `docs/refactor/slices/cp-26-authoring-and-legacy-removal.md` records these under §"Step 5",
-§"B-149" and §"Step 6" to §"Step 10" (D-321 to D-330).
+§"B-149" and §"Step 6" to §"Step 11" (D-321 to D-330).
 
-**Step 11 is next** — the second half of §1.4: `check` proves each parsed manifest compiles to a
-canonical package `registry scan` would accept. Use `compile_author_snapshot`, the function
-`tests/author_skeleton_test.py::CompilationTest` already runs against the generated workspaces, not
-a reimplementation. The verdict shape is in place: `ManifestVerdict` carries a path and the
-diagnostics against it, so a compilation refusal joins a parse refusal on the same manifest rather
-than needing a second report. Order matters — a manifest that does not parse cannot be compiled, so
-the promotable claim runs only on the verdicts the parseable claim accepted.
+**Step 12 is next** — `guideline`, `hook` and `memory` skeletons. Registering one is a `_Blueprint`
+in `_BLUEPRINTS` and everything in `author_skeleton_test` then runs over it automatically. Two
+things to settle first, both evidence questions rather than taste:
 
-**Then step 12** — `guideline`, `hook` and `memory` skeletons. Registering one is a `_Blueprint` in
-`_BLUEPRINTS`; the open question is whether a Collection skeleton is generated at all, since the
-anti-drift oracle currently excludes `site.owner == "parse_author_collection_manifest"`.
+- **What each kind's package format requires.** An `mcp` and a `hook` need `payload/mcp.json` and
+  `payload/hook.json`, which the compiler *generates* from the manifest, so the author ships
+  neither; `native_tree` is the authority on what a compiled package of each kind must contain, and
+  probing it is how step 9 settled the skill's `SKILL.md`.
+- **Whether a Collection skeleton is generated at all.** The anti-drift oracle currently excludes
+  `site.owner == "parse_author_collection_manifest"`, so a Collection blueprint would need that
+  exclusion revisited rather than worked around.
 
-A trap worth keeping: a targeted mutation that does not change a file's length leaves a
-`__pycache__` entry CPython considers current. Clear `__pycache__` after reverting one, or the test
-run disagrees with the source on disk (CP-26.10 record).
+Two traps worth carrying:
 
-Two open findings from step 5:
+- A targeted mutation that does not change a file's length leaves a `__pycache__` entry CPython
+  considers current. Clear `__pycache__` after reverting one, or the test run disagrees with the
+  source on disk (CP-26.10 record).
+- Read `make mutants` survivors as findings. In CP-26.11 one of them proved a whole call was
+  redundant, which shortened the code rather than adding a test.
+
+Three open findings:
 
 - **B-151** — seven shipped documents still describe `aart.lock.json` and `aart.index.json` as files
   AART writes. Not gated by `make docs-check`, which validates fences and links. Noncritical for
   step 5; a precondition of CP-26.21.
+- **B-154** — `aart author check` reports a Collection manifest as `skip` rather than checking it.
+  Noncritical; `registry scan` passes over one too.
 - **B-150** — the owner's installation-identity principle: an installation is
   (artifact, harness, user-or-project scope), and no artifact shares global state with any other.
   Input to CP-26 task 19, and to the Product Specification before it.

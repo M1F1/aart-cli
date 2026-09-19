@@ -834,7 +834,7 @@
         {
           "id": "11",
           "title": "`aart author check` proves each manifest would be accepted by `scan`",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "12",

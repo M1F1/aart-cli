@@ -9,12 +9,20 @@ from __future__ import annotations
 
 import json
 
-from agent_artifacts.authoring.check import AuthorCheckReport, check_author_manifests
+from agent_artifacts.authoring.check import (
+    AuthorCheckReport,
+    ManifestVerdict,
+    check_author_manifests,
+)
 from agent_artifacts.authoring.skeleton import author_skeleton
 from agent_artifacts.command_outcome import ERROR, OK
 from agent_artifacts.domain.diagnostics import Diagnostic, diagnostic_to_data
 from agent_artifacts.domain.result import Err
-from agent_artifacts.io.author_workspace import read_author_workspace, write_author_skeleton
+from agent_artifacts.io.author_workspace import (
+    WORKING_TREE_ALIAS,
+    read_author_workspace,
+    write_author_skeleton,
+)
 from agent_artifacts.model import Request
 
 _READ_THE_ACTIONS = "Run `aart author --help` for the actions this build has."
@@ -57,6 +65,21 @@ def _run_init(request: Request) -> int:
     return OK
 
 
+#: A manifest AART discovered and `registry scan` passes over. Saying nothing about it would read
+#: as a pass it never got.
+_NOT_AN_ARTIFACT = "not an artifact manifest: `registry scan` compiles artifacts only"
+
+
+def _label(verdict: ManifestVerdict) -> str:
+    if not verdict.checked:
+        return "skip "
+    return "ok   " if verdict.accepted else "error"
+
+
+def _promoted(verdict: ManifestVerdict) -> str:
+    return f"  ->  {verdict.package}" if verdict.package else ""
+
+
 def _check_data(report: AuthorCheckReport) -> dict[str, object]:
     return {
         "schema_version": 1,
@@ -66,6 +89,8 @@ def _check_data(report: AuthorCheckReport) -> dict[str, object]:
             {
                 "path": verdict.path,
                 "ok": verdict.accepted,
+                "checked": verdict.checked,
+                "package": verdict.package,
                 "diagnostics": [diagnostic_to_data(item) for item in verdict.diagnostics],
             }
             for verdict in report.verdicts
@@ -76,10 +101,15 @@ def _check_data(report: AuthorCheckReport) -> dict[str, object]:
 def _run_check(request: Request) -> int:
     """Read the tree the way a Source Sync reads one, then answer with the parser."""
 
-    snapshot = read_author_workspace(request.author_source or ".")
-    if isinstance(snapshot, Err):
-        return _report(snapshot.diagnostics, as_json=request.json)
-    checked = check_author_manifests(snapshot.value)
+    read = read_author_workspace(request.author_source or ".")
+    if isinstance(read, Err):
+        return _report(read.diagnostics, as_json=request.json)
+    checked = check_author_manifests(
+        read.value.snapshot,
+        source_alias=WORKING_TREE_ALIAS,
+        source=read.value.root,
+        revision=read.value.revision,
+    )
     if isinstance(checked, Err):
         return _report(checked.diagnostics, as_json=request.json)
     report = checked.value
@@ -87,13 +117,18 @@ def _run_check(request: Request) -> int:
         print(json.dumps(_check_data(report), indent=2))
         return OK if report.accepted else ERROR
     for verdict in report.verdicts:
-        print(f"{'ok   ' if verdict.accepted else 'error'} {verdict.path}")
+        print(f"{_label(verdict)} {verdict.path}{_promoted(verdict)}")
+        if not verdict.checked:
+            print(f"        {_NOT_AN_ARTIFACT}")
         for diagnostic in verdict.diagnostics:
             print(f"        {diagnostic.message}")
             for remediation in diagnostic.remediation:
                 print(f"        {remediation}")
     if report.accepted:
-        print(f"{len(report.verdicts)} manifest(s) parse.")
+        print(
+            f"{sum(1 for verdict in report.verdicts if verdict.checked)} manifest(s) would be "
+            f"promoted as written."
+        )
         return OK
     return ERROR
 

@@ -141,34 +141,56 @@ def _undo(created: list[Path]) -> None:
 
 #: The alias a read of the author's own directory carries. It is not a configured Source and
 #: never becomes one; the name exists because the reader below is the Source reader, deliberately.
-_WORKING_TREE_ALIAS = "working-tree"
+WORKING_TREE_ALIAS = SourceAlias("working-tree")
 
 
-def read_author_workspace(root: str) -> Result[SourceSnapshot]:
+@dataclass(frozen=True, slots=True)
+class AuthorWorkspaceRead:
+    """One read of an author's directory, in the terms the compiler asks a Source for.
+
+    `root` and `revision` are not decoration: compiling a manifest requires a canonical location
+    and an immutable pin, and the local reader has already computed both. Passing anything else
+    would be inventing an identity for a tree that has one.
+    """
+
+    root: str
+    revision: str
+    snapshot: SourceSnapshot
+
+
+def read_author_workspace(root: str) -> Result[AuthorWorkspaceRead]:
     """The author's directory, read exactly as a Source Sync would read it.
 
     `aart author check` has to answer with the verdict `registry scan` will later issue, and half
     of that verdict is what was in the tree at all. So this is `read_local_snapshot` -- the same
     bounded, symlink-refusing, special-file-refusing reader -- rather than a second walk with its
-    own idea of what a file is. The Source identity it wants is inert here: nothing is configured,
-    nothing is persisted, and the candidate's digest and revision are discarded.
+    own idea of what a file is. The Source identity it wants is inert here: nothing is configured
+    and nothing is persisted.
     """
 
     absolute = os.path.abspath(root)
-    alias = SourceAlias(_WORKING_TREE_ALIAS)
     try:
         # A value, not a record: `source_instance_id` is a pure function of these fields and
         # nothing here is written to the Source store or offered to the consumer surface.
-        described = ConfiguredSource(alias, SourceKind.SOURCE_LOCAL, absolute, None, True)
+        described = ConfiguredSource(
+            WORKING_TREE_ALIAS, SourceKind.SOURCE_LOCAL, absolute, None, True
+        )
         request = LocalSnapshotRequest(
-            source_instance_id(described), alias, absolute, SnapshotLimits()
+            source_instance_id(described), WORKING_TREE_ALIAS, absolute, SnapshotLimits()
         )
     except ValueError as error:  # pragma: no cover - an absolute path is always accepted
         return _error(f"{root} cannot be read as an authoring workspace: {error}")
     acquired = read_local_snapshot(request)
     if isinstance(acquired, Err):
         return acquired
-    return Ok(acquired.value.snapshot)
+    candidate = acquired.value
+    return Ok(AuthorWorkspaceRead(absolute, candidate.resolved_revision, candidate.snapshot))
 
 
-__all__ = ["AuthorWorkspaceWrite", "read_author_workspace", "write_author_skeleton"]
+__all__ = [
+    "WORKING_TREE_ALIAS",
+    "AuthorWorkspaceRead",
+    "AuthorWorkspaceWrite",
+    "read_author_workspace",
+    "write_author_skeleton",
+]

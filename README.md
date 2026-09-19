@@ -345,9 +345,15 @@ format requires â€” an entrypoint for an MCP server, a `SKILL.md` for a skill â€
 it deliberately leaves to you.
 
 `aart author check` reads the directory the way a Source Sync reads one and puts every `aart.yaml`
-and `aart.json` it finds through the parser a Registry uses, so a manifest that passes here is one
-`aart registry scan` will accept. It is the command to run in a loop while editing; `--json` makes
-the verdict machine-readable.
+and `aart.json` it finds through the parser *and* the compiler a Registry uses. A manifest that
+passes here parses and compiles to the package `aart registry scan` would accept, and the check
+prints the coordinate it compiled to:
+
+```
+ok    github-mcp/aart.yaml  ->  mcp/github-mcp@0.1.0
+```
+
+It is the command to run in a loop while editing; `--json` makes the verdict machine-readable.
 
 ## Maintaining a registry
 

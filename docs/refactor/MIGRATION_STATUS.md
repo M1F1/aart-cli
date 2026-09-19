@@ -1,5 +1,19 @@
 # AART Refactor Migration Status
 
+**2026-09-19, CP-26.11 complete.** `aart author check` now answers §1.4's second claim: every
+manifest that parses is compiled through `compile_author_manifests` and the check prints the
+coordinate it would be promoted as. `read_author_workspace` returns the root and the
+`local:<sha256>` revision the local reader computed, because compiling needs an identity and the
+tree already has one. Two corrections came out of it. The explicit `parse_author_manifest` call was
+deleted -- `make mutants` showed it survived being stubbed out, because the compiler parses first
+and carries the parser's diagnostics, so the second call only duplicated text and gave §1.4's
+ordering a second place to drift. And a Collection manifest is no longer judged as a broken
+artifact: `registry scan` passes over one, so `check` reports it `skip` with the reason instead of
+"missing required field 'artifact'" about a correct file (B-154 covers checking Collections
+properly). Three targeted mutations each failed only the tests naming their claim; mutmut survivors
+fell from 9 to 4, the rest being prose casing. `make unit`, `make integration`, `make typecheck`,
+`make docs-check`, Ruff check and format are green. No broad `make quality` ran, under D-317.
+
 **2026-09-19, CP-26.10 complete.** `aart author check [--source DIR] [--json]` proves every
 discovered manifest parses. `authoring/check.py` is pure -- snapshot in, one verdict per manifest
 out -- and calls `discover_author_manifests` and `parse_author_manifest` rather than restating

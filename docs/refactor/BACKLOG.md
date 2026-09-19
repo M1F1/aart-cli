@@ -3924,3 +3924,18 @@ No gate is wrong — the gate is correctly scoped and the damage came from a han
 this is not a defect in the quality suite. What is missing is a statement in the repository that
 ruff is scoped on purpose, and, if this build's ruff supports it, an exclusion that makes the
 unscoped invocation safe as well. Worth doing before more agents run formatters by hand.
+
+## B-154 — `aart author check` does not check Collection manifests
+
+**Found:** 2026-09-19, CP-26.11.
+
+`check` reports a Collection manifest as `skip`: discovered, not an artifact, not judged. That is
+honest -- `registry scan` passes over one too -- but an author writing a Collection gets no verdict
+at all, and `parse_author_collection_manifest` is right there. The obstacle is that
+`compile_author_collections` refuses the whole tree rather than the one manifest, so attributing a
+Collection refusal to its path needs either a per-manifest variant or attribution by
+`Diagnostic.path`.
+
+**Noncritical.** No Product Specification invariant, acceptance test or security boundary depends
+on it, and no CP-26 slice needs it. It becomes critical only if a mandatory acceptance test
+requires a Collection verdict from `author check`.
