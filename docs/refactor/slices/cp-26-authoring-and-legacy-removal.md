@@ -1,6 +1,6 @@
 # CP-26 — Canonical Registry maintenance, authoring tools and local consumption
 
-Status: **active**. Steps 1–16 are done; step 17 is next. The plan has **22 tasks** after the
+Status: **active**. Steps 1–17 are done; step 18 is next. The plan has **22 tasks** after the
 2026-09-19 addition of CP-26.18a (D-332); task 21 remains the final broad gate. D-333 requires
 independent input entry for each installation and withdraws all cross-installation sharing.
 Product Specification §169 defines the accepted layout and namespace; runtime implementation is
@@ -1271,3 +1271,40 @@ this gate if it changes README content or an install line.
 **Evidence.** 3 tests in `install_routes_e2e_test` (five executed routes plus the download),
 `make integration`, `make unit`, `make typecheck`, `make docs-check`, Ruff check and format. No
 broad `make quality` ran, under D-317.
+
+### Step 17 — no maintainer identity as a default (2026-09-19)
+
+Four consumer-facing surfaces carried `M1F1`. None of them does now, and the decision each one
+needed is D-341.
+
+**The generated workflow.** `TOOL_URL` was `vars.AART_TOOL_URL || format(..., vars.AART_REPOSITORY
+|| 'M1F1/aart-cli')`. It is now empty when neither variable is set, and the Git arm -- the only arm
+that carried a shipped default -- stops and lists the four variables instead of cloning a
+repository nobody chose. The test runs the emitted shell with everything empty and requires exit 1
+and those names, because a refusal that exists as text and not as an exit code is a refusal nobody
+has seen happen.
+
+**The generated Registry README** loses its link to the maintainer's repository and its
+`AART_REPOSITORY` default row, and says plainly that setting none of the four stops the first run.
+**The registry-init remediation** in `curation/runtime.py` names the variables rather than the
+repository it used to say would be cloned. **The Enterprise rollout guide** -- a public setup
+example -- says `<aart-upstream>` where it printed a clone URL, and its two tables agree with the
+workflow again.
+
+**The release checklist.** `approved_registry_origin()` fell back to the maintainer's registry, so
+a fork's release reconciled against somebody else's. Unset is now no registry, the diagnostic says
+`(none configured)`, and `release_test` sets `REFERENCE_REGISTRY_URL` in `setUp` -- which is what a
+real release run does. Its fixture origin was the maintainer's registry *and* the script's default,
+so those tests had been passing by agreeing with a constant; the fixture is now neutral.
+
+**What stays, because it is a fact rather than a default.** `pyproject.toml`'s project URLs named
+the predecessor repository and are corrected to this one. The Product Specification's target
+repository, the CHANGELOG's release links and these refactor records are records of what happened.
+D-309 draws that line and this step enforces it.
+
+**Evidence.** 6 tests in `maintainer_default_test` (red before each change), `make unit`,
+`make typecheck`, `make docs-check`, Ruff check and format. No broad `make quality` ran, under
+D-317.
+
+**Step 16's gate was rerun** as the slice requires: `make unit` includes it and passed. Nothing in
+this step changed README content or an install line.

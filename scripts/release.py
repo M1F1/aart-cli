@@ -24,7 +24,6 @@ PYTHON = sys.executable
 # comes from one place, the release engine writes it, and this checklist reports it rather than
 # ruling on it.
 _DECLARED_VERSION_RE = re.compile(r'(?m)^__version__\s*=\s*"([^"]+)"')
-REFERENCE_REGISTRY_ORIGIN = "https://github.com/M1F1/agent-artifacts-registry"
 # One freeze, overwritten in place by `make release-freeze` in the change that moves a schema; git
 # history is its record (D-275).
 SCHEMA_FREEZE_PATH = "docs/release/schema-freeze.json"
@@ -406,23 +405,20 @@ def _normalize_origin(raw: str) -> str:
 
 
 def approved_registry_origin() -> str:
-    """The registry origin this checklist will accept, defaulting to this project's own.
+    """The registry origin this checklist will accept: whatever `REFERENCE_REGISTRY_URL` names.
 
-    The release workflow already clones whatever `REFERENCE_REGISTRY_URL` names, because a fork
-    publishes to its own registry and cannot reach this one.  Reading the same variable here is
-    what makes that setting mean something: without it the workflow clones the fork's registry and
-    this check rejects it as "not the approved public reference repository", which is a variable
-    contradicted by a constant.
+    The release workflow already clones that variable's value, because a fork publishes to its own
+    registry and cannot reach anybody else's.  Reading the same variable here is what makes the
+    setting mean something: a constant on this side would be a variable contradicted by a
+    constant, and the fork's own registry would be rejected as "not the approved one".
 
-    The guard itself is unchanged.  On this repository the variable is unset, the default applies,
-    and a release still reconciles against exactly one approved registry.  A fork states its own,
-    and the registry it clones is then the registry it is checked against -- one value, not two
-    that can disagree.
+    It used to fall back to this project's registry when unset, which made one deployment's
+    address the default for every other (D-309).  Unset now means there is no approved registry to
+    reconcile against, and the caller says so by name -- the only answer that is true in both
+    repositories.
     """
 
-    return _normalize_origin(os.environ.get("REFERENCE_REGISTRY_URL", "")) or (
-        REFERENCE_REGISTRY_ORIGIN
-    )
+    return _normalize_origin(os.environ.get("REFERENCE_REGISTRY_URL", ""))
 
 
 def _remote_head_commit(result: subprocess.CompletedProcess[str] | None) -> str | None:
@@ -471,7 +467,7 @@ def _registry_diagnostics(
                     "registry-origin-invalid",
                     "reference registry origin is "
                     f"{_normalize_origin(origin.stdout) if origin else '(unreadable)'}, "
-                    f"not the approved {approved_registry_origin()}; "
+                    f"not the approved {approved_registry_origin() or '(none configured)'}; "
                     "set REFERENCE_REGISTRY_URL to the registry this release publishes to",
                 ),
             ),

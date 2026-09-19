@@ -2,8 +2,8 @@
 
 ## Where CP-26 is (2026-09-19)
 
-Steps 1–16 are **done** on `refactor/cp-26-legacy-removal`; **step 17 is next**. B-057 and B-149
-are both closed. The plan has **22 tasks (16 done)**: the owner added **CP-26.18a** between
+Steps 1–17 are **done** on `refactor/cp-26-legacy-removal`; **step 18 is next**. B-057 and B-149
+are both closed. The plan has **22 tasks (17 done)**: the owner added **CP-26.18a** between
 18 and 19 without renumbering existing ids. Task 21 remains the final broad verification.
 
 ### Accepted installation contract to carry into implementation (2026-09-19)
@@ -31,28 +31,33 @@ the slice; do not mark either task done for this specification-only segment.
 README opens with the route a new user runs, followed by a bounded `## What AART is`, a
 `## Documentation` index reaching all 33 public documents, and the licence -- four sections and
 nothing else, because step 15 moved the detail into eight linked documents.
-`docs/refactor/slices/cp-26-authoring-and-legacy-removal.md` records steps 5–16 (D-321 to D-340).
+`docs/refactor/slices/cp-26-authoring-and-legacy-removal.md` records steps 5–17 (D-321 to D-341).
 
-### Execute CP-26.17 next
+### Execute CP-26.18 next
 
-*Remove `M1F1` as a generated or operational default.* Plan step 17, and the last of phase 3.
-The slice's scope: Registry workflow and README content, CLI guidance, release defaults and public
-configuration documents. No organization or repository may be baked into a generated registry.
+*Registry Maintainer may push its publish-ready local snapshot.* Plan step 18, and the start of
+phase 4. The full placement and acceptance contract is in this slice's **Step 18** section and in
+Product Specification §164.7; D-312 supersedes CP-23 task 05/D-255. Read both before designing.
 
-**Start by finding them rather than by editing.** `grep -rn "M1F1" --include=*.py --include=*.md
---include=*.yml .` outside `docs/refactor/` is the whole surface; the ones that matter are the
-values a *generated* artifact carries, not a link in a document that names this repository
-truthfully. Separate the two before changing anything: a README sentence that says where this
-checkout lives is not an operational default, and removing it would be a different change from the
-one step 17 asks for.
+**The shape of it.** `[p] Push` is an action on screen 46's local Registry workspace row, never on
+initialization, rebuild, single or bulk promotion, and never on a connected approved-snapshot row,
+a Candidate or a Source. The row must not collapse three different facts: the accepted snapshot
+read from the Registry's default branch, the local snapshot under maintenance (worktree path,
+branch, `HEAD`, canonical content digest) and push readiness.
 
-**Rerun step 16's gate afterwards.** The slice requires it explicitly: step 17 may change README
-content or an install line, and `make integration` now executes those lines. Neither
-`install_commands.py` nor the install document names a host today (D-277), so the likely blast
-radius is the Registry workflow and CLI guidance -- but the gate is cheap and the requirement is
-written down.
+**Readiness is computed, not remembered.** Clean worktree and index, exact `HEAD`, reproducible
+canonical outputs with no pending build change, and the Registry's mandatory gate set green over
+those committed bytes -- through one application-level publication preparation shared with
+`registry publish`, not a third list. Never inferred from a wizard flag, a commit subject or the
+presence of unpushed commits. Every blocker is visible.
 
-**Do not pull 18a forward.** It renames the advertised commands and reruns step 16's gate again.
+**Targets.** The current named branch when it is neither `main` nor the Registry default; otherwise
+the maintainer enters a new review branch. The worktree holding `working_at` must itself be the
+canonical Registry -- a Source, a connected snapshot or an unrelated repository is never a target.
+`publish` still ends at the reviewed local commit and does not push.
+
+**Step 18 must remove drift** between that shared contract, CLI `publish` and the generated Registry
+workflow rather than introduce a third gate list. That is part of the step, not a follow-up.
 
 ### What the evidence said, so it is not re-derived
 

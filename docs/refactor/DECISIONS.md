@@ -8482,3 +8482,33 @@ of the two routes a first-time reader takes.
 **Both halves in one gate.** The section order, the bounded explanation, link reachability and the
 final licence are held by `adoption_first_contact_test` under `unit`; the e2e test loads those cases
 too, so the integration gate does not prove the lines work on a page whose shape it never checked.
+
+## D-341 — An unset tool repository is a refusal, not a fallback
+
+D-309 required step 17 to derive the repository from configuration, use a neutral example, or
+refuse missing configuration clearly. The one place needing a choice recorded before implementation
+is the generated workflow's Git arm: it was the only arm carrying a shipped default, so removing
+the default leaves it with nothing when a company sets no variable.
+
+**Decision: refuse, and name the four variables.** `TOOL_URL` is now empty when neither
+`AART_TOOL_URL` nor `AART_REPOSITORY` is set, and the Git arm stops with a message listing
+`AART_PACKAGE`, `AART_WHEEL_URL`, `AART_TOOL_PATH` and `AART_TOOL_URL`/`AART_REPOSITORY`, and says
+to set it on the organisation. Where AART comes from is a fact about a deployment and only that
+deployment knows it; a shipped default sent every company's registry to a repository nobody in it
+had chosen, and failed with a git error naming that repository rather than with a question.
+
+`tests/maintainer_default_test.py` runs the emitted shell with every variable empty and requires
+exit 1 and those names, for the reason step 16 runs the install lines: a refusal that exists as
+text and not as an exit code is a refusal nobody has seen happen.
+
+**The release checklist loses its constant the same way.** `approved_registry_origin()` returned
+the maintainer's registry when `REFERENCE_REGISTRY_URL` was unset, so a fork's release reconciled
+against somebody else's registry. Unset now means there is no approved registry and the diagnostic
+says `(none configured)`. The release tests set the variable in `setUp`, which is what a real
+release run does -- they previously passed by agreeing with the constant.
+
+**What is a fact and stays.** `pyproject.toml`'s project URLs say where this distribution is
+published; they named the predecessor `M1F1/agent-artifacts` and are corrected to `M1F1/aart-cli`.
+The Product Specification's identification of the target repository, the CHANGELOG's release links
+and the refactor records are records of what happened. None of them is a value another deployment
+inherits, which is the distinction D-309 draws and the one this step enforces.

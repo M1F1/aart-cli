@@ -4,6 +4,22 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-09-19, CP-26.17 complete.** `M1F1` is no longer an operational default anywhere a
+deployment could inherit it. The generated workflow's `TOOL_URL` no longer carries a repository:
+unset means empty, and the Git arm stops listing `AART_PACKAGE`, `AART_WHEEL_URL`, `AART_TOOL_PATH`
+and `AART_TOOL_URL`/`AART_REPOSITORY` rather than cloning the maintainer's repository from an
+instance where it does not exist (D-341). The generated Registry README, the registry-init
+remediation in `curation/runtime.py` and the Enterprise rollout guide agree with that. The release
+checklist's `approved_registry_origin()` lost its constant, so a fork no longer reconciles against
+somebody else's registry; `release_test` now sets `REFERENCE_REGISTRY_URL` in `setUp`, which is what
+a release run does, and its fixture origin is neutral -- it had been the maintainer's registry and
+the script's default at once, so those tests passed by agreeing with a constant. `pyproject.toml`'s
+project URLs named the predecessor repository and are corrected; the Product Specification's target
+repository, the CHANGELOG and these records are facts rather than defaults, which is the line D-309
+draws. The workflow's refusal is executed by the test, not read. Evidence: 6 tests in
+`maintainer_default_test`, `make unit`, `make typecheck`, `make docs-check`, Ruff. No broad
+`make quality` (D-317).
+
 **2026-09-19, CP-26.16 complete.** The documented install lines are executed.
 `run_install_routes` extends `scripts/distribution_smoke.py`, which already built and validated a
 wheel: it puts that wheel where an authenticated download would leave it and runs the fenced blocks

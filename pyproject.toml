@@ -23,9 +23,12 @@ dependencies = []
 agent-artifacts = "agent_artifacts.cli:main"
 aart = "agent_artifacts.cli:main"
 
+# Where this distribution is published, which is a fact about it rather than a value any other
+# deployment inherits -- the distinction D-309 draws.  It named the predecessor repository until
+# CP-26.17; `agent-artifacts` is the older project this one replaced.
 [project.urls]
-Homepage = "https://github.com/M1F1/agent-artifacts"
-Repository = "https://github.com/M1F1/agent-artifacts"
+Homepage = "https://github.com/M1F1/aart-cli"
+Repository = "https://github.com/M1F1/aart-cli"
 
 # --------------------------------------------------------------------------- #
 # Poetry

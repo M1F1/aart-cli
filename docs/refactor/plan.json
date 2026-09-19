@@ -864,7 +864,7 @@
         {
           "id": "17",
           "title": "Generated registry and release defaults contain no M1F1 repository or organization",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "18",

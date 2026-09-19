@@ -35,7 +35,7 @@ _PROVIDE_AART = b"""      - name: Provide AART
           PACKAGE: ${{ vars.AART_PACKAGE }}
           WHEEL_URL: ${{ vars.AART_WHEEL_URL }}
           TOOL_PATH: ${{ vars.AART_TOOL_PATH }}
-          TOOL_URL: ${{ vars.AART_TOOL_URL || format('{0}/{1}.git', github.server_url, vars.AART_REPOSITORY || 'M1F1/aart-cli') }}
+          TOOL_URL: ${{ vars.AART_TOOL_URL || (vars.AART_REPOSITORY && format('{0}/{1}.git', github.server_url, vars.AART_REPOSITORY)) || '' }}
           TOOL_REF: ${{ vars.AART_REF }}
           INDEX_URL: ${{ vars.AART_PIP_INDEX_URL || 'https://pypi.org/simple' }}
           INDEX_CREDENTIALS: ${{ secrets[vars.AART_PIP_INDEX_CREDENTIALS_SECRET] }}
@@ -115,6 +115,20 @@ _PROVIDE_AART = b"""      - name: Provide AART
             how="path $TOOL_PATH"
             tool="$TOOL_PATH"
           else
+            # This arm used to carry a shipped default, so a company that set nothing cloned the
+            # tool's own maintainer repository from its own instance -- absent there, and the run
+            # died on a git error naming a repository nobody in that company had chosen.  Where
+            # AART comes from is a fact about the deployment and only the deployment knows it, so
+            # the answer to "nothing is set" is to say what to set (D-309).
+            if [ -z "$TOOL_URL" ]; then
+              echo "AART: no source configured. Set one repository variable, first one set wins:" >&2
+              echo "  AART_PACKAGE     a requirement on your package index" >&2
+              echo "  AART_WHEEL_URL   a released wheel" >&2
+              echo "  AART_TOOL_PATH   a directory already on the runner" >&2
+              echo "  AART_TOOL_URL    a git URL, or AART_REPOSITORY as owner/name on this instance" >&2
+              echo "Set it on the organisation and it configures every registry at once." >&2
+              exit 1
+            fi
             # `how` keeps the address without the credential, so no log line carries one -- the
             # same split the index arm makes between `announce` and `INDEX_URL`.
             how="git $TOOL_URL@$ref"
@@ -344,7 +358,7 @@ jobs:
 # is supposed to change is the one that puts the registry out of step with the command managing it.
 _REGISTRY_README = b"""# __DISPLAY_NAME__
 
-An [AART](https://github.com/M1F1/aart-cli) registry. It holds packaged
+An AART registry. It holds packaged
 artifacts - skills, agents, commands, MCP servers, memory and guidelines - that AART installs into
 a consumer project.
 
@@ -438,9 +452,9 @@ The order runs from the most governed supply chain to the least. That matters wh
 stand up an internal index later, set `AART_PACKAGE`, and it takes over. You do not have to unset
 anything first.
 
-**Set none of them** and CI clones `M1F1/aart-cli` from the instance this registry runs on. Where
-that repository does not exist, or needs a login the runner does not have, the first run fails
-loudly, which is the intended behaviour.
+**Set none of them** and the first run stops and says so, listing these four. Where AART comes
+from is a fact about your deployment, and nothing here can guess it: a shipped default would send
+every company's registry to a repository nobody in it had chosen.
 
 **Set them on the organisation, not here.** GitHub resolves a repository variable over an
 organisation one, so one organisation variable configures every registry your company has, and any
@@ -457,7 +471,7 @@ AART: aart-cli 0.1.0  via index https://nexus.corp/pypi/simple (aart-cli==0.1.0)
 | Variable | Default | What it does |
 |---|---|---|
 | `AART_PIP_INDEX_URL` | `https://pypi.org/simple` | Index used by `AART_PACKAGE` |
-| `AART_REPOSITORY` | `M1F1/aart-cli` | `owner/name` of the AART repository, combined with this instance's own URL |
+| `AART_REPOSITORY` | unset | `owner/name` of your AART repository, combined with this instance's own URL. Shorter than `AART_TOOL_URL` when the copy is on this instance |
 | `AART_GIT_CREDENTIALS_SECRET` | unset | **Name** of a secret holding a token, or `user:token`, for the `git clone` arm. A bare token is used as `x-access-token`. Without it the clone is anonymous, and a private copy answers `could not read Username` |
 | `AART_REF` | `v` + the pin | Escape hatch: a branch or tag instead of `.aart-version`. Switches the version check off |
 | `AART_RUNNER` | `["ubuntu-latest"]` | JSON array of runner labels. Must be JSON, not a bare word |

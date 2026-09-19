@@ -60,8 +60,11 @@ Actions back on in Part 2.
 
 ### Step 3 — Copy the code and the tags
 
+`<aart-upstream>` is wherever you are copying AART from -- the public repository you found it in,
+or another instance's copy:
+
 ```bash
-git clone --bare https://github.com/M1F1/aart-cli.git
+git clone --bare <aart-upstream>.git
 git -C aart-cli.git push https://ghe.corp/platform/aart-cli.git main
 git -C aart-cli.git push https://ghe.corp/platform/aart-cli.git --tags
 ```
@@ -273,10 +276,12 @@ variable is replaced with it — so no variable carries a version number.
 | 3 | `AART_TOOL_PATH` | `/opt/aart` | the CI image already carries an `aart-cli` source tree or unpacked wheel |
 | 4 | `AART_TOOL_URL` | `https://ghe.corp/platform/aart-cli.git` | the runner can clone that repository — anonymously, or with a credential already in the image's Git configuration. Clones the tag `v` + the pin |
 
-Row 4 is also what happens when **none** is set: the URL is built from the instance the job runs on
-and `AART_REPOSITORY`, which defaults to `M1F1/aart-cli`. So on most instances you set at least
-`AART_REPOSITORY` = `platform/aart-cli`. A repository that needs a login and a runner without one
-fails that clone on the first run — which is why row 1 is the recommendation.
+Setting **none** of them is not a fourth route: the first run stops and lists these four. Where
+AART comes from is a fact about your deployment, and a shipped default would send every company's
+registry to a repository nobody in it had chosen. Row 4 is the shortest to arrange — set
+`AART_REPOSITORY` = `platform/aart-cli` and the URL is built from the instance the job runs on. A
+repository that needs a login and a runner without one fails that clone on the first run, which is
+why row 1 is the recommendation.
 
 ### Step 2 — Set the variables
 
@@ -286,7 +291,7 @@ Again on the **organisation** where you can, so every future registry is configu
 |---|---|
 | one route from step 1 | always |
 | `AART_PIP_INDEX_URL`, `AART_PIP_INDEX_CREDENTIALS_SECRET` | with `AART_PACKAGE` |
-| `AART_REPOSITORY` | with the Git route, when the copy is not at `M1F1/aart-cli` on this instance |
+| `AART_REPOSITORY` | with the Git route, unless you set `AART_TOOL_URL` in full |
 | `AART_RUNNER`, `AART_CI_IMAGE`, `AART_IMAGE_USERNAME_SECRET`, `AART_IMAGE_PASSWORD_SECRET` | same meaning as in Part 2 |
 | `AART_PYTHON` | the interpreter's name on the runner or in the image, if not `python3` |
 
@@ -395,8 +400,8 @@ overwrite one that was edited by hand, so configure them with variables, not edi
 | `AART_GIT_CREDENTIALS_SECRET` | unset | **name** of a secret holding a bare token, or `user:token`, used only by the `git clone` arm |
 | `AART_WHEEL_URL` | unset | fetch route 2: a wheel URL, downloaded without credentials and unzipped |
 | `AART_TOOL_PATH` | unset | fetch route 3: an AART tree already on the runner |
-| `AART_TOOL_URL` | instance URL + `AART_REPOSITORY` | fetch route 4: a Git URL, cloned at `v` + the pin |
-| `AART_REPOSITORY` | `M1F1/aart-cli` | `owner/name` used to build the default `AART_TOOL_URL` |
+| `AART_TOOL_URL` | instance URL + `AART_REPOSITORY`, if that is set | fetch route 4: a Git URL, cloned at `v` + the pin |
+| `AART_REPOSITORY` | unset | `owner/name` on this instance, used to build `AART_TOOL_URL` |
 | `AART_REF` | `v` + the pin | a branch or tag to run instead of the pin. Switches the version check off, and the run says so |
 | `AART_RUNNER` | `["ubuntu-latest"]` | JSON array of runner labels |
 | `AART_CI_IMAGE` | unset | container image for the jobs |
